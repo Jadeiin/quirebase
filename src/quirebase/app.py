@@ -1580,7 +1580,7 @@ def create_app() -> FastAPI:
             )
         )
         db.commit()
-        return JSONResponse(status_code=204, content=None)
+        return Response(status_code=204)
 
     @app.post("/documents/{item_id}/annotation-exports", dependencies=[Depends(require_csrf)])
     def create_export(

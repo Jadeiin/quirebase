@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from quirebase.app import app
 from quirebase.config import get_settings
 from quirebase.db import get_db
-from quirebase.models import FileRevision, Item, LoginSession, User
+from quirebase.models import AuditEvent, FileRevision, Item, LoginSession, User
 from quirebase.security import token_hash
 from quirebase.storage import LocalObjectStore
 
@@ -93,6 +93,19 @@ def test_pdf_range_and_annotation_api(db, tmp_path, monkeypatch):
             json={"version": 99, "color": "red"},
         )
         assert conflict.status_code == 409
+
+        deleted = client.delete(
+            f"/documents/{item.id}/annotations/{annotation['id']}",
+            headers={"X-CSRF-Token": "test-csrf"},
+        )
+        assert deleted.status_code == 204
+        assert deleted.content == b""
+        assert (
+            db
+            .query(AuditEvent)
+            .filter_by(action="annotation.delete", target_id=annotation["id"])
+            .one()
+        )
     finally:
         app.dependency_overrides.clear()
         get_settings.cache_clear()
