@@ -12,10 +12,10 @@
 <div class="import-grid">
   <section class="panel import-card featured" x-show="active === 'doi'">
     <span class="module-number">01</span><h2>{{ t('Import by identifier') }}</h2>
-    <p>{{ t('Retrieve metadata from DOI, PubMed, arXiv, or Open Library and review it before saving.') }}</p>
+    <p>{{ t('Retrieve metadata from DOI, PubMed, arXiv, OpenAlex, or Open Library and review it before saving.') }}</p>
     <form method="post" action="/metadata/preview?csrf_token={{ csrf }}">
-      <label>{{ t('Data source') }}<select name="provider"><option value="auto">{{ t('Detect automatically') }}</option><option value="doi">DOI · Crossref / DataCite</option><option value="pmid">PubMed PMID</option><option value="arxiv">arXiv</option><option value="isbn">ISBN · Open Library</option></select></label>
-      <label>{{ t('Identifier') }}<input name="identifier" maxlength="500" placeholder="10.1234/example · PMID: 12345 · arXiv: 1706.03762 · ISBN" required></label>
+      <label>{{ t('Data source') }}<select name="provider"><option value="auto">{{ t('Detect automatically') }}</option><option value="doi">DOI · Crossref / DataCite</option><option value="pmid">PubMed PMID</option><option value="arxiv">arXiv</option><option value="openalex">OpenAlex</option><option value="isbn">ISBN · Open Library</option></select></label>
+      <label>{{ t('Identifier') }}<input name="identifier" maxlength="500" placeholder="DOI · PMID · arXiv · OpenAlex · ISBN" required></label>
       <button>{{ t('Look up metadata') }}</button>
     </form>
   </section>
@@ -56,7 +56,7 @@
   <section class="panel import-card future-card">
     <span class="module-number">{{ t('Available') }}</span><h2>{{ t('Connected data sources') }}</h2>
     <p>{{ t('Sources without institutional credentials are available now. Credentialed providers remain isolated until keys and quotas are configured.') }}</p>
-    <div class="provider-list"><span>Crossref</span><span>DataCite</span><span>PubMed</span><span>arXiv</span><span>Open Library</span><span class="provider-muted">IEEE Xplore · API key</span><span class="provider-muted">Scopus · API key</span></div>
+    <div class="provider-list"><span>OpenAlex</span><span>Crossref</span><span>DataCite</span><span>PubMed</span><span>arXiv</span><span>Open Library</span><span class="provider-muted">IEEE Xplore · API key</span><span class="provider-muted">Scopus · API key</span></div>
   </section>
 </div>
 </div>

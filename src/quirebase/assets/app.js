@@ -42,6 +42,22 @@ Alpine.data("importWorkspace", () => ({
   },
 }));
 
+Alpine.data("onlineSearch", () => ({
+  visibleClauses: 1,
+  init() {
+    this.visibleClauses = Math.max(1, Math.min(5, Number(this.$root.dataset.initialClauses) || 1));
+  },
+  addClause() {
+    this.visibleClauses = Math.min(5, this.visibleClauses + 1);
+  },
+  removeClause() {
+    if (this.visibleClauses === 1) return;
+    const row = this.$root.querySelectorAll(".query-clause")[this.visibleClauses - 1];
+    row?.querySelectorAll("input").forEach((input) => { input.value = ""; });
+    this.visibleClauses -= 1;
+  },
+}));
+
 Alpine.data("pdfToolbar", () => ({
   annotationOpen: false,
   toggleAnnotations() {

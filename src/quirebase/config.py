@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     metadata_max_response_bytes: int = Field(default=2 * 1024 * 1024, ge=1024)
     metadata_contact_email: str | None = None
     ncbi_api_key: str | None = None
+    openalex_api_key: str | None = None
 
     @property
     def allowed_host_list(self) -> list[str]:

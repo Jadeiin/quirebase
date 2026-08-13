@@ -50,13 +50,14 @@ Password-protected PDFs, OCR and flattened annotations are outside the first mil
 ## Search and bibliography interchange
 
 - SQLite uses FTS5 and PostgreSQL uses a `tsvector`/GIN adapter behind the same search interface. Run `uv run quirebase reindex` after restoring a database or changing indexing rules.
+- Online search is separate from identifier import and provides fielded Boolean queries, source-specific sorting, year filters, pagination, and review-before-import across OpenAlex, Crossref, PubMed, arXiv, and Open Library.
 - BibTeX and RIS imports are parsed into a persisted preview and only committed as one transaction after confirmation. Exports contain only items visible to the current user.
 
 Quirebase is licensed under AGPL-3.0-only; see `LICENSE`. PyMuPDF is used under its AGPL option.
 
 ## Completed scope
 
-Quirebase includes local accounts and invitations, administrator/member and project owner/editor/viewer permissions, audited login attempts, per-session and all-session logout, durable login throttling, item metadata/custom fields, DOI/PMID/arXiv/ISBN lookup with preview, automatic DOI extraction from published PDFs, tags, dedicated project workspaces, duplicate-review and tag-management tools, discussions, PDF revisions, supplementary attachments, bulk citation/PDF export and owner-confirmed deletion, PDF.js reading with annotation detail panels, scoped annotations, PyMuPDF exports, dialect-native search, staged BibTeX/RIS import, audit events, resumable jobs, metrics, backup/restore, and integrity checks.
+Quirebase includes local accounts and invitations, administrator/member and project owner/editor/viewer permissions, audited login attempts, per-session and all-session logout, durable login throttling, item metadata/custom fields, DOI/PMID/arXiv/OpenAlex/ISBN lookup with preview, multi-source online scholarly search, automatic DOI extraction from published PDFs, tags, dedicated project workspaces, duplicate-review and tag-management tools, discussions, PDF revisions, supplementary attachments, bulk citation/PDF export and owner-confirmed deletion, PDF.js reading with annotation detail panels, scoped annotations, PyMuPDF exports, dialect-native library search, staged BibTeX/RIS import, audit events, resumable jobs, metrics, backup/restore, and integrity checks.
 
 Operational instructions are in `docs/DEPLOYMENT.md`. Deferred integrations and their security gates are recorded in `docs/adr/0001-deferred-integrations.md`.
 

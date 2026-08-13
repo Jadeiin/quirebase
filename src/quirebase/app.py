@@ -31,7 +31,13 @@ from .bibliography import SUPPORTED_FORMATS, export_bibliography, parse_bibliogr
 from .config import get_settings
 from .db import get_db
 from .i18n import DEFAULT_LOCALE, translate
-from .metadata_lookup import MetadataLookupError, MetadataNotFoundError, lookup_metadata
+from .metadata_lookup import (
+    MetadataLookupError,
+    MetadataNotFoundError,
+    SearchClause,
+    lookup_metadata,
+    search_metadata,
+)
 from .models import (
     Attachment,
     AuditEvent,
@@ -935,6 +941,113 @@ def create_app() -> FastAPI:
             request,
             "import.html",
             {"user": user, "csrf": login.csrf_token, "active_page": "import"},
+        )
+
+    @app.get("/online-search", response_class=HTMLResponse)
+    def online_search_page(
+        request: Request,
+        provider: str = "openalex",
+        sort: str = "relevance",
+        year_from: str = "",
+        year_to: str = "",
+        page: int = 1,
+        user: User = Depends(current_user),
+        login: LoginSession = Depends(current_login),
+        db: Session = Depends(get_db),
+    ):
+        fields = request.query_params.getlist("field")
+        operators = request.query_params.getlist("operator")
+        terms = request.query_params.getlist("term")
+        clauses = [
+            SearchClause(field, operator, term.strip())
+            for field, operator, term in zip(fields, operators, terms, strict=False)
+            if term.strip()
+        ]
+        defaults = ("any", "title", "author", "publication", "abstract")
+        while len(fields) < 5:
+            fields.append(defaults[len(fields)])
+        while len(operators) < 5:
+            operators.append("and")
+        while len(terms) < 5:
+            terms.append("")
+        visible_clause_count = max(
+            1,
+            max((index + 1 for index, term in enumerate(terms[:5]) if term.strip()), default=1),
+        )
+        results = None
+        error = None
+        if clauses:
+            try:
+                start_year = int(year_from) if year_from else None
+                end_year = int(year_to) if year_to else None
+                if start_year and not 1000 <= start_year <= 3000:
+                    raise ValueError("starting year is invalid")
+                if end_year and not 1000 <= end_year <= 3000:
+                    raise ValueError("ending year is invalid")
+                results = search_metadata(
+                    provider,
+                    clauses,
+                    page=page,
+                    per_page=10,
+                    sort=sort,
+                    year_from=start_year,
+                    year_to=end_year,
+                )
+                db.add(
+                    AuditEvent(
+                        actor_id=user.id,
+                        action="metadata.search",
+                        target_type="provider",
+                        target_id=provider,
+                        detail=json.dumps({
+                            "fields": [clause.field for clause in clauses],
+                            "result_count": len(results.results),
+                        }),
+                    )
+                )
+                db.commit()
+            except ValueError as caught:
+                error = str(caught)
+            except MetadataLookupError as caught:
+                error = str(caught)
+        imported: set[tuple[str, str]] = set()
+        for item in db.scalars(visible_items(user)).all():
+            if item.doi:
+                imported.add(("doi", item.doi.casefold()))
+            try:
+                identifiers = json.loads(item.identifiers or "{}")
+            except json.JSONDecodeError:
+                identifiers = {}
+            for key, value in identifiers.items():
+                if value:
+                    imported.add((str(key), str(value).casefold()))
+        query_items = [
+            (key, value) for key, value in request.query_params.multi_items() if key != "page"
+        ]
+
+        def page_url(number: int) -> str:
+            return "/online-search?" + urlencode([*query_items, ("page", number)])
+
+        return templates.TemplateResponse(
+            request,
+            "online_search.html",
+            {
+                "user": user,
+                "csrf": login.csrf_token,
+                "active_page": "online_search",
+                "provider": provider,
+                "sort": sort,
+                "year_from": year_from,
+                "year_to": year_to,
+                "fields": fields[:5],
+                "operators": operators[:5],
+                "terms": terms[:5],
+                "visible_clause_count": visible_clause_count,
+                "results": results,
+                "error": error,
+                "imported": imported,
+                "page_url": page_url,
+            },
         )
 
     @app.get("/tools", response_class=HTMLResponse)

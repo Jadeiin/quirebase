@@ -66,6 +66,21 @@ def response(request: httpx.Request) -> httpx.Response:
                 }
             },
         )
+    if request.url.host == "api.openalex.org":
+        assert request.url.path == "/works/W123"
+        return httpx.Response(
+            200,
+            json={
+                "id": "https://openalex.org/W123",
+                "display_name": "OpenAlex Example",
+                "doi": "https://doi.org/10.4/openalex",
+                "publication_date": "2026-01-01",
+                "type": "article",
+                "authorships": [{"author": {"display_name": "Alex Author"}}],
+                "primary_location": {"source": {"display_name": "Open Journal"}},
+                "topics": [{"display_name": "Open science"}],
+            },
+        )
     if request.url.host == "openlibrary.org":
         return httpx.Response(
             200,
@@ -97,6 +112,7 @@ def response(request: httpx.Request) -> httpx.Response:
         ("PMID: 42", "auto", Identifier("pmid", "42")),
         ("arXiv:1706.03762v7", "auto", Identifier("arxiv", "1706.03762v7")),
         ("ISBN 978-0-13-110362-7", "auto", Identifier("isbn", "9780131103627")),
+        ("https://openalex.org/W123", "auto", Identifier("openalex", "W123")),
     ],
 )
 def test_identifier_detection(value, provider, expected):
@@ -116,6 +132,7 @@ def test_identifier_input_cannot_be_used_as_an_arbitrary_url():
         ("1706.03762", "arxiv", "arXiv Example"),
         ("10.9999/dataset", "doi", "DataCite Example"),
         ("9780131103627", "isbn", "The C Programming Language"),
+        ("W123", "openalex", "OpenAlex Example"),
     ],
 )
 def test_provider_adapters_map_records(value, provider, title):

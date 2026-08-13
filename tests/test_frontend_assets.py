@@ -23,11 +23,15 @@ def test_alpine_is_bundled_locally_with_csp_compatible_build():
 def test_enhanced_workspaces_keep_native_form_fallbacks():
     library = read("src/quirebase/templates/library.html")
     imports = read("src/quirebase/templates/import.html")
+    online_search = read("src/quirebase/templates/online_search.html")
     assert 'x-data="libraryWorkspace"' in library
     assert 'method="post" action="/library/bulk' in library
     assert 'x-data="importWorkspace"' in imports
     assert 'method="post" action="/metadata/preview' in imports
     assert 'method="post" action="/bibliography/preview' in imports
+    assert 'x-data="onlineSearch"' in online_search
+    assert 'method="get" action="/online-search"' in online_search
+    assert 'method="post" action="/metadata/preview' in online_search
 
 
 def test_pdf_toolbar_exposes_navigation_search_zoom_and_download():

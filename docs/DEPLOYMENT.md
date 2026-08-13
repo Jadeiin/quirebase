@@ -6,7 +6,7 @@ Python 3.12+ wheels are the common installation path on Windows, macOS and Linux
 
 SQLite is intended for a single-host installation with one worker. PostgreSQL is recommended for teams and supports concurrent workers through `FOR UPDATE SKIP LOCKED`. Set `QUIREBASE_DATABASE_URL`, `QUIREBASE_DATA_DIR`, `QUIREBASE_ALLOWED_HOSTS`, and secure cookies behind HTTPS.
 
-For online DOI/PMID/arXiv metadata lookup, set a monitored `QUIREBASE_METADATA_CONTACT_EMAIL`; an NCBI API key is optional. See `METADATA_LOOKUP.md`. Restrictive egress firewalls should allow only the documented provider hosts.
+For identifier lookup and online scholarly search, set a monitored `QUIREBASE_METADATA_CONTACT_EMAIL`; NCBI and OpenAlex API keys are optional. See `METADATA_LOOKUP.md`. Restrictive egress firewalls should allow only the documented provider hosts.
 
 Use a reverse proxy for TLS and request-size limits. Do not expose Uvicorn directly to the public internet. Preserve the application data directory independently from the installed wheel.
 
