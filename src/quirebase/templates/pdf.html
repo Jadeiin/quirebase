@@ -13,6 +13,9 @@
   'exportReady': t('Export ready'),
   'exportFailed': t('Export failed'),
   'selectOwnAnnotation': t('Select one of your annotations.'),
+  'page': t('Page {page}'),
+  'private': t('Private'),
+  'project': t('Project'),
   'pages': t('{count} pages'),
   'unableToOpen': t('Unable to open PDF: {message}')
 }|tojson|forceescape }}">
@@ -48,6 +51,13 @@
     <select id="annotation-project"><option value="">{{ t('Private') }}</option>{% for project in projects %}<option value="{{ project.id }}">{{ project.name }}</option>{% endfor %}</select>
     <button id="export-annotations">{{ t('Export') }}</button>
   </div>
+  <aside id="annotation-detail" class="annotation-detail" hidden>
+    <header><div><p class="eyebrow">{{ t('Annotation details') }}</p><h2 id="annotation-detail-kind"></h2></div><button id="annotation-detail-close" class="secondary-button compact-button" type="button" aria-label="{{ t('Close') }}">×</button></header>
+    <dl><div><dt>{{ t('Location') }}</dt><dd id="annotation-detail-page"></dd></div><div><dt>{{ t('Visibility') }}</dt><dd id="annotation-detail-scope"></dd></div></dl>
+    <blockquote id="annotation-detail-text"></blockquote>
+    <label>{{ t('Note text') }}<textarea id="annotation-detail-body" rows="7"></textarea></label>
+    <div class="annotation-detail-actions"><button id="annotation-detail-save" type="button">{{ t('Save') }}</button><button id="annotation-detail-delete" class="danger-button" type="button">{{ t('Delete') }}</button></div>
+  </aside>
   <div id="viewerContainer"><div id="viewer" class="pdfViewer removePageBorders"></div></div>
 </div>
 <script type="module" src="{{ url_for('static', path='/pdf_viewer.js') }}"></script>

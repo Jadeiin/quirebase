@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}{{ t('Projects') }} · Quirebase{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">{{ t('Collaborative collections') }}</p><h1>{{ t('Projects') }}</h1></div></div>
+<section class="panel project-create-panel"><div><h2>{{ t('Create a project') }}</h2><p>{{ t('Group papers and collaborate with members using explicit roles.') }}</p></div><form method="post" action="/projects?csrf_token={{ csrf }}"><input name="name" placeholder="{{ t('New project name') }}" required><button>{{ t('Create') }}</button></form></section>
+<div class="project-card-grid">{% for project, role, item_count in projects %}<a class="panel project-card" href="/projects/{{ project.id }}"><span class="project-card-icon">◇</span><div><h2>{{ project.name }}</h2><p>{{ t(role) }} · {{ t('{count} paper(s)', count=item_count) }}</p></div><span>→</span></a>{% else %}<div class="panel empty-state">{{ t('No projects yet.') }}</div>{% endfor %}</div>
+{% endblock %}

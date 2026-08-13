@@ -4,9 +4,21 @@ from quirebase.models import PdfAnnotation, PdfAnnotationSegment
 from quirebase.pdf_service import (
     create_thumbnail,
     export_annotations,
+    extract_doi,
     inspect_pdf,
     validate_pdf_container,
 )
+
+
+def test_extracts_doi_from_early_pdf_text(tmp_path):
+    source = tmp_path / "doi.pdf"
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_text((72, 72), "Published article https://doi.org/10.1234/example.2026")
+    document.save(source)
+    document.close()
+
+    assert extract_doi(source) == "10.1234/example.2026"
 
 
 def sample_pdf(path):

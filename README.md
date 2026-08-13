@@ -56,7 +56,7 @@ Quirebase is licensed under AGPL-3.0-only; see `LICENSE`. PyMuPDF is used under 
 
 ## Completed scope
 
-Quirebase includes local accounts and invitations, administrator/member and project owner/editor/viewer permissions, audited login attempts, per-session and all-session logout, durable login throttling, item metadata/custom fields, DOI/PMID/arXiv lookup with preview, tags, projects, discussions, PDF revisions, supplementary attachments, PDF.js reading and scoped annotations, PyMuPDF exports, dialect-native search, staged BibTeX/RIS import, audit events, resumable jobs, metrics, backup/restore, and integrity checks.
+Quirebase includes local accounts and invitations, administrator/member and project owner/editor/viewer permissions, audited login attempts, per-session and all-session logout, durable login throttling, item metadata/custom fields, DOI/PMID/arXiv/ISBN lookup with preview, automatic DOI extraction from published PDFs, tags, dedicated project workspaces, duplicate-review and tag-management tools, discussions, PDF revisions, supplementary attachments, bulk citation/PDF export and owner-confirmed deletion, PDF.js reading with annotation detail panels, scoped annotations, PyMuPDF exports, dialect-native search, staged BibTeX/RIS import, audit events, resumable jobs, metrics, backup/restore, and integrity checks.
 
 Operational instructions are in `docs/DEPLOYMENT.md`. Deferred integrations and their security gates are recorded in `docs/adr/0001-deferred-integrations.md`.
 

@@ -22,7 +22,11 @@ PAPERS = CORPUS["papers"]
 
 def corpus_directory() -> Path:
     configured = os.getenv("QUIREBASE_OA_PDF_DIR")
-    return Path(configured) if configured else Path(__file__).parents[1] / ".cache" / "oa-pdfs"
+    return (
+        Path(configured).resolve()
+        if configured
+        else Path(__file__).parents[1] / ".cache" / "oa-pdfs"
+    )
 
 
 def paper_path(paper: dict) -> Path:

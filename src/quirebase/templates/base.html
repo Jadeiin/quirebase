@@ -18,7 +18,8 @@
       <a href="/" {% if active_page == 'dashboard' %}aria-current="page"{% endif %}><span>⌂</span>{{ t('Dashboard') }}</a>
       <a href="/library" {% if active_page == 'library' %}aria-current="page"{% endif %}><span>▤</span>{{ t('Library') }}</a>
       <a href="/bibliography/import" {% if active_page == 'import' %}aria-current="page"{% endif %}><span>＋</span>{{ t('Import') }}</a>
-      <a href="/#projects"><span>◇</span>{{ t('Projects') }}</a>
+      <a href="/projects" {% if active_page == 'projects' %}aria-current="page"{% endif %}><span>◇</span>{{ t('Projects') }}</a>
+      <a href="/tools" {% if active_page == 'tools' %}aria-current="page"{% endif %}><span>⌘</span>{{ t('Tools') }}</a>
       <a href="/account/sessions" {% if active_page == 'sessions' %}aria-current="page"{% endif %}><span>◉</span>{{ t('Devices') }}</a>
       {% if user.role == 'administrator' %}
       <a href="/admin" {% if active_page == 'admin' %}aria-current="page"{% endif %}><span>⚙</span>{{ t('Administration') }}</a>

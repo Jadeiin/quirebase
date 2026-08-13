@@ -45,3 +45,6 @@ def test_pdf_toolbar_exposes_navigation_search_zoom_and_download():
         assert f"#{control}" in script
     assert "download" in template
     assert 'eventBus.dispatch("find"' in script
+    assert 'id="annotation-detail"' in template
+    assert "showAnnotation(annotation)" in script
+    assert "status.textContent = node.title" not in script

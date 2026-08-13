@@ -18,6 +18,14 @@ const pageNumber = document.querySelector("#pdf-page-number");
 const pageTotal = document.querySelector("#pdf-page-total");
 const scale = document.querySelector("#pdf-scale");
 const search = document.querySelector("#pdf-search");
+const detail = document.querySelector("#annotation-detail");
+const detailKind = document.querySelector("#annotation-detail-kind");
+const detailPage = document.querySelector("#annotation-detail-page");
+const detailScope = document.querySelector("#annotation-detail-scope");
+const detailText = document.querySelector("#annotation-detail-text");
+const detailBody = document.querySelector("#annotation-detail-body");
+const detailSave = document.querySelector("#annotation-detail-save");
+const detailDelete = document.querySelector("#annotation-detail-delete");
 const eventBus = new EventBus();
 const linkService = new PDFLinkService({ eventBus });
 const findController = new PDFFindController({ eventBus, linkService });
@@ -40,6 +48,30 @@ const api = async (url, options = {}) => {
 
 const annotationUrl = `/documents/${itemId}/annotations`;
 const contentUrl = `/documents/${itemId}/revisions/${revisionId}/content`;
+
+const showAnnotation = (annotation) => {
+  selectedAnnotation = annotation;
+  document.querySelectorAll("[data-annotation-id]").forEach((node) => {
+    node.classList.toggle("is-selected", node.dataset.annotationId === annotation.id);
+  });
+  const firstSegment = annotation.segments[0];
+  detailKind.textContent = annotation.kind === "highlight" ? message("highlight") : message("noteText");
+  detailPage.textContent = message("page", { page: (firstSegment?.page_index ?? 0) + 1 });
+  detailScope.textContent = message(annotation.scope === "project" ? "project" : "private");
+  detailText.textContent = annotation.selected_text || "";
+  detailText.hidden = !annotation.selected_text;
+  detailBody.value = annotation.body || "";
+  detailBody.disabled = !annotation.mine;
+  detailSave.hidden = !annotation.mine;
+  detailDelete.hidden = !annotation.mine;
+  detail.hidden = false;
+};
+
+const closeAnnotation = () => {
+  detail.hidden = true;
+  document.querySelectorAll("[data-annotation-id]").forEach((node) => node.classList.remove("is-selected"));
+  selectedAnnotation = null;
+};
 
 const find = (findPrevious = false) => {
   const query = search.value.trim();
@@ -160,7 +192,7 @@ const renderAllOverlays = () => {
         const node = document.createElement("span");
         node.dataset.annotationId = annotation.id;
         node.title = annotation.body || annotation.selected_text || message("highlight");
-        node.addEventListener("click", () => { selectedAnnotation = annotation; status.textContent = node.title; });
+        node.addEventListener("click", (event) => { event.stopPropagation(); showAnnotation(annotation); });
         if (annotation.kind === "highlight") {
           const points = [];
           for (let i = 0; i < 8; i += 2) points.push(target.viewport.convertToViewportPoint(segment.quad_points[i], segment.quad_points[i + 1]));
@@ -220,6 +252,26 @@ document.querySelector("#delete-annotation").addEventListener("click", async () 
   await api(`${annotationUrl}/${selectedAnnotation.id}`, { method: "DELETE" });
   annotations = annotations.filter((row) => row.id !== selectedAnnotation.id);
   selectedAnnotation = null;
+  detail.hidden = true;
+  renderAllOverlays();
+});
+document.querySelector("#annotation-detail-close").addEventListener("click", closeAnnotation);
+detailSave.addEventListener("click", async () => {
+  if (!selectedAnnotation?.mine) return;
+  const saved = await api(`${annotationUrl}/${selectedAnnotation.id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ version: selectedAnnotation.version, body: detailBody.value }),
+  });
+  annotations = annotations.map((row) => row.id === saved.id ? saved : row);
+  showAnnotation(saved);
+  renderAllOverlays();
+  status.textContent = message("saved");
+});
+detailDelete.addEventListener("click", async () => {
+  if (!selectedAnnotation?.mine) return;
+  await api(`${annotationUrl}/${selectedAnnotation.id}`, { method: "DELETE" });
+  annotations = annotations.filter((row) => row.id !== selectedAnnotation.id);
+  closeAnnotation();
   renderAllOverlays();
 });
 eventBus.on("pagerendered", renderAllOverlays);

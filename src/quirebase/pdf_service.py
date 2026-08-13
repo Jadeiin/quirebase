@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import TYPE_CHECKING
 
 import pymupdf
@@ -16,6 +17,8 @@ COLORS = {
     "blue": (0.35, 0.65, 1.0),
     "red": (1.0, 0.35, 0.35),
 }
+
+PDF_DOI_PATTERN = re.compile(r"10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.IGNORECASE)
 
 
 def pdf_crop_box(page: pymupdf.Page) -> pymupdf.Rect:
@@ -58,6 +61,22 @@ def inspect_pdf(path: Path) -> tuple[int, str, list[list[float]]]:
             pdf_box = pdf_crop_box(page)
             geometry.append([pdf_box.x0, pdf_box.y0, pdf_box.x1, pdf_box.y1])
         return page_count, "\n\f\n".join(text), geometry
+
+
+def extract_doi(path: Path, maximum_pages: int = 8) -> str | None:
+    """Extract the first plausible DOI from PDF metadata or early-page text."""
+    with pymupdf.open(path) as document:
+        candidates = [document.metadata.get("subject", ""), document.metadata.get("keywords", "")]
+        candidates.extend(
+            document[index].get_text("text")
+            for index in range(min(document.page_count, maximum_pages))
+        )
+    for candidate in candidates:
+        normalized = re.sub(r"\s+", " ", candidate or "")
+        match = PDF_DOI_PATTERN.search(normalized)
+        if match:
+            return match.group(0).rstrip(".,;)]}")
+    return None
 
 
 def create_thumbnail(path: Path, output: Path) -> None:

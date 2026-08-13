@@ -66,6 +66,18 @@ def response(request: httpx.Request) -> httpx.Response:
                 }
             },
         )
+    if request.url.host == "openlibrary.org":
+        return httpx.Response(
+            200,
+            json={
+                "ISBN:9780131103627": {
+                    "title": "The C Programming Language",
+                    "authors": [{"name": "Brian Kernighan"}],
+                    "publishers": [{"name": "Prentice Hall"}],
+                    "publish_date": "1988",
+                }
+            },
+        )
     assert request.url.host == "export.arxiv.org"
     return httpx.Response(
         200,
@@ -84,6 +96,7 @@ def response(request: httpx.Request) -> httpx.Response:
         ("https://doi.org/10.1234/sample", "auto", Identifier("doi", "10.1234/sample")),
         ("PMID: 42", "auto", Identifier("pmid", "42")),
         ("arXiv:1706.03762v7", "auto", Identifier("arxiv", "1706.03762v7")),
+        ("ISBN 978-0-13-110362-7", "auto", Identifier("isbn", "9780131103627")),
     ],
 )
 def test_identifier_detection(value, provider, expected):
@@ -102,6 +115,7 @@ def test_identifier_input_cannot_be_used_as_an_arbitrary_url():
         ("42", "pmid", "PubMed Example"),
         ("1706.03762", "arxiv", "arXiv Example"),
         ("10.9999/dataset", "doi", "DataCite Example"),
+        ("9780131103627", "isbn", "The C Programming Language"),
     ],
 )
 def test_provider_adapters_map_records(value, provider, title):

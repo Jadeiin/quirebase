@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import io
+import zipfile
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
 
@@ -14,6 +16,15 @@ from quirebase.models import Item, ItemRead, ItemTag, Project, ProjectItem, Proj
 def pdf_bytes() -> bytes:
     document = pymupdf.open()
     document.new_page()
+    contents = document.tobytes()
+    document.close()
+    return contents
+
+
+def published_pdf_bytes() -> bytes:
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_text((72, 72), "https://doi.org/10.1000/published")
     contents = document.tobytes()
     document.close()
     return contents
@@ -135,6 +146,27 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
         assert exported.status_code == 200
         assert "quirebase-export.enw" in exported.headers["content-disposition"]
         assert "Library paper 00" in exported.text
+
+        pdf_archive = client.post(
+            "/library/bulk?csrf_token=test-csrf",
+            data={"action": "download_pdfs", "item_ids": original.id},
+        )
+        assert pdf_archive.status_code == 200
+        assert pdf_archive.headers["content-type"] == "application/zip"
+        with zipfile.ZipFile(io.BytesIO(pdf_archive.content)) as archive:
+            assert archive.namelist() == ["paper.pdf"]
+
+        deleted = client.post(
+            "/library/bulk?csrf_token=test-csrf",
+            data={
+                "action": "delete_items",
+                "item_ids": selected[1].id,
+                "confirm_delete": "delete",
+            },
+            follow_redirects=False,
+        )
+        assert deleted.status_code == 303
+        assert db.get(Item, selected[1].id) is None
     finally:
         app.dependency_overrides.clear()
         get_settings.cache_clear()
@@ -145,11 +177,11 @@ def test_pdf_import_modules(db, tmp_path, monkeypatch):
     try:
         import_page = client.get("/bibliography/import")
         assert import_page.status_code == 200
-        assert "通过 DOI 导入" in import_page.text
+        assert "通过标识符导入" in import_page.text
         assert "文献记录文件" in import_page.text
         assert "已发表 PDF" in import_page.text
         assert "未发表 PDF" in import_page.text
-        assert "IEEE Xplore API" in import_page.text
+        assert "IEEE Xplore" in import_page.text
 
         uploaded = client.post(
             "/imports/pdf/unpublished?csrf_token=test-csrf",
@@ -179,8 +211,7 @@ def test_pdf_import_modules(db, tmp_path, monkeypatch):
         )
         published = client.post(
             "/imports/pdf/published?csrf_token=test-csrf",
-            data={"doi": "10.1000/published"},
-            files={"pdf": ("published.pdf", BytesIO(pdf_bytes()), "application/pdf")},
+            files={"pdf": ("published.pdf", BytesIO(published_pdf_bytes()), "application/pdf")},
             follow_redirects=False,
         )
         assert published.status_code == 303

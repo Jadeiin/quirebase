@@ -30,9 +30,12 @@
       <option value="export_bibtex">{{ t('Export BibTeX') }}</option>
       <option value="export_ris">{{ t('Export RIS') }}</option>
       <option value="export_endnote">{{ t('Export EndNote') }}</option>
+      <option value="download_pdfs">{{ t('Download PDFs') }}</option>
+      <option value="delete_items">{{ t('Delete papers') }}</option>
     </select>
     <select name="project_id" x-show="action === 'add_project'"><option value="">{{ t('Choose project') }}</option>{% for option in editable_projects %}<option value="{{ option.id }}">{{ option.name }}</option>{% endfor %}</select>
     <input name="tag_name" x-show="action === 'add_tag'" placeholder="{{ t('Tag for selected papers') }}">
+    <label class="bulk-confirm" x-show="action === 'delete_items'"><input type="checkbox" name="confirm_delete" value="delete" :required="action === 'delete_items'">{{ t('Confirm permanent deletion') }}</label>
     <button :disabled="selected.length === 0">{{ t('Apply') }}</button>
   </div>
   <div class="paper-table" role="table">

@@ -14,11 +14,12 @@ from .config import Settings, get_settings
 
 DOI_PATTERN = re.compile(r"10\.\d{4,9}/\S+", re.IGNORECASE)
 PMID_PATTERN = re.compile(r"\d{1,10}")
+ISBN_PATTERN = re.compile(r"(?:97[89])?\d{9}[\dX]", re.IGNORECASE)
 ARXIV_PATTERN = re.compile(
     r"(?:[a-z-]+(?:\.[A-Z]{2})?/\d{7}|\d{4}\.\d{4,5})(?:v\d+)?", re.IGNORECASE
 )
 HTML_TAG = re.compile(r"<[^>]+>")
-PROVIDERS = {"auto", "doi", "pmid", "arxiv"}
+PROVIDERS = {"auto", "doi", "pmid", "arxiv", "isbn"}
 
 
 class MetadataLookupError(RuntimeError):
@@ -37,7 +38,7 @@ class Identifier:
 
 def parse_identifier(value: str, provider: str = "auto") -> Identifier:
     if provider not in PROVIDERS:
-        raise ValueError("provider must be auto, doi, pmid or arxiv")
+        raise ValueError("provider must be auto, doi, pmid, arxiv or isbn")
     candidate = value.strip()
     if not candidate or len(candidate) > 500 or any(ord(character) < 32 for character in candidate):
         raise ValueError("identifier is invalid")
@@ -57,9 +58,13 @@ def parse_identifier(value: str, provider: str = "auto") -> Identifier:
     arxiv = arxiv.removesuffix(".pdf")
     if provider in ("auto", "arxiv") and ARXIV_PATTERN.fullmatch(arxiv):
         return Identifier("arxiv", arxiv)
+    isbn = re.sub(r"^(?:urn:isbn:|isbn(?:-1[03])?:?)\s*", "", candidate, flags=re.IGNORECASE)
+    isbn = re.sub(r"[-\s]", "", isbn)
+    if provider in ("auto", "isbn") and ISBN_PATTERN.fullmatch(isbn):
+        return Identifier("isbn", isbn.upper())
     if provider != "auto":
         raise ValueError(f"identifier is not a valid {provider}")
-    raise ValueError("identifier is not a recognized DOI, PMID or arXiv ID")
+    raise ValueError("identifier is not a recognized DOI, PMID, arXiv ID or ISBN")
 
 
 def _first(value: Any) -> str | None:
@@ -135,7 +140,40 @@ class MetadataClient:
             return self._crossref(identifier.value)
         if identifier.provider == "pmid":
             return self._pubmed(identifier.value)
+        if identifier.provider == "isbn":
+            return self._open_library(identifier.value)
         return self._arxiv(identifier.value)
+
+    def _open_library(self, isbn: str) -> dict[str, str | None]:
+        key = f"ISBN:{isbn}"
+        try:
+            payload = json.loads(
+                self._get(
+                    "https://openlibrary.org/api/books",
+                    {"bibkeys": key, "format": "json", "jscmd": "data"},
+                )
+            )
+        except (json.JSONDecodeError, TypeError) as error:
+            raise MetadataLookupError("Open Library returned invalid metadata") from error
+        record = payload.get(key)
+        if not record:
+            raise MetadataNotFoundError("Open Library record was not found")
+        return {
+            "title": _first(record.get("title")),
+            "abstract": None,
+            "authors": "; ".join(
+                author["name"] for author in record.get("authors", []) if author.get("name")
+            )
+            or None,
+            "keywords": None,
+            "publication_date": _first(record.get("publish_date")),
+            "publication_title": _first([
+                publisher.get("name") for publisher in record.get("publishers", [])
+            ]),
+            "doi": None,
+            "identifiers": json.dumps({"isbn": isbn}),
+            "reference_type": "book",
+        }
 
     def _crossref(self, doi: str) -> dict[str, str | None]:
         params = (

@@ -3,7 +3,10 @@ from __future__ import annotations
 import json
 import re
 import secrets
+import zipfile
 from datetime import UTC, datetime, timedelta
+from difflib import SequenceMatcher
+from io import BytesIO
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlencode
@@ -49,7 +52,7 @@ from .models import (
     Tag,
     User,
 )
-from .pdf_service import job_payload, validate_pdf_container
+from .pdf_service import extract_doi, job_payload, validate_pdf_container
 from .permissions import (
     can_edit_annotation,
     can_edit_item,
@@ -113,6 +116,10 @@ def editable_projects(db: Session, user: User) -> list[Project]:
 
 
 def store_pdf_revision(db: Session, user: User, item: Item, pdf: UploadFile) -> FileRevision:
+    return attach_staged_pdf(db, user, item, stage_pdf(pdf))
+
+
+def stage_pdf(pdf: UploadFile) -> tuple[str, str, int, str]:
     if not pdf.filename or not pdf.filename.lower().endswith(".pdf"):
         raise HTTPException(415, "a PDF file is required")
     store = LocalObjectStore()
@@ -120,17 +127,25 @@ def store_pdf_revision(db: Session, user: User, item: Item, pdf: UploadFile) -> 
         key, digest, size = store.put_pdf(pdf.file, get_settings().max_pdf_bytes)
         validate_pdf_container(store.path(key))
     except ValueError as error:
-        if "key" in locals() and not db.scalar(
-            select(FileRevision.id).where(FileRevision.object_key == key).limit(1)
-        ):
+        if "key" in locals():
             store.path(key).unlink(missing_ok=True)
         raise HTTPException(422, str(error)) from error
+    return key, digest, size, Path(pdf.filename).name
+
+
+def attach_staged_pdf(
+    db: Session,
+    user: User,
+    item: Item,
+    staged: tuple[str, str, int, str],
+) -> FileRevision:
+    key, digest, size, original_name = staged
     revision = FileRevision(
         item_id=item.id,
         object_key=key,
         sha256=digest,
         size=size,
-        original_name=Path(pdf.filename).name,
+        original_name=original_name,
         created_by=user.id,
     )
     db.add(revision)
@@ -152,6 +167,11 @@ def store_pdf_revision(db: Session, user: User, item: Item, pdf: UploadFile) -> 
         )
     )
     return revision
+
+
+def discard_staged_pdf(db: Session, object_key: str) -> None:
+    if not db.scalar(select(FileRevision.id).where(FileRevision.object_key == object_key).limit(1)):
+        LocalObjectStore().path(object_key).unlink(missing_ok=True)
 
 
 def bibliography_response(items: list[Item], file_format: str) -> Response:
@@ -617,6 +637,7 @@ def create_app() -> FastAPI:
         item_ids: list[str] = Form(default=[]),
         project_id: str = Form(default=""),
         tag_name: str = Form(default=""),
+        confirm_delete: str = Form(default=""),
         user: User = Depends(current_user),
         db: Session = Depends(get_db),
     ):
@@ -626,8 +647,43 @@ def create_app() -> FastAPI:
             raise HTTPException(422, "select one or more accessible papers")
         if action.startswith("export_"):
             return bibliography_response(items, action.removeprefix("export_"))
+        if action == "download_pdfs":
+            archive = BytesIO()
+            used_names: set[str] = set()
+            with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+                for item in items:
+                    revision = db.scalar(
+                        select(FileRevision)
+                        .where(FileRevision.item_id == item.id)
+                        .order_by(FileRevision.created_at.desc())
+                        .limit(1)
+                    )
+                    if revision is None:
+                        continue
+                    filename = Path(revision.original_name).name
+                    if filename in used_names:
+                        filename = f"{item.id[:8]}-{filename}"
+                    used_names.add(filename)
+                    bundle.write(LocalObjectStore().path(revision.object_key), filename)
+            db.add(
+                AuditEvent(
+                    actor_id=user.id,
+                    action="library.bulk.download_pdfs",
+                    target_type="item",
+                    target_id=None,
+                    detail=json.dumps({"item_ids": [item.id for item in items]}),
+                )
+            )
+            db.commit()
+            archive.seek(0)
+            return StreamingResponse(
+                archive,
+                media_type="application/zip",
+                headers={"Content-Disposition": 'attachment; filename="quirebase-pdfs.zip"'},
+            )
         if any(not can_edit_item(db, user, item.id) for item in items):
             raise HTTPException(403, "all selected papers must be editable")
+        cleanup_keys: list[str] = []
         if action == "add_project":
             membership = project_member(db, user, project_id)
             if membership is None or membership.role not in ("owner", "editor"):
@@ -649,6 +705,28 @@ def create_app() -> FastAPI:
                 if db.get(ItemTag, (item.id, tag_record.id)) is None:
                     db.add(ItemTag(item_id=item.id, tag_id=tag_record.id))
                     search_index(db).index_item(db, item.id)
+        elif action == "delete_items":
+            if confirm_delete != "delete":
+                raise HTTPException(422, "confirm deletion of the selected papers")
+            if user.role != "administrator" and any(item.created_by != user.id for item in items):
+                raise HTTPException(403, "only paper owners can permanently delete papers")
+            cleanup_keys = list(
+                db.scalars(
+                    select(FileRevision.object_key).where(
+                        FileRevision.item_id.in_([item.id for item in items])
+                    )
+                ).all()
+            )
+            cleanup_keys.extend(
+                db.scalars(
+                    select(Attachment.object_key).where(
+                        Attachment.item_id.in_([item.id for item in items])
+                    )
+                ).all()
+            )
+            for item in items:
+                search_index(db).remove_item(db, item.id)
+                db.delete(item)
         else:
             raise HTTPException(422, "unknown bulk action")
         db.add(
@@ -661,6 +739,15 @@ def create_app() -> FastAPI:
             )
         )
         db.commit()
+        for object_key in cleanup_keys:
+            with Session(db.bind) as cleanup_db:
+                still_used = cleanup_db.scalar(
+                    select(FileRevision.id).where(FileRevision.object_key == object_key).limit(1)
+                ) or cleanup_db.scalar(
+                    select(Attachment.id).where(Attachment.object_key == object_key).limit(1)
+                )
+            if not still_used:
+                LocalObjectStore().path(object_key).unlink(missing_ok=True)
         return RedirectResponse("/library", status_code=303)
 
     @app.post("/projects", dependencies=[Depends(require_csrf)])
@@ -684,7 +771,33 @@ def create_app() -> FastAPI:
             )
         )
         db.commit()
-        return RedirectResponse("/", status_code=303)
+        return RedirectResponse(f"/projects/{project.id}", status_code=303)
+
+    @app.get("/projects", response_class=HTMLResponse)
+    def projects_page(
+        request: Request,
+        user: User = Depends(current_user),
+        login: LoginSession = Depends(current_login),
+        db: Session = Depends(get_db),
+    ):
+        projects = db.execute(
+            select(Project, ProjectMember.role, func.count(ProjectItem.item_id))
+            .join(ProjectMember, ProjectMember.project_id == Project.id)
+            .outerjoin(ProjectItem, ProjectItem.project_id == Project.id)
+            .where(ProjectMember.user_id == user.id)
+            .group_by(Project.id, ProjectMember.role)
+            .order_by(Project.name)
+        ).all()
+        return templates.TemplateResponse(
+            request,
+            "projects.html",
+            {
+                "user": user,
+                "projects": projects,
+                "csrf": login.csrf_token,
+                "active_page": "projects",
+            },
+        )
 
     @app.get("/projects/{project_id}", response_class=HTMLResponse)
     def project_page(
@@ -710,6 +823,7 @@ def create_app() -> FastAPI:
             select(Item)
             .join(ProjectItem, ProjectItem.item_id == Item.id)
             .where(ProjectItem.project_id == project_id)
+            .order_by(Item.updated_at.desc())
         ).all()
         return templates.TemplateResponse(
             request,
@@ -823,25 +937,168 @@ def create_app() -> FastAPI:
             {"user": user, "csrf": login.csrf_token, "active_page": "import"},
         )
 
+    @app.get("/tools", response_class=HTMLResponse)
+    def tools_page(
+        request: Request,
+        mode: str = "",
+        user: User = Depends(current_user),
+        login: LoginSession = Depends(current_login),
+        db: Session = Depends(get_db),
+    ):
+        if mode not in ("", "doi", "pdf", "title", "similar"):
+            raise HTTPException(404)
+        limit = 500 if mode == "similar" else 2000
+        items = list(db.scalars(visible_items(user).order_by(Item.title).limit(limit)).all())
+        groups: list[list[Item]] = []
+        if mode:
+            buckets: dict[str, list[Item]] = {}
+            if mode == "doi":
+                for item in items:
+                    key = (item.doi or "").strip().lower()
+                    if key:
+                        buckets.setdefault(key, []).append(item)
+            elif mode == "pdf":
+                revisions = db.execute(
+                    select(FileRevision.item_id, FileRevision.sha256).where(
+                        FileRevision.item_id.in_([item.id for item in items])
+                    )
+                ).all()
+                item_map = {item.id: item for item in items}
+                for item_id, digest in revisions:
+                    group = buckets.setdefault(digest, [])
+                    if all(item.id != item_id for item in group):
+                        group.append(item_map[item_id])
+            else:
+                normalize = lambda title: re.sub(r"[^\w]+", " ", title.casefold()).strip()
+                if mode == "title":
+                    for item in items:
+                        buckets.setdefault(normalize(item.title), []).append(item)
+                else:
+                    remaining = items.copy()
+                    while remaining:
+                        anchor = remaining.pop(0)
+                        key = normalize(anchor.title)
+                        matches = [anchor]
+                        for candidate in remaining.copy():
+                            if (
+                                SequenceMatcher(None, key, normalize(candidate.title)).ratio()
+                                >= 0.9
+                            ):
+                                matches.append(candidate)
+                                remaining.remove(candidate)
+                        if len(matches) > 1:
+                            groups.append(matches)
+            if mode != "similar":
+                groups = [group for group in buckets.values() if len({row.id for row in group}) > 1]
+        accessible_ids = visible_items(user).with_only_columns(Item.id).subquery()
+        tags = db.execute(
+            select(Tag, func.count(ItemTag.item_id))
+            .outerjoin(
+                ItemTag,
+                and_(ItemTag.tag_id == Tag.id, ItemTag.item_id.in_(select(accessible_ids.c.id))),
+            )
+            .group_by(Tag.id)
+            .having(func.count(ItemTag.item_id) > 0)
+            .order_by(Tag.name)
+        ).all()
+        return templates.TemplateResponse(
+            request,
+            "tools.html",
+            {
+                "user": user,
+                "csrf": login.csrf_token,
+                "mode": mode,
+                "groups": groups,
+                "tags": tags,
+                "active_page": "tools",
+            },
+        )
+
+    @app.post("/tools/tags/{tag_id}", dependencies=[Depends(require_csrf)])
+    def rename_tag(
+        tag_id: str,
+        name: str = Form(),
+        user: User = Depends(current_user),
+        db: Session = Depends(get_db),
+    ):
+        tag = db.get(Tag, tag_id)
+        normalized = " ".join(name.split())
+        if tag is None or (tag.created_by != user.id and user.role != "administrator"):
+            raise HTTPException(404)
+        if not normalized or len(normalized) > 120:
+            raise HTTPException(422, "tag must contain 1 to 120 characters")
+        if db.scalar(select(Tag.id).where(Tag.name == normalized, Tag.id != tag.id)):
+            raise HTTPException(409, "tag name already exists")
+        tag.name = normalized
+        item_ids = list(db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == tag.id)).all())
+        for item_id in item_ids:
+            search_index(db).index_item(db, item_id)
+        db.add(
+            AuditEvent(
+                actor_id=user.id,
+                action="tag.rename",
+                target_type="tag",
+                target_id=tag.id,
+            )
+        )
+        db.commit()
+        return RedirectResponse("/tools#tags", status_code=303)
+
+    @app.post("/tools/tags/{tag_id}/delete", dependencies=[Depends(require_csrf)])
+    def delete_tag(
+        tag_id: str,
+        user: User = Depends(current_user),
+        db: Session = Depends(get_db),
+    ):
+        tag = db.get(Tag, tag_id)
+        if tag is None or (tag.created_by != user.id and user.role != "administrator"):
+            raise HTTPException(404)
+        item_ids = list(db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == tag.id)).all())
+        db.delete(tag)
+        db.flush()
+        for item_id in item_ids:
+            search_index(db).index_item(db, item_id)
+        db.add(
+            AuditEvent(
+                actor_id=user.id,
+                action="tag.delete",
+                target_type="tag",
+                target_id=tag_id,
+            )
+        )
+        db.commit()
+        return RedirectResponse("/tools#tags", status_code=303)
+
     @app.post("/imports/pdf/published", dependencies=[Depends(require_csrf)])
     def import_published_pdf(
-        doi: str = Form(),
+        doi: str = Form(default=""),
         pdf: UploadFile = File(),
         user: User = Depends(current_user),
         db: Session = Depends(get_db),
     ):
+        staged = stage_pdf(pdf)
+        detected_doi = extract_doi(LocalObjectStore().path(staged[0]))
+        identifier = doi.strip() or detected_doi
+        if not identifier:
+            discard_staged_pdf(db, staged[0])
+            raise HTTPException(
+                422, "no DOI was found in the PDF; enter one manually or import it as unpublished"
+            )
         try:
-            _identifier, record = lookup_metadata(doi, "doi")
+            _identifier, record = lookup_metadata(identifier, "doi")
         except ValueError as error:
+            discard_staged_pdf(db, staged[0])
             raise HTTPException(422, str(error)) from error
         except MetadataNotFoundError as error:
+            discard_staged_pdf(db, staged[0])
             raise HTTPException(404, str(error)) from error
         except MetadataLookupError as error:
+            discard_staged_pdf(db, staged[0])
             raise HTTPException(502, str(error)) from error
         item = Item(created_by=user.id, **record)
         db.add(item)
         db.flush()
-        store_pdf_revision(db, user, item, pdf)
+        attach_staged_pdf(db, user, item, staged)
         search_index(db).index_item(db, item.id)
         db.add(
             AuditEvent(
@@ -849,7 +1106,10 @@ def create_app() -> FastAPI:
                 action="import.pdf.published",
                 target_type="item",
                 target_id=item.id,
-                detail=json.dumps({"doi": item.doi}),
+                detail=json.dumps({
+                    "doi": item.doi,
+                    "detected_automatically": not bool(doi.strip()),
+                }),
             )
         )
         db.commit()
