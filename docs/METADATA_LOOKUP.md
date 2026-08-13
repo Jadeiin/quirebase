@@ -1,6 +1,6 @@
 # Online metadata lookup
 
-Open **Import BibTeX/RIS** and use **Look up online metadata**. Accepted inputs are a DOI or `doi.org` URL, a numeric PMID (optionally prefixed `PMID:`), and a current or legacy arXiv ID. Automatic detection chooses the provider. Results are shown in the existing import preview and are not written until the user confirms.
+Open **Import BibTeX/RIS** and use **Look up online metadata**. Accepted inputs are a DOI or `doi.org` URL, a numeric PMID (optionally prefixed `PMID:`), and a current or older-format arXiv ID. Automatic detection chooses the provider. Results are shown in the existing import preview and are not written until the user confirms.
 
 DOIs are queried first through Crossref and fall back to DataCite when Crossref has no record. PMID uses NCBI PubMed ESummary. arXiv uses its Atom query API. Imported fields include title, authors, date, publication, DOI and provider-specific identifiers; abstracts and keywords are included when the provider supplies them. Provider metadata can be incomplete and should be reviewed before confirmation.
 

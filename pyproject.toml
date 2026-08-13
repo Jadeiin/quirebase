@@ -46,7 +46,6 @@ packages = ["src/quirebase"]
 "migrations" = "quirebase/migrations"
 "docs" = "quirebase/docs"
 "THIRD_PARTY.md" = "quirebase/THIRD_PARTY.md"
-"SOURCE_POLICY.md" = "quirebase/SOURCE_POLICY.md"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -5,8 +5,8 @@ from alembic import op
 
 from quirebase.db import Base
 
-revision = "0007_attachments_fields"
-down_revision = "0006_legacy_import_maps"
+revision = "0006_attachments_fields"
+down_revision = "0005_team_accounts"
 branch_labels = None
 depends_on = None
 

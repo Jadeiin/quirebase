@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import typer
@@ -11,7 +10,6 @@ from sqlalchemy import inspect, select, text
 
 from .config import get_settings
 from .db import SessionLocal, engine
-from .legacy_migration import migrate_legacy
 from .maintenance import check_objects, create_backup, restore_backup, verify_backup
 from .models import User
 from .search import reindex_all
@@ -136,27 +134,6 @@ def restore(
     engine.dispose()
     restore_backup(archive.resolve(), force=True)
     typer.echo("Backup restored. Restart all web and worker processes.")
-
-
-@app.command("migrate-legacy")
-def migrate_legacy_command(
-    database: Path = typer.Option(..., exists=True, dir_okay=False, readable=True),
-    data_dir: Path = typer.Option(..., exists=True, file_okay=False, readable=True),
-    owner: str = typer.Option(..., help="Existing account that will own imported records"),
-    commit: bool = typer.Option(
-        False, "--commit", help="Write after the default read-only preflight"
-    ),
-    report: Path | None = typer.Option(None, help="Write the JSON migration report here"),
-):
-    with SessionLocal() as db:
-        account = db.scalar(select(User).where(User.username == owner))
-        if account is None:
-            raise typer.BadParameter("owner account does not exist")
-        result = migrate_legacy(db, database.resolve(), data_dir.resolve(), account, commit=commit)
-    rendered = json.dumps(result, indent=2, ensure_ascii=False)
-    if report:
-        report.write_text(rendered + "\n", encoding="utf-8")
-    typer.echo(rendered)
 
 
 if __name__ == "__main__":

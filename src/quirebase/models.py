@@ -258,17 +258,6 @@ class ImportBatch(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
 
 
-class LegacyImportMap(Base):
-    __tablename__ = "legacy_import_maps"
-    __table_args__ = (UniqueConstraint("source_fingerprint", "entity_type", "legacy_id"),)
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    source_fingerprint: Mapped[str] = mapped_column(String(64), index=True)
-    entity_type: Mapped[str] = mapped_column(String(32))
-    legacy_id: Mapped[str] = mapped_column(String(80))
-    new_id: Mapped[str] = mapped_column(String(36))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
-
-
 class AuditEvent(Base):
     __tablename__ = "audit_events"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)

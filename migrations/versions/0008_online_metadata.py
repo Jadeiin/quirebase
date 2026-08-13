@@ -3,8 +3,8 @@
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0009_online_metadata"
-down_revision = "0008_shared_pdf_objects"
+revision = "0008_online_metadata"
+down_revision = "0007_shared_pdf_objects"
 branch_labels = None
 depends_on = None
 

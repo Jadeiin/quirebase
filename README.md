@@ -1,6 +1,6 @@
 # Quirebase
 
-Quirebase is an AGPL-3.0-only, self-hosted collaborative research library. This directory contains the clean Python implementation; the legacy application is not required at runtime.
+Quirebase is an AGPL-3.0-only, self-hosted collaborative research library.
 
 ## Development
 
@@ -32,19 +32,19 @@ QUIREBASE_DATABASE_URL=postgresql+psycopg://quirebase:password@localhost/quireba
 - PyMuPDF validates PDFs, extracts text, creates thumbnails, and writes database-backed highlights and notes into temporary export copies.
 - Original PDFs are content-addressed and never modified.
 
-Password-protected PDFs, OCR, flattened annotations and legacy-data migration are outside the first milestone.
+Password-protected PDFs, OCR and flattened annotations are outside the first milestone.
 
 ## Search and bibliography interchange
 
 - SQLite uses FTS5 and PostgreSQL uses a `tsvector`/GIN adapter behind the same search interface. Run `uv run quirebase reindex` after restoring a database or changing indexing rules.
 - BibTeX and RIS imports are parsed into a persisted preview and only committed as one transaction after confirmation. Exports contain only items visible to the current user.
 
-Quirebase is licensed under AGPL-3.0-only; see `LICENSE`. PyMuPDF is used under its AGPL option. The legacy application outside this directory retains its own license and is not relicensed by this rewrite.
+Quirebase is licensed under AGPL-3.0-only; see `LICENSE`. PyMuPDF is used under its AGPL option.
 
 ## Completed scope
 
-The rewrite includes local accounts and invitations, administrator/member and project owner/editor/viewer permissions, audited login attempts, per-session and all-session logout, durable login throttling, item metadata/custom fields, DOI/PMID/arXiv lookup with preview, tags, projects, discussions, PDF revisions, supplementary attachments, PDF.js reading and scoped annotations, PyMuPDF exports, dialect-native search, staged BibTeX/RIS import, audit events, resumable jobs, metrics, backup/restore, integrity checks, and a read-only legacy migration command.
+Quirebase includes local accounts and invitations, administrator/member and project owner/editor/viewer permissions, audited login attempts, per-session and all-session logout, durable login throttling, item metadata/custom fields, DOI/PMID/arXiv lookup with preview, tags, projects, discussions, PDF revisions, supplementary attachments, PDF.js reading and scoped annotations, PyMuPDF exports, dialect-native search, staged BibTeX/RIS import, audit events, resumable jobs, metrics, backup/restore, and integrity checks.
 
-Operational and migration instructions are in `docs/DEPLOYMENT.md` and `docs/LEGACY_MIGRATION.md`. Deferred integrations and their security gates are recorded in `docs/adr/0001-deferred-integrations.md`.
+Operational instructions are in `docs/DEPLOYMENT.md`. Deferred integrations and their security gates are recorded in `docs/adr/0001-deferred-integrations.md`.
 
 The real-paper validation suite uses separately downloaded, checksum-pinned PMC open-access PDFs. See `docs/TESTING.md`; run `uv run python scripts/download-oa-corpus.py`, `uv run pytest -q -m oa`, and `bun run test:oa:pdfjs`.
