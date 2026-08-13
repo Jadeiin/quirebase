@@ -4,6 +4,7 @@ repos:
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
+        exclude: ^src/quirebase/static/vendor/.*\.mjs$
       - id: check-yaml
       - id: check-toml
       - id: check-json

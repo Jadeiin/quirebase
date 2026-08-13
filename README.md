@@ -6,6 +6,21 @@ Quirebase is an AGPL-3.0-only, self-hosted collaborative research library.
 
 Requirements: Python 3.12+, `uv`, and Bun 1.3+ (or Node.js 22+ with npm) for building the bundled PDF.js assets.
 
+For a quick local test, run:
+
+```sh
+./scripts/dev.sh
+```
+
+This prepares dependencies and assets, initializes the development database, creates the
+`admin` account with password `quirebase-dev` on the first run, and starts both the web server
+and worker at <http://127.0.0.1:9060>. Override the defaults with
+`QUIREBASE_DEV_HOST`, `QUIREBASE_DEV_PORT`, `QUIREBASE_DEV_USERNAME`, and
+`QUIREBASE_DEV_PASSWORD`. Set `QUIREBASE_DEV_SKIP_SETUP=1` to skip dependency installation and
+asset rebuilding on later runs.
+
+For manual setup:
+
 ```sh
 uv sync --extra dev
 uv run prek install --hook-type pre-commit --hook-type pre-push --hook-type commit-msg
