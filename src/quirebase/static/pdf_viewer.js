@@ -4,6 +4,11 @@ import { EventBus, PDFLinkService, PDFFindController, PDFViewer } from "/static/
 pdfjsLib.GlobalWorkerOptions.workerSrc = "/static/vendor/pdf.worker.mjs";
 
 const root = document.querySelector("#pdf-app");
+const messages = JSON.parse(root.dataset.i18n);
+const message = (key, values = {}) => Object.entries(values).reduce(
+  (text, [name, value]) => text.replaceAll(`{${name}}`, value),
+  messages[key],
+);
 const itemId = root.dataset.itemId;
 const revisionId = root.dataset.revisionId;
 const csrf = root.dataset.csrf;
@@ -70,8 +75,8 @@ const selectionSegments = () => {
 const saveHighlight = async (color) => {
   const selection = window.getSelection();
   const segments = selectionSegments();
-  if (!segments.length) return alert("Select text first.");
-  status.textContent = "Saving…";
+  if (!segments.length) return alert(message("selectTextFirst"));
+  status.textContent = message("saving");
   try {
     const saved = await api(annotationUrl, {
       method: "POST",
@@ -83,7 +88,7 @@ const saveHighlight = async (color) => {
     annotations.push(saved);
     selection.removeAllRanges();
     renderAllOverlays();
-    status.textContent = "Saved";
+    status.textContent = message("saved");
   } catch (error) { status.textContent = error.message; }
 };
 
@@ -93,7 +98,7 @@ const saveNote = async (event) => {
   if (!context) return;
   event.preventDefault();
   noteMode = false;
-  const body = prompt("Note text");
+  const body = prompt(message("noteText"));
   if (body === null || !body.trim()) return;
   const [anchor_x, anchor_y] = pointToPdf(context.page, context.view, event.clientX, event.clientY);
   try {
@@ -106,7 +111,7 @@ const saveNote = async (event) => {
     });
     annotations.push(saved);
     renderAllOverlays();
-    status.textContent = "Saved";
+    status.textContent = message("saved");
   } catch (error) { status.textContent = error.message; }
 };
 
@@ -132,7 +137,7 @@ const renderAllOverlays = () => {
       for (const segment of annotation.segments.filter((part) => part.page_index === pageIndex)) {
         const node = document.createElement("span");
         node.dataset.annotationId = annotation.id;
-        node.title = annotation.body || annotation.selected_text || "Highlight";
+        node.title = annotation.body || annotation.selected_text || message("highlight");
         node.addEventListener("click", () => { selectedAnnotation = annotation; status.textContent = node.title; });
         if (annotation.kind === "highlight") {
           const points = [];
@@ -156,7 +161,7 @@ const renderAllOverlays = () => {
 };
 
 document.querySelectorAll("[data-color]").forEach((button) => button.addEventListener("click", () => saveHighlight(button.dataset.color)));
-document.querySelector("#add-note").addEventListener("click", () => { noteMode = true; status.textContent = "Click a page to place the note"; });
+document.querySelector("#add-note").addEventListener("click", () => { noteMode = true; status.textContent = message("clickPage"); });
 document.querySelector("#viewer").addEventListener("click", saveNote, true);
 projectPicker.addEventListener("change", loadAnnotations);
 document.querySelector("#export-annotations").addEventListener("click", async () => {
@@ -164,17 +169,17 @@ document.querySelector("#export-annotations").addEventListener("click", async ()
     const created = await api(`${annotationUrl.replace("/annotations", "/annotation-exports")}`, {
       method: "POST", body: JSON.stringify({ revision_id: revisionId, project_id: projectPicker.value || null, include_private: true }),
     });
-    status.textContent = "Preparing export…";
+    status.textContent = message("preparingExport");
     while (true) {
       await new Promise((resolve) => setTimeout(resolve, 700));
       const job = await api(`/annotation-exports/${created.id}`);
-      if (job.state === "succeeded") { window.location.assign(`/annotation-exports/${created.id}/content`); status.textContent = "Export ready"; break; }
-      if (job.state === "failed") throw new Error(job.error || "Export failed");
+      if (job.state === "succeeded") { window.location.assign(`/annotation-exports/${created.id}/content`); status.textContent = message("exportReady"); break; }
+      if (job.state === "failed") throw new Error(job.error || message("exportFailed"));
     }
   } catch (error) { status.textContent = error.message; }
 });
 document.querySelector("#delete-annotation").addEventListener("click", async () => {
-  if (!selectedAnnotation || !selectedAnnotation.mine) return alert("Select one of your annotations.");
+  if (!selectedAnnotation || !selectedAnnotation.mine) return alert(message("selectOwnAnnotation"));
   await api(`${annotationUrl}/${selectedAnnotation.id}`, { method: "DELETE" });
   annotations = annotations.filter((row) => row.id !== selectedAnnotation.id);
   selectedAnnotation = null;
@@ -189,7 +194,7 @@ try {
   viewer.setDocument(documentProxy);
   linkService.setDocument(documentProxy);
   await loadAnnotations();
-  status.textContent = `${documentProxy.numPages} pages`;
+  status.textContent = message("pages", { count: documentProxy.numPages });
 } catch (error) {
-  status.textContent = `Unable to open PDF: ${error.message}`;
+  status.textContent = message("unableToOpen", { message: error.message });
 }

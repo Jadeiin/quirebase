@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ locale }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -11,21 +11,21 @@
   {% if user %}
   <aside class="app-sidebar">
     <a href="/" class="brand">Quirebase</a>
-    <nav aria-label="Main navigation">
-      <a href="/" {% if active_page == 'dashboard' %}aria-current="page"{% endif %}><span>⌂</span>Dashboard</a>
-      <a href="/library" {% if active_page == 'library' %}aria-current="page"{% endif %}><span>▤</span>Library</a>
-      <a href="/bibliography/import" {% if active_page == 'import' %}aria-current="page"{% endif %}><span>＋</span>Import</a>
-      <a href="/#projects"><span>◇</span>Projects</a>
-      <a href="/account/sessions" {% if active_page == 'sessions' %}aria-current="page"{% endif %}><span>◉</span>Devices</a>
+    <nav aria-label="{{ t('Main navigation') }}">
+      <a href="/" {% if active_page == 'dashboard' %}aria-current="page"{% endif %}><span>⌂</span>{{ t('Dashboard') }}</a>
+      <a href="/library" {% if active_page == 'library' %}aria-current="page"{% endif %}><span>▤</span>{{ t('Library') }}</a>
+      <a href="/bibliography/import" {% if active_page == 'import' %}aria-current="page"{% endif %}><span>＋</span>{{ t('Import') }}</a>
+      <a href="/#projects"><span>◇</span>{{ t('Projects') }}</a>
+      <a href="/account/sessions" {% if active_page == 'sessions' %}aria-current="page"{% endif %}><span>◉</span>{{ t('Devices') }}</a>
       {% if user.role == 'administrator' %}
-      <a href="/admin" {% if active_page == 'admin' %}aria-current="page"{% endif %}><span>⚙</span>Admin</a>
+      <a href="/admin" {% if active_page == 'admin' %}aria-current="page"{% endif %}><span>⚙</span>{{ t('Administration') }}</a>
       {% endif %}
     </nav>
     <div class="app-sidebar-account">
       <strong>{{ user.username }}</strong>
-      <small>{{ user.role }}</small>
+      <small>{{ t(user.role) }}</small>
       {% if csrf %}
-      <form method="post" action="/logout?csrf_token={{ csrf }}"><button class="quiet-button">Sign out</button></form>
+      <form method="post" action="/logout?csrf_token={{ csrf }}"><button class="quiet-button">{{ t('Sign out') }}</button></form>
       {% endif %}
     </div>
   </aside>

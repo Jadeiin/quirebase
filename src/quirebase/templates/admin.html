@@ -1,6 +1,6 @@
-{% extends "base.html" %}{% block content %}<section class="panel"><h1>Administration</h1>
-<form method="post" action="/admin/invitations?csrf_token={{ csrf }}"><input name="username" maxlength="120" required><select name="role"><option>member</option><option>administrator</option></select><button>Create invitation</button></form>
-<h2>Users</h2>{% for account in users %}<p>{{ account.username }} · {{ account.role }}{% if not account.active %} · disabled{% endif %}</p>{% endfor %}
-<h2>Invitations</h2>{% for invite in invitations %}<p>{{ invite.username }} · {% if invite.accepted_at %}accepted{% else %}pending{% endif %}</p>{% else %}<p>None.</p>{% endfor %}
-<h2>Failed jobs</h2>{% for job in failed_jobs %}<p>{{ job.kind }} · {{ job.error }} <form class="inline" method="post" action="/admin/jobs/{{ job.id }}/retry?csrf_token={{ csrf }}"><button>Retry</button></form></p>{% else %}<p>None.</p>{% endfor %}
-<p><a href="/metrics">Metrics</a></p></section>{% endblock %}
+{% extends "base.html" %}{% block content %}<section class="panel"><h1>{{ t('Administration') }}</h1>
+<form method="post" action="/admin/invitations?csrf_token={{ csrf }}"><input name="username" aria-label="{{ t('Username') }}" maxlength="120" required><select name="role" aria-label="{{ t('role') }}"><option value="member">{{ t('member') }}</option><option value="administrator">{{ t('administrator') }}</option></select><button>{{ t('Create invitation') }}</button></form>
+<h2>{{ t('Users') }}</h2>{% for account in users %}<p>{{ account.username }} · {{ t(account.role) }}{% if not account.active %} · {{ t('disabled') }}{% endif %}</p>{% endfor %}
+<h2>{{ t('Invitations') }}</h2>{% for invite in invitations %}<p>{{ invite.username }} · {% if invite.accepted_at %}{{ t('accepted') }}{% else %}{{ t('pending') }}{% endif %}</p>{% else %}<p>{{ t('None.') }}</p>{% endfor %}
+<h2>{{ t('Failed jobs') }}</h2>{% for job in failed_jobs %}<p>{{ job.kind }} · {{ job.error }} <form class="inline" method="post" action="/admin/jobs/{{ job.id }}/retry?csrf_token={{ csrf }}"><button>{{ t('Retry') }}</button></form></p>{% else %}<p>{{ t('None.') }}</p>{% endfor %}
+<p><a href="/metrics">{{ t('Metrics') }}</a></p></section>{% endblock %}

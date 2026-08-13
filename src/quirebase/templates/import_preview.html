@@ -1,21 +1,21 @@
 {% extends "base.html" %}
-{% block title %}Import preview · Quirebase{% endblock %}
+{% block title %}{{ t('Import preview') }} · Quirebase{% endblock %}
 {% block content %}
 <section class="panel">
-  <h1>Import preview</h1>
-  <p>{{ records|length }} record(s) parsed.</p>
+  <h1>{{ t('Import preview') }}</h1>
+  <p>{{ t('{count} record(s) parsed.', count=records|length) }}</p>
   {% if errors %}
-    <h2>Errors</h2>
-    <ul>{% for error in errors %}<li>Record {{ error.row }}: {{ error.message }}</li>{% endfor %}</ul>
-    <p>Fix the source file and <a href="/bibliography/import">try again</a>. No records were imported.</p>
+    <h2>{{ t('Errors') }}</h2>
+    <ul>{% for error in errors %}<li>{{ t('Record {row}: {message}', row=error.row, message=t(error.message)) }}</li>{% endfor %}</ul>
+    <p>{{ t('Fix the source file and {try_again}. No records were imported.', try_again='<a href="/bibliography/import">' ~ t('try again') ~ '</a>')|safe }}</p>
   {% else %}
     <form method="post" action="/bibliography/import/{{ batch.id }}?csrf_token={{ csrf }}">
-      <button>Import all records</button>
+      <button>{{ t('Import all records') }}</button>
     </form>
   {% endif %}
   <ol>
     {% for record in records %}
-      <li><strong>{{ record.title or '(missing title)' }}</strong> — {{ record.authors or '' }}</li>
+      <li><strong>{{ record.title or t('(missing title)') }}</strong> — {{ record.authors or '' }}</li>
     {% endfor %}
   </ol>
 </section>

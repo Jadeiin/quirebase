@@ -27,6 +27,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from .bibliography import SUPPORTED_FORMATS, export_bibliography, parse_bibliography
 from .config import get_settings
 from .db import get_db
+from .i18n import DEFAULT_LOCALE, translate
 from .metadata_lookup import MetadataLookupError, MetadataNotFoundError, lookup_metadata
 from .models import (
     Attachment,
@@ -78,6 +79,7 @@ if TYPE_CHECKING:
 
 PACKAGE_DIR = Path(__file__).parent
 templates = Jinja2Templates(directory=PACKAGE_DIR / "templates")
+templates.env.globals.update(locale=DEFAULT_LOCALE, t=translate)
 
 
 def visible_items(user: User):

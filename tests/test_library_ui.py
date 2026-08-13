@@ -35,7 +35,8 @@ def test_dashboard_sidebar_limits_and_recent_reading(db, tmp_path, monkeypatch):
 
         dashboard = client.get("/")
         assert dashboard.status_code == 200
-        assert "Main navigation" in dashboard.text
+        assert 'lang="zh-CN"' in dashboard.text
+        assert "主导航" in dashboard.text
         assert "Source code" not in dashboard.text
         assert dashboard.text.count('class="paper-row"') == 10
         assert "Dashboard paper 11" in dashboard.text
@@ -45,7 +46,7 @@ def test_dashboard_sidebar_limits_and_recent_reading(db, tmp_path, monkeypatch):
         assert opened.status_code == 200
         assert db.get(ItemRead, (item.created_by, item.id)) is not None
         refreshed = client.get("/")
-        assert "Recently read" in refreshed.text
+        assert "最近阅读" in refreshed.text
         assert item.title in refreshed.text
         assert client.get("/source").status_code == 404
     finally:
@@ -87,7 +88,8 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
 
         first_page = client.get("/library")
         assert first_page.status_code == 200
-        assert "Page 1 of 2" in first_page.text
+        assert "第 1 页" in first_page.text
+        assert "共 2 页" in first_page.text
         assert "Library paper 29" in first_page.text
         second_page = client.get("/library?page=2")
         assert second_page.status_code == 200
@@ -143,10 +145,10 @@ def test_pdf_import_modules(db, tmp_path, monkeypatch):
     try:
         import_page = client.get("/bibliography/import")
         assert import_page.status_code == 200
-        assert "Import by DOI" in import_page.text
-        assert "Bibliography file" in import_page.text
-        assert "Published PDF" in import_page.text
-        assert "Unpublished PDF" in import_page.text
+        assert "通过 DOI 导入" in import_page.text
+        assert "文献记录文件" in import_page.text
+        assert "已发表 PDF" in import_page.text
+        assert "未发表 PDF" in import_page.text
         assert "IEEE Xplore API" in import_page.text
 
         uploaded = client.post(

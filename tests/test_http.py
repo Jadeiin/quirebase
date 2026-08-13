@@ -1,5 +1,7 @@
 import json
+import re
 from datetime import UTC, datetime, timedelta
+from html import unescape
 from io import BytesIO
 
 from fastapi.testclient import TestClient
@@ -58,6 +60,15 @@ def authenticated_client(db, tmp_path, monkeypatch):
 def test_pdf_range_and_annotation_api(db, tmp_path, monkeypatch):
     client, item, revision = authenticated_client(db, tmp_path, monkeypatch)
     try:
+        viewer = client.get(f"/items/{item.id}/pdf/{revision.id}")
+        assert viewer.status_code == 200
+        assert 'lang="zh-CN"' in viewer.text
+        assert "删除所选批注" in viewer.text
+        encoded_messages = re.search(r'data-i18n="([^"]+)"', viewer.text)
+        assert encoded_messages is not None
+        messages = json.loads(unescape(encoded_messages.group(1)))
+        assert messages["selectOwnAnnotation"] == "请选择一条你创建的批注。"
+
         content = client.get(
             f"/documents/{item.id}/revisions/{revision.id}/content",
             headers={"Range": "bytes=0-4"},

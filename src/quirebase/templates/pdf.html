@@ -2,14 +2,27 @@
 {% block title %}{{ item.title }} · Quirebase{% endblock %}
 {% block head %}<link rel="stylesheet" href="{{ url_for('static', path='/vendor/pdf_viewer.css') }}">{% endblock %}
 {% block content %}
-<div id="pdf-app" data-item-id="{{ item.id }}" data-revision-id="{{ revision.id }}" data-csrf="{{ csrf }}">
+<div id="pdf-app" data-item-id="{{ item.id }}" data-revision-id="{{ revision.id }}" data-csrf="{{ csrf }}" data-i18n="{{ {
+  'selectTextFirst': t('Select text first.'),
+  'saving': t('Saving…'),
+  'saved': t('Saved'),
+  'noteText': t('Note text'),
+  'highlight': t('Highlight'),
+  'clickPage': t('Click a page to place the note'),
+  'preparingExport': t('Preparing export…'),
+  'exportReady': t('Export ready'),
+  'exportFailed': t('Export failed'),
+  'selectOwnAnnotation': t('Select one of your annotations.'),
+  'pages': t('{count} pages'),
+  'unableToOpen': t('Unable to open PDF: {message}')
+}|tojson|forceescape }}">
   <nav class="pdf-tools">
-    <button data-color="yellow">Yellow</button><button data-color="green">Green</button>
-    <button data-color="blue">Blue</button><button data-color="red">Red</button>
-    <button id="add-note">Note</button><button id="delete-annotation">Delete selected</button>
-    <select id="annotation-project"><option value="">Private</option>{% for project in projects %}<option value="{{ project.id }}">{{ project.name }}</option>{% endfor %}</select>
-    <button id="export-annotations">Export</button>
-    <span id="pdf-status">Loading…</span>
+    <button data-color="yellow">{{ t('Yellow') }}</button><button data-color="green">{{ t('Green') }}</button>
+    <button data-color="blue">{{ t('Blue') }}</button><button data-color="red">{{ t('Red') }}</button>
+    <button id="add-note">{{ t('Note') }}</button><button id="delete-annotation">{{ t('Delete selected') }}</button>
+    <select id="annotation-project"><option value="">{{ t('Private') }}</option>{% for project in projects %}<option value="{{ project.id }}">{{ project.name }}</option>{% endfor %}</select>
+    <button id="export-annotations">{{ t('Export') }}</button>
+    <span id="pdf-status">{{ t('Loading…') }}</span>
   </nav>
   <div id="viewerContainer"><div id="viewer" class="pdfViewer removePageBorders"></div></div>
 </div>

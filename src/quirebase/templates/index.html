@@ -1,55 +1,55 @@
 {% extends "base.html" %}
-{% block title %}Dashboard · Quirebase{% endblock %}
+{% block title %}{{ t('Dashboard') }} · Quirebase{% endblock %}
 {% block content %}
 <div class="page-heading">
-  <div><p class="eyebrow">Workspace overview</p><h1>Dashboard</h1></div>
-  <a class="button-link" href="/bibliography/import">Import papers</a>
+  <div><p class="eyebrow">{{ t('Workspace overview') }}</p><h1>{{ t('Dashboard') }}</h1></div>
+  <a class="button-link" href="/bibliography/import">{{ t('Import papers') }}</a>
 </div>
 
 <section class="dashboard-search panel">
-  <div><h2>Search your research</h2><p>Titles, authors, keywords, metadata and extracted PDF text.</p></div>
+  <div><h2>{{ t('Search your research') }}</h2><p>{{ t('Titles, authors, keywords, metadata and extracted PDF text.') }}</p></div>
   <form method="get" action="/" class="search-form">
-    <input type="search" name="q" placeholder="Search papers and full text" aria-label="Search papers" required>
-    <button>Search</button>
+    <input type="search" name="q" placeholder="{{ t('Search papers and full text') }}" aria-label="{{ t('Search papers') }}" required>
+    <button>{{ t('Search') }}</button>
   </form>
 </section>
 
 <div class="dashboard-grid">
   <section class="panel dashboard-module wide">
-    <div class="section-heading"><div><p class="eyebrow">Latest additions</p><h2>New papers</h2></div><a href="/library">View library</a></div>
+    <div class="section-heading"><div><p class="eyebrow">{{ t('Latest additions') }}</p><h2>{{ t('New papers') }}</h2></div><a href="/library">{{ t('View library') }}</a></div>
     <div class="paper-list">
       {% for item in new_items %}
-      <a href="/items/{{ item.id }}" class="paper-row"><span><strong>{{ item.title }}</strong><small>{{ item.authors or 'No authors' }}</small></span><time>{{ item.publication_date or 'Undated' }}</time></a>
-      {% else %}<div class="empty-state">No papers yet. Import a DOI, bibliography, or PDF to begin.</div>{% endfor %}
+      <a href="/items/{{ item.id }}" class="paper-row"><span><strong>{{ item.title }}</strong><small>{{ item.authors or t('No authors') }}</small></span><time>{{ item.publication_date or t('Undated') }}</time></a>
+      {% else %}<div class="empty-state">{{ t('No papers yet. Import a DOI, bibliography, or PDF to begin.') }}</div>{% endfor %}
     </div>
   </section>
 
   <section class="panel dashboard-module">
-    <div class="section-heading"><div><p class="eyebrow">Continue where you left off</p><h2>Recently read</h2></div></div>
+    <div class="section-heading"><div><p class="eyebrow">{{ t('Continue where you left off') }}</p><h2>{{ t('Recently read') }}</h2></div></div>
     <div class="paper-list compact">
       {% for item, read_at in recent_items %}
-      <a href="/items/{{ item.id }}" class="paper-row"><span><strong>{{ item.title }}</strong><small>{{ item.authors or 'No authors' }}</small></span></a>
-      {% else %}<div class="empty-state">Papers you open will appear here.</div>{% endfor %}
+      <a href="/items/{{ item.id }}" class="paper-row"><span><strong>{{ item.title }}</strong><small>{{ item.authors or t('No authors') }}</small></span></a>
+      {% else %}<div class="empty-state">{{ t('Papers you open will appear here.') }}</div>{% endfor %}
     </div>
   </section>
 
   <section class="panel dashboard-module" id="projects">
-    <div class="section-heading"><div><p class="eyebrow">Collaborative collections</p><h2>Projects</h2></div></div>
+    <div class="section-heading"><div><p class="eyebrow">{{ t('Collaborative collections') }}</p><h2>{{ t('Projects') }}</h2></div></div>
     <form method="post" action="/projects?csrf_token={{ csrf }}" class="compact-form">
-      <input name="name" placeholder="New project name" required><button>Create</button>
+      <input name="name" placeholder="{{ t('New project name') }}" required><button>{{ t('Create') }}</button>
     </form>
     <div class="simple-list">
       {% for project in projects[:10] %}<a href="/projects/{{ project.id }}"><span>{{ project.name }}</span><span>→</span></a>
-      {% else %}<div class="empty-state">No projects yet.</div>{% endfor %}
+      {% else %}<div class="empty-state">{{ t('No projects yet.') }}</div>{% endfor %}
     </div>
   </section>
 
   <section class="panel dashboard-module wide">
-    <div class="section-heading"><div><p class="eyebrow">Account security</p><h2>Login devices</h2></div><a href="/account/sessions">Manage devices</a></div>
+    <div class="section-heading"><div><p class="eyebrow">{{ t('Account security') }}</p><h2>{{ t('Login devices') }}</h2></div><a href="/account/sessions">{{ t('Manage devices') }}</a></div>
     <div class="device-list">
       {% for session in sessions %}
-      <div><span class="status-dot"></span><span><strong>{% if session.id == current_login.id %}This device{% else %}Signed-in device{% endif %}</strong><small>Started {{ session.created_at }} · expires {{ session.expires_at }}</small></span></div>
-      {% else %}<div class="empty-state">No active sessions.</div>{% endfor %}
+      <div><span class="status-dot"></span><span><strong>{% if session.id == current_login.id %}{{ t('This device') }}{% else %}{{ t('Signed-in device') }}{% endif %}</strong><small>{{ t('Started {created} · expires {expires}', created=session.created_at, expires=session.expires_at) }}</small></span></div>
+      {% else %}<div class="empty-state">{{ t('No active sessions.') }}</div>{% endfor %}
     </div>
   </section>
 </div>
