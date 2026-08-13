@@ -33,8 +33,6 @@ uv run quirebase serve
 
 Run `uv run quirebase worker` in a second process. Configuration uses `QUIREBASE_` environment variables; the defaults use SQLite and `./quirebase-data`.
 
-Before making a deployment available over a network, set `QUIREBASE_SOURCE_URL` to a public repository or archive containing the complete corresponding source for the exact deployed version. The application exposes this through its persistent **Source code** link.
-
 For PostgreSQL install the `postgres` extra and set, for example:
 
 ```sh

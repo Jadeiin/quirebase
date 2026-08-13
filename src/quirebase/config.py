@@ -19,7 +19,6 @@ class Settings(BaseSettings):
     max_attachment_bytes: int = 250 * 1024 * 1024
     export_ttl_hours: int = 24
     worker_poll_seconds: float = Field(default=1.0, ge=0.1)
-    source_url: str | None = None
     allowed_hosts: str = "localhost,127.0.0.1,testserver"
     metadata_timeout_seconds: float = Field(default=10.0, ge=1.0, le=30.0)
     metadata_max_response_bytes: int = Field(default=2 * 1024 * 1024, ge=1024)

@@ -1,0 +1,190 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
+from io import BytesIO
+
+import pymupdf
+from test_http import authenticated_client
+
+from quirebase.app import app
+from quirebase.config import get_settings
+from quirebase.models import Item, ItemRead, ItemTag, Project, ProjectItem, ProjectMember, Tag
+
+
+def pdf_bytes() -> bytes:
+    document = pymupdf.open()
+    document.new_page()
+    contents = document.tobytes()
+    document.close()
+    return contents
+
+
+def test_dashboard_sidebar_limits_and_recent_reading(db, tmp_path, monkeypatch):
+    client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+    try:
+        baseline = datetime(2026, 1, 1, tzinfo=UTC)
+        for number in range(12):
+            db.add(
+                Item(
+                    title=f"Dashboard paper {number}",
+                    created_by=item.created_by,
+                    created_at=baseline + timedelta(days=number),
+                )
+            )
+        db.commit()
+
+        dashboard = client.get("/")
+        assert dashboard.status_code == 200
+        assert "Main navigation" in dashboard.text
+        assert "Source code" not in dashboard.text
+        assert dashboard.text.count('class="paper-row"') == 10
+        assert "Dashboard paper 11" in dashboard.text
+        assert "Dashboard paper 0" not in dashboard.text
+
+        opened = client.get(f"/items/{item.id}")
+        assert opened.status_code == 200
+        assert db.get(ItemRead, (item.created_by, item.id)) is not None
+        refreshed = client.get("/")
+        assert "Recently read" in refreshed.text
+        assert item.title in refreshed.text
+        assert client.get("/source").status_code == 404
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+
+
+def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
+    client, original, _revision = authenticated_client(db, tmp_path, monkeypatch)
+    try:
+        project = Project(name="Review project", created_by=original.created_by)
+        second_project = Project(name="Reading queue", created_by=original.created_by)
+        tag = Tag(name="Methods", created_by=original.created_by)
+        db.add_all([project, second_project, tag])
+        db.flush()
+        db.add_all([
+            ProjectMember(project_id=project.id, user_id=original.created_by, role="owner"),
+            ProjectMember(project_id=second_project.id, user_id=original.created_by, role="editor"),
+        ])
+        selected = []
+        for number in range(30):
+            paper = Item(
+                title=f"Library paper {number:02d}",
+                authors="Alice Researcher" if number % 2 == 0 else "Bob Scientist",
+                keywords="imaging" if number % 3 == 0 else "simulation",
+                publication_date="2025" if number % 2 == 0 else "2024",
+                created_by=original.created_by,
+                updated_at=datetime(2026, 1, 1, tzinfo=UTC) + timedelta(days=number),
+            )
+            db.add(paper)
+            db.flush()
+            if number < 2:
+                selected.append(paper)
+                db.add_all([
+                    ItemTag(item_id=paper.id, tag_id=tag.id),
+                    ProjectItem(project_id=project.id, item_id=paper.id),
+                ])
+        db.commit()
+
+        first_page = client.get("/library")
+        assert first_page.status_code == 200
+        assert "Page 1 of 2" in first_page.text
+        assert "Library paper 29" in first_page.text
+        second_page = client.get("/library?page=2")
+        assert second_page.status_code == 200
+        assert "Library paper 00" in second_page.text
+
+        filtered = client.get("/library?author=Alice&year=2025&keyword=imaging")
+        assert filtered.status_code == 200
+        assert "Library paper 00" in filtered.text
+        assert "Library paper 02" not in filtered.text
+        project_filter = client.get(f"/library?project={project.id}&tag={tag.id}")
+        assert "Library paper 00" in project_filter.text
+        assert "Library paper 02" not in project_filter.text
+
+        tagged = client.post(
+            "/library/bulk?csrf_token=test-csrf",
+            data={"action": "add_tag", "tag_name": "Priority", "item_ids": selected[0].id},
+            follow_redirects=False,
+        )
+        assert tagged.status_code == 303
+        priority = db.query(Tag).filter_by(name="Priority").one()
+        assert db.get(ItemTag, (selected[0].id, priority.id)) is not None
+
+        assigned = client.post(
+            "/library/bulk?csrf_token=test-csrf",
+            data={
+                "action": "add_project",
+                "project_id": second_project.id,
+                "item_ids": [selected[0].id, selected[1].id],
+            },
+            follow_redirects=False,
+        )
+        assert assigned.status_code == 303
+        assert db.get(ProjectItem, (second_project.id, selected[0].id)) is not None
+        assert db.get(ProjectItem, (second_project.id, selected[1].id)) is not None
+
+        exported = client.post(
+            "/library/bulk?csrf_token=test-csrf",
+            data={
+                "action": "export_endnote",
+                "item_ids": [selected[0].id, selected[1].id],
+            },
+        )
+        assert exported.status_code == 200
+        assert "quirebase-export.enw" in exported.headers["content-disposition"]
+        assert "Library paper 00" in exported.text
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+
+
+def test_pdf_import_modules(db, tmp_path, monkeypatch):
+    client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+    try:
+        import_page = client.get("/bibliography/import")
+        assert import_page.status_code == 200
+        assert "Import by DOI" in import_page.text
+        assert "Bibliography file" in import_page.text
+        assert "Published PDF" in import_page.text
+        assert "Unpublished PDF" in import_page.text
+        assert "IEEE Xplore API" in import_page.text
+
+        uploaded = client.post(
+            "/imports/pdf/unpublished?csrf_token=test-csrf",
+            data={
+                "title": "Working manuscript",
+                "authors": "A. Author",
+                "keywords": "draft; methods",
+            },
+            files={"pdf": ("draft.pdf", BytesIO(pdf_bytes()), "application/pdf")},
+            follow_redirects=False,
+        )
+        assert uploaded.status_code == 303
+        manuscript = db.query(Item).filter_by(title="Working manuscript").one()
+        assert manuscript.reference_type == "unpublished"
+        assert manuscript.revisions[0].original_name == "draft.pdf"
+
+        monkeypatch.setattr(
+            "quirebase.app.lookup_metadata",
+            lambda _identifier, _provider: (
+                object(),
+                {
+                    "title": "Published article",
+                    "doi": "10.1000/published",
+                    "authors": "P. Author",
+                },
+            ),
+        )
+        published = client.post(
+            "/imports/pdf/published?csrf_token=test-csrf",
+            data={"doi": "10.1000/published"},
+            files={"pdf": ("published.pdf", BytesIO(pdf_bytes()), "application/pdf")},
+            follow_redirects=False,
+        )
+        assert published.status_code == 303
+        article = db.query(Item).filter_by(title="Published article").one()
+        assert article.doi == "10.1000/published"
+        assert article.revisions[0].original_name == "published.pdf"
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()

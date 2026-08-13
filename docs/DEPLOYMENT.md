@@ -4,7 +4,7 @@
 
 Python 3.12+ wheels are the common installation path on Windows, macOS and Linux. Install with `uv tool install` or in a virtual environment, then run `quirebase init-db`, `quirebase create-admin`, `quirebase serve`, and a separate `quirebase worker` process. PDF.js assets are already included in release wheels.
 
-SQLite is intended for a single-host installation with one worker. PostgreSQL is recommended for teams and supports concurrent workers through `FOR UPDATE SKIP LOCKED`. Set `QUIREBASE_DATABASE_URL`, `QUIREBASE_DATA_DIR`, `QUIREBASE_ALLOWED_HOSTS`, secure cookies behind HTTPS, and an exact-version `QUIREBASE_SOURCE_URL`.
+SQLite is intended for a single-host installation with one worker. PostgreSQL is recommended for teams and supports concurrent workers through `FOR UPDATE SKIP LOCKED`. Set `QUIREBASE_DATABASE_URL`, `QUIREBASE_DATA_DIR`, `QUIREBASE_ALLOWED_HOSTS`, and secure cookies behind HTTPS.
 
 For online DOI/PMID/arXiv metadata lookup, set a monitored `QUIREBASE_METADATA_CONTACT_EMAIL`; an NCBI API key is optional. See `METADATA_LOOKUP.md`. Restrictive egress firewalls should allow only the documented provider hosts.
 

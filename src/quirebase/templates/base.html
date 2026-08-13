@@ -7,12 +7,29 @@
   <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
   {% block head %}{% endblock %}
 </head>
-<body>
-  <header>
+<body class="{% if user %}app-layout{% else %}public-layout{% endif %}">
+  {% if user %}
+  <aside class="sidebar">
     <a href="/" class="brand">Quirebase</a>
-    <a href="/source">Source code</a>
-    {% if user %}<a href="/account/sessions">Sessions</a>{% if user.role == 'administrator' %}<a href="/admin">Admin</a>{% endif %}<span>{{ user.username }}</span>{% endif %}
-  </header>
-  <main>{% block content %}{% endblock %}</main>
+    <nav aria-label="Main navigation">
+      <a href="/" {% if active_page == 'dashboard' %}aria-current="page"{% endif %}><span>⌂</span>Dashboard</a>
+      <a href="/library" {% if active_page == 'library' %}aria-current="page"{% endif %}><span>▤</span>Library</a>
+      <a href="/bibliography/import" {% if active_page == 'import' %}aria-current="page"{% endif %}><span>＋</span>Import</a>
+      <a href="/#projects"><span>◇</span>Projects</a>
+      <a href="/account/sessions" {% if active_page == 'sessions' %}aria-current="page"{% endif %}><span>◉</span>Devices</a>
+      {% if user.role == 'administrator' %}
+      <a href="/admin" {% if active_page == 'admin' %}aria-current="page"{% endif %}><span>⚙</span>Admin</a>
+      {% endif %}
+    </nav>
+    <div class="sidebar-account">
+      <strong>{{ user.username }}</strong>
+      <small>{{ user.role }}</small>
+      {% if csrf %}
+      <form method="post" action="/logout?csrf_token={{ csrf }}"><button class="quiet-button">Sign out</button></form>
+      {% endif %}
+    </div>
+  </aside>
+  {% endif %}
+  <main class="{% if not user %}public-main{% endif %}">{% block content %}{% endblock %}</main>
 </body>
 </html>

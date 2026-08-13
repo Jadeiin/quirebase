@@ -97,6 +97,17 @@ class Item(Base):
     revisions: Mapped[list[FileRevision]] = relationship(back_populates="item")
 
 
+class ItemRead(Base):
+    __tablename__ = "item_reads"
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    item_id: Mapped[str] = mapped_column(
+        ForeignKey("items.id", ondelete="CASCADE"), primary_key=True
+    )
+    last_read_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
+
+
 class Project(Base):
     __tablename__ = "projects"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)

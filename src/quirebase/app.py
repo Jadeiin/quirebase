@@ -6,6 +6,7 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
+from urllib.parse import urlencode
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import (
@@ -35,6 +36,7 @@ from .models import (
     ImportBatch,
     Invitation,
     Item,
+    ItemRead,
     ItemTag,
     Job,
     LoginSession,
@@ -78,6 +80,96 @@ PACKAGE_DIR = Path(__file__).parent
 templates = Jinja2Templates(directory=PACKAGE_DIR / "templates")
 
 
+def visible_items(user: User):
+    query = select(Item)
+    if user.role == "administrator":
+        return query
+    project_ids = select(ProjectMember.project_id).where(ProjectMember.user_id == user.id)
+    shared_ids = select(ProjectItem.item_id).where(ProjectItem.project_id.in_(project_ids))
+    return query.where(or_(Item.created_by == user.id, Item.id.in_(shared_ids)))
+
+
+def visible_projects(db: Session, user: User) -> list[Project]:
+    query = select(Project).order_by(Project.name)
+    if user.role != "administrator":
+        query = query.join(ProjectMember).where(ProjectMember.user_id == user.id)
+    return list(db.scalars(query).all())
+
+
+def editable_projects(db: Session, user: User) -> list[Project]:
+    return list(
+        db.scalars(
+            select(Project)
+            .join(ProjectMember)
+            .where(
+                ProjectMember.user_id == user.id,
+                ProjectMember.role.in_(["owner", "editor"]),
+            )
+            .order_by(Project.name)
+        ).all()
+    )
+
+
+def store_pdf_revision(db: Session, user: User, item: Item, pdf: UploadFile) -> FileRevision:
+    if not pdf.filename or not pdf.filename.lower().endswith(".pdf"):
+        raise HTTPException(415, "a PDF file is required")
+    store = LocalObjectStore()
+    try:
+        key, digest, size = store.put_pdf(pdf.file, get_settings().max_pdf_bytes)
+        validate_pdf_container(store.path(key))
+    except ValueError as error:
+        if "key" in locals() and not db.scalar(
+            select(FileRevision.id).where(FileRevision.object_key == key).limit(1)
+        ):
+            store.path(key).unlink(missing_ok=True)
+        raise HTTPException(422, str(error)) from error
+    revision = FileRevision(
+        item_id=item.id,
+        object_key=key,
+        sha256=digest,
+        size=size,
+        original_name=Path(pdf.filename).name,
+        created_by=user.id,
+    )
+    db.add(revision)
+    db.flush()
+    db.add(
+        Job(
+            kind="pdf.inspect",
+            payload=job_payload(revision_id=revision.id),
+            idempotency_key=f"pdf.inspect:{revision.id}",
+            owner_id=user.id,
+        )
+    )
+    db.add(
+        AuditEvent(
+            actor_id=user.id,
+            action="pdf.upload",
+            target_type="file_revision",
+            target_id=revision.id,
+        )
+    )
+    return revision
+
+
+def bibliography_response(items: list[Item], file_format: str) -> Response:
+    export_format = "ris" if file_format == "endnote" else file_format
+    if export_format not in SUPPORTED_FORMATS:
+        raise HTTPException(422, "format must be bibtex, ris, or endnote")
+    contents = export_bibliography(items, export_format)
+    media_type = (
+        "application/x-bibtex"
+        if export_format == "bibtex"
+        else "application/x-research-info-systems"
+    )
+    extension = {"bibtex": "bib", "ris": "ris", "endnote": "enw"}[file_format]
+    return Response(
+        contents,
+        media_type=f"{media_type}; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="quirebase-export.{extension}"'},
+    )
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="Quirebase", version="0.1.0")
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=get_settings().allowed_host_list)
@@ -113,14 +205,6 @@ def create_app() -> FastAPI:
             f"quirebase_file_revisions {db.scalar(select(func.count()).select_from(FileRevision)) or 0}"
         )
         return "\n".join(lines) + "\n"
-
-    @app.get("/source", response_class=HTMLResponse)
-    def source_offer(request: Request):
-        return templates.TemplateResponse(
-            request,
-            "source.html",
-            {"source_url": get_settings().source_url},
-        )
 
     @app.get("/login", response_class=HTMLResponse)
     def login_page(request: Request):
@@ -251,6 +335,7 @@ def create_app() -> FastAPI:
                 "invitations": invitations,
                 "failed_jobs": failed_jobs,
                 "csrf": login.csrf_token,
+                "active_page": "admin",
             },
         )
 
@@ -292,6 +377,7 @@ def create_app() -> FastAPI:
                 "csrf": login.csrf_token,
                 "invitation": invitation,
                 "invite_url": str(request.url_for("accept_invitation_page", token=raw)),
+                "active_page": "admin",
             },
         )
 
@@ -328,7 +414,13 @@ def create_app() -> FastAPI:
         return templates.TemplateResponse(
             request,
             "sessions.html",
-            {"user": user, "login": login, "sessions": sessions, "csrf": login.csrf_token},
+            {
+                "user": user,
+                "login": login,
+                "sessions": sessions,
+                "csrf": login.csrf_token,
+                "active_page": "sessions",
+            },
         )
 
     @app.post("/account/sessions/{session_id}/revoke", dependencies=[Depends(require_csrf)])
@@ -394,46 +486,180 @@ def create_app() -> FastAPI:
         return response
 
     @app.get("/", response_class=HTMLResponse)
-    def home(
+    def dashboard(
         request: Request,
         q: str = "",
         user: User = Depends(current_user),
         login: LoginSession = Depends(current_login),
         db: Session = Depends(get_db),
     ):
-        matching_ids = search_index(db).search(db, q) if q.strip() else None
-        if user.role == "administrator":
-            item_query = select(Item)
-            if matching_ids is not None:
-                item_query = item_query.where(Item.id.in_(matching_ids))
-            items = db.scalars(item_query.order_by(Item.updated_at.desc())).all()
-            projects = db.scalars(select(Project).order_by(Project.name)).all()
-        else:
-            project_ids = select(ProjectMember.project_id).where(ProjectMember.user_id == user.id)
-            shared_ids = select(ProjectItem.item_id).where(ProjectItem.project_id.in_(project_ids))
-            item_query = select(Item).where(
-                or_(Item.created_by == user.id, Item.id.in_(shared_ids))
-            )
-            if matching_ids is not None:
-                item_query = item_query.where(Item.id.in_(matching_ids))
-            items = db.scalars(item_query.order_by(Item.updated_at.desc())).all()
-            projects = db.scalars(
-                select(Project)
-                .join(ProjectMember, ProjectMember.project_id == Project.id)
-                .where(ProjectMember.user_id == user.id)
-                .order_by(Project.name)
-            ).all()
+        if q.strip():
+            return RedirectResponse(f"/library?{urlencode({'q': q.strip()})}", status_code=303)
+        new_items = db.scalars(visible_items(user).order_by(Item.created_at.desc()).limit(10)).all()
+        recent_items = db.execute(
+            visible_items(user)
+            .join(ItemRead, ItemRead.item_id == Item.id)
+            .where(ItemRead.user_id == user.id)
+            .with_only_columns(Item, ItemRead.last_read_at)
+            .order_by(ItemRead.last_read_at.desc())
+            .limit(10)
+        ).all()
+        projects = visible_projects(db, user)
+        sessions = db.scalars(
+            select(LoginSession)
+            .where(LoginSession.user_id == user.id)
+            .order_by(LoginSession.created_at.desc())
+            .limit(10)
+        ).all()
         return templates.TemplateResponse(
             request,
             "index.html",
             {
                 "user": user,
-                "items": items,
+                "new_items": new_items,
+                "recent_items": recent_items,
                 "projects": projects,
+                "sessions": sessions,
+                "current_login": login,
                 "csrf": login.csrf_token,
-                "query": q,
+                "active_page": "dashboard",
             },
         )
+
+    @app.get("/library", response_class=HTMLResponse)
+    def library(
+        request: Request,
+        q: str = "",
+        tag: str = "",
+        project: str = "",
+        year: str = "",
+        keyword: str = "",
+        author: str = "",
+        page: int = 1,
+        user: User = Depends(current_user),
+        login: LoginSession = Depends(current_login),
+        db: Session = Depends(get_db),
+    ):
+        page = max(page, 1)
+        per_page = 25
+        item_query = visible_items(user)
+        matching_ids = search_index(db).search(db, q) if q.strip() else None
+        if matching_ids is not None:
+            item_query = item_query.where(Item.id.in_(matching_ids))
+        if tag:
+            item_query = item_query.where(
+                Item.id.in_(select(ItemTag.item_id).where(ItemTag.tag_id == tag))
+            )
+        if project:
+            item_query = item_query.where(
+                Item.id.in_(select(ProjectItem.item_id).where(ProjectItem.project_id == project))
+            )
+        if year:
+            item_query = item_query.where(Item.publication_date.startswith(year))
+        if keyword:
+            item_query = item_query.where(Item.keywords.ilike(f"%{keyword}%"))
+        if author:
+            item_query = item_query.where(Item.authors.ilike(f"%{author}%"))
+        total = db.scalar(select(func.count()).select_from(item_query.subquery())) or 0
+        items = db.scalars(
+            item_query
+            .order_by(Item.updated_at.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        ).all()
+        accessible_ids = visible_items(user).with_only_columns(Item.id).subquery()
+        tags = db.scalars(
+            select(Tag)
+            .join(ItemTag, ItemTag.tag_id == Tag.id)
+            .where(ItemTag.item_id.in_(select(accessible_ids.c.id)))
+            .distinct()
+            .order_by(Tag.name)
+        ).all()
+        dates = db.scalars(
+            visible_items(user)
+            .with_only_columns(Item.publication_date)
+            .where(Item.publication_date.is_not(None))
+        ).all()
+        years = sorted(
+            {value[:4] for value in dates if value and value[:4].isdigit()}, reverse=True
+        )
+        return templates.TemplateResponse(
+            request,
+            "library.html",
+            {
+                "user": user,
+                "items": items,
+                "projects": visible_projects(db, user),
+                "editable_projects": editable_projects(db, user),
+                "tags": tags,
+                "years": years,
+                "csrf": login.csrf_token,
+                "active_page": "library",
+                "filters": {
+                    "q": q,
+                    "tag": tag,
+                    "project": project,
+                    "year": year,
+                    "keyword": keyword,
+                    "author": author,
+                },
+                "page": page,
+                "pages": max(1, (total + per_page - 1) // per_page),
+                "total": total,
+            },
+        )
+
+    @app.post("/library/bulk", dependencies=[Depends(require_csrf)])
+    def library_bulk_action(
+        action: str = Form(),
+        item_ids: list[str] = Form(default=[]),
+        project_id: str = Form(default=""),
+        tag_name: str = Form(default=""),
+        user: User = Depends(current_user),
+        db: Session = Depends(get_db),
+    ):
+        selected = [db.get(Item, item_id) for item_id in dict.fromkeys(item_ids)]
+        items = [item for item in selected if item is not None and can_read_item(db, user, item.id)]
+        if not items or len(items) != len(selected):
+            raise HTTPException(422, "select one or more accessible papers")
+        if action.startswith("export_"):
+            return bibliography_response(items, action.removeprefix("export_"))
+        if any(not can_edit_item(db, user, item.id) for item in items):
+            raise HTTPException(403, "all selected papers must be editable")
+        if action == "add_project":
+            membership = project_member(db, user, project_id)
+            if membership is None or membership.role not in ("owner", "editor"):
+                raise HTTPException(422, "choose an editable project")
+            for item in items:
+                if db.get(ProjectItem, (project_id, item.id)) is None:
+                    db.add(ProjectItem(project_id=project_id, item_id=item.id))
+                    search_index(db).index_item(db, item.id)
+        elif action == "add_tag":
+            normalized = " ".join(tag_name.split())
+            if not normalized or len(normalized) > 120:
+                raise HTTPException(422, "enter a tag containing 1 to 120 characters")
+            tag_record = db.scalar(select(Tag).where(Tag.name == normalized))
+            if tag_record is None:
+                tag_record = Tag(name=normalized, created_by=user.id)
+                db.add(tag_record)
+                db.flush()
+            for item in items:
+                if db.get(ItemTag, (item.id, tag_record.id)) is None:
+                    db.add(ItemTag(item_id=item.id, tag_id=tag_record.id))
+                    search_index(db).index_item(db, item.id)
+        else:
+            raise HTTPException(422, "unknown bulk action")
+        db.add(
+            AuditEvent(
+                actor_id=user.id,
+                action=f"library.bulk.{action}",
+                target_type="item",
+                target_id=None,
+                detail=json.dumps({"item_ids": [item.id for item in items]}),
+            )
+        )
+        db.commit()
+        return RedirectResponse("/library", status_code=303)
 
     @app.post("/projects", dependencies=[Depends(require_csrf)])
     def create_project(
@@ -493,6 +719,7 @@ def create_app() -> FastAPI:
                 "members": members,
                 "items": items,
                 "csrf": login.csrf_token,
+                "active_page": "projects",
             },
         )
 
@@ -591,8 +818,75 @@ def create_app() -> FastAPI:
         return templates.TemplateResponse(
             request,
             "import.html",
-            {"user": user, "csrf": login.csrf_token},
+            {"user": user, "csrf": login.csrf_token, "active_page": "import"},
         )
+
+    @app.post("/imports/pdf/published", dependencies=[Depends(require_csrf)])
+    def import_published_pdf(
+        doi: str = Form(),
+        pdf: UploadFile = File(),
+        user: User = Depends(current_user),
+        db: Session = Depends(get_db),
+    ):
+        try:
+            _identifier, record = lookup_metadata(doi, "doi")
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
+        except MetadataNotFoundError as error:
+            raise HTTPException(404, str(error)) from error
+        except MetadataLookupError as error:
+            raise HTTPException(502, str(error)) from error
+        item = Item(created_by=user.id, **record)
+        db.add(item)
+        db.flush()
+        store_pdf_revision(db, user, item, pdf)
+        search_index(db).index_item(db, item.id)
+        db.add(
+            AuditEvent(
+                actor_id=user.id,
+                action="import.pdf.published",
+                target_type="item",
+                target_id=item.id,
+                detail=json.dumps({"doi": item.doi}),
+            )
+        )
+        db.commit()
+        return RedirectResponse(f"/items/{item.id}", status_code=303)
+
+    @app.post("/imports/pdf/unpublished", dependencies=[Depends(require_csrf)])
+    def import_unpublished_pdf(
+        title: str = Form(),
+        authors: str = Form(default=""),
+        abstract: str = Form(default=""),
+        keywords: str = Form(default=""),
+        pdf: UploadFile = File(),
+        user: User = Depends(current_user),
+        db: Session = Depends(get_db),
+    ):
+        if not title.strip():
+            raise HTTPException(422, "title is required")
+        item = Item(
+            title=title.strip(),
+            authors=authors.strip() or None,
+            abstract=abstract.strip() or None,
+            keywords=keywords.strip() or None,
+            reference_type="unpublished",
+            created_by=user.id,
+        )
+        db.add(item)
+        db.flush()
+        store_pdf_revision(db, user, item, pdf)
+        search_index(db).index_item(db, item.id)
+        db.add(
+            AuditEvent(
+                actor_id=user.id,
+                action="import.pdf.unpublished",
+                target_type="item",
+                target_id=item.id,
+            )
+        )
+        db.commit()
+        return RedirectResponse(f"/items/{item.id}", status_code=303)
 
     @app.post("/bibliography/preview", dependencies=[Depends(require_csrf)])
     def preview_import(
@@ -630,6 +924,7 @@ def create_app() -> FastAPI:
                 "batch": batch,
                 "records": records,
                 "errors": errors,
+                "active_page": "import",
             },
         )
 
@@ -677,6 +972,7 @@ def create_app() -> FastAPI:
                 "batch": batch,
                 "records": [record],
                 "errors": [],
+                "active_page": "import",
             },
         )
 
@@ -717,25 +1013,12 @@ def create_app() -> FastAPI:
         user: User = Depends(current_user),
         db: Session = Depends(get_db),
     ):
-        if file_format not in SUPPORTED_FORMATS:
-            raise HTTPException(422, "format must be bibtex or ris")
         query = select(Item).order_by(Item.updated_at.desc())
         if user.role != "administrator":
             project_ids = select(ProjectMember.project_id).where(ProjectMember.user_id == user.id)
             shared_ids = select(ProjectItem.item_id).where(ProjectItem.project_id.in_(project_ids))
             query = query.where(or_(Item.created_by == user.id, Item.id.in_(shared_ids)))
-        contents = export_bibliography(list(db.scalars(query).all()), file_format)
-        media_type = (
-            "application/x-bibtex"
-            if file_format == "bibtex"
-            else "application/x-research-info-systems"
-        )
-        extension = "bib" if file_format == "bibtex" else "ris"
-        return Response(
-            contents,
-            media_type=f"{media_type}; charset=utf-8",
-            headers={"Content-Disposition": f'attachment; filename="quirebase-export.{extension}"'},
-        )
+        return bibliography_response(list(db.scalars(query).all()), file_format)
 
     @app.get("/items/{item_id}", response_class=HTMLResponse)
     def item_page(
@@ -752,6 +1035,12 @@ def create_app() -> FastAPI:
         )
         if item is None:
             raise HTTPException(404)
+        read = db.get(ItemRead, (user.id, item.id))
+        if read is None:
+            db.add(ItemRead(user_id=user.id, item_id=item.id))
+        else:
+            read.last_read_at = datetime.now(UTC)
+        db.commit()
         revisions = sorted(item.revisions, key=lambda row: row.created_at, reverse=True)
         memberships = db.execute(
             select(Project, ProjectMember.role)
@@ -791,6 +1080,7 @@ def create_app() -> FastAPI:
                 "attachments": attachments,
                 "can_edit": can_edit_item(db, user, item_id),
                 "csrf": login.csrf_token,
+                "active_page": "library",
             },
         )
 
@@ -1072,44 +1362,7 @@ def create_app() -> FastAPI:
         item = db.get(Item, item_id)
         if item is None or not can_edit_item(db, user, item_id):
             raise HTTPException(404)
-        if not pdf.filename or not pdf.filename.lower().endswith(".pdf"):
-            raise HTTPException(415, "a PDF file is required")
-        store = LocalObjectStore()
-        try:
-            key, digest, size = store.put_pdf(pdf.file, get_settings().max_pdf_bytes)
-            validate_pdf_container(store.path(key))
-        except ValueError as error:
-            if "key" in locals() and not db.scalar(
-                select(FileRevision.id).where(FileRevision.object_key == key).limit(1)
-            ):
-                store.path(key).unlink(missing_ok=True)
-            raise HTTPException(422, str(error)) from error
-        revision = FileRevision(
-            item_id=item.id,
-            object_key=key,
-            sha256=digest,
-            size=size,
-            original_name=Path(pdf.filename).name,
-            created_by=user.id,
-        )
-        db.add(revision)
-        db.flush()
-        db.add(
-            Job(
-                kind="pdf.inspect",
-                payload=job_payload(revision_id=revision.id),
-                idempotency_key=f"pdf.inspect:{revision.id}",
-                owner_id=user.id,
-            )
-        )
-        db.add(
-            AuditEvent(
-                actor_id=user.id,
-                action="pdf.upload",
-                target_type="file_revision",
-                target_id=revision.id,
-            )
-        )
+        store_pdf_revision(db, user, item, pdf)
         db.commit()
         return RedirectResponse(f"/items/{item.id}", status_code=303)
 
@@ -1141,6 +1394,7 @@ def create_app() -> FastAPI:
                 "revision": revision,
                 "csrf": login.csrf_token,
                 "projects": projects,
+                "active_page": "library",
             },
         )
 

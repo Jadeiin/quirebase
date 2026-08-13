@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Paper library · Quirebase{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">{{ total }} papers available</p><h1>Paper library</h1></div><a class="button-link" href="/bibliography/import">Import papers</a></div>
+
+<section class="panel filter-panel">
+  <form method="get" action="/library" class="filter-grid">
+    <label class="search-field">Search<input type="search" name="q" value="{{ filters.q }}" placeholder="Title, full text, metadata"></label>
+    <label>Tag<select name="tag"><option value="">All tags</option>{% for option in tags %}<option value="{{ option.id }}" {% if filters.tag == option.id %}selected{% endif %}>{{ option.name }}</option>{% endfor %}</select></label>
+    <label>Project<select name="project"><option value="">All projects</option>{% for option in projects %}<option value="{{ option.id }}" {% if filters.project == option.id %}selected{% endif %}>{{ option.name }}</option>{% endfor %}</select></label>
+    <label>Year<select name="year"><option value="">All years</option>{% for option in years %}<option value="{{ option }}" {% if filters.year == option %}selected{% endif %}>{{ option }}</option>{% endfor %}</select></label>
+    <label>Author<input name="author" value="{{ filters.author }}" placeholder="Author name"></label>
+    <label>Keyword<input name="keyword" value="{{ filters.keyword }}" placeholder="Keyword"></label>
+    <div class="filter-actions"><button>Apply filters</button><a href="/library">Clear</a></div>
+  </form>
+</section>
+
+<form method="post" action="/library/bulk?csrf_token={{ csrf }}" class="library-form">
+  <div class="bulk-bar">
+    <strong>Bulk actions</strong>
+    <select name="action" required>
+      <option value="">Choose action</option>
+      <option value="add_project">Add to project</option>
+      <option value="add_tag">Add tag</option>
+      <option value="export_bibtex">Export BibTeX</option>
+      <option value="export_ris">Export RIS</option>
+      <option value="export_endnote">Export EndNote</option>
+    </select>
+    <select name="project_id"><option value="">Choose project</option>{% for option in editable_projects %}<option value="{{ option.id }}">{{ option.name }}</option>{% endfor %}</select>
+    <input name="tag_name" placeholder="Tag for selected papers">
+    <button>Apply</button>
+  </div>
+  <div class="paper-table" role="table">
+    <div class="paper-table-head" role="row"><span></span><span>Paper</span><span>Year</span><span>Type</span><span>Updated</span></div>
+    {% for item in items %}
+    <div class="paper-table-row" role="row">
+      <span><input type="checkbox" name="item_ids" value="{{ item.id }}" aria-label="Select {{ item.title }}"></span>
+      <a href="/items/{{ item.id }}"><strong>{{ item.title }}</strong><small>{{ item.authors or 'No authors' }}{% if item.publication_title %} · {{ item.publication_title }}{% endif %}</small><span class="keyword-line">{{ item.keywords or '' }}</span></a>
+      <span>{{ (item.publication_date or '—')[:4] }}</span>
+      <span>{{ item.reference_type or 'Paper' }}</span>
+      <time>{{ item.updated_at.date() }}</time>
+    </div>
+    {% else %}<div class="empty-state table-empty">No papers match these filters.</div>{% endfor %}
+  </div>
+</form>
+
+{% if pages > 1 %}<nav class="pagination" aria-label="Library pages">
+  {% if page > 1 %}<a href="/library?{{ filters|urlencode }}&page={{ page - 1 }}">Previous</a>{% endif %}
+  <span>Page {{ page }} of {{ pages }}</span>
+  {% if page < pages %}<a href="/library?{{ filters|urlencode }}&page={{ page + 1 }}">Next</a>{% endif %}
+</nav>{% endif %}
+{% endblock %}

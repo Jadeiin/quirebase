@@ -1,26 +1,55 @@
 {% extends "base.html" %}
-{% block title %}Import bibliography · Quirebase{% endblock %}
+{% block title %}Import · Quirebase{% endblock %}
 {% block content %}
-<section class="panel">
-  <h1>Import bibliography</h1>
-  <p>The file is parsed into a preview first. Nothing is added until you confirm it.</p>
-  <form method="post" action="/bibliography/preview?csrf_token={{ csrf }}" enctype="multipart/form-data">
-    <label>Format
-      <select name="file_format"><option value="bibtex">BibTeX</option><option value="ris">RIS</option></select>
-    </label>
-    <input type="file" name="bibliography" accept=".bib,.ris,text/plain" required>
-    <button>Preview</button>
-  </form>
-</section>
-<section class="panel">
-  <h2>Look up online metadata</h2>
-  <p>Retrieve one record by DOI, PMID, or arXiv ID. You can review it before importing.</p>
-  <form method="post" action="/metadata/preview?csrf_token={{ csrf }}">
-    <label>Provider
-      <select name="provider"><option value="auto">Detect automatically</option><option value="doi">DOI / Crossref</option><option value="pmid">PMID / PubMed</option><option value="arxiv">arXiv</option></select>
-    </label>
-    <input name="identifier" maxlength="500" placeholder="10.1234/example, PMID:123456, or arXiv:1706.03762" required>
-    <button>Look up and preview</button>
-  </form>
-</section>
+<div class="page-heading"><div><p class="eyebrow">Bring research into your library</p><h1>Import papers</h1></div></div>
+<div class="import-grid">
+  <section class="panel import-card featured">
+    <span class="module-number">01</span><h2>Import by DOI</h2>
+    <p>Retrieve publication metadata from Crossref or DataCite and review it before saving.</p>
+    <form method="post" action="/metadata/preview?csrf_token={{ csrf }}">
+      <input type="hidden" name="provider" value="doi">
+      <label>DOI<input name="identifier" maxlength="500" placeholder="10.1234/example" required></label>
+      <button>Look up DOI</button>
+    </form>
+  </section>
+
+  <section class="panel import-card">
+    <span class="module-number">02</span><h2>Bibliography file</h2>
+    <p>Preview and import records exported by EndNote, Zotero, Mendeley, or another reference manager.</p>
+    <form method="post" action="/bibliography/preview?csrf_token={{ csrf }}" enctype="multipart/form-data">
+      <label>Format<select name="file_format"><option value="bibtex">BibTeX (.bib)</option><option value="ris">RIS / EndNote (.ris, .enw)</option></select></label>
+      <label>File<input type="file" name="bibliography" accept=".bib,.ris,.enw,text/plain" required></label>
+      <button>Preview records</button>
+    </form>
+  </section>
+
+  <section class="panel import-card">
+    <span class="module-number">03</span><h2>Published PDF</h2>
+    <p>Upload a published paper and use its DOI to retrieve and attach verified metadata.</p>
+    <form method="post" action="/imports/pdf/published?csrf_token={{ csrf }}" enctype="multipart/form-data">
+      <label>DOI<input name="doi" maxlength="500" placeholder="10.1234/example" required></label>
+      <label>PDF<input type="file" name="pdf" accept="application/pdf,.pdf" required></label>
+      <button>Import published PDF</button>
+    </form>
+  </section>
+
+  <section class="panel import-card">
+    <span class="module-number">04</span><h2>Unpublished PDF</h2>
+    <p>Add a preprint, manuscript, report, or private document and enter its metadata manually.</p>
+    <form method="post" action="/imports/pdf/unpublished?csrf_token={{ csrf }}" enctype="multipart/form-data">
+      <label>Title<input name="title" required></label>
+      <label>Authors<input name="authors" placeholder="Separate authors with semicolons"></label>
+      <label>Keywords<input name="keywords" placeholder="Separate keywords with semicolons"></label>
+      <label>Abstract<textarea name="abstract" rows="3"></textarea></label>
+      <label>PDF<input type="file" name="pdf" accept="application/pdf,.pdf" required></label>
+      <button>Import unpublished PDF</button>
+    </form>
+  </section>
+
+  <section class="panel import-card future-card">
+    <span class="module-number">Next</span><h2>More data sources</h2>
+    <p>Provider-backed search will be added here after credentials, quotas, result normalization, and audit behavior are configured.</p>
+    <div class="provider-list"><span>IEEE Xplore API</span><span>Scopus API</span><span>PubMed</span><span>arXiv</span></div>
+  </section>
+</div>
 {% endblock %}
