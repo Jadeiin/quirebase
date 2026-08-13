@@ -9,7 +9,7 @@
 </head>
 <body class="{% if user %}app-layout{% else %}public-layout{% endif %}">
   {% if user %}
-  <aside class="sidebar">
+  <aside class="app-sidebar">
     <a href="/" class="brand">Quirebase</a>
     <nav aria-label="Main navigation">
       <a href="/" {% if active_page == 'dashboard' %}aria-current="page"{% endif %}><span>⌂</span>Dashboard</a>
@@ -21,7 +21,7 @@
       <a href="/admin" {% if active_page == 'admin' %}aria-current="page"{% endif %}><span>⚙</span>Admin</a>
       {% endif %}
     </nav>
-    <div class="sidebar-account">
+    <div class="app-sidebar-account">
       <strong>{{ user.username }}</strong>
       <small>{{ user.role }}</small>
       {% if csrf %}

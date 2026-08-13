@@ -46,7 +46,7 @@ const pageViewForElement = (element) => {
 };
 
 const pointToPdf = (page, view, clientX, clientY) => {
-  const bounds = page.getBoundingClientRect();
+  const bounds = page.querySelector(".canvasWrapper")?.getBoundingClientRect() || page.getBoundingClientRect();
   return view.viewport.convertToPdfPoint(clientX - bounds.left, clientY - bounds.top);
 };
 

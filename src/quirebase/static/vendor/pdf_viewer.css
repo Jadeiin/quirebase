@@ -14,7 +14,7 @@
  */
 
 .messageBar{
-  --closing-button-icon:url(images/messageBar_closingButton.svg);
+  --closing-button-icon:none;
   --message-bar-close-button-color:var(--text-primary-color);
   --message-bar-close-button-color-hover:var(--text-primary-color);
   --message-bar-close-button-border-radius:4px;
@@ -138,7 +138,7 @@
 #editorUndoBar{
   --text-primary-color:light-dark(#15141a, #fbfbfe);
 
-  --message-bar-icon:url(images/messageBar_info.svg);
+  --message-bar-icon:none;
   --message-bar-icon-color:light-dark(#0060df, #73a7f3);
   --message-bar-bg-color:light-dark(#deeafc, #003070);
   --message-bar-fg-color:var(--text-primary-color);
@@ -560,7 +560,7 @@
         rgb(0 0 0 / 0.08),
         rgb(255 255 255 / 0.08)
       );
-      --message-bar-icon:url(images/messageBar_warning.svg);
+      --message-bar-icon:none;
       --message-bar-icon-color:light-dark(#cd411e, #e49c49);
 
       @media screen and (forced-colors: active){
@@ -1867,7 +1867,7 @@
 }
 
 :root{
-  --clear-signature-button-icon:url(images/editor-toolbar-delete.svg);
+  --clear-signature-button-icon:none;
   --signature-bg:light-dark(#f9f9fb, #2b2a33);
   --signature-hover-bg:light-dark(#f0f0f4, var(--signature-bg));
   --button-signature-bg:transparent;
@@ -1931,7 +1931,7 @@
 
   .inputWithClearButton{
     --button-dimension:24px;
-    --clear-button-icon:url(images/messageBar_closingButton.svg);
+    --clear-button-icon:none;
 
     width:100%;
     position:relative;
@@ -2012,7 +2012,7 @@
   --thickness-label-color:var(--primary-color);
   --thickness-slider-color:var(--primary-color);
   --thickness-border:none;
-  --draw-cursor:url(images/cursor-editorInk.svg) 0 16, pointer;
+  --draw-cursor:none 0 16, pointer;
 
   @media (prefers-color-scheme: dark){
     --dialog-bg-color:#42414d;
@@ -2695,7 +2695,7 @@
 }
 
 .editDescription.altText{
-  --alt-text-add-image:url(images/editor-toolbar-edit.svg) !important;
+  --alt-text-add-image:none !important;
 
   &::before{
     width:16px !important;
@@ -2718,7 +2718,7 @@
 }
 
 #commentManagerDialog{
-  --comment-close-button-icon:url(images/comment-closeButton.svg);
+  --comment-close-button-icon:none;
 
   .mainContainer{
     width:100%;
@@ -2860,9 +2860,9 @@
 
 #editorCommentsSidebar,
 .commentPopup{
-  --comment-close-button-icon:url(images/comment-closeButton.svg);
-  --comment-popup-edit-button-icon:url(images/comment-popup-editButton.svg);
-  --comment-popup-delete-button-icon:url(images/editor-toolbar-delete.svg);
+  --comment-close-button-icon:none;
+  --comment-popup-edit-button-icon:none;
+  --comment-popup-delete-button-icon:none;
 
   --comment-date-fg-color:light-dark(
     rgb(21 20 26 / 0.69),
@@ -3382,11 +3382,11 @@
       var(--outline-around-width)
   );
   --editorFreeText-editing-cursor:text;
-  --editorInk-editing-cursor:url(images/cursor-editorInk.svg) 0 16, pointer;
-  --editorHighlight-editing-cursor:url(images/cursor-editorTextHighlight.svg) 24 24, text;
-  --editorFreeHighlight-editing-cursor:url(images/cursor-editorFreeHighlight.svg) 1 18, pointer;
+  --editorInk-editing-cursor:none 0 16, pointer;
+  --editorHighlight-editing-cursor:none 24 24, text;
+  --editorFreeHighlight-editing-cursor:none 1 18, pointer;
 
-  --new-alt-text-warning-image:url(images/altText_warning.svg);
+  --new-alt-text-warning-image:none;
 }
 
 .textLayer{
@@ -3423,7 +3423,7 @@
 
 @media (min-resolution: 1.1dppx){
   :root{
-    --editorFreeText-editing-cursor:url(images/cursor-editorFreeText.svg) 0 16, text;
+    --editorFreeText-editing-cursor:none 0 16, text;
   }
 }
 
@@ -3560,9 +3560,9 @@
   ),
 .textLayer{
   .editToolbar{
-    --editor-toolbar-delete-image:url(images/editor-toolbar-delete.svg);
+    --editor-toolbar-delete-image:none;
     --editor-toolbar-bg-color:light-dark(#f0f0f4, #2b2a33);
-    --editor-toolbar-highlight-image:url(images/toolbarButton-editorHighlight.svg);
+    --editor-toolbar-highlight-image:none;
     --editor-toolbar-fg-color:light-dark(#2e2e56, #fbfbfe);
     --editor-toolbar-border-color:#8f8f9d;
     --editor-toolbar-hover-border-color:var(--editor-toolbar-border-color);
@@ -3719,8 +3719,8 @@
       }
 
       .altText{
-        --alt-text-add-image:url(images/altText_add.svg);
-        --alt-text-done-image:url(images/altText_done.svg);
+        --alt-text-add-image:none;
+        --alt-text-done-image:none;
 
         display:flex;
         align-items:center;
@@ -4217,8 +4217,8 @@
 }
 
 .dialog.newAltText{
-  --new-alt-text-ai-disclaimer-icon:url(images/altText_disclaimer.svg);
-  --new-alt-text-spinner-icon:url(images/altText_spinner.svg);
+  --new-alt-text-ai-disclaimer-icon:none;
+  --new-alt-text-spinner-icon:none;
   --preview-image-bg-color:light-dark(#f0f0f4, #2b2a33);
   --preview-image-border:none;
 
@@ -4511,7 +4511,7 @@
     }
 
     .editToolbar{
-      --editor-toolbar-colorpicker-arrow-image:url(images/toolbarButton-menuArrow.svg);
+      --editor-toolbar-colorpicker-arrow-image:none;
 
       transform-origin:center !important;
 
@@ -4784,7 +4784,7 @@ button.hasPopupMenu{
 }
 
 .popupMenu{
-  --menuitem-checkmark-icon:url(images/checkmark.svg);
+  --menuitem-checkmark-icon:none;
   --menu-mark-icon-size:0;
   --menu-icon-size:16px;
   --menuitem-gap:5px;
@@ -4993,8 +4993,8 @@ button.hasPopupMenu{
     rgb(0 0 0 / 0.25),
     rgb(255 255 255 / 0.25)
   );
-  --treeitem-expanded-icon:url(images/treeitem-expanded.svg);
-  --treeitem-collapsed-icon:url(images/treeitem-collapsed.svg);
+  --treeitem-expanded-icon:none;
+  --treeitem-collapsed-icon:none;
 
   &.withNesting{
     .treeItemToggler{
@@ -5120,19 +5120,19 @@ button.hasPopupMenu{
 }
 
 #viewsManager{
-  --views-manager-button-icon:url(images/pages_viewButton.svg);
-  --views-manager-button-arrow-icon:url(images/pages_viewArrow.svg);
-  --views-manager-add-file-button-icon:url(images/toolbarButton-zoomIn.svg);
-  --current-outline-button-icon:url(images/toolbarButton-currentOutlineItem.svg);
-  --menuitem-thumbnailsView-icon:url(images/pages_viewButton.svg);
-  --menuitem-outlinesView-icon:url(images/toolbarButton-viewOutline.svg);
-  --menuitem-attachmentsView-icon:url(images/toolbarButton-viewAttachments.svg);
-  --menuitem-layersView-icon:url(images/toolbarButton-viewLayers.svg);
-  --manage-button-icon:url(images/toolbarButton-pageDown.svg);
-  --close-button-icon:url(images/pages_closeButton.svg);
-  --undo-label-icon:url(images/altText_done.svg);
-  --pages-selected-icon:url(images/pages_selected.svg);
-  --spinner-icon:url(images/altText_spinner.svg);
+  --views-manager-button-icon:none;
+  --views-manager-button-arrow-icon:none;
+  --views-manager-add-file-button-icon:none;
+  --current-outline-button-icon:none;
+  --menuitem-thumbnailsView-icon:none;
+  --menuitem-outlinesView-icon:none;
+  --menuitem-attachmentsView-icon:none;
+  --menuitem-layersView-icon:none;
+  --manage-button-icon:none;
+  --close-button-icon:none;
+  --undo-label-icon:none;
+  --pages-selected-icon:none;
+  --spinner-icon:none;
 
   --sidebar-bg-color:light-dark(rgb(255 255 255 / 0.92), rgb(66 65 77 / 0.92));
   --sidebar-backdrop-filter:blur(7px);
@@ -6316,7 +6316,7 @@ button.hasPopupMenu{
   content:"";
   width:100%;
   height:100%;
-  background:url("images/loading-icon.gif") center no-repeat;
+  background:none center no-repeat;
   display:none;
   transition-property:display;
   transition-delay:var(--loading-icon-delay);

@@ -9635,5 +9635,3 @@ globalThis.pdfjsViewer = {
 };
 
 export { AnnotationLayerBuilder, DownloadManager, EventBus, FindState, genericl10n_GenericL10n as GenericL10n, LinkTarget, PDFFindController, PDFHistory, PDFLinkService, PDFPageView, PDFScriptingManagerComponents as PDFScriptingManager, PDFSinglePageViewer, PDFViewer, ProgressBar, RenderingStates, ScrollMode, SimpleLinkService, SpreadMode, StructTreeLayerBuilder, TextLayerBuilder, XfaLayerBuilder, parseQueryString };
-
-//# sourceMappingURL=pdf_viewer.mjs.map

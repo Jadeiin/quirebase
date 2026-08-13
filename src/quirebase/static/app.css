@@ -26,15 +26,15 @@ h2 { margin-bottom: .35rem; font-size: 1.08rem; letter-spacing: -.015em; }
 small { color: var(--muted); }
 
 .app-layout { padding-left: 248px; }
-.sidebar { position: fixed; inset: 0 auto 0 0; z-index: 30; width: 248px; display: flex; flex-direction: column; padding: 1.6rem 1rem 1rem; color: #f5faf7; background: var(--sidebar); }
+.app-sidebar { position: fixed; inset: 0 auto 0 0; z-index: 30; width: 248px; display: flex; flex-direction: column; padding: 1.6rem 1rem 1rem; color: #f5faf7; background: var(--sidebar); }
 .brand { display: block; padding: 0 .75rem 1.6rem; color: white; font-size: 1.24rem; font-weight: 800; letter-spacing: -.025em; text-decoration: none; }
-.sidebar nav { display: grid; gap: .25rem; }
-.sidebar nav a { display: flex; gap: .75rem; align-items: center; padding: .72rem .8rem; border-radius: .55rem; color: var(--sidebar-muted); font-weight: 650; text-decoration: none; }
-.sidebar nav a span { width: 1.25rem; color: inherit; font-size: 1.1rem; text-align: center; }
-.sidebar nav a:hover, .sidebar nav a[aria-current="page"] { color: white; background: rgb(255 255 255 / 9%); }
-.sidebar-account { display: grid; gap: .1rem; margin-top: auto; padding: 1rem .75rem 0; border-top: 1px solid rgb(255 255 255 / 12%); }
-.sidebar-account small { color: var(--sidebar-muted); text-transform: capitalize; }
-.sidebar-account form { margin-top: .65rem; }
+.app-sidebar nav { display: grid; gap: .25rem; }
+.app-sidebar nav a { display: flex; gap: .75rem; align-items: center; padding: .72rem .8rem; border-radius: .55rem; color: var(--sidebar-muted); font-weight: 650; text-decoration: none; }
+.app-sidebar nav a span { width: 1.25rem; color: inherit; font-size: 1.1rem; text-align: center; }
+.app-sidebar nav a:hover, .app-sidebar nav a[aria-current="page"] { color: white; background: rgb(255 255 255 / 9%); }
+.app-sidebar-account { display: grid; gap: .1rem; margin-top: auto; padding: 1rem .75rem 0; border-top: 1px solid rgb(255 255 255 / 12%); }
+.app-sidebar-account small { color: var(--sidebar-muted); text-transform: capitalize; }
+.app-sidebar-account form { margin-top: .65rem; }
 .quiet-button { width: 100%; color: #dbe7e1; background: transparent; border-color: rgb(255 255 255 / 18%); }
 
 main { width: min(1440px, 100%); margin: 0 auto; padding: 2.4rem clamp(1.25rem, 4vw, 3.5rem) 4rem; }
@@ -108,25 +108,24 @@ label { display: grid; gap: .3rem; color: #46514c; font-size: .82rem; font-weigh
 .card { display: grid; padding: 1rem; color: inherit; text-decoration: none; background: var(--surface); border: 1px solid var(--line); border-radius: .5rem; }
 .card span { opacity: .7; }
 
-#pdf-app { position: fixed; inset: 0 0 0 248px; display: grid; grid-template-rows: auto 1fr; }
-.pdf-tools { display: flex; gap: .4rem; padding: .5rem; background: var(--surface); border-bottom: 1px solid var(--line); }
+#pdf-app { position: fixed; inset: 0 0 0 248px; }
+.pdf-tools { position: absolute; inset: 0 0 auto; display: flex; gap: .4rem; align-items: center; height: 56px; padding: .5rem 20px; overflow-x: auto; background: var(--surface); border-bottom: 1px solid var(--line); }
 .pdf-tools button { min-height: auto; padding: .35rem .6rem; }
 .pdf-tools span { margin-left: auto; }
-#viewerContainer { position: relative; overflow: auto; background: #777; }
-.pdfViewer .page { position: relative; margin: 1rem auto; }
+#viewerContainer { position: absolute; inset: 56px 0 0; overflow: auto; background: #777; }
 .quirebase-overlay { position: absolute; inset: 0; pointer-events: none; }
 .quirebase-highlight { position: absolute; opacity: .35; pointer-events: auto; cursor: pointer; }
 .quirebase-note { position: absolute; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); pointer-events: auto; cursor: pointer; }
 
 @media (max-width: 900px) {
   .app-layout { padding-left: 76px; }
-  .sidebar { width: 76px; padding-inline: .6rem; }
+  .app-sidebar { width: 76px; padding-inline: .6rem; }
   .brand { padding-inline: .2rem; font-size: 0; }
   .brand::first-letter { font-size: 1.35rem; }
-  .sidebar nav a { justify-content: center; font-size: 0; }
-  .sidebar nav a span { font-size: 1.2rem; }
-  .sidebar-account strong, .sidebar-account small, .sidebar-account button { font-size: 0; }
-  .sidebar-account button::after { content: "↪"; font-size: 1.1rem; }
+  .app-sidebar nav a { justify-content: center; font-size: 0; }
+  .app-sidebar nav a span { font-size: 1.2rem; }
+  .app-sidebar-account strong, .app-sidebar-account small, .app-sidebar-account button { font-size: 0; }
+  .app-sidebar-account button::after { content: "↪"; font-size: 1.1rem; }
   #pdf-app { left: 76px; }
   .filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .bulk-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
