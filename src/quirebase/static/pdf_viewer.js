@@ -14,6 +14,10 @@ const revisionId = root.dataset.revisionId;
 const csrf = root.dataset.csrf;
 const status = document.querySelector("#pdf-status");
 const container = document.querySelector("#viewerContainer");
+const pageNumber = document.querySelector("#pdf-page-number");
+const pageTotal = document.querySelector("#pdf-page-total");
+const scale = document.querySelector("#pdf-scale");
+const search = document.querySelector("#pdf-search");
 const eventBus = new EventBus();
 const linkService = new PDFLinkService({ eventBus });
 const findController = new PDFFindController({ eventBus, linkService });
@@ -23,6 +27,7 @@ linkService.setViewer(viewer);
 let annotations = [];
 let selectedAnnotation = null;
 let noteMode = false;
+let lastFindQuery = "";
 const projectPicker = document.querySelector("#annotation-project");
 const visibility = () => projectPicker.value ? { scope: "project", project_id: projectPicker.value } : { scope: "private", project_id: null };
 
@@ -35,6 +40,23 @@ const api = async (url, options = {}) => {
 
 const annotationUrl = `/documents/${itemId}/annotations`;
 const contentUrl = `/documents/${itemId}/revisions/${revisionId}/content`;
+
+const find = (findPrevious = false) => {
+  const query = search.value.trim();
+  if (!query) return;
+  eventBus.dispatch("find", {
+    source: root,
+    type: query === lastFindQuery ? "again" : "",
+    query,
+    phraseSearch: true,
+    caseSensitive: false,
+    entireWord: false,
+    highlightAll: true,
+    findPrevious,
+    matchDiacritics: false,
+  });
+  lastFindQuery = query;
+};
 
 const loadAnnotations = async () => {
   const project = projectPicker.value ? `&project_id=${encodeURIComponent(projectPicker.value)}` : "";
@@ -161,6 +183,21 @@ const renderAllOverlays = () => {
 };
 
 document.querySelectorAll("[data-color]").forEach((button) => button.addEventListener("click", () => saveHighlight(button.dataset.color)));
+document.querySelector("#pdf-previous-page").addEventListener("click", () => { viewer.currentPageNumber -= 1; });
+document.querySelector("#pdf-next-page").addEventListener("click", () => { viewer.currentPageNumber += 1; });
+document.querySelector("#pdf-zoom-out").addEventListener("click", () => viewer.decreaseScale());
+document.querySelector("#pdf-zoom-in").addEventListener("click", () => viewer.increaseScale());
+pageNumber.addEventListener("change", () => {
+  viewer.currentPageNumber = Math.max(1, Math.min(viewer.pagesCount, Number(pageNumber.value) || 1));
+});
+scale.addEventListener("change", () => { viewer.currentScaleValue = scale.value; });
+document.querySelector("#pdf-find-previous").addEventListener("click", () => find(true));
+document.querySelector("#pdf-find-next").addEventListener("click", () => find());
+search.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  find(event.shiftKey);
+});
 document.querySelector("#add-note").addEventListener("click", () => { noteMode = true; status.textContent = message("clickPage"); });
 document.querySelector("#viewer").addEventListener("click", saveNote, true);
 projectPicker.addEventListener("change", loadAnnotations);
@@ -186,7 +223,15 @@ document.querySelector("#delete-annotation").addEventListener("click", async () 
   renderAllOverlays();
 });
 eventBus.on("pagerendered", renderAllOverlays);
-eventBus.on("pagesinit", () => { viewer.currentScaleValue = "page-width"; });
+eventBus.on("pagechanging", ({ pageNumber: current }) => { pageNumber.value = current; });
+eventBus.on("scalechanging", ({ presetValue }) => {
+  if (presetValue && [...scale.options].some((option) => option.value === presetValue)) scale.value = presetValue;
+});
+eventBus.on("pagesinit", () => {
+  viewer.currentScaleValue = "page-width";
+  pageTotal.textContent = viewer.pagesCount;
+  pageNumber.max = viewer.pagesCount;
+});
 
 try {
   const loadingTask = pdfjsLib.getDocument({ url: contentUrl, isEvalSupported: false });

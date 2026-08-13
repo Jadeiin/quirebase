@@ -1,10 +1,12 @@
 {
   "private": true,
   "scripts": {
-    "build": "node scripts/build-assets.mjs",
+    "build": "node scripts/build-assets.mjs && bun run build:app",
+    "build:app": "bun build src/quirebase/assets/app.js --outfile src/quirebase/static/app.js --minify",
     "test:oa:pdfjs": "node scripts/check-oa-pdfjs.mjs"
   },
   "dependencies": {
+    "@alpinejs/csp": "3.15.12",
     "pdfjs-dist": "6.2.108"
   }
 }

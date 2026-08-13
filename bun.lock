@@ -4,11 +4,14 @@
   "workspaces": {
     "": {
       "dependencies": {
+        "@alpinejs/csp": "3.15.12",
         "pdfjs-dist": "6.2.108",
       },
     },
   },
   "packages": {
+    "@alpinejs/csp": ["@alpinejs/csp@3.15.12", "", { "dependencies": { "@vue/reactivity": "~3.1.1" } }, "sha512-9jielHzVPqMlO9zQ6K1WtdhSHVX5OZfq5ZDUSVZfY10VnXRoRBx8nOadWjsG1xev/kz4EPaNN9eDFWtZSvJHxA=="],
+
     "@napi-rs/canvas": ["@napi-rs/canvas@1.0.5", "", { "optionalDependencies": { "@napi-rs/canvas-android-arm64": "1.0.5", "@napi-rs/canvas-darwin-arm64": "1.0.5", "@napi-rs/canvas-darwin-x64": "1.0.5", "@napi-rs/canvas-linux-arm-gnueabihf": "1.0.5", "@napi-rs/canvas-linux-arm64-gnu": "1.0.5", "@napi-rs/canvas-linux-arm64-musl": "1.0.5", "@napi-rs/canvas-linux-riscv64-gnu": "1.0.5", "@napi-rs/canvas-linux-x64-gnu": "1.0.5", "@napi-rs/canvas-linux-x64-musl": "1.0.5", "@napi-rs/canvas-win32-arm64-msvc": "1.0.5", "@napi-rs/canvas-win32-x64-msvc": "1.0.5" } }, "sha512-GaPlicMtnvgPr5SowFRprkEJicDSrV3qCq17U4jiF5u0kNORZo3IbdN2Bk4SfcZJAMYFHbMVJ81O3w21CYxazg=="],
 
     "@napi-rs/canvas-android-arm64": ["@napi-rs/canvas-android-arm64@1.0.5", "", { "os": "android", "cpu": "arm64" }, "sha512-ZzDlpKQocwFfCwhMh17UWre6Qt5yZN3kNIJoUpGfRZqwDDZ164IKOsPOHsRd3d8Tuj5KM6bDjGuPmZxuPuG3NQ=="],
@@ -32,6 +35,10 @@
     "@napi-rs/canvas-win32-arm64-msvc": ["@napi-rs/canvas-win32-arm64-msvc@1.0.5", "", { "os": "win32", "cpu": "arm64" }, "sha512-bi+JsdCdbfVJDoAQybTYmkLKwh1xpYpptg5j/BNr2BB56u4/R26jrVvtjqff+CxYMXV6Kz1/jeDVhZCuj6bDng=="],
 
     "@napi-rs/canvas-win32-x64-msvc": ["@napi-rs/canvas-win32-x64-msvc@1.0.5", "", { "os": "win32", "cpu": "x64" }, "sha512-KQQwG9/sBmcGxqaLFIQf+k2OefREGoyEaIBmRuTM8bUuFKOEE9Xk5pel90hE6pmBwk/vo4RB0OdX+FxobJGMFw=="],
+
+    "@vue/reactivity": ["@vue/reactivity@3.1.5", "", { "dependencies": { "@vue/shared": "3.1.5" } }, "sha512-1tdfLmNjWG6t/CsPldh+foumYFo3cpyCHgBYQ34ylaMsJ+SNHQ1kApMIa8jN+i593zQuaw3AdWH0nJTARzCFhg=="],
+
+    "@vue/shared": ["@vue/shared@3.1.5", "", {}, "sha512-oJ4F3TnvpXaQwZJNF3ZK+kLPHKarDmJjJ6jyzVNDKH9md1dptjC7lWR//jrGuLdek/U6iltWxqAnYOu8gCiOvA=="],
 
     "pdfjs-dist": ["pdfjs-dist@6.2.108", "", { "optionalDependencies": { "@napi-rs/canvas": "^1.0.0" } }, "sha512-YxFb+SQcodN2rnX9Tn3dHYlqfb7NjlzzfONPpJd+AKoKtUjEdevTfbC07d5TcczzOK6261auRkP/M8OBHs9vFQ=="],
   }

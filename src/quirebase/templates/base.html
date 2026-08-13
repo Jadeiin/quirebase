@@ -5,13 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Quirebase{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
+  <script defer src="{{ url_for('static', path='/app.js') }}"></script>
   {% block head %}{% endblock %}
 </head>
-<body class="{% if user %}app-layout{% else %}public-layout{% endif %}">
+<body class="{% if user %}app-layout{% else %}public-layout{% endif %}" x-data="appShell">
   {% if user %}
-  <aside class="app-sidebar">
+  <button class="mobile-nav-toggle" type="button" @click="toggleSidebar" :aria-expanded="sidebarOpen" aria-controls="app-sidebar" aria-label="{{ t('Toggle navigation') }}">☰</button>
+  <button class="sidebar-scrim" type="button" x-show="sidebarOpen" @click="closeSidebar" aria-label="{{ t('Close navigation') }}"></button>
+  <aside class="app-sidebar" id="app-sidebar" :class="{ 'is-open': sidebarOpen }">
     <a href="/" class="brand">Quirebase</a>
-    <nav aria-label="{{ t('Main navigation') }}">
+    <nav aria-label="{{ t('Main navigation') }}" @click="closeSidebar">
       <a href="/" {% if active_page == 'dashboard' %}aria-current="page"{% endif %}><span>⌂</span>{{ t('Dashboard') }}</a>
       <a href="/library" {% if active_page == 'library' %}aria-current="page"{% endif %}><span>▤</span>{{ t('Library') }}</a>
       <a href="/bibliography/import" {% if active_page == 'import' %}aria-current="page"{% endif %}><span>＋</span>{{ t('Import') }}</a>

@@ -2,7 +2,7 @@
 {% block title %}{{ item.title }} · Quirebase{% endblock %}
 {% block head %}<link rel="stylesheet" href="{{ url_for('static', path='/vendor/pdf_viewer.css') }}">{% endblock %}
 {% block content %}
-<div id="pdf-app" data-item-id="{{ item.id }}" data-revision-id="{{ revision.id }}" data-csrf="{{ csrf }}" data-i18n="{{ {
+<div id="pdf-app" x-data="pdfToolbar" data-item-id="{{ item.id }}" data-revision-id="{{ revision.id }}" data-csrf="{{ csrf }}" data-i18n="{{ {
   'selectTextFirst': t('Select text first.'),
   'saving': t('Saving…'),
   'saved': t('Saved'),
@@ -17,13 +17,37 @@
   'unableToOpen': t('Unable to open PDF: {message}')
 }|tojson|forceescape }}">
   <nav class="pdf-tools">
+    <div class="pdf-tool-group">
+      <button id="pdf-previous-page" type="button" aria-label="{{ t('Previous PDF page') }}">‹</button>
+      <input id="pdf-page-number" type="number" min="1" value="1" aria-label="{{ t('Page') }}">
+      <span>/ <span id="pdf-page-total">—</span></span>
+      <button id="pdf-next-page" type="button" aria-label="{{ t('Next PDF page') }}">›</button>
+    </div>
+    <div class="pdf-tool-group">
+      <button id="pdf-zoom-out" type="button" aria-label="{{ t('Zoom out') }}">−</button>
+      <select id="pdf-scale" aria-label="{{ t('Automatic zoom') }}">
+        <option value="page-width">{{ t('Fit width') }}</option>
+        <option value="page-fit">{{ t('Fit page') }}</option>
+        <option value="auto">{{ t('Automatic zoom') }}</option>
+      </select>
+      <button id="pdf-zoom-in" type="button" aria-label="{{ t('Zoom in') }}">＋</button>
+    </div>
+    <div class="pdf-tool-group pdf-search-tools">
+      <input id="pdf-search" type="search" placeholder="{{ t('Search PDF') }}" aria-label="{{ t('Search PDF') }}">
+      <button id="pdf-find-previous" type="button" aria-label="{{ t('Previous result') }}">↑</button>
+      <button id="pdf-find-next" type="button" aria-label="{{ t('Next result') }}">↓</button>
+    </div>
+    <button class="secondary-button" type="button" @click="toggleAnnotations" :aria-expanded="annotationOpen">{{ t('Annotation tools') }}</button>
+    <a class="toolbar-link" href="/documents/{{ item.id }}/revisions/{{ revision.id }}/content" download>{{ t('Download') }}</a>
+    <span id="pdf-status">{{ t('Loading…') }}</span>
+  </nav>
+  <div class="pdf-annotation-tools" x-cloak x-show="annotationOpen">
     <button data-color="yellow">{{ t('Yellow') }}</button><button data-color="green">{{ t('Green') }}</button>
     <button data-color="blue">{{ t('Blue') }}</button><button data-color="red">{{ t('Red') }}</button>
     <button id="add-note">{{ t('Note') }}</button><button id="delete-annotation">{{ t('Delete selected') }}</button>
     <select id="annotation-project"><option value="">{{ t('Private') }}</option>{% for project in projects %}<option value="{{ project.id }}">{{ project.name }}</option>{% endfor %}</select>
     <button id="export-annotations">{{ t('Export') }}</button>
-    <span id="pdf-status">{{ t('Loading…') }}</span>
-  </nav>
+  </div>
   <div id="viewerContainer"><div id="viewer" class="pdfViewer removePageBorders"></div></div>
 </div>
 <script type="module" src="{{ url_for('static', path='/pdf_viewer.js') }}"></script>

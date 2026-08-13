@@ -2,8 +2,15 @@
 {% block title %}{{ t('Import') }} · Quirebase{% endblock %}
 {% block content %}
 <div class="page-heading"><div><p class="eyebrow">{{ t('Bring research into your library') }}</p><h1>{{ t('Import papers') }}</h1></div></div>
+<div x-data="importWorkspace">
+<nav class="import-methods" aria-label="{{ t('Import methods') }}">
+  <button type="button" data-method="doi" @click="selectMethod" :aria-selected="active === 'doi'">{{ t('Import by DOI') }}</button>
+  <button type="button" data-method="bibliography" @click="selectMethod" :aria-selected="active === 'bibliography'">{{ t('Bibliography file') }}</button>
+  <button type="button" data-method="published" @click="selectMethod" :aria-selected="active === 'published'">{{ t('Published PDF') }}</button>
+  <button type="button" data-method="unpublished" @click="selectMethod" :aria-selected="active === 'unpublished'">{{ t('Unpublished PDF') }}</button>
+</nav>
 <div class="import-grid">
-  <section class="panel import-card featured">
+  <section class="panel import-card featured" x-show="active === 'doi'">
     <span class="module-number">01</span><h2>{{ t('Import by DOI') }}</h2>
     <p>{{ t('Retrieve publication metadata from Crossref or DataCite and review it before saving.') }}</p>
     <form method="post" action="/metadata/preview?csrf_token={{ csrf }}">
@@ -13,7 +20,7 @@
     </form>
   </section>
 
-  <section class="panel import-card">
+  <section class="panel import-card" x-show="active === 'bibliography'">
     <span class="module-number">02</span><h2>{{ t('Bibliography file') }}</h2>
     <p>{{ t('Preview and import records exported by EndNote, Zotero, Mendeley, or another reference manager.') }}</p>
     <form method="post" action="/bibliography/preview?csrf_token={{ csrf }}" enctype="multipart/form-data">
@@ -23,7 +30,7 @@
     </form>
   </section>
 
-  <section class="panel import-card">
+  <section class="panel import-card" x-show="active === 'published'">
     <span class="module-number">03</span><h2>{{ t('Published PDF') }}</h2>
     <p>{{ t('Upload a published paper and use its DOI to retrieve and attach verified metadata.') }}</p>
     <form method="post" action="/imports/pdf/published?csrf_token={{ csrf }}" enctype="multipart/form-data">
@@ -33,7 +40,7 @@
     </form>
   </section>
 
-  <section class="panel import-card">
+  <section class="panel import-card" x-show="active === 'unpublished'">
     <span class="module-number">04</span><h2>{{ t('Unpublished PDF') }}</h2>
     <p>{{ t('Add a preprint, manuscript, report, or private document and enter its metadata manually.') }}</p>
     <form method="post" action="/imports/pdf/unpublished?csrf_token={{ csrf }}" enctype="multipart/form-data">
@@ -51,5 +58,6 @@
     <p>{{ t('Provider-backed search will be added here after credentials, quotas, result normalization, and audit behavior are configured.') }}</p>
     <div class="provider-list"><span>IEEE Xplore API</span><span>Scopus API</span><span>PubMed</span><span>arXiv</span></div>
   </section>
+</div>
 </div>
 {% endblock %}
