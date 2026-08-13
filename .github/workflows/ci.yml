@@ -1,0 +1,74 @@
+name: CI
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 3 * * 1"
+jobs:
+  sqlite:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.5"
+      - run: uv sync --extra dev
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - run: uv run ruff check .
+      - run: uv run pytest -q -m "not oa"
+      - run: uv run quirebase init-db
+      - run: uv run quirebase doctor
+      - run: uv build
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: quirebase_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      QUIREBASE_TEST_POSTGRES_URL: postgresql+psycopg://postgres:postgres@localhost:5432/quirebase_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --extra dev --extra postgres
+      - run: uv run pytest -q tests/test_postgres_contract.py
+  oa-pdf-corpus:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.5"
+      - uses: actions/cache@v4
+        with:
+          path: .cache/oa-pdfs
+          key: oa-pdfs-${{ hashFiles('tests/oa_corpus.json') }}
+      - run: uv sync --extra dev
+      - run: bun install --frozen-lockfile
+      - run: uv run python scripts/download-oa-corpus.py
+      - run: uv run pytest -q -m oa
+      - run: bun run test:oa:pdfjs
+      - run: uv run python scripts/check-metadata-providers.py

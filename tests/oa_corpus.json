@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "source": "PMC Open Access Subset via the official PMC Cloud Service",
+  "source_documentation": "https://pmc.ncbi.nlm.nih.gov/tools/pmcaws/",
+  "papers": [
+    {
+      "id": "PMC5334499",
+      "title": "Evaluation of response to immunotherapy in patients with non-small cell lung cancer using 18F-FDG PET/CT",
+      "license": "CC BY-NC",
+      "license_record": "https://www.ncbi.nlm.nih.gov/pmc/utils/oa/oa.fcgi?id=PMC5334499",
+      "url": "https://pmc-oa-opendata.s3.amazonaws.com/PMC5334499.1/PMC5334499.1.pdf",
+      "sha256": "33a175c168ad74a3e65dc6cc67c4e4c2d082d8eb0db1f207b0f50a4e189fb7dc",
+      "bytes": 1006134,
+      "pages": 8,
+      "minimum_text_characters": 35000,
+      "search_phrase": "immunotherapy"
+    },
+    {
+      "id": "PMC10335462",
+      "title": "Smartphones, social media and adolescent mental well-being",
+      "license": "CC BY",
+      "license_record": "https://www.ncbi.nlm.nih.gov/pmc/utils/oa/oa.fcgi?id=PMC10335462",
+      "url": "https://pmc-oa-opendata.s3.amazonaws.com/PMC10335462.1/PMC10335462.1.pdf",
+      "sha256": "6a44235d94e41617f1eca8b385e79a242f6cf123106e8b66e82247bbf3326924",
+      "bytes": 1091988,
+      "pages": 10,
+      "minimum_text_characters": 50000,
+      "search_phrase": "adolescent"
+    },
+    {
+      "id": "PMC10670526",
+      "title": "Drivers and Consequences of ChatGPT Use in Higher Education",
+      "license": "CC BY",
+      "license_record": "https://www.ncbi.nlm.nih.gov/pmc/utils/oa/oa.fcgi?id=PMC10670526",
+      "url": "https://pmc-oa-opendata.s3.amazonaws.com/PMC10670526.1/PMC10670526.1.pdf",
+      "sha256": "027e74f87b7ebf3062933eb1fb08e7a108bb215a0c3f4a8cd3701fccd86ceb1a",
+      "bytes": 314888,
+      "pages": 16,
+      "minimum_text_characters": 65000,
+      "search_phrase": "stakeholder"
+    }
+  ]
+}

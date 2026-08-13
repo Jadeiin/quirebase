@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Quirebase{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <header>
+    <a href="/" class="brand">Quirebase</a>
+    <a href="/source">Source code</a>
+    {% if user %}<a href="/account/sessions">Sessions</a>{% if user.role == 'administrator' %}<a href="/admin">Admin</a>{% endif %}<span>{{ user.username }}</span>{% endif %}
+  </header>
+  <main>{% block content %}{% endblock %}</main>
+</body>
+</html>

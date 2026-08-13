@@ -1,0 +1,21 @@
+# Deployment and operations
+
+## Supported platforms
+
+Python 3.12+ wheels are the common installation path on Windows, macOS and Linux. Install with `uv tool install` or in a virtual environment, then run `quirebase init-db`, `quirebase create-admin`, `quirebase serve`, and a separate `quirebase worker` process. PDF.js assets are already included in release wheels.
+
+SQLite is intended for a single-host installation with one worker. PostgreSQL is recommended for teams and supports concurrent workers through `FOR UPDATE SKIP LOCKED`. Set `QUIREBASE_DATABASE_URL`, `QUIREBASE_DATA_DIR`, `QUIREBASE_ALLOWED_HOSTS`, secure cookies behind HTTPS, and an exact-version `QUIREBASE_SOURCE_URL`.
+
+For online DOI/PMID/arXiv metadata lookup, set a monitored `QUIREBASE_METADATA_CONTACT_EMAIL`; an NCBI API key is optional. See `METADATA_LOOKUP.md`. Restrictive egress firewalls should allow only the documented provider hosts.
+
+Use a reverse proxy for TLS and request-size limits. Do not expose Uvicorn directly to the public internet. Preserve the application data directory independently from the installed wheel.
+
+## Backups
+
+`quirebase backup backup.zip` creates a consistent SQLite snapshot or invokes `pg_dump` for PostgreSQL, adds immutable objects, and writes a checksum manifest. Verify it with `quirebase verify-backup backup.zip`. Test restoration periodically on a separate installation. `quirebase restore backup.zip --force` replaces the configured database and overlays backed-up objects; stop all web and worker processes first.
+
+`quirebase doctor` checks the schema, writable directories, PyMuPDF and every stored object's SHA-256. `quirebase reindex` rebuilds search. The administrator page can retry failed jobs; `/metrics` exposes authenticated job and content counts.
+
+## Upgrades
+
+Back up first, install the new wheel, run `quirebase init-db` to apply Alembic migrations, rebuild assets only for source checkouts, restart web and worker processes, then run `quirebase doctor`.

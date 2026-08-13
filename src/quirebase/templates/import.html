@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Import bibliography · Quirebase{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>Import bibliography</h1>
+  <p>The file is parsed into a preview first. Nothing is added until you confirm it.</p>
+  <form method="post" action="/bibliography/preview?csrf_token={{ csrf }}" enctype="multipart/form-data">
+    <label>Format
+      <select name="file_format"><option value="bibtex">BibTeX</option><option value="ris">RIS</option></select>
+    </label>
+    <input type="file" name="bibliography" accept=".bib,.ris,text/plain" required>
+    <button>Preview</button>
+  </form>
+</section>
+<section class="panel">
+  <h2>Look up online metadata</h2>
+  <p>Retrieve one record by DOI, PMID, or arXiv ID. You can review it before importing.</p>
+  <form method="post" action="/metadata/preview?csrf_token={{ csrf }}">
+    <label>Provider
+      <select name="provider"><option value="auto">Detect automatically</option><option value="doi">DOI / Crossref</option><option value="pmid">PMID / PubMed</option><option value="arxiv">arXiv</option></select>
+    </label>
+    <input name="identifier" maxlength="500" placeholder="10.1234/example, PMID:123456, or arXiv:1706.03762" required>
+    <button>Look up and preview</button>
+  </form>
+</section>
+{% endblock %}

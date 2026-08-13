@@ -1,0 +1,2 @@
+{% extends "base.html" %}{% block content %}<section class="panel"><h1>Active sessions</h1>{% for session in sessions %}<p>{{ session.created_at }} · expires {{ session.expires_at }}{% if session.id == login.id %} · current{% else %}<form class="inline" method="post" action="/account/sessions/{{ session.id }}/revoke?csrf_token={{ csrf }}"><button>Revoke</button></form>{% endif %}</p>{% endfor %}
+<form method="post" action="/account/sessions/revoke-all?csrf_token={{ csrf }}"><button>Sign out of all sessions</button></form></section>{% endblock %}

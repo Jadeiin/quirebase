@@ -1,0 +1,1 @@
+{% extends "base.html" %}{% block content %}<section class="panel"><h1>Invitation created</h1><p>Copy this link now. The plaintext token is not stored and cannot be shown again.</p><input readonly value="{{ invite_url }}"><p>Expires {{ invitation.expires_at }}.</p><a href="/admin">Return to administration</a></section>{% endblock %}

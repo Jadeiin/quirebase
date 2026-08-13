@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h1>Research library</h1>
+  <p><a href="/bibliography/import">Import BibTeX/RIS</a> ·
+    Export <a href="/bibliography/export?file_format=bibtex">BibTeX</a> or
+    <a href="/bibliography/export?file_format=ris">RIS</a></p>
+  <form method="get" action="/" class="row">
+    <input type="search" name="q" value="{{ query }}" placeholder="Search titles, authors, keywords and PDF text">
+    <button>Search</button>
+    {% if query %}<a href="/">Clear</a>{% endif %}
+  </form>
+  <form method="post" action="/items?csrf_token={{ csrf }}" class="row">
+    <input name="title" placeholder="Title" required>
+    <input name="authors" placeholder="Authors">
+    <input name="abstract" placeholder="Abstract">
+    <button>Add item</button>
+  </form>
+</section>
+<section class="panel">
+  <h2>Projects</h2>
+  <form method="post" action="/projects?csrf_token={{ csrf }}" class="row">
+    <input name="name" placeholder="Project name" required><button>Create project</button>
+  </form>
+  {% for project in projects %}<p><a href="/projects/{{ project.id }}">{{ project.name }}</a></p>{% else %}<p>No projects yet.</p>{% endfor %}
+</section>
+<section class="cards">
+{% for item in items %}
+  <a class="card" href="/items/{{ item.id }}"><strong>{{ item.title }}</strong><span>{{ item.authors or '' }}</span></a>
+{% else %}<p>{% if query %}No matching items.{% else %}No items yet.{% endif %}</p>{% endfor %}
+</section>
+{% endblock %}

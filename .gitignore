@@ -1,0 +1,12 @@
+.env
+.DS_Store
+.venv/
+node_modules/
+quirebase.db*
+quirebase-data/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.coverage
+dist/
+.cache/

@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build-assets.mjs",
+    "test:oa:pdfjs": "node scripts/check-oa-pdfjs.mjs"
+  },
+  "dependencies": {
+    "pdfjs-dist": "6.2.108"
+  }
+}

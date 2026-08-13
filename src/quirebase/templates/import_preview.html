@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Import preview · Quirebase{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>Import preview</h1>
+  <p>{{ records|length }} record(s) parsed.</p>
+  {% if errors %}
+    <h2>Errors</h2>
+    <ul>{% for error in errors %}<li>Record {{ error.row }}: {{ error.message }}</li>{% endfor %}</ul>
+    <p>Fix the source file and <a href="/bibliography/import">try again</a>. No records were imported.</p>
+  {% else %}
+    <form method="post" action="/bibliography/import/{{ batch.id }}?csrf_token={{ csrf }}">
+      <button>Import all records</button>
+    </form>
+  {% endif %}
+  <ol>
+    {% for record in records %}
+      <li><strong>{{ record.title or '(missing title)' }}</strong> — {{ record.authors or '' }}</li>
+    {% endfor %}
+  </ol>
+</section>
+{% endblock %}

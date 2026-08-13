@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "quirebase"
+version = "0.1.0"
+description = "A collaborative, self-hosted research library"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "AGPL-3.0-only"
+dependencies = [
+  "alembic>=1.16,<2",
+  "argon2-cffi>=25,<26",
+  "bibtexparser>=1.4,<2",
+  "fastapi>=0.116,<1",
+  "httpx>=0.28,<1",
+  "jinja2>=3.1,<4",
+  "pymupdf>=1.28,<1.29",
+  "pydantic-settings>=2.10,<3",
+  "python-multipart>=0.0.20,<1",
+  "rispy>=0.10,<1",
+  "sqlalchemy>=2.0,<3",
+  "typer>=0.16,<1",
+  "uvicorn[standard]>=0.35,<1",
+]
+
+[project.optional-dependencies]
+postgres = ["psycopg[binary]>=3.2,<4"]
+dev = ["pytest>=8.4,<9", "pytest-cov>=6.2,<7", "ruff>=0.12,<1"]
+
+[project.scripts]
+quirebase = "quirebase.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/quirebase"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"migrations" = "quirebase/migrations"
+"docs" = "quirebase/docs"
+"THIRD_PARTY.md" = "quirebase/THIRD_PARTY.md"
+"SOURCE_POLICY.md" = "quirebase/SOURCE_POLICY.md"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["oa: tests using the separately downloaded open-access PDF corpus"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+extend-ignore = ["B008", "BLE001"]
+exclude = ["migrations"]
