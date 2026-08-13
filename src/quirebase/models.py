@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import enum
 import uuid
 from datetime import UTC, datetime
+from enum import StrEnum
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -18,18 +18,18 @@ def now() -> datetime:
     return datetime.now(UTC)
 
 
-class SystemRole(str, enum.Enum):
+class SystemRole(StrEnum):
     administrator = "administrator"
     member = "member"
 
 
-class ProjectRole(str, enum.Enum):
+class ProjectRole(StrEnum):
     owner = "owner"
     editor = "editor"
     viewer = "viewer"
 
 
-class JobState(str, enum.Enum):
+class JobState(StrEnum):
     pending = "pending"
     running = "running"
     succeeded = "succeeded"
@@ -139,9 +139,7 @@ class ItemTag(Base):
     item_id: Mapped[str] = mapped_column(
         ForeignKey("items.id", ondelete="CASCADE"), primary_key=True
     )
-    tag_id: Mapped[str] = mapped_column(
-        ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True
-    )
+    tag_id: Mapped[str] = mapped_column(ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True)
 
 
 class DiscussionMessage(Base):

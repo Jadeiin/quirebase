@@ -22,9 +22,7 @@ def test_failed_and_successful_logins_are_audited_without_credentials(db):
     app.dependency_overrides[get_db] = override_db
     client = TestClient(app)
     try:
-        failed = client.post(
-            "/login", data={"username": "audited", "password": "wrong-password"}
-        )
+        failed = client.post("/login", data={"username": "audited", "password": "wrong-password"})
         assert failed.status_code == 401
         succeeded = client.post(
             "/login",
@@ -55,9 +53,7 @@ def test_failed_and_successful_logins_are_audited_without_credentials(db):
         get_settings.cache_clear()
 
 
-def test_revoke_all_sessions_requires_csrf_and_invalidates_every_session(
-    db, tmp_path, monkeypatch
-):
+def test_revoke_all_sessions_requires_csrf_and_invalidates_every_session(db, tmp_path, monkeypatch):
     client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
     user = db.scalar(select(User).where(User.username == "reader"))
     db.add(
@@ -72,9 +68,10 @@ def test_revoke_all_sessions_requires_csrf_and_invalidates_every_session(
     try:
         rejected = client.post("/account/sessions/revoke-all", follow_redirects=False)
         assert rejected.status_code == 403
-        assert db.scalar(
-            select(LoginSession).where(LoginSession.user_id == user.id).limit(1)
-        ) is not None
+        assert (
+            db.scalar(select(LoginSession).where(LoginSession.user_id == user.id).limit(1))
+            is not None
+        )
 
         response = client.post(
             "/account/sessions/revoke-all?csrf_token=test-csrf", follow_redirects=False
@@ -83,13 +80,9 @@ def test_revoke_all_sessions_requires_csrf_and_invalidates_every_session(
         assert response.headers["location"] == "/login"
         assert get_settings().session_cookie in response.headers["set-cookie"]
         assert "Max-Age=0" in response.headers["set-cookie"]
-        assert db.scalars(
-            select(LoginSession).where(LoginSession.user_id == user.id)
-        ).all() == []
+        assert db.scalars(select(LoginSession).where(LoginSession.user_id == user.id)).all() == []
 
-        event = db.scalar(
-            select(AuditEvent).where(AuditEvent.action == "auth.sessions.revoke_all")
-        )
+        event = db.scalar(select(AuditEvent).where(AuditEvent.action == "auth.sessions.revoke_all"))
         assert event.actor_id == user.id
         assert '"revoked_sessions": 2' in event.detail
         assert client.get("/").status_code == 401
@@ -106,16 +99,17 @@ def test_throttled_login_is_audited(db):
     client = TestClient(app)
     try:
         for _ in range(5):
-            assert client.post(
-                "/login", data={"username": "missing", "password": "not-a-password"}
-            ).status_code == 401
+            assert (
+                client.post(
+                    "/login", data={"username": "missing", "password": "not-a-password"}
+                ).status_code
+                == 401
+            )
         throttled = client.post(
             "/login", data={"username": "missing", "password": "not-a-password"}
         )
         assert throttled.status_code == 429
-        event = db.scalar(
-            select(AuditEvent).where(AuditEvent.action == "auth.login.throttled")
-        )
+        event = db.scalar(select(AuditEvent).where(AuditEvent.action == "auth.login.throttled"))
         assert event is not None
         assert event.actor_id is None
         assert "missing" not in (event.detail or "")

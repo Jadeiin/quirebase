@@ -3,16 +3,19 @@ from __future__ import annotations
 import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .db import get_db
 from .models import LoginSession, LoginThrottle, User
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 password_hasher = PasswordHasher()
 THROTTLE_WINDOW = timedelta(minutes=15)

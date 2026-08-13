@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pymupdf
 
-from .models import PdfAnnotation
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from .models import PdfAnnotation
 
 COLORS = {
     "yellow": (1.0, 0.92, 0.2),
@@ -76,8 +79,14 @@ def export_annotations(source: Path, output: Path, annotations: list[PdfAnnotati
             if record.kind == "highlight":
                 for segment in record.segments:
                     values = [
-                        segment.x1, segment.y1, segment.x2, segment.y2,
-                        segment.x3, segment.y3, segment.x4, segment.y4,
+                        segment.x1,
+                        segment.y1,
+                        segment.x2,
+                        segment.y2,
+                        segment.x3,
+                        segment.y3,
+                        segment.x4,
+                        segment.y4,
                     ]
                     if any(value is None for value in values):
                         continue

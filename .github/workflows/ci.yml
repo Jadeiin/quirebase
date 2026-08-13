@@ -22,7 +22,8 @@ jobs:
       - run: uv sync --extra dev
       - run: bun install --frozen-lockfile
       - run: bun run build
-      - run: uv run ruff check .
+      - run: uv run prek run --all-files
+      - run: uv run mypy src/quirebase
       - run: uv run pytest -q -m "not oa"
       - run: uv run quirebase init-db
       - run: uv run quirebase doctor

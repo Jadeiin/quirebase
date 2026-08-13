@@ -8,6 +8,7 @@ Requirements: Python 3.12+, `uv`, and Bun 1.3+ (or Node.js 22+ with npm) for bui
 
 ```sh
 uv sync --extra dev
+uv run prek install --hook-type pre-commit --hook-type pre-push --hook-type commit-msg
 bun install --frozen-lockfile
 bun run build
 uv run quirebase init-db

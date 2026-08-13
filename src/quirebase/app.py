@@ -5,6 +5,7 @@ import re
 import secrets
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import (
@@ -25,7 +26,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from .bibliography import SUPPORTED_FORMATS, export_bibliography, parse_bibliography
 from .config import get_settings
 from .db import get_db
-from .metadata_lookup import MetadataLookupError, MetadataNotFound, lookup_metadata
+from .metadata_lookup import MetadataLookupError, MetadataNotFoundError, lookup_metadata
 from .models import (
     Attachment,
     AuditEvent,
@@ -69,6 +70,9 @@ from .security import (
     verify_password,
 )
 from .storage import LocalObjectStore
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 PACKAGE_DIR = Path(__file__).parent
 templates = Jinja2Templates(directory=PACKAGE_DIR / "templates")
@@ -192,7 +196,9 @@ def create_app() -> FastAPI:
             and invitation.expires_at.replace(tzinfo=UTC) > datetime.now(UTC)
         )
         return templates.TemplateResponse(
-            request, "accept_invitation.html", {"token": token, "invitation": invitation if valid else None}
+            request,
+            "accept_invitation.html",
+            {"token": token, "invitation": invitation if valid else None},
         )
 
     @app.post("/accept-invitation/{token}")
@@ -214,7 +220,11 @@ def create_app() -> FastAPI:
         db.add(user)
         invitation.accepted_at = datetime.now(UTC)
         db.flush()
-        db.add(AuditEvent(actor_id=user.id, action="invitation.accept", target_type="user", target_id=user.id))
+        db.add(
+            AuditEvent(
+                actor_id=user.id, action="invitation.accept", target_type="user", target_id=user.id
+            )
+        )
         db.commit()
         return RedirectResponse("/login", status_code=303)
 
@@ -229,10 +239,24 @@ def create_app() -> FastAPI:
             raise HTTPException(404)
         users = db.scalars(select(User).order_by(User.username)).all()
         invitations = db.scalars(select(Invitation).order_by(Invitation.created_at.desc())).all()
-        failed_jobs = db.scalars(select(Job).where(Job.state == "failed").order_by(Job.updated_at.desc())).all()
-        return templates.TemplateResponse(request, "admin.html", {"user": user, "users": users, "invitations": invitations, "failed_jobs": failed_jobs, "csrf": login.csrf_token})
+        failed_jobs = db.scalars(
+            select(Job).where(Job.state == "failed").order_by(Job.updated_at.desc())
+        ).all()
+        return templates.TemplateResponse(
+            request,
+            "admin.html",
+            {
+                "user": user,
+                "users": users,
+                "invitations": invitations,
+                "failed_jobs": failed_jobs,
+                "csrf": login.csrf_token,
+            },
+        )
 
-    @app.post("/admin/invitations", dependencies=[Depends(require_csrf)], response_class=HTMLResponse)
+    @app.post(
+        "/admin/invitations", dependencies=[Depends(require_csrf)], response_class=HTMLResponse
+    )
     def create_invitation(
         request: Request,
         username: str = Form(),
@@ -252,12 +276,24 @@ def create_app() -> FastAPI:
             raise HTTPException(409, "username already exists or is invited")
         raw = secrets.token_urlsafe(32)
         invitation = Invitation(
-            token_hash=token_hash(raw), username=normalized, role=role, created_by=user.id,
+            token_hash=token_hash(raw),
+            username=normalized,
+            role=role,
+            created_by=user.id,
             expires_at=datetime.now(UTC) + timedelta(days=7),
         )
         db.add(invitation)
         db.commit()
-        return templates.TemplateResponse(request, "invitation_created.html", {"user": user, "csrf": login.csrf_token, "invitation": invitation, "invite_url": str(request.url_for("accept_invitation_page", token=raw))})
+        return templates.TemplateResponse(
+            request,
+            "invitation_created.html",
+            {
+                "user": user,
+                "csrf": login.csrf_token,
+                "invitation": invitation,
+                "invite_url": str(request.url_for("accept_invitation_page", token=raw)),
+            },
+        )
 
     @app.post("/admin/jobs/{job_id}/retry", dependencies=[Depends(require_csrf)])
     def retry_job(
@@ -284,11 +320,21 @@ def create_app() -> FastAPI:
         login: LoginSession = Depends(current_login),
         db: Session = Depends(get_db),
     ):
-        sessions = db.scalars(select(LoginSession).where(LoginSession.user_id == user.id).order_by(LoginSession.created_at.desc())).all()
-        return templates.TemplateResponse(request, "sessions.html", {"user": user, "login": login, "sessions": sessions, "csrf": login.csrf_token})
+        sessions = db.scalars(
+            select(LoginSession)
+            .where(LoginSession.user_id == user.id)
+            .order_by(LoginSession.created_at.desc())
+        ).all()
+        return templates.TemplateResponse(
+            request,
+            "sessions.html",
+            {"user": user, "login": login, "sessions": sessions, "csrf": login.csrf_token},
+        )
 
     @app.post("/account/sessions/{session_id}/revoke", dependencies=[Depends(require_csrf)])
-    def revoke_session(session_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    def revoke_session(
+        session_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)
+    ):
         target = db.get(LoginSession, session_id)
         if target is None or target.user_id != user.id:
             raise HTTPException(404)
@@ -433,9 +479,22 @@ def create_app() -> FastAPI:
             .order_by(User.username)
         ).all()
         items = db.scalars(
-            select(Item).join(ProjectItem, ProjectItem.item_id == Item.id).where(ProjectItem.project_id == project_id)
+            select(Item)
+            .join(ProjectItem, ProjectItem.item_id == Item.id)
+            .where(ProjectItem.project_id == project_id)
         ).all()
-        return templates.TemplateResponse(request, "project.html", {"user": user, "project": project, "membership": membership, "members": members, "items": items, "csrf": login.csrf_token})
+        return templates.TemplateResponse(
+            request,
+            "project.html",
+            {
+                "user": user,
+                "project": project,
+                "membership": membership,
+                "members": members,
+                "items": items,
+                "csrf": login.csrf_token,
+            },
+        )
 
     @app.post("/projects/{project_id}/members", dependencies=[Depends(require_csrf)])
     def add_project_member(
@@ -450,7 +509,9 @@ def create_app() -> FastAPI:
             raise HTTPException(404)
         if role not in ("owner", "editor", "viewer"):
             raise HTTPException(422, "invalid project role")
-        target = db.scalar(select(User).where(User.username == username.strip(), User.active.is_(True)))
+        target = db.scalar(
+            select(User).where(User.username == username.strip(), User.active.is_(True))
+        )
         if target is None:
             raise HTTPException(404, "user not found")
         existing = db.get(ProjectMember, (project_id, target.id))
@@ -458,11 +519,21 @@ def create_app() -> FastAPI:
             existing.role = role
         else:
             db.add(ProjectMember(project_id=project_id, user_id=target.id, role=role))
-        db.add(AuditEvent(actor_id=user.id, action="project.member.set", target_type="project", target_id=project_id, detail=json.dumps({"user_id": target.id, "role": role})))
+        db.add(
+            AuditEvent(
+                actor_id=user.id,
+                action="project.member.set",
+                target_type="project",
+                target_id=project_id,
+                detail=json.dumps({"user_id": target.id, "role": role}),
+            )
+        )
         db.commit()
         return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
-    @app.post("/projects/{project_id}/members/{member_id}/remove", dependencies=[Depends(require_csrf)])
+    @app.post(
+        "/projects/{project_id}/members/{member_id}/remove", dependencies=[Depends(require_csrf)]
+    )
     def remove_project_member(
         project_id: str,
         member_id: str,
@@ -474,11 +545,11 @@ def create_app() -> FastAPI:
         if actor is None or actor.role != "owner" or target is None:
             raise HTTPException(404)
         owner_count = db.scalar(
-            select(func.count()).select_from(ProjectMember).where(
-                ProjectMember.project_id == project_id, ProjectMember.role == "owner"
-            )
+            select(func.count())
+            .select_from(ProjectMember)
+            .where(ProjectMember.project_id == project_id, ProjectMember.role == "owner")
         )
-        if target.role == "owner" and owner_count <= 1:
+        if target.role == "owner" and (owner_count or 0) <= 1:
             raise HTTPException(409, "a project must retain an owner")
         db.delete(target)
         db.commit()
@@ -575,7 +646,7 @@ def create_app() -> FastAPI:
             parsed, record = lookup_metadata(identifier, provider)
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
-        except MetadataNotFound as error:
+        except MetadataNotFoundError as error:
             raise HTTPException(404, str(error)) from error
         except MetadataLookupError as error:
             raise HTTPException(502, str(error)) from error
@@ -654,7 +725,11 @@ def create_app() -> FastAPI:
             shared_ids = select(ProjectItem.item_id).where(ProjectItem.project_id.in_(project_ids))
             query = query.where(or_(Item.created_by == user.id, Item.id.in_(shared_ids)))
         contents = export_bibliography(list(db.scalars(query).all()), file_format)
-        media_type = "application/x-bibtex" if file_format == "bibtex" else "application/x-research-info-systems"
+        media_type = (
+            "application/x-bibtex"
+            if file_format == "bibtex"
+            else "application/x-research-info-systems"
+        )
         extension = "bib" if file_format == "bibtex" else "ris"
         return Response(
             contents,
@@ -675,6 +750,8 @@ def create_app() -> FastAPI:
         item = db.scalar(
             select(Item).options(selectinload(Item.revisions)).where(Item.id == item_id)
         )
+        if item is None:
+            raise HTTPException(404)
         revisions = sorted(item.revisions, key=lambda row: row.created_at, reverse=True)
         memberships = db.execute(
             select(Project, ProjectMember.role)
@@ -753,7 +830,7 @@ def create_app() -> FastAPI:
                 raise HTTPException(422, "identifiers must be valid JSON") from error
             if not isinstance(parsed_identifiers, dict):
                 raise HTTPException(422, "identifiers must be a JSON object")
-        result = db.execute(
+        updated_id = db.scalar(
             update(Item)
             .where(Item.id == item_id, Item.version == version)
             .values(
@@ -769,18 +846,23 @@ def create_app() -> FastAPI:
                 identifiers=json.dumps(parsed_identifiers, ensure_ascii=False)
                 if identifiers.strip()
                 else None,
-                custom_fields=json.dumps(parsed_custom, ensure_ascii=False) if custom_fields.strip() else None,
+                custom_fields=json.dumps(parsed_custom, ensure_ascii=False)
+                if custom_fields.strip()
+                else None,
                 version=Item.version + 1,
                 updated_at=datetime.now(UTC),
             )
+            .returning(Item.id)
         )
-        if result.rowcount != 1:
+        if updated_id is None:
             db.rollback()
             current = db.get(Item, item_id)
             raise HTTPException(409, {"version": current.version if current else None})
         db.flush()
         db.expire_all()
         item = db.get(Item, item_id)
+        if item is None:
+            raise HTTPException(404)
         search_index(db).index_item(db, item.id)
         db.add(
             AuditEvent(
@@ -810,13 +892,24 @@ def create_app() -> FastAPI:
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
         record = Attachment(
-            item_id=item_id, object_key=key, sha256=digest, size=size,
+            item_id=item_id,
+            object_key=key,
+            sha256=digest,
+            size=size,
             mime_type=(attachment.content_type or "application/octet-stream")[:100],
-            original_name=Path(attachment.filename).name[:255], created_by=user.id,
+            original_name=Path(attachment.filename).name[:255],
+            created_by=user.id,
         )
         db.add(record)
         db.flush()
-        db.add(AuditEvent(actor_id=user.id, action="attachment.upload", target_type="attachment", target_id=record.id))
+        db.add(
+            AuditEvent(
+                actor_id=user.id,
+                action="attachment.upload",
+                target_type="attachment",
+                target_id=record.id,
+            )
+        )
         db.commit()
         return RedirectResponse(f"/items/{item_id}", status_code=303)
 
@@ -831,8 +924,10 @@ def create_app() -> FastAPI:
         if record is None or record.item_id != item_id or not can_read_item(db, user, item_id):
             raise HTTPException(404)
         return FileResponse(
-            LocalObjectStore().path(record.object_key), media_type="application/octet-stream",
-            filename=record.original_name, content_disposition_type="attachment",
+            LocalObjectStore().path(record.object_key),
+            media_type="application/octet-stream",
+            filename=record.original_name,
+            content_disposition_type="attachment",
         )
 
     @app.post("/items/{item_id}/tags", dependencies=[Depends(require_csrf)])
@@ -856,7 +951,11 @@ def create_app() -> FastAPI:
             db.add(ItemTag(item_id=item_id, tag_id=tag.id))
             db.flush()
             search_index(db).index_item(db, item_id)
-            db.add(AuditEvent(actor_id=user.id, action="tag.add", target_type="item", target_id=item_id))
+            db.add(
+                AuditEvent(
+                    actor_id=user.id, action="tag.add", target_type="item", target_id=item_id
+                )
+            )
             db.commit()
         return RedirectResponse(f"/items/{item_id}", status_code=303)
 
@@ -892,11 +991,20 @@ def create_app() -> FastAPI:
         message = DiscussionMessage(item_id=item_id, author_id=user.id, body=content)
         db.add(message)
         db.flush()
-        db.add(AuditEvent(actor_id=user.id, action="discussion.create", target_type="discussion", target_id=message.id))
+        db.add(
+            AuditEvent(
+                actor_id=user.id,
+                action="discussion.create",
+                target_type="discussion",
+                target_id=message.id,
+            )
+        )
         db.commit()
         return RedirectResponse(f"/items/{item_id}", status_code=303)
 
-    @app.post("/items/{item_id}/discussion/{message_id}/delete", dependencies=[Depends(require_csrf)])
+    @app.post(
+        "/items/{item_id}/discussion/{message_id}/delete", dependencies=[Depends(require_csrf)]
+    )
     def delete_discussion_message(
         item_id: str,
         message_id: str,
@@ -911,7 +1019,14 @@ def create_app() -> FastAPI:
         ):
             raise HTTPException(404)
         db.delete(message)
-        db.add(AuditEvent(actor_id=user.id, action="discussion.delete", target_type="discussion", target_id=message_id))
+        db.add(
+            AuditEvent(
+                actor_id=user.id,
+                action="discussion.delete",
+                target_type="discussion",
+                target_id=message_id,
+            )
+        )
         db.commit()
         return RedirectResponse(f"/items/{item_id}", status_code=303)
 
@@ -1103,7 +1218,7 @@ def create_app() -> FastAPI:
             selected_text=data.selected_text,
         )
         for ordinal, segment in enumerate(data.segments):
-            values = segment.quad_points or [None] * 8
+            values: Sequence[float | None] = segment.quad_points or [None] * 8
             record.segments.append(
                 PdfAnnotationSegment(
                     page_index=segment.page_index,
@@ -1323,14 +1438,20 @@ def validate_segments(data: AnnotationCreate, revision: FileRevision) -> None:
     for segment in data.segments:
         if segment.page_index >= revision.page_count:
             raise HTTPException(422, "page index is outside the document")
-        values = (segment.quad_points or []) + [
-            value for value in (segment.anchor_x, segment.anchor_y) if value is not None
-        ]
+        values = list(segment.quad_points or [])
+        if segment.anchor_x is not None:
+            values.append(segment.anchor_x)
+        if segment.anchor_y is not None:
+            values.append(segment.anchor_y)
         if any(not (-1_000_000 < value < 1_000_000) for value in values):
             raise HTTPException(422, "invalid PDF coordinates")
         left, bottom, right, top = geometry[segment.page_index]
-        xs = (segment.quad_points or [segment.anchor_x])[0::2]
-        ys = (segment.quad_points or [None, segment.anchor_y])[1::2]
+        if segment.quad_points is not None:
+            xs: Sequence[float | None] = segment.quad_points[0::2]
+            ys: Sequence[float | None] = segment.quad_points[1::2]
+        else:
+            xs = [segment.anchor_x]
+            ys = [segment.anchor_y]
         tolerance = 2.0
         if any(
             value is None or value < left - tolerance or value > right + tolerance for value in xs
@@ -1379,9 +1500,10 @@ def ranged_file(request: Request, path: Path, etag: str, filename: str):
                 remaining -= len(chunk)
                 yield chunk
 
-    headers.update(
-        {"Content-Range": f"bytes {start}-{end}/{size}", "Content-Length": str(end - start + 1)}
-    )
+    headers.update({
+        "Content-Range": f"bytes {start}-{end}/{size}",
+        "Content-Length": str(end - start + 1),
+    })
     return StreamingResponse(
         chunks(), status_code=206, media_type="application/pdf", headers=headers
     )

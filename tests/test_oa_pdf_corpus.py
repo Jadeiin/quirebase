@@ -106,9 +106,7 @@ def test_real_oa_pdf_web_worker_search_annotation_export(paper, db, tmp_path, mo
                 "scope": "private",
                 "color": "green",
                 "selected_text": paper["search_phrase"],
-                "segments": [
-                    {"page_index": 0, "quad_points": [x1, y1, x2, y1, x1, y2, x2, y2]}
-                ],
+                "segments": [{"page_index": 0, "quad_points": [x1, y1, x2, y1, x1, y2, x2, y2]}],
             },
         )
         assert created.status_code == 201, created.text

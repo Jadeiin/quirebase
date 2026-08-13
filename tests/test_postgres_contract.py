@@ -10,7 +10,9 @@ from quirebase.models import Item, User
 from quirebase.search import search_index
 
 
-@pytest.mark.skipif(not os.getenv("QUIREBASE_TEST_POSTGRES_URL"), reason="PostgreSQL is not configured")
+@pytest.mark.skipif(
+    not os.getenv("QUIREBASE_TEST_POSTGRES_URL"), reason="PostgreSQL is not configured"
+)
 def test_postgresql_search_contract():
     engine = create_engine(os.environ["QUIREBASE_TEST_POSTGRES_URL"])
     Base.metadata.create_all(engine)
@@ -20,7 +22,9 @@ def test_postgresql_search_contract():
             user = User(username=username, password_hash="unused")
             db.add(user)
             db.flush()
-            item = Item(title="Spectral graph methods", abstract="Topological signal", created_by=user.id)
+            item = Item(
+                title="Spectral graph methods", abstract="Topological signal", created_by=user.id
+            )
             db.add(item)
             db.flush()
             search_index(db).index_item(db, item.id)

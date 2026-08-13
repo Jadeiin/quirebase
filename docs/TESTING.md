@@ -4,11 +4,12 @@
 
 ```sh
 uv sync --extra dev
-uv run ruff check .
+uv run prek install --hook-type pre-commit --hook-type pre-push --hook-type commit-msg
+uv run prek run --all-files
 uv run pytest -q -m "not oa"
 ```
 
-This suite is offline and covers schema, permissions, storage, PDF coordinates and annotations, search, bibliography interchange, maintenance, migration, security and HTTP behavior. PostgreSQL search runs in CI against PostgreSQL 17 when `QUIREBASE_TEST_POSTGRES_URL` is set.
+The hooks reject malformed YAML/TOML/JSON, large files, case-conflicting paths, merge markers and private keys; update the uv lock; run strict Ruff checks plus formatting; type-check production modules with mypy; enforce Conventional Commits; and run the fast tests before pushes. This suite is offline and covers schema, permissions, storage, PDF coordinates and annotations, search, bibliography interchange, maintenance, migration, security and HTTP behavior. PostgreSQL search runs in CI against PostgreSQL 17 when `QUIREBASE_TEST_POSTGRES_URL` is set.
 
 ## Real open-access PDF suite
 

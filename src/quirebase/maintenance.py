@@ -9,13 +9,16 @@ import tempfile
 import zipfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .models import Attachment, FileRevision
 from .storage import LocalObjectStore
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 
 def sha256_file(path: Path) -> str:
@@ -39,7 +42,10 @@ def create_backup(destination: Path) -> Path:
         root = Path(temporary)
         if settings.database_url.startswith("sqlite:///"):
             source = sqlite_path(settings.database_url)
-            with sqlite3.connect(source) as source_db, sqlite3.connect(root / "database.sqlite3") as target:
+            with (
+                sqlite3.connect(source) as source_db,
+                sqlite3.connect(root / "database.sqlite3") as target,
+            ):
                 source_db.backup(target)
             database_file = "database.sqlite3"
             database_kind = "sqlite"
@@ -47,7 +53,16 @@ def create_backup(destination: Path) -> Path:
             executable = shutil.which("pg_dump")
             if executable is None:
                 raise RuntimeError("pg_dump is required for PostgreSQL backups")
-            subprocess.run([executable, "--format=custom", "--file", str(root / "database.dump"), settings.database_url], check=True)
+            subprocess.run(
+                [
+                    executable,
+                    "--format=custom",
+                    "--file",
+                    str(root / "database.dump"),
+                    settings.database_url,
+                ],
+                check=True,
+            )
             database_file = "database.dump"
             database_kind = "postgresql"
         manifest = {
@@ -106,7 +121,14 @@ def restore_backup(archive_path: Path, *, force: bool = False) -> None:
             if executable is None:
                 raise RuntimeError("pg_restore is required for PostgreSQL restores")
             subprocess.run(
-                [executable, "--clean", "--if-exists", "--dbname", settings.database_url, str(root / manifest["database_file"])],
+                [
+                    executable,
+                    "--clean",
+                    "--if-exists",
+                    "--dbname",
+                    settings.database_url,
+                    str(root / manifest["database_file"]),
+                ],
                 check=True,
             )
         restored_objects = root / "objects"

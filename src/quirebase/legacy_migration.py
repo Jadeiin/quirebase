@@ -3,10 +3,9 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
-from pathlib import Path
+from typing import TYPE_CHECKING, TypedDict
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from .models import (
     AuditEvent,
@@ -26,14 +25,41 @@ from .pdf_service import job_payload, validate_pdf_container
 from .search import search_index
 from .storage import LocalObjectStore
 
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from sqlalchemy.orm import Session
+
+
+class MigrationReport(TypedDict):
+    source_fingerprint: str
+    items: int
+    pdfs: int
+    tags: int
+    projects: int
+    discussions: int
+    skipped: list[str]
+    warnings: list[str]
+    committed: bool
+
 
 def _connect_read_only(path: Path) -> sqlite3.Connection:
     connection = sqlite3.connect(f"file:{path.resolve()}?mode=ro", uri=True)
     connection.row_factory = sqlite3.Row
     required = {
-        "items", "primary_titles", "authors", "items_authors", "keywords", "items_keywords", "uids", "tags", "items_tags"
+        "items",
+        "primary_titles",
+        "authors",
+        "items_authors",
+        "keywords",
+        "items_keywords",
+        "uids",
+        "tags",
+        "items_tags",
     }
-    tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    tables = {
+        row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    }
     missing = required - tables
     if missing:
         connection.close()
@@ -53,9 +79,9 @@ def migrate_legacy(
     owner: User,
     *,
     commit: bool = False,
-) -> dict:
+) -> MigrationReport:
     source = hashlib.sha256(legacy_database.read_bytes()).hexdigest()
-    report: dict[str, object] = {
+    report: MigrationReport = {
         "source_fingerprint": source,
         "items": 0,
         "pdfs": 0,
@@ -63,7 +89,9 @@ def migrate_legacy(
         "projects": 0,
         "discussions": 0,
         "skipped": [],
-        "warnings": ["Legacy accounts and password hashes are not imported; ownership is assigned to the selected account."],
+        "warnings": [
+            "Legacy accounts and password hashes are not imported; ownership is assigned to the selected account."
+        ],
         "committed": commit,
     }
     connection = _connect_read_only(legacy_database)
@@ -96,34 +124,62 @@ def migrate_legacy(
             )
             if existing:
                 item_map[row["id"]] = existing.new_id
-                cast_skipped = report["skipped"]
-                cast_skipped.append(f"item {row['id']}: already imported")
+                report["skipped"].append(f"item {row['id']}: already imported")
                 continue
             item = Item(
-                title=row["title"], abstract=row["abstract"], publication_date=row["publication_date"],
-                publication_title=row["primary_title"], authors=row["authors_text"], keywords=row["keywords_text"],
-                doi=row["doi_text"], reference_type=row["reference_type"], created_by=owner.id,
+                title=row["title"],
+                abstract=row["abstract"],
+                publication_date=row["publication_date"],
+                publication_title=row["primary_title"],
+                authors=row["authors_text"],
+                keywords=row["keywords_text"],
+                doi=row["doi_text"],
+                reference_type=row["reference_type"],
+                created_by=owner.id,
             )
             db.add(item)
             db.flush()
             item_map[row["id"]] = item.id
             newly_imported.add(row["id"])
-            db.add(LegacyImportMap(source_fingerprint=source, entity_type="item", legacy_id=str(row["id"]), new_id=item.id))
+            db.add(
+                LegacyImportMap(
+                    source_fingerprint=source,
+                    entity_type="item",
+                    legacy_id=str(row["id"]),
+                    new_id=item.id,
+                )
+            )
             pdf_path = _legacy_pdf(legacy_data_dir, row["id"])
             if pdf_path.is_file():
                 try:
                     validate_pdf_container(pdf_path)
                     with pdf_path.open("rb") as stream:
                         key, digest, size = LocalObjectStore().put_pdf(stream, 2**63 - 1)
-                    revision = FileRevision(item_id=item.id, object_key=key, sha256=digest, size=size, original_name=pdf_path.name, created_by=owner.id)
+                    revision = FileRevision(
+                        item_id=item.id,
+                        object_key=key,
+                        sha256=digest,
+                        size=size,
+                        original_name=pdf_path.name,
+                        created_by=owner.id,
+                    )
                     db.add(revision)
                     db.flush()
-                    db.add(Job(kind="pdf.inspect", payload=job_payload(revision_id=revision.id), idempotency_key=f"pdf.inspect:{revision.id}", owner_id=owner.id))
+                    db.add(
+                        Job(
+                            kind="pdf.inspect",
+                            payload=job_payload(revision_id=revision.id),
+                            idempotency_key=f"pdf.inspect:{revision.id}",
+                            owner_id=owner.id,
+                        )
+                    )
                     report["pdfs"] += 1
                 except ValueError as error:
                     report["skipped"].append(f"PDF for item {row['id']}: {error}")
             search_index(db).index_item(db, item.id)
-        for row in connection.execute("SELECT it.item_id, t.tag FROM items_tags it JOIN tags t ON t.id=it.tag_id"):
+        for row in connection.execute(
+            "SELECT it.item_id, t.tag FROM items_tags it JOIN tags t ON t.id=it.tag_id"
+        ):
             if row["item_id"] not in item_map:
                 continue
             tag = db.scalar(select(Tag).where(Tag.name == row["tag"]))
@@ -134,7 +190,10 @@ def migrate_legacy(
                 report["tags"] += 1
             if db.get(ItemTag, (item_map[row["item_id"]], tag.id)) is None:
                 db.add(ItemTag(item_id=item_map[row["item_id"]], tag_id=tag.id))
-        tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        tables = {
+            row[0]
+            for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
         if "projects" in tables:
             for row in connection.execute("SELECT id, project FROM projects"):
                 existing = db.scalar(
@@ -150,19 +209,46 @@ def migrate_legacy(
                 db.add(project)
                 db.flush()
                 db.add(ProjectMember(project_id=project.id, user_id=owner.id, role="owner"))
-                db.add(LegacyImportMap(source_fingerprint=source, entity_type="project", legacy_id=str(row["id"]), new_id=project.id))
-                for linked in connection.execute("SELECT item_id FROM projects_items WHERE project_id=?", (row["id"],)):
+                db.add(
+                    LegacyImportMap(
+                        source_fingerprint=source,
+                        entity_type="project",
+                        legacy_id=str(row["id"]),
+                        new_id=project.id,
+                    )
+                )
+                for linked in connection.execute(
+                    "SELECT item_id FROM projects_items WHERE project_id=?", (row["id"],)
+                ):
                     if linked["item_id"] in item_map:
-                        db.add(ProjectItem(project_id=project.id, item_id=item_map[linked["item_id"]]))
+                        db.add(
+                            ProjectItem(project_id=project.id, item_id=item_map[linked["item_id"]])
+                        )
                 report["projects"] += 1
         if "item_discussions" in tables:
-            for row in connection.execute("SELECT item_id, message FROM item_discussions ORDER BY id"):
+            for row in connection.execute(
+                "SELECT item_id, message FROM item_discussions ORDER BY id"
+            ):
                 if row["item_id"] in newly_imported and row["message"].strip():
-                    db.add(DiscussionMessage(item_id=item_map[row["item_id"]], author_id=owner.id, body=row["message"].strip()))
+                    db.add(
+                        DiscussionMessage(
+                            item_id=item_map[row["item_id"]],
+                            author_id=owner.id,
+                            body=row["message"].strip(),
+                        )
+                    )
                     report["discussions"] += 1
         for item_id in item_map.values():
             search_index(db).index_item(db, item_id)
-        db.add(AuditEvent(actor_id=owner.id, action="legacy.import", target_type="migration", target_id=None, detail=json.dumps(report)))
+        db.add(
+            AuditEvent(
+                actor_id=owner.id,
+                action="legacy.import",
+                target_type="migration",
+                target_id=None,
+                detail=json.dumps(report),
+            )
+        )
         db.commit()
         return report
     except Exception:

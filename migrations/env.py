@@ -3,7 +3,7 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from quirebase import models  # noqa: F401
+from quirebase import models  # ruff: ignore[unused-import]
 from quirebase.config import get_settings
 from quirebase.db import Base
 

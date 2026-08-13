@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import bibtexparser
 import rispy
 from bibtexparser.bibdatabase import BibDatabase
 
-from .models import Item
+if TYPE_CHECKING:
+    from .models import Item
 
 SUPPORTED_FORMATS = {"bibtex", "ris"}
 
@@ -41,9 +42,7 @@ def _normalise(entry: dict[str, Any], file_format: str) -> dict[str, str | None]
         "authors": _text(entry.get("authors") or entry.get("first_authors")),
         "keywords": _text(entry.get("keywords")),
         "publication_date": _text(entry.get("publication_year") or entry.get("year")),
-        "publication_title": _text(
-            entry.get("journal_name") or entry.get("secondary_title")
-        ),
+        "publication_title": _text(entry.get("journal_name") or entry.get("secondary_title")),
         "doi": _text(entry.get("doi")),
         "reference_type": _text(entry.get("type_of_reference")),
     }
@@ -54,7 +53,9 @@ def parse_bibliography(contents: str, file_format: str) -> tuple[list[dict], lis
         raise ValueError("format must be bibtex or ris")
     try:
         raw_records = (
-            bibtexparser.loads(contents).entries if file_format == "bibtex" else rispy.loads(contents)
+            bibtexparser.loads(contents).entries
+            if file_format == "bibtex"
+            else rispy.loads(contents)
         )
     except Exception as error:
         return [], [{"row": 0, "message": f"Cannot parse file: {error}"}]
@@ -81,7 +82,7 @@ def export_bibliography(items: list[Item], file_format: str) -> str:
                 "ENTRYTYPE": (item.reference_type or "article").lower(),
                 "title": item.title,
             }
-            optional = {
+            optional: dict[str, Any] = {
                 "abstract": item.abstract,
                 "author": item.authors.replace("; ", " and ") if item.authors else None,
                 "keywords": item.keywords,
@@ -100,7 +101,7 @@ def export_bibliography(items: list[Item], file_format: str) -> str:
             "type_of_reference": (item.reference_type or "JOUR").upper(),
             "title": item.title,
         }
-        optional = {
+        ris_optional: dict[str, Any] = {
             "abstract": item.abstract,
             "authors": item.authors.split("; ") if item.authors else None,
             "keywords": item.keywords.split("; ") if item.keywords else None,
@@ -108,6 +109,6 @@ def export_bibliography(items: list[Item], file_format: str) -> str:
             "journal_name": item.publication_title,
             "doi": item.doi,
         }
-        record.update({key: value for key, value in optional.items() if value})
+        record.update({key: value for key, value in ris_optional.items() if value})
         records.append(record)
     return rispy.dumps(records)

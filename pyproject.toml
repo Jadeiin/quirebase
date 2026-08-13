@@ -27,7 +27,14 @@ dependencies = [
 
 [project.optional-dependencies]
 postgres = ["psycopg[binary]>=3.2,<4"]
-dev = ["pytest>=8.4,<9", "pytest-cov>=6.2,<7", "ruff>=0.12,<1"]
+dev = [
+  "commitizen>=4.17,<5",
+  "mypy>=1.17,<2",
+  "prek>=0.3,<1",
+  "pytest>=8.4,<9",
+  "pytest-cov>=6.2,<7",
+  "ruff>=0.16,<1",
+]
 
 [project.scripts]
 quirebase = "quirebase.cli:app"
@@ -48,7 +55,58 @@ markers = ["oa: tests using the separately downloaded open-access PDF corpus"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+preview = true
 
 [tool.ruff.lint]
-extend-ignore = ["B008", "BLE001"]
+extend-select = [
+  "C4",   # flake8-comprehensions
+  "FA",   # flake8-future-annotations
+  "I",    # isort
+  "N",    # pep8-naming
+  "PERF", # perflint
+  "PIE",  # flake8-pie
+  "Q",    # flake8-quotes
+  "RET",  # flake8-return
+  "RUF",  # Ruff-specific correctness rules
+  "SIM",  # flake8-simplify
+  "TC",   # flake8-type-checking
+  "TID",  # flake8-tidy-imports
+  "UP",   # pyupgrade
+  "W",    # pycodestyle warnings
+]
+ignore = [
+  "function-call-in-default-argument", # FastAPI deliberately calls Depends/Form/File in signatures
+  "blind-except",                      # worker boundary must record arbitrary task failures
+]
+future-annotations = true
 exclude = ["migrations"]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/**" = ["print"]
+"tests/**" = ["import-private-name", "assert"]
+"src/quirebase/app.py" = ["typing-only-first-party-import"]
+
+[tool.ruff.format]
+docstring-code-format = true
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.12"
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unreachable = true
+warn_unused_configs = true
+warn_unused_ignores = true
+exclude = ["migrations/"]
+
+[[tool.mypy.overrides]]
+module = ["bibtexparser", "bibtexparser.*", "rispy"]
+ignore_missing_imports = true
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+tag_format = "$version"
+version_scheme = "pep440"
+version_provider = "uv"
+major_version_zero = true

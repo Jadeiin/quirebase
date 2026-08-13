@@ -97,8 +97,8 @@ def doctor():
             object_errors = check_objects(db)
         if object_errors:
             failures += len(object_errors)
-            for error in object_errors:
-                typer.echo(f"[failed] object {error}")
+            for object_error in object_errors:
+                typer.echo(f"[failed] object {object_error}")
         else:
             typer.echo("[ok] object integrity")
     raise typer.Exit(code=1 if failures else 0)
@@ -127,7 +127,9 @@ def verify_backup_command(archive: Path = typer.Argument(...)):
 @app.command("restore")
 def restore(
     archive: Path = typer.Argument(...),
-    force: bool = typer.Option(False, "--force", help="Replace the configured database and objects"),
+    force: bool = typer.Option(
+        False, "--force", help="Replace the configured database and objects"
+    ),
 ):
     if not force:
         raise typer.BadParameter("restore is destructive; inspect the target and pass --force")
@@ -141,7 +143,9 @@ def migrate_legacy_command(
     database: Path = typer.Option(..., exists=True, dir_okay=False, readable=True),
     data_dir: Path = typer.Option(..., exists=True, file_okay=False, readable=True),
     owner: str = typer.Option(..., help="Existing account that will own imported records"),
-    commit: bool = typer.Option(False, "--commit", help="Write after the default read-only preflight"),
+    commit: bool = typer.Option(
+        False, "--commit", help="Write after the default read-only preflight"
+    ),
     report: Path | None = typer.Option(None, help="Write the JSON migration report here"),
 ):
     with SessionLocal() as db:

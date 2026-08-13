@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import re
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from sqlalchemy import select, text
-from sqlalchemy.orm import Session
 
 from .models import FileRevision, Item, ItemTag, Project, ProjectItem, Tag
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 
 class SearchIndex(Protocol):
@@ -35,8 +37,16 @@ def _search_text(db: Session, item: Item) -> str:
     return "\n".join(
         value
         for value in (
-            item.title, item.abstract, item.authors, item.editors, item.keywords,
-            item.custom_fields, item.identifiers, full_text, " ".join(tags), " ".join(projects)
+            item.title,
+            item.abstract,
+            item.authors,
+            item.editors,
+            item.keywords,
+            item.custom_fields,
+            item.identifiers,
+            full_text,
+            " ".join(tags),
+            " ".join(projects),
         )
         if value
     )

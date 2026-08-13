@@ -32,7 +32,10 @@ def download(destination: Path) -> None:
             paper["url"], headers={"User-Agent": "Quirebase-OA-PDF-tests/0.1"}
         )
         try:
-            with urllib.request.urlopen(request, timeout=120) as source, temporary.open("wb") as output:
+            with (
+                urllib.request.urlopen(request, timeout=120) as source,
+                temporary.open("wb") as output,
+            ):
                 while chunk := source.read(1024 * 1024):
                     output.write(chunk)
             if temporary.stat().st_size != paper["bytes"]:

@@ -12,12 +12,10 @@ def test_item_access_is_owner_or_project_membership(db):
     project = Project(name="Lab", created_by=owner.id)
     db.add_all([item, project])
     db.flush()
-    db.add_all(
-        [
-            ProjectItem(project_id=project.id, item_id=item.id),
-            ProjectMember(project_id=project.id, user_id=member.id, role="viewer"),
-        ]
-    )
+    db.add_all([
+        ProjectItem(project_id=project.id, item_id=item.id),
+        ProjectMember(project_id=project.id, user_id=member.id, role="viewer"),
+    ])
     db.commit()
 
     assert can_read_item(db, owner, item.id)

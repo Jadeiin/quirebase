@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from fastapi import HTTPException
 from sqlalchemy import exists, or_, select
-from sqlalchemy.orm import Session
 
 from .models import FileRevision, Item, PdfAnnotation, ProjectItem, ProjectMember, SystemRole, User
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 
 def can_read_item(db: Session, user: User, item_id: str) -> bool:

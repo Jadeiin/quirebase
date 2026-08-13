@@ -25,7 +25,7 @@ class MetadataLookupError(RuntimeError):
     pass
 
 
-class MetadataNotFound(MetadataLookupError):
+class MetadataNotFoundError(MetadataLookupError):
     pass
 
 
@@ -41,9 +41,7 @@ def parse_identifier(value: str, provider: str = "auto") -> Identifier:
     candidate = value.strip()
     if not candidate or len(candidate) > 500 or any(ord(character) < 32 for character in candidate):
         raise ValueError("identifier is invalid")
-    candidate = re.sub(
-        r"^https?://(?:dx\.)?doi\.org/", "", candidate, flags=re.IGNORECASE
-    )
+    candidate = re.sub(r"^https?://(?:dx\.)?doi\.org/", "", candidate, flags=re.IGNORECASE)
     candidate = re.sub(r"^doi:\s*", "", candidate, flags=re.IGNORECASE)
     if provider in ("auto", "doi") and DOI_PATTERN.fullmatch(candidate):
         return Identifier("doi", candidate.rstrip(".,; "))
@@ -80,14 +78,23 @@ def _clean_markup(value: str | None) -> str | None:
 
 
 def _date_parts(message: dict) -> str | None:
-    parts = (message.get("published-print") or message.get("published-online") or message.get("issued") or {}).get("date-parts", [])
+    parts = (
+        message.get("published-print")
+        or message.get("published-online")
+        or message.get("issued")
+        or {}
+    ).get("date-parts", [])
     if not parts:
         return None
-    return "-".join(str(number).zfill(2) if index else str(number) for index, number in enumerate(parts[0]))
+    return "-".join(
+        str(number).zfill(2) if index else str(number) for index, number in enumerate(parts[0])
+    )
 
 
 class MetadataClient:
-    def __init__(self, settings: Settings | None = None, transport: httpx.BaseTransport | None = None):
+    def __init__(
+        self, settings: Settings | None = None, transport: httpx.BaseTransport | None = None
+    ):
         self.settings = settings or get_settings()
         agent = "Quirebase/0.1 metadata lookup"
         if self.settings.metadata_contact_email:
@@ -106,7 +113,7 @@ class MetadataClient:
         try:
             with self.client.stream("GET", url, params=params) as response:
                 if response.status_code == 404:
-                    raise MetadataNotFound("metadata record was not found")
+                    raise MetadataNotFoundError("metadata record was not found")
                 if response.status_code == 429:
                     raise MetadataLookupError("metadata provider rate limit was reached")
                 if response.is_redirect:
@@ -131,20 +138,31 @@ class MetadataClient:
         return self._arxiv(identifier.value)
 
     def _crossref(self, doi: str) -> dict[str, str | None]:
-        params = {"mailto": self.settings.metadata_contact_email} if self.settings.metadata_contact_email else None
+        params = (
+            {"mailto": self.settings.metadata_contact_email}
+            if self.settings.metadata_contact_email
+            else None
+        )
         try:
             body = self._get(f"https://api.crossref.org/works/{quote(doi, safe='')}", params)
-        except MetadataNotFound:
+        except MetadataNotFoundError:
             return self._datacite(doi)
         try:
             payload = json.loads(body)
         except (json.JSONDecodeError, TypeError) as error:
             raise MetadataLookupError("Crossref returned invalid metadata") from error
         message = payload.get("message", {})
-        authors = "; ".join(
-            ", ".join(part for part in (_first(author.get("family")), _first(author.get("given"))) if part)
-            for author in message.get("author", [])
-        ) or None
+        authors = (
+            "; ".join(
+                ", ".join(
+                    part
+                    for part in (_first(author.get("family")), _first(author.get("given")))
+                    if part
+                )
+                for author in message.get("author", [])
+            )
+            or None
+        )
         return {
             "title": _first(message.get("title")),
             "abstract": _clean_markup(message.get("abstract")),
@@ -159,25 +177,26 @@ class MetadataClient:
 
     def _datacite(self, doi: str) -> dict[str, str | None]:
         try:
-            payload = json.loads(
-                self._get(f"https://api.datacite.org/dois/{quote(doi, safe='')}")
-            )
+            payload = json.loads(self._get(f"https://api.datacite.org/dois/{quote(doi, safe='')}"))
         except (json.JSONDecodeError, TypeError) as error:
             raise MetadataLookupError("DataCite returned invalid metadata") from error
         attributes = payload.get("data", {}).get("attributes", {})
         creators = attributes.get("creators", [])
-        authors = "; ".join(
-            _first(creator.get("name"))
-            or ", ".join(
-                part
-                for part in (
-                    _first(creator.get("familyName")),
-                    _first(creator.get("givenName")),
+        authors = (
+            "; ".join(
+                _first(creator.get("name"))
+                or ", ".join(
+                    part
+                    for part in (
+                        _first(creator.get("familyName")),
+                        _first(creator.get("givenName")),
+                    )
+                    if part
                 )
-                if part
+                for creator in creators
             )
-            for creator in creators
-        ) or None
+            or None
+        )
         abstract = next(
             (
                 _clean_markup(description.get("description"))
@@ -189,9 +208,9 @@ class MetadataClient:
         resource_type = attributes.get("types", {})
         canonical_doi = _first(attributes.get("doi")) or doi
         return {
-            "title": _first(
-                [title.get("title") for title in attributes.get("titles", []) if title.get("title")]
-            ),
+            "title": _first([
+                title.get("title") for title in attributes.get("titles", []) if title.get("title")
+            ]),
             "abstract": abstract,
             "authors": authors,
             "keywords": "; ".join(
@@ -200,7 +219,9 @@ class MetadataClient:
                 if subject.get("subject")
             )
             or None,
-            "publication_date": _first(attributes.get("published") or attributes.get("publicationYear")),
+            "publication_date": _first(
+                attributes.get("published") or attributes.get("publicationYear")
+            ),
             "publication_title": _first(attributes.get("publisher")),
             "doi": canonical_doi,
             "identifiers": json.dumps({"doi": canonical_doi}),
@@ -223,7 +244,7 @@ class MetadataClient:
             raise MetadataLookupError("PubMed returned invalid metadata") from error
         record = payload.get("result", {}).get(pmid)
         if not record:
-            raise MetadataNotFound("PubMed record was not found")
+            raise MetadataNotFoundError("PubMed record was not found")
         identifiers = {"pmid": pmid}
         for article_id in record.get("articleids", []):
             if article_id.get("idtype") == "doi" and article_id.get("value"):
@@ -231,7 +252,10 @@ class MetadataClient:
         return {
             "title": _clean_markup(record.get("title")),
             "abstract": None,
-            "authors": "; ".join(author["name"] for author in record.get("authors", []) if author.get("name")) or None,
+            "authors": "; ".join(
+                author["name"] for author in record.get("authors", []) if author.get("name")
+            )
+            or None,
             "keywords": None,
             "publication_date": _first(record.get("pubdate")),
             "publication_title": _first(record.get("fulljournalname") or record.get("source")),
@@ -241,19 +265,27 @@ class MetadataClient:
         }
 
     def _arxiv(self, arxiv_id: str) -> dict[str, str | None]:
-        body = self._get("https://export.arxiv.org/api/query", {"id_list": arxiv_id, "max_results": "1"})
+        body = self._get(
+            "https://export.arxiv.org/api/query", {"id_list": arxiv_id, "max_results": "1"}
+        )
         try:
             root = ElementTree.fromstring(body)
         except ElementTree.ParseError as error:
             raise MetadataLookupError("arXiv returned invalid metadata") from error
-        namespace = {"atom": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/schemas/atom"}
+        namespace = {
+            "atom": "http://www.w3.org/2005/Atom",
+            "arxiv": "http://arxiv.org/schemas/atom",
+        }
         entry = root.find("atom:entry", namespace)
         if entry is None:
-            raise MetadataNotFound("arXiv record was not found")
-        authors = "; ".join(
-            _first(node.findtext("atom:name", default="", namespaces=namespace)) or ""
-            for node in entry.findall("atom:author", namespace)
-        ) or None
+            raise MetadataNotFoundError("arXiv record was not found")
+        authors = (
+            "; ".join(
+                _first(node.findtext("atom:name", default="", namespaces=namespace)) or ""
+                for node in entry.findall("atom:author", namespace)
+            )
+            or None
+        )
         doi = _first(entry.findtext("arxiv:doi", default="", namespaces=namespace))
         identifiers = {"arxiv": arxiv_id}
         if doi:
@@ -264,9 +296,14 @@ class MetadataClient:
             "authors": authors,
             "keywords": "; ".join(
                 category.get("term", "") for category in entry.findall("atom:category", namespace)
-            ) or None,
-            "publication_date": _first(entry.findtext("atom:published", default="", namespaces=namespace)),
-            "publication_title": _first(entry.findtext("arxiv:journal_ref", default="", namespaces=namespace)),
+            )
+            or None,
+            "publication_date": _first(
+                entry.findtext("atom:published", default="", namespaces=namespace)
+            ),
+            "publication_title": _first(
+                entry.findtext("arxiv:journal_ref", default="", namespaces=namespace)
+            ),
             "doi": doi,
             "identifiers": json.dumps(identifiers),
             "reference_type": "preprint",

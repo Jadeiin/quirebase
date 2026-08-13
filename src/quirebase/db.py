@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from collections.abc import Generator
+from typing import TYPE_CHECKING
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from .config import get_settings
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 
 class Base(DeclarativeBase):
