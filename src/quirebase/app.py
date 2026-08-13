@@ -1022,14 +1022,17 @@ def create_app() -> FastAPI:
             query = query.where(or_(Item.created_by == user.id, Item.id.in_(shared_ids)))
         return bibliography_response(list(db.scalars(query).all()), file_format)
 
-    @app.get("/items/{item_id}", response_class=HTMLResponse)
-    def item_page(
+    def render_item_workspace(
         request: Request,
         item_id: str,
-        user: User = Depends(current_user),
-        login: LoginSession = Depends(current_login),
-        db: Session = Depends(get_db),
+        section: str,
+        user: User,
+        login: LoginSession,
+        db: Session,
     ):
+        sections = {"summary", "metadata", "files", "organize", "annotations", "discussion"}
+        if section not in sections:
+            raise HTTPException(404)
         if not can_read_item(db, user, item_id):
             raise HTTPException(404)
         item = db.scalar(
@@ -1068,6 +1071,32 @@ def create_app() -> FastAPI:
         attachments = db.scalars(
             select(Attachment).where(Attachment.item_id == item_id).order_by(Attachment.created_at)
         ).all()
+        revision_ids = [revision.id for revision in revisions]
+        annotations: Sequence[object] = ()
+        if revision_ids:
+            member_projects = select(ProjectMember.project_id).where(
+                ProjectMember.user_id == user.id
+            )
+            annotations = db.execute(
+                select(PdfAnnotation, FileRevision, User)
+                .join(FileRevision, FileRevision.id == PdfAnnotation.file_revision_id)
+                .join(User, User.id == PdfAnnotation.author_id)
+                .where(
+                    PdfAnnotation.file_revision_id.in_(revision_ids),
+                    PdfAnnotation.deleted_at.is_(None),
+                    or_(
+                        and_(
+                            PdfAnnotation.scope == "private",
+                            PdfAnnotation.author_id == user.id,
+                        ),
+                        and_(
+                            PdfAnnotation.scope == "project",
+                            PdfAnnotation.project_id.in_(member_projects),
+                        ),
+                    ),
+                )
+                .order_by(PdfAnnotation.updated_at.desc())
+            ).all()
         return templates.TemplateResponse(
             request,
             "item.html",
@@ -1080,11 +1109,48 @@ def create_app() -> FastAPI:
                 "tags": tags,
                 "messages": messages,
                 "attachments": attachments,
+                "annotations": annotations,
                 "can_edit": can_edit_item(db, user, item_id),
                 "csrf": login.csrf_token,
                 "active_page": "library",
+                "item_section": section,
             },
         )
+
+    @app.get("/items/{item_id}", response_class=HTMLResponse)
+    def item_page(
+        request: Request,
+        item_id: str,
+        user: User = Depends(current_user),
+        login: LoginSession = Depends(current_login),
+        db: Session = Depends(get_db),
+    ):
+        return render_item_workspace(request, item_id, "summary", user, login, db)
+
+    @app.get("/items/{item_id}/{section}", response_class=HTMLResponse)
+    def item_section_page(
+        request: Request,
+        item_id: str,
+        section: str,
+        user: User = Depends(current_user),
+        login: LoginSession = Depends(current_login),
+        db: Session = Depends(get_db),
+    ):
+        return render_item_workspace(request, item_id, section, user, login, db)
+
+    @app.get("/documents/{item_id}/citation")
+    def export_item(
+        item_id: str,
+        file_format: str,
+        user: User = Depends(current_user),
+        db: Session = Depends(get_db),
+    ):
+        if not can_read_item(db, user, item_id):
+            raise HTTPException(404)
+        item = db.get(Item, item_id)
+        if item is None:
+            raise HTTPException(404)
+        return bibliography_response([item], file_format)
 
     @app.post("/items/{item_id}/edit", dependencies=[Depends(require_csrf)])
     def edit_item(
@@ -1166,7 +1232,7 @@ def create_app() -> FastAPI:
             )
         )
         db.commit()
-        return RedirectResponse(f"/items/{item.id}", status_code=303)
+        return RedirectResponse(f"/items/{item.id}/metadata", status_code=303)
 
     @app.post("/items/{item_id}/attachments", dependencies=[Depends(require_csrf)])
     def upload_attachment(
@@ -1203,7 +1269,7 @@ def create_app() -> FastAPI:
             )
         )
         db.commit()
-        return RedirectResponse(f"/items/{item_id}", status_code=303)
+        return RedirectResponse(f"/items/{item_id}/files", status_code=303)
 
     @app.get("/items/{item_id}/attachments/{attachment_id}")
     def download_attachment(
@@ -1249,7 +1315,7 @@ def create_app() -> FastAPI:
                 )
             )
             db.commit()
-        return RedirectResponse(f"/items/{item_id}", status_code=303)
+        return RedirectResponse(f"/items/{item_id}/organize", status_code=303)
 
     @app.post("/items/{item_id}/tags/{tag_id}/remove", dependencies=[Depends(require_csrf)])
     def remove_tag(
@@ -1266,7 +1332,7 @@ def create_app() -> FastAPI:
             db.flush()
             search_index(db).index_item(db, item_id)
             db.commit()
-        return RedirectResponse(f"/items/{item_id}", status_code=303)
+        return RedirectResponse(f"/items/{item_id}/organize", status_code=303)
 
     @app.post("/items/{item_id}/discussion", dependencies=[Depends(require_csrf)])
     def add_discussion_message(
@@ -1292,7 +1358,7 @@ def create_app() -> FastAPI:
             )
         )
         db.commit()
-        return RedirectResponse(f"/items/{item_id}", status_code=303)
+        return RedirectResponse(f"/items/{item_id}/discussion", status_code=303)
 
     @app.post(
         "/items/{item_id}/discussion/{message_id}/delete", dependencies=[Depends(require_csrf)]
@@ -1320,7 +1386,7 @@ def create_app() -> FastAPI:
             )
         )
         db.commit()
-        return RedirectResponse(f"/items/{item_id}", status_code=303)
+        return RedirectResponse(f"/items/{item_id}/discussion", status_code=303)
 
     @app.post("/items/{item_id}/projects/{project_id}", dependencies=[Depends(require_csrf)])
     def add_item_to_project(
@@ -1352,7 +1418,38 @@ def create_app() -> FastAPI:
                 )
             )
             db.commit()
-        return RedirectResponse(f"/items/{item_id}", status_code=303)
+        return RedirectResponse(f"/items/{item_id}/organize", status_code=303)
+
+    @app.post("/items/{item_id}/projects/{project_id}/remove", dependencies=[Depends(require_csrf)])
+    def remove_item_from_project(
+        item_id: str,
+        project_id: str,
+        user: User = Depends(current_user),
+        db: Session = Depends(get_db),
+    ):
+        membership = project_member(db, user, project_id)
+        assignment = db.get(ProjectItem, (project_id, item_id))
+        if (
+            assignment is None
+            or not can_read_item(db, user, item_id)
+            or membership is None
+            or membership.role not in ("owner", "editor")
+        ):
+            raise HTTPException(404)
+        db.delete(assignment)
+        db.flush()
+        search_index(db).index_item(db, item_id)
+        db.add(
+            AuditEvent(
+                actor_id=user.id,
+                action="project.item.remove",
+                target_type="item",
+                target_id=item_id,
+                detail=json.dumps({"project_id": project_id}),
+            )
+        )
+        db.commit()
+        return RedirectResponse(f"/items/{item_id}/organize", status_code=303)
 
     @app.post("/items/{item_id}/pdf", dependencies=[Depends(require_csrf)])
     def upload_pdf(
@@ -1366,7 +1463,7 @@ def create_app() -> FastAPI:
             raise HTTPException(404)
         store_pdf_revision(db, user, item, pdf)
         db.commit()
-        return RedirectResponse(f"/items/{item.id}", status_code=303)
+        return RedirectResponse(f"/items/{item.id}/files", status_code=303)
 
     @app.get("/items/{item_id}/pdf/{revision_id}", response_class=HTMLResponse)
     def pdf_viewer(

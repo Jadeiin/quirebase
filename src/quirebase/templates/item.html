@@ -1,71 +1,116 @@
 {% extends "base.html" %}
 {% block title %}{{ item.title }} · Quirebase{% endblock %}
 {% block content %}
-<nav class="item-section-nav" aria-label="{{ t('Item sections') }}">
-  <a href="#summary">{{ t('Summary') }}</a>
-  {% if can_edit %}<a href="#metadata" @click="openDetails">{{ t('Metadata') }}</a>{% endif %}
-  <a href="#attachments">{{ t('Attachments') }}</a>
-  <a href="#tags">{{ t('Tags') }}</a>
-  <a href="#projects">{{ t('Projects') }}</a>
-  <a href="#pdf-revisions">PDF</a>
-  <a href="#discussion">{{ t('Discussion') }}</a>
-  {% if revisions %}
-  <span class="item-nav-actions"><a class="button-link" href="/items/{{ item.id }}/pdf/{{ revisions[0].id }}">{{ t('Open PDF') }}</a><a href="/documents/{{ item.id }}/revisions/{{ revisions[0].id }}/content" download>{{ t('Download') }}</a></span>
-  {% endif %}
-</nav>
-<article class="panel" id="summary">
-  <h1>{{ item.title }}</h1>
-  <p>{{ item.authors or '' }}</p><p>{{ item.abstract or '' }}</p>
-  {% if can_edit %}
-  <details id="metadata">
-    <summary>{{ t('Edit metadata') }}</summary>
-    <form method="post" action="/items/{{ item.id }}/edit?csrf_token={{ csrf }}">
-      <input type="hidden" name="version" value="{{ item.version }}">
-      <label>{{ t('Title') }} <input name="title" value="{{ item.title }}" required></label>
-      <label>{{ t('Authors') }} <input name="authors" value="{{ item.authors or '' }}"></label>
-      <label>{{ t('Editors') }} <input name="editors" value="{{ item.editors or '' }}"></label>
-      <label>{{ t('Abstract') }} <textarea name="abstract">{{ item.abstract or '' }}</textarea></label>
-      <label>{{ t('Keywords') }} <input name="keywords" value="{{ item.keywords or '' }}"></label>
-      <label>{{ t('Date') }} <input name="publication_date" value="{{ item.publication_date or '' }}"></label>
-      <label>{{ t('Publication') }} <input name="publication_title" value="{{ item.publication_title or '' }}"></label>
-      <label>{{ t('DOI') }} <input name="doi" value="{{ item.doi or '' }}"></label>
-      <label>{{ t('Identifiers (JSON object)') }} <textarea name="identifiers">{{ item.identifiers or '' }}</textarea></label>
-      <label>{{ t('Reference type') }} <input name="reference_type" value="{{ item.reference_type or '' }}"></label>
-      <label>{{ t('Custom fields (JSON object)') }} <textarea name="custom_fields">{{ item.custom_fields or '' }}</textarea></label>
-      <button>{{ t('Save metadata') }}</button>
-    </form>
-  </details>
-  <form method="post" enctype="multipart/form-data" action="/items/{{ item.id }}/pdf?csrf_token={{ csrf }}">
-    <label>{{ t('Add a PDF') }}<input type="file" name="pdf" accept="application/pdf,.pdf" required></label>
-    <button>{{ t('Upload') }}</button>
-  </form>
-  {% endif %}
-</article>
-<section class="panel" id="attachments"><h2>{{ t('Attachments') }}</h2>{% for attachment in attachments %}<p><a href="/items/{{ item.id }}/attachments/{{ attachment.id }}">{{ attachment.original_name }}</a> · {{ t('{bytes} bytes', bytes=attachment.size) }}</p>{% else %}<p>{{ t('No attachments.') }}</p>{% endfor %}
-{% if can_edit %}<form method="post" enctype="multipart/form-data" action="/items/{{ item.id }}/attachments?csrf_token={{ csrf }}"><input type="file" name="attachment" aria-label="{{ t('File') }}" required><button>{{ t('Upload attachment') }}</button></form>{% endif %}</section>
-<section class="panel" id="tags"><h2>{{ t('Tags') }}</h2>
-  <p>{% for tag in tags %}<span>{{ tag.name }}</span>{% if can_edit %}
-    <form class="inline" method="post" action="/items/{{ item.id }}/tags/{{ tag.id }}/remove?csrf_token={{ csrf }}"><button>×</button></form>{% endif %}
-  {% else %}{{ t('No tags.') }}{% endfor %}</p>
-  {% if can_edit %}<form method="post" action="/items/{{ item.id }}/tags?csrf_token={{ csrf }}" class="row"><input name="name" placeholder="{{ t('Tag') }}" required><button>{{ t('Add tag') }}</button></form>{% endif %}
-</section>
-<section class="panel" id="projects"><h2>{{ t('Projects') }}</h2>
-{% for project, role in memberships %}
-  {% if project.id in assigned %}<p>{{ project.name }} · {{ t(role) }}</p>
-  {% elif role in ('owner', 'editor') %}
-  <form method="post" action="/items/{{ item.id }}/projects/{{ project.id }}?csrf_token={{ csrf }}"><button>{{ t('Add to {project}', project=project.name) }}</button></form>
-  {% endif %}
-{% else %}<p>{{ t('No projects.') }}</p>{% endfor %}
-</section>
-<section class="panel" id="pdf-revisions"><h2>{{ t('PDF revisions') }}</h2>
-{% for revision in revisions %}
-  <p><a href="/items/{{ item.id }}/pdf/{{ revision.id }}">{{ revision.original_name }}</a> · {{ t(revision.processing_state) }}{% if revision.page_count %} · {{ t('{count} pages', count=revision.page_count) }}{% endif %}</p>
-{% else %}<p>{{ t('No PDF uploaded.') }}</p>{% endfor %}
-</section>
-<section class="panel" id="discussion"><h2>{{ t('Discussion') }}</h2>
-{% for message in messages %}<article><strong>{{ message.author.username }}</strong><p>{{ message.body }}</p>
-  {% if message.author_id == user.id or user.role == 'administrator' %}<form class="inline" method="post" action="/items/{{ item.id }}/discussion/{{ message.id }}/delete?csrf_token={{ csrf }}"><button>{{ t('Delete') }}</button></form>{% endif %}</article>
-{% else %}<p>{{ t('No discussion yet.') }}</p>{% endfor %}
-<form method="post" action="/items/{{ item.id }}/discussion?csrf_token={{ csrf }}"><textarea name="body" maxlength="20000" required></textarea><button>{{ t('Post') }}</button></form>
-</section>
+<header class="item-header">
+  <p class="item-breadcrumb"><a href="/library">{{ t('Library') }}</a> / {{ t('Paper') }}</p>
+  <div class="item-title-row">
+    <div>
+      <h1>{{ item.title }}</h1>
+      <p class="item-byline">{{ item.authors or t('No authors') }}{% if item.publication_title %} · {{ item.publication_title }}{% endif %}{% if item.publication_date %} · {{ item.publication_date }}{% endif %}</p>
+    </div>
+    <div class="item-header-actions">
+      {% if revisions %}<a class="button-link" href="/items/{{ item.id }}/pdf/{{ revisions[0].id }}">{{ t('Read PDF') }}</a>{% endif %}
+      <details class="export-menu">
+        <summary>{{ t('Export citation') }}</summary>
+        <div><a href="/documents/{{ item.id }}/citation?file_format=bibtex">BibTeX</a><a href="/documents/{{ item.id }}/citation?file_format=ris">RIS</a><a href="/documents/{{ item.id }}/citation?file_format=endnote">EndNote</a></div>
+      </details>
+    </div>
+  </div>
+</header>
+
+<div class="item-workspace">
+  <nav class="item-local-nav" aria-label="{{ t('Paper workspace') }}">
+    <a href="/items/{{ item.id }}" {% if item_section == 'summary' %}aria-current="page"{% endif %}><span>⌂</span><span><strong>{{ t('Overview') }}</strong><small>{{ t('Abstract and key details') }}</small></span></a>
+    <a href="/items/{{ item.id }}/metadata" {% if item_section == 'metadata' %}aria-current="page"{% endif %}><span>≡</span><span><strong>{{ t('Metadata') }}</strong><small>{{ t('Bibliographic fields') }}</small></span></a>
+    <a href="/items/{{ item.id }}/files" {% if item_section == 'files' %}aria-current="page"{% endif %}><span>▱</span><span><strong>{{ t('Files') }}</strong><small>{{ t('PDF versions and attachments') }}</small></span></a>
+    <a href="/items/{{ item.id }}/organize" {% if item_section == 'organize' %}aria-current="page"{% endif %}><span>◇</span><span><strong>{{ t('Organize') }}</strong><small>{{ t('Tags and projects') }}</small></span></a>
+    <a href="/items/{{ item.id }}/annotations" {% if item_section == 'annotations' %}aria-current="page"{% endif %}><span>✎</span><span><strong>{{ t('Notes and annotations') }}</strong><small>{{ t('Reading notes') }}</small></span></a>
+    <a href="/items/{{ item.id }}/discussion" {% if item_section == 'discussion' %}aria-current="page"{% endif %}><span>◌</span><span><strong>{{ t('Discussion') }}</strong><small>{{ t('Team conversation') }}</small></span></a>
+  </nav>
+
+  <div class="item-content">
+    {% if item_section == 'summary' %}
+    <div class="item-summary-grid">
+      <section class="panel item-abstract">
+        <div class="section-heading"><h2>{{ t('Abstract') }}</h2>{% if can_edit %}<a href="/items/{{ item.id }}/metadata">{{ t('Edit metadata') }}</a>{% endif %}</div>
+        {% if item.abstract %}<p class="long-copy">{{ item.abstract }}</p>{% else %}<div class="empty-state">{{ t('No abstract available.') }}</div>{% endif %}
+      </section>
+      <aside class="item-facts">
+        <section class="panel">
+          <h2>{{ t('At a glance') }}</h2>
+          <dl class="metadata-list">
+            <div><dt>{{ t('Type') }}</dt><dd>{{ t(item.reference_type) if item.reference_type else '—' }}</dd></div>
+            <div><dt>{{ t('DOI') }}</dt><dd>{% if item.doi %}<a href="https://doi.org/{{ item.doi }}" rel="noreferrer">{{ item.doi }}</a>{% else %}—{% endif %}</dd></div>
+            <div><dt>{{ t('Updated') }}</dt><dd>{{ item.updated_at.strftime('%Y-%m-%d') }}</dd></div>
+          </dl>
+        </section>
+        <section class="panel">
+          <h2>{{ t('Workspace activity') }}</h2>
+          <div class="item-stat-grid"><a href="/items/{{ item.id }}/files"><strong>{{ revisions|length }}</strong><span>PDF</span></a><a href="/items/{{ item.id }}/annotations"><strong>{{ annotations|length }}</strong><span>{{ t('Annotations') }}</span></a><a href="/items/{{ item.id }}/discussion"><strong>{{ messages|length }}</strong><span>{{ t('Messages') }}</span></a></div>
+        </section>
+        <section class="panel">
+          <h2>{{ t('Keywords') }}</h2>
+          <p>{{ item.keywords or t('No keywords.') }}</p>
+        </section>
+      </aside>
+    </div>
+
+    {% elif item_section == 'metadata' %}
+    <section class="panel page-section-heading"><p class="eyebrow">{{ t('Paper record') }}</p><h2>{{ t('Bibliographic metadata') }}</h2><p>{{ t('Review and maintain the fields used for search, citation export, and organization.') }}</p></section>
+    <section class="panel">
+      {% if can_edit %}
+      <form class="metadata-form" method="post" action="/items/{{ item.id }}/edit?csrf_token={{ csrf }}">
+        <input type="hidden" name="version" value="{{ item.version }}">
+        <label class="span-2">{{ t('Title') }} <input name="title" value="{{ item.title }}" required></label>
+        <label class="span-2">{{ t('Authors') }} <input name="authors" value="{{ item.authors or '' }}"></label>
+        <label>{{ t('Editors') }} <input name="editors" value="{{ item.editors or '' }}"></label>
+        <label>{{ t('Reference type') }} <input name="reference_type" value="{{ item.reference_type or '' }}"></label>
+        <label>{{ t('Date') }} <input name="publication_date" value="{{ item.publication_date or '' }}"></label>
+        <label>{{ t('Publication') }} <input name="publication_title" value="{{ item.publication_title or '' }}"></label>
+        <label class="span-2">{{ t('DOI') }} <input name="doi" value="{{ item.doi or '' }}"></label>
+        <label class="span-2">{{ t('Keywords') }} <input name="keywords" value="{{ item.keywords or '' }}"></label>
+        <label class="span-2">{{ t('Abstract') }} <textarea name="abstract" rows="9">{{ item.abstract or '' }}</textarea></label>
+        <details class="span-2 advanced-fields"><summary>{{ t('Advanced fields') }}</summary><div class="metadata-form">
+          <label>{{ t('Identifiers (JSON object)') }} <textarea name="identifiers">{{ item.identifiers or '' }}</textarea></label>
+          <label>{{ t('Custom fields (JSON object)') }} <textarea name="custom_fields">{{ item.custom_fields or '' }}</textarea></label>
+        </div></details>
+        <div class="form-actions span-2"><button>{{ t('Save metadata') }}</button></div>
+      </form>
+      {% else %}
+      <dl class="metadata-list metadata-list-wide">
+        <div><dt>{{ t('Title') }}</dt><dd>{{ item.title }}</dd></div><div><dt>{{ t('Authors') }}</dt><dd>{{ item.authors or '—' }}</dd></div><div><dt>{{ t('Editors') }}</dt><dd>{{ item.editors or '—' }}</dd></div><div><dt>{{ t('Publication') }}</dt><dd>{{ item.publication_title or '—' }}</dd></div><div><dt>{{ t('Date') }}</dt><dd>{{ item.publication_date or '—' }}</dd></div><div><dt>{{ t('DOI') }}</dt><dd>{{ item.doi or '—' }}</dd></div>
+      </dl>
+      {% endif %}
+    </section>
+
+    {% elif item_section == 'files' %}
+    <section class="panel page-section-heading"><p class="eyebrow">{{ t('Document storage') }}</p><h2>{{ t('PDF versions and attachments') }}</h2><p>{{ t('Keep the reading copy and supplementary files together without mixing them with metadata.') }}</p></section>
+    <section class="panel">
+      <div class="section-heading"><h2>{{ t('PDF revisions') }}</h2><span>{{ t('{count} file(s)', count=revisions|length) }}</span></div>
+      <div class="file-list">{% for revision in revisions %}<article><span class="file-icon">PDF</span><div><strong>{{ revision.original_name }}</strong><small>{{ t(revision.processing_state) }}{% if revision.page_count %} · {{ t('{count} pages', count=revision.page_count) }}{% endif %} · {{ t('{bytes} bytes', bytes=revision.size) }}</small></div><div class="file-actions"><a href="/items/{{ item.id }}/pdf/{{ revision.id }}">{{ t('Read') }}</a><a href="/documents/{{ item.id }}/revisions/{{ revision.id }}/content" download>{{ t('Download') }}</a></div></article>{% else %}<div class="empty-state">{{ t('No PDF uploaded.') }}</div>{% endfor %}</div>
+      {% if can_edit %}<form class="upload-form" method="post" enctype="multipart/form-data" action="/items/{{ item.id }}/pdf?csrf_token={{ csrf }}"><label>{{ t('Add a PDF') }}<input type="file" name="pdf" accept="application/pdf,.pdf" required></label><button>{{ t('Upload') }}</button></form>{% endif %}
+    </section>
+    <section class="panel">
+      <div class="section-heading"><h2>{{ t('Attachments') }}</h2><span>{{ t('{count} file(s)', count=attachments|length) }}</span></div>
+      <div class="file-list">{% for attachment in attachments %}<article><span class="file-icon">FILE</span><div><strong>{{ attachment.original_name }}</strong><small>{{ attachment.mime_type }} · {{ t('{bytes} bytes', bytes=attachment.size) }}</small></div><div class="file-actions"><a href="/items/{{ item.id }}/attachments/{{ attachment.id }}">{{ t('Download') }}</a></div></article>{% else %}<div class="empty-state">{{ t('No attachments.') }}</div>{% endfor %}</div>
+      {% if can_edit %}<form class="upload-form" method="post" enctype="multipart/form-data" action="/items/{{ item.id }}/attachments?csrf_token={{ csrf }}"><label>{{ t('Add attachment') }}<input type="file" name="attachment" required></label><button>{{ t('Upload') }}</button></form>{% endif %}
+    </section>
+
+    {% elif item_section == 'organize' %}
+    <section class="panel page-section-heading"><p class="eyebrow">{{ t('Library organization') }}</p><h2>{{ t('Tags and projects') }}</h2><p>{{ t('Use tags for flexible classification and projects for shared collections.') }}</p></section>
+    <div class="item-two-column">
+      <section class="panel"><h2>{{ t('Tags') }}</h2><div class="chip-list">{% for tag in tags %}<span>{{ tag.name }}{% if can_edit %}<form class="inline" method="post" action="/items/{{ item.id }}/tags/{{ tag.id }}/remove?csrf_token={{ csrf }}"><button aria-label="{{ t('Remove {name}', name=tag.name) }}">×</button></form>{% endif %}</span>{% else %}<p>{{ t('No tags.') }}</p>{% endfor %}</div>{% if can_edit %}<form class="compact-form" method="post" action="/items/{{ item.id }}/tags?csrf_token={{ csrf }}"><input name="name" placeholder="{{ t('New tag') }}" required><button>{{ t('Add tag') }}</button></form>{% endif %}</section>
+      <section class="panel"><h2>{{ t('Projects') }}</h2><div class="project-memberships">{% for project, role in memberships %}{% if project.id in assigned %}<article><div><strong>{{ project.name }}</strong><small>{{ t(role) }}</small></div>{% if role in ('owner', 'editor') %}<form method="post" action="/items/{{ item.id }}/projects/{{ project.id }}/remove?csrf_token={{ csrf }}"><button class="secondary-button compact-button">{{ t('Remove') }}</button></form>{% endif %}</article>{% elif role in ('owner', 'editor') %}<article><div><strong>{{ project.name }}</strong><small>{{ t('Not in this project') }}</small></div><form method="post" action="/items/{{ item.id }}/projects/{{ project.id }}?csrf_token={{ csrf }}"><button class="secondary-button compact-button">{{ t('Add') }}</button></form></article>{% endif %}{% else %}<p>{{ t('No projects.') }}</p>{% endfor %}</div></section>
+    </div>
+
+    {% elif item_section == 'annotations' %}
+    <section class="panel page-section-heading"><p class="eyebrow">{{ t('Reading workspace') }}</p><h2>{{ t('Notes and annotations') }}</h2><p>{{ t('Highlights and margin notes are created in the PDF reader and collected here for review.') }}</p>{% if revisions %}<a class="button-link" href="/items/{{ item.id }}/pdf/{{ revisions[0].id }}">{{ t('Open annotation tools') }}</a>{% endif %}</section>
+    <section class="panel annotation-list"><div class="section-heading"><h2>{{ t('All annotations') }}</h2><span>{{ t('{count} annotation(s)', count=annotations|length) }}</span></div>{% for annotation, revision, author in annotations %}<article><span class="annotation-swatch" style="--annotation-color: {{ annotation.color }}"></span><div><div class="annotation-meta"><strong>{{ t(annotation.kind) }}</strong><span>{{ author.username }} · {{ t(annotation.scope) }} · {{ revision.original_name }}{% if annotation.segments %} · {{ t('Page {page}', page=annotation.segments[0].page_index + 1) }}{% endif %}</span></div>{% if annotation.selected_text %}<blockquote>{{ annotation.selected_text }}</blockquote>{% endif %}{% if annotation.body %}<p>{{ annotation.body }}</p>{% endif %}</div><a href="/items/{{ item.id }}/pdf/{{ revision.id }}">{{ t('Open') }}</a></article>{% else %}<div class="empty-state">{{ t('No annotations yet. Open a PDF to highlight text or add a note.') }}</div>{% endfor %}</section>
+
+    {% elif item_section == 'discussion' %}
+    <section class="panel page-section-heading"><p class="eyebrow">{{ t('Collaboration') }}</p><h2>{{ t('Discussion') }}</h2><p>{{ t('Keep paper-specific questions and decisions with the research record.') }}</p></section>
+    <section class="panel discussion-thread">{% for message in messages %}<article><div class="message-avatar">{{ message.author.username[:1]|upper }}</div><div><header><strong>{{ message.author.username }}</strong><time>{{ message.created_at.strftime('%Y-%m-%d %H:%M') }}</time></header><p>{{ message.body }}</p>{% if message.author_id == user.id or user.role == 'administrator' %}<form class="inline" method="post" action="/items/{{ item.id }}/discussion/{{ message.id }}/delete?csrf_token={{ csrf }}"><button class="text-danger">{{ t('Delete') }}</button></form>{% endif %}</div></article>{% else %}<div class="empty-state">{{ t('No discussion yet.') }}</div>{% endfor %}<form class="message-composer" method="post" action="/items/{{ item.id }}/discussion?csrf_token={{ csrf }}"><label>{{ t('Add to the discussion') }}<textarea name="body" maxlength="20000" rows="5" required></textarea></label><div><button>{{ t('Post') }}</button></div></form></section>
+    {% endif %}
+  </div>
+</div>
 {% endblock %}

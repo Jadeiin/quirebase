@@ -30,7 +30,7 @@ def test_tags_discussion_and_search(db, tmp_path, monkeypatch):
             files={"attachment": ("notes.txt", b"supplement", "text/plain")},
         )
         assert uploaded.status_code == 200
-        page = client.get(f"/items/{item.id}")
+        page = client.get(f"/items/{item.id}/files")
         assert "notes.txt" in page.text
         assert page.headers["x-content-type-options"] == "nosniff"
     finally:
