@@ -11,11 +11,20 @@ from sqlalchemy.orm import selectinload
 
 from quirebase.core.config import get_settings
 from quirebase.core.database import SessionLocal
+from quirebase.core.errors import ResourceUnavailable
 from quirebase.core.storage import LocalObjectStore
-from quirebase.models import FileRevision, Job, PdfAnnotation, ProjectItem, ProjectMember
-from quirebase.operations.maintenance import cleanup_exports
+from quirebase.library.audit import record_audit_event
+from quirebase.models import (
+    FileRevision,
+    Job,
+    PdfAnnotation,
+    ProjectItem,
+    ProjectMember,
+    User,
+)
+from quirebase.operations.maintenance import check_objects, cleanup_exports
 from quirebase.pipeline.inspection import create_thumbnail, export_annotations, inspect_pdf
-from quirebase.search import search_index
+from quirebase.search import reindex_all, search_index
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -98,10 +107,74 @@ def handle_pdf_export_annotations(db: Session, job: Job, payload: dict[str, Any]
     return {"filename": filename}
 
 
+def handle_system_reindex(db: Session, job: Job, payload: dict[str, Any]) -> dict[str, Any]:
+    count = reindex_all(db)
+    return {"reindexed_items": count}
+
+
+def handle_system_check_objects(db: Session, job: Job, payload: dict[str, Any]) -> dict[str, Any]:
+    errors = check_objects(db)
+    return {"errors": errors, "checked_status": "ok" if not errors else "inconsistencies_found"}
+
+
 JOB_HANDLERS.update({
     "pdf.inspect": handle_pdf_inspect,
     "pdf.export_annotations": handle_pdf_export_annotations,
+    "system.reindex_all": handle_system_reindex,
+    "system.check_objects": handle_system_check_objects,
 })
+
+
+def enqueue_job(
+    db: Session,
+    kind: str,
+    payload: dict[str, Any],
+    owner_id: str | None = None,
+    idempotency_key: str | None = None,
+) -> Job:
+    import uuid
+
+    key = idempotency_key or f"{kind}:{uuid.uuid4()}"
+    job = Job(
+        kind=kind,
+        payload=json.dumps(payload, ensure_ascii=False),
+        owner_id=owner_id,
+        idempotency_key=key,
+    )
+    db.add(job)
+    db.flush()
+    return job
+
+
+def list_jobs_admin(db: Session, admin: User, state: str = "", limit: int = 50) -> list[Job]:
+    if admin.role != "administrator":
+        raise ResourceUnavailable("administrator required")
+    query = select(Job)
+    if state.strip():
+        query = query.where(Job.state == state.strip())
+    return list(db.scalars(query.order_by(Job.created_at.desc()).limit(limit)).all())
+
+
+def retry_all_failed_jobs(db: Session, admin: User) -> int:
+    if admin.role != "administrator":
+        raise ResourceUnavailable("administrator required")
+    failed = list(db.scalars(select(Job).where(Job.state == "failed")).all())
+    for job in failed:
+        job.state = "pending"
+        job.attempts = 0
+        job.error = None
+        job.lease_until = None
+    if failed:
+        record_audit_event(
+            db,
+            admin.id,
+            "admin.jobs.retry_all",
+            "job",
+            None,
+            detail={"count": len(failed)},
+        )
+        db.commit()
+    return len(failed)
 
 
 def claim_job(db: Session) -> Job | None:

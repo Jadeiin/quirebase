@@ -94,7 +94,9 @@ class Item(Base):
     version: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
-    revisions: Mapped[list[FileRevision]] = relationship(back_populates="item")
+    revisions: Mapped[list[FileRevision]] = relationship(
+        back_populates="item", cascade="all, delete-orphan", passive_deletes=True
+    )
 
 
 class ItemRead(Base):
@@ -287,3 +289,13 @@ class AuditEvent(Base):
     target_id: Mapped[str | None] = mapped_column(String(36))
     detail: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class SystemSetting(Base):
+    __tablename__ = "system_settings"
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+    updated_by: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )

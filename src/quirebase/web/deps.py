@@ -39,3 +39,9 @@ def require_csrf(request: Request, login: LoginSession = Depends(current_login))
         supplied = request.query_params.get("csrf_token")
     if not supplied or not compare_digest(supplied, login.csrf_token):
         raise HTTPException(status_code=403, detail="invalid CSRF token")
+
+
+def require_admin(user: User = Depends(current_user)) -> User:
+    if user.role != "administrator":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+    return user

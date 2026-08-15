@@ -1,0 +1,96 @@
+from __future__ import annotations
+
+import json
+
+import pytest
+
+from quirebase.core.crypto import hash_password
+from quirebase.core.errors import ResourceUnavailable
+from quirebase.library import create_item
+from quirebase.models import User
+from quirebase.pipeline import enqueue_job, list_jobs_admin, retry_all_failed_jobs, run_job
+
+
+def create_test_admin(db, username="admin_maint_test"):
+    admin = User(
+        username=username,
+        password_hash=hash_password("adminpass123456"),
+        role="administrator",
+        active=True,
+    )
+    db.add(admin)
+    db.commit()
+    return admin
+
+
+def create_test_member(db, username="member_maint_test"):
+    user = User(
+        username=username,
+        password_hash=hash_password("memberpass123456"),
+        role="member",
+        active=True,
+    )
+    db.add(user)
+    db.commit()
+    return user
+
+
+def test_system_reindex_job_execution(db):
+    admin = create_test_admin(db, "admin_maint_1")
+    create_item(db, admin, title="Reindexed Item", authors="Author One")
+
+    job = enqueue_job(db, "system.reindex_all", {}, owner_id=admin.id)
+    db.commit()
+
+    run_job(db, job)
+    assert job.state == "succeeded"
+    assert job.result is not None
+    result = json.loads(job.result)
+    assert "reindexed_items" in result
+    assert result["reindexed_items"] >= 1
+
+
+def test_system_check_objects_job_execution(db):
+    admin = create_test_admin(db, "admin_maint_2")
+
+    job = enqueue_job(db, "system.check_objects", {}, owner_id=admin.id)
+    db.commit()
+
+    run_job(db, job)
+    assert job.state == "succeeded"
+    assert job.result is not None
+    result = json.loads(job.result)
+    assert "checked_status" in result
+    assert result["checked_status"] == "ok"
+
+
+def test_retry_all_failed_jobs(db):
+    admin = create_test_admin(db, "admin_maint_3")
+
+    j1 = enqueue_job(db, "system.reindex_all", {}, owner_id=admin.id)
+    j1.state = "failed"
+    j1.error = "Simulated error"
+    j1.attempts = 3
+
+    j2 = enqueue_job(db, "system.check_objects", {}, owner_id=admin.id)
+    j2.state = "failed"
+    j2.error = "Simulated error 2"
+    j2.attempts = 3
+    db.commit()
+
+    count = retry_all_failed_jobs(db, admin)
+    assert count == 2
+    assert j1.state == "pending"
+    assert j2.state == "pending"
+
+
+def test_non_admin_cannot_list_jobs(db):
+    member = create_test_member(db, "member_maint_blocked1")
+    with pytest.raises(ResourceUnavailable, match="administrator required"):
+        list_jobs_admin(db, member)
+
+
+def test_non_admin_cannot_retry_jobs(db):
+    member = create_test_member(db, "member_maint_blocked2")
+    with pytest.raises(ResourceUnavailable, match="administrator required"):
+        retry_all_failed_jobs(db, member)

@@ -17,6 +17,12 @@ EXPECTED_OPERATIONAL_ROUTES = {
     ("GET", "/accept-invitation/{token}"),
     ("GET", "/account/sessions"),
     ("GET", "/admin"),
+    ("GET", "/admin/audit"),
+    ("GET", "/admin/items"),
+    ("GET", "/admin/jobs"),
+    ("GET", "/admin/maintenance"),
+    ("GET", "/admin/settings"),
+    ("GET", "/admin/users"),
     ("GET", "/annotation-exports/{job_id}"),
     ("GET", "/annotation-exports/{job_id}/content"),
     ("GET", "/bibliography/export"),
@@ -42,7 +48,18 @@ EXPECTED_OPERATIONAL_ROUTES = {
     ("POST", "/account/sessions/revoke-all"),
     ("POST", "/account/sessions/{session_id}/revoke"),
     ("POST", "/admin/invitations"),
+    ("POST", "/admin/items/{item_id}/delete"),
+    ("POST", "/admin/jobs/retry-all"),
     ("POST", "/admin/jobs/{job_id}/retry"),
+    ("POST", "/admin/maintenance/backup"),
+    ("POST", "/admin/maintenance/check-objects"),
+    ("POST", "/admin/maintenance/reindex"),
+    ("POST", "/admin/settings"),
+    ("POST", "/admin/users/create"),
+    ("POST", "/admin/users/{user_id}/password"),
+    ("POST", "/admin/users/{user_id}/revoke-sessions"),
+    ("POST", "/admin/users/{user_id}/role"),
+    ("POST", "/admin/users/{user_id}/status"),
     ("POST", "/bibliography/import/{batch_id}"),
     ("POST", "/bibliography/preview"),
     ("POST", "/citation-styles"),
@@ -98,7 +115,7 @@ def test_operational_routes_contract():
                 continue
             operational_routes.add((method, route.path))
 
-    assert len(operational_routes) == 58, f"Expected 58 routes, found {len(operational_routes)}"
+    assert len(operational_routes) == 75, f"Expected 75 routes, found {len(operational_routes)}"
     assert operational_routes == EXPECTED_OPERATIONAL_ROUTES
 
 
