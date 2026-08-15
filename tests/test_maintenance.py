@@ -1,3 +1,4 @@
+import contextlib
 import sqlite3
 
 from quirebase.core.config import get_settings
@@ -6,7 +7,7 @@ from quirebase.operations import create_backup, restore_backup, verify_backup
 
 def test_backup_contains_verified_sqlite_snapshot(tmp_path, monkeypatch):
     database = tmp_path / "source.db"
-    with sqlite3.connect(database) as connection:
+    with contextlib.closing(sqlite3.connect(database)) as connection, connection:
         connection.execute("CREATE TABLE example(value text)")
         connection.execute("INSERT INTO example VALUES ('safe')")
     monkeypatch.setenv("QUIREBASE_DATABASE_URL", f"sqlite:///{database}")
@@ -17,10 +18,10 @@ def test_backup_contains_verified_sqlite_snapshot(tmp_path, monkeypatch):
         manifest = verify_backup(archive)
         assert manifest["database_kind"] == "sqlite"
         assert len(manifest["database_sha256"]) == 64
-        with sqlite3.connect(database) as connection:
+        with contextlib.closing(sqlite3.connect(database)) as connection, connection:
             connection.execute("UPDATE example SET value='changed'")
         restore_backup(archive, force=True)
-        with sqlite3.connect(database) as connection:
+        with contextlib.closing(sqlite3.connect(database)) as connection:
             assert connection.execute("SELECT value FROM example").fetchone()[0] == "safe"
     finally:
         get_settings.cache_clear()

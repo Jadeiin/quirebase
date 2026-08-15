@@ -26,9 +26,10 @@ class LocalObjectStore:
     def put_pdf(self, source: BinaryIO, maximum: int) -> tuple[str, str, int]:
         key, sha256, size, temporary = self._stage(source, maximum)
         with temporary.open("rb") as check:
-            if check.read(5) != b"%PDF-":
-                temporary.unlink(missing_ok=True)
-                raise ValueError("file is not a PDF")
+            header = check.read(5)
+        if header != b"%PDF-":
+            temporary.unlink(missing_ok=True)
+            raise ValueError("file is not a PDF")
         return self._finish(temporary, key + ".pdf", sha256, size)
 
     def put_attachment(self, source: BinaryIO, maximum: int) -> tuple[str, str, int]:

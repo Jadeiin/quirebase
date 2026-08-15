@@ -19,7 +19,10 @@ def test_simplified_chinese_catalog_covers_static_template_messages():
     messages = catalog()
     used = set()
     for template in TEMPLATE_DIR.glob("*.html"):
-        used.update(match.group(2) for match in STATIC_TRANSLATION.finditer(template.read_text()))
+        used.update(
+            match.group(2)
+            for match in STATIC_TRANSLATION.finditer(template.read_text(encoding="utf-8"))
+        )
     assert used
     assert used <= messages.keys()
 

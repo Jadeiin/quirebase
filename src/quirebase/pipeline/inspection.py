@@ -40,12 +40,11 @@ def pdf_point_to_page(page: pymupdf.Page, point: pymupdf.Point) -> pymupdf.Point
 
 def validate_pdf_container(path: Path) -> None:
     try:
-        document = pymupdf.open(path)
-        if document.needs_pass:
-            raise ValueError("password-protected PDFs are not supported")
-        if document.page_count < 1:
-            raise ValueError("PDF contains no pages")
-        document.close()
+        with pymupdf.open(path) as document:
+            if document.needs_pass:
+                raise ValueError("password-protected PDFs are not supported")
+            if document.page_count < 1:
+                raise ValueError("PDF contains no pages")
     except ValueError:
         raise
     except Exception as error:

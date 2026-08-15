@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import shutil
@@ -43,8 +44,8 @@ def create_backup(destination: Path) -> Path:
         if settings.database_url.startswith("sqlite:///"):
             source = sqlite_path(settings.database_url)
             with (
-                sqlite3.connect(source) as source_db,
-                sqlite3.connect(root / "database.sqlite3") as target,
+                contextlib.closing(sqlite3.connect(source)) as source_db,
+                contextlib.closing(sqlite3.connect(root / "database.sqlite3")) as target,
             ):
                 source_db.backup(target)
             database_file = "database.sqlite3"
