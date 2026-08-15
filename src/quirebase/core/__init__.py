@@ -10,7 +10,18 @@ from quirebase.core.errors import (
     ValidationFailure,
     VersionConflict,
 )
-from quirebase.core.i18n import DEFAULT_LOCALE, catalog, translate
+from quirebase.core.i18n import (
+    DEFAULT_LOCALE,
+    catalog,
+    format_date,
+    format_datetime,
+    format_number,
+    gettext,
+    negotiate_locale,
+    ngettext,
+    pgettext,
+    translate,
+)
 
 __all__ = [
     "DEFAULT_LOCALE",
@@ -25,8 +36,15 @@ __all__ = [
     "VersionConflict",
     "catalog",
     "engine",
+    "format_date",
+    "format_datetime",
+    "format_number",
     "get_db",
     "get_settings",
+    "gettext",
     "make_engine",
+    "negotiate_locale",
+    "ngettext",
+    "pgettext",
     "translate",
 ]

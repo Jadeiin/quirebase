@@ -1,0 +1,1447 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: quirebase 0.1.0
+"
+"Report-Msgid-Bugs-To: 
+"
+"POT-Creation-Date: 2026-08-15 19:40+0800
+"
+"PO-Revision-Date: 2026-08-15 19:40+0800
+"
+"Last-Translator: Quirebase Team
+"
+"Language-Team: Chinese (Simplified)
+"
+"Language: zh_CN
+"
+"MIME-Version: 1.0
+"
+"Content-Type: text/plain; charset=UTF-8
+"
+"Content-Transfer-Encoding: 8bit
+"
+"Plural-Forms: nplurals=1; plural=0;
+"
+
+msgid "(missing title)"
+msgstr "（缺少标题）"
+
+msgid "API keys and thresholds"
+msgstr "API 密钥与阈值"
+
+msgid "Abstract"
+msgstr "摘要"
+
+msgid "Abstract and key details"
+msgstr "摘要与关键信息"
+
+msgid "Accept invitation"
+msgstr "接受邀请"
+
+msgid "Account security"
+msgstr "账户安全"
+
+msgid "Accounts, roles, and invites"
+msgstr "账户、角色与邀请"
+
+msgid "Action"
+msgstr "动作"
+
+msgid "Action, detail keyword, or target ID…"
+msgstr "动作、详情关键词或目标 ID…"
+
+msgid "Active"
+msgstr "正常"
+
+msgid "Active sessions"
+msgstr "活动会话"
+
+msgid "Activity"
+msgstr "活动"
+
+msgid "Actor"
+msgstr "操作者"
+
+msgid "Add"
+msgstr "添加"
+
+msgid "Add a PDF"
+msgstr "添加 PDF"
+
+msgid "Add a preprint, manuscript, report, or private document and enter its metadata manually."
+msgstr "添加预印本、手稿、报告或私有文档，并手动填写元数据。"
+
+msgid "Add attachment"
+msgstr "添加附件"
+
+msgid "Add condition"
+msgstr "添加条件"
+
+msgid "Add or update member"
+msgstr "添加或更新成员"
+
+msgid "Add style"
+msgstr "添加样式"
+
+msgid "Add tag"
+msgstr "添加标签"
+
+msgid "Add to project"
+msgstr "添加到项目"
+
+msgid "Add to the discussion"
+msgstr "参与讨论"
+
+msgid "Add to {project}"
+msgstr "添加到 {project}"
+
+msgid "Add user directly"
+msgstr "直接添加用户"
+
+msgid "Administration"
+msgstr "管理"
+
+msgid "Administration navigation"
+msgstr "管理导航"
+
+msgid "Advanced fields"
+msgstr "高级字段"
+
+msgid "All"
+msgstr "全部"
+
+msgid "All annotations"
+msgstr "全部批注"
+
+msgid "All items ({count})"
+msgstr "全部条目（{count}）"
+
+msgid "All projects"
+msgstr "全部项目"
+
+msgid "All roles"
+msgstr "所有角色"
+
+msgid "All states"
+msgstr "所有状态"
+
+msgid "All statuses"
+msgstr "所有状态"
+
+msgid "All tags"
+msgstr "全部标签"
+
+msgid "All users ({count})"
+msgstr "全部用户（{count}）"
+
+msgid "All years"
+msgstr "全部年份"
+
+msgid "Already in library"
+msgstr "已在论文库中"
+
+msgid "Annotation details"
+msgstr "批注详情"
+
+msgid "Annotation tools"
+msgstr "批注工具"
+
+msgid "Annotations"
+msgstr "批注"
+
+msgid "Any field"
+msgstr "任意字段"
+
+msgid "Apply"
+msgstr "应用"
+
+msgid "Apply filters"
+msgstr "应用筛选"
+
+msgid "At a glance"
+msgstr "基本信息"
+
+msgid "Attachments"
+msgstr "附件"
+
+msgid "Attempts"
+msgstr "重试次数"
+
+msgid "Audit Log"
+msgstr "审计日志"
+
+msgid "Audit events ({count})"
+msgstr "审计事件（{count}）"
+
+msgid "Author"
+msgstr "作者"
+
+msgid "Author name"
+msgstr "作者姓名"
+
+msgid "Authors"
+msgstr "作者"
+
+msgid "Automatic zoom"
+msgstr "自动缩放"
+
+msgid "Available"
+msgstr "已接入"
+
+msgid "Background Jobs"
+msgstr "后台任务"
+
+msgid "Bibliographic fields"
+msgstr "书目字段"
+
+msgid "Bibliographic metadata"
+msgstr "书目元数据"
+
+msgid "Bibliography file"
+msgstr "文献记录文件"
+
+msgid "Blue"
+msgstr "蓝色"
+
+msgid "Boolean operator"
+msgstr "布尔运算符"
+
+msgid "Bring research into your library"
+msgstr "将研究资料导入论文库"
+
+msgid "Broader check that may include false positives."
+msgstr "范围较广，可能包含误报。"
+
+msgid "Built-in styles are ready to use. Add a custom CSL style to use a journal-specific format."
+msgstr "内置样式可直接使用。添加自定义 CSL 样式以使用期刊专属格式。"
+
+msgid "Built-in styles require the optional citation extra. Install it with: uv sync --extra citation."
+msgstr "内置样式需要可选的 citation 附加组件。请运行：uv sync --extra citation 进行安装。"
+
+msgid "Bulk actions"
+msgstr "批量操作"
+
+msgid "CSL XML"
+msgstr "CSL XML"
+
+msgid "Choose action"
+msgstr "选择操作"
+
+msgid "Choose project"
+msgstr "选择项目"
+
+msgid "Citation styles"
+msgstr "引文样式"
+
+msgid "Classification"
+msgstr "分类"
+
+msgid "Clear"
+msgstr "清除"
+
+msgid "Click a page to place the note"
+msgstr "点击页面放置批注"
+
+msgid "Close"
+msgstr "关闭"
+
+msgid "Close navigation"
+msgstr "关闭导航"
+
+msgid "Collaboration"
+msgstr "协作"
+
+msgid "Collaborative collections"
+msgstr "协作集合"
+
+msgid "Compare exact file hashes without reading content."
+msgstr "比较精确文件哈希，无需读取内容。"
+
+msgid "Confirm permanent deletion"
+msgstr "确认永久删除"
+
+msgid "Connected data sources"
+msgstr "已连接的数据源"
+
+msgid "Contact email (for PubMed & Crossref rate-limiting)"
+msgstr "联系邮箱（用于 PubMed 与 Crossref 频控）"
+
+msgid "Continue where you left off"
+msgstr "继续上次阅读"
+
+msgid "Copy"
+msgstr "复制"
+
+msgid "Copy this link now. The plaintext token is not stored and cannot be shown again."
+msgstr "请立即复制此链接。明文令牌不会被保存，之后无法再次显示。"
+
+msgid "Create"
+msgstr "创建"
+
+msgid "Create a project"
+msgstr "创建项目"
+
+msgid "Create account"
+msgstr "创建账户"
+
+msgid "Create account {username}."
+msgstr "为 {username} 创建账户。"
+
+msgid "Create invitation"
+msgstr "创建邀请"
+
+msgid "Create user"
+msgstr "创建用户"
+
+msgid "Created"
+msgstr "创建时间"
+
+msgid "Credentialed providers remain isolated until keys and quotas are configured."
+msgstr "需要凭据的数据源将在配置密钥和配额后启用。"
+
+msgid "Custom fields (JSON object)"
+msgstr "自定义字段（JSON 对象）"
+
+msgid "DOI"
+msgstr "DOI"
+
+msgid "DOI override (optional)"
+msgstr "手动指定 DOI（可选）"
+
+msgid "Dashboard"
+msgstr "仪表盘"
+
+msgid "Data source"
+msgstr "数据源"
+
+msgid "Date"
+msgstr "日期"
+
+msgid "Delete"
+msgstr "删除"
+
+msgid "Delete papers"
+msgstr "删除论文"
+
+msgid "Delete selected"
+msgstr "删除所选批注"
+
+msgid "Delete this tag from every paper?"
+msgstr "确认从所有论文中删除此标签？"
+
+msgid "Detect automatically"
+msgstr "自动识别"
+
+msgid "Devices"
+msgstr "设备"
+
+msgid "Directory"
+msgstr "用户目录"
+
+msgid "Disable"
+msgstr "停用"
+
+msgid "Disabled"
+msgstr "已停用"
+
+msgid "Discover research"
+msgstr "发现研究资料"
+
+msgid "Discussion"
+msgstr "讨论"
+
+msgid "Dispatch Backup Job"
+msgstr "派发备份任务"
+
+msgid "Dispatch Check Job"
+msgstr "派发校验任务"
+
+msgid "Dispatch Re-index Job"
+msgstr "派发全量重建任务"
+
+msgid "Document storage"
+msgstr "文档存储"
+
+msgid "Download"
+msgstr "下载"
+
+msgid "Download Full Backup"
+msgstr "下载完整系统备份"
+
+msgid "Download PDFs"
+msgstr "下载 PDF"
+
+msgid "Duplicate review"
+msgstr "重复条目检查"
+
+msgid "Edit metadata"
+msgstr "编辑元数据"
+
+msgid "Editors"
+msgstr "编者"
+
+msgid "Enable"
+msgstr "启用"
+
+msgid "Errors"
+msgstr "错误"
+
+msgid "Existing username"
+msgstr "已有用户名"
+
+msgid "Expires"
+msgstr "过期时间"
+
+msgid "Expires {time}."
+msgstr "到期时间：{time}。"
+
+msgid "Export"
+msgstr "导出"
+
+msgid "Export BibTeX"
+msgstr "导出 BibTeX"
+
+msgid "Export EndNote"
+msgstr "导出 EndNote"
+
+msgid "Export RIS"
+msgstr "导出 RIS"
+
+msgid "Export cache TTL (hours)"
+msgstr "导出缓存保留时间（小时）"
+
+msgid "Export citation"
+msgstr "导出引用"
+
+msgid "Export citation (CSL)"
+msgstr "导出引文（CSL）"
+
+msgid "Export failed"
+msgstr "导出失败"
+
+msgid "Export ready"
+msgstr "导出已就绪"
+
+msgid "External API Credentials"
+msgstr "外部 API 凭据"
+
+msgid "Failed"
+msgstr "已失败"
+
+msgid "Failed jobs"
+msgstr "失败任务"
+
+msgid "File"
+msgstr "文件"
+
+msgid "File objects"
+msgstr "文件对象"
+
+msgid "Files"
+msgstr "文件"
+
+msgid "Filter"
+msgstr "筛选"
+
+msgid "Filter by state"
+msgstr "按状态筛选"
+
+msgid "Filters"
+msgstr "筛选条件"
+
+msgid "Find titles equal after punctuation and case normalization."
+msgstr "查找忽略标点和大小写后相同的标题。"
+
+msgid "Fit page"
+msgstr "适合页面"
+
+msgid "Fit width"
+msgstr "适合宽度"
+
+msgid "Fix the source file and {try_again}. No records were imported."
+msgstr "请修复源文件后{try_again}。尚未导入任何记录。"
+
+msgid "Format"
+msgstr "格式"
+
+msgid "Formatted citation"
+msgstr "格式化引文"
+
+msgid "Formatted citation (CSL)"
+msgstr "格式化引文（CSL）"
+
+msgid "From year"
+msgstr "起始年份"
+
+msgid "Full-Text Search Re-index"
+msgstr "全文检索全量重建索引"
+
+msgid "Generate & Download Backup"
+msgstr "生成并下载备份"
+
+msgid "Generate a complete ZIP archive containing database dump, manifest, and all storage objects."
+msgstr "生成包含数据库导出文件、清单元数据以及所有存储对象的完整 ZIP 归档包。"
+
+msgid "Global Items & Files"
+msgstr "全局条目与文件"
+
+msgid "Global inventory"
+msgstr "全局清单"
+
+msgid "Green"
+msgstr "绿色"
+
+msgid "Group papers and collaborate with members using explicit roles."
+msgstr "整理论文，并通过明确的成员角色开展协作。"
+
+msgid "Has PDF"
+msgstr "包含 PDF"
+
+msgid "Highest-confidence metadata duplicate check."
+msgstr "可信度最高的元数据重复检查。"
+
+msgid "Highlight"
+msgstr "高亮"
+
+msgid "Highlights and margin notes are created in the PDF reader and collected here for review."
+msgstr "在 PDF 阅读器中创建高亮和页边笔记，并在此集中查看。"
+
+msgid "History"
+msgstr "历史记录"
+
+msgid "IEEE Xplore API Key"
+msgstr "IEEE Xplore API 密钥"
+
+msgid "Identical PDF"
+msgstr "相同 PDF"
+
+msgid "Identifier"
+msgstr "标识符"
+
+msgid "Identifiers (JSON object)"
+msgstr "标识符（JSON 对象）"
+
+msgid "Import"
+msgstr "导入"
+
+msgid "Import all records"
+msgstr "导入全部记录"
+
+msgid "Import by DOI"
+msgstr "通过 DOI 导入"
+
+msgid "Import by identifier"
+msgstr "通过标识符导入"
+
+msgid "Import known identifiers"
+msgstr "导入已知标识符"
+
+msgid "Import methods"
+msgstr "导入方式"
+
+msgid "Import papers"
+msgstr "导入论文"
+
+msgid "Import preview"
+msgstr "导入预览"
+
+msgid "Import published PDF"
+msgstr "导入已发表 PDF"
+
+msgid "Import unpublished PDF"
+msgstr "导入未发表 PDF"
+
+msgid "Inspect possible duplicates and maintain shared classification data."
+msgstr "检查可能重复的条目并维护分类数据。"
+
+msgid "Invalid credentials"
+msgstr "用户名或密码错误"
+
+msgid "Invitation created"
+msgstr "邀请已创建"
+
+msgid "Invitations"
+msgstr "邀请"
+
+msgid "Invite a user"
+msgstr "邀请用户"
+
+msgid "Item sections"
+msgstr "条目分区"
+
+msgid "Items"
+msgstr "条目"
+
+msgid "Joined"
+msgstr "加入时间"
+
+msgid "Keep paper-specific questions and decisions with the research record."
+msgstr "将与论文相关的问题和决定保留在研究记录中。"
+
+msgid "Keep the reading copy and supplementary files together without mixing them with metadata."
+msgstr "集中管理阅读副本和补充文件，同时与元数据保持清晰分区。"
+
+msgid "Keyword"
+msgstr "关键词"
+
+msgid "Keywords"
+msgstr "关键词"
+
+msgid "Latest additions"
+msgstr "最新添加"
+
+msgid "Library"
+msgstr "论文库"
+
+msgid "Library items and storage"
+msgstr "论文库条目与存储"
+
+msgid "Library maintenance"
+msgstr "论文库维护"
+
+msgid "Library organization"
+msgstr "论文库整理"
+
+msgid "Library pages"
+msgstr "论文库分页"
+
+msgid "Loading…"
+msgstr "正在加载…"
+
+msgid "Location"
+msgstr "位置"
+
+msgid "Login devices"
+msgstr "登录设备"
+
+msgid "Look up DOI"
+msgstr "查询 DOI"
+
+msgid "Look up metadata"
+msgstr "查询元数据"
+
+msgid "Main navigation"
+msgstr "主导航"
+
+msgid "Maintenance"
+msgstr "系统维护"
+
+msgid "Make Admin"
+msgstr "设为管理员"
+
+msgid "Make Member"
+msgstr "设为普通成员"
+
+msgid "Manage access, global library items, audit events, background jobs, runtime settings and maintenance."
+msgstr "管理访问权限、全局文献条目、审计事件、后台任务、运行时配置与系统维护。"
+
+msgid "Manage access, pending invitations, and background processing failures."
+msgstr "管理访问权限、待处理邀请和后台任务故障。"
+
+msgid "Manage citation styles"
+msgstr "管理引文样式"
+
+msgid "Manage devices"
+msgstr "管理设备"
+
+msgid "Manage tags"
+msgstr "管理标签"
+
+msgid "Matching DOI"
+msgstr "相同 DOI"
+
+msgid "Matching title"
+msgstr "相同标题"
+
+msgid "Max PDF size (bytes)"
+msgstr "最大 PDF 体积（字节）"
+
+msgid "Max attachment size (bytes)"
+msgstr "最大附件体积（字节）"
+
+msgid "Members"
+msgstr "成员"
+
+msgid "Messages"
+msgstr "消息"
+
+msgid "Metadata"
+msgstr "元数据"
+
+msgid "Metadata lookup failed"
+msgstr "元数据查询失败"
+
+msgid "Metrics"
+msgstr "指标"
+
+msgid "More data sources"
+msgstr "更多数据源"
+
+msgid "Most cited"
+msgstr "引用最多"
+
+msgid "NASA ADS Token"
+msgstr "NASA ADS 令牌"
+
+msgid "NCBI API Key (for PubMed / PMC)"
+msgstr "NCBI API 密钥（用于 PubMed / PMC）"
+
+msgid "New papers"
+msgstr "新论文"
+
+msgid "New password"
+msgstr "新密码"
+
+msgid "New project name"
+msgstr "新项目名称"
+
+msgid "New tag"
+msgstr "新标签"
+
+msgid "Newest publication"
+msgstr "最新发表"
+
+msgid "Next"
+msgstr "后续"
+
+msgid "Next PDF page"
+msgstr "下一页"
+
+msgid "Next page"
+msgstr "下一页"
+
+msgid "Next result"
+msgstr "下一个结果"
+
+msgid "No PDF uploaded."
+msgstr "尚未上传 PDF。"
+
+msgid "No abstract available."
+msgstr "暂无摘要。"
+
+msgid "No active sessions."
+msgstr "没有活动会话。"
+
+msgid "No annotations yet. Open a PDF to highlight text or add a note."
+msgstr "暂无批注。打开 PDF 后可以高亮文本或添加笔记。"
+
+msgid "No attachments."
+msgstr "没有附件。"
+
+msgid "No audit events found."
+msgstr "未找到审计事件。"
+
+msgid "No authors"
+msgstr "无作者"
+
+msgid "No background jobs."
+msgstr "暂无后台任务。"
+
+msgid "No discussion yet."
+msgstr "暂无讨论。"
+
+msgid "No external results matched these conditions."
+msgstr "没有符合这些条件的外部检索结果。"
+
+msgid "No items found."
+msgstr "未找到匹配条目。"
+
+msgid "No items."
+msgstr "没有条目。"
+
+msgid "No keywords."
+msgstr "没有关键词。"
+
+msgid "No papers match these filters."
+msgstr "没有符合筛选条件的论文。"
+
+msgid "No papers yet. Import a DOI, bibliography, or PDF to begin."
+msgstr "暂无论文。请导入 DOI、文献记录或 PDF 开始使用。"
+
+msgid "No possible duplicates found with this method."
+msgstr "使用此方法未发现可能的重复条目。"
+
+msgid "No projects yet."
+msgstr "暂无项目。"
+
+msgid "No projects."
+msgstr "没有项目。"
+
+msgid "No recent audit events."
+msgstr "暂无最近审计事件。"
+
+msgid "No tags."
+msgstr "没有标签。"
+
+msgid "No users found."
+msgstr "未找到匹配用户。"
+
+msgid "None."
+msgstr "无。"
+
+msgid "Not in this project"
+msgstr "尚未加入此项目"
+
+msgid "Note"
+msgstr "批注"
+
+msgid "Note text"
+msgstr "批注内容"
+
+msgid "Notes and annotations"
+msgstr "笔记与批注"
+
+msgid "Object Store Integrity Check"
+msgstr "对象存储完整性校验"
+
+msgid "Online identifier"
+msgstr "联网标识符"
+
+msgid "Online search"
+msgstr "联网检索"
+
+msgid "Only needed when automatic detection fails"
+msgstr "仅在自动识别失败时填写"
+
+msgid "Open"
+msgstr "打开"
+
+msgid "Open PDF"
+msgstr "打开 PDF"
+
+msgid "Open annotation tools"
+msgstr "打开批注工具"
+
+msgid "Open in library"
+msgstr "在论文库中打开"
+
+msgid "OpenAlex API Key (optional)"
+msgstr "OpenAlex API 密钥（可选）"
+
+msgid "Organize"
+msgstr "分类整理"
+
+msgid "Overview"
+msgstr "概览"
+
+msgid "PDF Revisions"
+msgstr "PDF 版本"
+
+msgid "PDF revisions"
+msgstr "PDF 版本"
+
+msgid "PDF versions and attachments"
+msgstr "PDF 版本与附件"
+
+msgid "Page"
+msgstr "页码"
+
+msgid "Page {page}"
+msgstr "第 {page} 页"
+
+msgid "Page {page} of {pages}"
+msgstr "第 {page} 页，共 {pages} 页"
+
+msgid "Paper"
+msgstr "论文"
+
+msgid "Paper library"
+msgstr "论文库"
+
+msgid "Paper record"
+msgstr "论文记录"
+
+msgid "Paper workspace"
+msgstr "论文工作区"
+
+msgid "Papers you open will appear here."
+msgstr "你打开过的论文会显示在这里。"
+
+msgid "Password"
+msgstr "密码"
+
+msgid "Pending"
+msgstr "待处理"
+
+msgid "Pending invitations"
+msgstr "待处理邀请"
+
+msgid "Permanently delete this item, all its revisions, annotations, and storage files?"
+msgstr "确定永久删除此条目及其所有版本、批注和存储文件？"
+
+msgid "Pipeline monitor"
+msgstr "流水线监控"
+
+msgid "Post"
+msgstr "发布"
+
+msgid "Preparing export…"
+msgstr "正在准备导出…"
+
+msgid "Preview and import records exported by EndNote, Zotero, Mendeley, or another reference manager."
+msgstr "预览并导入由 EndNote、Zotero、Mendeley 或其他文献管理器导出的记录。"
+
+msgid "Preview records"
+msgstr "预览记录"
+
+msgid "Previous"
+msgstr "上一页"
+
+msgid "Previous PDF page"
+msgstr "上一页"
+
+msgid "Previous result"
+msgstr "上一个结果"
+
+msgid "Private"
+msgstr "私有"
+
+msgid "Processing pipeline"
+msgstr "后台处理流水线"
+
+msgid "Project"
+msgstr "项目"
+
+msgid "Project papers"
+msgstr "项目论文"
+
+msgid "Project workspace"
+msgstr "项目工作区"
+
+msgid "Projects"
+msgstr "项目"
+
+msgid "Provider-backed search will be added here after credentials, quotas, result normalization, and audit behavior are configured."
+msgstr "配置凭据、配额、结果标准化和审计行为后，可在此添加由数据提供商支持的检索。"
+
+msgid "Publication"
+msgstr "出版物"
+
+msgid "Published PDF"
+msgstr "已发表 PDF"
+
+msgid "Read"
+msgstr "阅读"
+
+msgid "Read PDF"
+msgstr "阅读 PDF"
+
+msgid "Reading notes"
+msgstr "阅读笔记"
+
+msgid "Reading workspace"
+msgstr "阅读工作区"
+
+msgid "Rebuild SQLite FTS5 / PostgreSQL tsvector full-text index across all items and extracted PDF text."
+msgstr "基于所有文献条目与提取的 PDF 全文，全量重建 SQLite FTS5 / PostgreSQL tsvector 索引。"
+
+msgid "Recent audit events"
+msgstr "最近审计事件"
+
+msgid "Recent background jobs"
+msgstr "最近后台任务"
+
+msgid "Recent system maintenance jobs"
+msgstr "最近系统维护任务"
+
+msgid "Recently opened"
+msgstr "最近打开"
+
+msgid "Recently read"
+msgstr "最近阅读"
+
+msgid "Record {row}: {message}"
+msgstr "第 {row} 条：{message}"
+
+msgid "Red"
+msgstr "红色"
+
+msgid "Reference type"
+msgstr "文献类型"
+
+msgid "Reindex, verify, and backups"
+msgstr "重建索引、校验与备份"
+
+msgid "Relevance"
+msgstr "相关性"
+
+msgid "Remove"
+msgstr "移除"
+
+msgid "Remove condition"
+msgstr "移除条件"
+
+msgid "Remove {name}"
+msgstr "移除 {name}"
+
+msgid "Rename"
+msgstr "重命名"
+
+msgid "Reset password"
+msgstr "重置密码"
+
+msgid "Retrieve metadata from DOI, PubMed, arXiv, OpenAlex, or Open Library and review it before saving."
+msgstr "从 DOI、PubMed、arXiv、OpenAlex 或 Open Library 获取元数据，确认后再保存。"
+
+msgid "Retrieve publication metadata from Crossref or DataCite and review it before saving."
+msgstr "从 Crossref 或 DataCite 获取出版物元数据，确认后再保存。"
+
+msgid "Retry"
+msgstr "重试"
+
+msgid "Retry all failed jobs ({count})"
+msgstr "重试所有失败任务（{count}）"
+
+msgid "Return to administration"
+msgstr "返回管理页面"
+
+msgid "Review active sign-ins and revoke sessions you no longer recognize."
+msgstr "检查活动登录并撤销不再识别的会话。"
+
+msgid "Review and import"
+msgstr "检查并导入"
+
+msgid "Review and maintain the fields used for search, citation export, and organization."
+msgstr "检查并维护用于搜索、引用导出和分类整理的字段。"
+
+msgid "Revoke"
+msgstr "撤销"
+
+msgid "Revoke all login sessions for this user?"
+msgstr "确定吊销该用户的所有登录会话？"
+
+msgid "Revoke sessions"
+msgstr "吊销会话"
+
+msgid "Revoking a session takes effect on its next authenticated request."
+msgstr "撤销会话会在其下一次认证请求时生效。"
+
+msgid "Role"
+msgstr "角色"
+
+msgid "Running"
+msgstr "执行中"
+
+msgid "Runtime Settings"
+msgstr "运行时配置"
+
+msgid "Save"
+msgstr "保存"
+
+msgid "Save metadata"
+msgstr "保存元数据"
+
+msgid "Save runtime settings"
+msgstr "保存运行时配置"
+
+msgid "Saved"
+msgstr "已保存"
+
+msgid "Saving…"
+msgstr "正在保存…"
+
+msgid "Scholarly Providers"
+msgstr "学术数据源"
+
+msgid "Search"
+msgstr "搜索"
+
+msgid "Search PDF"
+msgstr "搜索 PDF"
+
+msgid "Search all items"
+msgstr "搜索所有条目"
+
+msgid "Search audit trail"
+msgstr "搜索审计流水"
+
+msgid "Search conditions"
+msgstr "检索条件"
+
+msgid "Search external scholarly indexes by terms and conditions, then review candidates before importing."
+msgstr "根据检索词和条件查询外部学术索引，并在导入前检查候选结果。"
+
+msgid "Search external sources"
+msgstr "检索外部数据源"
+
+msgid "Search failed"
+msgstr "检索失败"
+
+msgid "Search field"
+msgstr "检索字段"
+
+msgid "Search papers"
+msgstr "搜索论文"
+
+msgid "Search papers and full text"
+msgstr "搜索论文和全文"
+
+msgid "Search result pages"
+msgstr "检索结果分页"
+
+msgid "Search terms"
+msgstr "检索词"
+
+msgid "Search users"
+msgstr "搜索用户"
+
+msgid "Search your research"
+msgstr "搜索研究资料"
+
+msgid "Security & Operations Log"
+msgstr "安全与运维日志"
+
+msgid "Security and change log"
+msgstr "安全与变更记录"
+
+msgid "Select all papers"
+msgstr "选择全部论文"
+
+msgid "Select one of your annotations."
+msgstr "请选择一条你创建的批注。"
+
+msgid "Select text first."
+msgstr "请先选择文本。"
+
+msgid "Select {title}"
+msgstr "选择 {title}"
+
+msgid "Separate authors with semicolons"
+msgstr "使用分号分隔作者"
+
+msgid "Separate keywords with semicolons"
+msgstr "使用分号分隔关键词"
+
+msgid "Session controls are active"
+msgstr "会话控制已启用"
+
+msgid "Session lifetime (days)"
+msgstr "会话有效期（天）"
+
+msgid "Session {id}"
+msgstr "会话 {id}"
+
+msgid "Sessions & Storage"
+msgstr "会话与存储"
+
+msgid "Shared collection for papers, members, and project annotations."
+msgstr "用于论文、成员和项目批注的共享集合。"
+
+msgid "Sign in"
+msgstr "登录"
+
+msgid "Sign out"
+msgstr "退出登录"
+
+msgid "Sign out every device, including this one?"
+msgstr "确认退出包括当前设备在内的所有设备？"
+
+msgid "Sign out of all sessions"
+msgstr "退出所有会话"
+
+msgid "Signed in"
+msgstr "登录时间"
+
+msgid "Signed-in device"
+msgstr "已登录设备"
+
+msgid "Similar title"
+msgstr "相似标题"
+
+msgid "Sort by"
+msgstr "排序方式"
+
+msgid "Sources without institutional credentials are available now. Credentialed providers remain isolated until keys and quotas are configured."
+msgstr "无需机构凭据的数据源现已可用；需要凭据的数据源将在配置密钥和配额后启用。"
+
+msgid "Started {created} · expires {expires}"
+msgstr "登录于 {created} · 到期于 {expires}"
+
+msgid "Status"
+msgstr "状态"
+
+msgid "Storage breakdown"
+msgstr "存储容量分布"
+
+msgid "Style"
+msgstr "样式"
+
+msgid "Style name"
+msgstr "样式名称"
+
+msgid "Succeeded"
+msgstr "已成功"
+
+msgid "Summary"
+msgstr "概览"
+
+msgid "System"
+msgstr "系统"
+
+msgid "System policies"
+msgstr "系统策略"
+
+msgid "System stats and health"
+msgstr "系统统计与健康状态"
+
+msgid "System workspace"
+msgstr "系统工作区"
+
+msgid "Tag"
+msgstr "标签"
+
+msgid "Tag for selected papers"
+msgstr "为所选论文添加标签"
+
+msgid "Tags"
+msgstr "标签"
+
+msgid "Tags and projects"
+msgstr "标签与项目"
+
+msgid "Target"
+msgstr "目标"
+
+msgid "Target type"
+msgstr "目标类型"
+
+msgid "Team conversation"
+msgstr "团队讨论"
+
+msgid "The file contains no records"
+msgstr "文件中没有记录"
+
+msgid "This device"
+msgstr "当前设备"
+
+msgid "This invitation is invalid, expired, or already used."
+msgstr "此邀请无效、已过期或已被使用。"
+
+msgid "Thumbnails"
+msgstr "缩略图"
+
+msgid "Title"
+msgstr "标题"
+
+msgid "Title is required"
+msgstr "标题为必填项"
+
+msgid "Title, author, DOI, or ID…"
+msgstr "标题、作者、DOI 或 ID…"
+
+msgid "Title, full text, metadata"
+msgstr "标题、全文、元数据"
+
+msgid "Titles, authors, keywords, metadata and extracted PDF text."
+msgstr "搜索标题、作者、关键词、元数据及从 PDF 提取的全文。"
+
+msgid "To year"
+msgstr "结束年份"
+
+msgid "Toggle navigation"
+msgstr "切换导航"
+
+msgid "Tools"
+msgstr "工具"
+
+msgid "Total items"
+msgstr "条目总数"
+
+msgid "Total storage"
+msgstr "存储总容量"
+
+msgid "Total users"
+msgstr "用户总数"
+
+msgid "Type"
+msgstr "类型"
+
+msgid "Unable to open PDF: {message}"
+msgstr "无法打开 PDF：{message}"
+
+msgid "Undated"
+msgstr "日期未知"
+
+msgid "Unpublished PDF"
+msgstr "未发表 PDF"
+
+msgid "Unsupported sort modes fall back to relevance for that source."
+msgstr "数据源不支持所选排序时，将回退为相关性排序。"
+
+msgid "Update"
+msgstr "更新"
+
+msgid "Updated"
+msgstr "更新时间"
+
+msgid "Upload"
+msgstr "上传"
+
+msgid "Upload a published paper and use its DOI to retrieve and attach verified metadata."
+msgstr "上传已发表论文，并通过 DOI 获取并关联经过验证的元数据。"
+
+msgid "Upload a published paper. Its DOI is extracted from the PDF and used to retrieve verified metadata."
+msgstr "上传已发表论文后，将自动从 PDF 提取 DOI 并获取经过验证的元数据。"
+
+msgid "Upload attachment"
+msgstr "上传附件"
+
+msgid "Use tags for flexible classification and projects for shared collections."
+msgstr "使用标签灵活分类，并通过项目组织共享集合。"
+
+msgid "Username"
+msgstr "用户名"
+
+msgid "Username or ID…"
+msgstr "用户名或 ID…"
+
+msgid "Users"
+msgstr "用户"
+
+msgid "Users & Access"
+msgstr "用户与访问"
+
+msgid "Verify existence and SHA-256 checksums of all PDF files and attachments against the database."
+msgstr "比对数据库记录，逐项校验所有 PDF 文件和附件的物理存在性及 SHA-256 校验和。"
+
+msgid "View"
+msgstr "查看"
+
+msgid "View all"
+msgstr "查看全部"
+
+msgid "View library"
+msgstr "查看论文库"
+
+msgid "Visibility"
+msgstr "可见范围"
+
+msgid "With PDF"
+msgstr "有 PDF"
+
+msgid "Without PDF"
+msgstr "无 PDF"
+
+msgid "Workspace activity"
+msgstr "工作区动态"
+
+msgid "Workspace overview"
+msgstr "工作区概览"
+
+msgid "Year"
+msgstr "年份"
+
+msgid "Yellow"
+msgstr "黄色"
+
+msgid "Zoom in"
+msgstr "放大"
+
+msgid "Zoom out"
+msgstr "缩小"
+
+msgid "accepted"
+msgstr "已接受"
+
+msgid "administrator"
+msgstr "管理员"
+
+msgid "current"
+msgstr "当前设备"
+
+msgid "disabled"
+msgstr "已停用"
+
+msgid "editor"
+msgstr "编辑者"
+
+msgid "expires {time}"
+msgstr "到期时间 {time}"
+
+msgid "failed"
+msgstr "失败"
+
+msgid "files"
+msgstr "个文件"
+
+msgid "highlight"
+msgstr "高亮"
+
+msgid "journal_article"
+msgstr "期刊论文"
+
+msgid "member"
+msgstr "成员"
+
+msgid "note"
+msgstr "笔记"
+
+msgid "owner"
+msgstr "所有者"
+
+msgid "pending"
+msgstr "待处理"
+
+msgid "private"
+msgstr "私有"
+
+msgid "processing"
+msgstr "处理中"
+
+msgid "project"
+msgstr "项目"
+
+msgid "ready"
+msgstr "就绪"
+
+msgid "role"
+msgstr "角色"
+
+msgid "style name is required"
+msgstr "样式名称为必填项"
+
+msgid "the CSL text is not a valid citation style"
+msgstr "CSL 文本不是有效的引文样式"
+
+msgid "try again"
+msgstr "重试"
+
+msgid "unknown citation style"
+msgstr "未知的引文样式"
+
+msgid "unpublished"
+msgstr "未发表文献"
+
+msgid "viewer"
+msgstr "查看者"
+
+msgid "{bytes} bytes"
+msgstr "{bytes} 字节"
+
+msgid "{count} annotation(s)"
+msgstr "{count} 条批注"
+
+msgid "{count} file(s)"
+msgstr "{count} 个文件"
+
+msgid "{count} pages"
+msgstr "{count} 页"
+
+msgid "{count} paper(s)"
+msgstr "{count} 篇论文"
+
+msgid "{count} paper(s) selected"
+msgstr "已选择 {count} 篇论文"
+
+msgid "{count} papers available"
+msgstr "共 {count} 篇论文"
+
+msgid "{count} possible group(s)"
+msgstr "{count} 组可能重复项"
+
+msgid "{count} record(s) parsed."
+msgstr "已解析 {count} 条记录。"
+
+msgid "{count} result(s)"
+msgstr "共 {count} 条结果"
+

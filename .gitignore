@@ -13,3 +13,5 @@ dist/
 .agents/
 .claude/
 skills-lock.json
+src/quirebase/static/vendor/
+

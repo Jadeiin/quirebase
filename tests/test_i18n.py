@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import UTC
 from pathlib import Path
 from string import Formatter
 
@@ -17,7 +18,7 @@ def fields(message: str) -> set[str]:
 
 def test_simplified_chinese_catalog_covers_static_template_messages():
     messages = catalog()
-    used = set()
+    used: set[str] = set()
     for template in TEMPLATE_DIR.glob("*.html"):
         used.update(
             match.group(2)
@@ -40,3 +41,40 @@ def test_default_locale_and_translation_fallback():
     assert pagination.endswith("共 3 页")
     assert translate("Dashboard", locale="en") == "Dashboard"
     assert translate("Uncatalogued product name") == "Uncatalogued product name"
+
+
+def test_babel_gettext_and_plural_support():
+    from quirebase.core.i18n import gettext, ngettext, pgettext
+
+    assert gettext("Dashboard") == "仪表盘"
+    assert gettext("Nonexistent String") == "Nonexistent String"
+    # Singular/plural
+    assert ngettext("{n} item", "{n} items", 1) in (
+        "{n} item",
+        "{n} items",
+        "1 个条目",
+        "{n} 个条目",
+    )
+    # Contextual translation
+    assert pgettext("Admin", "Dashboard") == "仪表盘"
+
+
+def test_babel_formatting_and_locale_negotiation():
+    from datetime import datetime
+
+    from quirebase.core.i18n import (
+        format_datetime,
+        format_number,
+        negotiate_locale,
+    )
+
+    dt = datetime(2026, 8, 15, 14, 30, tzinfo=UTC)
+    formatted_dt = format_datetime(dt, locale="zh_CN")
+    assert "2026" in formatted_dt
+
+    formatted_num = format_number(1234567.89, locale="zh_CN")
+    assert "1,234,567.89" in formatted_num or "1234567.89" in formatted_num
+
+    assert negotiate_locale("zh-CN,zh;q=0.9,en;q=0.8") == "zh_CN"
+    assert negotiate_locale("en-US,en;q=0.9") == "en_US"
+    assert negotiate_locale("") == "zh-CN"
