@@ -84,18 +84,12 @@ def stage_metadata_batch(
 
     effective_settings = settings or get_effective_settings_model(db)
     try:
-        if transport is not None:
-            try:
-                parsed, record = lookup_metadata(
-                    identifier, provider, settings=effective_settings, transport=transport
-                )
-            except TypeError:
-                parsed, record = lookup_metadata(identifier, provider, transport=transport)
-        else:
-            try:
-                parsed, record = lookup_metadata(identifier, provider, settings=effective_settings)
-            except TypeError:
-                parsed, record = lookup_metadata(identifier, provider)
+        parsed, record = lookup_metadata(
+            identifier,
+            provider,
+            settings=effective_settings,
+            transport=transport,
+        )
     except ValueError as error:
         raise ValidationFailure(str(error)) from error
     except MetadataNotFoundError as error:
@@ -168,12 +162,9 @@ def import_published_pdf(
                 "no DOI was found in the PDF; enter one manually or import it as unpublished"
             )
         try:
-            try:
-                _identifier, record = lookup_metadata(
-                    identifier, "doi", settings=get_effective_settings_model(db)
-                )
-            except TypeError:
-                _identifier, record = lookup_metadata(identifier, "doi")
+            _identifier, record = lookup_metadata(
+                identifier, "doi", settings=get_effective_settings_model(db)
+            )
         except ValueError as error:
             raise ValidationFailure(str(error)) from error
         except MetadataNotFoundError as error:

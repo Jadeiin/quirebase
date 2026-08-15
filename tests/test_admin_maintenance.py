@@ -137,3 +137,21 @@ def test_non_admin_cannot_retry_jobs(db):
     member = create_test_member(db, "member_maint_blocked2")
     with pytest.raises(ResourceUnavailable, match="administrator required"):
         retry_all_failed_jobs(db, member)
+
+
+def test_list_jobs_admin_filters_kind_prefix_under_high_volume(db):
+    admin = create_test_admin(db, "admin_maint_vol")
+
+    # Create 2 system jobs
+    sys1 = enqueue_job(db, "system.backup", {}, owner_id=admin.id)
+    sys2 = enqueue_job(db, "system.reindex_all", {}, owner_id=admin.id)
+
+    # Create 25 newer non-system jobs
+    for i in range(25):
+        enqueue_job(db, f"pdf.inspect_{i}", {}, owner_id=admin.id)
+    db.commit()
+
+    # Query with kind_prefix='system.' with limit=20
+    system_jobs = list_jobs_admin(db, admin, kind_prefix="system.", limit=20)
+    assert len(system_jobs) == 2
+    assert {j.id for j in system_jobs} == {sys1.id, sys2.id}

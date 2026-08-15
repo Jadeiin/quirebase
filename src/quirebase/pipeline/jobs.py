@@ -175,12 +175,20 @@ def dispatch_maintenance_job(db: Session, admin: User, kind: str) -> Job:
     return job
 
 
-def list_jobs_admin(db: Session, admin: User, state: str = "", limit: int = 50) -> list[Job]:
+def list_jobs_admin(
+    db: Session,
+    admin: User,
+    state: str = "",
+    kind_prefix: str = "",
+    limit: int = 50,
+) -> list[Job]:
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")
     query = select(Job)
     if state.strip():
         query = query.where(Job.state == state.strip())
+    if kind_prefix.strip():
+        query = query.where(Job.kind.startswith(kind_prefix.strip()))
     return list(db.scalars(query.order_by(Job.created_at.desc()).limit(limit)).all())
 
 

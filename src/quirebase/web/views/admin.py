@@ -430,8 +430,7 @@ def admin_maintenance_page(
     db: Session = Depends(get_db),
 ):
     storage = get_storage_metrics(db, user)
-    jobs = list_jobs_admin(db, user, limit=20)
-    system_jobs = [j for j in jobs if j.kind.startswith("system.")]
+    system_jobs = list_jobs_admin(db, user, kind_prefix="system.", limit=20)
 
     return templates.TemplateResponse(
         request,

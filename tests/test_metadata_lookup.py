@@ -262,7 +262,7 @@ def test_online_preview_uses_existing_confirmed_import_flow(db, tmp_path, monkey
     }
     monkeypatch.setattr(
         "quirebase.discovery.imports.lookup_metadata",
-        lambda _value, _provider: (Identifier("doi", "10.1/looked-up"), record),
+        lambda _value, _provider, *args, **kwargs: (Identifier("doi", "10.1/looked-up"), record),
     )
     try:
         preview = client.post(

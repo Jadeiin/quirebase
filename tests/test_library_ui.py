@@ -201,7 +201,7 @@ def test_pdf_import_modules(db, tmp_path, monkeypatch):
 
         monkeypatch.setattr(
             "quirebase.discovery.imports.lookup_metadata",
-            lambda _identifier, _provider: (
+            lambda _identifier, _provider, *args, **kwargs: (
                 object(),
                 {
                     "title": "Published article",
@@ -229,7 +229,7 @@ def test_failed_published_pdf_import_removes_unreferenced_object(db, tmp_path, m
     objects_before = set(get_settings().object_dir.rglob("*.pdf"))
     monkeypatch.setattr(
         "quirebase.discovery.imports.lookup_metadata",
-        lambda _identifier, _provider: (_ for _ in ()).throw(
+        lambda _identifier, _provider, *args, **kwargs: (_ for _ in ()).throw(
             MetadataNotFoundError("metadata not found")
         ),
     )
