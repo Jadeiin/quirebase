@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import contextlib
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from sqlalchemy import delete, func, or_, select
+from sqlalchemy.orm import Session
 
 from quirebase.core.config import get_settings
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
@@ -11,9 +12,6 @@ from quirebase.core.storage import LocalObjectStore
 from quirebase.library.audit import record_audit_event
 from quirebase.models import Attachment, FileRevision, Item, User
 from quirebase.search import search_index
-
-if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
 
 
 def list_global_items(
@@ -155,7 +153,14 @@ def admin_delete_item(db: Session, admin: User, item_id: str) -> None:
     )
     db.commit()
 
-    # Clean object store files after successful commit
+    # Clean object store files after successful commit only if not referenced by other items
     store = LocalObjectStore()
-    for key in cleanup_keys:
-        store.delete(key)
+    for object_key in cleanup_keys:
+        with Session(db.bind) as cleanup_db:
+            still_used = cleanup_db.scalar(
+                select(FileRevision.id).where(FileRevision.object_key == object_key).limit(1)
+            ) or cleanup_db.scalar(
+                select(Attachment.id).where(Attachment.object_key == object_key).limit(1)
+            )
+        if not still_used:
+            store.delete(object_key)

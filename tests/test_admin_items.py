@@ -119,6 +119,34 @@ def test_admin_delete_item_cascades_and_cleans_storage(db, tmp_path, monkeypatch
     assert event.actor_id == admin.id
 
 
+def test_admin_delete_item_preserves_shared_objects(db, tmp_path, monkeypatch):
+    admin = create_test_admin(db, "admin_lib_share")
+    member = create_test_member(db, "member_lib_share")
+
+    item1 = create_item(db, member, title="Shared Item 1")
+    item2 = create_item(db, member, title="Shared Item 2")
+    data = pdf_bytes()
+    rev1 = store_pdf_revision(db, member, item1.id, io.BytesIO(data), "same.pdf")
+    rev2 = store_pdf_revision(db, member, item2.id, io.BytesIO(data), "same.pdf")
+    assert rev1.object_key == rev2.object_key
+
+    store = LocalObjectStore()
+    object_path = store.path(rev1.object_key)
+    assert object_path.is_file()
+
+    # Delete item1
+    admin_delete_item(db, admin, item1.id)
+    assert db.get(Item, item1.id) is None
+    assert db.get(Item, item2.id) is not None
+
+    # Object file MUST be preserved because item2 still references it!
+    assert object_path.is_file()
+
+    # Deleting item2 now removes the file
+    admin_delete_item(db, admin, item2.id)
+    assert not object_path.exists()
+
+
 def test_non_admin_cannot_admin_delete_item(db):
     admin = create_test_admin(db, "admin_lib_prot")
     member = create_test_member(db, "member_lib_prot")

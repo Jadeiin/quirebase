@@ -84,3 +84,47 @@ def test_non_admin_cannot_update_settings(db):
     member = create_test_member(db, "member_set_3")
     with pytest.raises(ResourceUnavailable, match="administrator required"):
         update_runtime_settings(db, member, {"ncbi_api_key": "hacked"})
+
+
+def test_runtime_settings_applied_to_pdf_upload_limit(db, tmp_path, monkeypatch):
+    import io
+
+    from test_library_ui import pdf_bytes
+
+    from quirebase.core.config import get_settings
+    from quirebase.core.errors import ValidationFailure
+    from quirebase.documents import store_pdf_revision
+    from quirebase.library import create_item
+
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+    admin = create_test_admin(db, "admin_set_limit")
+    member = create_test_member(db, "member_set_limit")
+    item = create_item(db, member, title="Limit Test")
+
+    # Set runtime limit to 10 bytes (smaller than sample PDF)
+    update_runtime_settings(db, admin, {"max_pdf_bytes": 10})
+
+    data = pdf_bytes()
+    with pytest.raises(ValidationFailure, match="file exceeds configured size limit"):
+        store_pdf_revision(db, member, item.id, io.BytesIO(data), "test.pdf")
+
+
+def test_runtime_settings_applied_to_discovery_settings_model(db):
+    from quirebase.operations.settings import get_effective_settings_model
+
+    admin = create_test_admin(db, "admin_set_disc")
+    update_runtime_settings(
+        db,
+        admin,
+        {
+            "nasa_ads_token": "ads_live_token",
+            "ieee_api_key": "ieee_live_key",
+            "metadata_contact_email": "admin@live.org",
+        },
+    )
+
+    settings_model = get_effective_settings_model(db)
+    assert settings_model.nasa_ads_token == "ads_live_token"
+    assert settings_model.ieee_api_key == "ieee_live_key"
+    assert settings_model.metadata_contact_email == "admin@live.org"

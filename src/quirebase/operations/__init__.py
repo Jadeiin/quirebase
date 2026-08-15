@@ -8,6 +8,7 @@ from quirebase.operations.maintenance import (
     check_objects,
     cleanup_exports,
     create_backup,
+    get_backup_artifact,
     restore_backup,
     sha256_file,
     sqlite_path,
@@ -15,6 +16,7 @@ from quirebase.operations.maintenance import (
 )
 from quirebase.operations.settings import (
     get_effective_setting,
+    get_effective_settings_model,
     get_runtime_setting,
     get_runtime_settings,
     update_runtime_settings,
@@ -35,7 +37,9 @@ __all__ = [
     "check_objects",
     "cleanup_exports",
     "create_backup",
+    "get_backup_artifact",
     "get_effective_setting",
+    "get_effective_settings_model",
     "get_runtime_setting",
     "get_runtime_settings",
     "get_system_metrics",

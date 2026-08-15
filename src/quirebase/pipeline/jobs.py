@@ -117,11 +117,21 @@ def handle_system_check_objects(db: Session, job: Job, payload: dict[str, Any]) 
     return {"errors": errors, "checked_status": "ok" if not errors else "inconsistencies_found"}
 
 
+def handle_system_backup(db: Session, job: Job, payload: dict[str, Any]) -> dict[str, Any]:
+    from quirebase.operations.maintenance import create_backup
+
+    filename = f"backup_{job.id}.zip"
+    dest_path = get_settings().export_dir / filename
+    create_backup(dest_path)
+    return {"filename": filename, "size_bytes": dest_path.stat().st_size}
+
+
 JOB_HANDLERS.update({
     "pdf.inspect": handle_pdf_inspect,
     "pdf.export_annotations": handle_pdf_export_annotations,
     "system.reindex_all": handle_system_reindex,
     "system.check_objects": handle_system_check_objects,
+    "system.backup": handle_system_backup,
 })
 
 
@@ -143,6 +153,25 @@ def enqueue_job(
     )
     db.add(job)
     db.flush()
+    return job
+
+
+def dispatch_maintenance_job(db: Session, admin: User, kind: str) -> Job:
+    from quirebase.core.errors import ValidationFailure
+
+    if admin.role != "administrator":
+        raise ResourceUnavailable("administrator required")
+    if kind not in ("system.reindex_all", "system.check_objects", "system.backup"):
+        raise ValidationFailure(f"unknown maintenance job kind: {kind}")
+    job = enqueue_job(db, kind, {}, owner_id=admin.id)
+    record_audit_event(
+        db,
+        admin.id,
+        f"admin.maintenance.{kind.removeprefix('system.')}",
+        "job",
+        job.id,
+    )
+    db.commit()
     return job
 
 

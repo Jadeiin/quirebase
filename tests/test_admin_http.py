@@ -175,3 +175,24 @@ def test_admin_maintenance_triggers(db, tmp_path, monkeypatch):
 
     check_job = db.scalar(select(Job).where(Job.kind == "system.check_objects"))
     assert check_job is not None
+
+    # Backup trigger
+    res = client.post(
+        f"/admin/maintenance/backup?csrf_token={login.csrf_token}",
+        follow_redirects=False,
+    )
+    assert res.status_code == 303
+    assert res.headers["location"] == "/admin/jobs"
+
+    backup_job = db.scalar(select(Job).where(Job.kind == "system.backup"))
+    assert backup_job is not None
+
+    # Complete the job and verify download
+    from quirebase.pipeline import run_job
+
+    run_job(db, backup_job)
+    assert backup_job.state == "succeeded"
+
+    download_res = client.get(f"/admin/maintenance/backups/{backup_job.id}/download")
+    assert download_res.status_code == 200
+    assert download_res.headers["content-type"] == "application/zip"

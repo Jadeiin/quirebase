@@ -16,7 +16,7 @@ from sqlalchemy import select
 
 from quirebase.core.config import get_settings
 from quirebase.core.storage import LocalObjectStore
-from quirebase.models import Attachment, FileRevision
+from quirebase.models import Attachment, FileRevision, User
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -138,16 +138,24 @@ def restore_backup(archive_path: Path, *, force: bool = False) -> None:
             shutil.copytree(restored_objects, settings.object_dir, dirs_exist_ok=True)
 
 
-def cleanup_exports() -> int:
+def cleanup_exports(db: Session | None = None) -> int:
+    from quirebase.operations.settings import get_effective_setting
+
     directory = get_settings().export_dir
-    cutoff = datetime.now(UTC) - timedelta(hours=get_settings().export_ttl_hours)
+    ttl_hours = (
+        get_effective_setting(db, "export_ttl_hours", get_settings().export_ttl_hours)
+        if db is not None
+        else get_settings().export_ttl_hours
+    )
+    cutoff = datetime.now(UTC) - timedelta(hours=ttl_hours)
     removed = 0
     if directory.exists():
-        for path in directory.glob("*.pdf"):
-            modified = datetime.fromtimestamp(path.stat().st_mtime, UTC)
-            if modified < cutoff:
-                path.unlink()
-                removed += 1
+        for path in directory.iterdir():
+            if path.is_file():
+                modified = datetime.fromtimestamp(path.stat().st_mtime, UTC)
+                if modified < cutoff:
+                    path.unlink(missing_ok=True)
+                    removed += 1
     return removed
 
 
@@ -167,3 +175,28 @@ def check_objects(db: Session) -> list[str]:
         elif sha256_file(path) != attachment.sha256:
             errors.append(f"{attachment.id}: attachment checksum mismatch")
     return errors
+
+
+def get_backup_artifact(db: Session, admin: User, job_id: str) -> tuple[Path, str]:
+    from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
+    from quirebase.models import Job
+
+    if admin.role != "administrator":
+        raise ResourceUnavailable("administrator required")
+    job = db.get(Job, job_id)
+    if job is None or job.kind != "system.backup" or job.state != "succeeded" or not job.result:
+        raise ResourceNotFound("backup artifact not found or not ready")
+    try:
+        data = json.loads(job.result)
+        filename = data.get("filename")
+    except Exception as error:
+        raise ResourceUnavailable("corrupt backup job result") from error
+
+    if not filename:
+        raise ResourceNotFound("backup filename missing")
+
+    backup_file = get_settings().export_dir / filename
+    if not backup_file.is_file():
+        raise ResourceNotFound("backup artifact expired or deleted")
+
+    return backup_file, f"quirebase_backup_{job.id[:8]}.zip"

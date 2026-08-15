@@ -358,7 +358,7 @@
     {# 5. Background Jobs Tab                                           #}
     {# ================================================================= #}
     {% elif admin_tab == 'jobs' %}
-    <section class="panel filter-panel">
+    <section class="panel filter-panel" style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
       <form method="get" action="/admin/jobs" style="display: flex; gap: 1rem; align-items: center;">
         <label style="margin: 0; display: flex; gap: .5rem; align-items: center;">
           {{ t('Filter by state') }}:
@@ -370,12 +370,12 @@
             <option value="failed" {% if state_filter == 'failed' %}selected{% endif %}>{{ t('Failed') }}</option>
           </select>
         </label>
-        {% if failed_jobs %}
-        <form method="post" action="/admin/jobs/retry-all?csrf_token={{ csrf }}">
-          <button class="compact-button">{{ t('Retry all failed jobs ({count})', count=failed_jobs|length) }}</button>
-        </form>
-        {% endif %}
       </form>
+      {% if failed_jobs %}
+      <form method="post" action="/admin/jobs/retry-all?csrf_token={{ csrf }}" style="margin: 0;">
+        <button class="compact-button">{{ t('Retry all failed jobs ({count})', count=failed_jobs|length) }}</button>
+      </form>
+      {% endif %}
     </section>
 
     <section class="panel">
@@ -395,11 +395,16 @@
             </div>
             <small>{{ t('Attempts') }}: {{ job.attempts }} · {{ t('Created') }}: {{ job.created_at.strftime('%Y-%m-%d %H:%M:%S') }}{% if job.error %} · <span style="color: var(--danger);">{{ job.error }}</span>{% endif %}</small>
           </div>
-          {% if job.state == 'failed' %}
-          <form method="post" action="/admin/jobs/{{ job.id }}/retry?csrf_token={{ csrf }}">
-            <button class="secondary-button compact-button">{{ t('Retry') }}</button>
-          </form>
-          {% endif %}
+          <div style="display: flex; gap: .5rem; align-items: center;">
+            {% if job.kind == 'system.backup' and job.state == 'succeeded' %}
+            <a class="button-link secondary-button compact-button" href="/admin/maintenance/backups/{{ job.id }}/download">{{ t('Download') }}</a>
+            {% endif %}
+            {% if job.state == 'failed' %}
+            <form method="post" action="/admin/jobs/{{ job.id }}/retry?csrf_token={{ csrf }}">
+              <button class="secondary-button compact-button">{{ t('Retry') }}</button>
+            </form>
+            {% endif %}
+          </div>
         </article>
         {% else %}
         <div class="empty-state">{{ t('No background jobs.') }}</div>
@@ -494,11 +499,40 @@
           <h2>{{ t('Download Full Backup') }}</h2>
           <p>{{ t('Generate a complete ZIP archive containing database dump, manifest, and all storage objects.') }}</p>
           <form method="post" action="/admin/maintenance/backup?csrf_token={{ csrf }}" style="margin-top: .8rem;">
-            <button class="secondary-button compact-button">{{ t('Generate & Download Backup') }}</button>
+            <button class="secondary-button compact-button">{{ t('Dispatch Backup Job') }}</button>
           </form>
         </div>
       </section>
     </div>
+
+    {% if system_jobs %}
+    <section class="panel" style="margin-top: 1.5rem;">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">{{ t('History') }}</p>
+          <h2>{{ t('Recent system maintenance jobs') }}</h2>
+        </div>
+      </div>
+      <div class="admin-list">
+        {% for job in system_jobs %}
+        <article style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem; align-items: center;">
+          <div>
+            <div style="display: flex; gap: .5rem; align-items: center;">
+              <strong>{{ job.kind }}</strong>
+              <span class="imported-badge" style="{% if job.state == 'failed' %}background: #fce8e6; color: var(--danger);{% elif job.state == 'running' %}background: #e8f0fe; color: #1a73e8;{% endif %}">{{ job.state }}</span>
+            </div>
+            <small>{{ t('Created') }}: {{ job.created_at.strftime('%Y-%m-%d %H:%M:%S') }}{% if job.error %} · <span style="color: var(--danger);">{{ job.error }}</span>{% endif %}</small>
+          </div>
+          <div>
+            {% if job.kind == 'system.backup' and job.state == 'succeeded' %}
+            <a class="button-link secondary-button compact-button" href="/admin/maintenance/backups/{{ job.id }}/download">{{ t('Download') }}</a>
+            {% endif %}
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
     {% endif %}
 
   </div>

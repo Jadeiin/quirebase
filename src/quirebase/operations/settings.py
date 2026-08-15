@@ -77,6 +77,12 @@ def get_effective_setting(db: Session, key: str, default: Any = None) -> Any:
 get_runtime_setting = get_effective_setting
 
 
+def get_effective_settings_model(db: Session) -> Any:
+    from quirebase.core.config import Settings
+
+    return Settings(**get_runtime_settings(db))
+
+
 def update_runtime_settings(db: Session, admin: User, updates: dict[str, Any]) -> None:
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import tempfile
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, Form, Query, Request
@@ -25,7 +23,6 @@ from quirebase.accounts import (
     retry_job as retry_job_op,
 )
 from quirebase.core.database import get_db
-from quirebase.core.errors import ValidationFailure
 from quirebase.library import (
     admin_delete_item,
     get_storage_metrics,
@@ -34,12 +31,12 @@ from quirebase.library import (
 )
 from quirebase.models import LoginSession, User
 from quirebase.operations import (
-    create_backup,
+    get_backup_artifact,
     get_runtime_settings,
     update_runtime_settings,
 )
 from quirebase.pipeline import (
-    enqueue_job,
+    dispatch_maintenance_job,
     list_jobs_admin,
     retry_all_failed_jobs,
 )
@@ -455,9 +452,7 @@ def trigger_reindex_job(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    if user.role != "administrator":
-        raise ValidationFailure("administrator required")
-    enqueue_job(db, "system.reindex_all", {}, owner_id=user.id)
+    dispatch_maintenance_job(db, user, "system.reindex_all")
     return RedirectResponse("/admin/jobs", status_code=303)
 
 
@@ -466,24 +461,28 @@ def trigger_check_objects_job(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    if user.role != "administrator":
-        raise ValidationFailure("administrator required")
-    enqueue_job(db, "system.check_objects", {}, owner_id=user.id)
+    dispatch_maintenance_job(db, user, "system.check_objects")
     return RedirectResponse("/admin/jobs", status_code=303)
 
 
 @router.post("/admin/maintenance/backup", dependencies=[Depends(require_csrf)])
-def download_backup_endpoint(
+def trigger_backup_job(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    if user.role != "administrator":
-        raise ValidationFailure("administrator required")
-    temp_dir = Path(tempfile.mkdtemp())
-    backup_file = temp_dir / "quirebase_backup.zip"
-    create_backup(backup_file)
+    dispatch_maintenance_job(db, user, "system.backup")
+    return RedirectResponse("/admin/jobs", status_code=303)
+
+
+@router.get("/admin/maintenance/backups/{job_id}/download")
+def download_backup_endpoint(
+    job_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    path, filename = get_backup_artifact(db, user, job_id)
     return FileResponse(
-        str(backup_file),
+        str(path),
         media_type="application/zip",
-        filename="quirebase_backup.zip",
+        filename=filename,
     )

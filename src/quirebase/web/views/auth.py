@@ -28,6 +28,7 @@ from quirebase.accounts.sessions import (
 from quirebase.core.config import get_settings
 from quirebase.core.database import get_db
 from quirebase.models import LoginSession, User
+from quirebase.operations.settings import get_effective_setting
 from quirebase.web.deps import current_login, current_user, login_identity, require_csrf
 from quirebase.web.templates import templates
 
@@ -50,9 +51,10 @@ def login(
     db: Session = Depends(get_db),
 ):
     identity = login_identity(request, username)
+    session_days = get_effective_setting(db, "session_days", get_settings().session_days)
     try:
         _login_session, raw = authenticate_user(
-            db, identity, username, password, session_days=get_settings().session_days
+            db, identity, username, password, session_days=session_days
         )
     except InvalidCredentials:
         return templates.TemplateResponse(
@@ -65,7 +67,7 @@ def login(
         httponly=True,
         secure=get_settings().secure_cookies,
         samesite="lax",
-        max_age=get_settings().session_days * 86400,
+        max_age=session_days * 86400,
     )
     return response
 

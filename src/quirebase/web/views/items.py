@@ -40,6 +40,7 @@ from quirebase.models import (
     LoginSession,
     User,
 )
+from quirebase.operations.settings import get_effective_setting
 from quirebase.projects import (
     add_item_to_project as add_item_to_project_op,
 )
@@ -166,7 +167,7 @@ def upload_attachment(
         attachment.file,
         attachment.filename or "",
         attachment.content_type or "application/octet-stream",
-        get_settings().max_attachment_bytes,
+        get_effective_setting(db, "max_attachment_bytes", get_settings().max_attachment_bytes),
     )
     return RedirectResponse(f"/items/{item_id}/files", status_code=303)
 
@@ -268,7 +269,7 @@ def upload_pdf(
         item_id,
         pdf.file,
         pdf.filename or "",
-        get_settings().max_pdf_bytes,
+        get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes),
     )
     return RedirectResponse(f"/items/{item_id}/files", status_code=303)
 

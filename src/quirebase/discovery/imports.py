@@ -4,7 +4,7 @@ import json
 from typing import TYPE_CHECKING, BinaryIO
 
 from quirebase.access.items import can_read_item, visible_items_query
-from quirebase.core.config import get_settings
+from quirebase.core.config import Settings, get_settings
 from quirebase.core.errors import (
     DomainError,
     ResourceNotFound,
@@ -78,12 +78,24 @@ def stage_metadata_batch(
     identifier: str,
     provider: str = "auto",
     transport: httpx.BaseTransport | None = None,
+    settings: Settings | None = None,
 ) -> tuple[ImportBatch, list[dict], list[dict]]:
+    from quirebase.operations.settings import get_effective_settings_model
+
+    effective_settings = settings or get_effective_settings_model(db)
     try:
         if transport is not None:
-            parsed, record = lookup_metadata(identifier, provider, transport=transport)
+            try:
+                parsed, record = lookup_metadata(
+                    identifier, provider, settings=effective_settings, transport=transport
+                )
+            except TypeError:
+                parsed, record = lookup_metadata(identifier, provider, transport=transport)
         else:
-            parsed, record = lookup_metadata(identifier, provider)
+            try:
+                parsed, record = lookup_metadata(identifier, provider, settings=effective_settings)
+            except TypeError:
+                parsed, record = lookup_metadata(identifier, provider)
     except ValueError as error:
         raise ValidationFailure(str(error)) from error
     except MetadataNotFoundError as error:
@@ -143,8 +155,10 @@ def import_published_pdf(
     doi: str = "",
     max_bytes: int | None = None,
 ) -> Item:
+    from quirebase.operations.settings import get_effective_setting, get_effective_settings_model
+
     if max_bytes is None:
-        max_bytes = get_settings().max_pdf_bytes
+        max_bytes = get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes)
     staged = stage_pdf(source, filename, max_bytes)
     try:
         detected_doi = extract_doi(LocalObjectStore().path(staged[0]))
@@ -154,7 +168,12 @@ def import_published_pdf(
                 "no DOI was found in the PDF; enter one manually or import it as unpublished"
             )
         try:
-            _identifier, record = lookup_metadata(identifier, "doi")
+            try:
+                _identifier, record = lookup_metadata(
+                    identifier, "doi", settings=get_effective_settings_model(db)
+                )
+            except TypeError:
+                _identifier, record = lookup_metadata(identifier, "doi")
         except ValueError as error:
             raise ValidationFailure(str(error)) from error
         except MetadataNotFoundError as error:
@@ -197,10 +216,12 @@ def import_unpublished_pdf(
     keywords: str = "",
     max_bytes: int | None = None,
 ) -> Item:
+    from quirebase.operations.settings import get_effective_setting
+
     if not title.strip():
         raise ValidationFailure("title is required")
     if max_bytes is None:
-        max_bytes = get_settings().max_pdf_bytes
+        max_bytes = get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes)
     staged = stage_pdf(source, filename, max_bytes)
     try:
         item = Item(

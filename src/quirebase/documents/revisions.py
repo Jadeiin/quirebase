@@ -97,9 +97,11 @@ def store_pdf_revision(
     filename: str,
     max_bytes: int | None = None,
 ) -> FileRevision:
+    from quirebase.operations.settings import get_effective_setting
+
     item = require_editable_item(db, user, item_id)
     if max_bytes is None:
-        max_bytes = get_settings().max_pdf_bytes
+        max_bytes = get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes)
     staged = stage_pdf(source, filename, max_bytes)
     try:
         revision = attach_staged_pdf(db, user, item, staged)
@@ -120,10 +122,14 @@ def create_attachment(
     content_type: str = "application/octet-stream",
     max_bytes: int | None = None,
 ) -> Attachment:
+    from quirebase.operations.settings import get_effective_setting
+
     if not can_edit_item(db, user, item_id) or not filename:
         raise ResourceUnavailable("item not accessible or filename missing")
     if max_bytes is None:
-        max_bytes = get_settings().max_attachment_bytes
+        max_bytes = get_effective_setting(
+            db, "max_attachment_bytes", get_settings().max_attachment_bytes
+        )
     try:
         key, digest, size = LocalObjectStore().put_attachment(source, max_bytes)
     except ValueError as error:

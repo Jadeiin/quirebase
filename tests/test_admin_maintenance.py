@@ -4,11 +4,18 @@ import json
 
 import pytest
 
+from quirebase.core.config import get_settings
 from quirebase.core.crypto import hash_password
 from quirebase.core.errors import ResourceUnavailable
 from quirebase.library import create_item
-from quirebase.models import User
-from quirebase.pipeline import enqueue_job, list_jobs_admin, retry_all_failed_jobs, run_job
+from quirebase.models import AuditEvent, Job, User
+from quirebase.pipeline import (
+    dispatch_maintenance_job,
+    enqueue_job,
+    list_jobs_admin,
+    retry_all_failed_jobs,
+    run_job,
+)
 
 
 def create_test_admin(db, username="admin_maint_test"):
@@ -62,6 +69,42 @@ def test_system_check_objects_job_execution(db):
     result = json.loads(job.result)
     assert "checked_status" in result
     assert result["checked_status"] == "ok"
+
+
+def test_system_backup_job_execution(db, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+    admin = create_test_admin(db, "admin_maint_backup")
+    create_item(db, admin, title="Backup Item")
+
+    job = enqueue_job(db, "system.backup", {}, owner_id=admin.id)
+    db.commit()
+
+    run_job(db, job)
+    assert job.state == "succeeded"
+    assert job.result is not None
+    result = json.loads(job.result)
+    assert "filename" in result
+    backup_file = get_settings().export_dir / result["filename"]
+    assert backup_file.is_file()
+    assert backup_file.stat().st_size > 0
+
+
+def test_dispatch_maintenance_job_commits_and_records_audit(db):
+    admin = create_test_admin(db, "admin_maint_dispatch")
+    job = dispatch_maintenance_job(db, admin, "system.reindex_all")
+
+    assert job.id is not None
+    assert job.kind == "system.reindex_all"
+
+    # Verifying it was committed into database
+    fetched = db.get(Job, job.id)
+    assert fetched is not None
+
+    # Verifying audit event
+    audit = db.query(AuditEvent).filter_by(target_id=job.id).first()
+    assert audit is not None
+    assert audit.action == "admin.maintenance.reindex_all"
 
 
 def test_retry_all_failed_jobs(db):

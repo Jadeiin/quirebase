@@ -474,6 +474,9 @@
   "Verify existence and SHA-256 checksums of all PDF files and attachments against the database.": "比对数据库记录，逐项校验所有 PDF 文件和附件的物理存在性及 SHA-256 校验和。",
   "Reset password": "重置密码",
   "New password": "新密码",
-  "Update": "更新"
+  "Update": "更新",
+  "Dispatch Backup Job": "派发备份任务",
+  "Recent system maintenance jobs": "最近系统维护任务",
+  "History": "历史记录"
 }
 

@@ -6,7 +6,6 @@ from urllib.parse import urlencode
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from quirebase.core.config import get_settings
 from quirebase.core.database import get_db
 from quirebase.discovery import (
     MetadataLookupError,
@@ -29,6 +28,7 @@ from quirebase.models import (
     LoginSession,
     User,
 )
+from quirebase.operations.settings import get_effective_settings_model
 from quirebase.web.deps import current_login, current_user, require_csrf
 from quirebase.web.templates import templates
 
@@ -84,6 +84,7 @@ def online_search_page(
     )
     results = None
     error = None
+    effective_settings = get_effective_settings_model(db)
     if clauses:
         try:
             start_year = int(year_from) if year_from else None
@@ -100,6 +101,7 @@ def online_search_page(
                 sort=sort,
                 year_from=start_year,
                 year_to=end_year,
+                settings=effective_settings,
             )
             record_search_audit(db, user, provider, clauses, len(results.results))
         except ValueError as caught:
@@ -133,8 +135,8 @@ def online_search_page(
             "error": error,
             "imported": imported,
             "page_url": page_url,
-            "has_nasa_ads": bool(get_settings().nasa_ads_token),
-            "has_ieee": bool(get_settings().ieee_api_key),
+            "has_nasa_ads": bool(effective_settings.nasa_ads_token),
+            "has_ieee": bool(effective_settings.ieee_api_key),
         },
     )
 
@@ -207,7 +209,9 @@ def preview_online_metadata(
     login: LoginSession = Depends(current_login),
     db: Session = Depends(get_db),
 ):
-    batch, records, errors = stage_metadata_batch(db, user, identifier, provider)
+    batch, records, errors = stage_metadata_batch(
+        db, user, identifier, provider, settings=get_effective_settings_model(db)
+    )
     return templates.TemplateResponse(
         request,
         "import_preview.html",

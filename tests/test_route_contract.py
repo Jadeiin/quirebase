@@ -21,6 +21,7 @@ EXPECTED_OPERATIONAL_ROUTES = {
     ("GET", "/admin/items"),
     ("GET", "/admin/jobs"),
     ("GET", "/admin/maintenance"),
+    ("GET", "/admin/maintenance/backups/{job_id}/download"),
     ("GET", "/admin/settings"),
     ("GET", "/admin/users"),
     ("GET", "/annotation-exports/{job_id}"),
@@ -115,7 +116,7 @@ def test_operational_routes_contract():
                 continue
             operational_routes.add((method, route.path))
 
-    assert len(operational_routes) == 75, f"Expected 75 routes, found {len(operational_routes)}"
+    assert len(operational_routes) == 76, f"Expected 76 routes, found {len(operational_routes)}"
     assert operational_routes == EXPECTED_OPERATIONAL_ROUTES
 
 
