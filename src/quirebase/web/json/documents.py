@@ -8,9 +8,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 
 from quirebase.core.database import get_db
-from quirebase.documents import (
+from quirebase.discovery import (
     get_item_citation_response,
     get_item_citation_text_response,
+)
+from quirebase.documents import (
     get_revision_file,
 )
 from quirebase.models import User

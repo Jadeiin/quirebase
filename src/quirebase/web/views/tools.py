@@ -5,9 +5,9 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from quirebase.citation import available_builtin_styles
 from quirebase.core.database import get_db
-from quirebase.documents import (
+from quirebase.discovery import (
+    available_builtin_styles,
     create_custom_citation_style,
     delete_custom_citation_style,
     list_custom_citation_styles,

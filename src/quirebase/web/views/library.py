@@ -6,10 +6,12 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
 
 from quirebase.access import editable_projects, visible_projects
-from quirebase.citation import available_builtin_styles
 from quirebase.core.database import get_db
-from quirebase.discovery import export_selected_bibliography
-from quirebase.documents import list_custom_citation_styles
+from quirebase.discovery import (
+    available_builtin_styles,
+    export_selected_bibliography,
+    list_custom_citation_styles,
+)
 from quirebase.library import bulk_action, bulk_download_pdfs, search_library
 from quirebase.models import LoginSession, User
 from quirebase.web.deps import current_login, current_user, require_csrf

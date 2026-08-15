@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from quirebase.citation import (
+from quirebase.discovery import (
     BUILTIN_STYLES,
     available_builtin_styles,
     builtin_style_xml,
+    create_custom_citation_style,
     is_valid_csl,
     item_to_csl_json,
     render_citation,
+    resolve_style_xml,
 )
 from quirebase.models import Item, User
 
@@ -74,14 +76,18 @@ def test_builtin_styles_render(db):
 
 def test_render_citation_html(db):
     item = _item(db)
-    rendered = render_citation(item, builtin_style_xml("apa"), output_format="html")
+    apa_xml = builtin_style_xml("apa")
+    assert apa_xml is not None
+    rendered = render_citation(item, apa_xml, output_format="html")
     assert "An Example Paper" in rendered
 
 
 def test_is_valid_csl_rejects_garbage():
     assert is_valid_csl("<style/>") is False
     assert is_valid_csl("<style><not-csl/></style>") is False
-    assert is_valid_csl(builtin_style_xml("apa")) is True
+    apa_xml = builtin_style_xml("apa")
+    assert apa_xml is not None
+    assert is_valid_csl(apa_xml) is True
 
 
 def test_builtin_style_xml_unknown_returns_none():
@@ -94,7 +100,7 @@ def test_available_builtin_styles_lists_installed_styles():
 
 
 def test_builtin_style_xml_degrades_when_styles_package_is_missing(monkeypatch):
-    monkeypatch.setattr("quirebase.citation.get_style_filepath", None)
+    monkeypatch.setattr("quirebase.discovery.citations.get_style_filepath", None)
     available_builtin_styles.cache_clear()
     try:
         assert builtin_style_xml("apa") is None
@@ -104,9 +110,8 @@ def test_builtin_style_xml_degrades_when_styles_package_is_missing(monkeypatch):
 
 
 def test_resolve_style_xml_scoped_to_owner(db):
-    from quirebase.documents.citations import create_custom_citation_style, resolve_style_xml
-
     csl_xml = builtin_style_xml("apa")
+    assert csl_xml is not None
     user_a = User(username="owner-a", password_hash="unused")
     user_b = User(username="owner-b", password_hash="unused")
     db.add_all([user_a, user_b])
@@ -130,17 +135,18 @@ def test_citation_routes_enforce_custom_style_ownership(db, tmp_path, monkeypatc
     from test_http import authenticated_client
 
     from quirebase.core.config import get_settings
-    from quirebase.documents.citations import create_custom_citation_style
     from quirebase.web.app import app
 
     client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
     try:
         user_a = db.get(User, item.created_by)
+        assert user_a is not None
         user_b = User(username="other-user", password_hash="unused")
         db.add(user_b)
         db.flush()
 
         csl_xml = builtin_style_xml("apa")
+        assert csl_xml is not None
         style_a = create_custom_citation_style(db, user_a, "User A Style", csl_xml)
         style_b = create_custom_citation_style(db, user_b, "User B Style", csl_xml)
 
@@ -153,21 +159,24 @@ def test_citation_routes_enforce_custom_style_ownership(db, tmp_path, monkeypatc
         res_forbidden = client.get(f"/documents/{item.id}/citation-text?style={style_b.id}")
         assert res_forbidden.status_code == 422
 
-        res_csl_forbidden = client.get(f"/documents/{item.id}/citation?file_format=csl&style={style_b.id}")
+        res_csl_forbidden = client.get(
+            f"/documents/{item.id}/citation?file_format=csl&style={style_b.id}"
+        )
         assert res_csl_forbidden.status_code == 422
     finally:
         app.dependency_overrides.clear()
         get_settings.cache_clear()
 
 
-def test_custom_styles_accessible_in_item_workspace_when_builtin_styles_missing(db, tmp_path, monkeypatch):
+def test_custom_styles_accessible_in_item_workspace_when_builtin_styles_missing(
+    db, tmp_path, monkeypatch
+):
     from test_http import authenticated_client
 
     from quirebase.core.config import get_settings
-    from quirebase.documents.citations import create_custom_citation_style
     from quirebase.web.app import app
 
-    monkeypatch.setattr("quirebase.citation.get_style_filepath", None)
+    monkeypatch.setattr("quirebase.discovery.citations.get_style_filepath", None)
     available_builtin_styles.cache_clear()
 
     client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
@@ -176,10 +185,10 @@ def test_custom_styles_accessible_in_item_workspace_when_builtin_styles_missing(
         csl_xml = (
             '<?xml version="1.0" encoding="utf-8"?>\n'
             '<style xmlns="http://purl.org/net/xbiblio/csl" version="1.0" class="in-text">\n'
-            '  <info><id>test</id><title>Test Custom</title><updated>2025-01-01T00:00:00Z</updated></info>\n'
+            "  <info><id>test</id><title>Test Custom</title><updated>2025-01-01T00:00:00Z</updated></info>\n"
             '  <citation><layout><text variable="title"/></layout></citation>\n'
             '  <bibliography><layout><text variable="title"/></layout></bibliography>\n'
-            '</style>'
+            "</style>"
         )
         custom_style = create_custom_citation_style(db, user, "My Isolated Custom Style", csl_xml)
 

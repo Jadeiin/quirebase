@@ -5,16 +5,18 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
-from quirebase.citation import available_builtin_styles
 from quirebase.core.config import get_settings
 from quirebase.core.database import get_db
+from quirebase.discovery import (
+    available_builtin_styles,
+    list_custom_citation_styles,
+)
 from quirebase.documents import (
     create_attachment as create_attachment_op,
 )
 from quirebase.documents import (
     get_attachment_file,
     get_pdf_viewer_data,
-    list_custom_citation_styles,
     store_pdf_revision,
 )
 from quirebase.library import (

@@ -64,7 +64,7 @@ def test_endnote_parse_and_round_trip(db):
 %T An EndNote Paper
 %J EndNote Quarterly
 %D 2025
-%@ 10.1234/endnote
+%R 10.1234/endnote
 %K search;testing
 %X A full abstract.
 """
@@ -86,7 +86,7 @@ def test_endnote_parse_and_round_trip(db):
     assert "%A Doe, Jane" in output
     assert "%A Smith, Alex" in output
     assert "%T An EndNote Paper" in output
-    assert "%@ 10.1234/endnote" in output
+    assert "%R 10.1234/endnote" in output
 
 
 def test_endnote_multiple_records_are_split():
@@ -108,7 +108,9 @@ def test_endnote_multiple_records_are_split():
 
 
 def test_endnote_multiline_abstract_round_trip(db):
-    multiline_abstract = "First line of abstract.\nSecond line of abstract.\nThird line of abstract."
+    multiline_abstract = (
+        "First line of abstract.\nSecond line of abstract.\nThird line of abstract."
+    )
     source = f"""%0 Journal Article
 %T Multiline Paper
 %A Doe, Jane

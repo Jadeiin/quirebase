@@ -588,15 +588,20 @@ class PmcSearchAdapter:
             identifiers = found.get("idlist", [])
             if not identifiers:
                 return SearchPage("pmc", [], int(found.get("count", 0)), page, per_page)
+            summary_params = {
+                "db": "pmc",
+                "id": ",".join(identifiers),
+                "retmode": "json",
+                "tool": "quirebase",
+            }
+            if settings.metadata_contact_email:
+                summary_params["email"] = settings.metadata_contact_email
+            if settings.ncbi_api_key:
+                summary_params["api_key"] = settings.ncbi_api_key
             payload = json.loads(
                 client._get(
                     "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
-                    {
-                        "db": "pmc",
-                        "id": ",".join(identifiers),
-                        "retmode": "json",
-                        "tool": "quirebase",
-                    },
+                    summary_params,
                 )
             ).get("result", {})
         except (json.JSONDecodeError, TypeError) as error:
@@ -682,7 +687,9 @@ class NasaAdsSearchAdapter:
         headers = {"Authorization": f"Bearer {settings.nasa_ads_token}"}
         try:
             payload = json.loads(
-                client._get("https://api.adsabs.harvard.edu/v1/search/query", params, headers=headers)
+                client._get(
+                    "https://api.adsabs.harvard.edu/v1/search/query", params, headers=headers
+                )
             )
         except (json.JSONDecodeError, TypeError) as error:
             raise MetadataLookupError("NASA ADS returned invalid search results") from error

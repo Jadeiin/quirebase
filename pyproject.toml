@@ -13,7 +13,6 @@ dependencies = [
   "alembic>=1.16,<2",
   "argon2-cffi>=25,<26",
   "bibtexparser>=1.4,<2",
-  "citeproc-py>=0.10,<0.11",
   "fastapi>=0.116,<1",
   "httpx>=0.28,<1",
   "jinja2>=3.1,<4",
@@ -28,9 +27,12 @@ dependencies = [
 
 [project.optional-dependencies]
 postgres = ["psycopg[binary]>=3.2,<4"]
-citation = ["citeproc-py-styles>=0.1.6,<0.2"]
+citation = ["citeproc-py>=0.10,<0.11", "citeproc-py-styles>=0.1.6,<0.2"]
+
+[dependency-groups]
 dev = [
   "commitizen>=4.17,<5",
+  "citeproc-py>=0.10,<0.11",
   "citeproc-py-styles>=0.1.6,<0.2",
   "mypy>=1.17,<2",
   "prek>=0.3,<1",

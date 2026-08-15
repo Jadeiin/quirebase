@@ -132,7 +132,7 @@ def _parse_endnote_records(contents: str) -> list[dict[str, str | None]]:
             "keywords": _text(record.get("K", [])),
             "publication_date": _text(record.get("D", [])),
             "publication_title": _text(record.get("J", []) or record.get("B", [])),
-            "doi": _text(record.get("@", [])),
+            "doi": _text(record.get("R", [])),
             "reference_type": (
                 ENDNOTE_TYPE_TO_REFERENCE.get(reference_type, reference_type)
                 if reference_type
@@ -186,7 +186,7 @@ def _export_endnote(items: list[Item]) -> str:
         if item.publication_date:
             lines.append(f"%D {item.publication_date}")
         if item.doi:
-            lines.append(f"%@ {item.doi}")
+            lines.append(f"%R {item.doi}")
         lines.extend(
             f"%K {keyword.strip()}"
             for keyword in (item.keywords or "").split(";")

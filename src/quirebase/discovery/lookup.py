@@ -41,7 +41,9 @@ class Identifier:
 
 def parse_identifier(value: str, provider: str = "auto") -> Identifier:
     if provider not in PROVIDERS:
-        raise ValueError("provider must be auto, doi, pmid, arxiv, isbn, openalex, bibcode or article_number")
+        raise ValueError(
+            "provider must be auto, doi, pmid, arxiv, isbn, openalex, bibcode or article_number"
+        )
     candidate = value.strip()
     if not candidate or len(candidate) > 500 or any(ord(character) < 32 for character in candidate):
         raise ValueError("identifier is invalid")
@@ -69,7 +71,7 @@ def parse_identifier(value: str, provider: str = "auto") -> Identifier:
     if provider in ("auto", "openalex") and OPENALEX_PATTERN.fullmatch(openalex):
         return Identifier("openalex", openalex.upper())
     bibcode = re.sub(r"^bibcode:\s*", "", candidate, flags=re.IGNORECASE)
-    if provider in ("auto", "bibcode") and BIBCODE_PATTERN.fullmatch(bibcode):
+    if provider == "bibcode" and BIBCODE_PATTERN.fullmatch(bibcode):
         return Identifier("bibcode", bibcode)
     article_number = re.sub(r"^(?:article_number|ieee):\s*", "", candidate, flags=re.IGNORECASE)
     if provider == "article_number" and ARTICLE_NUMBER_PATTERN.fullmatch(article_number):

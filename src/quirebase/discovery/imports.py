@@ -4,7 +4,6 @@ import json
 from typing import TYPE_CHECKING, BinaryIO
 
 from quirebase.access.items import can_read_item, visible_items_query
-from quirebase.citation import item_to_csl_json, render_bibliography
 from quirebase.core.config import get_settings
 from quirebase.core.errors import (
     DomainError,
@@ -16,15 +15,17 @@ from quirebase.core.errors import (
 from quirebase.core.storage import LocalObjectStore
 from quirebase.discovery.bibliography import (
     SUPPORTED_FORMATS,
-    export_bibliography,
     parse_bibliography,
+)
+from quirebase.discovery.citations import (
+    format_csl_export,
+    format_standard_export,
 )
 from quirebase.discovery.lookup import (
     MetadataLookupError,
     MetadataNotFoundError,
     lookup_metadata,
 )
-from quirebase.documents.citations import resolve_style_xml
 from quirebase.documents.revisions import (
     attach_staged_pdf,
     discard_staged_object,
@@ -52,7 +53,7 @@ def stage_import_batch(
     db: Session, user: User, file_bytes: bytes, file_format: str
 ) -> tuple[ImportBatch, list[dict], list[dict]]:
     if file_format not in SUPPORTED_FORMATS:
-        raise ValidationFailure("format must be bibtex or ris")
+        raise ValidationFailure("format must be bibtex, ris, or endnote")
     if len(file_bytes) > 5 * 1024 * 1024:
         raise SizeLimitExceeded("bibliography files are limited to 5 MiB")
     try:
@@ -228,22 +229,8 @@ def export_accessible_bibliography(
 ) -> tuple[str, str, str]:
     items = list(db.scalars(visible_items_query(user).order_by(Item.updated_at.desc())).all())
     if file_format == "csl":
-        style_xml = resolve_style_xml(db, user, style_key)
-        if style_xml is None:
-            raise ValidationFailure("unknown citation style")
-        entries = render_bibliography([item_to_csl_json(item) for item in items], style_xml)
-        return "\n\n".join(entries), "text/plain", "quirebase-citations.txt"
-    if file_format not in SUPPORTED_FORMATS:
-        raise ValidationFailure("format must be bibtex, ris, or endnote")
-    contents = export_bibliography(items, file_format)
-    media_type = {
-        "bibtex": "application/x-bibtex",
-        "ris": "application/x-research-info-systems",
-        "endnote": "application/x-endnote-refer",
-    }[file_format]
-    extension = {"bibtex": "bib", "ris": "ris", "endnote": "enw"}[file_format]
-    filename = f"quirebase-export.{extension}"
-    return contents, media_type, filename
+        return format_csl_export(db, user, items, style_key=style_key)
+    return format_standard_export(items, file_format)
 
 
 def export_selected_bibliography(
@@ -259,18 +246,5 @@ def export_selected_bibliography(
     if not items or len(items) != len(selected):
         raise ValidationFailure("select one or more accessible papers")
     if file_format == "csl":
-        style_xml = resolve_style_xml(db, user, style_key)
-        if style_xml is None:
-            raise ValidationFailure("unknown citation style")
-        entries = render_bibliography([item_to_csl_json(item) for item in items], style_xml)
-        return "\n\n".join(entries), "text/plain", "quirebase-citations.txt"
-    if file_format not in SUPPORTED_FORMATS:
-        raise ValidationFailure("format must be bibtex, ris, or endnote")
-    contents = export_bibliography(items, file_format)
-    media_type = {
-        "bibtex": "application/x-bibtex",
-        "ris": "application/x-research-info-systems",
-        "endnote": "application/x-endnote-refer",
-    }[file_format]
-    extension = {"bibtex": "bib", "ris": "ris", "endnote": "enw"}[file_format]
-    return contents, media_type, f"quirebase-export.{extension}"
+        return format_csl_export(db, user, items, style_key=style_key)
+    return format_standard_export(items, file_format)

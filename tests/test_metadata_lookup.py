@@ -148,12 +148,18 @@ def response(request: httpx.Request) -> httpx.Response:
         ("arXiv:1706.03762v7", "auto", Identifier("arxiv", "1706.03762v7")),
         ("ISBN 978-0-13-110362-7", "auto", Identifier("isbn", "9780131103627")),
         ("https://openalex.org/W123", "auto", Identifier("openalex", "W123")),
-        ("2025ApJ...123..456A", "auto", Identifier("bibcode", "2025ApJ...123..456A")),
+        ("2025ApJ...123..456A", "bibcode", Identifier("bibcode", "2025ApJ...123..456A")),
+        ("bibcode: 2025ApJ...123..456A", "bibcode", Identifier("bibcode", "2025ApJ...123..456A")),
         ("1234567", "article_number", Identifier("article_number", "1234567")),
     ],
 )
 def test_identifier_detection(value, provider, expected):
     assert parse_identifier(value, provider) == expected
+
+
+def test_auto_detection_does_not_match_bibcode():
+    with pytest.raises(ValueError, match="not a recognized DOI"):
+        parse_identifier("2025ApJ...123..456A", "auto")
 
 
 def test_identifier_input_cannot_be_used_as_an_arbitrary_url():

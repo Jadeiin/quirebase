@@ -6,14 +6,29 @@ from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from citeproc import (
-    Citation,
-    CitationItem,
-    CitationStylesBibliography,
-    CitationStylesStyle,
-    formatter,
-)
-from citeproc.source.json import CiteProcJSON
+from sqlalchemy import select
+
+from quirebase.access.items import require_readable_item
+from quirebase.core.errors import ResourceNotFound, ValidationFailure
+from quirebase.discovery.bibliography import SUPPORTED_FORMATS, export_bibliography
+from quirebase.models import CitationStyle
+
+try:
+    from citeproc import (
+        Citation,
+        CitationItem,
+        CitationStylesBibliography,
+        CitationStylesStyle,
+        formatter,
+    )
+    from citeproc.source.json import CiteProcJSON
+except ImportError:
+    Citation = None
+    CitationItem = None
+    CitationStylesBibliography = None
+    CitationStylesStyle = None
+    formatter = None
+    CiteProcJSON = None
 
 try:
     from citeproc_styles import get_style_filepath
@@ -21,7 +36,9 @@ except ImportError:  # optional `citation` extra is not installed
     get_style_filepath = None
 
 if TYPE_CHECKING:
-    from .models import Item
+    from sqlalchemy.orm import Session
+
+    from quirebase.models import Item, User
 
 BUILTIN_STYLES: dict[str, str] = {
     "apa": "APA 7th edition",
@@ -48,6 +65,18 @@ REFERENCE_TYPE_TO_CSL: dict[str, str] = {
     "report": "report",
     "webpage": "webpage",
     "dataset": "dataset",
+}
+
+BIBLIOGRAPHY_MEDIA_TYPES: dict[str, str] = {
+    "bibtex": "application/x-bibtex",
+    "ris": "application/x-research-info-systems",
+    "endnote": "application/x-endnote-refer",
+}
+
+BIBLIOGRAPHY_EXTENSIONS: dict[str, str] = {
+    "bibtex": "bib",
+    "ris": "ris",
+    "endnote": "enw",
 }
 
 _DATE_PATTERN = re.compile(r"(\d{4})(?:[-/](\d{1,2})(?:[-/](\d{1,2}))?)?")
@@ -134,7 +163,9 @@ def item_to_csl_json(item: Item) -> dict[str, Any]:
     return record
 
 
-def _load_style(xml_text: str) -> CitationStylesStyle:
+def _load_style(xml_text: str) -> Any:
+    if CitationStylesStyle is None:
+        raise ValidationFailure("CSL formatting requires the 'citation' extra")
     return CitationStylesStyle(io.BytesIO(xml_text.encode("utf-8")))
 
 
@@ -144,6 +175,14 @@ def render_bibliography(
     """Render CSL-JSON records to styled bibliography entries."""
     if not csl_json:
         return []
+    if (
+        CiteProcJSON is None
+        or CitationStylesBibliography is None
+        or Citation is None
+        or CitationItem is None
+        or formatter is None
+    ):
+        raise ValidationFailure("CSL formatting requires the 'citation' extra")
     source = CiteProcJSON(csl_json)
     style = _load_style(style_xml)
     output = formatter.html if output_format == "html" else formatter.plain
@@ -189,3 +228,88 @@ def is_valid_csl(xml_text: str) -> bool:
     except Exception:
         return False
     return True
+
+
+def resolve_style_xml(db: Session, user: User | None, style_key: str) -> str | None:
+    builtin = builtin_style_xml(style_key)
+    if builtin:
+        return builtin
+    if user is None:
+        return None
+    style = db.get(CitationStyle, style_key)
+    if style is None or style.created_by != user.id:
+        return None
+    return style.csl_xml
+
+
+def list_custom_citation_styles(db: Session, user: User) -> list[CitationStyle]:
+    return list(
+        db.scalars(
+            select(CitationStyle)
+            .where(CitationStyle.created_by == user.id)
+            .order_by(CitationStyle.name)
+        ).all()
+    )
+
+
+def create_custom_citation_style(db: Session, user: User, name: str, csl: str) -> CitationStyle:
+    name = name.strip()
+    if not name:
+        raise ValidationFailure("style name is required")
+    if len(name) > 120:
+        name = name[:120]
+    if not is_valid_csl(csl):
+        raise ValidationFailure("the CSL text is not a valid citation style")
+    style = CitationStyle(name=name, csl_xml=csl, created_by=user.id)
+    db.add(style)
+    db.commit()
+    return style
+
+
+def delete_custom_citation_style(db: Session, user: User, style_id: str) -> None:
+    style = db.get(CitationStyle, style_id)
+    if style is None or style.created_by != user.id:
+        raise ResourceNotFound("citation style not found")
+    db.delete(style)
+    db.commit()
+
+
+def format_csl_export(
+    db: Session, user: User, items: list[Item], style_key: str = "apa"
+) -> tuple[str, str, str]:
+    style_xml = resolve_style_xml(db, user, style_key)
+    if style_xml is None:
+        raise ValidationFailure("unknown citation style")
+    entries = render_bibliography([item_to_csl_json(item) for item in items], style_xml)
+    return "\n\n".join(entries), "text/plain", "quirebase-citations.txt"
+
+
+def format_standard_export(items: list[Item], file_format: str) -> tuple[str, str, str]:
+    if file_format not in SUPPORTED_FORMATS:
+        raise ValidationFailure("format must be bibtex, ris, or endnote")
+    contents = export_bibliography(items, file_format)
+    media_type = BIBLIOGRAPHY_MEDIA_TYPES[file_format]
+    extension = BIBLIOGRAPHY_EXTENSIONS[file_format]
+    filename = f"quirebase-export.{extension}"
+    return contents, media_type, filename
+
+
+def get_item_citation_response(
+    db: Session, user: User, item_id: str, file_format: str, style_key: str = "apa"
+) -> tuple[str, str, str]:
+    item = require_readable_item(db, user, item_id)
+    if file_format == "csl":
+        return format_csl_export(db, user, [item], style_key=style_key)
+    return format_standard_export([item], file_format)
+
+
+def get_item_citation_text_response(
+    db: Session, user: User, item_id: str, style_key: str = "apa", output: str = "text"
+) -> tuple[str, str]:
+    item = require_readable_item(db, user, item_id)
+    style_xml = resolve_style_xml(db, user, style_key)
+    if style_xml is None:
+        raise ValidationFailure("unknown citation style")
+    rendered = render_citation(item, style_xml, output_format=output)
+    media_type = "text/html" if output == "html" else "text/plain"
+    return rendered, media_type

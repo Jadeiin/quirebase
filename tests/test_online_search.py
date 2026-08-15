@@ -388,6 +388,45 @@ def test_extra_search_adapters_normalize_results(provider, title, identifier_pro
     assert page.results[0].identifier_provider == identifier_provider
 
 
+def test_pmc_forwards_credentials_to_esearch_and_esummary():
+    recorded_params = []
+
+    def pmc_credential_response(request: httpx.Request) -> httpx.Response:
+        recorded_params.append((request.url.path, dict(request.url.params)))
+        if request.url.path.endswith("esearch.fcgi"):
+            return httpx.Response(200, json={"esearchresult": {"count": "1", "idlist": ["PMC999"]}})
+        return httpx.Response(
+            200,
+            json={
+                "result": {
+                    "PMC999": {
+                        "title": "PMC Credentialed result",
+                        "authors": [{"name": "Auth"}],
+                        "source": "PMC J",
+                        "pubdate": "2025",
+                        "articleids": [{"idtype": "doi", "value": "10.1/pmc999"}],
+                    }
+                }
+            },
+        )
+
+    search_metadata(
+        "pmc",
+        [SearchClause("title", "and", "test")],
+        settings=Settings(metadata_contact_email="pmc@test.org", ncbi_api_key="ncbi-secret-key"),
+        transport=httpx.MockTransport(pmc_credential_response),
+    )
+    assert len(recorded_params) == 2
+    esearch_path, esearch_params = recorded_params[0]
+    esummary_path, esummary_params = recorded_params[1]
+    assert esearch_path.endswith("esearch.fcgi")
+    assert esearch_params["email"] == "pmc@test.org"
+    assert esearch_params["api_key"] == "ncbi-secret-key"
+    assert esummary_path.endswith("esummary.fcgi")
+    assert esummary_params["email"] == "pmc@test.org"
+    assert esummary_params["api_key"] == "ncbi-secret-key"
+
+
 def test_credentialed_sources_require_keys():
     with pytest.raises(MetadataLookupError, match="QUIREBASE_NASA_ADS_TOKEN"):
         search_metadata(

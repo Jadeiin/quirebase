@@ -139,6 +139,7 @@ def test_no_legacy_root_files_or_shims():
         "i18n.py",
         "pdf_service.py",
         "search.py",
+        "citation.py",
     ]
     for forbidden in forbidden_root_files:
         assert not (SRC_ROOT / forbidden).exists(), (
