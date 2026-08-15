@@ -155,12 +155,13 @@ def admin_delete_item(db: Session, admin: User, item_id: str) -> None:
 
     # Clean object store files after successful commit only if not referenced by other items
     store = LocalObjectStore()
-    for object_key in cleanup_keys:
+    if cleanup_keys:
         with Session(db.bind) as cleanup_db:
-            still_used = cleanup_db.scalar(
-                select(FileRevision.id).where(FileRevision.object_key == object_key).limit(1)
-            ) or cleanup_db.scalar(
-                select(Attachment.id).where(Attachment.object_key == object_key).limit(1)
-            )
-        if not still_used:
-            store.delete(object_key)
+            for object_key in cleanup_keys:
+                still_used = cleanup_db.scalar(
+                    select(FileRevision.id).where(FileRevision.object_key == object_key).limit(1)
+                ) or cleanup_db.scalar(
+                    select(Attachment.id).where(Attachment.object_key == object_key).limit(1)
+                )
+                if not still_used:
+                    store.delete(object_key)

@@ -179,8 +179,9 @@ def list_jobs_admin(
     db: Session,
     admin: User,
     state: str = "",
-    kind_prefix: str = "",
     limit: int = 50,
+    *,
+    kind_prefix: str = "",
 ) -> list[Job]:
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")

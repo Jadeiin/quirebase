@@ -155,3 +155,14 @@ def test_list_jobs_admin_filters_kind_prefix_under_high_volume(db):
     system_jobs = list_jobs_admin(db, admin, kind_prefix="system.", limit=20)
     assert len(system_jobs) == 2
     assert {j.id for j in system_jobs} == {sys1.id, sys2.id}
+
+
+def test_list_jobs_admin_positional_limit_compatibility(db):
+    admin = create_test_admin(db, "admin_maint_pos")
+    for i in range(10):
+        enqueue_job(db, f"test.job_{i}", {}, owner_id=admin.id)
+    db.commit()
+
+    # Legacy positional call: (db, admin, state, limit)
+    jobs = list_jobs_admin(db, admin, "", 5)
+    assert len(jobs) == 5
