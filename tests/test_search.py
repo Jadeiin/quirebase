@@ -1,5 +1,5 @@
 from quirebase.models import FileRevision, Item, User
-from quirebase.search import reindex_all, search_index
+from quirebase.operations import reindex_all, search_index
 
 
 def add_item(db, user, *, title, abstract=None, full_text=None):

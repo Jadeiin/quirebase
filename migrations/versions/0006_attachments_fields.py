@@ -3,7 +3,7 @@
 import sqlalchemy as sa
 from alembic import op
 
-from quirebase.db import Base
+from quirebase.core.database import Base
 
 revision = "0006_attachments_fields"
 down_revision = "0005_team_accounts"

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from quirebase.metadata_lookup import lookup_metadata
+from quirebase.discovery import lookup_metadata
 
 SAMPLES = (
     ("doi", "10.1038/s41586-020-2649-2"),

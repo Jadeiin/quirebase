@@ -2,7 +2,7 @@
 
 from alembic import op
 
-from quirebase.db import Base
+from quirebase.core.database import Base
 
 revision = "0009_item_reads"
 down_revision = "0008_online_metadata"

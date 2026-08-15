@@ -1,7 +1,7 @@
 import pymupdf
 
 from quirebase.models import PdfAnnotation, PdfAnnotationSegment
-from quirebase.pdf_service import (
+from quirebase.pipeline.inspection import (
     create_thumbnail,
     export_annotations,
     extract_doi,

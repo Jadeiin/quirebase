@@ -5,15 +5,15 @@ import pytest
 from sqlalchemy import select
 from test_http import authenticated_client
 
-from quirebase.app import app
-from quirebase.config import Settings, get_settings
-from quirebase.metadata_lookup import (
+from quirebase.core.config import Settings, get_settings
+from quirebase.discovery import (
     Identifier,
     MetadataLookupError,
     lookup_metadata,
     parse_identifier,
 )
 from quirebase.models import AuditEvent, ImportBatch, Item
+from quirebase.web.app import app
 
 
 def response(request: httpx.Request) -> httpx.Response:
@@ -158,6 +158,32 @@ def test_metadata_response_size_is_limited():
         )
 
 
+def test_pubmed_lookup_passes_configured_identity_and_api_key():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(request.url.params)
+        return httpx.Response(
+            200,
+            json={"result": {"42": {"title": "Configured PubMed", "authors": []}}},
+        )
+
+    _, record = lookup_metadata(
+        "42",
+        "pmid",
+        settings=Settings(
+            metadata_contact_email="operator@example.org",
+            ncbi_api_key="secret-key",
+        ),
+        transport=httpx.MockTransport(handler),
+    )
+
+    assert record["title"] == "Configured PubMed"
+    assert captured["tool"] == "quirebase"
+    assert captured["email"] == "operator@example.org"
+    assert captured["api_key"] == "secret-key"
+
+
 def test_online_preview_uses_existing_confirmed_import_flow(db, tmp_path, monkeypatch):
     client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
     record = {
@@ -172,7 +198,7 @@ def test_online_preview_uses_existing_confirmed_import_flow(db, tmp_path, monkey
         "reference_type": "journal-article",
     }
     monkeypatch.setattr(
-        "quirebase.app.lookup_metadata",
+        "quirebase.discovery.imports.lookup_metadata",
         lambda _value, _provider: (Identifier("doi", "10.1/looked-up"), record),
     )
     try:

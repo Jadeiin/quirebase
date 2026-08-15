@@ -2,7 +2,7 @@
 
 from alembic import op
 
-from quirebase.db import Base
+from quirebase.core.database import Base
 
 revision = "0001_initial"
 down_revision = None

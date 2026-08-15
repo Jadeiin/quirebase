@@ -1,5 +1,5 @@
+from quirebase.access.items import can_read_item
 from quirebase.models import Item, Project, ProjectItem, ProjectMember, User
-from quirebase.permissions import can_read_item
 
 
 def test_item_access_is_owner_or_project_membership(db):

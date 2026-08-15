@@ -8,20 +8,19 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import inspect, select, text
 
-from .config import get_settings
-from .db import SessionLocal, engine
-from .maintenance import check_objects, create_backup, restore_backup, verify_backup
+from .core.config import get_settings
+from .core.crypto import hash_password
+from .core.database import SessionLocal, engine
 from .models import User
-from .search import reindex_all
-from .security import hash_password
-from .worker import run_forever
+from .operations import check_objects, create_backup, reindex_all, restore_backup, verify_backup
+from .pipeline import run_forever
 
 app = typer.Typer(help="Quirebase administration")
 
 
 @app.command("serve")
 def serve(host: str = "127.0.0.1", port: int = 9060, reload: bool = False):
-    uvicorn.run("quirebase.app:app", host=host, port=port, reload=reload)
+    uvicorn.run("quirebase.web.app:app", host=host, port=port, reload=reload)
 
 
 @app.command("worker")

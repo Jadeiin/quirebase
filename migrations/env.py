@@ -4,8 +4,8 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from quirebase import models  # ruff: ignore[unused-import]
-from quirebase.config import get_settings
-from quirebase.db import Base
+from quirebase.core.config import get_settings
+from quirebase.core.database import Base
 
 config = context.config
 config.set_main_option("sqlalchemy.url", get_settings().database_url)

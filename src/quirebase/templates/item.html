@@ -46,7 +46,7 @@
         </section>
         <section class="panel">
           <h2>{{ t('Workspace activity') }}</h2>
-          <div class="item-stat-grid"><a href="/items/{{ item.id }}/files"><strong>{{ revisions|length }}</strong><span>PDF</span></a><a href="/items/{{ item.id }}/annotations"><strong>{{ annotations|length }}</strong><span>{{ t('Annotations') }}</span></a><a href="/items/{{ item.id }}/discussion"><strong>{{ messages|length }}</strong><span>{{ t('Messages') }}</span></a></div>
+          <div class="item-stat-grid"><a href="/items/{{ item.id }}/files"><strong>{{ revision_count }}</strong><span>PDF</span></a><a href="/items/{{ item.id }}/annotations"><strong>{{ annotation_count }}</strong><span>{{ t('Annotations') }}</span></a><a href="/items/{{ item.id }}/discussion"><strong>{{ message_count }}</strong><span>{{ t('Messages') }}</span></a></div>
         </section>
         <section class="panel">
           <h2>{{ t('Keywords') }}</h2>

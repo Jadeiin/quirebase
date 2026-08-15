@@ -1,7 +1,7 @@
 import sqlite3
 
-from quirebase.config import get_settings
-from quirebase.maintenance import create_backup, restore_backup, verify_backup
+from quirebase.core.config import get_settings
+from quirebase.operations import create_backup, restore_backup, verify_backup
 
 
 def test_backup_contains_verified_sqlite_snapshot(tmp_path, monkeypatch):

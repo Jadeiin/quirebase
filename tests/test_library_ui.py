@@ -8,9 +8,10 @@ from io import BytesIO
 import pymupdf
 from test_http import authenticated_client
 
-from quirebase.app import app
-from quirebase.config import get_settings
+from quirebase.core.config import get_settings
+from quirebase.discovery.lookup import MetadataNotFoundError
 from quirebase.models import Item, ItemRead, ItemTag, Project, ProjectItem, ProjectMember, Tag
+from quirebase.web.app import app
 
 
 def pdf_bytes() -> bytes:
@@ -199,7 +200,7 @@ def test_pdf_import_modules(db, tmp_path, monkeypatch):
         assert manuscript.revisions[0].original_name == "draft.pdf"
 
         monkeypatch.setattr(
-            "quirebase.app.lookup_metadata",
+            "quirebase.discovery.imports.lookup_metadata",
             lambda _identifier, _provider: (
                 object(),
                 {
@@ -218,6 +219,29 @@ def test_pdf_import_modules(db, tmp_path, monkeypatch):
         article = db.query(Item).filter_by(title="Published article").one()
         assert article.doi == "10.1000/published"
         assert article.revisions[0].original_name == "published.pdf"
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+
+
+def test_failed_published_pdf_import_removes_unreferenced_object(db, tmp_path, monkeypatch):
+    client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+    objects_before = set(get_settings().object_dir.rglob("*.pdf"))
+    monkeypatch.setattr(
+        "quirebase.discovery.imports.lookup_metadata",
+        lambda _identifier, _provider: (_ for _ in ()).throw(
+            MetadataNotFoundError("metadata not found")
+        ),
+    )
+    try:
+        response = client.post(
+            "/imports/pdf/published?csrf_token=test-csrf",
+            data={"doi": "10.1000/missing"},
+            files={"pdf": ("missing.pdf", BytesIO(pdf_bytes()), "application/pdf")},
+        )
+
+        assert response.status_code == 404
+        assert set(get_settings().object_dir.rglob("*.pdf")) == objects_before
     finally:
         app.dependency_overrides.clear()
         get_settings.cache_clear()

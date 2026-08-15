@@ -1,7 +1,7 @@
 import bibtexparser
 import rispy
 
-from quirebase.bibliography import export_bibliography, parse_bibliography
+from quirebase.discovery import export_bibliography, parse_bibliography
 from quirebase.models import Item, User
 
 

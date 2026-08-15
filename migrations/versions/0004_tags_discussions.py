@@ -2,7 +2,7 @@
 
 from alembic import op
 
-from quirebase.db import Base
+from quirebase.core.database import Base
 
 revision = "0004_tags_discussions"
 down_revision = "0003_bibliography_import"

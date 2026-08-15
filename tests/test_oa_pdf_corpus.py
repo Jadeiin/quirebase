@@ -10,11 +10,10 @@ import pytest
 from sqlalchemy import select
 from test_http import authenticated_client
 
-from quirebase.app import app
-from quirebase.config import get_settings
+from quirebase.core.config import get_settings
 from quirebase.models import FileRevision, Job
-from quirebase.pdf_service import create_thumbnail, inspect_pdf, validate_pdf_container
-from quirebase.worker import run_job
+from quirebase.pipeline import create_thumbnail, inspect_pdf, run_job, validate_pdf_container
+from quirebase.web.app import app
 
 CORPUS = json.loads((Path(__file__).parent / "oa_corpus.json").read_text(encoding="utf-8"))
 PAPERS = CORPUS["papers"]

@@ -7,7 +7,7 @@ from enum import StrEnum
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from .db import Base
+from .core.database import Base
 
 
 def uid() -> str:

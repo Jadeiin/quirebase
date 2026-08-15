@@ -5,9 +5,9 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
-from quirebase.db import Base
+from quirebase.core.database import Base
 from quirebase.models import Item, User
-from quirebase.search import search_index
+from quirebase.operations import search_index
 
 
 @pytest.mark.skipif(

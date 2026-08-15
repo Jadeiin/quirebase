@@ -4,11 +4,11 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from test_http import authenticated_client
 
-from quirebase.app import app
-from quirebase.config import get_settings
-from quirebase.db import get_db
+from quirebase.core.config import get_settings
+from quirebase.core.crypto import hash_password, token_hash
+from quirebase.core.database import get_db
 from quirebase.models import AuditEvent, LoginSession, User
-from quirebase.security import hash_password, token_hash
+from quirebase.web.app import app
 
 
 def test_failed_and_successful_logins_are_audited_without_credentials(db):

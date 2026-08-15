@@ -6,15 +6,15 @@ import httpx
 import pytest
 from test_http import authenticated_client
 
-from quirebase.app import app
-from quirebase.config import Settings, get_settings
-from quirebase.metadata_lookup import (
+from quirebase.core.config import Settings, get_settings
+from quirebase.discovery import (
     SearchClause,
     SearchPage,
     SearchResult,
     search_metadata,
 )
 from quirebase.models import AuditEvent
+from quirebase.web.app import app
 
 
 def search_response(request: httpx.Request) -> httpx.Response:
@@ -148,7 +148,7 @@ def test_online_search_page_keeps_search_separate_from_import(db, tmp_path, monk
         publication_date="2026",
     )
     monkeypatch.setattr(
-        "quirebase.app.search_metadata",
+        "quirebase.web.views.discovery.search_metadata",
         lambda *_args, **_kwargs: SearchPage("openalex", [result], 11, 1, 10),
     )
     try:
@@ -205,10 +205,84 @@ def test_openalex_resolves_publication_names_to_source_ids():
     assert page.results[0].title == "OpenAlex result"
 
 
+def test_openalex_supports_adjacent_or_on_same_field():
+    seen_filter = None
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal seen_filter
+        seen_filter = request.url.params.get("filter")
+        return httpx.Response(200, json={"meta": {"count": 0}, "results": []})
+
+    search_metadata(
+        "openalex",
+        [
+            SearchClause("title", "and", "quantum"),
+            SearchClause("title", "or", "photonics"),
+        ],
+        transport=httpx.MockTransport(handler),
+    )
+
+    assert seen_filter == "title.search:quantum|photonics"
+
+
+def test_search_validation_and_pagination_are_bounded():
+    with pytest.raises(ValueError, match="clause is invalid"):
+        search_metadata("crossref", [SearchClause("any", "and", " ")])
+    with pytest.raises(ValueError, match="clause is invalid"):
+        search_metadata("crossref", [SearchClause("any", "and", "x" * 301)])
+    with pytest.raises(ValueError, match="must not be after"):
+        search_metadata(
+            "crossref",
+            [SearchClause("any", "and", "term")],
+            year_from=2026,
+            year_to=2020,
+        )
+
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(request.url.params)
+        return httpx.Response(200, json={"message": {"total-results": 0, "items": []}})
+
+    page = search_metadata(
+        "crossref",
+        [SearchClause("any", "and", "term")],
+        page=999,
+        per_page=999,
+        transport=httpx.MockTransport(handler),
+    )
+    assert page.page == 100
+    assert page.per_page == 25
+    assert captured["offset"] == "2475"
+    assert captured["rows"] == "25"
+
+
+def test_openlibrary_preserves_boolean_and_year_filters():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(request.url.params)
+        return httpx.Response(200, json={"numFound": 0, "docs": []})
+
+    search_metadata(
+        "openlibrary",
+        [
+            SearchClause("title", "and", "distributed systems"),
+            SearchClause("author", "or", "Tanenbaum"),
+        ],
+        year_from=2010,
+        year_to=2020,
+        transport=httpx.MockTransport(handler),
+    )
+
+    assert captured["q"] == 'title:"distributed systems" OR author:"Tanenbaum"'
+    assert captured["first_publish_year"] == "[2010 TO 2020]"
+
+
 def test_search_page_preserves_sparse_condition_rows(db, tmp_path, monkeypatch):
     client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
     monkeypatch.setattr(
-        "quirebase.app.search_metadata",
+        "quirebase.web.views.discovery.search_metadata",
         lambda *_args, **_kwargs: SearchPage("openalex", [], 0, 1, 10),
     )
     try:

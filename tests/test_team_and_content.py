@@ -2,10 +2,10 @@ from datetime import UTC, datetime
 
 from test_http import authenticated_client
 
-from quirebase.app import app
-from quirebase.config import get_settings
+from quirebase.accounts.throttling import check_login_throttle, record_login_failure
+from quirebase.core.config import get_settings
 from quirebase.models import DiscussionMessage, ItemTag, LoginThrottle, Tag
-from quirebase.security import check_login_throttle, record_login_failure
+from quirebase.web.app import app
 
 
 def test_tags_discussion_and_search(db, tmp_path, monkeypatch):

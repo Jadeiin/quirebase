@@ -2,8 +2,8 @@ from io import BytesIO
 
 import pytest
 
-from quirebase.config import Settings
-from quirebase.storage import LocalObjectStore
+from quirebase.core.config import Settings
+from quirebase.core.storage import LocalObjectStore
 
 
 def test_content_addressed_pdf_storage_is_idempotent(tmp_path):

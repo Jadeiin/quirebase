@@ -4,14 +4,18 @@ from datetime import UTC, datetime, timedelta
 from html import unescape
 from io import BytesIO
 
+import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
-from quirebase.app import app
-from quirebase.config import get_settings
-from quirebase.db import get_db
+from quirebase.core.config import get_settings
+from quirebase.core.crypto import token_hash
+from quirebase.core.database import get_db
+from quirebase.core.errors import VersionConflict
+from quirebase.core.storage import LocalObjectStore
+from quirebase.library.items import update_item
 from quirebase.models import AuditEvent, FileRevision, Item, LoginSession, User
-from quirebase.security import token_hash
-from quirebase.storage import LocalObjectStore
+from quirebase.web.app import app
 
 
 def authenticated_client(db, tmp_path, monkeypatch):
@@ -153,3 +157,41 @@ def test_item_edit_detects_conflicts_and_updates_search(db, tmp_path, monkeypatc
     finally:
         app.dependency_overrides.clear()
         get_settings.cache_clear()
+
+
+def test_item_edit_uses_atomic_optimistic_lock(db):
+    owner = User(username="concurrent_owner", password_hash="unused")
+    db.add(owner)
+    db.flush()
+    item = Item(title="Original", created_by=owner.id)
+    db.add(item)
+    db.commit()
+
+    with (
+        Session(db.bind, expire_on_commit=False) as first,
+        Session(db.bind, expire_on_commit=False) as second,
+    ):
+        first_owner = first.get(User, owner.id)
+        second_owner = second.get(User, owner.id)
+        first_item = first.get(Item, item.id)
+        second_item = second.get(Item, item.id)
+        assert first_owner and second_owner and first_item and second_item
+        assert first_item.version == second_item.version == 1
+
+        update_item(
+            first,
+            first_owner,
+            item_id=item.id,
+            version=1,
+            title="First update",
+        )
+        with pytest.raises(VersionConflict):
+            update_item(
+                second,
+                second_owner,
+                item_id=item.id,
+                version=1,
+                title="Lost update",
+            )
+    db.expire_all()
+    assert db.get(Item, item.id).title == "First update"

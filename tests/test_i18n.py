@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 from string import Formatter
 
-from quirebase.i18n import DEFAULT_LOCALE, catalog, translate
+from quirebase.core.i18n import DEFAULT_LOCALE, catalog, translate
 
 ROOT = Path(__file__).parents[1]
 TEMPLATE_DIR = ROOT / "src/quirebase/templates"

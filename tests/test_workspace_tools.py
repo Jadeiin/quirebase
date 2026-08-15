@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from test_http import authenticated_client
 
-from quirebase.app import app
-from quirebase.config import get_settings
+from quirebase.core.config import get_settings
 from quirebase.models import Item, ItemTag, Project, ProjectMember, Tag, User
+from quirebase.web.app import app
 
 
 def test_projects_have_a_dedicated_workspace(db, tmp_path, monkeypatch):

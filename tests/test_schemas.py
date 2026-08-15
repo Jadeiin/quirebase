@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from quirebase.schemas import AnnotationCreate
+from quirebase.documents.schemas import AnnotationCreate
 
 
 def test_project_scope_requires_project():

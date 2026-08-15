@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from quirebase.db import Base
+from quirebase.core.database import Base
 
 
 @pytest.fixture
