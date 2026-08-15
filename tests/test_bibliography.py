@@ -105,3 +105,25 @@ def test_endnote_multiple_records_are_split():
     assert records[0]["title"] == "First Paper"
     assert records[1]["title"] == "Second Book"
     assert records[1]["reference_type"] == "book"
+
+
+def test_endnote_multiline_abstract_round_trip(db):
+    multiline_abstract = "First line of abstract.\nSecond line of abstract.\nThird line of abstract."
+    source = f"""%0 Journal Article
+%T Multiline Paper
+%A Doe, Jane
+%X {multiline_abstract}
+"""
+    records, errors = parse_bibliography(source, "endnote")
+    assert errors == []
+    assert records[0]["abstract"] == multiline_abstract
+
+    user = User(username="multiline_user", password_hash="unused")
+    db.add(user)
+    db.flush()
+    item = Item(created_by=user.id, **records[0])
+    exported = export_bibliography([item], "endnote")
+
+    round_trip_records, round_trip_errors = parse_bibliography(exported, "endnote")
+    assert round_trip_errors == []
+    assert round_trip_records[0]["abstract"] == multiline_abstract

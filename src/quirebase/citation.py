@@ -148,8 +148,13 @@ def render_bibliography(
     style = _load_style(style_xml)
     output = formatter.html if output_format == "html" else formatter.plain
     bibliography = CitationStylesBibliography(style, source, output)
-    bibliography.register(Citation([CitationItem(record["id"]) for record in csl_json]))
-    return ["".join(entry) for entry in bibliography.bibliography()]
+    citation = Citation([CitationItem(record["id"]) for record in csl_json])
+    bibliography.register(citation)
+    if getattr(style.root, "bibliography", None) is not None:
+        return ["".join(entry) for entry in bibliography.bibliography()]
+    if getattr(style.root, "citation", None) is not None:
+        return ["".join(bibliography.cite(citation, lambda _: None))]
+    return [str(record.get("title", "")) for record in csl_json]
 
 
 def render_citation(item: Item, style_xml: str, output_format: str = "text") -> str:

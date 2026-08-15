@@ -19,8 +19,10 @@ ARXIV_PATTERN = re.compile(
     r"(?:[a-z-]+(?:\.[A-Z]{2})?/\d{7}|\d{4}\.\d{4,5})(?:v\d+)?", re.IGNORECASE
 )
 OPENALEX_PATTERN = re.compile(r"W\d+", re.IGNORECASE)
+BIBCODE_PATTERN = re.compile(r"\d{4}[A-Za-z0-9.&]{5,20}")
+ARTICLE_NUMBER_PATTERN = re.compile(r"\d{1,12}")
 HTML_TAG = re.compile(r"<[^>]+>")
-PROVIDERS = {"auto", "doi", "pmid", "arxiv", "isbn", "openalex"}
+PROVIDERS = {"auto", "doi", "pmid", "arxiv", "isbn", "openalex", "bibcode", "article_number"}
 
 
 class MetadataLookupError(RuntimeError):
@@ -39,7 +41,7 @@ class Identifier:
 
 def parse_identifier(value: str, provider: str = "auto") -> Identifier:
     if provider not in PROVIDERS:
-        raise ValueError("provider must be auto, doi, pmid, arxiv, isbn or openalex")
+        raise ValueError("provider must be auto, doi, pmid, arxiv, isbn, openalex, bibcode or article_number")
     candidate = value.strip()
     if not candidate or len(candidate) > 500 or any(ord(character) < 32 for character in candidate):
         raise ValueError("identifier is invalid")
@@ -66,6 +68,12 @@ def parse_identifier(value: str, provider: str = "auto") -> Identifier:
     openalex = re.sub(r"^https?://openalex\.org/", "", candidate, flags=re.IGNORECASE)
     if provider in ("auto", "openalex") and OPENALEX_PATTERN.fullmatch(openalex):
         return Identifier("openalex", openalex.upper())
+    bibcode = re.sub(r"^bibcode:\s*", "", candidate, flags=re.IGNORECASE)
+    if (provider == "auto" and BIBCODE_PATTERN.fullmatch(bibcode)) or (provider == "bibcode" and bibcode):
+        return Identifier("bibcode", bibcode)
+    article_number = re.sub(r"^(?:article_number|ieee):\s*", "", candidate, flags=re.IGNORECASE)
+    if provider == "article_number" and ARTICLE_NUMBER_PATTERN.fullmatch(article_number):
+        return Identifier("article_number", article_number)
     if provider != "auto":
         raise ValueError(f"identifier is not a valid {provider}")
     raise ValueError("identifier is not a recognized DOI, PMID, arXiv ID, ISBN or OpenAlex ID")
@@ -375,12 +383,104 @@ class OpenAlexLookupAdapter:
         return record
 
 
+class NasaAdsLookupAdapter:
+    def lookup(
+        self, client: MetadataClient, value: str, settings: Settings
+    ) -> dict[str, str | None]:
+        if not settings.nasa_ads_token:
+            raise MetadataLookupError("NASA ADS requires QUIREBASE_NASA_ADS_TOKEN")
+        params = {
+            "q": f'bibcode:"{value}"',
+            "fl": "bibcode,title,author,doi,pubdate,pub,abstract",
+            "rows": "1",
+        }
+        headers = {"Authorization": f"Bearer {settings.nasa_ads_token}"}
+        body = client._get(
+            "https://api.adsabs.harvard.edu/v1/search/query", params, headers=headers
+        )
+        try:
+            payload = json.loads(body)
+        except (json.JSONDecodeError, TypeError) as error:
+            raise MetadataLookupError("NASA ADS returned invalid metadata") from error
+        docs = (payload.get("response") or {}).get("docs", [])
+        if not docs:
+            raise MetadataNotFoundError("NASA ADS record was not found")
+        doc = docs[0]
+        title = _clean_markup(_first(doc.get("title")))
+        if not title:
+            raise MetadataNotFoundError("NASA ADS record was not found")
+        doi = _first(doc.get("doi"))
+        bibcode = _first(doc.get("bibcode")) or value
+        identifiers = {"bibcode": bibcode}
+        if doi:
+            identifiers["doi"] = doi
+        return {
+            "title": title,
+            "abstract": _clean_markup(_first(doc.get("abstract"))),
+            "authors": "; ".join(doc.get("author", [])) or None,
+            "keywords": None,
+            "publication_date": _first(doc.get("pubdate")),
+            "publication_title": _first(doc.get("pub")),
+            "doi": doi,
+            "identifiers": json.dumps(identifiers),
+            "reference_type": "article",
+        }
+
+
+class IeeeLookupAdapter:
+    def lookup(
+        self, client: MetadataClient, value: str, settings: Settings
+    ) -> dict[str, str | None]:
+        if not settings.ieee_api_key:
+            raise MetadataLookupError("IEEE Xplore requires QUIREBASE_IEEE_API_KEY")
+        params = {
+            "apikey": settings.ieee_api_key,
+            "format": "json",
+            "article_number": value,
+        }
+        body = client._get("https://ieeexploreapi.ieee.org/api/v1/search/articles", params)
+        try:
+            payload = json.loads(body)
+        except (json.JSONDecodeError, TypeError) as error:
+            raise MetadataLookupError("IEEE Xplore returned invalid metadata") from error
+        articles = payload.get("articles", [])
+        if not articles:
+            raise MetadataNotFoundError("IEEE Xplore article was not found")
+        article = articles[0]
+        title = _clean_markup(_first(article.get("title")))
+        if not title:
+            raise MetadataNotFoundError("IEEE Xplore article was not found")
+        doi = _first(article.get("doi"))
+        article_number = _first(article.get("article_number")) or value
+        identifiers = {"article_number": article_number}
+        if doi:
+            identifiers["doi"] = doi
+        authors = "; ".join(
+            author.get("full_name", "")
+            for author in (article.get("authors") or {}).get("authors", [])
+            if author.get("full_name")
+        )
+        return {
+            "title": title,
+            "abstract": _clean_markup(_first(article.get("abstract"))),
+            "authors": authors or None,
+            "keywords": None,
+            "publication_date": _first(article.get("publication_year")),
+            "publication_title": _first(article.get("publication_title")),
+            "doi": doi,
+            "identifiers": json.dumps(identifiers),
+            "reference_type": "article",
+        }
+
+
 LOOKUP_ADAPTERS: dict[str, LookupAdapter] = {
     "doi": CrossrefLookupAdapter(),
     "pmid": PubMedLookupAdapter(),
     "arxiv": ArxivLookupAdapter(),
     "isbn": OpenLibraryLookupAdapter(),
     "openalex": OpenAlexLookupAdapter(),
+    "bibcode": NasaAdsLookupAdapter(),
+    "article_number": IeeeLookupAdapter(),
 }
 
 
@@ -404,9 +504,14 @@ class MetadataClient:
     def close(self) -> None:
         self.client.close()
 
-    def _get(self, url: str, params: dict[str, str] | None = None) -> bytes:
+    def _get(
+        self,
+        url: str,
+        params: dict[str, str] | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> bytes:
         try:
-            with self.client.stream("GET", url, params=params) as response:
+            with self.client.stream("GET", url, params=params, headers=headers) as response:
                 if response.status_code == 404:
                     raise MetadataNotFoundError("metadata record was not found")
                 if response.status_code == 429:

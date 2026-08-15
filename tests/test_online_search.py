@@ -401,3 +401,130 @@ def test_credentialed_sources_require_keys():
             [SearchClause("title", "and", "term")],
             transport=httpx.MockTransport(extra_search_response),
         )
+
+
+def test_extra_search_fallback_identifiers_without_doi():
+    def fallback_response(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "api.adsabs.harvard.edu":
+            return httpx.Response(
+                200,
+                json={
+                    "response": {
+                        "numFound": 1,
+                        "docs": [
+                            {
+                                "bibcode": "2025ApJ...123..456A",
+                                "title": ["NASA No-DOI result"],
+                                "author": ["Astro Author"],
+                                "pub": "ApJ",
+                                "pubdate": "2025-01-01",
+                            }
+                        ],
+                    }
+                },
+            )
+        if request.url.host == "ieeexploreapi.ieee.org":
+            return httpx.Response(
+                200,
+                json={
+                    "total_records": 1,
+                    "articles": [
+                        {
+                            "title": "IEEE No-DOI result",
+                            "article_number": "9876543",
+                            "publication_title": "IEEE Journal",
+                            "publication_year": 2025,
+                            "authors": {"authors": [{"full_name": "Ieee Author"}]},
+                        }
+                    ],
+                },
+            )
+        raise NotImplementedError(str(request.url))
+
+    nasa_page = search_metadata(
+        "nasa",
+        [SearchClause("title", "and", "machine learning")],
+        settings=Settings(nasa_ads_token="ads-token"),
+        transport=httpx.MockTransport(fallback_response),
+    )
+    assert nasa_page.results[0].identifier_provider == "bibcode"
+    assert nasa_page.results[0].identifier == "2025ApJ...123..456A"
+
+    ieee_page = search_metadata(
+        "ieee",
+        [SearchClause("title", "and", "machine learning")],
+        settings=Settings(ieee_api_key="ieee-key"),
+        transport=httpx.MockTransport(fallback_response),
+    )
+    assert ieee_page.results[0].identifier_provider == "article_number"
+    assert ieee_page.results[0].identifier == "9876543"
+
+
+def test_fallback_identifiers_can_be_staged_for_import(db, monkeypatch):
+    from quirebase.discovery.imports import stage_metadata_batch
+    from quirebase.models import User
+
+    monkeypatch.setenv("QUIREBASE_NASA_ADS_TOKEN", "ads-token")
+    monkeypatch.setenv("QUIREBASE_IEEE_API_KEY", "ieee-key")
+    get_settings.cache_clear()
+
+    def lookup_fallback_response(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "api.adsabs.harvard.edu":
+            return httpx.Response(
+                200,
+                json={
+                    "response": {
+                        "docs": [
+                            {
+                                "bibcode": ["2025ApJ...123..456A"],
+                                "title": ["NASA No-DOI result"],
+                                "author": ["Astro Author"],
+                                "pub": ["ApJ"],
+                                "pubdate": ["2025-01-01"],
+                            }
+                        ]
+                    }
+                },
+            )
+        if request.url.host == "ieeexploreapi.ieee.org":
+            return httpx.Response(
+                200,
+                json={
+                    "articles": [
+                        {
+                            "title": "IEEE No-DOI result",
+                            "article_number": "9876543",
+                            "publication_title": "IEEE Journal",
+                            "publication_year": "2025",
+                            "authors": {"authors": [{"full_name": "Ieee Author"}]},
+                        }
+                    ]
+                },
+            )
+        raise NotImplementedError(str(request.url))
+
+    user = User(username="search_user", password_hash="unused")
+    db.add(user)
+    db.flush()
+
+    batch_nasa, records_nasa, errors_nasa = stage_metadata_batch(
+        db,
+        user,
+        "2025ApJ...123..456A",
+        "bibcode",
+        transport=httpx.MockTransport(lookup_fallback_response),
+    )
+    assert errors_nasa == []
+    assert len(records_nasa) == 1
+    assert batch_nasa.file_format == "metadata:bibcode"
+
+    batch_ieee, records_ieee, errors_ieee = stage_metadata_batch(
+        db,
+        user,
+        "9876543",
+        "article_number",
+        transport=httpx.MockTransport(lookup_fallback_response),
+    )
+    assert errors_ieee == []
+    assert len(records_ieee) == 1
+    assert batch_ieee.file_format == "metadata:article_number"

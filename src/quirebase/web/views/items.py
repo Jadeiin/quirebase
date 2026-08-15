@@ -14,6 +14,7 @@ from quirebase.documents import (
 from quirebase.documents import (
     get_attachment_file,
     get_pdf_viewer_data,
+    list_custom_citation_styles,
     store_pdf_revision,
 )
 from quirebase.library import (
@@ -70,6 +71,7 @@ def render_item_workspace(
             "active_page": "library",
             "item_section": section,
             "builtin_styles": available_builtin_styles(),
+            "custom_styles": list_custom_citation_styles(db, user),
             **data,
         },
     )

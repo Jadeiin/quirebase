@@ -93,6 +93,41 @@ def response(request: httpx.Request) -> httpx.Response:
                 }
             },
         )
+    if request.url.host == "api.adsabs.harvard.edu":
+        assert "Bearer ads-token" in request.headers.get("Authorization", "")
+        return httpx.Response(
+            200,
+            json={
+                "response": {
+                    "docs": [
+                        {
+                            "bibcode": ["2025ApJ...123..456A"],
+                            "title": ["NASA ADS Example"],
+                            "author": ["Doe, Jane"],
+                            "pub": ["ApJ"],
+                            "pubdate": ["2025-01-01"],
+                            "doi": ["10.1234/ads"],
+                        }
+                    ]
+                }
+            },
+        )
+    if request.url.host == "ieeexploreapi.ieee.org":
+        return httpx.Response(
+            200,
+            json={
+                "articles": [
+                    {
+                        "title": "IEEE Example",
+                        "doi": "10.1234/ieee",
+                        "article_number": "1234567",
+                        "publication_title": "IEEE Trans",
+                        "publication_year": "2025",
+                        "authors": {"authors": [{"full_name": "Doe, Jane"}]},
+                    }
+                ]
+            },
+        )
     assert request.url.host == "export.arxiv.org"
     return httpx.Response(
         200,
@@ -113,6 +148,8 @@ def response(request: httpx.Request) -> httpx.Response:
         ("arXiv:1706.03762v7", "auto", Identifier("arxiv", "1706.03762v7")),
         ("ISBN 978-0-13-110362-7", "auto", Identifier("isbn", "9780131103627")),
         ("https://openalex.org/W123", "auto", Identifier("openalex", "W123")),
+        ("2025ApJ...123..456A", "auto", Identifier("bibcode", "2025ApJ...123..456A")),
+        ("1234567", "article_number", Identifier("article_number", "1234567")),
     ],
 )
 def test_identifier_detection(value, provider, expected):
@@ -133,13 +170,19 @@ def test_identifier_input_cannot_be_used_as_an_arbitrary_url():
         ("10.9999/dataset", "doi", "DataCite Example"),
         ("9780131103627", "isbn", "The C Programming Language"),
         ("W123", "openalex", "OpenAlex Example"),
+        ("2025ApJ...123..456A", "bibcode", "NASA ADS Example"),
+        ("1234567", "article_number", "IEEE Example"),
     ],
 )
 def test_provider_adapters_map_records(value, provider, title):
     parsed, record = lookup_metadata(
         value,
         provider,
-        settings=Settings(metadata_contact_email="operator@example.org"),
+        settings=Settings(
+            metadata_contact_email="operator@example.org",
+            nasa_ads_token="ads-token",
+            ieee_api_key="ieee-key",
+        ),
         transport=httpx.MockTransport(response),
     )
     assert parsed.provider == provider

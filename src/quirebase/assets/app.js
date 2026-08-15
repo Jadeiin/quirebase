@@ -66,9 +66,18 @@ Alpine.data("pdfToolbar", () => ({
 }));
 
 Alpine.data("formattedCitation", () => ({
-  style: "apa",
+  style: "",
   output: "",
+  init() {
+    const select = this.$root.querySelector("select");
+    this.style = select?.value || "apa";
+    this.render();
+  },
   render() {
+    if (!this.style) {
+      const select = this.$root.querySelector("select");
+      this.style = select?.value || "apa";
+    }
     const url = `/documents/${this.$root.dataset.itemId}/citation-text?style=${encodeURIComponent(this.style)}`;
     fetch(url, { headers: { Accept: "text/plain" } })
       .then((response) => (response.ok ? response.text() : Promise.reject(new Error("failed"))))

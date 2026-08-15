@@ -51,11 +51,11 @@ REFERENCE_TYPE_TO_ENDNOTE: dict[str, str] = {
 _ENDNOTE_TAGS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ@"
 
 
-def _text(value: Any) -> str | None:
+def _text(value: Any, separator: str = "; ") -> str | None:
     if value is None:
         return None
     if isinstance(value, list):
-        value = "; ".join(str(part).strip() for part in value if str(part).strip())
+        value = separator.join(str(part).strip() for part in value if str(part).strip())
     result = str(value).strip()
     return result or None
 
@@ -90,6 +90,7 @@ def _normalise(entry: dict[str, Any], file_format: str) -> dict[str, str | None]
 def _parse_endnote_records(contents: str) -> list[dict[str, str | None]]:
     records: list[dict[str, list[str]]] = []
     current: dict[str, list[str]] | None = None
+    last_tag: str | None = None
     for raw_line in contents.splitlines():
         line = raw_line.rstrip("\r")
         if not line.strip():
@@ -101,10 +102,22 @@ def _parse_endnote_records(contents: str) -> list[dict[str, str | None]]:
                 if current is not None:
                     records.append(current)
                 current = {}
+                last_tag = None
             if current is None:
                 continue
             if value:
                 current.setdefault(tag, []).append(value)
+                last_tag = tag
+            else:
+                last_tag = tag
+        elif current is not None and last_tag is not None:
+            continuation = line.strip()
+            if continuation:
+                if last_tag in current and current[last_tag]:
+                    sep = "\n" if last_tag == "X" else " "
+                    current[last_tag][-1] = f"{current[last_tag][-1]}{sep}{continuation}"
+                else:
+                    current.setdefault(last_tag, []).append(continuation)
     if current is not None:
         records.append(current)
 
@@ -113,7 +126,7 @@ def _parse_endnote_records(contents: str) -> list[dict[str, str | None]]:
         reference_type = _text(record.get("0", []))
         normalised.append({
             "title": _text(record.get("T", [])),
-            "abstract": _text(record.get("X", [])),
+            "abstract": _text(record.get("X", []), separator="\n"),
             "authors": _text(record.get("A", [])),
             "editors": _text(record.get("E", [])),
             "keywords": _text(record.get("K", [])),

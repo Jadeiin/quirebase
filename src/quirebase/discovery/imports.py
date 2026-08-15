@@ -71,10 +71,17 @@ def stage_import_batch(
 
 
 def stage_metadata_batch(
-    db: Session, user: User, identifier: str, provider: str = "auto"
+    db: Session,
+    user: User,
+    identifier: str,
+    provider: str = "auto",
+    transport: httpx.BaseTransport | None = None,
 ) -> tuple[ImportBatch, list[dict], list[dict]]:
     try:
-        parsed, record = lookup_metadata(identifier, provider)
+        if transport is not None:
+            parsed, record = lookup_metadata(identifier, provider, transport=transport)
+        else:
+            parsed, record = lookup_metadata(identifier, provider)
     except ValueError as error:
         raise ValidationFailure(str(error)) from error
     except MetadataNotFoundError as error:
@@ -220,7 +227,7 @@ def export_accessible_bibliography(
 ) -> tuple[str, str, str]:
     items = list(db.scalars(visible_items_query(user).order_by(Item.updated_at.desc())).all())
     if file_format == "csl":
-        style_xml = resolve_style_xml(db, style_key)
+        style_xml = resolve_style_xml(db, user, style_key)
         if style_xml is None:
             raise ValidationFailure("unknown citation style")
         entries = render_bibliography([item_to_csl_json(item) for item in items], style_xml)
@@ -251,7 +258,7 @@ def export_selected_bibliography(
     if not items or len(items) != len(selected):
         raise ValidationFailure("select one or more accessible papers")
     if file_format == "csl":
-        style_xml = resolve_style_xml(db, style_key)
+        style_xml = resolve_style_xml(db, user, style_key)
         if style_xml is None:
             raise ValidationFailure("unknown citation style")
         entries = render_bibliography([item_to_csl_json(item) for item in items], style_xml)

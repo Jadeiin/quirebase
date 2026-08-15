@@ -30,11 +30,11 @@
       <option value="export_bibtex">{{ t('Export BibTeX') }}</option>
       <option value="export_ris">{{ t('Export RIS') }}</option>
       <option value="export_endnote">{{ t('Export EndNote') }}</option>
-      {% if builtin_styles %}<option value="export_csl">{{ t('Export citation (CSL)') }}</option>{% endif %}
+      {% if builtin_styles or custom_styles %}<option value="export_csl">{{ t('Export citation (CSL)') }}</option>{% endif %}
       <option value="download_pdfs">{{ t('Download PDFs') }}</option>
       <option value="delete_items">{{ t('Delete papers') }}</option>
     </select>
-    {% if builtin_styles %}<select name="style" x-show="action === 'export_csl'">{% for key, name in builtin_styles.items() %}<option value="{{ key }}">{{ name }}</option>{% endfor %}</select>{% endif %}
+    {% if builtin_styles or custom_styles %}<select name="style" x-show="action === 'export_csl'">{% for key, name in builtin_styles.items() %}<option value="{{ key }}">{{ name }}</option>{% endfor %}{% for style in custom_styles %}<option value="{{ style.id }}">{{ style.name }}</option>{% endfor %}</select>{% endif %}
     <select name="project_id" x-show="action === 'add_project'"><option value="">{{ t('Choose project') }}</option>{% for option in editable_projects %}<option value="{{ option.id }}">{{ option.name }}</option>{% endfor %}</select>
     <input name="tag_name" x-show="action === 'add_tag'" placeholder="{{ t('Tag for selected papers') }}">
     <label class="bulk-confirm" x-show="action === 'delete_items'"><input type="checkbox" name="confirm_delete" value="delete" :required="action === 'delete_items'">{{ t('Confirm permanent deletion') }}</label>

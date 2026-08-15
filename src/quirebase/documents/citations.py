@@ -23,12 +23,16 @@ if TYPE_CHECKING:
     from quirebase.models import User
 
 
-def resolve_style_xml(db: Session, style_key: str) -> str | None:
+def resolve_style_xml(db: Session, user: User | None, style_key: str) -> str | None:
     builtin = builtin_style_xml(style_key)
     if builtin:
         return builtin
+    if user is None:
+        return None
     style = db.get(CitationStyle, style_key)
-    return style.csl_xml if style else None
+    if style is None or style.created_by != user.id:
+        return None
+    return style.csl_xml
 
 
 def list_custom_citation_styles(db: Session, user: User) -> list[CitationStyle]:
@@ -70,7 +74,7 @@ def get_item_citation_response(
 ) -> tuple[str, str, str]:
     item = require_readable_item(db, user, item_id)
     if file_format == "csl":
-        style_xml = resolve_style_xml(db, style_key)
+        style_xml = resolve_style_xml(db, user, style_key)
         if style_xml is None:
             raise ValidationFailure("unknown citation style")
         entries = render_bibliography([item_to_csl_json(item)], style_xml)
@@ -92,7 +96,7 @@ def get_item_citation_text_response(
     db: Session, user: User, item_id: str, style_key: str = "apa", output: str = "text"
 ) -> tuple[str, str]:
     item = require_readable_item(db, user, item_id)
-    style_xml = resolve_style_xml(db, style_key)
+    style_xml = resolve_style_xml(db, user, style_key)
     if style_xml is None:
         raise ValidationFailure("unknown citation style")
     rendered = render_citation(item, style_xml, output_format=output)

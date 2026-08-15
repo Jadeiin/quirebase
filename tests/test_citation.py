@@ -101,3 +101,96 @@ def test_builtin_style_xml_degrades_when_styles_package_is_missing(monkeypatch):
         assert available_builtin_styles() == {}
     finally:
         available_builtin_styles.cache_clear()
+
+
+def test_resolve_style_xml_scoped_to_owner(db):
+    from quirebase.documents.citations import create_custom_citation_style, resolve_style_xml
+
+    csl_xml = builtin_style_xml("apa")
+    user_a = User(username="owner-a", password_hash="unused")
+    user_b = User(username="owner-b", password_hash="unused")
+    db.add_all([user_a, user_b])
+    db.flush()
+
+    style_a = create_custom_citation_style(db, user_a, "Custom A", csl_xml)
+
+    # Owner can resolve
+    assert resolve_style_xml(db, user_a, style_a.id) == csl_xml
+    # Non-owner cannot resolve
+    assert resolve_style_xml(db, user_b, style_a.id) is None
+    # Unauthenticated cannot resolve
+    assert resolve_style_xml(db, None, style_a.id) is None
+    # Built-in styles remain resolvable by anyone
+    assert resolve_style_xml(db, user_a, "apa") == csl_xml
+    assert resolve_style_xml(db, user_b, "apa") == csl_xml
+    assert resolve_style_xml(db, None, "apa") == csl_xml
+
+
+def test_citation_routes_enforce_custom_style_ownership(db, tmp_path, monkeypatch):
+    from test_http import authenticated_client
+    from quirebase.core.config import get_settings
+    from quirebase.documents.citations import create_custom_citation_style
+    from quirebase.web.app import app
+
+    client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+    try:
+        user_a = db.get(User, item.created_by)
+        user_b = User(username="other-user", password_hash="unused")
+        db.add(user_b)
+        db.flush()
+
+        csl_xml = builtin_style_xml("apa")
+        style_a = create_custom_citation_style(db, user_a, "User A Style", csl_xml)
+        style_b = create_custom_citation_style(db, user_b, "User B Style", csl_xml)
+
+        # User A requesting User A's style succeeds
+        res = client.get(f"/documents/{item.id}/citation-text?style={style_a.id}")
+        assert res.status_code == 200
+        assert item.title in res.text
+
+        # User A requesting User B's style is forbidden / invalid
+        res_forbidden = client.get(f"/documents/{item.id}/citation-text?style={style_b.id}")
+        assert res_forbidden.status_code == 422
+
+        res_csl_forbidden = client.get(f"/documents/{item.id}/citation?file_format=csl&style={style_b.id}")
+        assert res_csl_forbidden.status_code == 422
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+
+
+def test_custom_styles_accessible_in_item_workspace_when_builtin_styles_missing(db, tmp_path, monkeypatch):
+    from test_http import authenticated_client
+    from quirebase.core.config import get_settings
+    from quirebase.documents.citations import create_custom_citation_style
+    from quirebase.web.app import app
+
+    monkeypatch.setattr("quirebase.citation.get_style_filepath", None)
+    available_builtin_styles.cache_clear()
+
+    client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+    try:
+        user = db.get(User, item.created_by)
+        csl_xml = (
+            '<?xml version="1.0" encoding="utf-8"?>\n'
+            '<style xmlns="http://purl.org/net/xbiblio/csl" version="1.0" class="in-text">\n'
+            '  <info><id>test</id><title>Test Custom</title><updated>2025-01-01T00:00:00Z</updated></info>\n'
+            '  <citation><layout><text variable="title"/></layout></citation>\n'
+            '  <bibliography><layout><text variable="title"/></layout></bibliography>\n'
+            '</style>'
+        )
+        custom_style = create_custom_citation_style(db, user, "My Isolated Custom Style", csl_xml)
+
+        response = client.get(f"/items/{item.id}")
+        assert response.status_code == 200
+        assert 'x-data="formattedCitation"' in response.text
+        assert custom_style.id in response.text
+        assert "My Isolated Custom Style" in response.text
+
+        text_res = client.get(f"/documents/{item.id}/citation-text?style={custom_style.id}")
+        assert text_res.status_code == 200
+        assert item.title in text_res.text
+    finally:
+        available_builtin_styles.cache_clear()
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
