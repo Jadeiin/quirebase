@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import Select, exists, or_, select
 
-from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
+from quirebase.core.errors import ResourceNotFound, ResourceUnavailable, ValidationFailure
 from quirebase.models import Item, ProjectItem, ProjectMember, SystemRole, User
 
 if TYPE_CHECKING:
@@ -69,3 +69,11 @@ def require_editable_item(db: Session, user: User, item_id: str) -> Item:
     if item is None:
         raise ResourceNotFound("item not found")
     return item
+
+
+def require_accessible_items(db: Session, user: User, item_ids: list[str]) -> list[Item]:
+    selected = [db.get(Item, item_id) for item_id in dict.fromkeys(item_ids)]
+    items = [item for item in selected if item is not None and can_read_item(db, user, item.id)]
+    if not items or len(items) != len(selected):
+        raise ValidationFailure("select one or more accessible items")
+    return items

@@ -9,7 +9,7 @@ uv run prek run --all-files
 uv run pytest -q -m "not oa"
 ```
 
-The hooks reject malformed YAML/TOML/JSON, large files, case-conflicting paths, merge markers and private keys; update the uv lock; run strict Ruff checks plus formatting; type-check production modules with mypy; enforce Conventional Commits; and run the fast tests before pushes. This suite is offline and covers schema, permissions, storage, PDF coordinates and annotations, search, bibliography interchange, maintenance, migration, security and HTTP behavior. PostgreSQL search runs in CI against PostgreSQL 17 when `QUIREBASE_TEST_POSTGRES_URL` is set.
+The hooks reject malformed YAML/TOML/JSON, large files, case-conflicting paths, merge markers and private keys; update the uv lock; run strict Ruff checks plus formatting; type-check production modules with mypy; enforce Conventional Commits; and run the fast tests before pushes. This suite is offline and covers schema, permissions, storage, PDF coordinates and annotations, Library Search and Discovery, bibliography interchange, maintenance, migration, security and HTTP behavior. PostgreSQL Library Search runs in CI against PostgreSQL 17 when `QUIREBASE_TEST_POSTGRES_URL` is set.
 
 ## Real open-access PDF suite
 
@@ -21,7 +21,7 @@ uv run pytest -q -m oa
 bun run test:oa:pdfjs
 ```
 
-The Python suite validates every container and checksum, extracts all text and page geometry, rasterizes every page with PyMuPDF, generates thumbnails, uploads through the authenticated HTTP endpoint, runs the durable worker, searches extracted text, checks Range/ETag delivery, creates database annotations, exports standard PDF annotations, reopens the result and proves the source hash is unchanged.
+The Python suite validates every container and checksum, extracts all text and page geometry, rasterizes every page with PyMuPDF, generates thumbnails, uploads through the authenticated HTTP endpoint, runs the durable worker, performs Library Search over extracted text, checks Range/ETag delivery, creates database annotations, exports standard PDF annotations, reopens the result and proves the source hash is unchanged.
 
 The PDF.js suite loads every page using the exact pinned browser engine, obtains each viewport, extracts text and resolves the complete drawing operator list. Together the tests currently cover 34 real article pages and more than 160,000 extracted characters.
 

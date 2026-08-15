@@ -52,7 +52,7 @@ graph LR
   subgraph CoreCapabilities[Core Business Modules]
     Library[quirebase.library]
     Documents[quirebase.documents]
-    Search[quirebase.search]
+    LibrarySearch["Library Search (quirebase.search)"]
     Access[quirebase.access]
   end
 

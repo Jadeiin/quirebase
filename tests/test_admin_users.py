@@ -54,7 +54,7 @@ def test_admin_create_user_and_authenticate(db):
     assert new_user.role == "member"
     assert new_user.active is True
 
-    # Check audit log
+    # Check audit event
     event = db.scalar(
         select(AuditEvent).where(
             AuditEvent.action == "admin.user.create", AuditEvent.target_id == new_user.id

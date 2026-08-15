@@ -6,7 +6,7 @@ Python 3.12+ wheels are the common installation path on Windows, macOS and Linux
 
 SQLite is intended for a single-host installation with one worker. PostgreSQL is recommended for teams and supports concurrent workers through `FOR UPDATE SKIP LOCKED`. Set `QUIREBASE_DATABASE_URL`, `QUIREBASE_DATA_DIR`, `QUIREBASE_ALLOWED_HOSTS`, and secure cookies behind HTTPS.
 
-For identifier lookup and online scholarly search, set a monitored `QUIREBASE_METADATA_CONTACT_EMAIL`; NCBI and OpenAlex API keys are optional. See `METADATA_LOOKUP.md`. Restrictive egress firewalls should allow only the documented provider hosts.
+For identifier lookup and Discovery (online scholarly search), set a monitored `QUIREBASE_METADATA_CONTACT_EMAIL`; NCBI and OpenAlex API keys are optional. See `METADATA_LOOKUP.md`. Restrictive egress firewalls should allow only the documented Provider hosts.
 
 Use a reverse proxy for TLS and request-size limits. Do not expose Uvicorn directly to the public internet. Preserve the application data directory independently from the installed wheel.
 
@@ -14,7 +14,7 @@ Use a reverse proxy for TLS and request-size limits. Do not expose Uvicorn direc
 
 `quirebase backup backup.zip` creates a consistent SQLite snapshot or invokes `pg_dump` for PostgreSQL, adds immutable objects, and writes a checksum manifest. Verify it with `quirebase verify-backup backup.zip`. Test restoration periodically on a separate installation. `quirebase restore backup.zip --force` replaces the configured database and overlays backed-up objects; stop all web and worker processes first.
 
-`quirebase doctor` checks the schema, writable directories, PyMuPDF and every stored object's SHA-256. `quirebase reindex` rebuilds search. The administrator page can retry failed jobs; `/metrics` exposes authenticated job and content counts.
+`quirebase doctor` checks the schema, writable directories, PyMuPDF and every stored object's SHA-256. `quirebase reindex` rebuilds the Library Search index. The administrator page can retry failed jobs; `/metrics` exposes authenticated job and content counts.
 
 ## Upgrades
 

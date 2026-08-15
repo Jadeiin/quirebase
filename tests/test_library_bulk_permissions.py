@@ -39,7 +39,7 @@ def test_bulk_action_blocks_unauthorized_assignment_to_project(db, tmp_path, mon
     db.commit()
 
     # Attempt to bulk-assign item to target project as viewer_user
-    with pytest.raises(PermissionDenied, match="all selected papers must be editable"):
+    with pytest.raises(PermissionDenied, match="all selected items must be editable"):
         bulk_action(
             db,
             viewer_user,

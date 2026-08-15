@@ -47,19 +47,19 @@ QUIREBASE_DATABASE_URL=postgresql+psycopg://quirebase:password@localhost/quireba
 
 Password-protected PDFs, OCR and flattened annotations are outside the first milestone.
 
-## Search and bibliography interchange
+## Library Search, Discovery, and bibliography interchange
 
-- SQLite uses FTS5 and PostgreSQL uses a `tsvector`/GIN adapter behind the same search interface. Run `uv run quirebase reindex` after restoring a database or changing indexing rules.
-- Online search is separate from identifier import and provides fielded Boolean queries, source-specific sorting, year filters, pagination, and review-before-import across OpenAlex, Crossref, PubMed, arXiv, Open Library, PMC, NASA ADS, and IEEE Xplore (the latter two need API keys).
-- BibTeX and RIS imports are parsed into a persisted preview and only committed as one transaction after confirmation. Exports contain only items visible to the current user.
+- SQLite uses FTS5 and PostgreSQL uses a `tsvector`/GIN adapter behind the same Library Search interface. Run `uv run quirebase reindex` after restoring a database or changing indexing rules.
+- Discovery (online search) is separate from Import and provides fielded Boolean queries, source-specific sorting, year filters, pagination, and review-before-import across OpenAlex, Crossref, PubMed, arXiv, Open Library, PMC, NASA ADS, and IEEE Xplore (the latter two need API keys).
+- BibTeX and RIS imports are parsed into a persisted preview and only committed as one transaction after confirmation. Exports contain only Items visible to the current user.
 - Formatted citations use CSL styles via `citeproc-py`. Built-in styles require the optional `citation` extra (`uv sync --extra citation`); custom styles can be added from the Tools page without it.
 
 Quirebase is licensed under AGPL-3.0-only; see `LICENSE`. PyMuPDF is used under its AGPL option.
 
 ## Completed scope
 
-Quirebase includes local accounts and invitations, administrator/member and project owner/editor/viewer permissions, audited login attempts, per-session and all-session logout, durable login throttling, item metadata/custom fields, DOI/PMID/arXiv/OpenAlex/ISBN lookup with preview, multi-source online scholarly search, automatic DOI extraction from published PDFs, tags, dedicated project workspaces, duplicate-review and tag-management tools, discussions, PDF revisions, supplementary attachments, bulk citation/PDF export and owner-confirmed deletion, PDF.js reading with annotation detail panels, scoped annotations, PyMuPDF exports, dialect-native library search, staged BibTeX/RIS import, audit events, resumable jobs, metrics, backup/restore, and integrity checks.
+Quirebase includes local accounts and invitations, administrator/member and project owner/editor/viewer permissions, audited login attempts, per-session and all-session logout, durable login throttling, Item metadata/custom fields, DOI/PMID/arXiv/OpenAlex/ISBN lookup with preview, multi-source Discovery (online scholarly search), automatic DOI extraction from published PDFs, tags, dedicated project workspaces, duplicate-review and tag-management tools, discussions, PDF revisions, supplementary attachments, bulk citation/PDF export and owner-confirmed deletion, PDF.js reading with annotation detail panels, scoped annotations, PyMuPDF exports, dialect-native Library Search, staged BibTeX/RIS Import, audit events, resumable jobs, metrics, backup/restore, and integrity checks.
 
 Operational instructions are in `docs/DEPLOYMENT.md`. Deferred integrations and their security gates are recorded in `docs/adr/0001-deferred-integrations.md`.
 
-The real-paper validation suite uses separately downloaded, checksum-pinned PMC open-access PDFs. See `docs/TESTING.md`; run `uv run python scripts/download-oa-corpus.py`, `uv run pytest -q -m oa`, and `bun run test:oa:pdfjs`.
+The real open-access PDF validation suite uses separately downloaded, checksum-pinned PMC open-access PDFs. See `docs/TESTING.md`; run `uv run python scripts/download-oa-corpus.py`, `uv run pytest -q -m oa`, and `bun run test:oa:pdfjs`.

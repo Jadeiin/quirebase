@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, BinaryIO
 
-from quirebase.access.items import can_read_item, visible_items_query
+from quirebase.access.items import require_accessible_items, visible_items_query
 from quirebase.core.config import Settings, get_settings
 from quirebase.core.errors import (
     DomainError,
@@ -252,11 +252,7 @@ def export_selected_bibliography(
     file_format: str,
     style_key: str = "apa",
 ) -> tuple[str, str, str]:
-    unique_ids = list(dict.fromkeys(item_ids))
-    selected = [db.get(Item, item_id) for item_id in unique_ids]
-    items = [item for item in selected if item is not None and can_read_item(db, user, item.id)]
-    if not items or len(items) != len(selected):
-        raise ValidationFailure("select one or more accessible papers")
+    items = require_accessible_items(db, user, item_ids)
     if file_format == "csl":
         return format_csl_export(db, user, items, style_key=style_key)
     return format_standard_export(items, file_format)

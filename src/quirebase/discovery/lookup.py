@@ -381,7 +381,7 @@ class OpenAlexLookupAdapter:
             "reference_type": _first(payload.get("type")),
         }
         if not record["title"]:
-            raise MetadataNotFoundError("OpenAlex work was not found")
+            raise MetadataNotFoundError("OpenAlex record was not found")
         return record
 
 

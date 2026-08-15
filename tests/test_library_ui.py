@@ -80,7 +80,7 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
         ])
         selected = []
         for number in range(30):
-            paper = Item(
+            item = Item(
                 title=f"Library paper {number:02d}",
                 authors="Alice Researcher" if number % 2 == 0 else "Bob Scientist",
                 keywords="imaging" if number % 3 == 0 else "simulation",
@@ -88,13 +88,13 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
                 created_by=original.created_by,
                 updated_at=datetime(2026, 1, 1, tzinfo=UTC) + timedelta(days=number),
             )
-            db.add(paper)
+            db.add(item)
             db.flush()
             if number < 2:
-                selected.append(paper)
+                selected.append(item)
                 db.add_all([
-                    ItemTag(item_id=paper.id, tag_id=tag.id),
-                    ProjectItem(project_id=project.id, item_id=paper.id),
+                    ItemTag(item_id=item.id, tag_id=tag.id),
+                    ProjectItem(project_id=project.id, item_id=item.id),
                 ])
         db.commit()
 

@@ -1,4 +1,4 @@
-"""Track recently opened papers per account."""
+"""Track recently opened items per account."""
 
 from alembic import op
 

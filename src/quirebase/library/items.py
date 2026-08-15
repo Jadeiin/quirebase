@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from quirebase.access.items import (
     can_edit_item,
-    can_read_item,
+    require_accessible_items,
     require_editable_item,
     require_readable_item,
 )
@@ -317,10 +317,7 @@ def get_item_workspace_data(db: Session, user: User, item_id: str, section: str)
 
 
 def bulk_download_pdfs(db: Session, user: User, item_ids: list[str]) -> BytesIO:
-    selected = [db.get(Item, item_id) for item_id in dict.fromkeys(item_ids)]
-    items = [item for item in selected if item is not None and can_read_item(db, user, item.id)]
-    if not items or len(items) != len(selected):
-        raise ValidationFailure("select one or more accessible papers")
+    items = require_accessible_items(db, user, item_ids)
     archive = BytesIO()
     used_names: set[str] = set()
     store = LocalObjectStore()
@@ -361,14 +358,11 @@ def bulk_action(
     tag_name: str = "",
     confirm_delete: str = "",
 ) -> list[str]:
-    selected = [db.get(Item, item_id) for item_id in dict.fromkeys(item_ids)]
-    items = [item for item in selected if item is not None and can_read_item(db, user, item.id)]
-    if not items or len(items) != len(selected):
-        raise ValidationFailure("select one or more accessible papers")
+    items = require_accessible_items(db, user, item_ids)
 
     # Fail-closed: All selected items must be editable for mutating bulk actions
     if any(not can_edit_item(db, user, item.id) for item in items):
-        raise PermissionDenied("all selected papers must be editable")
+        raise PermissionDenied("all selected items must be editable")
 
     cleanup_keys: list[str] = []
     if action in ("add_project", "project_add"):
@@ -396,9 +390,9 @@ def bulk_action(
         audit_action = "library.bulk.add_tag"
     elif action in ("delete_items", "delete"):
         if confirm_delete != "delete":
-            raise ValidationFailure("confirm deletion of the selected papers")
+            raise ValidationFailure("confirm deletion of the selected items")
         if user.role != "administrator" and any(item.created_by != user.id for item in items):
-            raise PermissionDenied("only paper owners can permanently delete papers")
+            raise PermissionDenied("only item owners can permanently delete items")
         cleanup_keys = list(
             db.scalars(
                 select(FileRevision.object_key).where(
