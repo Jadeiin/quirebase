@@ -10,3 +10,6 @@ __pycache__/
 .coverage
 dist/
 .cache/
+.agents/
+.claude/
+skills-lock.json

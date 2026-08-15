@@ -4,7 +4,7 @@
 
 ### Issue tracker
 
-Implementation work is tracked as local Markdown under `.scratch/<feature>/`.
+Issues are tracked in GitHub Issues (via `forge` CLI).
 See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
