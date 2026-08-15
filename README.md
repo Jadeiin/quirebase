@@ -50,8 +50,9 @@ Password-protected PDFs, OCR and flattened annotations are outside the first mil
 ## Search and bibliography interchange
 
 - SQLite uses FTS5 and PostgreSQL uses a `tsvector`/GIN adapter behind the same search interface. Run `uv run quirebase reindex` after restoring a database or changing indexing rules.
-- Online search is separate from identifier import and provides fielded Boolean queries, source-specific sorting, year filters, pagination, and review-before-import across OpenAlex, Crossref, PubMed, arXiv, and Open Library.
+- Online search is separate from identifier import and provides fielded Boolean queries, source-specific sorting, year filters, pagination, and review-before-import across OpenAlex, Crossref, PubMed, arXiv, Open Library, PMC, NASA ADS, and IEEE Xplore (the latter two need API keys).
 - BibTeX and RIS imports are parsed into a persisted preview and only committed as one transaction after confirmation. Exports contain only items visible to the current user.
+- Formatted citations use CSL styles via `citeproc-py`. Built-in styles require the optional `citation` extra (`uv sync --extra citation`); custom styles can be added from the Tools page without it.
 
 Quirebase is licensed under AGPL-3.0-only; see `LICENSE`. PyMuPDF is used under its AGPL option.
 

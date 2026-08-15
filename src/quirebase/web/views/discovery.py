@@ -6,6 +6,7 @@ from urllib.parse import urlencode
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
+from quirebase.core.config import get_settings
 from quirebase.core.database import get_db
 from quirebase.discovery import (
     MetadataLookupError,
@@ -132,6 +133,8 @@ def online_search_page(
             "error": error,
             "imported": imported,
             "page_url": page_url,
+            "has_nasa_ads": bool(get_settings().nasa_ads_token),
+            "has_ieee": bool(get_settings().ieee_api_key),
         },
     )
 
@@ -232,10 +235,13 @@ def commit_import(
 @router.get("/bibliography/export")
 def export_items(
     file_format: str,
+    style: str = "apa",
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    contents, media_type, filename = export_accessible_bibliography(db, user, file_format)
+    contents, media_type, filename = export_accessible_bibliography(
+        db, user, file_format, style_key=style
+    )
     return Response(
         contents,
         media_type=f"{media_type}; charset=utf-8",

@@ -29,6 +29,7 @@
   "Choose project": "选择项目",
   "Clear": "清除",
   "Close navigation": "关闭导航",
+  "Copy": "复制",
   "Click a page to place the note": "点击页面放置批注",
   "Collaborative collections": "协作集合",
   "Continue where you left off": "继续上次阅读",
@@ -347,5 +348,19 @@
   "Search terms": "检索词",
   "Sort by": "排序方式",
   "To year": "结束年份",
-  "{count} result(s)": "共 {count} 条结果"
+  "{count} result(s)": "共 {count} 条结果",
+  "Formatted citation": "格式化引文",
+  "Formatted citation (CSL)": "格式化引文（CSL）",
+  "Export citation (CSL)": "导出引文（CSL）",
+  "Style": "样式",
+  "Citation styles": "引文样式",
+  "Manage citation styles": "管理引文样式",
+  "Built-in styles are ready to use. Add a custom CSL style to use a journal-specific format.": "内置样式可直接使用。添加自定义 CSL 样式以使用期刊专属格式。",
+  "Style name": "样式名称",
+  "CSL XML": "CSL XML",
+  "Add style": "添加样式",
+  "Built-in styles require the optional citation extra. Install it with: uv sync --extra citation.": "内置样式需要可选的 citation 附加组件。请运行：uv sync --extra citation 进行安装。",
+  "the CSL text is not a valid citation style": "CSL 文本不是有效的引文样式",
+  "style name is required": "样式名称为必填项",
+  "unknown citation style": "未知的引文样式"
 }

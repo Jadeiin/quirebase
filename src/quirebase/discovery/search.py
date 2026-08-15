@@ -11,7 +11,7 @@ import httpx
 from quirebase.core.config import Settings, get_settings
 from quirebase.discovery.lookup import MetadataLookupError, _clean_markup, _date_parts, _first
 
-SEARCH_PROVIDERS = {"crossref", "pubmed", "arxiv", "openlibrary", "openalex"}
+SEARCH_PROVIDERS = {"crossref", "pubmed", "pmc", "arxiv", "openlibrary", "openalex", "nasa", "ieee"}
 SEARCH_FIELDS = {"any", "title", "author", "publication", "abstract"}
 SEARCH_OPERATORS = {"and", "or", "not"}
 
@@ -33,6 +33,7 @@ class SearchResult:
     publication_title: str | None = None
     publication_date: str | None = None
     doi: str | None = None
+    abstract: str | None = None
 
 
 @dataclass(frozen=True)
@@ -518,12 +519,279 @@ class OpenAlexSearchAdapter:
         ]
 
 
+_IEEE_FIELDS = {
+    "any": None,
+    "title": '"Document Title"',
+    "author": '"Author"',
+    "publication": '"Publication Title"',
+    "abstract": '"Abstract"',
+}
+
+
+def _ieee_boolean_query(clauses: list[SearchClause]) -> str:
+    parts = []
+    for index, clause in enumerate(clauses):
+        value = clause.term.replace('"', " ").replace("\\", " ").strip()
+        field = _IEEE_FIELDS[clause.field]
+        tagged = f"{field}:{value}" if field else value
+        if clause.operator == "not":
+            parts.append(f"NOT {tagged}")
+        elif index and clause.operator == "or":
+            parts.append(f"OR {tagged}")
+        else:
+            parts.append(("AND " if index else "") + tagged)
+    return " ".join(parts)
+
+
+class PmcSearchAdapter:
+    def search(
+        self,
+        client: OnlineSearchClient,
+        clauses: list[SearchClause],
+        *,
+        page: int,
+        per_page: int,
+        sort: str,
+        year_from: int | None,
+        year_to: int | None,
+        settings: Settings,
+    ) -> SearchPage:
+        query = _boolean_query(
+            clauses,
+            {
+                "any": "[All Fields]",
+                "title": "[Title]",
+                "author": "[Author]",
+                "publication": "[Journal]",
+                "abstract": "[Title/Abstract]",
+            },
+        )
+        if year_from or year_to:
+            query += f" AND {year_from or 1000}:{year_to or 3000}[Publication Date]"
+        params = {
+            "db": "pmc",
+            "term": query,
+            "retmode": "json",
+            "retstart": str((page - 1) * per_page),
+            "retmax": str(per_page),
+            "sort": "pub date" if sort == "published" else "relevance",
+            "tool": "quirebase",
+        }
+        if settings.metadata_contact_email:
+            params["email"] = settings.metadata_contact_email
+        if settings.ncbi_api_key:
+            params["api_key"] = settings.ncbi_api_key
+        try:
+            found = json.loads(
+                client._get("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi", params)
+            ).get("esearchresult", {})
+            identifiers = found.get("idlist", [])
+            if not identifiers:
+                return SearchPage("pmc", [], int(found.get("count", 0)), page, per_page)
+            payload = json.loads(
+                client._get(
+                    "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
+                    {
+                        "db": "pmc",
+                        "id": ",".join(identifiers),
+                        "retmode": "json",
+                        "tool": "quirebase",
+                    },
+                )
+            ).get("result", {})
+        except (json.JSONDecodeError, TypeError) as error:
+            raise MetadataLookupError("PMC returned invalid search results") from error
+        results = []
+        for identifier in identifiers:
+            record = payload.get(identifier, {})
+            title = _clean_markup(record.get("title"))
+            if not title:
+                continue
+            doi = None
+            pmid = None
+            for article_id in record.get("articleids", []):
+                if article_id.get("idtype") == "doi" and article_id.get("value"):
+                    doi = article_id["value"]
+                elif article_id.get("idtype") == "pmid" and article_id.get("value"):
+                    pmid = article_id["value"]
+            if doi:
+                result_provider, result_identifier = "doi", doi
+            elif pmid:
+                result_provider, result_identifier = "pmid", pmid
+            else:
+                continue
+            results.append(
+                SearchResult(
+                    provider="pmc",
+                    identifier_provider=result_provider,
+                    identifier=result_identifier,
+                    title=title,
+                    authors="; ".join(
+                        author["name"] for author in record.get("authors", []) if author.get("name")
+                    )
+                    or None,
+                    publication_title=_first(record.get("fulljournalname") or record.get("source")),
+                    publication_date=_first(record.get("pubdate")),
+                )
+            )
+        return SearchPage("pmc", results, int(found.get("count", len(results))), page, per_page)
+
+
+class NasaAdsSearchAdapter:
+    def search(
+        self,
+        client: OnlineSearchClient,
+        clauses: list[SearchClause],
+        *,
+        page: int,
+        per_page: int,
+        sort: str,
+        year_from: int | None,
+        year_to: int | None,
+        settings: Settings,
+    ) -> SearchPage:
+        if not settings.nasa_ads_token:
+            raise MetadataLookupError("NASA ADS requires QUIREBASE_NASA_ADS_TOKEN")
+        query = _boolean_query(
+            clauses,
+            {
+                "any": "",
+                "title": "title:",
+                "author": "author:",
+                "publication": "bibstem:",
+                "abstract": "abs:",
+            },
+            field_prefix=True,
+        )
+        if year_from or year_to:
+            query += f" year:{year_from or 0}-{year_to or 3000}"
+        sort_value = (
+            "date desc"
+            if sort == "published"
+            else "citation_count desc"
+            if sort == "cited"
+            else "score desc"
+        )
+        params = {
+            "q": query,
+            "fl": "bibcode,title,author,doi,pubdate,pub,abstract",
+            "rows": str(per_page),
+            "start": str((page - 1) * per_page),
+            "sort": sort_value,
+        }
+        headers = {"Authorization": f"Bearer {settings.nasa_ads_token}"}
+        try:
+            payload = json.loads(
+                client._get("https://api.adsabs.harvard.edu/v1/search/query", params, headers=headers)
+            )
+        except (json.JSONDecodeError, TypeError) as error:
+            raise MetadataLookupError("NASA ADS returned invalid search results") from error
+        response = payload.get("response", {})
+        results = []
+        for document in response.get("docs", []):
+            title = _first(document.get("title"))
+            bibcode = _first(document.get("bibcode"))
+            doi = _first(document.get("doi"))
+            if not title or not (doi or bibcode):
+                continue
+            identifier = doi or bibcode
+            assert identifier is not None
+            results.append(
+                SearchResult(
+                    provider="nasa",
+                    identifier_provider="doi" if doi else "bibcode",
+                    identifier=identifier,
+                    title=title,
+                    authors="; ".join(document.get("author", [])) or None,
+                    publication_title=_first(document.get("pub")),
+                    publication_date=_first(document.get("pubdate")),
+                    abstract=_first(document.get("abstract")),
+                )
+            )
+        return SearchPage(
+            "nasa", results, int(response.get("numFound", len(results))), page, per_page
+        )
+
+
+class IeeeSearchAdapter:
+    def search(
+        self,
+        client: OnlineSearchClient,
+        clauses: list[SearchClause],
+        *,
+        page: int,
+        per_page: int,
+        sort: str,
+        year_from: int | None,
+        year_to: int | None,
+        settings: Settings,
+    ) -> SearchPage:
+        if not settings.ieee_api_key:
+            raise MetadataLookupError("IEEE Xplore requires QUIREBASE_IEEE_API_KEY")
+        params = {
+            "apikey": settings.ieee_api_key,
+            "format": "json",
+            "querytext": _ieee_boolean_query(clauses),
+            "startRecord": str((page - 1) * per_page + 1),
+            "max_records": str(per_page),
+        }
+        if year_from:
+            params["start_year"] = str(year_from)
+        if year_to:
+            params["end_year"] = str(year_to)
+        if sort == "published":
+            params["sort_field"] = "publication_year"
+            params["sort_order"] = "desc"
+        elif sort == "cited":
+            params["sort_field"] = "article_citations"
+            params["sort_order"] = "desc"
+        try:
+            payload = json.loads(
+                client._get("https://ieeexploreapi.ieee.org/api/v1/search/articles", params)
+            )
+        except (json.JSONDecodeError, TypeError) as error:
+            raise MetadataLookupError("IEEE Xplore returned invalid search results") from error
+        results = []
+        for article in payload.get("articles", []):
+            title = _first(article.get("title"))
+            if not title:
+                continue
+            doi = _first(article.get("doi"))
+            article_number = _first(article.get("article_number"))
+            identifier = doi or article_number
+            if identifier is None:
+                continue
+            results.append(
+                SearchResult(
+                    provider="ieee",
+                    identifier_provider="doi" if doi else "article_number",
+                    identifier=identifier,
+                    title=title,
+                    authors="; ".join(
+                        author.get("full_name", "")
+                        for author in (article.get("authors") or {}).get("authors", [])
+                        if author.get("full_name")
+                    )
+                    or None,
+                    publication_title=_first(article.get("publication_title")),
+                    publication_date=_first(article.get("publication_year")),
+                    abstract=_first(article.get("abstract")),
+                )
+            )
+        return SearchPage(
+            "ieee", results, int(payload.get("total_records", len(results))), page, per_page
+        )
+
+
 SEARCH_ADAPTERS: dict[str, SearchAdapter] = {
     "crossref": CrossrefSearchAdapter(),
     "pubmed": PubMedSearchAdapter(),
+    "pmc": PmcSearchAdapter(),
     "arxiv": ArxivSearchAdapter(),
     "openlibrary": OpenLibrarySearchAdapter(),
     "openalex": OpenAlexSearchAdapter(),
+    "nasa": NasaAdsSearchAdapter(),
+    "ieee": IeeeSearchAdapter(),
 }
 
 
@@ -547,9 +815,14 @@ class OnlineSearchClient:
     def close(self) -> None:
         self.client.close()
 
-    def _get(self, url: str, params: dict[str, Any] | None = None) -> bytes:
+    def _get(
+        self,
+        url: str,
+        params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> bytes:
         try:
-            with self.client.stream("GET", url, params=params) as response:
+            with self.client.stream("GET", url, params=params, headers=headers) as response:
                 if response.status_code == 404:
                     return b"{}"
                 if response.status_code == 429:

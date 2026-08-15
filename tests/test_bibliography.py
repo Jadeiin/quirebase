@@ -55,3 +55,53 @@ def test_import_reports_each_missing_title():
 
     assert len(records) == 1
     assert errors == [{"row": 1, "message": "Title is required"}]
+
+
+def test_endnote_parse_and_round_trip(db):
+    source = """%0 Journal Article
+%A Doe, Jane
+%A Smith, Alex
+%T An EndNote Paper
+%J EndNote Quarterly
+%D 2025
+%@ 10.1234/endnote
+%K search;testing
+%X A full abstract.
+"""
+    records, errors = parse_bibliography(source, "endnote")
+
+    assert errors == []
+    assert records[0]["title"] == "An EndNote Paper"
+    assert records[0]["authors"] == "Doe, Jane; Smith, Alex"
+    assert records[0]["doi"] == "10.1234/endnote"
+    assert records[0]["reference_type"] == "journal-article"
+
+    user = User(username="endnote", password_hash="unused")
+    db.add(user)
+    db.flush()
+    item = Item(created_by=user.id, **records[0])
+    output = export_bibliography([item], "endnote")
+
+    assert output.splitlines()[0] == "%0 Journal Article"
+    assert "%A Doe, Jane" in output
+    assert "%A Smith, Alex" in output
+    assert "%T An EndNote Paper" in output
+    assert "%@ 10.1234/endnote" in output
+
+
+def test_endnote_multiple_records_are_split():
+    source = """%0 Journal Article
+%T First Paper
+%A One, Author
+
+%0 Book
+%T Second Book
+%A Two, Author
+"""
+    records, errors = parse_bibliography(source, "endnote")
+
+    assert errors == []
+    assert len(records) == 2
+    assert records[0]["title"] == "First Paper"
+    assert records[1]["title"] == "Second Book"
+    assert records[1]["reference_type"] == "book"

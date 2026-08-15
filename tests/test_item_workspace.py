@@ -93,6 +93,11 @@ def test_item_citation_export_and_project_removal(db, tmp_path, monkeypatch):
         assert item.title in exported.text
         assert "quirebase-export.bib" in exported.headers["content-disposition"]
 
+        cited = client.get(f"/documents/{item.id}/citation?file_format=csl&style=apa")
+        assert cited.status_code == 200
+        assert item.title in cited.text
+        assert "quirebase-citations.txt" in cited.headers["content-disposition"]
+
         removed = client.post(
             f"/items/{item.id}/projects/{project.id}/remove?csrf_token=test-csrf",
             follow_redirects=False,

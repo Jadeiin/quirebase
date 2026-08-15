@@ -4,6 +4,7 @@ import json
 from typing import TYPE_CHECKING, BinaryIO
 
 from quirebase.access.items import can_read_item, visible_items_query
+from quirebase.citation import item_to_csl_json, render_bibliography
 from quirebase.core.config import get_settings
 from quirebase.core.errors import (
     DomainError,
@@ -23,6 +24,7 @@ from quirebase.discovery.lookup import (
     MetadataNotFoundError,
     lookup_metadata,
 )
+from quirebase.documents.citations import resolve_style_xml
 from quirebase.documents.revisions import (
     attach_staged_pdf,
     discard_staged_object,
@@ -214,18 +216,23 @@ def import_unpublished_pdf(
 
 
 def export_accessible_bibliography(
-    db: Session, user: User, file_format: str
+    db: Session, user: User, file_format: str, style_key: str = "apa"
 ) -> tuple[str, str, str]:
-    export_format = "ris" if file_format == "endnote" else file_format
-    if export_format not in SUPPORTED_FORMATS:
-        raise ValidationFailure("format must be bibtex, ris, or endnote")
     items = list(db.scalars(visible_items_query(user).order_by(Item.updated_at.desc())).all())
-    contents = export_bibliography(items, export_format)
-    media_type = (
-        "application/x-bibtex"
-        if export_format == "bibtex"
-        else "application/x-research-info-systems"
-    )
+    if file_format == "csl":
+        style_xml = resolve_style_xml(db, style_key)
+        if style_xml is None:
+            raise ValidationFailure("unknown citation style")
+        entries = render_bibliography([item_to_csl_json(item) for item in items], style_xml)
+        return "\n\n".join(entries), "text/plain", "quirebase-citations.txt"
+    if file_format not in SUPPORTED_FORMATS:
+        raise ValidationFailure("format must be bibtex, ris, or endnote")
+    contents = export_bibliography(items, file_format)
+    media_type = {
+        "bibtex": "application/x-bibtex",
+        "ris": "application/x-research-info-systems",
+        "endnote": "application/x-endnote-refer",
+    }[file_format]
     extension = {"bibtex": "bib", "ris": "ris", "endnote": "enw"}[file_format]
     filename = f"quirebase-export.{extension}"
     return contents, media_type, filename
@@ -236,20 +243,26 @@ def export_selected_bibliography(
     user: User,
     item_ids: list[str],
     file_format: str,
+    style_key: str = "apa",
 ) -> tuple[str, str, str]:
-    export_format = "ris" if file_format == "endnote" else file_format
-    if export_format not in SUPPORTED_FORMATS:
-        raise ValidationFailure("format must be bibtex, ris, or endnote")
     unique_ids = list(dict.fromkeys(item_ids))
     selected = [db.get(Item, item_id) for item_id in unique_ids]
     items = [item for item in selected if item is not None and can_read_item(db, user, item.id)]
     if not items or len(items) != len(selected):
         raise ValidationFailure("select one or more accessible papers")
-    contents = export_bibliography(items, export_format)
-    media_type = (
-        "application/x-bibtex"
-        if export_format == "bibtex"
-        else "application/x-research-info-systems"
-    )
+    if file_format == "csl":
+        style_xml = resolve_style_xml(db, style_key)
+        if style_xml is None:
+            raise ValidationFailure("unknown citation style")
+        entries = render_bibliography([item_to_csl_json(item) for item in items], style_xml)
+        return "\n\n".join(entries), "text/plain", "quirebase-citations.txt"
+    if file_format not in SUPPORTED_FORMATS:
+        raise ValidationFailure("format must be bibtex, ris, or endnote")
+    contents = export_bibliography(items, file_format)
+    media_type = {
+        "bibtex": "application/x-bibtex",
+        "ris": "application/x-research-info-systems",
+        "endnote": "application/x-endnote-refer",
+    }[file_format]
     extension = {"bibtex": "bib", "ris": "ris", "endnote": "enw"}[file_format]
     return contents, media_type, f"quirebase-export.{extension}"

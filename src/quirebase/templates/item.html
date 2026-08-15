@@ -12,8 +12,16 @@
       {% if revisions %}<a class="button-link" href="/items/{{ item.id }}/pdf/{{ revisions[0].id }}">{{ t('Read PDF') }}</a>{% endif %}
       <details class="export-menu">
         <summary>{{ t('Export citation') }}</summary>
-        <div><a href="/documents/{{ item.id }}/citation?file_format=bibtex">BibTeX</a><a href="/documents/{{ item.id }}/citation?file_format=ris">RIS</a><a href="/documents/{{ item.id }}/citation?file_format=endnote">EndNote</a></div>
+        <div><a href="/documents/{{ item.id }}/citation?file_format=bibtex">BibTeX</a><a href="/documents/{{ item.id }}/citation?file_format=ris">RIS</a><a href="/documents/{{ item.id }}/citation?file_format=endnote">EndNote</a>{% if builtin_styles %}<a href="/documents/{{ item.id }}/citation?file_format=csl&style=apa">{{ t('Formatted citation (CSL)') }}</a>{% endif %}</div>
       </details>
+      {% if builtin_styles %}<details class="export-menu" x-data="formattedCitation" x-init="render()" data-item-id="{{ item.id }}">
+        <summary>{{ t('Formatted citation') }}</summary>
+        <div class="citation-panel">
+          <label>{{ t('Style') }}<select x-model="style" @change="render()">{% for key, name in builtin_styles.items() %}<option value="{{ key }}">{{ name }}</option>{% endfor %}</select></label>
+          <pre class="citation-output" x-text="output"></pre>
+          <button type="button" class="secondary-button compact-button" @click="copy()">{{ t('Copy') }}</button>
+        </div>
+      </details>{% endif %}
     </div>
   </div>
 </header>

@@ -65,5 +65,29 @@ Alpine.data("pdfToolbar", () => ({
   },
 }));
 
+Alpine.data("formattedCitation", () => ({
+  style: "apa",
+  output: "",
+  render() {
+    const url = `/documents/${this.$root.dataset.itemId}/citation-text?style=${encodeURIComponent(this.style)}`;
+    fetch(url, { headers: { Accept: "text/plain" } })
+      .then((response) => (response.ok ? response.text() : Promise.reject(new Error("failed"))))
+      .then((text) => { this.output = text; })
+      .catch(() => { this.output = ""; });
+  },
+  async copy() {
+    try {
+      await navigator.clipboard.writeText(this.output);
+    } catch {
+      const node = document.createElement("textarea");
+      node.value = this.output;
+      document.body.appendChild(node);
+      node.select();
+      document.execCommand("copy");
+      node.remove();
+    }
+  },
+}));
+
 window.Alpine = Alpine;
 Alpine.start();

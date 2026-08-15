@@ -5,7 +5,13 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from quirebase.citation import available_builtin_styles
 from quirebase.core.database import get_db
+from quirebase.documents import (
+    create_custom_citation_style,
+    delete_custom_citation_style,
+    list_custom_citation_styles,
+)
 from quirebase.library import (
     delete_tag as delete_tag_op,
 )
@@ -38,6 +44,7 @@ def tools_page(
         raise HTTPException(404)
     groups = find_duplicates(db, user, mode)
     tags = list_accessible_tags_with_counts(db, user)
+    custom_styles = list_custom_citation_styles(db, user)
     return templates.TemplateResponse(
         request,
         "tools.html",
@@ -47,9 +54,32 @@ def tools_page(
             "mode": mode,
             "groups": groups,
             "tags": tags,
+            "custom_styles": custom_styles,
+            "builtin_styles": available_builtin_styles(),
             "active_page": "tools",
         },
     )
+
+
+@router.post("/citation-styles", dependencies=[Depends(require_csrf)])
+def create_citation_style(
+    name: str = Form(),
+    csl: str = Form(),
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    create_custom_citation_style(db, user, name, csl)
+    return RedirectResponse("/tools#citation-styles", status_code=303)
+
+
+@router.post("/citation-styles/{style_id}/delete", dependencies=[Depends(require_csrf)])
+def delete_citation_style(
+    style_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    delete_custom_citation_style(db, user, style_id)
+    return RedirectResponse("/tools#citation-styles", status_code=303)
 
 
 @router.post("/tools/tags/{tag_id}", dependencies=[Depends(require_csrf)])

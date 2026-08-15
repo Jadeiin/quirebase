@@ -23,6 +23,7 @@ EXPECTED_OPERATIONAL_ROUTES = {
     ("GET", "/bibliography/import"),
     ("GET", "/documents/{item_id}/annotations"),
     ("GET", "/documents/{item_id}/citation"),
+    ("GET", "/documents/{item_id}/citation-text"),
     ("GET", "/documents/{item_id}/revisions/{revision_id}/content"),
     ("GET", "/healthz"),
     ("GET", "/items/{item_id}"),
@@ -44,6 +45,8 @@ EXPECTED_OPERATIONAL_ROUTES = {
     ("POST", "/admin/jobs/{job_id}/retry"),
     ("POST", "/bibliography/import/{batch_id}"),
     ("POST", "/bibliography/preview"),
+    ("POST", "/citation-styles"),
+    ("POST", "/citation-styles/{style_id}/delete"),
     ("POST", "/documents/{item_id}/annotation-exports"),
     ("POST", "/documents/{item_id}/annotations"),
     ("POST", "/imports/pdf/published"),
@@ -95,7 +98,7 @@ def test_operational_routes_contract():
                 continue
             operational_routes.add((method, route.path))
 
-    assert len(operational_routes) == 55, f"Expected 55 routes, found {len(operational_routes)}"
+    assert len(operational_routes) == 58, f"Expected 58 routes, found {len(operational_routes)}"
     assert operational_routes == EXPECTED_OPERATIONAL_ROUTES
 
 

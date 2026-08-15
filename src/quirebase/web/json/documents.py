@@ -8,7 +8,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 
 from quirebase.core.database import get_db
-from quirebase.documents import get_item_citation_response, get_revision_file
+from quirebase.documents import (
+    get_item_citation_response,
+    get_item_citation_text_response,
+    get_revision_file,
+)
 from quirebase.models import User
 from quirebase.web.deps import current_user
 
@@ -67,15 +71,32 @@ def ranged_file(request: Request, path: Path, etag: str, filename: str):
 def export_item(
     item_id: str,
     file_format: str,
+    style: str = "apa",
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    contents, media_type, filename = get_item_citation_response(db, user, item_id, file_format)
+    contents, media_type, filename = get_item_citation_response(
+        db, user, item_id, file_format, style_key=style
+    )
     return Response(
         contents,
         media_type=f"{media_type}; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/documents/{item_id}/citation-text")
+def citation_text(
+    item_id: str,
+    style: str = "apa",
+    output: str = "text",
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    rendered, media_type = get_item_citation_text_response(
+        db, user, item_id, style_key=style, output=output
+    )
+    return Response(rendered, media_type=f"{media_type}; charset=utf-8")
 
 
 @router.get("/documents/{item_id}/revisions/{revision_id}/content")

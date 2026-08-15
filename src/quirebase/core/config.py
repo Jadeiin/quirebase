@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     metadata_contact_email: str | None = None
     ncbi_api_key: str | None = None
     openalex_api_key: str | None = None
+    nasa_ads_token: str | None = None
+    ieee_api_key: str | None = None
 
     @property
     def allowed_host_list(self) -> list[str]:

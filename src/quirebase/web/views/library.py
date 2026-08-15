@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
 
 from quirebase.access import editable_projects, visible_projects
+from quirebase.citation import available_builtin_styles
 from quirebase.core.database import get_db
 from quirebase.discovery import export_selected_bibliography
 from quirebase.library import bulk_action, bulk_download_pdfs, search_library
@@ -59,6 +60,7 @@ def library(
             "years": years,
             "csrf": login_session.csrf_token,
             "active_page": "library",
+            "builtin_styles": available_builtin_styles(),
             "filters": {
                 "q": q,
                 "tag": tag,
@@ -81,9 +83,19 @@ def library_bulk_action(
     project_id: str = Form(default=""),
     tag_name: str = Form(default=""),
     confirm_delete: str = Form(default=""),
+    style: str = Form(default="apa"),
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
+    if action == "export_csl":
+        contents, media_type, filename = export_selected_bibliography(
+            db, user, item_ids, "csl", style_key=style
+        )
+        return Response(
+            contents,
+            media_type=f"{media_type}; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
     if action.startswith("export_"):
         contents, media_type, filename = export_selected_bibliography(
             db, user, item_ids, action.removeprefix("export_")

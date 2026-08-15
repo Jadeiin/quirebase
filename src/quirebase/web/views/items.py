@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
+from quirebase.citation import available_builtin_styles
 from quirebase.core.config import get_settings
 from quirebase.core.database import get_db
 from quirebase.documents import (
@@ -68,6 +69,7 @@ def render_item_workspace(
             "csrf": login_session.csrf_token,
             "active_page": "library",
             "item_section": section,
+            "builtin_styles": available_builtin_styles(),
             **data,
         },
     )

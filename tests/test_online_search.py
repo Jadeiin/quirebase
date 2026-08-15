@@ -8,6 +8,7 @@ from test_http import authenticated_client
 
 from quirebase.core.config import Settings, get_settings
 from quirebase.discovery import (
+    MetadataLookupError,
     SearchClause,
     SearchPage,
     SearchResult,
@@ -306,3 +307,97 @@ def test_search_page_preserves_sparse_condition_rows(db, tmp_path, monkeypatch):
     finally:
         app.dependency_overrides.clear()
         get_settings.cache_clear()
+
+
+def extra_search_response(request: httpx.Request) -> httpx.Response:
+    if request.url.host == "eutils.ncbi.nlm.nih.gov":
+        if request.url.path.endswith("esearch.fcgi"):
+            assert request.url.params.get("db") == "pmc"
+            return httpx.Response(200, json={"esearchresult": {"count": "1", "idlist": ["PMC123"]}})
+        assert request.url.params.get("db") == "pmc"
+        return httpx.Response(
+            200,
+            json={
+                "result": {
+                    "PMC123": {
+                        "title": "PMC result",
+                        "authors": [{"name": "Open Author"}],
+                        "source": "PMC Journal",
+                        "pubdate": "2025",
+                        "articleids": [{"idtype": "doi", "value": "10.1/pmc"}],
+                    }
+                }
+            },
+        )
+    if request.url.host == "api.adsabs.harvard.edu":
+        assert request.headers["Authorization"] == "Bearer ads-token"
+        return httpx.Response(
+            200,
+            json={
+                "response": {
+                    "numFound": 1,
+                    "docs": [
+                        {
+                            "bibcode": "2025ApJ...1",
+                            "title": ["NASA ADS result"],
+                            "author": ["Astro Author"],
+                            "pub": "ApJ",
+                            "pubdate": "2025-01-01",
+                            "doi": ["10.1/nasa"],
+                        }
+                    ],
+                }
+            },
+        )
+    assert request.url.host == "ieeexploreapi.ieee.org"
+    assert request.url.params.get("apikey") == "ieee-key"
+    return httpx.Response(
+        200,
+        json={
+            "total_records": 1,
+            "articles": [
+                {
+                    "title": "IEEE result",
+                    "doi": "10.1/ieee",
+                    "publication_title": "IEEE Journal",
+                    "publication_year": 2025,
+                    "authors": {"authors": [{"full_name": "Ieee Author"}]},
+                }
+            ],
+        },
+    )
+
+
+@pytest.mark.parametrize(
+    ("provider", "title", "identifier_provider"),
+    [
+        ("pmc", "PMC result", "doi"),
+        ("nasa", "NASA ADS result", "doi"),
+        ("ieee", "IEEE result", "doi"),
+    ],
+)
+def test_extra_search_adapters_normalize_results(provider, title, identifier_provider):
+    page = search_metadata(
+        provider,
+        [SearchClause("title", "and", "machine learning")],
+        settings=Settings(nasa_ads_token="ads-token", ieee_api_key="ieee-key"),
+        transport=httpx.MockTransport(extra_search_response),
+    )
+    assert page.total == 1
+    assert page.results[0].title == title
+    assert page.results[0].identifier_provider == identifier_provider
+
+
+def test_credentialed_sources_require_keys():
+    with pytest.raises(MetadataLookupError, match="QUIREBASE_NASA_ADS_TOKEN"):
+        search_metadata(
+            "nasa",
+            [SearchClause("title", "and", "term")],
+            transport=httpx.MockTransport(extra_search_response),
+        )
+    with pytest.raises(MetadataLookupError, match="QUIREBASE_IEEE_API_KEY"):
+        search_metadata(
+            "ieee",
+            [SearchClause("title", "and", "term")],
+            transport=httpx.MockTransport(extra_search_response),
+        )
