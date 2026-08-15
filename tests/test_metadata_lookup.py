@@ -162,6 +162,20 @@ def test_identifier_input_cannot_be_used_as_an_arbitrary_url():
 
 
 @pytest.mark.parametrize(
+    ("value", "provider"),
+    [
+        ("invalid", "bibcode"),
+        ('" OR 1=1', "bibcode"),
+        ("not-a-bibcode", "bibcode"),
+        ("invalid-number", "article_number"),
+    ],
+)
+def test_explicit_provider_rejects_malformed_identifiers(value, provider):
+    with pytest.raises(ValueError, match=f"identifier is not a valid {provider}"):
+        parse_identifier(value, provider)
+
+
+@pytest.mark.parametrize(
     ("value", "provider", "title"),
     [
         ("10.1234/sample", "doi", "DOI Example"),

@@ -6,7 +6,6 @@ from sqlalchemy import select
 
 from quirebase.access.items import require_readable_item
 from quirebase.citation import (
-    available_builtin_styles,
     builtin_style_xml,
     is_valid_csl,
     item_to_csl_json,

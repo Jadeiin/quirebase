@@ -2,7 +2,7 @@
 
 from alembic import op
 
-from quirebase.db import Base
+from quirebase.models import Base
 
 revision = "0010_citation_styles"
 down_revision = "0009_item_reads"

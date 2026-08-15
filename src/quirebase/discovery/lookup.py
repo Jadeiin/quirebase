@@ -69,7 +69,7 @@ def parse_identifier(value: str, provider: str = "auto") -> Identifier:
     if provider in ("auto", "openalex") and OPENALEX_PATTERN.fullmatch(openalex):
         return Identifier("openalex", openalex.upper())
     bibcode = re.sub(r"^bibcode:\s*", "", candidate, flags=re.IGNORECASE)
-    if (provider == "auto" and BIBCODE_PATTERN.fullmatch(bibcode)) or (provider == "bibcode" and bibcode):
+    if provider in ("auto", "bibcode") and BIBCODE_PATTERN.fullmatch(bibcode):
         return Identifier("bibcode", bibcode)
     article_number = re.sub(r"^(?:article_number|ieee):\s*", "", candidate, flags=re.IGNORECASE)
     if provider == "article_number" and ARTICLE_NUMBER_PATTERN.fullmatch(article_number):

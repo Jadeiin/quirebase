@@ -128,6 +128,7 @@ def test_resolve_style_xml_scoped_to_owner(db):
 
 def test_citation_routes_enforce_custom_style_ownership(db, tmp_path, monkeypatch):
     from test_http import authenticated_client
+
     from quirebase.core.config import get_settings
     from quirebase.documents.citations import create_custom_citation_style
     from quirebase.web.app import app
@@ -161,6 +162,7 @@ def test_citation_routes_enforce_custom_style_ownership(db, tmp_path, monkeypatc
 
 def test_custom_styles_accessible_in_item_workspace_when_builtin_styles_missing(db, tmp_path, monkeypatch):
     from test_http import authenticated_client
+
     from quirebase.core.config import get_settings
     from quirebase.documents.citations import create_custom_citation_style
     from quirebase.web.app import app

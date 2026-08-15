@@ -113,7 +113,7 @@ def _parse_endnote_records(contents: str) -> list[dict[str, str | None]]:
         elif current is not None and last_tag is not None:
             continuation = line.strip()
             if continuation:
-                if last_tag in current and current[last_tag]:
+                if current.get(last_tag):
                     sep = "\n" if last_tag == "X" else " "
                     current[last_tag][-1] = f"{current[last_tag][-1]}{sep}{continuation}"
                 else:

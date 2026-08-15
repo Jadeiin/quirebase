@@ -36,6 +36,7 @@ from quirebase.pipeline.inspection import extract_doi
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
+    import httpx
     from sqlalchemy.orm import Session
 
 
