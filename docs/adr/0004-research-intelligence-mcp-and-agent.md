@@ -21,7 +21,7 @@ We establish two decoupled layers for AI and language model integration:
 
 ### 1. Domain Capability: `quirebase.intelligence`
 A dedicated capability module providing:
-- **Structural Extraction (`extraction.py`)**: Uses `pymupdf4llm` (with fallback to structured PyMuPDF extraction) to transform PDF revisions into structured Markdown with LaTeX math formulas (`$...$`) and Markdown tables.
+- **Structural Extraction (`extraction.py`)**: Uses `pymupdf4llm` (with fallback to structured PyMuPDF extraction) to transform a **File Revision** into structured Markdown with LaTeX math formulas (`$...$`) and Markdown tables.
 - **Semantic Chunking (`chunking.py`)**: Header-aware document chunking for Retrieval-Augmented Generation (RAG).
 - **Research Agent (`agent.py`)**: Type-safe research assistant agent built on **Pydantic AI**, providing structured outputs (`ItemSummary`, `LiteratureReview`, `SynthesisOutput`) and tool calling across Quirebase capabilities.
 
@@ -29,7 +29,7 @@ A dedicated capability module providing:
 An inbound protocol adapter exposing Quirebase capabilities as an MCP Server (over standard I/O and SSE):
 - **Tools**: `search_library`, `get_item`, `get_item_fulltext`, `list_projects`, `get_annotations`, `create_annotation`.
 - **Resources**: `quirebase://items/{item_id}`, `quirebase://projects/{project_id}`.
-- **Prompts**: `literature_review`, `paper_summary`.
+- **Prompts**: `literature_review`, `item_summary`.
 
 ```mermaid
 graph LR

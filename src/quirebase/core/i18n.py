@@ -44,13 +44,9 @@ def catalog(locale: str = DEFAULT_LOCALE) -> dict[str, str]:
     """Return dictionary of all msgid -> msgstr for the given locale (backwards compatible)."""
     norm = normalize_locale(locale)
     trans = get_translations(norm)
-    if hasattr(trans, "_catalog") and isinstance(trans._catalog, dict):
-        return {str(k): str(v) for k, v in trans._catalog.items() if k and isinstance(k, str)}
-    json_path = LOCALES_DIR / f"{locale}.json"
-    if json_path.is_file():
-        import json
-
-        return json.loads(json_path.read_text(encoding="utf-8"))
+    data = getattr(trans, "_catalog", {})
+    if isinstance(data, dict):
+        return {str(k): str(v) for k, v in data.items() if k and isinstance(k, str)}
     return {}
 
 
@@ -101,7 +97,7 @@ def format_datetime(
     norm = normalize_locale(locale)
     try:
         return babel_format_datetime(dt, format=format, locale=norm)
-    except Exception:
+    except (ValueError, TypeError, LookupError):
         return dt.isoformat()
 
 
@@ -114,7 +110,7 @@ def format_date(
     norm = normalize_locale(locale)
     try:
         return babel_format_date(d, format=format, locale=norm)
-    except Exception:
+    except (ValueError, TypeError, LookupError):
         return d.isoformat()
 
 
@@ -128,7 +124,7 @@ def format_number(
     norm = normalize_locale(locale)
     try:
         return format_decimal(number, locale=norm)
-    except Exception:
+    except (ValueError, TypeError, LookupError):
         return str(number)
 
 
