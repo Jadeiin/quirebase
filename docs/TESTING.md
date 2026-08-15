@@ -3,7 +3,7 @@
 ## Fast suite
 
 ```sh
-uv sync --extra dev
+uv sync
 uv run prek install --hook-type pre-commit --hook-type pre-push --hook-type commit-msg
 uv run prek run --all-files
 uv run pytest -q -m "not oa"

@@ -11,7 +11,7 @@ dev_username="${QUIREBASE_DEV_USERNAME:-admin}"
 dev_password="${QUIREBASE_DEV_PASSWORD:-quirebase-dev}"
 
 if [[ "${QUIREBASE_DEV_SKIP_SETUP:-0}" != "1" ]]; then
-  uv sync --extra dev
+  uv sync
   bun install --frozen-lockfile
   bun run build
 fi

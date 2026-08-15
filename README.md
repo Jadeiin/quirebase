@@ -22,7 +22,7 @@ asset rebuilding on later runs.
 For manual setup:
 
 ```sh
-uv sync --extra dev
+uv sync
 uv run prek install --hook-type pre-commit --hook-type pre-push --hook-type commit-msg
 bun install --frozen-lockfile
 bun run build
