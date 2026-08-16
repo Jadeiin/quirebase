@@ -25,6 +25,7 @@ from quirebase.library import (
     batch_add_tags_to_item,
     generate_bibtex_key,
     get_item_workspace_data,
+    mark_item_read,
     remove_tag_from_item,
     rescan_pdf_doi,
     search_authors_typeahead,
@@ -71,6 +72,7 @@ def render_item_workspace(
     login_session: LoginSession,
     db: Session,
 ):
+    mark_item_read(db, user, item_id)
     data = get_item_workspace_data(db, user, item_id, section)
     return templates.TemplateResponse(
         request,

@@ -257,7 +257,6 @@ def get_item_workspace_data(db: Session, user: User, item_id: str, section: str)
     item = db.get(Item, item_id)
     if item is None:
         raise ResourceNotFound("item not found")
-    mark_item_read(db, user, item_id)
 
     can_edit = can_edit_item(db, user, item_id)
 
