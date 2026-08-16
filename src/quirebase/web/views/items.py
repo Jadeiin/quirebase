@@ -27,6 +27,7 @@ from quirebase.library import (
     batch_add_tags_to_item,
     generate_bibtex_key,
     get_item_workspace_data,
+    parse_author_name,
     remove_tag_from_item,
     rescan_pdf_doi,
     search_authors_typeahead,
@@ -193,7 +194,18 @@ def edit_item(
                     "first_name": first,
                     "is_corresponding": is_corr,
                 })
-        set_item_authors(db, user, item.id, authors_data, role="author")
+        if authors_data or (
+            not any(name.strip() for name in author_last_name) and not authors.strip()
+        ):
+            set_item_authors(db, user, item.id, authors_data, role="author")
+    elif authors.strip():
+        parsed_authors = []
+        for a_str in authors.split(";"):
+            if a_str.strip():
+                l, f = parse_author_name(a_str.strip())
+                parsed_authors.append({"last_name": l, "first_name": f})
+        if parsed_authors:
+            set_item_authors(db, user, item.id, parsed_authors, role="author")
 
     if editor_last_name:
         editors_data = []
@@ -201,7 +213,18 @@ def edit_item(
             if last.strip():
                 first = editor_first_name[idx] if idx < len(editor_first_name) else None
                 editors_data.append({"last_name": last.strip(), "first_name": first})
-        set_item_authors(db, user, item.id, editors_data, role="editor")
+        if editors_data or (
+            not any(name.strip() for name in editor_last_name) and not editors.strip()
+        ):
+            set_item_authors(db, user, item.id, editors_data, role="editor")
+    elif editors.strip():
+        parsed_editors = []
+        for e_str in editors.split(";"):
+            if e_str.strip():
+                l, f = parse_author_name(e_str.strip())
+                parsed_editors.append({"last_name": l, "first_name": f})
+        if parsed_editors:
+            set_item_authors(db, user, item.id, parsed_editors, role="editor")
 
     return RedirectResponse(f"/items/{item.id}/metadata", status_code=303)
 

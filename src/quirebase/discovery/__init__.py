@@ -39,6 +39,7 @@ from quirebase.discovery.lookup import (
     Identifier,
     MetadataLookupError,
     MetadataNotFoundError,
+    MetadataRecord,
     lookup_metadata,
     parse_identifier,
 )
@@ -57,6 +58,7 @@ __all__ = [
     "Identifier",
     "MetadataLookupError",
     "MetadataNotFoundError",
+    "MetadataRecord",
     "SearchClause",
     "SearchPage",
     "SearchResult",

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-16 17:02+0800\n"
+"POT-Creation-Date: 2026-08-16 17:23+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1086,6 +1086,14 @@ msgstr ""
 
 #: src/quirebase/templates/item.html:87
 msgid "Update key"
+msgstr ""
+
+#: src/quirebase/templates/item.html:103
+msgid "Select upstream provider"
+msgstr ""
+
+#: src/quirebase/templates/item.html:104
+msgid "Auto"
 msgstr ""
 
 #: src/quirebase/templates/item.html:109 src/quirebase/templates/item.html:139

@@ -9,7 +9,13 @@ from xml.etree import ElementTree
 import httpx
 
 from quirebase.core.config import Settings, get_settings
-from quirebase.discovery.lookup import MetadataLookupError, _clean_markup, _date_parts, _first
+from quirebase.discovery.lookup import (
+    MetadataLookupError,
+    _clean_markup,
+    _date_parts,
+    _first,
+    _reconstruct_openalex_abstract,
+)
 
 SEARCH_PROVIDERS = {"crossref", "pubmed", "pmc", "arxiv", "openlibrary", "openalex", "nasa", "ieee"}
 SEARCH_FIELDS = {"any", "title", "author", "publication", "abstract"}
@@ -472,7 +478,7 @@ class OpenAlexSearchAdapter:
         results = []
         for work in payload.get("results", []):
             openalex_id = (work.get("id") or "").rsplit("/", 1)[-1]
-            title = work.get("display_name") or work.get("title")
+            title = _clean_markup(work.get("display_name") or work.get("title"))
             if not openalex_id or not title:
                 continue
             doi = (
@@ -486,6 +492,9 @@ class OpenAlexSearchAdapter:
                 for authorship in work.get("authorships", [])
                 if (author_name := _first((authorship.get("author") or {}).get("display_name")))
             )
+            abstract = _reconstruct_openalex_abstract(
+                work.get("abstract_inverted_index")
+            ) or _clean_markup(_first(work.get("abstract")))
             source = (work.get("primary_location") or {}).get("source") or {}
             results.append(
                 SearchResult(
@@ -497,6 +506,7 @@ class OpenAlexSearchAdapter:
                     publication_title=_first(source.get("display_name")),
                     publication_date=work.get("publication_date"),
                     doi=doi,
+                    abstract=abstract,
                 )
             )
         return SearchPage("openalex", results, total, page, per_page)

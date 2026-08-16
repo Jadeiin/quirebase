@@ -25,6 +25,8 @@ from quirebase.core.errors import (
 )
 from quirebase.core.storage import LocalObjectStore
 from quirebase.library.audit import record_audit_event
+from quirebase.library.authors import parse_author_name, set_item_authors
+from quirebase.library.identifiers import set_item_identifiers
 from quirebase.library.tags import get_tag_matrix_for_item
 from quirebase.models import (
     Attachment,
@@ -63,6 +65,14 @@ def create_item(
     )
     db.add(item)
     db.flush()
+    if item.authors:
+        parsed_authors = []
+        for raw in item.authors.split(";"):
+            if raw.strip():
+                last, first = parse_author_name(raw.strip())
+                parsed_authors.append({"last_name": last, "first_name": first})
+        if parsed_authors:
+            set_item_authors(db, user, item.id, parsed_authors, role="author")
     search_index(db).index_item(db, item.id)
     record_audit_event(db, user.id, "item.create", "item", item.id)
     db.commit()
@@ -329,6 +339,13 @@ def get_item_workspace_data(db: Session, user: User, item_id: str, section: str)
     identifier_links = list(
         db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item_id)).all()
     )
+    if not identifier_links and item.doi and item.doi.strip() and can_edit:
+        set_item_identifiers(db, user, item_id, [("doi", item.doi.strip())])
+        db.commit()
+        identifier_links = list(
+            db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item_id)).all()
+        )
+
     author_links = list(
         db.scalars(
             select(ItemAuthor)
@@ -337,6 +354,16 @@ def get_item_workspace_data(db: Session, user: User, item_id: str, section: str)
             .order_by(ItemAuthor.position)
         ).all()
     )
+    if not author_links and item.authors and item.authors.strip() and can_edit:
+        parsed_authors = []
+        for raw in item.authors.split(";"):
+            if raw.strip():
+                last, first = parse_author_name(raw.strip())
+                parsed_authors.append({"last_name": last, "first_name": first})
+        if parsed_authors:
+            author_links = set_item_authors(db, user, item_id, parsed_authors, role="author")
+            db.commit()
+
     editor_links = list(
         db.scalars(
             select(ItemAuthor)
@@ -345,6 +372,16 @@ def get_item_workspace_data(db: Session, user: User, item_id: str, section: str)
             .order_by(ItemAuthor.position)
         ).all()
     )
+    if not editor_links and item.editors and item.editors.strip() and can_edit:
+        parsed_editors = []
+        for raw in item.editors.split(";"):
+            if raw.strip():
+                last, first = parse_author_name(raw.strip())
+                parsed_editors.append({"last_name": last, "first_name": first})
+        if parsed_editors:
+            editor_links = set_item_authors(db, user, item_id, parsed_editors, role="editor")
+            db.commit()
+
     tag_matrix = get_tag_matrix_for_item(db, user, item_id) if section == "organize" else None
 
     return {

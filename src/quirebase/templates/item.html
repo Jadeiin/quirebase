@@ -98,9 +98,14 @@
               </div>
               {% if can_edit %}
               <div class="identifier-actions">
-                <form method="post" action="/items/{{ item.id }}/sync-metadata?csrf_token={{ csrf }}">
-                  <input type="hidden" name="provider" value="doi">
+                <form method="post" action="/items/{{ item.id }}/sync-metadata?csrf_token={{ csrf }}" class="inline-sync-form">
                   <input type="hidden" name="uid" value="{{ item.doi }}">
+                  <select name="provider" class="provider-select" title="{{ _('Select upstream provider') }}">
+                    <option value="doi">{{ _('Auto') }}</option>
+                    <option value="crossref">Crossref</option>
+                    <option value="openalex">OpenAlex</option>
+                    <option value="datacite">DataCite</option>
+                  </select>
                   <button class="secondary-button compact-action-btn" type="submit">{{ _('Autoupdate') }}</button>
                 </form>
               </div>

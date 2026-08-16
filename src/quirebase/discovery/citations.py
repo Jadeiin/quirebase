@@ -145,7 +145,13 @@ def item_to_csl_json(item: Item) -> dict[str, Any]:
         "abstract": item.abstract,
         "DOI": item.doi,
         "container-title": item.publication_title,
-        "page": None,
+        "container-title-short": item.journal_abbreviation,
+        "volume": item.volume,
+        "issue": item.issue,
+        "page": item.pages,
+        "publisher": item.publisher,
+        "publisher-place": item.place_published,
+        "URL": item.urls.splitlines()[0].strip() if item.urls else None,
     }
     record.update({key: value for key, value in optional.items() if value})
     author = _parse_names(item.authors)

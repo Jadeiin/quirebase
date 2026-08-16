@@ -48,6 +48,37 @@ REFERENCE_TYPE_TO_ENDNOTE: dict[str, str] = {
     "webpage": "Web Page",
 }
 
+REFERENCE_TYPE_TO_BIBTEX: dict[str, str] = {
+    "article": "article",
+    "journal-article": "article",
+    "journal_article": "article",
+    "jour": "article",
+    "book": "book",
+    "chapter": "incollection",
+    "book-chapter": "incollection",
+    "book_chapter": "incollection",
+    "book_section": "incollection",
+    "book-section": "incollection",
+    "chap": "incollection",
+    "conference": "inproceedings",
+    "conference-paper": "inproceedings",
+    "conference_paper": "inproceedings",
+    "proceedings": "proceedings",
+    "conf": "inproceedings",
+    "thesis": "phdthesis",
+    "dissertation": "phdthesis",
+    "thes": "phdthesis",
+    "mastersthesis": "mastersthesis",
+    "report": "techreport",
+    "rprt": "techreport",
+    "techreport": "techreport",
+    "preprint": "misc",
+    "webpage": "misc",
+    "dataset": "misc",
+    "unpublished": "unpublished",
+    "generic": "misc",
+}
+
 _ENDNOTE_TAGS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ@"
 
 
@@ -206,18 +237,31 @@ def export_bibliography(items: list[Item], file_format: str) -> str:
     if file_format == "bibtex":
         entries = []
         for number, item in enumerate(items, start=1):
+            entry_type = (
+                item.bibtex_type
+                or REFERENCE_TYPE_TO_BIBTEX.get((item.reference_type or "").lower(), "article")
+            ).lower()
             entry = {
-                "ID": f"quirebase-{number}",
-                "ENTRYTYPE": (item.reference_type or "article").lower(),
+                "ID": item.bibtex_id or f"quirebase-{number}",
+                "ENTRYTYPE": entry_type,
                 "title": item.title,
             }
             optional: dict[str, Any] = {
                 "abstract": item.abstract,
                 "author": item.authors.replace("; ", " and ") if item.authors else None,
                 "keywords": item.keywords,
-                "year": item.publication_date,
+                "year": item.publication_date[:4]
+                if item.publication_date
+                and len(item.publication_date) >= 4
+                and item.publication_date[:4].isdigit()
+                else item.publication_date,
                 "journal": item.publication_title,
+                "volume": item.volume,
+                "number": item.issue,
+                "pages": item.pages,
+                "publisher": item.publisher,
                 "doi": item.doi,
+                "url": (item.urls or "").splitlines()[0] if item.urls else None,
             }
             entry.update({key: value for key, value in optional.items() if value})
             entries.append(entry)

@@ -9,9 +9,16 @@ from sqlalchemy import delete, select
 
 from quirebase.access.items import require_editable_item
 from quirebase.core.errors import ValidationFailure
-from quirebase.discovery.lookup import DOI_PATTERN, lookup_metadata
+from quirebase.discovery.bibliography import REFERENCE_TYPE_TO_BIBTEX
+from quirebase.discovery.lookup import (
+    DOI_PATTERN,
+    _clean_markup,
+    lookup_metadata,
+    normalize_reference_type,
+)
 from quirebase.library.audit import record_audit_event
 from quirebase.library.authors import parse_author_name, set_item_authors
+from quirebase.library.tags import batch_add_tags_to_item
 from quirebase.models import FileRevision, Item, ItemIdentifier, User
 from quirebase.search import search_index
 
@@ -140,7 +147,7 @@ def rescan_pdf_doi(db: Session, user: User, item_id: str) -> str | None:
                 set_item_identifiers(db, user, item_id, existing_pairs)
                 item.updated_by = user.id
                 record_audit_event(db, user.id, "item.rescan_doi", "item", item_id)
-                db.flush()
+                db.commit()
                 return found_doi
     return None
 
@@ -159,32 +166,39 @@ def sync_metadata_from_upstream(
 
     _, record = lookup_metadata(uid_value, provider=provider)
 
-    if record.get("title"):
-        item.title = record["title"] or item.title
-    if record.get("abstract"):
-        item.abstract = record["abstract"]
-    if record.get("publication_date"):
-        item.publication_date = record["publication_date"]
-    if record.get("publication_title"):
-        item.publication_title = record["publication_title"]
-    if record.get("reference_type"):
-        item.reference_type = record["reference_type"]
-    if record.get("volume"):
-        item.volume = record["volume"]
-    if record.get("issue"):
-        item.issue = record["issue"]
-    if record.get("pages"):
-        item.pages = record["pages"]
-    if record.get("publisher"):
-        item.publisher = record["publisher"]
-    if record.get("affiliation"):
-        item.affiliation = record["affiliation"]
-    if record.get("journal_abbreviation"):
-        item.journal_abbreviation = record["journal_abbreviation"]
-    if record.get("doi"):
-        item.doi = record["doi"]
-    elif provider == "doi":
-        item.doi = uid_value
+    if record.get("title") and (t := _clean_markup(record["title"])):
+        item.title = t
+    if record.get("abstract") and (a := _clean_markup(record["abstract"])):
+        item.abstract = a
+    if record.get("publication_date") and (d := str(record["publication_date"]).strip()):
+        item.publication_date = d
+    if record.get("publication_title") and (pt := _clean_markup(record["publication_title"])):
+        item.publication_title = pt
+    if record.get("journal_abbreviation") and (ja := _clean_markup(record["journal_abbreviation"])):
+        item.journal_abbreviation = ja
+    if record.get("reference_type") and (
+        ref_type := normalize_reference_type(record["reference_type"])
+    ):
+        item.reference_type = ref_type
+        bib_type = record.get("bibtex_type") or REFERENCE_TYPE_TO_BIBTEX.get(ref_type, ref_type)
+        if bib_type:
+            item.bibtex_type = bib_type
+    elif record.get("bibtex_type"):
+        item.bibtex_type = record["bibtex_type"].strip().lower()
+    if record.get("volume") and (v := str(record["volume"]).strip()):
+        item.volume = v
+    if record.get("issue") and (iss := str(record["issue"]).strip()):
+        item.issue = iss
+    if record.get("pages") and (pg := str(record["pages"]).strip()):
+        item.pages = pg
+    if record.get("publisher") and (pub := _clean_markup(record["publisher"])):
+        item.publisher = pub
+    if record.get("affiliation") and (aff := _clean_markup(record["affiliation"])):
+        item.affiliation = aff
+    if record.get("doi") and (doi := clean_identifier_value("doi", record["doi"])):
+        item.doi = doi
+    elif provider == "doi" and uid_value and not item.doi:
+        item.doi = clean_identifier_value("doi", uid_value)
 
     authors_raw = record.get("authors")
     if isinstance(authors_raw, str) and authors_raw.strip():
@@ -195,6 +209,7 @@ def sync_metadata_from_upstream(
                 last, first = parse_author_name(author_str)
                 parsed_authors.append({"last_name": last, "first_name": first})
         if parsed_authors:
+            item.authors = authors_raw.strip()
             set_item_authors(db, user, item_id, parsed_authors, role="author")
 
     idents_raw = record.get("identifiers")
@@ -213,11 +228,33 @@ def sync_metadata_from_upstream(
     if current_idents:
         set_item_identifiers(db, user, item_id, list(current_idents.items()))
 
+    if record.get("urls"):
+        existing_urls = [u.strip() for u in (item.urls or "").splitlines() if u.strip()]
+        for u in str(record["urls"]).splitlines():
+            u_clean = u.strip()
+            if u_clean and u_clean not in existing_urls:
+                existing_urls.append(u_clean)
+        item.urls = "\n".join(existing_urls) if existing_urls else None
+
+    if record.get("keywords"):
+        kw_raw = str(record["keywords"])
+        existing_kws = [k.strip() for k in (item.keywords or "").split(";") if k.strip()]
+        new_kws = [k.strip() for k in kw_raw.split(";") if k.strip()]
+        for nk in new_kws:
+            if nk not in existing_kws:
+                existing_kws.append(nk)
+        item.keywords = "; ".join(existing_kws) if existing_kws else None
+        if new_kws:
+            batch_add_tags_to_item(db, user, item_id, new_kws)
+
+    if not item.bibtex_id:
+        item.bibtex_id = generate_bibtex_key(item)
+
     item.updated_by = user.id
     item.version += 1
     db.flush()
 
     search_index(db).index_item(db, item_id)
     record_audit_event(db, user.id, "item.sync_upstream", "item", item_id)
-    db.flush()
+    db.commit()
     return item

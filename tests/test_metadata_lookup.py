@@ -187,7 +187,7 @@ def test_explicit_provider_rejects_malformed_identifiers(value, provider):
         ("10.1234/sample", "doi", "DOI Example"),
         ("42", "pmid", "PubMed Example"),
         ("1706.03762", "arxiv", "arXiv Example"),
-        ("10.9999/dataset", "doi", "DataCite Example"),
+        ("10.9999/dataset", "datacite", "DataCite Example"),
         ("9780131103627", "isbn", "The C Programming Language"),
         ("W123", "openalex", "OpenAlex Example"),
         ("2025ApJ...123..456A", "bibcode", "NASA ADS Example"),
@@ -283,3 +283,73 @@ def test_online_preview_uses_existing_confirmed_import_flow(db, tmp_path, monkey
     finally:
         app.dependency_overrides.clear()
         get_settings.cache_clear()
+
+
+def test_metadata_record_dto_attributes_and_mapping():
+    from quirebase.discovery.lookup import MetadataRecord
+
+    record = MetadataRecord(
+        title="Attention Is All You Need",
+        abstract="The dominant sequence transduction models...",
+        authors="Vaswani, Ashish; Shazeer, Noam",
+        keywords="Machine Learning; Transformer",
+        publication_date="2017-06-12",
+        publication_title="NeurIPS 2017",
+        volume="30",
+        pages="5998-6008",
+        doi="10.48550/arXiv.1706.03762",
+        urls="https://arxiv.org/abs/1706.03762\nhttps://arxiv.org/pdf/1706.03762.pdf",
+    )
+
+    assert record.title == "Attention Is All You Need"
+    assert record["title"] == "Attention Is All You Need"
+    assert record.get("volume") == "30"
+    assert "doi" in record
+    assert "nonexistent" not in record
+
+    as_dict = record.to_dict()
+    assert as_dict["volume"] == "30"
+    assert as_dict["authors"] == "Vaswani, Ashish; Shazeer, Noam"
+
+
+def test_openalex_abstract_inverted_index_and_html_cleaning():
+    mock_payload = {
+        "id": "https://openalex.org/W4391019623",
+        "doi": "https://doi.org/10.48550/arxiv.2309.12825",
+        "title": "<i>OmniDrones:</i> An Efficient Platform",
+        "display_name": "<i>OmniDrones:</i> An Efficient Platform",
+        "publication_date": "2023-09-21",
+        "abstract_inverted_index": {
+            "In": [0],
+            "this": [1],
+            "work,": [2],
+            "we": [3],
+            "introduce": [4],
+            "OmniDrones.": [5],
+        },
+        "authorships": [
+            {"author": {"display_name": "Guanqi He"}},
+            {"author": {"display_name": "Jordan Key"}},
+        ],
+        "topics": [{"display_name": "Robotics"}],
+        "primary_location": {
+            "source": {"display_name": "arXiv", "host_organization_name": "Cornell University"},
+            "landing_page_url": "https://arxiv.org/abs/2309.12825",
+        },
+        "type": "preprint",
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=mock_payload)
+
+    _ident, record = lookup_metadata(
+        "W4391019623",
+        "openalex",
+        transport=httpx.MockTransport(handler),
+    )
+
+    assert record.title == "OmniDrones: An Efficient Platform"
+    assert record.abstract == "In this work, we introduce OmniDrones."
+    assert record.authors == "Guanqi He; Jordan Key"
+    assert record.keywords == "Robotics"
+    assert "https://arxiv.org/abs/2309.12825" in str(record.urls)

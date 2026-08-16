@@ -103,6 +103,8 @@ def test_sync_metadata_from_upstream(db):
         "title": "A Mathematical Theory of Communication",
         "abstract": "The fundamental problem of communication is...",
         "authors": "Shannon, Claude",
+        "keywords": "Information Theory; Cryptography",
+        "urls": "https://doi.org/10.1002/j.1538-7305.1948.tb01338.x\nhttps://bell-labs.com/shannon1948",
         "publication_date": "1948",
         "publication_title": "Bell System Technical Journal",
         "volume": "27",
@@ -125,6 +127,54 @@ def test_sync_metadata_from_upstream(db):
     assert updated_item.issue == "3"
     assert updated_item.pages == "379-423"
     assert updated_item.publisher == "Alcatel-Lucent"
+    assert updated_item.bibtex_type == "article"
+    assert updated_item.bibtex_id is not None
+    assert "https://bell-labs.com/shannon1948" in updated_item.urls
     assert updated_item.updated_by == user.id
     assert len(updated_item.author_links) == 1
     assert updated_item.author_links[0].author.last_name == "Shannon"
+
+
+def test_sync_metadata_cleans_html_and_syncs_bibtex_type(db):
+    user = User(username="clean_html_user", password_hash="hash")
+    db.add(user)
+    db.flush()
+
+    item = Item(title="Draft Title", created_by=user.id)
+    db.add(item)
+    db.flush()
+
+    mock_record = {
+        "title": "<i>Quantum</i> Supremacy using a <b>Programmable</b> Superconducting Processor",
+        "abstract": "<p>The promise of quantum computers is that certain computational tasks might be executed exponentially faster...</p>",
+        "authors": "Arute, Frank; Arya, Kunal",
+        "keywords": "Quantum Computing; Superconducting",
+        "publication_date": "2019-10-23",
+        "publication_title": "<i>Nature</i>",
+        "journal_abbreviation": "<i>Nat.</i>",
+        "volume": "574",
+        "issue": "7779",
+        "pages": "505-510",
+        "publisher": "<b>Nature Publishing Group</b>",
+        "affiliation": "Google LLC, Santa Barbara, CA, USA",
+        "doi": "10.1038/s41586-019-1666-5",
+        "reference_type": "journal-article",
+    }
+
+    with patch("quirebase.library.identifiers.lookup_metadata", return_value=(None, mock_record)):
+        updated = sync_metadata_from_upstream(
+            db, user, item.id, provider="doi", uid_value="10.1038/s41586-019-1666-5"
+        )
+        db.commit()
+
+    assert updated.title == "Quantum Supremacy using a Programmable Superconducting Processor"
+    assert (
+        updated.abstract
+        == "The promise of quantum computers is that certain computational tasks might be executed exponentially faster..."
+    )
+    assert updated.publication_title == "Nature"
+    assert updated.journal_abbreviation == "Nat."
+    assert updated.publisher == "Nature Publishing Group"
+    assert updated.reference_type == "article"
+    assert updated.bibtex_type == "article"
+    assert updated.bibtex_id.startswith("Arute2019")
