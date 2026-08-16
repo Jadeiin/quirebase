@@ -135,7 +135,14 @@ def get_tag_matrix_for_item(db: Session, item_id: str) -> dict[str, Any]:
         groups_dict.setdefault(first_char, []).append(tag)
 
     sorted_letters = sorted(groups_dict.keys(), key=lambda k: (k == "#", k))
-    groups = [{"letter": letter, "tags": groups_dict[letter]} for letter in sorted_letters]
+    groups = [
+        {
+            "letter": letter,
+            "tags": groups_dict[letter],
+            "names": [t.name for t in groups_dict[letter]],
+        }
+        for letter in sorted_letters
+    ]
 
     return {
         "groups": groups,

@@ -104,6 +104,11 @@ Alpine.data("tagMatrix", () => ({
     if (!this.filter.trim()) return true;
     return name.toLowerCase().includes(this.filter.trim().toLowerCase());
   },
+  groupMatches(names) {
+    if (!this.filter.trim()) return true;
+    const q = this.filter.trim().toLowerCase();
+    return names.some((n) => n.toLowerCase().includes(q));
+  },
 }));
 
 Alpine.data("authorEditor", () => ({
