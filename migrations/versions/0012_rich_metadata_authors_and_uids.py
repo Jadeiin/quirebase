@@ -54,8 +54,12 @@ def upgrade() -> None:
         sa.column("item_id", sa.String),
         sa.column("provider", sa.String),
         sa.column("value", sa.String),
+        sa.column("created_at", sa.DateTime),
     )
     import uuid
+    from datetime import UTC, datetime
+
+    now_utc = datetime.now(UTC)
 
     existing_items = bind.execute(
         sa.select(items_table.c.id, items_table.c.doi).where(items_table.c.doi.is_not(None))
@@ -68,6 +72,7 @@ def upgrade() -> None:
                     item_id=row[0],
                     provider="doi",
                     value=row[1].strip(),
+                    created_at=now_utc,
                 )
             )
 
