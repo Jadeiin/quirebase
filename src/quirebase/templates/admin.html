@@ -1,48 +1,48 @@
 {% extends "base.html" %}
-{% block title %}{{ t('Administration') }} · Quirebase{% endblock %}
+{% block title %}{{ _('Administration') }} · Quirebase{% endblock %}
 {% block content %}
 <header class="item-header">
   <div class="item-title-row">
     <div>
-      <p class="eyebrow">{{ t('System workspace') }}</p>
-      <h1>{{ t('Administration') }}</h1>
-      <p class="item-byline">{{ t('Manage access, global library items, audit events, background jobs, runtime settings and maintenance.') }}</p>
+      <p class="eyebrow">{{ _('System workspace') }}</p>
+      <h1>{{ _('Administration') }}</h1>
+      <p class="item-byline">{{ _('Manage access, global library items, audit events, background jobs, runtime settings and maintenance.') }}</p>
     </div>
     <div class="item-header-actions">
-      <a class="button-link secondary-button" href="/metrics">{{ t('Metrics') }}</a>
+      <a class="button-link secondary-button" href="/metrics">{{ _('Metrics') }}</a>
     </div>
   </div>
 </header>
 
 <div class="item-workspace">
-  <nav class="item-local-nav" aria-label="{{ t('Administration navigation') }}">
+  <nav class="item-local-nav" aria-label="{{ _('Administration navigation') }}">
     <a href="/admin" {% if admin_tab == 'overview' %}aria-current="page"{% endif %}>
       <span>⌂</span>
-      <span><strong>{{ t('Overview') }}</strong><small>{{ t('System stats and health') }}</small></span>
+      <span><strong>{{ _('Overview') }}</strong><small>{{ _('System stats and health') }}</small></span>
     </a>
     <a href="/admin/users" {% if admin_tab == 'users' %}aria-current="page"{% endif %}>
       <span>👥</span>
-      <span><strong>{{ t('Users & Access') }}</strong><small>{{ t('Invite a user') }} · {{ t('Accounts, roles, and invites') }}</small></span>
+      <span><strong>{{ _('Users & Access') }}</strong><small>{{ _('Invite a user') }} · {{ _('Accounts, roles, and invites') }}</small></span>
     </a>
     <a href="/admin/items" {% if admin_tab == 'items' %}aria-current="page"{% endif %}>
       <span>▤</span>
-      <span><strong>{{ t('Global Items & Files') }}</strong><small>{{ t('Library items and storage') }}</small></span>
+      <span><strong>{{ _('Global Items & Files') }}</strong><small>{{ _('Library items and storage') }}</small></span>
     </a>
     <a href="/admin/audit" {% if admin_tab == 'audit' %}aria-current="page"{% endif %}>
       <span>📜</span>
-      <span><strong>{{ t('Audit Log') }}</strong><small>{{ t('Security and change log') }}</small></span>
+      <span><strong>{{ _('Audit Log') }}</strong><small>{{ _('Security and change log') }}</small></span>
     </a>
     <a href="/admin/jobs" {% if admin_tab == 'jobs' %}aria-current="page"{% endif %}>
       <span>⚡</span>
-      <span><strong>{{ t('Background Jobs') }}</strong><small>{{ t('Processing pipeline') }}</small></span>
+      <span><strong>{{ _('Background Jobs') }}</strong><small>{{ _('Processing pipeline') }}</small></span>
     </a>
     <a href="/admin/settings" {% if admin_tab == 'settings' %}aria-current="page"{% endif %}>
       <span>⚙</span>
-      <span><strong>{{ t('Runtime Settings') }}</strong><small>{{ t('API keys and thresholds') }}</small></span>
+      <span><strong>{{ _('Runtime Settings') }}</strong><small>{{ _('API keys and thresholds') }}</small></span>
     </a>
     <a href="/admin/maintenance" {% if admin_tab == 'maintenance' %}aria-current="page"{% endif %}>
       <span>🛠</span>
-      <span><strong>{{ t('Maintenance') }}</strong><small>{{ t('Reindex, verify, and backups') }}</small></span>
+      <span><strong>{{ _('Maintenance') }}</strong><small>{{ _('Reindex, verify, and backups') }}</small></span>
     </a>
   </nav>
 
@@ -55,19 +55,19 @@
     <div class="admin-stats">
       <section class="panel">
         <strong>{{ users|length }}</strong>
-        <span>{{ t('Total users') }}</span>
+        <span>{{ _('Total users') }}</span>
       </section>
       <section class="panel">
         <strong>{{ storage.items_count }}</strong>
-        <span>{{ t('Total items') }}</span>
+        <span>{{ _('Total items') }}</span>
       </section>
       <section class="panel">
         <strong>{{ (storage.total_disk_bytes / 1024 / 1024)|round(1) }} MB</strong>
-        <span>{{ t('Total storage') }}</span>
+        <span>{{ _('Total storage') }}</span>
       </section>
       <section class="panel">
         <strong>{{ failed_jobs|length }}</strong>
-        <span>{{ t('Failed jobs') }}</span>
+        <span>{{ _('Failed jobs') }}</span>
       </section>
     </div>
 
@@ -75,27 +75,27 @@
       <section class="panel">
         <div class="section-heading">
           <div>
-            <p class="eyebrow">{{ t('Storage breakdown') }}</p>
-            <h2>{{ t('File objects') }}</h2>
+            <p class="eyebrow">{{ _('Storage breakdown') }}</p>
+            <h2>{{ _('File objects') }}</h2>
           </div>
         </div>
         <div class="admin-list">
           <article>
             <div>
-              <strong>{{ t('PDF Revisions') }}</strong>
-              <small>{{ storage.revisions_count }} {{ t('files') }} · {{ (storage.revisions_bytes / 1024 / 1024)|round(2) }} MB</small>
+              <strong>{{ _('PDF Revisions') }}</strong>
+              <small>{{ storage.revisions_count }} {{ _('files') }} · {{ (storage.revisions_bytes / 1024 / 1024)|round(2) }} MB</small>
             </div>
           </article>
           <article>
             <div>
-              <strong>{{ t('Attachments') }}</strong>
-              <small>{{ storage.attachments_count }} {{ t('files') }} · {{ (storage.attachments_bytes / 1024 / 1024)|round(2) }} MB</small>
+              <strong>{{ _('Attachments') }}</strong>
+              <small>{{ storage.attachments_count }} {{ _('files') }} · {{ (storage.attachments_bytes / 1024 / 1024)|round(2) }} MB</small>
             </div>
           </article>
           <article>
             <div>
-              <strong>{{ t('Thumbnails') }}</strong>
-              <small>{{ storage.thumbnails_count }} {{ t('files') }} · {{ (storage.thumbnails_bytes / 1024 / 1024)|round(2) }} MB</small>
+              <strong>{{ _('Thumbnails') }}</strong>
+              <small>{{ storage.thumbnails_count }} {{ _('files') }} · {{ (storage.thumbnails_bytes / 1024 / 1024)|round(2) }} MB</small>
             </div>
           </article>
         </div>
@@ -104,10 +104,10 @@
       <section class="panel">
         <div class="section-heading">
           <div>
-            <p class="eyebrow">{{ t('Activity') }}</p>
-            <h2>{{ t('Recent audit events') }}</h2>
+            <p class="eyebrow">{{ _('Activity') }}</p>
+            <h2>{{ _('Recent audit events') }}</h2>
           </div>
-          <a href="/admin/audit">{{ t('View all') }}</a>
+          <a href="/admin/audit">{{ _('View all') }}</a>
         </div>
         <div class="admin-list">
           {% for ev in recent_events %}
@@ -118,7 +118,7 @@
             </div>
           </article>
           {% else %}
-          <div class="empty-state">{{ t('No recent audit events.') }}</div>
+          <div class="empty-state">{{ _('No recent audit events.') }}</div>
           {% endfor %}
         </div>
       </section>
@@ -131,29 +131,29 @@
     <section class="panel filter-panel">
       <form method="get" action="/admin/users" class="filter-grid">
         <label class="search-field">
-          {{ t('Search users') }}
-          <input name="search" value="{{ search }}" placeholder="{{ t('Username or ID…') }}">
+          {{ _('Search users') }}
+          <input name="search" value="{{ search }}" placeholder="{{ _('Username or ID…') }}">
         </label>
         <label>
-          {{ t('Role') }}
+          {{ _('Role') }}
           <select name="role">
-            <option value="">{{ t('All roles') }}</option>
-            <option value="member" {% if role == 'member' %}selected{% endif %}>{{ t('member') }}</option>
-            <option value="administrator" {% if role == 'administrator' %}selected{% endif %}>{{ t('administrator') }}</option>
+            <option value="">{{ _('All roles') }}</option>
+            <option value="member" {% if role == 'member' %}selected{% endif %}>{{ _('member') }}</option>
+            <option value="administrator" {% if role == 'administrator' %}selected{% endif %}>{{ _('administrator') }}</option>
           </select>
         </label>
         <label>
-          {{ t('Status') }}
+          {{ _('Status') }}
           <select name="active">
-            <option value="">{{ t('All statuses') }}</option>
-            <option value="true" {% if active_filter == 'true' %}selected{% endif %}>{{ t('Active') }}</option>
-            <option value="false" {% if active_filter == 'false' %}selected{% endif %}>{{ t('Disabled') }}</option>
+            <option value="">{{ _('All statuses') }}</option>
+            <option value="true" {% if active_filter == 'true' %}selected{% endif %}>{{ _('Active') }}</option>
+            <option value="false" {% if active_filter == 'false' %}selected{% endif %}>{{ _('Disabled') }}</option>
           </select>
         </label>
         <div class="filter-actions">
-          <button class="compact-button">{{ t('Filter') }}</button>
+          <button class="compact-button">{{ _('Filter') }}</button>
           {% if search or role or active_filter %}
-          <a href="/admin/users">{{ t('Clear') }}</a>
+          <a href="/admin/users">{{ _('Clear') }}</a>
           {% endif %}
         </div>
       </form>
@@ -163,39 +163,39 @@
       <section class="panel">
         <div class="section-heading">
           <div>
-            <p class="eyebrow">{{ t('Create account') }}</p>
-            <h2>{{ t('Add user directly') }}</h2>
+            <p class="eyebrow">{{ _('Create account') }}</p>
+            <h2>{{ _('Add user directly') }}</h2>
           </div>
         </div>
         <form method="post" action="/admin/users/create?csrf_token={{ csrf }}">
-          <label>{{ t('Username') }}<input name="username" maxlength="120" required autocomplete="off"></label>
-          <label>{{ t('Password') }}<input type="password" name="password" minlength="12" required autocomplete="new-password"></label>
-          <label>{{ t('Role') }}
+          <label>{{ _('Username') }}<input name="username" maxlength="120" required autocomplete="off"></label>
+          <label>{{ _('Password') }}<input type="password" name="password" minlength="12" required autocomplete="new-password"></label>
+          <label>{{ _('Role') }}
             <select name="role">
-              <option value="member">{{ t('member') }}</option>
-              <option value="administrator">{{ t('administrator') }}</option>
+              <option value="member">{{ _('member') }}</option>
+              <option value="administrator">{{ _('administrator') }}</option>
             </select>
           </label>
-          <button>{{ t('Create user') }}</button>
+          <button>{{ _('Create user') }}</button>
         </form>
       </section>
 
       <section class="panel">
         <div class="section-heading">
           <div>
-            <p class="eyebrow">{{ t('Invitations') }}</p>
-            <h2>{{ t('Invite a user') }}</h2>
+            <p class="eyebrow">{{ _('Invitations') }}</p>
+            <h2>{{ _('Invite a user') }}</h2>
           </div>
         </div>
         <form method="post" action="/admin/invitations?csrf_token={{ csrf }}">
-          <label>{{ t('Username') }}<input name="username" maxlength="120" required></label>
-          <label>{{ t('Role') }}
+          <label>{{ _('Username') }}<input name="username" maxlength="120" required></label>
+          <label>{{ _('Role') }}
             <select name="role">
-              <option value="member">{{ t('member') }}</option>
-              <option value="administrator">{{ t('administrator') }}</option>
+              <option value="member">{{ _('member') }}</option>
+              <option value="administrator">{{ _('administrator') }}</option>
             </select>
           </label>
-          <button>{{ t('Create invitation') }}</button>
+          <button>{{ _('Create invitation') }}</button>
         </form>
       </section>
     </div>
@@ -203,8 +203,8 @@
     <section class="panel">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">{{ t('Directory') }}</p>
-          <h2>{{ t('All users ({count})', count=total_users) }}</h2>
+          <p class="eyebrow">{{ _('Directory') }}</p>
+          <h2>{{ _('All users ({count})', count=total_users) }}</h2>
         </div>
       </div>
       <div class="admin-list">
@@ -213,35 +213,35 @@
           <span class="message-avatar">{{ account.username[:1]|upper }}</span>
           <div>
             <strong>{{ account.username }}</strong>
-            <small>{{ t(account.role) }} · {% if account.active %}<span style="color: var(--accent-strong);">{{ t('Active') }}</span>{% else %}<span style="color: var(--danger);">{{ t('Disabled') }}</span>{% endif %} · {{ t('Joined') }}: {{ account.created_at.strftime('%Y-%m-%d') }}</small>
+            <small>{{ _(account.role) }} · {% if account.active %}<span style="color: var(--accent-strong);">{{ _('Active') }}</span>{% else %}<span style="color: var(--danger);">{{ _('Disabled') }}</span>{% endif %} · {{ _('Joined') }}: {{ account.created_at.strftime('%Y-%m-%d') }}</small>
           </div>
           <div style="display: flex; gap: .4rem; align-items: center;">
             <details class="export-menu">
-              <summary style="font-size: .8rem; padding: .25rem .5rem;">{{ t('Reset password') }}</summary>
+              <summary style="font-size: .8rem; padding: .25rem .5rem;">{{ _('Reset password') }}</summary>
               <form method="post" action="/admin/users/{{ account.id }}/password?csrf_token={{ csrf }}" style="padding: .5rem; gap: .4rem;">
-                <input type="password" name="password" minlength="12" placeholder="{{ t('New password') }}" required style="font-size: .8rem;">
-                <button class="compact-button" style="font-size: .75rem;">{{ t('Update') }}</button>
+                <input type="password" name="password" minlength="12" placeholder="{{ _('New password') }}" required style="font-size: .8rem;">
+                <button class="compact-button" style="font-size: .75rem;">{{ _('Update') }}</button>
               </form>
             </details>
             <form method="post" action="/admin/users/{{ account.id }}/status?csrf_token={{ csrf }}">
               <input type="hidden" name="active" value="{{ 'false' if account.active else 'true' }}">
               <button class="secondary-button compact-button" {% if account.id == user.id %}disabled{% endif %}>
-                {{ t('Disable') if account.active else t('Enable') }}
+                {{ _('Disable') if account.active else _('Enable') }}
               </button>
             </form>
             <form method="post" action="/admin/users/{{ account.id }}/role?csrf_token={{ csrf }}">
               <input type="hidden" name="role" value="{{ 'member' if account.role == 'administrator' else 'administrator' }}">
               <button class="secondary-button compact-button" {% if account.id == user.id and account.role == 'administrator' %}disabled{% endif %}>
-                {{ t('Make Member') if account.role == 'administrator' else t('Make Admin') }}
+                {{ _('Make Member') if account.role == 'administrator' else _('Make Admin') }}
               </button>
             </form>
-            <form method="post" action="/admin/users/{{ account.id }}/revoke-sessions?csrf_token={{ csrf }}" onsubmit="return confirm('{{ t('Revoke all login sessions for this user?') }}')">
-              <button class="secondary-button compact-button text-danger">{{ t('Revoke sessions') }}</button>
+            <form method="post" action="/admin/users/{{ account.id }}/revoke-sessions?csrf_token={{ csrf }}" onsubmit="return confirm('{{ _('Revoke all login sessions for this user?') }}')">
+              <button class="secondary-button compact-button text-danger">{{ _('Revoke sessions') }}</button>
             </form>
           </div>
         </article>
         {% else %}
-        <div class="empty-state">{{ t('No users found.') }}</div>
+        <div class="empty-state">{{ _('No users found.') }}</div>
         {% endfor %}
       </div>
     </section>
@@ -253,21 +253,21 @@
     <section class="panel filter-panel">
       <form method="get" action="/admin/items" class="filter-grid">
         <label class="search-field">
-          {{ t('Search all items') }}
-          <input name="search" value="{{ search }}" placeholder="{{ t('Title, author, DOI, or ID…') }}">
+          {{ _('Search all items') }}
+          <input name="search" value="{{ search }}" placeholder="{{ _('Title, author, DOI, or ID…') }}">
         </label>
         <label>
-          {{ t('Has PDF') }}
+          {{ _('Has PDF') }}
           <select name="has_pdf">
-            <option value="">{{ t('All') }}</option>
-            <option value="true" {% if has_pdf == 'true' %}selected{% endif %}>{{ t('With PDF') }}</option>
-            <option value="false" {% if has_pdf == 'false' %}selected{% endif %}>{{ t('Without PDF') }}</option>
+            <option value="">{{ _('All') }}</option>
+            <option value="true" {% if has_pdf == 'true' %}selected{% endif %}>{{ _('With PDF') }}</option>
+            <option value="false" {% if has_pdf == 'false' %}selected{% endif %}>{{ _('Without PDF') }}</option>
           </select>
         </label>
         <div class="filter-actions">
-          <button class="compact-button">{{ t('Filter') }}</button>
+          <button class="compact-button">{{ _('Filter') }}</button>
           {% if search or has_pdf %}
-          <a href="/admin/items">{{ t('Clear') }}</a>
+          <a href="/admin/items">{{ _('Clear') }}</a>
           {% endif %}
         </div>
       </form>
@@ -276,8 +276,8 @@
     <section class="panel">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">{{ t('Global inventory') }}</p>
-          <h2>{{ t('All items ({count})', count=total_items) }}</h2>
+          <p class="eyebrow">{{ _('Global inventory') }}</p>
+          <h2>{{ _('All items ({count})', count=total_items) }}</h2>
         </div>
       </div>
       <div class="admin-list">
@@ -285,17 +285,17 @@
         <article style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem; align-items: center;">
           <div>
             <a href="/items/{{ item.id }}" style="font-weight: 700; color: inherit; text-decoration: none;">{{ item.title }}</a>
-            <small>{{ item.authors or t('No authors') }}{% if item.doi %} · DOI: {{ item.doi }}{% endif %} · {{ item.created_at.strftime('%Y-%m-%d') }}</small>
+            <small>{{ item.authors or _('No authors') }}{% if item.doi %} · DOI: {{ item.doi }}{% endif %} · {{ item.created_at.strftime('%Y-%m-%d') }}</small>
           </div>
           <div style="display: flex; gap: .5rem; align-items: center;">
-            <a class="button-link secondary-button compact-button" href="/items/{{ item.id }}">{{ t('View') }}</a>
-            <form method="post" action="/admin/items/{{ item.id }}/delete?csrf_token={{ csrf }}" onsubmit="return confirm('{{ t('Permanently delete this item, all its revisions, annotations, and storage files?') }}')">
-              <button class="secondary-button compact-button text-danger">{{ t('Delete') }}</button>
+            <a class="button-link secondary-button compact-button" href="/items/{{ item.id }}">{{ _('View') }}</a>
+            <form method="post" action="/admin/items/{{ item.id }}/delete?csrf_token={{ csrf }}" onsubmit="return confirm('{{ _('Permanently delete this item, all its revisions, annotations, and storage files?') }}')">
+              <button class="secondary-button compact-button text-danger">{{ _('Delete') }}</button>
             </form>
           </div>
         </article>
         {% else %}
-        <div class="empty-state">{{ t('No items found.') }}</div>
+        <div class="empty-state">{{ _('No items found.') }}</div>
         {% endfor %}
       </div>
     </section>
@@ -307,21 +307,21 @@
     <section class="panel filter-panel">
       <form method="get" action="/admin/audit" class="filter-grid">
         <label class="search-field">
-          {{ t('Search audit trail') }}
-          <input name="search" value="{{ search }}" placeholder="{{ t('Action, detail keyword, or target ID…') }}">
+          {{ _('Search audit trail') }}
+          <input name="search" value="{{ search }}" placeholder="{{ _('Action, detail keyword, or target ID…') }}">
         </label>
         <label>
-          {{ t('Action') }}
+          {{ _('Action') }}
           <input name="action" value="{{ action_filter }}" placeholder="e.g. item.create, pdf.upload">
         </label>
         <label>
-          {{ t('Target type') }}
+          {{ _('Target type') }}
           <input name="target_type" value="{{ target_type }}" placeholder="e.g. item, user, job">
         </label>
         <div class="filter-actions">
-          <button class="compact-button">{{ t('Filter') }}</button>
+          <button class="compact-button">{{ _('Filter') }}</button>
           {% if search or action_filter or target_type %}
-          <a href="/admin/audit">{{ t('Clear') }}</a>
+          <a href="/admin/audit">{{ _('Clear') }}</a>
           {% endif %}
         </div>
       </form>
@@ -330,8 +330,8 @@
     <section class="panel">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">{{ t('Security & Operations Log') }}</p>
-          <h2>{{ t('Audit events ({count})', count=total_events) }}</h2>
+          <p class="eyebrow">{{ _('Security & Operations Log') }}</p>
+          <h2>{{ _('Audit events ({count})', count=total_events) }}</h2>
         </div>
       </div>
       <div class="admin-list">
@@ -342,14 +342,14 @@
             <small>{{ ev.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</small>
           </div>
           <div>
-            <small>{{ t('Target') }}: <strong>{{ ev.target_type }}</strong>{% if ev.target_id %} ({{ ev.target_id }}){% endif %}{% if ev.actor_id %} · {{ t('Actor') }}: {{ ev.actor_id }}{% else %} · {{ t('System') }}{% endif %}</small>
+            <small>{{ _('Target') }}: <strong>{{ ev.target_type }}</strong>{% if ev.target_id %} ({{ ev.target_id }}){% endif %}{% if ev.actor_id %} · {{ _('Actor') }}: {{ ev.actor_id }}{% else %} · {{ _('System') }}{% endif %}</small>
           </div>
           {% if ev.detail %}
           <pre style="margin: .3rem 0 0; padding: .4rem .6rem; border-radius: .35rem; background: var(--surface-soft); font-size: .75rem; overflow-x: auto; white-space: pre-wrap;">{{ ev.detail }}</pre>
           {% endif %}
         </article>
         {% else %}
-        <div class="empty-state">{{ t('No audit events found.') }}</div>
+        <div class="empty-state">{{ _('No audit events found.') }}</div>
         {% endfor %}
       </div>
     </section>
@@ -361,19 +361,19 @@
     <section class="panel filter-panel" style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
       <form method="get" action="/admin/jobs" style="display: flex; gap: 1rem; align-items: center;">
         <label style="margin: 0; display: flex; gap: .5rem; align-items: center;">
-          {{ t('Filter by state') }}:
+          {{ _('Filter by state') }}:
           <select name="state" onchange="this.form.submit()">
-            <option value="">{{ t('All states') }}</option>
-            <option value="pending" {% if state_filter == 'pending' %}selected{% endif %}>{{ t('Pending') }}</option>
-            <option value="running" {% if state_filter == 'running' %}selected{% endif %}>{{ t('Running') }}</option>
-            <option value="succeeded" {% if state_filter == 'succeeded' %}selected{% endif %}>{{ t('Succeeded') }}</option>
-            <option value="failed" {% if state_filter == 'failed' %}selected{% endif %}>{{ t('Failed') }}</option>
+            <option value="">{{ _('All states') }}</option>
+            <option value="pending" {% if state_filter == 'pending' %}selected{% endif %}>{{ _('Pending') }}</option>
+            <option value="running" {% if state_filter == 'running' %}selected{% endif %}>{{ _('Running') }}</option>
+            <option value="succeeded" {% if state_filter == 'succeeded' %}selected{% endif %}>{{ _('Succeeded') }}</option>
+            <option value="failed" {% if state_filter == 'failed' %}selected{% endif %}>{{ _('Failed') }}</option>
           </select>
         </label>
       </form>
       {% if failed_jobs %}
       <form method="post" action="/admin/jobs/retry-all?csrf_token={{ csrf }}" style="margin: 0;">
-        <button class="compact-button">{{ t('Retry all failed jobs ({count})', count=failed_jobs|length) }}</button>
+        <button class="compact-button">{{ _('Retry all failed jobs ({count})', count=failed_jobs|length) }}</button>
       </form>
       {% endif %}
     </section>
@@ -381,8 +381,8 @@
     <section class="panel">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">{{ t('Pipeline monitor') }}</p>
-          <h2>{{ t('Recent background jobs') }}</h2>
+          <p class="eyebrow">{{ _('Pipeline monitor') }}</p>
+          <h2>{{ _('Recent background jobs') }}</h2>
         </div>
       </div>
       <div class="admin-list">
@@ -393,21 +393,21 @@
               <strong>{{ job.kind }}</strong>
               <span class="imported-badge" style="{% if job.state == 'failed' %}background: #fce8e6; color: var(--danger);{% elif job.state == 'running' %}background: #e8f0fe; color: #1a73e8;{% endif %}">{{ job.state }}</span>
             </div>
-            <small>{{ t('Attempts') }}: {{ job.attempts }} · {{ t('Created') }}: {{ job.created_at.strftime('%Y-%m-%d %H:%M:%S') }}{% if job.error %} · <span style="color: var(--danger);">{{ job.error }}</span>{% endif %}</small>
+            <small>{{ _('Attempts') }}: {{ job.attempts }} · {{ _('Created') }}: {{ job.created_at.strftime('%Y-%m-%d %H:%M:%S') }}{% if job.error %} · <span style="color: var(--danger);">{{ job.error }}</span>{% endif %}</small>
           </div>
           <div style="display: flex; gap: .5rem; align-items: center;">
             {% if job.kind == 'system.backup' and job.state == 'succeeded' %}
-            <a class="button-link secondary-button compact-button" href="/admin/maintenance/backups/{{ job.id }}/download">{{ t('Download') }}</a>
+            <a class="button-link secondary-button compact-button" href="/admin/maintenance/backups/{{ job.id }}/download">{{ _('Download') }}</a>
             {% endif %}
             {% if job.state == 'failed' %}
             <form method="post" action="/admin/jobs/{{ job.id }}/retry?csrf_token={{ csrf }}">
-              <button class="secondary-button compact-button">{{ t('Retry') }}</button>
+              <button class="secondary-button compact-button">{{ _('Retry') }}</button>
             </form>
             {% endif %}
           </div>
         </article>
         {% else %}
-        <div class="empty-state">{{ t('No background jobs.') }}</div>
+        <div class="empty-state">{{ _('No background jobs.') }}</div>
         {% endfor %}
       </div>
     </section>
@@ -420,23 +420,23 @@
       <section class="panel">
         <div class="section-heading">
           <div>
-            <p class="eyebrow">{{ t('Scholarly Providers') }}</p>
-            <h2>{{ t('External API Credentials') }}</h2>
+            <p class="eyebrow">{{ _('Scholarly Providers') }}</p>
+            <h2>{{ _('External API Credentials') }}</h2>
           </div>
         </div>
-        <label>{{ t('Contact email (for PubMed & Crossref rate-limiting)') }}
+        <label>{{ _('Contact email (for PubMed & Crossref rate-limiting)') }}
           <input name="metadata_contact_email" type="email" value="{{ settings.metadata_contact_email }}" placeholder="librarian@institution.edu">
         </label>
-        <label>{{ t('NCBI API Key (for PubMed / PMC)') }}
+        <label>{{ _('NCBI API Key (for PubMed / PMC)') }}
           <input name="ncbi_api_key" value="{{ settings.ncbi_api_key }}" placeholder="NCBI secret key">
         </label>
-        <label>{{ t('NASA ADS Token') }}
+        <label>{{ _('NASA ADS Token') }}
           <input name="nasa_ads_token" value="{{ settings.nasa_ads_token }}" placeholder="Bearer token">
         </label>
-        <label>{{ t('IEEE Xplore API Key') }}
+        <label>{{ _('IEEE Xplore API Key') }}
           <input name="ieee_api_key" value="{{ settings.ieee_api_key }}" placeholder="IEEE API key">
         </label>
-        <label>{{ t('OpenAlex API Key (optional)') }}
+        <label>{{ _('OpenAlex API Key (optional)') }}
           <input name="openalex_api_key" value="{{ settings.openalex_api_key }}" placeholder="OpenAlex key">
         </label>
       </section>
@@ -444,24 +444,24 @@
       <section class="panel">
         <div class="section-heading">
           <div>
-            <p class="eyebrow">{{ t('System policies') }}</p>
-            <h2>{{ t('Sessions & Storage') }}</h2>
+            <p class="eyebrow">{{ _('System policies') }}</p>
+            <h2>{{ _('Sessions & Storage') }}</h2>
           </div>
         </div>
-        <label>{{ t('Session lifetime (days)') }}
+        <label>{{ _('Session lifetime (days)') }}
           <input name="session_days" type="number" min="1" max="365" value="{{ settings.session_days }}" required>
         </label>
-        <label>{{ t('Max PDF size (bytes)') }}
+        <label>{{ _('Max PDF size (bytes)') }}
           <input name="max_pdf_bytes" type="number" min="1048576" value="{{ settings.max_pdf_bytes }}" required>
         </label>
-        <label>{{ t('Max attachment size (bytes)') }}
+        <label>{{ _('Max attachment size (bytes)') }}
           <input name="max_attachment_bytes" type="number" min="1048576" value="{{ settings.max_attachment_bytes }}" required>
         </label>
-        <label>{{ t('Export cache TTL (hours)') }}
+        <label>{{ _('Export cache TTL (hours)') }}
           <input name="export_ttl_hours" type="number" min="1" max="168" value="{{ settings.export_ttl_hours }}" required>
         </label>
         <div style="margin-top: 1rem;">
-          <button>{{ t('Save runtime settings') }}</button>
+          <button>{{ _('Save runtime settings') }}</button>
         </div>
       </section>
     </form>
@@ -474,10 +474,10 @@
       <section class="panel tool-card">
         <span>⌕</span>
         <div>
-          <h2>{{ t('Full-Text Search Re-index') }}</h2>
-          <p>{{ t('Rebuild SQLite FTS5 / PostgreSQL tsvector full-text index across all items and extracted PDF text.') }}</p>
+          <h2>{{ _('Full-Text Search Re-index') }}</h2>
+          <p>{{ _('Rebuild SQLite FTS5 / PostgreSQL tsvector full-text index across all items and extracted PDF text.') }}</p>
           <form method="post" action="/admin/maintenance/reindex?csrf_token={{ csrf }}" style="margin-top: .8rem;">
-            <button class="secondary-button compact-button">{{ t('Dispatch Re-index Job') }}</button>
+            <button class="secondary-button compact-button">{{ _('Dispatch Re-index Job') }}</button>
           </form>
         </div>
       </section>
@@ -485,10 +485,10 @@
       <section class="panel tool-card">
         <span>✓</span>
         <div>
-          <h2>{{ t('Object Store Integrity Check') }}</h2>
-          <p>{{ t('Verify existence and SHA-256 checksums of all PDF files and attachments against the database.') }}</p>
+          <h2>{{ _('Object Store Integrity Check') }}</h2>
+          <p>{{ _('Verify existence and SHA-256 checksums of all PDF files and attachments against the database.') }}</p>
           <form method="post" action="/admin/maintenance/check-objects?csrf_token={{ csrf }}" style="margin-top: .8rem;">
-            <button class="secondary-button compact-button">{{ t('Dispatch Check Job') }}</button>
+            <button class="secondary-button compact-button">{{ _('Dispatch Check Job') }}</button>
           </form>
         </div>
       </section>
@@ -496,10 +496,10 @@
       <section class="panel tool-card">
         <span>💾</span>
         <div>
-          <h2>{{ t('Download Full Backup') }}</h2>
-          <p>{{ t('Generate a complete ZIP archive containing database dump, manifest, and all storage objects.') }}</p>
+          <h2>{{ _('Download Full Backup') }}</h2>
+          <p>{{ _('Generate a complete ZIP archive containing database dump, manifest, and all storage objects.') }}</p>
           <form method="post" action="/admin/maintenance/backup?csrf_token={{ csrf }}" style="margin-top: .8rem;">
-            <button class="secondary-button compact-button">{{ t('Dispatch Backup Job') }}</button>
+            <button class="secondary-button compact-button">{{ _('Dispatch Backup Job') }}</button>
           </form>
         </div>
       </section>
@@ -509,8 +509,8 @@
     <section class="panel" style="margin-top: 1.5rem;">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">{{ t('History') }}</p>
-          <h2>{{ t('Recent system maintenance jobs') }}</h2>
+          <p class="eyebrow">{{ _('History') }}</p>
+          <h2>{{ _('Recent system maintenance jobs') }}</h2>
         </div>
       </div>
       <div class="admin-list">
@@ -521,11 +521,11 @@
               <strong>{{ job.kind }}</strong>
               <span class="imported-badge" style="{% if job.state == 'failed' %}background: #fce8e6; color: var(--danger);{% elif job.state == 'running' %}background: #e8f0fe; color: #1a73e8;{% endif %}">{{ job.state }}</span>
             </div>
-            <small>{{ t('Created') }}: {{ job.created_at.strftime('%Y-%m-%d %H:%M:%S') }}{% if job.error %} · <span style="color: var(--danger);">{{ job.error }}</span>{% endif %}</small>
+            <small>{{ _('Created') }}: {{ job.created_at.strftime('%Y-%m-%d %H:%M:%S') }}{% if job.error %} · <span style="color: var(--danger);">{{ job.error }}</span>{% endif %}</small>
           </div>
           <div>
             {% if job.kind == 'system.backup' and job.state == 'succeeded' %}
-            <a class="button-link secondary-button compact-button" href="/admin/maintenance/backups/{{ job.id }}/download">{{ t('Download') }}</a>
+            <a class="button-link secondary-button compact-button" href="/admin/maintenance/backups/{{ job.id }}/download">{{ _('Download') }}</a>
             {% endif %}
           </div>
         </article>

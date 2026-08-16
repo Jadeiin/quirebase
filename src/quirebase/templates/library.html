@@ -1,63 +1,63 @@
 {% extends "base.html" %}
-{% block title %}{{ t('Paper library') }} · Quirebase{% endblock %}
+{% block title %}{{ _('Paper library') }} · Quirebase{% endblock %}
 {% block content %}
-<div class="page-heading"><div><p class="eyebrow">{{ t('{count} papers available', count=total) }}</p><h1>{{ t('Paper library') }}</h1></div><a class="button-link" href="/bibliography/import">{{ t('Import papers') }}</a></div>
+<div class="page-heading"><div><p class="eyebrow">{{ _('{count} papers available', count=total) }}</p><h1>{{ _('Paper library') }}</h1></div><a class="button-link" href="/bibliography/import">{{ _('Import papers') }}</a></div>
 
-<div x-data="libraryWorkspace" data-selection-label="{{ t('{count} paper(s) selected') }}">
+<div x-data="libraryWorkspace" data-selection-label="{{ _('{count} paper(s) selected') }}">
 <section class="panel filter-panel">
   <div class="panel-heading-row">
-    <h2>{{ t('Filters') }}</h2>
-    <button class="secondary-button compact-button" type="button" @click="toggleFilters" :aria-expanded="filtersOpen">{{ t('Filters') }}</button>
+    <h2>{{ _('Filters') }}</h2>
+    <button class="secondary-button compact-button" type="button" @click="toggleFilters" :aria-expanded="filtersOpen">{{ _('Filters') }}</button>
   </div>
   <form method="get" action="/library" class="filter-grid" x-show="filtersOpen">
-    <label class="search-field">{{ t('Search') }}<input type="search" name="q" value="{{ filters.q }}" placeholder="{{ t('Title, full text, metadata') }}"></label>
-    <label>{{ t('Tag') }}<select name="tag"><option value="">{{ t('All tags') }}</option>{% for option in tags %}<option value="{{ option.id }}" {% if filters.tag == option.id %}selected{% endif %}>{{ option.name }}</option>{% endfor %}</select></label>
-    <label>{{ t('Project') }}<select name="project"><option value="">{{ t('All projects') }}</option>{% for option in projects %}<option value="{{ option.id }}" {% if filters.project == option.id %}selected{% endif %}>{{ option.name }}</option>{% endfor %}</select></label>
-    <label>{{ t('Year') }}<select name="year"><option value="">{{ t('All years') }}</option>{% for option in years %}<option value="{{ option }}" {% if filters.year == option %}selected{% endif %}>{{ option }}</option>{% endfor %}</select></label>
-    <label>{{ t('Author') }}<input name="author" value="{{ filters.author }}" placeholder="{{ t('Author name') }}"></label>
-    <label>{{ t('Keyword') }}<input name="keyword" value="{{ filters.keyword }}" placeholder="{{ t('Keyword') }}"></label>
-    <div class="filter-actions"><button>{{ t('Apply filters') }}</button><a href="/library">{{ t('Clear') }}</a></div>
+    <label class="search-field">{{ _('Search') }}<input type="search" name="q" value="{{ filters.q }}" placeholder="{{ _('Title, full text, metadata') }}"></label>
+    <label>{{ _('Tag') }}<select name="tag"><option value="">{{ _('All tags') }}</option>{% for option in tags %}<option value="{{ option.id }}" {% if filters.tag == option.id %}selected{% endif %}>{{ option.name }}</option>{% endfor %}</select></label>
+    <label>{{ _('Project') }}<select name="project"><option value="">{{ _('All projects') }}</option>{% for option in projects %}<option value="{{ option.id }}" {% if filters.project == option.id %}selected{% endif %}>{{ option.name }}</option>{% endfor %}</select></label>
+    <label>{{ _('Year') }}<select name="year"><option value="">{{ _('All years') }}</option>{% for option in years %}<option value="{{ option }}" {% if filters.year == option %}selected{% endif %}>{{ option }}</option>{% endfor %}</select></label>
+    <label>{{ _('Author') }}<input name="author" value="{{ filters.author }}" placeholder="{{ _('Author name') }}"></label>
+    <label>{{ _('Keyword') }}<input name="keyword" value="{{ filters.keyword }}" placeholder="{{ _('Keyword') }}"></label>
+    <div class="filter-actions"><button>{{ _('Apply filters') }}</button><a href="/library">{{ _('Clear') }}</a></div>
   </form>
 </section>
 
 <form method="post" action="/library/bulk?csrf_token={{ csrf }}" class="library-form">
   <div class="bulk-bar">
-    <strong><span x-text="selectionLabel">{{ t('{count} paper(s) selected', count=0) }}</span></strong>
+    <strong><span x-text="selectionLabel">{{ _('{count} paper(s) selected', count=0) }}</span></strong>
     <select name="action" x-model="action" required>
-      <option value="">{{ t('Choose action') }}</option>
-      <option value="add_project">{{ t('Add to project') }}</option>
-      <option value="add_tag">{{ t('Add tag') }}</option>
-      <option value="export_bibtex">{{ t('Export BibTeX') }}</option>
-      <option value="export_ris">{{ t('Export RIS') }}</option>
-      <option value="export_endnote">{{ t('Export EndNote') }}</option>
-      {% if builtin_styles or custom_styles %}<option value="export_csl">{{ t('Export citation (CSL)') }}</option>{% endif %}
-      <option value="download_pdfs">{{ t('Download PDFs') }}</option>
-      <option value="delete_items">{{ t('Delete papers') }}</option>
+      <option value="">{{ _('Choose action') }}</option>
+      <option value="add_project">{{ _('Add to project') }}</option>
+      <option value="add_tag">{{ _('Add tag') }}</option>
+      <option value="export_bibtex">{{ _('Export BibTeX') }}</option>
+      <option value="export_ris">{{ _('Export RIS') }}</option>
+      <option value="export_endnote">{{ _('Export EndNote') }}</option>
+      {% if builtin_styles or custom_styles %}<option value="export_csl">{{ _('Export citation (CSL)') }}</option>{% endif %}
+      <option value="download_pdfs">{{ _('Download PDFs') }}</option>
+      <option value="delete_items">{{ _('Delete papers') }}</option>
     </select>
     {% if builtin_styles or custom_styles %}<select name="style" x-show="action === 'export_csl'">{% for key, name in builtin_styles.items() %}<option value="{{ key }}">{{ name }}</option>{% endfor %}{% for style in custom_styles %}<option value="{{ style.id }}">{{ style.name }}</option>{% endfor %}</select>{% endif %}
-    <select name="project_id" x-show="action === 'add_project'"><option value="">{{ t('Choose project') }}</option>{% for option in editable_projects %}<option value="{{ option.id }}">{{ option.name }}</option>{% endfor %}</select>
-    <input name="tag_name" x-show="action === 'add_tag'" placeholder="{{ t('Tag for selected papers') }}">
-    <label class="bulk-confirm" x-show="action === 'delete_items'"><input type="checkbox" name="confirm_delete" value="delete" :required="action === 'delete_items'">{{ t('Confirm permanent deletion') }}</label>
-    <button :disabled="selected.length === 0">{{ t('Apply') }}</button>
+    <select name="project_id" x-show="action === 'add_project'"><option value="">{{ _('Choose project') }}</option>{% for option in editable_projects %}<option value="{{ option.id }}">{{ option.name }}</option>{% endfor %}</select>
+    <input name="tag_name" x-show="action === 'add_tag'" placeholder="{{ _('Tag for selected papers') }}">
+    <label class="bulk-confirm" x-show="action === 'delete_items'"><input type="checkbox" name="confirm_delete" value="delete" :required="action === 'delete_items'">{{ _('Confirm permanent deletion') }}</label>
+    <button :disabled="selected.length === 0">{{ _('Apply') }}</button>
   </div>
   <div class="paper-table" role="table">
-    <div class="paper-table-head" role="row"><span><input type="checkbox" @change="toggleAll" :checked="allSelected" aria-label="{{ t('Select all papers') }}"></span><span>{{ t('Paper') }}</span><span>{{ t('Year') }}</span><span>{{ t('Type') }}</span><span>{{ t('Updated') }}</span></div>
+    <div class="paper-table-head" role="row"><span><input type="checkbox" @change="toggleAll" :checked="allSelected" aria-label="{{ _('Select all papers') }}"></span><span>{{ _('Paper') }}</span><span>{{ _('Year') }}</span><span>{{ _('Type') }}</span><span>{{ _('Updated') }}</span></div>
     {% for item in items %}
     <div class="paper-table-row" role="row">
-      <span><input type="checkbox" name="item_ids" value="{{ item.id }}" x-model="selected" aria-label="{{ t('Select {title}', title=item.title) }}"></span>
-      <a href="/items/{{ item.id }}"><strong>{{ item.title }}</strong><small>{{ item.authors or t('No authors') }}{% if item.publication_title %} · {{ item.publication_title }}{% endif %}</small><span class="keyword-line">{{ item.keywords or '' }}</span></a>
+      <span><input type="checkbox" name="item_ids" value="{{ item.id }}" x-model="selected" aria-label="{{ _('Select {title}', title=item.title) }}"></span>
+      <a href="/items/{{ item.id }}"><strong>{{ item.title }}</strong><small>{{ item.authors or _('No authors') }}{% if item.publication_title %} · {{ item.publication_title }}{% endif %}</small><span class="keyword-line">{{ item.keywords or '' }}</span></a>
       <span>{{ (item.publication_date or '—')[:4] }}</span>
-      <span>{{ t(item.reference_type or 'Paper') }}</span>
+      <span>{{ _(item.reference_type or 'Paper') }}</span>
       <time>{{ item.updated_at.date() }}</time>
     </div>
-    {% else %}<div class="empty-state table-empty">{{ t('No papers match these filters.') }}</div>{% endfor %}
+    {% else %}<div class="empty-state table-empty">{{ _('No papers match these filters.') }}</div>{% endfor %}
   </div>
 </form>
 
-{% if pages > 1 %}<nav class="pagination" aria-label="{{ t('Library pages') }}">
-  {% if page > 1 %}<a href="/library?{{ filters|urlencode }}&page={{ page - 1 }}">{{ t('Previous') }}</a>{% endif %}
-  <span>{{ t('Page {page} of {pages}', page=page, pages=pages) }}</span>
-  {% if page < pages %}<a href="/library?{{ filters|urlencode }}&page={{ page + 1 }}">{{ t('Next page') }}</a>{% endif %}
+{% if pages > 1 %}<nav class="pagination" aria-label="{{ _('Library pages') }}">
+  {% if page > 1 %}<a href="/library?{{ filters|urlencode }}&page={{ page - 1 }}">{{ _('Previous') }}</a>{% endif %}
+  <span>{{ _('Page {page} of {pages}', page=page, pages=pages) }}</span>
+  {% if page < pages %}<a href="/library?{{ filters|urlencode }}&page={{ page + 1 }}">{{ _('Next page') }}</a>{% endif %}
 </nav>{% endif %}
 </div>
 {% endblock %}

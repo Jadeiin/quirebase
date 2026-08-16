@@ -37,3 +37,15 @@ be reconsidered only after business Module seams are stable.
 - Business Modules must not depend on FastAPI.
 - Existing Alembic revisions retain their IDs and schema behaviour, but imports
   are updated to the new database Module.
+
+## Implementation notes
+
+Recorded from the completed refactor plan (retired once fully implemented):
+
+- Business failures are raised as typed exceptions
+  (`quirebase.core.errors`) and converted to HTTP responses by the Web layer
+  and to job statuses by the Job runner, never rendered inside Modules.
+- Job handlers are registered through an explicit mapping; decorator-based
+  registration via import side effects is not used.
+- `LocalObjectStore` remains a concrete implementation until a second storage
+  adapter exists; no storage interface is introduced speculatively.

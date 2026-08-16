@@ -3,60 +3,60 @@
 {% block head %}<link rel="stylesheet" href="{{ url_for('static', path='/vendor/pdf_viewer.css') }}">{% endblock %}
 {% block content %}
 <div id="pdf-app" x-data="pdfToolbar" data-item-id="{{ item.id }}" data-revision-id="{{ revision.id }}" data-csrf="{{ csrf }}" data-i18n="{{ {
-  'selectTextFirst': t('Select text first.'),
-  'saving': t('Saving…'),
-  'saved': t('Saved'),
-  'noteText': t('Note text'),
-  'highlight': t('Highlight'),
-  'clickPage': t('Click a page to place the note'),
-  'preparingExport': t('Preparing export…'),
-  'exportReady': t('Export ready'),
-  'exportFailed': t('Export failed'),
-  'selectOwnAnnotation': t('Select one of your annotations.'),
-  'page': t('Page {page}'),
-  'private': t('Private'),
-  'project': t('Project'),
-  'pages': t('{count} pages'),
-  'unableToOpen': t('Unable to open PDF: {message}')
+  'selectTextFirst': _('Select text first.'),
+  'saving': _('Saving…'),
+  'saved': _('Saved'),
+  'noteText': _('Note text'),
+  'highlight': _('Highlight'),
+  'clickPage': _('Click a page to place the note'),
+  'preparingExport': _('Preparing export…'),
+  'exportReady': _('Export ready'),
+  'exportFailed': _('Export failed'),
+  'selectOwnAnnotation': _('Select one of your annotations.'),
+  'page': _('Page {page}'),
+  'private': _('Private'),
+  'project': _('Project'),
+  'pages': _('{count} pages'),
+  'unableToOpen': _('Unable to open PDF: {message}')
 }|tojson|forceescape }}">
   <nav class="pdf-tools">
     <div class="pdf-tool-group">
-      <button id="pdf-previous-page" type="button" aria-label="{{ t('Previous PDF page') }}">‹</button>
-      <input id="pdf-page-number" type="number" min="1" value="1" aria-label="{{ t('Page') }}">
+      <button id="pdf-previous-page" type="button" aria-label="{{ _('Previous PDF page') }}">‹</button>
+      <input id="pdf-page-number" type="number" min="1" value="1" aria-label="{{ _('Page') }}">
       <span>/ <span id="pdf-page-total">—</span></span>
-      <button id="pdf-next-page" type="button" aria-label="{{ t('Next PDF page') }}">›</button>
+      <button id="pdf-next-page" type="button" aria-label="{{ _('Next PDF page') }}">›</button>
     </div>
     <div class="pdf-tool-group">
-      <button id="pdf-zoom-out" type="button" aria-label="{{ t('Zoom out') }}">−</button>
-      <select id="pdf-scale" aria-label="{{ t('Automatic zoom') }}">
-        <option value="page-width">{{ t('Fit width') }}</option>
-        <option value="page-fit">{{ t('Fit page') }}</option>
-        <option value="auto">{{ t('Automatic zoom') }}</option>
+      <button id="pdf-zoom-out" type="button" aria-label="{{ _('Zoom out') }}">−</button>
+      <select id="pdf-scale" aria-label="{{ _('Automatic zoom') }}">
+        <option value="page-width">{{ _('Fit width') }}</option>
+        <option value="page-fit">{{ _('Fit page') }}</option>
+        <option value="auto">{{ _('Automatic zoom') }}</option>
       </select>
-      <button id="pdf-zoom-in" type="button" aria-label="{{ t('Zoom in') }}">＋</button>
+      <button id="pdf-zoom-in" type="button" aria-label="{{ _('Zoom in') }}">＋</button>
     </div>
     <div class="pdf-tool-group pdf-search-tools">
-      <input id="pdf-search" type="search" placeholder="{{ t('Search PDF') }}" aria-label="{{ t('Search PDF') }}">
-      <button id="pdf-find-previous" type="button" aria-label="{{ t('Previous result') }}">↑</button>
-      <button id="pdf-find-next" type="button" aria-label="{{ t('Next result') }}">↓</button>
+      <input id="pdf-search" type="search" placeholder="{{ _('Search PDF') }}" aria-label="{{ _('Search PDF') }}">
+      <button id="pdf-find-previous" type="button" aria-label="{{ _('Previous result') }}">↑</button>
+      <button id="pdf-find-next" type="button" aria-label="{{ _('Next result') }}">↓</button>
     </div>
-    <button class="secondary-button" type="button" @click="toggleAnnotations" :aria-expanded="annotationOpen">{{ t('Annotation tools') }}</button>
-    <a class="toolbar-link" href="/documents/{{ item.id }}/revisions/{{ revision.id }}/content" download>{{ t('Download') }}</a>
-    <span id="pdf-status">{{ t('Loading…') }}</span>
+    <button class="secondary-button" type="button" @click="toggleAnnotations" :aria-expanded="annotationOpen">{{ _('Annotation tools') }}</button>
+    <a class="toolbar-link" href="/documents/{{ item.id }}/revisions/{{ revision.id }}/content" download>{{ _('Download') }}</a>
+    <span id="pdf-status">{{ _('Loading…') }}</span>
   </nav>
   <div class="pdf-annotation-tools" x-cloak x-show="annotationOpen">
-    <button data-color="yellow">{{ t('Yellow') }}</button><button data-color="green">{{ t('Green') }}</button>
-    <button data-color="blue">{{ t('Blue') }}</button><button data-color="red">{{ t('Red') }}</button>
-    <button id="add-note">{{ t('Note') }}</button><button id="delete-annotation">{{ t('Delete selected') }}</button>
-    <select id="annotation-project"><option value="">{{ t('Private') }}</option>{% for project in projects %}<option value="{{ project.id }}">{{ project.name }}</option>{% endfor %}</select>
-    <button id="export-annotations">{{ t('Export') }}</button>
+    <button data-color="yellow">{{ _('Yellow') }}</button><button data-color="green">{{ _('Green') }}</button>
+    <button data-color="blue">{{ _('Blue') }}</button><button data-color="red">{{ _('Red') }}</button>
+    <button id="add-note">{{ _('Note') }}</button><button id="delete-annotation">{{ _('Delete selected') }}</button>
+    <select id="annotation-project"><option value="">{{ _('Private') }}</option>{% for project in projects %}<option value="{{ project.id }}">{{ project.name }}</option>{% endfor %}</select>
+    <button id="export-annotations">{{ _('Export') }}</button>
   </div>
   <aside id="annotation-detail" class="annotation-detail" hidden>
-    <header><div><p class="eyebrow">{{ t('Annotation details') }}</p><h2 id="annotation-detail-kind"></h2></div><button id="annotation-detail-close" class="secondary-button compact-button" type="button" aria-label="{{ t('Close') }}">×</button></header>
-    <dl><div><dt>{{ t('Location') }}</dt><dd id="annotation-detail-page"></dd></div><div><dt>{{ t('Visibility') }}</dt><dd id="annotation-detail-scope"></dd></div></dl>
+    <header><div><p class="eyebrow">{{ _('Annotation details') }}</p><h2 id="annotation-detail-kind"></h2></div><button id="annotation-detail-close" class="secondary-button compact-button" type="button" aria-label="{{ _('Close') }}">×</button></header>
+    <dl><div><dt>{{ _('Location') }}</dt><dd id="annotation-detail-page"></dd></div><div><dt>{{ _('Visibility') }}</dt><dd id="annotation-detail-scope"></dd></div></dl>
     <blockquote id="annotation-detail-text"></blockquote>
-    <label>{{ t('Note text') }}<textarea id="annotation-detail-body" rows="7"></textarea></label>
-    <div class="annotation-detail-actions"><button id="annotation-detail-save" type="button">{{ t('Save') }}</button><button id="annotation-detail-delete" class="danger-button" type="button">{{ t('Delete') }}</button></div>
+    <label>{{ _('Note text') }}<textarea id="annotation-detail-body" rows="7"></textarea></label>
+    <div class="annotation-detail-actions"><button id="annotation-detail-save" type="button">{{ _('Save') }}</button><button id="annotation-detail-delete" class="danger-button" type="button">{{ _('Delete') }}</button></div>
   </aside>
   <div id="viewerContainer"><div id="viewer" class="pdfViewer removePageBorders"></div></div>
 </div>

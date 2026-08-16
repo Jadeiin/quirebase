@@ -12,7 +12,7 @@ from quirebase.core.errors import (
 )
 from quirebase.core.i18n import (
     DEFAULT_LOCALE,
-    catalog,
+    _,
     format_date,
     format_datetime,
     format_number,
@@ -20,7 +20,6 @@ from quirebase.core.i18n import (
     negotiate_locale,
     ngettext,
     pgettext,
-    translate,
 )
 
 __all__ = [
@@ -34,7 +33,7 @@ __all__ = [
     "Settings",
     "ValidationFailure",
     "VersionConflict",
-    "catalog",
+    "_",
     "engine",
     "format_date",
     "format_datetime",
@@ -46,5 +45,4 @@ __all__ = [
     "negotiate_locale",
     "ngettext",
     "pgettext",
-    "translate",
 ]

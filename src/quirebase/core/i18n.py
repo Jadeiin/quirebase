@@ -11,7 +11,7 @@ from babel.support import NullTranslations, Translations
 if TYPE_CHECKING:
     from datetime import date, datetime
 
-DEFAULT_LOCALE = "zh-CN"
+DEFAULT_LOCALE = "zh_CN"
 LOCALES_DIR = Path(__file__).resolve().parent.parent / "locales"
 
 
@@ -24,6 +24,11 @@ def normalize_locale(locale: str) -> str:
     if len(parts) == 1:
         return parts[0].lower()
     return f"{parts[0].lower()}_{parts[1].upper()}"
+
+
+def bcp47_tag(locale: str = DEFAULT_LOCALE) -> str:
+    """Render a locale as a BCP 47 language tag for HTML (zh_CN -> zh-CN)."""
+    return normalize_locale(locale).replace("_", "-")
 
 
 @cache
@@ -39,37 +44,25 @@ def get_translations(locale: str = DEFAULT_LOCALE) -> Translations | NullTransla
     return NullTranslations()
 
 
-@cache
-def catalog(locale: str = DEFAULT_LOCALE) -> dict[str, str]:
-    """Return dictionary of all msgid -> msgstr for the given locale (backwards compatible)."""
-    norm = normalize_locale(locale)
-    trans = get_translations(norm)
-    data = getattr(trans, "_catalog", {})
-    if isinstance(data, dict):
-        return {str(k): str(v) for k, v in data.items() if k and isinstance(k, str)}
-    return {}
+def _interpolate(translated: str, values: dict[str, object]) -> str:
+    """Interpolate {field} placeholders, returning the raw text if any field is unknown."""
+    if not values:
+        return translated
+    try:
+        return translated.format(**values)
+    except (KeyError, IndexError, ValueError):
+        return translated
 
 
-def translate(message: str, /, locale: str = DEFAULT_LOCALE, **values: object) -> str:
-    """Translate a message string and format values."""
+def gettext(message: str, locale: str = DEFAULT_LOCALE, **values: object) -> str:
+    """Standard gettext translation with optional value interpolation."""
     if not message:
         return ""
     trans = get_translations(locale)
-    translated = trans.gettext(message)
-    if values:
-        try:
-            return translated.format(**values)
-        except (KeyError, IndexError, ValueError):
-            return translated
-    return translated
+    return _interpolate(trans.gettext(message), values)
 
 
-def gettext(message: str, locale: str = DEFAULT_LOCALE) -> str:
-    """Standard gettext translation."""
-    if not message:
-        return ""
-    trans = get_translations(locale)
-    return trans.gettext(message)
+_ = gettext
 
 
 def ngettext(singular: str, plural: str, n: int, locale: str = DEFAULT_LOCALE) -> str:
@@ -78,14 +71,14 @@ def ngettext(singular: str, plural: str, n: int, locale: str = DEFAULT_LOCALE) -
     return trans.ngettext(singular, plural, n)
 
 
-def pgettext(context: str, message: str, locale: str = DEFAULT_LOCALE) -> str:
+def pgettext(context: str, message: str, locale: str = DEFAULT_LOCALE, **values: object) -> str:
     """Contextual gettext translation with fallback to general message."""
     trans = get_translations(locale)
     if hasattr(trans, "pgettext"):
         res = trans.pgettext(context, message)
         if res != message:
-            return str(res)
-    return gettext(message, locale)
+            return _interpolate(str(res), values)
+    return gettext(message, locale, **values)
 
 
 def format_datetime(

@@ -1,21 +1,21 @@
 {% extends "base.html" %}
-{% block title %}{{ t('Import preview') }} · Quirebase{% endblock %}
+{% block title %}{{ _('Import preview') }} · Quirebase{% endblock %}
 {% block content %}
 <section class="panel">
-  <h1>{{ t('Import preview') }}</h1>
-  <p>{{ t('{count} record(s) parsed.', count=records|length) }}</p>
+  <h1>{{ _('Import preview') }}</h1>
+  <p>{{ _('{count} record(s) parsed.', count=records|length) }}</p>
   {% if errors %}
-    <h2>{{ t('Errors') }}</h2>
-    <ul>{% for error in errors %}<li>{{ t('Record {row}: {message}', row=error.row, message=t(error.message)) }}</li>{% endfor %}</ul>
-    <p>{{ t('Fix the source file and {try_again}. No records were imported.', try_again='<a href="/bibliography/import">' ~ t('try again') ~ '</a>')|safe }}</p>
+    <h2>{{ _('Errors') }}</h2>
+    <ul>{% for error in errors %}<li>{{ _('Record {row}: {message}', row=error.row, message=_(error.message)) }}</li>{% endfor %}</ul>
+    <p>{{ _('Fix the source file and {try_again}. No records were imported.', try_again='<a href="/bibliography/import">' ~ _('try again') ~ '</a>')|safe }}</p>
   {% else %}
     <form method="post" action="/bibliography/import/{{ batch.id }}?csrf_token={{ csrf }}">
-      <button>{{ t('Import all records') }}</button>
+      <button>{{ _('Import all records') }}</button>
     </form>
   {% endif %}
   <ol>
     {% for record in records %}
-      <li><strong>{{ record.title or t('(missing title)') }}</strong> — {{ record.authors or '' }}</li>
+      <li><strong>{{ record.title or _('(missing title)') }}</strong> — {{ record.authors or '' }}</li>
     {% endfor %}
   </ol>
 </section>

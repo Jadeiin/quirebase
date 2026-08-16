@@ -6,6 +6,7 @@ from fastapi.templating import Jinja2Templates
 
 from quirebase.core.i18n import (
     DEFAULT_LOCALE,
+    bcp47_tag,
     format_date,
     format_datetime,
     format_number,
@@ -13,7 +14,6 @@ from quirebase.core.i18n import (
     gettext,
     ngettext,
     pgettext,
-    translate,
 )
 
 PACKAGE_DIR = Path(__file__).resolve().parent.parent
@@ -25,8 +25,7 @@ templates.env.install_gettext_translations(get_translations(DEFAULT_LOCALE), new
 
 # Register template globals and filters
 templates.env.globals.update(
-    locale=DEFAULT_LOCALE,
-    t=translate,
+    locale=bcp47_tag(),
     _=gettext,
     gettext=gettext,
     ngettext=ngettext,
@@ -36,7 +35,6 @@ templates.env.globals.update(
     format_number=format_number,
 )
 templates.env.filters.update(
-    t=translate,
     format_datetime=format_datetime,
     format_date=format_date,
     format_number=format_number,

@@ -1,13 +1,13 @@
 {% extends "base.html" %}
-{% block title %}{{ t('Sign in') }} · Quirebase{% endblock %}
+{% block title %}{{ _('Sign in') }} · Quirebase{% endblock %}
 {% block content %}
 <section class="panel narrow">
-  <h1>{{ t('Sign in') }}</h1>
-  {% if error %}<p class="error">{{ t(error) }}</p>{% endif %}
+  <h1>{{ _('Sign in') }}</h1>
+  {% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
   <form method="post">
-    <label>{{ t('Username') }}<input name="username" autocomplete="username" required></label>
-    <label>{{ t('Password') }}<input name="password" type="password" autocomplete="current-password" required></label>
-    <button>{{ t('Sign in') }}</button>
+    <label>{{ _('Username') }}<input name="username" autocomplete="username" required></label>
+    <label>{{ _('Password') }}<input name="password" type="password" autocomplete="current-password" required></label>
+    <button>{{ _('Sign in') }}</button>
   </form>
 </section>
 {% endblock %}

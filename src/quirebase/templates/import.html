@@ -1,61 +1,61 @@
 {% extends "base.html" %}
-{% block title %}{{ t('Import') }} · Quirebase{% endblock %}
+{% block title %}{{ _('Import') }} · Quirebase{% endblock %}
 {% block content %}
-<div class="page-heading"><div><p class="eyebrow">{{ t('Bring research into your library') }}</p><h1>{{ t('Import papers') }}</h1></div></div>
+<div class="page-heading"><div><p class="eyebrow">{{ _('Bring research into your library') }}</p><h1>{{ _('Import papers') }}</h1></div></div>
 <div x-data="importWorkspace">
-<nav class="import-methods" aria-label="{{ t('Import methods') }}">
-  <button type="button" data-method="doi" @click="selectMethod" :aria-selected="active === 'doi'">{{ t('Online identifier') }}</button>
-  <button type="button" data-method="bibliography" @click="selectMethod" :aria-selected="active === 'bibliography'">{{ t('Bibliography file') }}</button>
-  <button type="button" data-method="published" @click="selectMethod" :aria-selected="active === 'published'">{{ t('Published PDF') }}</button>
-  <button type="button" data-method="unpublished" @click="selectMethod" :aria-selected="active === 'unpublished'">{{ t('Unpublished PDF') }}</button>
+<nav class="import-methods" aria-label="{{ _('Import methods') }}">
+  <button type="button" data-method="doi" @click="selectMethod" :aria-selected="active === 'doi'">{{ _('Online identifier') }}</button>
+  <button type="button" data-method="bibliography" @click="selectMethod" :aria-selected="active === 'bibliography'">{{ _('Bibliography file') }}</button>
+  <button type="button" data-method="published" @click="selectMethod" :aria-selected="active === 'published'">{{ _('Published PDF') }}</button>
+  <button type="button" data-method="unpublished" @click="selectMethod" :aria-selected="active === 'unpublished'">{{ _('Unpublished PDF') }}</button>
 </nav>
 <div class="import-grid">
   <section class="panel import-card featured" x-show="active === 'doi'">
-    <span class="module-number">01</span><h2>{{ t('Import by identifier') }}</h2>
-    <p>{{ t('Retrieve metadata from DOI, PubMed, arXiv, OpenAlex, or Open Library and review it before saving.') }}</p>
+    <span class="module-number">01</span><h2>{{ _('Import by identifier') }}</h2>
+    <p>{{ _('Retrieve metadata from DOI, PubMed, arXiv, OpenAlex, or Open Library and review it before saving.') }}</p>
     <form method="post" action="/metadata/preview?csrf_token={{ csrf }}">
-      <label>{{ t('Data source') }}<select name="provider"><option value="auto">{{ t('Detect automatically') }}</option><option value="doi">DOI · Crossref / DataCite</option><option value="pmid">PubMed PMID</option><option value="arxiv">arXiv</option><option value="openalex">OpenAlex</option><option value="isbn">ISBN · Open Library</option></select></label>
-      <label>{{ t('Identifier') }}<input name="identifier" maxlength="500" placeholder="DOI · PMID · arXiv · OpenAlex · ISBN" required></label>
-      <button>{{ t('Look up metadata') }}</button>
+      <label>{{ _('Data source') }}<select name="provider"><option value="auto">{{ _('Detect automatically') }}</option><option value="doi">DOI · Crossref / DataCite</option><option value="pmid">PubMed PMID</option><option value="arxiv">arXiv</option><option value="openalex">OpenAlex</option><option value="isbn">ISBN · Open Library</option></select></label>
+      <label>{{ _('Identifier') }}<input name="identifier" maxlength="500" placeholder="DOI · PMID · arXiv · OpenAlex · ISBN" required></label>
+      <button>{{ _('Look up metadata') }}</button>
     </form>
   </section>
 
   <section class="panel import-card" x-show="active === 'bibliography'">
-    <span class="module-number">02</span><h2>{{ t('Bibliography file') }}</h2>
-    <p>{{ t('Preview and import records exported by EndNote, Zotero, Mendeley, or another reference manager.') }}</p>
+    <span class="module-number">02</span><h2>{{ _('Bibliography file') }}</h2>
+    <p>{{ _('Preview and import records exported by EndNote, Zotero, Mendeley, or another reference manager.') }}</p>
     <form method="post" action="/bibliography/preview?csrf_token={{ csrf }}" enctype="multipart/form-data">
-      <label>{{ t('Format') }}<select name="file_format"><option value="bibtex">BibTeX (.bib)</option><option value="ris">RIS / EndNote (.ris, .enw)</option></select></label>
-      <label>{{ t('File') }}<input type="file" name="bibliography" accept=".bib,.ris,.enw,text/plain" required></label>
-      <button>{{ t('Preview records') }}</button>
+      <label>{{ _('Format') }}<select name="file_format"><option value="bibtex">BibTeX (.bib)</option><option value="ris">RIS / EndNote (.ris, .enw)</option></select></label>
+      <label>{{ _('File') }}<input type="file" name="bibliography" accept=".bib,.ris,.enw,text/plain" required></label>
+      <button>{{ _('Preview records') }}</button>
     </form>
   </section>
 
   <section class="panel import-card" x-show="active === 'published'">
-    <span class="module-number">03</span><h2>{{ t('Published PDF') }}</h2>
-    <p>{{ t('Upload a published paper. Its DOI is extracted from the PDF and used to retrieve verified metadata.') }}</p>
+    <span class="module-number">03</span><h2>{{ _('Published PDF') }}</h2>
+    <p>{{ _('Upload a published paper. Its DOI is extracted from the PDF and used to retrieve verified metadata.') }}</p>
     <form method="post" action="/imports/pdf/published?csrf_token={{ csrf }}" enctype="multipart/form-data">
       <label>PDF<input type="file" name="pdf" accept="application/pdf,.pdf" required></label>
-      <label>{{ t('DOI override (optional)') }}<input name="doi" maxlength="500" placeholder="{{ t('Only needed when automatic detection fails') }}"></label>
-      <button>{{ t('Import published PDF') }}</button>
+      <label>{{ _('DOI override (optional)') }}<input name="doi" maxlength="500" placeholder="{{ _('Only needed when automatic detection fails') }}"></label>
+      <button>{{ _('Import published PDF') }}</button>
     </form>
   </section>
 
   <section class="panel import-card" x-show="active === 'unpublished'">
-    <span class="module-number">04</span><h2>{{ t('Unpublished PDF') }}</h2>
-    <p>{{ t('Add a preprint, manuscript, report, or private document and enter its metadata manually.') }}</p>
+    <span class="module-number">04</span><h2>{{ _('Unpublished PDF') }}</h2>
+    <p>{{ _('Add a preprint, manuscript, report, or private document and enter its metadata manually.') }}</p>
     <form method="post" action="/imports/pdf/unpublished?csrf_token={{ csrf }}" enctype="multipart/form-data">
-      <label>{{ t('Title') }}<input name="title" required></label>
-      <label>{{ t('Authors') }}<input name="authors" placeholder="{{ t('Separate authors with semicolons') }}"></label>
-      <label>{{ t('Keywords') }}<input name="keywords" placeholder="{{ t('Separate keywords with semicolons') }}"></label>
-      <label>{{ t('Abstract') }}<textarea name="abstract" rows="3"></textarea></label>
+      <label>{{ _('Title') }}<input name="title" required></label>
+      <label>{{ _('Authors') }}<input name="authors" placeholder="{{ _('Separate authors with semicolons') }}"></label>
+      <label>{{ _('Keywords') }}<input name="keywords" placeholder="{{ _('Separate keywords with semicolons') }}"></label>
+      <label>{{ _('Abstract') }}<textarea name="abstract" rows="3"></textarea></label>
       <label>PDF<input type="file" name="pdf" accept="application/pdf,.pdf" required></label>
-      <button>{{ t('Import unpublished PDF') }}</button>
+      <button>{{ _('Import unpublished PDF') }}</button>
     </form>
   </section>
 
   <section class="panel import-card future-card">
-    <span class="module-number">{{ t('Available') }}</span><h2>{{ t('Connected data sources') }}</h2>
-    <p>{{ t('Sources without institutional credentials are available now. Credentialed providers remain isolated until keys and quotas are configured.') }}</p>
+    <span class="module-number">{{ _('Available') }}</span><h2>{{ _('Connected data sources') }}</h2>
+    <p>{{ _('Sources without institutional credentials are available now. Credentialed providers remain isolated until keys and quotas are configured.') }}</p>
     <div class="provider-list"><span>OpenAlex</span><span>Crossref</span><span>DataCite</span><span>PubMed</span><span>arXiv</span><span>Open Library</span><span class="provider-muted">IEEE Xplore · API key</span><span class="provider-muted">Scopus · API key</span></div>
   </section>
 </div>
