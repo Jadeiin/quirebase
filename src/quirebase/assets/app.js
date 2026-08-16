@@ -98,5 +98,107 @@ Alpine.data("formattedCitation", () => ({
   },
 }));
 
+Alpine.data("tagMatrix", () => ({
+  filter: "",
+  matches(name) {
+    if (!this.filter.trim()) return true;
+    return name.toLowerCase().includes(this.filter.trim().toLowerCase());
+  },
+}));
+
+Alpine.data("authorEditor", () => ({
+  authors: [],
+  init() {
+    try {
+      const initial = JSON.parse(this.$root.dataset.initialAuthors || "[]");
+      this.authors = initial.length
+        ? initial
+        : [{ last_name: "", first_name: "", is_corresponding: false, suggestions: [] }];
+    } catch {
+      this.authors = [{ last_name: "", first_name: "", is_corresponding: false, suggestions: [] }];
+    }
+  },
+  add() {
+    this.authors.push({ last_name: "", first_name: "", is_corresponding: false, suggestions: [] });
+  },
+  remove(index) {
+    if (this.authors.length > 1) {
+      this.authors.splice(index, 1);
+    } else {
+      this.authors[0] = { last_name: "", first_name: "", is_corresponding: false, suggestions: [] };
+    }
+  },
+  moveUp(index) {
+    if (index > 0) {
+      const item = this.authors.splice(index, 1)[0];
+      this.authors.splice(index - 1, 0, item);
+    }
+  },
+  moveDown(index) {
+    if (index < this.authors.length - 1) {
+      const item = this.authors.splice(index, 1)[0];
+      this.authors.splice(index + 1, 0, item);
+    }
+  },
+  suggest(index) {
+    const q = this.authors[index].last_name;
+    if (!q || q.length < 2) {
+      this.authors[index].suggestions = [];
+      return;
+    }
+    fetch(`/api/authors/suggest?q=${encodeURIComponent(q)}`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        this.authors[index].suggestions = data || [];
+      })
+      .catch(() => {
+        this.authors[index].suggestions = [];
+      });
+  },
+  selectSuggestion(index, s) {
+    this.authors[index].last_name = s.last_name;
+    this.authors[index].first_name = s.first_name || "";
+    this.authors[index].suggestions = [];
+  },
+}));
+
+Alpine.data("editorEditor", () => ({
+  editors: [],
+  init() {
+    try {
+      const initial = JSON.parse(this.$root.dataset.initialEditors || "[]");
+      this.editors = initial.length ? initial : [];
+    } catch {
+      this.editors = [];
+    }
+  },
+  add() {
+    this.editors.push({ last_name: "", first_name: "", suggestions: [] });
+  },
+  remove(index) {
+    this.editors.splice(index, 1);
+  },
+  suggest(index) {
+    const q = this.editors[index].last_name;
+    if (!q || q.length < 2) {
+      this.editors[index].suggestions = [];
+      return;
+    }
+    fetch(`/api/authors/suggest?q=${encodeURIComponent(q)}`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        this.editors[index].suggestions = data || [];
+      })
+      .catch(() => {
+        this.editors[index].suggestions = [];
+      });
+  },
+  selectSuggestion(index, s) {
+    this.editors[index].last_name = s.last_name;
+    this.editors[index].first_name = s.first_name || "";
+    this.editors[index].suggestions = [];
+  },
+}));
+
 window.Alpine = Alpine;
 Alpine.start();

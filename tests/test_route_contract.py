@@ -77,8 +77,12 @@ EXPECTED_OPERATIONAL_ROUTES = {
     ("POST", "/items/{item_id}/pdf"),
     ("POST", "/items/{item_id}/projects/{project_id}"),
     ("POST", "/items/{item_id}/projects/{project_id}/remove"),
+    ("POST", "/items/{item_id}/rescan-doi"),
+    ("POST", "/items/{item_id}/sync-metadata"),
     ("POST", "/items/{item_id}/tags"),
+    ("POST", "/items/{item_id}/tags/matrix"),
     ("POST", "/items/{item_id}/tags/{tag_id}/remove"),
+    ("POST", "/items/{item_id}/update-bibtex-key"),
     ("POST", "/library/bulk"),
     ("POST", "/login"),
     ("POST", "/logout"),
@@ -88,6 +92,7 @@ EXPECTED_OPERATIONAL_ROUTES = {
     ("POST", "/projects/{project_id}/members/{member_id}/remove"),
     ("POST", "/tools/tags/{tag_id}"),
     ("POST", "/tools/tags/{tag_id}/delete"),
+    ("GET", "/api/authors/suggest"),
 }
 
 
@@ -116,7 +121,7 @@ def test_operational_routes_contract():
                 continue
             operational_routes.add((method, route.path))
 
-    assert len(operational_routes) == 76, f"Expected 76 routes, found {len(operational_routes)}"
+    assert len(operational_routes) == 81, f"Expected 81 routes, found {len(operational_routes)}"
     assert operational_routes == EXPECTED_OPERATIONAL_ROUTES
 
 

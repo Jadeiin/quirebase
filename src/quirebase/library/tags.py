@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import re
+from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, delete, func, select
 
 from quirebase.access.items import can_edit_item, visible_items_query
 from quirebase.core.errors import (
@@ -102,3 +103,121 @@ def list_accessible_tags_with_counts(db: Session, user: User) -> list[tuple[Tag,
         .order_by(Tag.name)
     ).all()
     return [(row[0], row[1]) for row in rows]
+
+
+def recommend_tags_for_item(db: Session, item_id: str) -> list[Tag]:
+    item = db.get(Item, item_id)
+    if item is None:
+        return []
+    text = f"{item.title or ''} {item.abstract or ''} {item.keywords or ''}"
+    words = {w.lower() for w in re.findall(r"[A-Za-z0-9\u4e00-\u9fa5]+", text) if len(w) > 1}
+    if not words:
+        return []
+    # Limit word pool
+    word_list = list(words)[:500]
+    return list(
+        db.scalars(select(Tag).where(func.lower(Tag.name).in_(word_list)).order_by(Tag.name)).all()
+    )
+
+
+def get_tag_matrix_for_item(db: Session, user: User, item_id: str) -> dict[str, Any]:
+    all_tags = list(db.scalars(select(Tag).order_by(Tag.name)).all())
+    assigned_ids = set(db.scalars(select(ItemTag.tag_id).where(ItemTag.item_id == item_id)).all())
+    recommended_tags = recommend_tags_for_item(db, item_id)
+    recommended_ids = {t.id for t in recommended_tags}
+
+    # Group by first letter A-Z or '#'
+    groups_dict: dict[str, list[Tag]] = {}
+    for tag in all_tags:
+        first_char = tag.name[0].upper() if tag.name else "#"
+        if not ("A" <= first_char <= "Z"):
+            first_char = "#"
+        groups_dict.setdefault(first_char, []).append(tag)
+
+    sorted_letters = sorted(groups_dict.keys(), key=lambda k: (k == "#", k))
+    groups = [{"letter": letter, "tags": groups_dict[letter]} for letter in sorted_letters]
+
+    return {
+        "groups": groups,
+        "assigned_ids": assigned_ids,
+        "recommended_ids": recommended_ids,
+        "all_tags": all_tags,
+    }
+
+
+def batch_add_tags_to_item(db: Session, user: User, item_id: str, names: list[str]) -> list[Tag]:
+    if not can_edit_item(db, user, item_id):
+        raise ResourceUnavailable("item not found or cannot be edited")
+    added: list[Tag] = []
+    for raw_name in names:
+        cleaned = " ".join(raw_name.split())
+        if not cleaned:
+            continue
+        normalized = normalize_tag_name(cleaned)
+        tag = db.scalar(select(Tag).where(Tag.name == normalized))
+        if tag is None:
+            tag = Tag(name=normalized, created_by=user.id)
+            db.add(tag)
+            db.flush()
+        assignment = db.get(ItemTag, (item_id, tag.id))
+        if assignment is None:
+            assignment = ItemTag(item_id=item_id, tag_id=tag.id)
+            db.add(assignment)
+            db.flush()
+        added.append(tag)
+    search_index(db).index_item(db, item_id)
+    record_audit_event(db, user.id, "tag.batch_add", "item", item_id)
+    db.commit()
+    return added
+
+
+def set_item_tags(db: Session, user: User, item_id: str, tag_ids: list[str]) -> None:
+    if not can_edit_item(db, user, item_id):
+        raise ResourceUnavailable("item not found or cannot be edited")
+    db.execute(delete(ItemTag).where(ItemTag.item_id == item_id))
+    db.flush()
+    for tag_id in tag_ids:
+        if db.get(Tag, tag_id) is not None:
+            db.add(ItemTag(item_id=item_id, tag_id=tag_id))
+    db.flush()
+    search_index(db).index_item(db, item_id)
+    record_audit_event(db, user.id, "tag.set", "item", item_id)
+    db.commit()
+
+
+def merge_tags(db: Session, user: User, source_tag_id: str, target_tag_id: str) -> Tag:
+    source_tag = db.get(Tag, source_tag_id)
+    target_tag = db.get(Tag, target_tag_id)
+    if source_tag is None or target_tag is None:
+        raise ResourceUnavailable("tags not found")
+    if (
+        user.role != "administrator"
+        and source_tag.created_by != user.id
+        and target_tag.created_by != user.id
+    ):
+        raise ResourceUnavailable("not authorized to merge these tags")
+
+    # Re-link items from source to target
+    source_items = list(
+        db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == source_tag.id)).all()
+    )
+    for item_id in source_items:
+        existing = db.get(ItemTag, (item_id, target_tag.id))
+        if existing is None:
+            db.add(ItemTag(item_id=item_id, tag_id=target_tag.id))
+    db.execute(delete(ItemTag).where(ItemTag.tag_id == source_tag.id))
+    db.delete(source_tag)
+    db.flush()
+
+    for item_id in source_items:
+        search_index(db).index_item(db, item_id)
+    record_audit_event(
+        db,
+        user.id,
+        "tag.merge",
+        "tag",
+        target_tag.id,
+        detail={"merged_from": source_tag.name},
+    )
+    db.commit()
+    return target_tag

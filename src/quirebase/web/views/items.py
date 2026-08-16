@@ -24,8 +24,15 @@ from quirebase.library import (
 )
 from quirebase.library import (
     add_tag_to_item,
+    batch_add_tags_to_item,
+    generate_bibtex_key,
     get_item_workspace_data,
     remove_tag_from_item,
+    rescan_pdf_doi,
+    search_authors_typeahead,
+    set_item_authors,
+    set_item_tags,
+    sync_metadata_from_upstream,
 )
 from quirebase.library import (
     create_item as create_item_op,
@@ -128,8 +135,23 @@ def edit_item(
     publication_title: str = Form(default=""),
     doi: str = Form(default=""),
     reference_type: str = Form(default=""),
+    volume: str = Form(default=""),
+    issue: str = Form(default=""),
+    pages: str = Form(default=""),
+    affiliation: str = Form(default=""),
+    publisher: str = Form(default=""),
+    place_published: str = Form(default=""),
+    journal_abbreviation: str = Form(default=""),
+    bibtex_id: str = Form(default=""),
+    bibtex_type: str = Form(default=""),
+    urls: str = Form(default=""),
     identifiers: str = Form(default=""),
     custom_fields: str = Form(default=""),
+    author_last_name: list[str] = Form(default=[]),
+    author_first_name: list[str] = Form(default=[]),
+    author_is_corr: list[str] = Form(default=[]),
+    editor_last_name: list[str] = Form(default=[]),
+    editor_first_name: list[str] = Form(default=[]),
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
@@ -147,10 +169,111 @@ def edit_item(
         publication_title=publication_title,
         doi=doi,
         reference_type=reference_type,
+        volume=volume,
+        issue=issue,
+        pages=pages,
+        affiliation=affiliation,
+        publisher=publisher,
+        place_published=place_published,
+        journal_abbreviation=journal_abbreviation,
+        bibtex_id=bibtex_id,
+        bibtex_type=bibtex_type,
+        urls=urls,
         identifiers=identifiers,
         custom_fields=custom_fields,
     )
+    if author_last_name:
+        authors_data = []
+        for idx, last in enumerate(author_last_name):
+            if last.strip():
+                first = author_first_name[idx] if idx < len(author_first_name) else None
+                is_corr = str(idx) in author_is_corr or "true" in author_is_corr
+                authors_data.append({
+                    "last_name": last.strip(),
+                    "first_name": first,
+                    "is_corresponding": is_corr,
+                })
+        set_item_authors(db, user, item.id, authors_data, role="author")
+
+    if editor_last_name:
+        editors_data = []
+        for idx, last in enumerate(editor_last_name):
+            if last.strip():
+                first = editor_first_name[idx] if idx < len(editor_first_name) else None
+                editors_data.append({"last_name": last.strip(), "first_name": first})
+        set_item_authors(db, user, item.id, editors_data, role="editor")
+
     return RedirectResponse(f"/items/{item.id}/metadata", status_code=303)
+
+
+@router.post("/items/{item_id}/sync-metadata", dependencies=[Depends(require_csrf)])
+def sync_metadata_route(
+    item_id: str,
+    provider: str = Form(),
+    uid: str = Form(),
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    sync_metadata_from_upstream(db, user, item_id, provider=provider, uid_value=uid)
+    return RedirectResponse(f"/items/{item_id}", status_code=303)
+
+
+@router.post("/items/{item_id}/rescan-doi", dependencies=[Depends(require_csrf)])
+def rescan_doi_route(
+    item_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    rescan_pdf_doi(db, user, item_id)
+    return RedirectResponse(f"/items/{item_id}", status_code=303)
+
+
+@router.post("/items/{item_id}/update-bibtex-key", dependencies=[Depends(require_csrf)])
+def update_bibtex_key_route(
+    item_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    data = get_item_workspace_data(db, user, item_id, "summary")
+    item = data["item"]
+    key = generate_bibtex_key(item)
+    update_item_op(
+        db,
+        user,
+        item_id=item_id,
+        version=item.version,
+        title=item.title,
+        bibtex_id=key,
+    )
+    return RedirectResponse(f"/items/{item_id}", status_code=303)
+
+
+@router.post("/items/{item_id}/tags/matrix", dependencies=[Depends(require_csrf)])
+def update_tag_matrix_route(
+    item_id: str,
+    tag_ids: list[str] = Form(default=[]),
+    new_tags: str = Form(default=""),
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    all_selected = list(tag_ids)
+    if new_tags.strip():
+        lines = [line.strip() for line in new_tags.splitlines() if line.strip()]
+        if lines:
+            created = batch_add_tags_to_item(db, user, item_id, lines)
+            for t in created:
+                if t.id not in all_selected:
+                    all_selected.append(t.id)
+    set_item_tags(db, user, item_id, all_selected)
+    return RedirectResponse(f"/items/{item_id}/organize", status_code=303)
+
+
+@router.get("/api/authors/suggest")
+def suggest_authors(
+    q: str = "",
+    db: Session = Depends(get_db),
+):
+    return search_authors_typeahead(db, query=q)
 
 
 @router.post("/items/{item_id}/attachments", dependencies=[Depends(require_csrf)])

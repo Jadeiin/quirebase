@@ -83,20 +83,81 @@ class Item(Base):
     abstract: Mapped[str | None] = mapped_column(Text)
     publication_date: Mapped[str | None] = mapped_column(String(32))
     publication_title: Mapped[str | None] = mapped_column(Text)
+    volume: Mapped[str | None] = mapped_column(String(100))
+    issue: Mapped[str | None] = mapped_column(String(100))
+    pages: Mapped[str | None] = mapped_column(String(100))
+    affiliation: Mapped[str | None] = mapped_column(Text)
+    publisher: Mapped[str | None] = mapped_column(Text)
+    place_published: Mapped[str | None] = mapped_column(String(255))
+    journal_abbreviation: Mapped[str | None] = mapped_column(Text)
     doi: Mapped[str | None] = mapped_column(String(500), index=True)
     identifiers: Mapped[str | None] = mapped_column(Text)
     reference_type: Mapped[str | None] = mapped_column(String(40))
     authors: Mapped[str | None] = mapped_column(Text)
     editors: Mapped[str | None] = mapped_column(Text)
+    bibtex_id: Mapped[str | None] = mapped_column(String(255), index=True)
+    bibtex_type: Mapped[str | None] = mapped_column(String(40))
+    urls: Mapped[str | None] = mapped_column(Text)
     keywords: Mapped[str | None] = mapped_column(Text)
     custom_fields: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    updated_by: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     version: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
     revisions: Mapped[list[FileRevision]] = relationship(
         back_populates="item", cascade="all, delete-orphan", passive_deletes=True
     )
+    author_links: Mapped[list[ItemAuthor]] = relationship(
+        back_populates="item",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="ItemAuthor.position",
+    )
+    identifier_links: Mapped[list[ItemIdentifier]] = relationship(
+        back_populates="item", cascade="all, delete-orphan", passive_deletes=True
+    )
+    creator: Mapped[User] = relationship(foreign_keys=[created_by])
+    updater: Mapped[User | None] = relationship(foreign_keys=[updated_by])
+
+
+class Author(Base):
+    __tablename__ = "authors"
+    __table_args__ = (UniqueConstraint("last_name", "first_name", name="uq_authors_name"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    first_name: Mapped[str | None] = mapped_column(String(120))
+    last_name: Mapped[str] = mapped_column(String(120), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class ItemAuthor(Base):
+    __tablename__ = "item_authors"
+    __table_args__ = (UniqueConstraint("item_id", "author_id", "role", name="uq_item_author_role"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    item_id: Mapped[str] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
+    author_id: Mapped[str] = mapped_column(
+        ForeignKey("authors.id", ondelete="RESTRICT"), index=True
+    )
+    position: Mapped[int] = mapped_column(Integer, default=1)
+    role: Mapped[str] = mapped_column(String(20), default="author")
+    is_corresponding: Mapped[bool] = mapped_column(Boolean, default=False)
+    item: Mapped[Item] = relationship(back_populates="author_links")
+    author: Mapped[Author] = relationship()
+
+
+class ItemIdentifier(Base):
+    __tablename__ = "item_identifiers"
+    __table_args__ = (
+        UniqueConstraint("item_id", "provider", "value", name="uq_item_provider_value"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    item_id: Mapped[str] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
+    provider: Mapped[str] = mapped_column(String(40), index=True)
+    value: Mapped[str] = mapped_column(String(500), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    item: Mapped[Item] = relationship(back_populates="identifier_links")
 
 
 class ItemRead(Base):

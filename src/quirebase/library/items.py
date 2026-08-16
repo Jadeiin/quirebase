@@ -25,11 +25,14 @@ from quirebase.core.errors import (
 )
 from quirebase.core.storage import LocalObjectStore
 from quirebase.library.audit import record_audit_event
+from quirebase.library.tags import get_tag_matrix_for_item
 from quirebase.models import (
     Attachment,
     DiscussionMessage,
     FileRevision,
     Item,
+    ItemAuthor,
+    ItemIdentifier,
     ItemRead,
     ItemTag,
     PdfAnnotation,
@@ -81,6 +84,16 @@ def update_item(
     publication_title: str = "",
     doi: str = "",
     reference_type: str = "",
+    volume: str = "",
+    issue: str = "",
+    pages: str = "",
+    affiliation: str = "",
+    publisher: str = "",
+    place_published: str = "",
+    journal_abbreviation: str = "",
+    bibtex_id: str = "",
+    bibtex_type: str = "",
+    urls: str = "",
     identifiers: str = "",
     custom_fields: str = "",
 ) -> Item:
@@ -117,12 +130,23 @@ def update_item(
             publication_title=publication_title.strip() or None,
             doi=doi.strip() or None,
             reference_type=reference_type.strip() or None,
+            volume=volume.strip() or None,
+            issue=issue.strip() or None,
+            pages=pages.strip() or None,
+            affiliation=affiliation.strip() or None,
+            publisher=publisher.strip() or None,
+            place_published=place_published.strip() or None,
+            journal_abbreviation=journal_abbreviation.strip() or None,
+            bibtex_id=bibtex_id.strip() or None,
+            bibtex_type=bibtex_type.strip() or None,
+            urls=urls.strip() or None,
             identifiers=json.dumps(parsed_identifiers, ensure_ascii=False)
             if parsed_identifiers is not None
             else None,
             custom_fields=json.dumps(parsed_custom, ensure_ascii=False)
             if parsed_custom is not None
             else None,
+            updated_by=user.id,
             version=Item.version + 1,
             updated_at=datetime.now(UTC),
         )
@@ -300,6 +324,29 @@ def get_item_workspace_data(db: Session, user: User, item_id: str, section: str)
         )
         message_count = len(messages)
 
+    creator = db.get(User, item.created_by) if item.created_by else None
+    updater = db.get(User, item.updated_by) if item.updated_by else None
+    identifier_links = list(
+        db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item_id)).all()
+    )
+    author_links = list(
+        db.scalars(
+            select(ItemAuthor)
+            .options(selectinload(ItemAuthor.author))
+            .where(ItemAuthor.item_id == item_id, ItemAuthor.role == "author")
+            .order_by(ItemAuthor.position)
+        ).all()
+    )
+    editor_links = list(
+        db.scalars(
+            select(ItemAuthor)
+            .options(selectinload(ItemAuthor.author))
+            .where(ItemAuthor.item_id == item_id, ItemAuthor.role == "editor")
+            .order_by(ItemAuthor.position)
+        ).all()
+    )
+    tag_matrix = get_tag_matrix_for_item(db, user, item_id) if section == "organize" else None
+
     return {
         "item": item,
         "revisions": revisions,
@@ -307,12 +354,18 @@ def get_item_workspace_data(db: Session, user: User, item_id: str, section: str)
         "memberships": memberships,
         "assigned": assigned,
         "tags": tags,
+        "tag_matrix": tag_matrix,
         "messages": messages,
         "attachments": attachments,
         "annotations": annotations,
         "annotation_count": annotation_count,
         "message_count": message_count,
         "can_edit": can_edit,
+        "creator": creator,
+        "updater": updater,
+        "identifier_links": identifier_links,
+        "author_links": author_links,
+        "editor_links": editor_links,
     }
 
 

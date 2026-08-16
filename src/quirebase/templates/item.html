@@ -42,16 +42,104 @@
       <section class="panel item-abstract">
         <div class="section-heading"><h2>{{ _('Abstract') }}</h2>{% if can_edit %}<a href="/items/{{ item.id }}/metadata">{{ _('Edit metadata') }}</a>{% endif %}</div>
         {% if item.abstract %}<p class="long-copy">{{ item.abstract }}</p>{% else %}<div class="empty-state">{{ _('No abstract available.') }}</div>{% endif %}
+
+        {% if item.urls %}
+        <div class="section-heading" style="margin-top: 1.5rem;"><h2>{{ _('External links') }}</h2></div>
+        <ul style="margin: 0; padding-left: 1.25rem; display: flex; flex-direction: column; gap: .35rem;">
+          {% for url in item.urls.splitlines() if url.strip() %}
+          <li><a href="{{ url.strip() }}" target="_blank" rel="noreferrer">{{ url.strip() }}</a></li>
+          {% endfor %}
+        </ul>
+        {% endif %}
       </section>
       <aside class="item-facts">
         <section class="panel">
           <h2>{{ _('At a glance') }}</h2>
           <dl class="metadata-list">
             <div><dt>{{ _('Type') }}</dt><dd>{{ _(item.reference_type) if item.reference_type else '—' }}</dd></div>
-            <div><dt>{{ _('DOI') }}</dt><dd>{% if item.doi %}<a href="https://doi.org/{{ item.doi }}" rel="noreferrer">{{ item.doi }}</a>{% else %}—{% endif %}</dd></div>
-            <div><dt>{{ _('Updated') }}</dt><dd>{{ item.updated_at.strftime('%Y-%m-%d') }}</dd></div>
+            {% if item.journal_abbreviation %}<div><dt>{{ _('Journal abbr.') }}</dt><dd>{{ item.journal_abbreviation }}</dd></div>{% endif %}
+            {% if item.volume or item.issue or item.pages %}
+            <div><dt>{{ _('Volume / Pages') }}</dt><dd>{% if item.volume %}Vol. {{ item.volume }}{% endif %}{% if item.issue %} ({{ item.issue }}){% endif %}{% if item.pages %} pp. {{ item.pages }}{% endif %}</dd></div>
+            {% endif %}
+            {% if item.affiliation %}<div><dt>{{ _('Affiliation') }}</dt><dd>{{ item.affiliation }}</dd></div>{% endif %}
+            {% if item.publisher %}<div><dt>{{ _('Publisher') }}</dt><dd>{{ item.publisher }}{% if item.place_published %} ({{ item.place_published }}){% endif %}</dd></div>{% endif %}
+            <div><dt>{{ _('DOI') }}</dt><dd>{% if item.doi %}<a href="https://doi.org/{{ item.doi }}" rel="noreferrer" target="_blank">{{ item.doi }}</a>{% else %}—{% endif %}</dd></div>
           </dl>
+          <div class="provenance-meta">
+            <div><strong>{{ _('Added') }}:</strong> {{ item.created_at.strftime('%Y-%m-%d %H:%M') }}{% if creator %} · {{ creator.username }}{% endif %}</div>
+            {% if item.updated_by and updater %}
+            <div><strong>{{ _('Modified') }}:</strong> {{ item.updated_at.strftime('%Y-%m-%d %H:%M') }} · {{ updater.username }}</div>
+            {% endif %}
+          </div>
         </section>
+
+        <section class="panel">
+          <h2>{{ _('Identifiers & Sync') }}</h2>
+          <div class="identifier-list">
+            <div class="identifier-row">
+              <div class="identifier-info">
+                <strong>{{ _('Citation key') }}</strong>
+                <span>{{ item.bibtex_id or '—' }}</span>
+              </div>
+              {% if can_edit %}
+              <div class="identifier-actions">
+                <form method="post" action="/items/{{ item.id }}/update-bibtex-key?csrf_token={{ csrf }}">
+                  <button class="secondary-button compact-action-btn" type="submit">{{ _('Update key') }}</button>
+                </form>
+              </div>
+              {% endif %}
+            </div>
+
+            {% if item.doi %}
+            <div class="identifier-row">
+              <div class="identifier-info">
+                <strong>DOI</strong>
+                <a href="https://doi.org/{{ item.doi }}" target="_blank" rel="noreferrer">{{ item.doi }}</a>
+              </div>
+              {% if can_edit %}
+              <div class="identifier-actions">
+                <form method="post" action="/items/{{ item.id }}/sync-metadata?csrf_token={{ csrf }}">
+                  <input type="hidden" name="provider" value="doi">
+                  <input type="hidden" name="uid" value="{{ item.doi }}">
+                  <button class="secondary-button compact-action-btn" type="submit">{{ _('Autoupdate') }}</button>
+                </form>
+              </div>
+              {% endif %}
+            </div>
+            {% elif revisions and can_edit %}
+            <div class="identifier-row">
+              <div class="identifier-info">
+                <strong>DOI</strong>
+                <span class="text-muted">{{ _('Missing DOI?') }}</span>
+              </div>
+              <div class="identifier-actions">
+                <form method="post" action="/items/{{ item.id }}/rescan-doi?csrf_token={{ csrf }}">
+                  <button class="secondary-button compact-action-btn" type="submit">{{ _('Rescan PDF') }}</button>
+                </form>
+              </div>
+            </div>
+            {% endif %}
+
+            {% for ident in identifier_links if ident.provider != 'doi' %}
+            <div class="identifier-row">
+              <div class="identifier-info">
+                <strong>{{ ident.provider|upper }}</strong>
+                <span>{{ ident.value }}</span>
+              </div>
+              {% if can_edit %}
+              <div class="identifier-actions">
+                <form method="post" action="/items/{{ item.id }}/sync-metadata?csrf_token={{ csrf }}">
+                  <input type="hidden" name="provider" value="{{ ident.provider }}">
+                  <input type="hidden" name="uid" value="{{ ident.value }}">
+                  <button class="secondary-button compact-action-btn" type="submit">{{ _('Autoupdate') }}</button>
+                </form>
+              </div>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+        </section>
+
         <section class="panel">
           <h2>{{ _('Workspace activity') }}</h2>
           <div class="item-stat-grid"><a href="/items/{{ item.id }}/files"><strong>{{ revision_count }}</strong><span>PDF</span></a><a href="/items/{{ item.id }}/annotations"><strong>{{ annotation_count }}</strong><span>{{ _('Annotations') }}</span></a><a href="/items/{{ item.id }}/discussion"><strong>{{ message_count }}</strong><span>{{ _('Messages') }}</span></a></div>
@@ -70,15 +158,81 @@
       <form class="metadata-form" method="post" action="/items/{{ item.id }}/edit?csrf_token={{ csrf }}">
         <input type="hidden" name="version" value="{{ item.version }}">
         <label class="span-2">{{ _('Title') }} <input name="title" value="{{ item.title }}" required></label>
-        <label class="span-2">{{ _('Authors') }} <input name="authors" value="{{ item.authors or '' }}"></label>
-        <label>{{ _('Editors') }} <input name="editors" value="{{ item.editors or '' }}"></label>
-        <label>{{ _('Reference type') }} <input name="reference_type" value="{{ item.reference_type or '' }}"></label>
-        <label>{{ _('Date') }} <input name="publication_date" value="{{ item.publication_date or '' }}"></label>
-        <label>{{ _('Publication') }} <input name="publication_title" value="{{ item.publication_title or '' }}"></label>
+        
+        <!-- Structured Authors Editor -->
+        <div class="span-2 author-editor-container" x-data="authorEditor" data-initial-authors="[{% for link in author_links %}{&quot;last_name&quot;: &quot;{{ link.author.last_name }}&quot;, &quot;first_name&quot;: &quot;{{ link.author.first_name or '' }}&quot;, &quot;is_corresponding&quot;: {{ 'true' if link.is_corresponding else 'false' }}}{% if not loop.last %},{% endif %}{% endfor %}]">
+          <label><strong>{{ _('Authors (Structured & Ranked)') }}</strong></label>
+          <template x-for="(author, index) in authors" :key="index">
+            <div class="author-input-row">
+              <div class="author-suggest-wrapper">
+                <input name="author_last_name[]" x-model="author.last_name" placeholder="{{ _('Last name') }}" @input.debounce.300ms="suggest(index)" autocomplete="off">
+                <ul class="suggest-dropdown" x-show="author.suggestions && author.suggestions.length > 0">
+                  <template x-for="s in author.suggestions" :key="s.id">
+                    <li class="suggest-item" @click="selectSuggestion(index, s)" x-text="s.full_name"></li>
+                  </template>
+                </ul>
+              </div>
+              <input name="author_first_name[]" x-model="author.first_name" placeholder="{{ _('First name / initials') }}">
+              <label class="corr-label"><input type="checkbox" name="author_is_corr[]" :value="index" x-model="author.is_corresponding"> {{ _('Corr.') }}</label>
+              <button type="button" class="secondary-button compact-button" @click="moveUp(index)" :disabled="index === 0" title="{{ _('Move up') }}">↑</button>
+              <button type="button" class="secondary-button compact-button" @click="moveDown(index)" :disabled="index === authors.length - 1" title="{{ _('Move down') }}">↓</button>
+              <button type="button" class="secondary-button compact-button" @click="remove(index)" title="{{ _('Remove author') }}">×</button>
+            </div>
+          </template>
+          <div><button type="button" class="secondary-button compact-button" @click="add()">+ {{ _('Add author') }}</button></div>
+        </div>
+
+        <!-- Structured Editors Editor -->
+        <div class="span-2 author-editor-container" x-data="editorEditor" data-initial-editors="[{% for link in editor_links %}{&quot;last_name&quot;: &quot;{{ link.author.last_name }}&quot;, &quot;first_name&quot;: &quot;{{ link.author.first_name or '' }}&quot;}{% if not loop.last %},{% endif %}{% endfor %}]">
+          <label><strong>{{ _('Editors (Structured)') }}</strong></label>
+          <template x-for="(editor, index) in editors" :key="index">
+            <div class="author-input-row">
+              <div class="author-suggest-wrapper">
+                <input name="editor_last_name[]" x-model="editor.last_name" placeholder="{{ _('Editor last name') }}" @input.debounce.300ms="suggest(index)" autocomplete="off">
+                <ul class="suggest-dropdown" x-show="editor.suggestions && editor.suggestions.length > 0">
+                  <template x-for="s in editor.suggestions" :key="s.id">
+                    <li class="suggest-item" @click="selectSuggestion(index, s)" x-text="s.full_name"></li>
+                  </template>
+                </ul>
+              </div>
+              <input name="editor_first_name[]" x-model="editor.first_name" placeholder="{{ _('Editor first name') }}">
+              <button type="button" class="secondary-button compact-button" @click="remove(index)">×</button>
+            </div>
+          </template>
+          <div><button type="button" class="secondary-button compact-button" @click="add()">+ {{ _('Add editor') }}</button></div>
+        </div>
+
+        <label>{{ _('Reference type') }}
+          <select name="reference_type">
+            <option value="article" {% if item.reference_type == 'article' %}selected{% endif %}>{{ _('Article / Journal') }}</option>
+            <option value="book" {% if item.reference_type == 'book' %}selected{% endif %}>{{ _('Book') }}</option>
+            <option value="chapter" {% if item.reference_type == 'chapter' %}selected{% endif %}>{{ _('Chapter / Incollection') }}</option>
+            <option value="conference" {% if item.reference_type == 'conference' %}selected{% endif %}>{{ _('Conference Paper') }}</option>
+            <option value="dataset" {% if item.reference_type == 'dataset' %}selected{% endif %}>{{ _('Dataset') }}</option>
+            <option value="thesis" {% if item.reference_type == 'thesis' %}selected{% endif %}>{{ _('Thesis / Dissertation') }}</option>
+            <option value="patent" {% if item.reference_type == 'patent' %}selected{% endif %}>{{ _('Patent') }}</option>
+            <option value="report" {% if item.reference_type == 'report' %}selected{% endif %}>{{ _('Report / Tech Report') }}</option>
+            <option value="standard" {% if item.reference_type == 'standard' %}selected{% endif %}>{{ _('Standard') }}</option>
+            <option value="generic" {% if item.reference_type == 'generic' %}selected{% endif %}>{{ _('Generic / Misc') }}</option>
+          </select>
+        </label>
+        <label>{{ _('Publication date (YYYY-MM-DD)') }} <input name="publication_date" value="{{ item.publication_date or '' }}" placeholder="2026-05-12"></label>
+        <label>{{ _('Publication / Journal name') }} <input name="publication_title" value="{{ item.publication_title or '' }}"></label>
+        <label>{{ _('Journal abbreviation') }} <input name="journal_abbreviation" value="{{ item.journal_abbreviation or '' }}" placeholder="e.g. Nat. Mach. Intell."></label>
+        <label>{{ _('Volume') }} <input name="volume" value="{{ item.volume or '' }}"></label>
+        <label>{{ _('Issue') }} <input name="issue" value="{{ item.issue or '' }}"></label>
+        <label>{{ _('Pages') }} <input name="pages" value="{{ item.pages or '' }}" placeholder="e.g. 100-115"></label>
+        <label>{{ _('Affiliation / Institution') }} <input name="affiliation" value="{{ item.affiliation or '' }}" placeholder="e.g. Stanford University"></label>
+        <label>{{ _('Publisher') }} <input name="publisher" value="{{ item.publisher or '' }}"></label>
+        <label>{{ _('Place published') }} <input name="place_published" value="{{ item.place_published or '' }}"></label>
         <label class="span-2">{{ _('DOI') }} <input name="doi" value="{{ item.doi or '' }}"></label>
+        <label>{{ _('BibTeX ID (Citation key)') }} <input name="bibtex_id" value="{{ item.bibtex_id or '' }}"></label>
+        <label>{{ _('BibTeX type') }} <input name="bibtex_type" value="{{ item.bibtex_type or '' }}" placeholder="e.g. article"></label>
+        <label class="span-2">{{ _('URLs (one per line)') }} <textarea name="urls" rows="2">{{ item.urls or '' }}</textarea></label>
         <label class="span-2">{{ _('Keywords') }} <input name="keywords" value="{{ item.keywords or '' }}"></label>
-        <label class="span-2">{{ _('Abstract') }} <textarea name="abstract" rows="9">{{ item.abstract or '' }}</textarea></label>
-        <details class="span-2 advanced-fields"><summary>{{ _('Advanced fields') }}</summary><div class="metadata-form">
+        <label class="span-2">{{ _('Abstract') }} <textarea name="abstract" rows="6">{{ item.abstract or '' }}</textarea></label>
+        
+        <details class="span-2 advanced-fields"><summary>{{ _('Advanced identifiers & Custom fields') }}</summary><div class="metadata-form">
           <label>{{ _('Identifiers (JSON object)') }} <textarea name="identifiers">{{ item.identifiers or '' }}</textarea></label>
           <label>{{ _('Custom fields (JSON object)') }} <textarea name="custom_fields">{{ item.custom_fields or '' }}</textarea></label>
         </div></details>
@@ -86,7 +240,14 @@
       </form>
       {% else %}
       <dl class="metadata-list metadata-list-wide">
-        <div><dt>{{ _('Title') }}</dt><dd>{{ item.title }}</dd></div><div><dt>{{ _('Authors') }}</dt><dd>{{ item.authors or '—' }}</dd></div><div><dt>{{ _('Editors') }}</dt><dd>{{ item.editors or '—' }}</dd></div><div><dt>{{ _('Publication') }}</dt><dd>{{ item.publication_title or '—' }}</dd></div><div><dt>{{ _('Date') }}</dt><dd>{{ item.publication_date or '—' }}</dd></div><div><dt>{{ _('DOI') }}</dt><dd>{{ item.doi or '—' }}</dd></div>
+        <div><dt>{{ _('Title') }}</dt><dd>{{ item.title }}</dd></div>
+        <div><dt>{{ _('Authors') }}</dt><dd>{{ item.authors or '—' }}</dd></div>
+        <div><dt>{{ _('Editors') }}</dt><dd>{{ item.editors or '—' }}</dd></div>
+        <div><dt>{{ _('Publication') }}</dt><dd>{{ item.publication_title or '—' }}</dd></div>
+        <div><dt>{{ _('Date') }}</dt><dd>{{ item.publication_date or '—' }}</dd></div>
+        <div><dt>{{ _('Volume / Pages') }}</dt><dd>{% if item.volume %}Vol. {{ item.volume }}{% endif %}{% if item.pages %} pp. {{ item.pages }}{% endif %}</dd></div>
+        <div><dt>{{ _('Affiliation') }}</dt><dd>{{ item.affiliation or '—' }}</dd></div>
+        <div><dt>{{ _('DOI') }}</dt><dd>{{ item.doi or '—' }}</dd></div>
       </dl>
       {% endif %}
     </section>
@@ -107,8 +268,85 @@
     {% elif item_section == 'organize' %}
     <section class="panel page-section-heading"><p class="eyebrow">{{ _('Library organization') }}</p><h2>{{ _('Tags and projects') }}</h2><p>{{ _('Use tags for flexible classification and projects for shared collections.') }}</p></section>
     <div class="item-two-column">
-      <section class="panel"><h2>{{ _('Tags') }}</h2><div class="chip-list">{% for tag in tags %}<span>{{ tag.name }}{% if can_edit %}<form class="inline" method="post" action="/items/{{ item.id }}/tags/{{ tag.id }}/remove?csrf_token={{ csrf }}"><button aria-label="{{ _('Remove {name}', name=tag.name) }}">×</button></form>{% endif %}</span>{% else %}<p>{{ _('No tags.') }}</p>{% endfor %}</div>{% if can_edit %}<form class="compact-form" method="post" action="/items/{{ item.id }}/tags?csrf_token={{ csrf }}"><input name="name" placeholder="{{ _('New tag') }}" required><button>{{ _('Add tag') }}</button></form>{% endif %}</section>
-      <section class="panel"><h2>{{ _('Projects') }}</h2><div class="project-memberships">{% for project, role in memberships %}{% if project.id in assigned %}<article><div><strong>{{ project.name }}</strong><small>{{ _(role) }}</small></div>{% if role in ('owner', 'editor') %}<form method="post" action="/items/{{ item.id }}/projects/{{ project.id }}/remove?csrf_token={{ csrf }}"><button class="secondary-button compact-button">{{ _('Remove') }}</button></form>{% endif %}</article>{% elif role in ('owner', 'editor') %}<article><div><strong>{{ project.name }}</strong><small>{{ _('Not in this project') }}</small></div><form method="post" action="/items/{{ item.id }}/projects/{{ project.id }}?csrf_token={{ csrf }}"><button class="secondary-button compact-button">{{ _('Add') }}</button></form></article>{% endif %}{% else %}<p>{{ _('No projects.') }}</p>{% endfor %}</div></section>
+      <div>
+        <section class="panel" style="margin-bottom: 1.5rem;">
+          <h2>{{ _('Add new tags') }}</h2>
+          {% if can_edit %}
+          <form class="metadata-form" method="post" action="/items/{{ item.id }}/tags/matrix?csrf_token={{ csrf }}">
+            {% if tag_matrix %}
+            {% for tid in tag_matrix.assigned_ids %}
+            <input type="hidden" name="tag_ids" value="{{ tid }}">
+            {% endfor %}
+            {% endif %}
+            <label>{{ _('New tags (one per line)') }}
+              <textarea name="new_tags" rows="3" placeholder="{{ _('One tag per line') }}"></textarea>
+            </label>
+            <div><button>{{ _('Add & Save') }}</button></div>
+          </form>
+          {% endif %}
+        </section>
+
+        <section class="panel" style="margin-bottom: 1.5rem;">
+          <h2>{{ _('Current tags') }}</h2>
+          <div class="chip-list">
+            {% for tag in tags %}
+            <span>{{ tag.name }}{% if can_edit %}<form class="inline" method="post" action="/items/{{ item.id }}/tags/{{ tag.id }}/remove?csrf_token={{ csrf }}"><button aria-label="{{ _('Remove {name}', name=tag.name) }}">×</button></form>{% endif %}</span>
+            {% else %}<p>{{ _('No tags attached yet.') }}</p>{% endfor %}
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>{{ _('Projects') }}</h2>
+          <div class="project-memberships">
+            {% for project, role in memberships %}
+            {% if project.id in assigned %}
+            <article><div><strong>{{ project.name }}</strong><small>{{ _(role) }}</small></div>{% if role in ('owner', 'editor') %}<form method="post" action="/items/{{ item.id }}/projects/{{ project.id }}/remove?csrf_token={{ csrf }}"><button class="secondary-button compact-button">{{ _('Remove') }}</button></form>{% endif %}</article>
+            {% elif role in ('owner', 'editor') %}
+            <article><div><strong>{{ project.name }}</strong><small>{{ _('Not in this project') }}</small></div><form method="post" action="/items/{{ item.id }}/projects/{{ project.id }}?csrf_token={{ csrf }}"><button class="secondary-button compact-button">{{ _('Add') }}</button></form></article>
+            {% endif %}
+            {% else %}<p>{{ _('No projects.') }}</p>{% endfor %}
+          </div>
+        </section>
+      </div>
+
+      <!-- Tag Matrix Panel (A-Z Grouping & Filter) -->
+      <section class="panel tag-matrix-panel" x-data="tagMatrix">
+        <div class="section-heading">
+          <h2>{{ _('Tag picker matrix') }}</h2>
+          <span class="text-muted">{{ _('Pick from library tags') }}</span>
+        </div>
+        <div class="tag-filter-bar">
+          <input type="search" x-model="filter" placeholder="{{ _('Filter tags (e.g. machine learning)...') }}">
+        </div>
+
+        {% if tag_matrix and tag_matrix.groups %}
+        <form method="post" action="/items/{{ item.id }}/tags/matrix?csrf_token={{ csrf }}">
+          <div class="tag-matrix-scroll">
+            {% for group in tag_matrix.groups %}
+            <div class="tag-letter-row">
+              <span class="tag-letter-badge">{{ group.letter }}</span>
+              <div class="tag-letter-items">
+                {% for t in group.tags %}
+                <label class="tag-checkbox-label {% if t.id in tag_matrix.recommended_ids %}is-recommended{% endif %}" x-show="matches('{{ t.name }}')">
+                  <input type="checkbox" name="tag_ids" value="{{ t.id }}" {% if t.id in tag_matrix.assigned_ids %}checked{% endif %}>
+                  <span>{{ t.name }}</span>
+                  {% if t.id in tag_matrix.recommended_ids %}
+                  <span class="rec-badge">{{ _('Recommended') }}</span>
+                  {% endif %}
+                </label>
+                {% endfor %}
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% if can_edit %}
+          <div style="margin-top: 1rem;"><button>{{ _('Save tag selection') }}</button></div>
+          {% endif %}
+        </form>
+        {% else %}
+        <div class="empty-state">{{ _('No library tags available yet.') }}</div>
+        {% endif %}
+      </section>
     </div>
 
     {% elif item_section == 'annotations' %}
