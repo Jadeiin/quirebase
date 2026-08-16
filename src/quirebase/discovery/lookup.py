@@ -423,7 +423,7 @@ class PubMedLookupAdapter:
             doi=doi,
             urls="\n".join(urls) if urls else None,
             identifiers=json.dumps(identifiers),
-            reference_type="journal-article",
+            reference_type="article",
         )
 
 

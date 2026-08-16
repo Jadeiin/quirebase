@@ -17,8 +17,7 @@ from quirebase.discovery.lookup import (
     normalize_reference_type,
 )
 from quirebase.library.audit import record_audit_event
-from quirebase.library.authors import parse_author_name, set_item_authors
-from quirebase.library.tags import batch_add_tags_to_item
+from quirebase.library.authors import parse_author_list_string, set_item_authors
 from quirebase.models import FileRevision, Item, ItemIdentifier, User
 from quirebase.search import search_index
 
@@ -202,12 +201,7 @@ def sync_metadata_from_upstream(
 
     authors_raw = record.get("authors")
     if isinstance(authors_raw, str) and authors_raw.strip():
-        parsed_authors = []
-        for author_str in authors_raw.split(";"):
-            author_str = author_str.strip()
-            if author_str:
-                last, first = parse_author_name(author_str)
-                parsed_authors.append({"last_name": last, "first_name": first})
+        parsed_authors = parse_author_list_string(authors_raw)
         if parsed_authors:
             item.authors = authors_raw.strip()
             set_item_authors(db, user, item_id, parsed_authors, role="author")
@@ -244,8 +238,6 @@ def sync_metadata_from_upstream(
             if nk not in existing_kws:
                 existing_kws.append(nk)
         item.keywords = "; ".join(existing_kws) if existing_kws else None
-        if new_kws:
-            batch_add_tags_to_item(db, user, item_id, new_kws)
 
     if not item.bibtex_id:
         item.bibtex_id = generate_bibtex_key(item)

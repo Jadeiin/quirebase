@@ -61,7 +61,7 @@ def test_get_tag_matrix_for_item(db):
     add_tag_to_item(db, user, item.id, "Algorithms")
     db.commit()
 
-    matrix = get_tag_matrix_for_item(db, user, item.id)
+    matrix = get_tag_matrix_for_item(db, item.id)
     assert len(matrix["groups"]) >= 3
     assert t1.id in matrix["assigned_ids"]
     assert t2.id not in matrix["assigned_ids"]

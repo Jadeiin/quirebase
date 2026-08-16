@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import zipfile
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
@@ -24,9 +25,12 @@ from quirebase.core.errors import (
     VersionConflict,
 )
 from quirebase.core.storage import LocalObjectStore
+from quirebase.discovery.lookup import normalize_reference_type
 from quirebase.library.audit import record_audit_event
-from quirebase.library.authors import parse_author_name, set_item_authors
-from quirebase.library.identifiers import set_item_identifiers
+from quirebase.library.authors import (
+    parse_author_list_string,
+    set_item_authors,
+)
 from quirebase.library.tags import get_tag_matrix_for_item
 from quirebase.models import (
     Attachment,
@@ -45,6 +49,34 @@ from quirebase.models import (
     User,
 )
 from quirebase.search import search_index
+
+
+@dataclass
+class ItemMetadataUpdate:
+    title: str
+    version: int
+    abstract: str = ""
+    authors: str = ""
+    editors: str = ""
+    keywords: str = ""
+    publication_date: str = ""
+    publication_title: str = ""
+    doi: str = ""
+    reference_type: str = ""
+    volume: str = ""
+    issue: str = ""
+    pages: str = ""
+    affiliation: str = ""
+    publisher: str = ""
+    place_published: str = ""
+    journal_abbreviation: str = ""
+    bibtex_id: str = ""
+    bibtex_type: str = ""
+    urls: str = ""
+    identifiers: str = ""
+    custom_fields: str = ""
+    structured_authors: list[dict[str, Any]] | None = None
+    structured_editors: list[dict[str, Any]] | None = None
 
 
 def create_item(
@@ -66,11 +98,7 @@ def create_item(
     db.add(item)
     db.flush()
     if item.authors:
-        parsed_authors = []
-        for raw in item.authors.split(";"):
-            if raw.strip():
-                last, first = parse_author_name(raw.strip())
-                parsed_authors.append({"last_name": last, "first_name": first})
+        parsed_authors = parse_author_list_string(item.authors)
         if parsed_authors:
             set_item_authors(db, user, item.id, parsed_authors, role="author")
     search_index(db).index_item(db, item.id)
@@ -84,44 +112,56 @@ def update_item(
     user: User,
     *,
     item_id: str,
-    version: int,
-    title: str,
-    abstract: str = "",
-    authors: str = "",
-    editors: str = "",
-    keywords: str = "",
-    publication_date: str = "",
-    publication_title: str = "",
-    doi: str = "",
-    reference_type: str = "",
-    volume: str = "",
-    issue: str = "",
-    pages: str = "",
-    affiliation: str = "",
-    publisher: str = "",
-    place_published: str = "",
-    journal_abbreviation: str = "",
-    bibtex_id: str = "",
-    bibtex_type: str = "",
-    urls: str = "",
-    identifiers: str = "",
-    custom_fields: str = "",
+    version: int | None = None,
+    title: str | None = None,
+    data: ItemMetadataUpdate | None = None,
+    **kwargs: Any,
 ) -> Item:
+    if data is None:
+        if version is None or title is None:
+            raise ValidationFailure("version and title are required")
+        data = ItemMetadataUpdate(
+            title=title,
+            version=version,
+            abstract=str(kwargs.get("abstract", "") or ""),
+            authors=str(kwargs.get("authors", "") or ""),
+            editors=str(kwargs.get("editors", "") or ""),
+            keywords=str(kwargs.get("keywords", "") or ""),
+            publication_date=str(kwargs.get("publication_date", "") or ""),
+            publication_title=str(kwargs.get("publication_title", "") or ""),
+            doi=str(kwargs.get("doi", "") or ""),
+            reference_type=str(kwargs.get("reference_type", "") or ""),
+            volume=str(kwargs.get("volume", "") or ""),
+            issue=str(kwargs.get("issue", "") or ""),
+            pages=str(kwargs.get("pages", "") or ""),
+            affiliation=str(kwargs.get("affiliation", "") or ""),
+            publisher=str(kwargs.get("publisher", "") or ""),
+            place_published=str(kwargs.get("place_published", "") or ""),
+            journal_abbreviation=str(kwargs.get("journal_abbreviation", "") or ""),
+            bibtex_id=str(kwargs.get("bibtex_id", "") or ""),
+            bibtex_type=str(kwargs.get("bibtex_type", "") or ""),
+            urls=str(kwargs.get("urls", "") or ""),
+            identifiers=str(kwargs.get("identifiers", "") or ""),
+            custom_fields=str(kwargs.get("custom_fields", "") or ""),
+            structured_authors=kwargs.get("structured_authors"),
+            structured_editors=kwargs.get("structured_editors"),
+        )
+
     require_editable_item(db, user, item_id)
-    if not title.strip():
+    if not data.title.strip():
         raise ValidationFailure("title is required")
     parsed_identifiers: dict[str, Any] | None = None
-    if identifiers.strip():
+    if data.identifiers.strip():
         try:
-            parsed_identifiers = json.loads(identifiers)
+            parsed_identifiers = json.loads(data.identifiers)
         except json.JSONDecodeError as error:
             raise ValidationFailure("identifiers must be valid JSON") from error
         if not isinstance(parsed_identifiers, dict):
             raise ValidationFailure("identifiers must be a JSON object")
     parsed_custom: dict[str, Any] | None = None
-    if custom_fields.strip():
+    if data.custom_fields.strip():
         try:
-            parsed_custom = json.loads(custom_fields)
+            parsed_custom = json.loads(data.custom_fields)
         except json.JSONDecodeError as error:
             raise ValidationFailure("custom fields must be valid JSON") from error
         if not isinstance(parsed_custom, dict):
@@ -129,27 +169,27 @@ def update_item(
 
     updated_id = db.scalar(
         update(Item)
-        .where(Item.id == item_id, Item.version == version)
+        .where(Item.id == item_id, Item.version == data.version)
         .values(
-            title=title.strip(),
-            abstract=abstract.strip() or None,
-            authors=authors.strip() or None,
-            editors=editors.strip() or None,
-            keywords=keywords.strip() or None,
-            publication_date=publication_date.strip() or None,
-            publication_title=publication_title.strip() or None,
-            doi=doi.strip() or None,
-            reference_type=reference_type.strip() or None,
-            volume=volume.strip() or None,
-            issue=issue.strip() or None,
-            pages=pages.strip() or None,
-            affiliation=affiliation.strip() or None,
-            publisher=publisher.strip() or None,
-            place_published=place_published.strip() or None,
-            journal_abbreviation=journal_abbreviation.strip() or None,
-            bibtex_id=bibtex_id.strip() or None,
-            bibtex_type=bibtex_type.strip() or None,
-            urls=urls.strip() or None,
+            title=data.title.strip(),
+            abstract=data.abstract.strip() or None,
+            authors=data.authors.strip() or None,
+            editors=data.editors.strip() or None,
+            keywords=data.keywords.strip() or None,
+            publication_date=data.publication_date.strip() or None,
+            publication_title=data.publication_title.strip() or None,
+            doi=data.doi.strip() or None,
+            reference_type=normalize_reference_type(data.reference_type),
+            volume=data.volume.strip() or None,
+            issue=data.issue.strip() or None,
+            pages=data.pages.strip() or None,
+            affiliation=data.affiliation.strip() or None,
+            publisher=data.publisher.strip() or None,
+            place_published=data.place_published.strip() or None,
+            journal_abbreviation=data.journal_abbreviation.strip() or None,
+            bibtex_id=data.bibtex_id.strip() or None,
+            bibtex_type=data.bibtex_type.strip() or None,
+            urls=data.urls.strip() or None,
             identifiers=json.dumps(parsed_identifiers, ensure_ascii=False)
             if parsed_identifiers is not None
             else None,
@@ -167,6 +207,21 @@ def update_item(
         current = db.get(Item, item_id)
         raise VersionConflict(current.version if current else None)
     db.flush()
+
+    if data.structured_authors is not None:
+        set_item_authors(db, user, item_id, data.structured_authors, role="author")
+    elif data.authors.strip():
+        parsed_authors = parse_author_list_string(data.authors)
+        if parsed_authors:
+            set_item_authors(db, user, item_id, parsed_authors, role="author")
+
+    if data.structured_editors is not None:
+        set_item_authors(db, user, item_id, data.structured_editors, role="editor")
+    elif data.editors.strip():
+        parsed_editors = parse_author_list_string(data.editors)
+        if parsed_editors:
+            set_item_authors(db, user, item_id, parsed_editors, role="editor")
+
     db.expire_all()
     item = db.get(Item, item_id)
     if item is None:
@@ -178,7 +233,7 @@ def update_item(
         "item.update",
         "item",
         item.id,
-        detail={"version": version + 1},
+        detail={"version": data.version + 1},
     )
     db.commit()
     return item
@@ -339,13 +394,6 @@ def get_item_workspace_data(db: Session, user: User, item_id: str, section: str)
     identifier_links = list(
         db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item_id)).all()
     )
-    if not identifier_links and item.doi and item.doi.strip() and can_edit:
-        set_item_identifiers(db, user, item_id, [("doi", item.doi.strip())])
-        db.commit()
-        identifier_links = list(
-            db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item_id)).all()
-        )
-
     author_links = list(
         db.scalars(
             select(ItemAuthor)
@@ -354,16 +402,6 @@ def get_item_workspace_data(db: Session, user: User, item_id: str, section: str)
             .order_by(ItemAuthor.position)
         ).all()
     )
-    if not author_links and item.authors and item.authors.strip() and can_edit:
-        parsed_authors = []
-        for raw in item.authors.split(";"):
-            if raw.strip():
-                last, first = parse_author_name(raw.strip())
-                parsed_authors.append({"last_name": last, "first_name": first})
-        if parsed_authors:
-            author_links = set_item_authors(db, user, item_id, parsed_authors, role="author")
-            db.commit()
-
     editor_links = list(
         db.scalars(
             select(ItemAuthor)
@@ -372,17 +410,8 @@ def get_item_workspace_data(db: Session, user: User, item_id: str, section: str)
             .order_by(ItemAuthor.position)
         ).all()
     )
-    if not editor_links and item.editors and item.editors.strip() and can_edit:
-        parsed_editors = []
-        for raw in item.editors.split(";"):
-            if raw.strip():
-                last, first = parse_author_name(raw.strip())
-                parsed_editors.append({"last_name": last, "first_name": first})
-        if parsed_editors:
-            editor_links = set_item_authors(db, user, item_id, parsed_editors, role="editor")
-            db.commit()
 
-    tag_matrix = get_tag_matrix_for_item(db, user, item_id) if section == "organize" else None
+    tag_matrix = get_tag_matrix_for_item(db, item_id) if section == "organize" else None
 
     return {
         "item": item,

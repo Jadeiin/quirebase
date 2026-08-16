@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
@@ -20,20 +20,19 @@ from quirebase.documents import (
     store_pdf_revision,
 )
 from quirebase.library import (
-    add_discussion_message as add_discussion_message_op,
-)
-from quirebase.library import (
+    ItemMetadataUpdate,
     add_tag_to_item,
     batch_add_tags_to_item,
     generate_bibtex_key,
     get_item_workspace_data,
-    parse_author_name,
     remove_tag_from_item,
     rescan_pdf_doi,
     search_authors_typeahead,
-    set_item_authors,
     set_item_tags,
     sync_metadata_from_upstream,
+)
+from quirebase.library import (
+    add_discussion_message as add_discussion_message_op,
 )
 from quirebase.library import (
     create_item as create_item_op,
@@ -156,12 +155,32 @@ def edit_item(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    item = update_item_op(
-        db,
-        user,
-        item_id=item_id,
-        version=version,
+    structured_authors: list[dict[str, Any]] | None = None
+    if author_last_name:
+        structured_authors = [
+            {
+                "last_name": last.strip(),
+                "first_name": author_first_name[idx] if idx < len(author_first_name) else None,
+                "is_corresponding": str(idx) in author_is_corr or "true" in author_is_corr,
+            }
+            for idx, last in enumerate(author_last_name)
+            if last.strip()
+        ]
+
+    structured_editors: list[dict[str, Any]] | None = None
+    if editor_last_name:
+        structured_editors = [
+            {
+                "last_name": last.strip(),
+                "first_name": editor_first_name[idx] if idx < len(editor_first_name) else None,
+            }
+            for idx, last in enumerate(editor_last_name)
+            if last.strip()
+        ]
+
+    data = ItemMetadataUpdate(
         title=title,
+        version=version,
         abstract=abstract,
         authors=authors,
         editors=editors,
@@ -182,50 +201,10 @@ def edit_item(
         urls=urls,
         identifiers=identifiers,
         custom_fields=custom_fields,
+        structured_authors=structured_authors,
+        structured_editors=structured_editors,
     )
-    if author_last_name:
-        authors_data = []
-        for idx, last in enumerate(author_last_name):
-            if last.strip():
-                first = author_first_name[idx] if idx < len(author_first_name) else None
-                is_corr = str(idx) in author_is_corr or "true" in author_is_corr
-                authors_data.append({
-                    "last_name": last.strip(),
-                    "first_name": first,
-                    "is_corresponding": is_corr,
-                })
-        if authors_data or (
-            not any(name.strip() for name in author_last_name) and not authors.strip()
-        ):
-            set_item_authors(db, user, item.id, authors_data, role="author")
-    elif authors.strip():
-        parsed_authors = []
-        for a_str in authors.split(";"):
-            if a_str.strip():
-                l, f = parse_author_name(a_str.strip())
-                parsed_authors.append({"last_name": l, "first_name": f})
-        if parsed_authors:
-            set_item_authors(db, user, item.id, parsed_authors, role="author")
-
-    if editor_last_name:
-        editors_data = []
-        for idx, last in enumerate(editor_last_name):
-            if last.strip():
-                first = editor_first_name[idx] if idx < len(editor_first_name) else None
-                editors_data.append({"last_name": last.strip(), "first_name": first})
-        if editors_data or (
-            not any(name.strip() for name in editor_last_name) and not editors.strip()
-        ):
-            set_item_authors(db, user, item.id, editors_data, role="editor")
-    elif editors.strip():
-        parsed_editors = []
-        for e_str in editors.split(";"):
-            if e_str.strip():
-                l, f = parse_author_name(e_str.strip())
-                parsed_editors.append({"last_name": l, "first_name": f})
-        if parsed_editors:
-            set_item_authors(db, user, item.id, parsed_editors, role="editor")
-
+    item = update_item_op(db, user, item_id=item_id, data=data)
     return RedirectResponse(f"/items/{item.id}/metadata", status_code=303)
 
 

@@ -27,6 +27,18 @@ def parse_author_name(name_str: str) -> tuple[str, str | None]:
     return parts[-1], " ".join(parts[:-1])
 
 
+def parse_author_list_string(raw: str | None) -> list[dict[str, str | None]]:
+    if not raw or not raw.strip():
+        return []
+    authors: list[dict[str, str | None]] = []
+    for part in raw.split(";"):
+        cleaned = part.strip()
+        if cleaned:
+            last, first = parse_author_name(cleaned)
+            authors.append({"last_name": last, "first_name": first})
+    return authors
+
+
 def find_or_create_author(db: Session, last_name: str, first_name: str | None = None) -> Author:
     last = " ".join(last_name.split())
     if not last:

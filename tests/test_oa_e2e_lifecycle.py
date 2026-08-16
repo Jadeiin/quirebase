@@ -29,8 +29,6 @@ from quirebase.models import (
     Item,
     ItemAuthor,
     ItemIdentifier,
-    ItemTag,
-    Tag,
     User,
 )
 from quirebase.web.app import app
@@ -178,15 +176,10 @@ def test_seam2_oa_corpus_batch_import_and_relational_mapping(db):
     assert author_links[0].author.last_name == "Hasanein"
     assert author_links[1].author.last_name == "Sobaih"
 
-    # Verify Tags created from OA keywords
-    tags = list(
-        db.scalars(
-            select(Tag).join(ItemTag, ItemTag.tag_id == Tag.id).where(ItemTag.item_id == item.id)
-        ).all()
-    )
-    tag_names = {t.name for t in tags}
-    assert "Artificial Intelligence in Higher Education" in tag_names
-    assert "Educational Technology and Stakeholder Engagement" in tag_names
+    # Verify Keywords populated on Item metadata
+    assert item.keywords is not None
+    assert "Artificial Intelligence in Higher Education" in item.keywords
+    assert "Educational Technology and Stakeholder Engagement" in item.keywords
 
     # Verify ItemIdentifiers
     idents = list(db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item.id)).all())

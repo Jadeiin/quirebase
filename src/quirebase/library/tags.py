@@ -120,7 +120,7 @@ def recommend_tags_for_item(db: Session, item_id: str) -> list[Tag]:
     )
 
 
-def get_tag_matrix_for_item(db: Session, user: User, item_id: str) -> dict[str, Any]:
+def get_tag_matrix_for_item(db: Session, item_id: str, user: User | None = None) -> dict[str, Any]:
     all_tags = list(db.scalars(select(Tag).order_by(Tag.name)).all())
     assigned_ids = set(db.scalars(select(ItemTag.tag_id).where(ItemTag.item_id == item_id)).all())
     recommended_tags = recommend_tags_for_item(db, item_id)

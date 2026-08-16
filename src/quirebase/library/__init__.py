@@ -9,6 +9,7 @@ from quirebase.library.audit import query_audit_events, record_audit_event
 from quirebase.library.authors import (
     find_or_create_author,
     get_item_authors,
+    parse_author_list_string,
     parse_author_name,
     search_authors_typeahead,
     set_item_authors,
@@ -23,6 +24,7 @@ from quirebase.library.identifiers import (
     sync_metadata_from_upstream,
 )
 from quirebase.library.items import (
+    ItemMetadataUpdate,
     bulk_action,
     bulk_download_pdfs,
     create_item,
@@ -45,6 +47,7 @@ from quirebase.library.tags import (
 )
 
 __all__ = [
+    "ItemMetadataUpdate",
     "TagConflict",
     "add_discussion_message",
     "add_tag_to_item",
@@ -68,6 +71,7 @@ __all__ = [
     "list_global_items",
     "mark_item_read",
     "merge_tags",
+    "parse_author_list_string",
     "parse_author_name",
     "query_audit_events",
     "recommend_tags_for_item",

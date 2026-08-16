@@ -35,6 +35,7 @@ from quirebase.documents.revisions import (
     stage_pdf,
 )
 from quirebase.library.audit import record_audit_event
+from quirebase.library.authors import parse_author_list_string, set_item_authors
 from quirebase.models import ImportBatch, Item, User
 from quirebase.pipeline.inspection import extract_doi
 from quirebase.search import search_index
@@ -123,9 +124,8 @@ def stage_metadata_batch(
 def _create_item_from_record(db: Session, user: User, record: dict | Any) -> Item:
     from quirebase.discovery.bibliography import REFERENCE_TYPE_TO_BIBTEX
     from quirebase.discovery.lookup import _clean_markup
-    from quirebase.library.authors import parse_author_name, set_item_authors
+    from quirebase.library.authors import parse_author_list_string
     from quirebase.library.identifiers import generate_bibtex_key, set_item_identifiers
-    from quirebase.library.tags import batch_add_tags_to_item
 
     rec_dict = record.to_dict() if isinstance(record, MetadataRecord) else dict(record)
     title = _clean_markup(rec_dict.get("title")) or "Untitled"
@@ -163,11 +163,7 @@ def _create_item_from_record(db: Session, user: User, record: dict | Any) -> Ite
     db.flush()
 
     if item.authors:
-        parsed_authors = []
-        for raw in item.authors.split(";"):
-            if raw.strip():
-                last, first = parse_author_name(raw.strip())
-                parsed_authors.append({"last_name": last, "first_name": first})
+        parsed_authors = parse_author_list_string(item.authors)
         if parsed_authors:
             set_item_authors(db, user, item.id, parsed_authors, role="author")
 
@@ -184,12 +180,6 @@ def _create_item_from_record(db: Session, user: User, record: dict | Any) -> Ite
                         id_pairs.append((p, v))
     if id_pairs:
         set_item_identifiers(db, user, item.id, id_pairs)
-
-    if rec_dict.get("keywords"):
-        kw_raw = str(rec_dict["keywords"])
-        kw_list = [k.strip() for k in kw_raw.split(";") if k.strip()]
-        if kw_list:
-            batch_add_tags_to_item(db, user, item.id, kw_list)
 
     return item
 
@@ -289,13 +279,13 @@ def import_unpublished_pdf(
         max_bytes = get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes)
     staged = stage_pdf(source, filename, max_bytes)
     try:
-        from quirebase.library.authors import parse_author_name, set_item_authors
-        from quirebase.library.tags import batch_add_tags_to_item
+        from quirebase.library.authors import set_item_authors
 
         item = Item(
             title=title.strip(),
             authors=authors.strip() or None,
             abstract=abstract.strip() or None,
+            keywords=keywords.strip() or None,
             reference_type="unpublished",
             created_by=user.id,
         )
@@ -303,18 +293,9 @@ def import_unpublished_pdf(
         db.flush()
 
         if item.authors:
-            parsed_authors = []
-            for raw in item.authors.split(";"):
-                if raw.strip():
-                    last, first = parse_author_name(raw.strip())
-                    parsed_authors.append({"last_name": last, "first_name": first})
+            parsed_authors = parse_author_list_string(item.authors)
             if parsed_authors:
                 set_item_authors(db, user, item.id, parsed_authors, role="author")
-
-        if keywords.strip():
-            kw_list = [k.strip() for k in keywords.split(";") if k.strip()]
-            if kw_list:
-                batch_add_tags_to_item(db, user, item.id, kw_list)
 
         attach_staged_pdf(db, user, item, staged)
         search_index(db).index_item(db, item.id)
