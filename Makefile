@@ -33,13 +33,14 @@ i18n-compile:
 	$(PYBABEL) compile -d $(LOCALES_DIR)
 
 i18n-init:
-	@if [ -z "$(LANG)" ]; then \
-		echo "Error: Please specify language code with LANG=<lang_code>, e.g. make i18n-init LANG=fr"; \
+	@if [ -z "$(LOCALE)" ]; then \
+		echo "Error: Please specify a locale with LOCALE=<lang_code>, e.g. make i18n-init LOCALE=fr"; \
 		exit 1; \
 	fi
-	$(PYBABEL) init -i $(POT_FILE) -d $(LOCALES_DIR) -l $(LANG)
+	$(PYBABEL) init -i $(POT_FILE) -d $(LOCALES_DIR) -l $(LOCALE)
 
-i18n-sync: i18n-extract i18n-update i18n-compile
+i18n-sync: i18n-extract
+	$(MAKE) i18n-update i18n-compile
 
 # --- Client & Frontend Assets ---
 build-assets: build-client
