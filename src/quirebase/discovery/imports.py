@@ -4,6 +4,7 @@ import json
 from typing import TYPE_CHECKING, BinaryIO
 
 from quirebase.access.items import require_accessible_items, visible_items_query
+from quirebase.audit import record_event
 from quirebase.core.config import Settings, get_settings
 from quirebase.core.errors import (
     DomainError,
@@ -32,7 +33,6 @@ from quirebase.documents.revisions import (
     discard_staged_object,
     stage_pdf,
 )
-from quirebase.library.audit import record_audit_event
 from quirebase.library.authors import set_item_authors_from_string
 from quirebase.models import ImportBatch, Item, User
 from quirebase.pipeline.inspection import extract_doi
@@ -107,7 +107,7 @@ def stage_metadata_batch(
     )
     db.add(batch)
     db.flush()
-    record_audit_event(
+    record_event(
         db,
         user.id,
         "metadata.lookup",
@@ -142,7 +142,7 @@ def commit_import_batch(db: Session, user: User, batch_id: str) -> None:
     for record in records:
         item = _create_item_from_record(db, user, record)
         search_index(db).index_item(db, item.id)
-        record_audit_event(
+        record_event(
             db,
             user.id,
             "bibliography.import",
@@ -188,7 +188,7 @@ def import_published_pdf(
         item = _create_item_from_record(db, user, record)
         attach_staged_pdf(db, user, item, staged)
         search_index(db).index_item(db, item.id)
-        record_audit_event(
+        record_event(
             db,
             user.id,
             "import.pdf.published",
@@ -241,7 +241,7 @@ def import_unpublished_pdf(
 
         attach_staged_pdf(db, user, item, staged)
         search_index(db).index_item(db, item.id)
-        record_audit_event(db, user.id, "import.pdf.unpublished", "item", item.id)
+        record_event(db, user.id, "import.pdf.unpublished", "item", item.id)
         db.commit()
         return item
     except Exception:

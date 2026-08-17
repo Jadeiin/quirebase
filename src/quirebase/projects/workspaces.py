@@ -6,12 +6,12 @@ from sqlalchemy import func, select
 
 from quirebase.access.items import can_read_item
 from quirebase.access.projects import project_member, require_project_member
+from quirebase.audit import record_event
 from quirebase.core.errors import (
     ResourceNotFound,
     ResourceUnavailable,
     ValidationFailure,
 )
-from quirebase.library.audit import record_audit_event
 from quirebase.models import Item, Project, ProjectItem, ProjectMember, ProjectRole, User
 from quirebase.search import search_index
 
@@ -27,7 +27,7 @@ def create_project(db: Session, user: User, name: str) -> Project:
     db.add(project)
     db.flush()
     db.add(ProjectMember(project_id=project.id, user_id=user.id, role=ProjectRole.owner))
-    record_audit_event(db, user.id, "project.create", "project", project.id)
+    record_event(db, user.id, "project.create", "project", project.id)
     db.commit()
     return project
 
@@ -86,7 +86,7 @@ def add_item_to_project(db: Session, user: User, project_id: str, item_id: str) 
         db.add(ProjectItem(project_id=project_id, item_id=item_id))
         db.flush()
         search_index(db).index_item(db, item_id)
-        record_audit_event(
+        record_event(
             db,
             user.id,
             "project.item.add",
@@ -110,7 +110,7 @@ def remove_item_from_project(db: Session, user: User, project_id: str, item_id: 
     db.delete(assignment)
     db.flush()
     search_index(db).index_item(db, item_id)
-    record_audit_event(
+    record_event(
         db,
         user.id,
         "project.item.remove",

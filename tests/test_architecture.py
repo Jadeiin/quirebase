@@ -8,6 +8,7 @@ SRC_ROOT = Path(__file__).parent.parent / "src" / "quirebase"
 PACKAGE_ROLES = {
     "access": "domain-policy",
     "accounts": "business",
+    "audit": "business",
     "core": "infrastructure",
     "discovery": "business",
     "documents": "business",
@@ -21,10 +22,12 @@ PACKAGE_ROLES = {
 
 ALLOWED_PACKAGE_DEPENDENCIES = {
     "access": {"core", "models"},
-    "accounts": {"core", "library", "models"},
+    "accounts": {"audit", "core", "models"},
+    "audit": {"core", "models"},
     "core": set(),
     "discovery": {
         "access",
+        "audit",
         "core",
         "documents",
         "library",
@@ -33,15 +36,16 @@ ALLOWED_PACKAGE_DEPENDENCIES = {
         "pipeline",
         "search",
     },
-    "documents": {"access", "core", "library", "models", "operations", "pipeline"},
-    "library": {"access", "core", "discovery", "models", "pipeline", "search"},
-    "operations": {"core", "library", "models"},
-    "pipeline": {"core", "library", "models", "operations", "search"},
-    "projects": {"access", "core", "library", "models", "search"},
+    "documents": {"access", "audit", "core", "models", "operations", "pipeline"},
+    "library": {"access", "audit", "core", "discovery", "models", "pipeline", "search"},
+    "operations": {"audit", "core", "models"},
+    "pipeline": {"audit", "core", "models", "operations", "search"},
+    "projects": {"access", "audit", "core", "models", "search"},
     "search": {"models"},
     "web": {
         "access",
         "accounts",
+        "audit",
         "core",
         "discovery",
         "documents",
@@ -231,6 +235,23 @@ def test_web_layer_does_not_own_transactions_persistence_or_audit():
                 )
 
 
+def test_only_audit_module_constructs_audit_events():
+    for package_name, role in PACKAGE_ROLES.items():
+        if package_name == "audit" or role not in BUSINESS_ROLES:
+            continue
+        for py_file in get_python_files(SRC_ROOT / package_name):
+            tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+            for node in ast.walk(tree):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name)
+                    and node.func.id == "AuditEvent"
+                ):
+                    raise AssertionError(
+                        f"{py_file} constructs AuditEvent outside the Audit Module interface"
+                    )
+
+
 def test_discovery_provider_modules_do_not_depend_on_orm_or_web():
     forbidden = ("sqlalchemy", "quirebase.models", "quirebase.web", "quirebase.access")
     for filename in ("lookup.py", "search.py"):
@@ -267,3 +288,6 @@ def test_no_legacy_root_files_or_shims():
         assert not (SRC_ROOT / forbidden).exists(), (
             f"Legacy root file {forbidden} still exists in src/quirebase"
         )
+    assert not (SRC_ROOT / "library" / "audit.py").exists(), (
+        "Audit Events belong to quirebase.audit; do not restore quirebase.library.audit"
+    )

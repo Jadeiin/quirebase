@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -14,9 +13,10 @@ from quirebase.accounts.throttling import (
     clear_login_failures,
     record_login_failure,
 )
+from quirebase.audit import record_event
 from quirebase.core.crypto import hash_password, token_hash, verify_password
 from quirebase.core.errors import DomainError, ResourceNotFound, ValidationFailure
-from quirebase.models import AuditEvent, Invitation, LoginSession, User
+from quirebase.models import Invitation, LoginSession, User
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -40,14 +40,12 @@ def authenticate_user(
     try:
         check_login_throttle(db, identity)
     except LoginThrottled:
-        db.add(
-            AuditEvent(
-                actor_id=None,
-                action="auth.login.throttled",
-                target_type="user",
-                target_id=None,
-                detail=json.dumps({"identity_hash": identity}),
-            )
+        record_event(
+            db,
+            None,
+            "auth.login.throttled",
+            "user",
+            detail={"identity_hash": identity},
         )
         db.commit()
         raise
@@ -55,42 +53,33 @@ def authenticate_user(
     user = db.scalar(select(User).where(User.username == username))
     if user is None or not user.active or not verify_password(user.password_hash, password):
         record_login_failure(db, identity)
-        db.add(
-            AuditEvent(
-                actor_id=None,
-                action="auth.login.failed",
-                target_type="user",
-                target_id=user.id if user else None,
-                detail=json.dumps({"identity_hash": identity}),
-            )
+        record_event(
+            db,
+            None,
+            "auth.login.failed",
+            "user",
+            user.id if user else None,
+            detail={"identity_hash": identity},
         )
         db.commit()
         raise InvalidCredentials("Invalid credentials")
 
     clear_login_failures(db, identity)
     login_session, raw = create_login_session(db, user, session_days=session_days)
-    db.add(
-        AuditEvent(
-            actor_id=user.id,
-            action="auth.login.succeeded",
-            target_type="login_session",
-            target_id=login_session.id,
-            detail=json.dumps({"identity_hash": identity}),
-        )
+    record_event(
+        db,
+        user.id,
+        "auth.login.succeeded",
+        "login_session",
+        login_session.id,
+        detail={"identity_hash": identity},
     )
     db.commit()
     return login_session, raw
 
 
 def logout(db: Session, user: User, login_session: LoginSession) -> None:
-    db.add(
-        AuditEvent(
-            actor_id=user.id,
-            action="auth.logout",
-            target_type="login_session",
-            target_id=login_session.id,
-        )
-    )
+    record_event(db, user.id, "auth.logout", "login_session", login_session.id)
     db.delete(login_session)
     db.commit()
 
@@ -114,10 +103,6 @@ def accept_invitation(db: Session, token: str, password: str) -> User:
     db.add(user)
     invitation.accepted_at = datetime.now(UTC)
     db.flush()
-    db.add(
-        AuditEvent(
-            actor_id=user.id, action="invitation.accept", target_type="user", target_id=user.id
-        )
-    )
+    record_event(db, user.id, "invitation.accept", "user", user.id)
     db.commit()
     return user

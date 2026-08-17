@@ -4,7 +4,7 @@ import json
 from typing import TYPE_CHECKING
 
 from quirebase.access.items import visible_items_query
-from quirebase.library.audit import record_audit_event
+from quirebase.audit import record_event
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -20,7 +20,7 @@ def record_search_audit(
     clauses: list[SearchClause],
     result_count: int,
 ) -> None:
-    record_audit_event(
+    record_event(
         db,
         user.id,
         "metadata.search",

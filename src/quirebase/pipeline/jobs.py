@@ -9,11 +9,11 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import selectinload
 
+from quirebase.audit import record_event
 from quirebase.core.config import get_settings
 from quirebase.core.database import SessionLocal
 from quirebase.core.errors import ResourceUnavailable, ValidationFailure
 from quirebase.core.storage import LocalObjectStore
-from quirebase.library.audit import record_audit_event
 from quirebase.models import (
     AnnotationScope,
     FileRevision,
@@ -218,7 +218,7 @@ def dispatch_maintenance_job(db: Session, admin: User, kind: str) -> Job:
     if kind not in ("system.reindex_all", "system.check_objects", "system.backup"):
         raise ValidationFailure(f"unknown maintenance job kind: {kind}")
     job = enqueue_job(db, kind, {}, owner_id=admin.id)
-    record_audit_event(
+    record_event(
         db,
         admin.id,
         f"admin.maintenance.{kind.removeprefix('system.')}",
@@ -258,7 +258,7 @@ def retry_all_failed_jobs(db: Session, admin: User) -> int:
     for job in failed:
         reset_job_for_retry(job)
     if failed:
-        record_audit_event(
+        record_event(
             db,
             admin.id,
             "admin.jobs.retry_all",

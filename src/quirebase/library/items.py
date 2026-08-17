@@ -18,6 +18,7 @@ from quirebase.access.items import (
     require_readable_item,
 )
 from quirebase.access.projects import project_member
+from quirebase.audit import record_event
 from quirebase.core.errors import (
     PermissionDenied,
     ResourceNotFound,
@@ -26,7 +27,6 @@ from quirebase.core.errors import (
 )
 from quirebase.core.storage import LocalObjectStore
 from quirebase.discovery.lookup import normalize_reference_type
-from quirebase.library.audit import record_audit_event
 from quirebase.library.authors import (
     get_item_authors,
     set_item_authors,
@@ -131,7 +131,7 @@ def create_item(
     db.flush()
     set_item_authors_from_string(db, user, item)
     search_index(db).index_item(db, item.id)
-    record_audit_event(db, user.id, "item.create", "item", item.id)
+    record_event(db, user.id, "item.create", "item", item.id)
     db.commit()
     return item
 
@@ -231,7 +231,7 @@ def update_item(
     if updated_item is None:
         raise ResourceNotFound("item not found")
     search_index(db).index_item(db, updated_item.id)
-    record_audit_event(
+    record_event(
         db,
         user.id,
         "item.update",
@@ -450,7 +450,7 @@ def bulk_download_pdfs(db: Session, user: User, item_ids: list[str]) -> BytesIO:
                 filename = f"{item.id[:8]}-{filename}"
             used_names.add(filename)
             bundle.write(store.path(revision.object_key), filename)
-    record_audit_event(
+    record_event(
         db,
         user.id,
         "library.bulk.download_pdfs",
@@ -521,7 +521,7 @@ def bulk_action(
     else:
         raise ValidationFailure("unknown bulk action")
 
-    record_audit_event(
+    record_event(
         db,
         user.id,
         audit_action,

@@ -5,9 +5,9 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
 
+from quirebase.audit import record_event
 from quirebase.core.config import get_settings
 from quirebase.core.errors import ResourceUnavailable, ValidationFailure
-from quirebase.library.audit import record_audit_event
 from quirebase.models import SystemSetting, User
 
 if TYPE_CHECKING:
@@ -116,7 +116,7 @@ def update_runtime_settings(db: Session, admin: User, updates: dict[str, Any]) -
                     updated_by=admin.id,
                 )
             )
-    record_audit_event(
+    record_event(
         db,
         admin.id,
         "system.settings_update",

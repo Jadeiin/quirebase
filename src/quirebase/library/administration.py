@@ -6,10 +6,10 @@ from typing import Any
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
+from quirebase.audit import record_event
 from quirebase.core.config import get_settings
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
 from quirebase.core.storage import LocalObjectStore
-from quirebase.library.audit import record_audit_event
 from quirebase.models import Attachment, FileRevision, Item, User
 from quirebase.search import search_index
 
@@ -143,7 +143,7 @@ def admin_delete_item(db: Session, admin: User, item_id: str) -> None:
     db.delete(item)
 
     # Record audit event before commit
-    record_audit_event(
+    record_event(
         db,
         admin.id,
         "admin.item.delete",

@@ -12,7 +12,8 @@ Planned deepening work is ordered in `docs/architecture/deep-module-roadmap.md`.
 | --- | --- | --- |
 | `accounts` | Business Module | User authentication, Invitations, Login Sessions and login throttling |
 | `access` | Domain-policy Module | Authorization decisions over Items, Projects, Documents and Annotations |
-| `library` | Business Module | Items, Authors, Identifiers, Tags, Discussion Messages and Audit Events |
+| `audit` | Business Module | Audit Event construction, detail serialization and administrative queries |
+| `library` | Business Module | Items, Authors, Identifiers, Tags and Discussion Messages |
 | `projects` | Business Module | Projects, Project membership and Item assignment |
 | `documents` | Business Module | File Revisions, Attachments, Annotations and annotation exports |
 | `discovery` | Business Module | Providers, Candidate Records, Import Batches, bibliography interchange and Citation Styles |
@@ -51,20 +52,21 @@ directions are:
 | Source | May depend on | Ownership reason |
 | --- | --- | --- |
 | `access` | `core`, `models` | Evaluate policies using persisted identities and domain errors |
-| `accounts` | `core`, `models`, `library` | Authentication persistence plus the Library-owned Audit Event sink |
-| `library` | `access`, `core`, `models`, `discovery`, `pipeline`, `search` | Authorization and persistence; upstream metadata/identifier integration; PDF inspection; search-index synchronization |
-| `projects` | `access`, `core`, `models`, `library`, `search` | Authorization, Project persistence, audit recording and Item index synchronization |
-| `documents` | `access`, `core`, `models`, `library`, `operations`, `pipeline` | Authorization, file persistence, auditing, runtime settings and durable export/inspection jobs |
-| `discovery` | `access`, `core`, `models`, `documents`, `library`, `operations`, `pipeline`, `search` | Candidate authorization, import/file operations, Item creation and audit, provider settings, inspection and indexing |
-| `pipeline` | `core`, `models`, `library`, `operations`, `search` | Durable execution, audit recording, maintenance handlers and index updates |
-| `operations` | `core`, `models`, `library` | Infrastructure access, operational persistence and audit recording |
+| `accounts` | `audit`, `core`, `models` | Authentication persistence and Audit Event recording |
+| `audit` | `core`, `models` | Authorization errors and Audit Event persistence |
+| `library` | `access`, `audit`, `core`, `models`, `discovery`, `pipeline`, `search` | Authorization, persistence and auditing; upstream metadata/identifier integration; PDF inspection; search-index synchronization |
+| `projects` | `access`, `audit`, `core`, `models`, `search` | Authorization, Project persistence, audit recording and Item index synchronization |
+| `documents` | `access`, `audit`, `core`, `models`, `operations`, `pipeline` | Authorization, file persistence, auditing, runtime settings and durable export/inspection jobs |
+| `discovery` | `access`, `audit`, `core`, `models`, `documents`, `library`, `operations`, `pipeline`, `search` | Candidate authorization, import/file operations, Item creation and audit, provider settings, inspection and indexing |
+| `pipeline` | `audit`, `core`, `models`, `operations`, `search` | Durable execution, audit recording, maintenance handlers and index updates |
+| `operations` | `audit`, `core`, `models` | Infrastructure access, operational persistence and audit recording |
 | `search` | `models` | Build and query the derived search representation |
 | `web` | Business Modules, `access`, `core`, `models` | Invoke use cases and format their returned ORM-backed views during the current persistence phase |
 | `core` | Nothing above infrastructure | Infrastructure must not know business concepts |
 
-The broad `library` ↔ `discovery` relationship and the shared Audit Event dependency are known
-deepening candidates. New code must not expand those relationships without first selecting an
-owner and a narrower interface.
+The broad `library` ↔ `discovery` relationship remains a known deepening candidate. New code
+must not expand it without first selecting an owner and a narrower interface. Audit Event
+construction and administrative queries cross only the `quirebase.audit` interface.
 
 Business Modules never import FastAPI, MCP transports or vendor AI SDKs. Inbound adapters do
 not own transactions, ORM persistence, audit recording, object storage or search-index writes.

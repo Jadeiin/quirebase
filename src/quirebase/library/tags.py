@@ -6,12 +6,12 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import and_, delete, func, select
 
 from quirebase.access.items import can_edit_item, can_read_item, visible_items_query
+from quirebase.audit import record_event
 from quirebase.core.errors import (
     DomainError,
     ResourceUnavailable,
     ValidationFailure,
 )
-from quirebase.library.audit import record_audit_event
 from quirebase.models import Item, ItemTag, Tag, User
 from quirebase.search import search_index
 
@@ -50,7 +50,7 @@ def add_tag_to_item(db: Session, user: User, item_id: str, name: str) -> ItemTag
         db.add(assignment)
         db.flush()
         search_index(db).index_item(db, item_id)
-        record_audit_event(db, user.id, "tag.add", "item", item_id)
+        record_event(db, user.id, "tag.add", "item", item_id)
         db.commit()
     return assignment
 
@@ -77,7 +77,7 @@ def rename_tag(db: Session, user: User, tag_id: str, name: str) -> Tag:
     item_ids = list(db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == tag.id)).all())
     for item_id in item_ids:
         search_index(db).index_item(db, item_id)
-    record_audit_event(db, user.id, "tag.rename", "tag", tag.id)
+    record_event(db, user.id, "tag.rename", "tag", tag.id)
     db.commit()
     return tag
 
@@ -91,7 +91,7 @@ def delete_tag(db: Session, user: User, tag_id: str) -> None:
     db.flush()
     for item_id in item_ids:
         search_index(db).index_item(db, item_id)
-    record_audit_event(db, user.id, "tag.delete", "tag", tag_id)
+    record_event(db, user.id, "tag.delete", "tag", tag_id)
     db.commit()
 
 
@@ -182,7 +182,7 @@ def batch_add_tags_to_item(db: Session, user: User, item_id: str, names: list[st
             db.flush()
         added.append(tag)
     search_index(db).index_item(db, item_id)
-    record_audit_event(db, user.id, "tag.batch_add", "item", item_id)
+    record_event(db, user.id, "tag.batch_add", "item", item_id)
     db.commit()
     return added
 
@@ -210,7 +210,7 @@ def set_item_tags(
             db.add(ItemTag(item_id=item_id, tag_id=tag_id))
     db.flush()
     search_index(db).index_item(db, item_id)
-    record_audit_event(db, user.id, "tag.set", "item", item_id)
+    record_event(db, user.id, "tag.set", "item", item_id)
     db.commit()
 
 
@@ -246,7 +246,7 @@ def merge_tags(db: Session, user: User, source_tag_id: str, target_tag_id: str) 
 
     for item_id in source_items:
         search_index(db).index_item(db, item_id)
-    record_audit_event(
+    record_event(
         db,
         user.id,
         "tag.merge",

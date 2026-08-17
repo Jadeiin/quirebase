@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import delete, func, or_, select
 
+from quirebase.audit import record_event
 from quirebase.core.crypto import hash_password
 from quirebase.core.errors import (
     PermissionDenied,
@@ -11,7 +12,6 @@ from quirebase.core.errors import (
     ResourceUnavailable,
     ValidationFailure,
 )
-from quirebase.library.audit import record_audit_event
 from quirebase.models import Invitation, Job, JobState, LoginSession, SystemRole, User
 
 if TYPE_CHECKING:
@@ -77,7 +77,7 @@ def create_user_admin(
     )
     db.add(user)
     db.flush()
-    record_audit_event(
+    record_event(
         db,
         admin.id,
         "admin.user.create",
@@ -101,7 +101,7 @@ def update_user_status(db: Session, admin: User, user_id: str, active: bool) -> 
     if not active:
         # Revoke all active sessions upon deactivation
         db.execute(delete(LoginSession).where(LoginSession.user_id == user.id))
-    record_audit_event(
+    record_event(
         db,
         admin.id,
         "admin.user.status_update",
@@ -124,7 +124,7 @@ def change_user_role(db: Session, admin: User, user_id: str, new_role: str) -> U
     if user.id == admin.id and new_role != SystemRole.administrator.value:
         raise PermissionDenied("administrators cannot demote their own account")
     user.role = new_role
-    record_audit_event(
+    record_event(
         db,
         admin.id,
         "admin.user.role_change",
@@ -147,7 +147,7 @@ def reset_user_password(db: Session, admin: User, user_id: str, new_password: st
     user.password_hash = hash_password(new_password)
     # Revoke sessions after password reset
     db.execute(delete(LoginSession).where(LoginSession.user_id == user.id))
-    record_audit_event(
+    record_event(
         db,
         admin.id,
         "admin.user.password_reset",
@@ -165,7 +165,7 @@ def revoke_user_sessions(db: Session, admin: User, user_id: str) -> int:
         raise ResourceNotFound("user not found")
     result = db.execute(delete(LoginSession).where(LoginSession.user_id == user.id))
     deleted_count = result.rowcount if hasattr(result, "rowcount") else 1
-    record_audit_event(
+    record_event(
         db,
         admin.id,
         "admin.user.sessions_revoked",
@@ -202,7 +202,7 @@ def retry_job(db: Session, admin: User, job_id: str) -> None:
     job.attempts = 0
     job.error = None
     job.lease_until = None
-    record_audit_event(
+    record_event(
         db,
         admin.id,
         "admin.job.retry",

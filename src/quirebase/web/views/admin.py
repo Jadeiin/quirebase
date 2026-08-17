@@ -22,12 +22,12 @@ from quirebase.accounts import (
 from quirebase.accounts import (
     retry_job as retry_job_op,
 )
+from quirebase.audit import query_events
 from quirebase.core.database import get_db
 from quirebase.library import (
     admin_delete_item,
     get_storage_metrics,
     list_global_items,
-    query_audit_events,
 )
 from quirebase.models import LoginSession, User
 from quirebase.operations import (
@@ -65,7 +65,7 @@ def admin_overview_page(
     invitations = list_invitations(db, user)
     failed_jobs = list_failed_jobs(db, user)
     storage = get_storage_metrics(db, user)
-    recent_events, _ = query_audit_events(db, user, page=1, page_size=10)
+    recent_events, _ = query_events(db, user, page=1, page_size=10)
 
     return templates.TemplateResponse(
         request,
@@ -281,7 +281,7 @@ def admin_audit_page(
     login_session: LoginSession = Depends(current_login),
     db: Session = Depends(get_db),
 ):
-    events, total_events = query_audit_events(
+    events, total_events = query_events(
         db,
         user,
         actor_id=actor_id.strip() or None,

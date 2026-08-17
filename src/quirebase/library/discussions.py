@@ -6,11 +6,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from quirebase.access.items import can_read_item
+from quirebase.audit import record_event
 from quirebase.core.errors import (
     ResourceUnavailable,
     ValidationFailure,
 )
-from quirebase.library.audit import record_audit_event
 from quirebase.models import DiscussionMessage, User
 
 if TYPE_CHECKING:
@@ -26,7 +26,7 @@ def add_discussion_message(db: Session, user: User, item_id: str, body: str) -> 
     message = DiscussionMessage(item_id=item_id, author_id=user.id, body=content)
     db.add(message)
     db.flush()
-    record_audit_event(db, user.id, "discussion.create", "discussion", message.id)
+    record_event(db, user.id, "discussion.create", "discussion", message.id)
     db.commit()
     return message
 
@@ -40,7 +40,7 @@ def delete_discussion_message(db: Session, user: User, item_id: str, message_id:
     ):
         raise ResourceUnavailable("discussion message not found or cannot be deleted")
     db.delete(message)
-    record_audit_event(db, user.id, "discussion.delete", "discussion", message_id)
+    record_event(db, user.id, "discussion.delete", "discussion", message_id)
     db.commit()
 
 

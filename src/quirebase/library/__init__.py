@@ -5,7 +5,6 @@ from quirebase.library.administration import (
     get_storage_metrics,
     list_global_items,
 )
-from quirebase.library.audit import query_audit_events, record_audit_event
 from quirebase.library.authors import (
     find_or_create_author,
     get_item_authors,
@@ -73,9 +72,7 @@ __all__ = [
     "merge_tags",
     "parse_author_list_string",
     "parse_author_name",
-    "query_audit_events",
     "recommend_tags_for_item",
-    "record_audit_event",
     "remove_tag_from_item",
     "rename_tag",
     "rescan_pdf_doi",

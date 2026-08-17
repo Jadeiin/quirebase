@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from quirebase.models import User
 
 
-def record_audit_event(
+def record_event(
     db: Session,
     actor_id: str | None,
     action: str,
@@ -22,23 +22,23 @@ def record_audit_event(
     target_id: str | None = None,
     detail: dict[str, Any] | str | None = None,
 ) -> AuditEvent:
-    detail_str: str | None = None
+    detail_text: str | None = None
     if isinstance(detail, dict):
-        detail_str = json.dumps(detail, ensure_ascii=False)
+        detail_text = json.dumps(detail, ensure_ascii=False)
     elif isinstance(detail, str):
-        detail_str = detail
+        detail_text = detail
     event = AuditEvent(
         actor_id=actor_id,
         action=action,
         target_type=target_type,
         target_id=target_id,
-        detail=detail_str,
+        detail=detail_text,
     )
     db.add(event)
     return event
 
 
-def query_audit_events(
+def query_events(
     db: Session,
     admin: User,
     actor_id: str | None = None,

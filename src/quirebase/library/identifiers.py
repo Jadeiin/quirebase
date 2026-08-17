@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import delete, select
 
 from quirebase.access.items import require_editable_item
+from quirebase.audit import record_event
 from quirebase.discovery.bibliography import REFERENCE_TYPE_TO_BIBTEX, extract_year
 from quirebase.discovery.lookup import (
     MetadataRecord,
@@ -16,7 +17,6 @@ from quirebase.discovery.lookup import (
     normalize_doi,
     normalize_reference_type,
 )
-from quirebase.library.audit import record_audit_event
 from quirebase.library.authors import parse_author_name, set_item_authors_from_string
 from quirebase.models import FileRevision, Item, ItemIdentifier, User
 from quirebase.pipeline.inspection import first_doi_from_text
@@ -133,7 +133,7 @@ def rescan_pdf_doi(db: Session, user: User, item_id: str) -> str | None:
                 existing_pairs.append(("doi", found_doi))
                 set_item_identifiers(db, user, item_id, existing_pairs)
                 item.updated_by = user.id
-                record_audit_event(db, user.id, "item.rescan_doi", "item", item_id)
+                record_event(db, user.id, "item.rescan_doi", "item", item_id)
                 db.commit()
                 return found_doi
     return None
@@ -262,6 +262,6 @@ def sync_metadata_from_upstream(
     db.flush()
 
     search_index(db).index_item(db, item_id)
-    record_audit_event(db, user.id, "item.sync_upstream", "item", item_id)
+    record_event(db, user.id, "item.sync_upstream", "item", item_id)
     db.commit()
     return item

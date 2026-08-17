@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 from quirebase.access.annotations import require_editable_annotation
 from quirebase.access.documents import require_revision
 from quirebase.access.projects import project_member
+from quirebase.audit import record_event
 from quirebase.core.errors import (
     DomainError,
     ResourceNotFound,
@@ -17,7 +18,6 @@ from quirebase.core.errors import (
     ValidationFailure,
     VersionConflict,
 )
-from quirebase.library.audit import record_audit_event
 from quirebase.models import (
     AnnotationScope,
     FileRevision,
@@ -195,7 +195,7 @@ def create_document_annotation(
         )
     db.add(record)
     db.flush()
-    record_audit_event(db, user.id, "annotation.create", "pdf_annotation", record.id)
+    record_event(db, user.id, "annotation.create", "pdf_annotation", record.id)
     db.commit()
     return annotation_json(record, user.id)
 
@@ -223,7 +223,7 @@ def update_document_annotation(
     if data.body is not None:
         record.body = data.body
     record.version += 1
-    record_audit_event(db, user.id, "annotation.update", "pdf_annotation", record.id)
+    record_event(db, user.id, "annotation.update", "pdf_annotation", record.id)
     db.commit()
     return annotation_json(record, user.id)
 
@@ -237,5 +237,5 @@ def delete_document_annotation(
     record = require_editable_annotation(db, user, item_id, annotation_id)
     record.deleted_at = datetime.now(UTC)
     record.version += 1
-    record_audit_event(db, user.id, "annotation.delete", "pdf_annotation", record.id)
+    record_event(db, user.id, "annotation.delete", "pdf_annotation", record.id)
     db.commit()

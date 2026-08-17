@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from quirebase.access.documents import require_attachment, require_revision
 from quirebase.access.items import can_edit_item, require_editable_item
+from quirebase.audit import record_event
 from quirebase.core.config import get_settings
 from quirebase.core.errors import (
     DomainError,
@@ -16,7 +17,6 @@ from quirebase.core.errors import (
     ValidationFailure,
 )
 from quirebase.core.storage import LocalObjectStore
-from quirebase.library.audit import record_audit_event
 from quirebase.models import (
     Attachment,
     FileRevision,
@@ -73,7 +73,7 @@ def attach_staged_pdf(
             owner_id=user.id,
         )
     )
-    record_audit_event(db, user.id, "pdf.upload", "file_revision", revision.id)
+    record_event(db, user.id, "pdf.upload", "file_revision", revision.id)
     return revision
 
 
@@ -146,7 +146,7 @@ def create_attachment(
         )
         db.add(record)
         db.flush()
-        record_audit_event(db, user.id, "attachment.upload", "attachment", record.id)
+        record_event(db, user.id, "attachment.upload", "attachment", record.id)
         db.commit()
         return record
     except Exception:

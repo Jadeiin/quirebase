@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from sqlalchemy import delete, func, select
 
+from quirebase.audit import record_event
 from quirebase.core.crypto import generate_token, token_hash
 from quirebase.core.errors import ResourceNotFound
-from quirebase.models import AuditEvent, LoginSession, User
+from quirebase.models import LoginSession, User
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -56,14 +56,7 @@ def revoke_session(db: Session, user: User, session_id: str) -> None:
     target = db.get(LoginSession, session_id)
     if target is None or target.user_id != user.id:
         raise ResourceNotFound("session not found")
-    db.add(
-        AuditEvent(
-            actor_id=user.id,
-            action="auth.session.revoke",
-            target_type="login_session",
-            target_id=target.id,
-        )
-    )
+    record_event(db, user.id, "auth.session.revoke", "login_session", target.id)
     db.delete(target)
     db.commit()
 
@@ -75,14 +68,13 @@ def revoke_all_sessions(db: Session, user: User) -> int:
         )
         or 0
     )
-    db.add(
-        AuditEvent(
-            actor_id=user.id,
-            action="auth.sessions.revoke_all",
-            target_type="user",
-            target_id=user.id,
-            detail=json.dumps({"revoked_sessions": count}),
-        )
+    record_event(
+        db,
+        user.id,
+        "auth.sessions.revoke_all",
+        "user",
+        user.id,
+        detail={"revoked_sessions": count},
     )
     db.execute(delete(LoginSession).where(LoginSession.user_id == user.id))
     db.commit()

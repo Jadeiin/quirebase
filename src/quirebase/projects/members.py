@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select
 
 from quirebase.access.projects import project_member, require_project_member
+from quirebase.audit import record_event
 from quirebase.core.errors import (
     DomainError,
     ResourceNotFound,
     ResourceUnavailable,
     ValidationFailure,
 )
-from quirebase.models import AuditEvent, ProjectMember, ProjectRole, User
+from quirebase.models import ProjectMember, ProjectRole, User
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -59,14 +59,13 @@ def add_project_member(
     else:
         member = ProjectMember(project_id=project_id, user_id=target.id, role=requested_role)
         db.add(member)
-    db.add(
-        AuditEvent(
-            actor_id=user.id,
-            action="project.member.set",
-            target_type="project",
-            target_id=project_id,
-            detail=json.dumps({"user_id": target.id, "role": requested_role}),
-        )
+    record_event(
+        db,
+        user.id,
+        "project.member.set",
+        "project",
+        project_id,
+        detail={"user_id": target.id, "role": requested_role},
     )
     db.commit()
     return member
