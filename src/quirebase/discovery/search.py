@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 from xml.etree import ElementTree
 
 import httpx
@@ -17,7 +17,6 @@ from quirebase.discovery.lookup import (
     reconstruct_openalex_abstract,
 )
 
-SEARCH_PROVIDERS = {"crossref", "pubmed", "pmc", "arxiv", "openlibrary", "openalex", "nasa", "ieee"}
 SEARCH_FIELDS = {"any", "title", "author", "publication", "abstract"}
 SEARCH_OPERATORS = {"and", "or", "not"}
 
@@ -63,6 +62,7 @@ class SearchAdapter(Protocol):
         year_from: int | None,
         year_to: int | None,
         settings: Settings,
+        endpoint: str,
     ) -> SearchPage: ...
 
 
@@ -95,6 +95,7 @@ class CrossrefSearchAdapter:
         year_from: int | None,
         year_to: int | None,
         settings: Settings,
+        endpoint: str,
     ) -> SearchPage:
         params: dict[str, Any] = {
             "rows": str(per_page),
@@ -140,7 +141,7 @@ class CrossrefSearchAdapter:
             filters.append(f"until-pub-date:{year_to}-12-31")
         if filters:
             params["filter"] = ",".join(filters)
-        body = client._get("https://api.crossref.org/works", params)
+        body = client._get(endpoint, params)
         try:
             payload = json.loads(body)
         except (json.JSONDecodeError, TypeError) as error:
@@ -184,6 +185,7 @@ class PubMedSearchAdapter:
         year_from: int | None,
         year_to: int | None,
         settings: Settings,
+        endpoint: str,
     ) -> SearchPage:
         query = _boolean_query(
             clauses,
@@ -210,9 +212,7 @@ class PubMedSearchAdapter:
             search_params["email"] = settings.metadata_contact_email
         if settings.ncbi_api_key:
             search_params["api_key"] = settings.ncbi_api_key
-        search_body = client._get(
-            "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi", search_params
-        )
+        search_body = client._get(f"{endpoint}/esearch.fcgi", search_params)
         try:
             search_data = json.loads(search_body).get("esearchresult", {})
             ids = search_data.get("idlist", [])
@@ -231,9 +231,7 @@ class PubMedSearchAdapter:
             summary_params["email"] = settings.metadata_contact_email
         if settings.ncbi_api_key:
             summary_params["api_key"] = settings.ncbi_api_key
-        summary_body = client._get(
-            "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi", summary_params
-        )
+        summary_body = client._get(f"{endpoint}/esummary.fcgi", summary_params)
         try:
             summary_data = json.loads(summary_body).get("result", {})
         except (json.JSONDecodeError, TypeError) as error:
@@ -281,6 +279,7 @@ class ArxivSearchAdapter:
         year_from: int | None,
         year_to: int | None,
         settings: Settings,
+        endpoint: str,
     ) -> SearchPage:
         query = _boolean_query(
             clauses,
@@ -304,7 +303,7 @@ class ArxivSearchAdapter:
             "sortBy": "submittedDate" if sort == "published" else "relevance",
             "sortOrder": "descending",
         }
-        body = client._get("https://export.arxiv.org/api/query", params)
+        body = client._get(endpoint, params)
         try:
             root = ElementTree.fromstring(body)
         except ElementTree.ParseError as error:
@@ -360,6 +359,7 @@ class OpenLibrarySearchAdapter:
         year_from: int | None,
         year_to: int | None,
         settings: Settings,
+        endpoint: str,
     ) -> SearchPage:
         params: dict[str, Any] = {
             "limit": str(per_page),
@@ -381,7 +381,7 @@ class OpenLibrarySearchAdapter:
             params["first_publish_year"] = f"[{year_from or 0} TO {year_to or 3000}]"
         if sort == "published":
             params["sort"] = "new"
-        body = client._get("https://openlibrary.org/search.json", params)
+        body = client._get(f"{endpoint}/search.json", params)
         try:
             payload = json.loads(body)
         except (json.JSONDecodeError, TypeError) as error:
@@ -418,6 +418,7 @@ class OpenAlexSearchAdapter:
         year_from: int | None,
         year_to: int | None,
         settings: Settings,
+        endpoint: str,
     ) -> SearchPage:
         params: dict[str, Any] = {
             "page": page,
@@ -448,7 +449,7 @@ class OpenAlexSearchAdapter:
             if field == "publication":
                 source_ids: list[str] = []
                 for value in values:
-                    source_ids.extend(self._resolve_source_ids(client, value, settings))
+                    source_ids.extend(self._resolve_source_ids(client, value, settings, endpoint))
                 source_ids = list(dict.fromkeys(source_ids))
                 if not source_ids:
                     if negated:
@@ -468,7 +469,7 @@ class OpenAlexSearchAdapter:
             params["filter"] = ",".join(filter_parts)
         if sort == "relevance" and not any(".search:" in value for value in filter_parts):
             params["sort"] = "cited_by_count:desc"
-        body = client._get("https://api.openalex.org/works", params)
+        body = client._get(f"{endpoint}/works", params)
         try:
             payload = json.loads(body)
         except (json.JSONDecodeError, TypeError) as error:
@@ -512,13 +513,13 @@ class OpenAlexSearchAdapter:
         return SearchPage("openalex", results, total, page, per_page)
 
     def _resolve_source_ids(
-        self, client: OnlineSearchClient, name: str, settings: Settings
+        self, client: OnlineSearchClient, name: str, settings: Settings, endpoint: str
     ) -> list[str]:
         params: dict[str, Any] = {"search": name, "per-page": "10"}
         if settings.openalex_api_key:
             params["api_key"] = settings.openalex_api_key
         try:
-            body = client._get("https://api.openalex.org/sources", params)
+            body = client._get(f"{endpoint}/sources", params)
             payload = json.loads(body)
         except (json.JSONDecodeError, TypeError) as error:
             raise MetadataLookupError("OpenAlex returned invalid source results") from error
@@ -565,6 +566,7 @@ class PmcSearchAdapter:
         year_from: int | None,
         year_to: int | None,
         settings: Settings,
+        endpoint: str,
     ) -> SearchPage:
         query = _boolean_query(
             clauses,
@@ -592,9 +594,9 @@ class PmcSearchAdapter:
         if settings.ncbi_api_key:
             params["api_key"] = settings.ncbi_api_key
         try:
-            found = json.loads(
-                client._get("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi", params)
-            ).get("esearchresult", {})
+            found = json.loads(client._get(f"{endpoint}/esearch.fcgi", params)).get(
+                "esearchresult", {}
+            )
             identifiers = found.get("idlist", [])
             if not identifiers:
                 return SearchPage("pmc", [], int(found.get("count", 0)), page, per_page)
@@ -608,12 +610,9 @@ class PmcSearchAdapter:
                 summary_params["email"] = settings.metadata_contact_email
             if settings.ncbi_api_key:
                 summary_params["api_key"] = settings.ncbi_api_key
-            payload = json.loads(
-                client._get(
-                    "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
-                    summary_params,
-                )
-            ).get("result", {})
+            payload = json.loads(client._get(f"{endpoint}/esummary.fcgi", summary_params)).get(
+                "result", {}
+            )
         except (json.JSONDecodeError, TypeError) as error:
             raise MetadataLookupError("PMC returned invalid search results") from error
         results = []
@@ -664,9 +663,9 @@ class NasaAdsSearchAdapter:
         year_from: int | None,
         year_to: int | None,
         settings: Settings,
+        endpoint: str,
     ) -> SearchPage:
-        if not settings.nasa_ads_token:
-            raise MetadataLookupError("NASA ADS requires QUIREBASE_NASA_ADS_TOKEN")
+        token = cast("str", settings.nasa_ads_token)
         query = _boolean_query(
             clauses,
             {
@@ -694,13 +693,9 @@ class NasaAdsSearchAdapter:
             "start": str((page - 1) * per_page),
             "sort": sort_value,
         }
-        headers = {"Authorization": f"Bearer {settings.nasa_ads_token}"}
+        headers = {"Authorization": f"Bearer {token}"}
         try:
-            payload = json.loads(
-                client._get(
-                    "https://api.adsabs.harvard.edu/v1/search/query", params, headers=headers
-                )
-            )
+            payload = json.loads(client._get(endpoint, params, headers=headers))
         except (json.JSONDecodeError, TypeError) as error:
             raise MetadataLookupError("NASA ADS returned invalid search results") from error
         response = payload.get("response", {})
@@ -742,11 +737,11 @@ class IeeeSearchAdapter:
         year_from: int | None,
         year_to: int | None,
         settings: Settings,
+        endpoint: str,
     ) -> SearchPage:
-        if not settings.ieee_api_key:
-            raise MetadataLookupError("IEEE Xplore requires QUIREBASE_IEEE_API_KEY")
+        api_key = cast("str", settings.ieee_api_key)
         params = {
-            "apikey": settings.ieee_api_key,
+            "apikey": api_key,
             "format": "json",
             "querytext": _ieee_boolean_query(clauses),
             "startRecord": str((page - 1) * per_page + 1),
@@ -763,9 +758,7 @@ class IeeeSearchAdapter:
             params["sort_field"] = "article_citations"
             params["sort_order"] = "desc"
         try:
-            payload = json.loads(
-                client._get("https://ieeexploreapi.ieee.org/api/v1/search/articles", params)
-            )
+            payload = json.loads(client._get(endpoint, params))
         except (json.JSONDecodeError, TypeError) as error:
             raise MetadataLookupError("IEEE Xplore returned invalid search results") from error
         results = []
@@ -798,18 +791,6 @@ class IeeeSearchAdapter:
         return SearchPage(
             "ieee", results, int(payload.get("total_records", len(results))), page, per_page
         )
-
-
-SEARCH_ADAPTERS: dict[str, SearchAdapter] = {
-    "crossref": CrossrefSearchAdapter(),
-    "pubmed": PubMedSearchAdapter(),
-    "pmc": PmcSearchAdapter(),
-    "arxiv": ArxivSearchAdapter(),
-    "openlibrary": OpenLibrarySearchAdapter(),
-    "openalex": OpenAlexSearchAdapter(),
-    "nasa": NasaAdsSearchAdapter(),
-    "ieee": IeeeSearchAdapter(),
-}
 
 
 class OnlineSearchClient:
@@ -871,7 +852,10 @@ def search_metadata(
     settings: Settings | None = None,
     transport: httpx.BaseTransport | None = None,
 ) -> SearchPage:
-    if provider not in SEARCH_PROVIDERS:
+    from quirebase.discovery.providers import search_provider
+
+    registration = search_provider(provider)
+    if registration is None or registration.search_adapter is None:
         raise ValueError(f"unknown search provider: {provider}")
     if not clauses or len(clauses) > 5:
         raise ValueError("one to five search clauses required")
@@ -887,10 +871,9 @@ def search_metadata(
     per_page = max(1, min(per_page, 25))
     if year_from and year_to and year_from > year_to:
         raise ValueError("starting year must not be after ending year")
-    adapter = SEARCH_ADAPTERS.get(provider)
-    if adapter is None:
-        raise ValueError(f"unknown search provider: {provider}")
     resolved_settings = settings or get_settings()
+    registration.require_credentials(resolved_settings)
+    adapter = cast("SearchAdapter", registration.search_adapter)
     client = OnlineSearchClient(settings=resolved_settings, transport=transport)
     try:
         return adapter.search(
@@ -902,6 +885,7 @@ def search_metadata(
             year_from=year_from,
             year_to=year_to,
             settings=resolved_settings,
+            endpoint=registration.endpoint,
         )
     finally:
         client.close()

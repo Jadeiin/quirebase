@@ -4,7 +4,7 @@ import html
 import json
 import re
 from dataclasses import asdict, dataclass
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 from urllib.parse import quote
 from xml.etree import ElementTree
 
@@ -22,19 +22,6 @@ OPENALEX_PATTERN = re.compile(r"W\d+", re.IGNORECASE)
 BIBCODE_PATTERN = re.compile(r"\d{4}[A-Za-z0-9.&]{5,20}")
 ARTICLE_NUMBER_PATTERN = re.compile(r"\d{1,12}")
 HTML_TAG = re.compile(r"<[^>]+>")
-PROVIDERS = {
-    "auto",
-    "doi",
-    "crossref",
-    "datacite",
-    "pmid",
-    "pubmed",
-    "arxiv",
-    "isbn",
-    "openalex",
-    "bibcode",
-    "article_number",
-}
 
 
 class MetadataLookupError(RuntimeError):
@@ -57,20 +44,21 @@ def normalize_doi(value: str) -> str:
     return re.sub(r"^doi:\s*", "", cleaned, flags=re.IGNORECASE)
 
 
-def parse_identifier(value: str, provider: str = "auto") -> Identifier:
-    if provider not in PROVIDERS:
-        raise ValueError(
-            "provider must be auto, doi, crossref, datacite, pmid, pubmed, arxiv, isbn, openalex, bibcode or article_number"
-        )
-    candidate = normalize_doi(value)
-    if not candidate or len(candidate) > 500 or any(ord(character) < 32 for character in candidate):
-        raise ValueError("identifier is invalid")
-    if provider in ("auto", "doi", "crossref", "datacite") and DOI_PATTERN.fullmatch(candidate):
-        target_provider = provider if provider in ("crossref", "datacite") else "doi"
-        return Identifier(target_provider, candidate.rstrip(".,; "))
+def _parse_doi_identifier(candidate: str, alias: str) -> Identifier | None:
+    if not DOI_PATTERN.fullmatch(candidate):
+        return None
+    provider = alias if alias in ("crossref", "datacite") else "doi"
+    return Identifier(provider, candidate.rstrip(".,; "))
+
+
+def _parse_pmid_identifier(candidate: str, _alias: str) -> Identifier | None:
     pmid = re.sub(r"^pmid:\s*", "", candidate, flags=re.IGNORECASE)
-    if provider in ("auto", "pmid", "pubmed") and PMID_PATTERN.fullmatch(pmid):
+    if PMID_PATTERN.fullmatch(pmid):
         return Identifier("pmid", pmid)
+    return None
+
+
+def _parse_arxiv_identifier(candidate: str, _alias: str) -> Identifier | None:
     arxiv = re.sub(
         r"^(?:https?://arxiv\.org/(?:abs|pdf)/|arxiv:\s*)",
         "",
@@ -78,24 +66,73 @@ def parse_identifier(value: str, provider: str = "auto") -> Identifier:
         flags=re.IGNORECASE,
     )
     arxiv = arxiv.removesuffix(".pdf")
-    if provider in ("auto", "arxiv") and ARXIV_PATTERN.fullmatch(arxiv):
+    if ARXIV_PATTERN.fullmatch(arxiv):
         return Identifier("arxiv", arxiv)
+    return None
+
+
+def _parse_isbn_identifier(candidate: str, _alias: str) -> Identifier | None:
     isbn = re.sub(r"^(?:urn:isbn:|isbn(?:-1[03])?:?)\s*", "", candidate, flags=re.IGNORECASE)
     isbn = re.sub(r"[-\s]", "", isbn)
-    if provider in ("auto", "isbn") and ISBN_PATTERN.fullmatch(isbn):
+    if ISBN_PATTERN.fullmatch(isbn):
         return Identifier("isbn", isbn.upper())
+    return None
+
+
+def _parse_openalex_identifier(candidate: str, _alias: str) -> Identifier | None:
     openalex = re.sub(r"^https?://openalex\.org/", "", candidate, flags=re.IGNORECASE)
-    if provider in ("auto", "openalex"):
-        if OPENALEX_PATTERN.fullmatch(openalex):
-            return Identifier("openalex", openalex.upper())
-        if DOI_PATTERN.fullmatch(candidate):
-            return Identifier("openalex", candidate.rstrip(".,; "))
+    if OPENALEX_PATTERN.fullmatch(openalex):
+        return Identifier("openalex", openalex.upper())
+    if DOI_PATTERN.fullmatch(candidate):
+        return Identifier("openalex", candidate.rstrip(".,; "))
+    return None
+
+
+def _parse_bibcode_identifier(candidate: str, _alias: str) -> Identifier | None:
     bibcode = re.sub(r"^bibcode:\s*", "", candidate, flags=re.IGNORECASE)
-    if provider == "bibcode" and BIBCODE_PATTERN.fullmatch(bibcode):
+    if BIBCODE_PATTERN.fullmatch(bibcode):
         return Identifier("bibcode", bibcode)
+    return None
+
+
+def _parse_ieee_identifier(candidate: str, _alias: str) -> Identifier | None:
     article_number = re.sub(r"^(?:article_number|ieee):\s*", "", candidate, flags=re.IGNORECASE)
-    if provider == "article_number" and ARTICLE_NUMBER_PATTERN.fullmatch(article_number):
+    if ARTICLE_NUMBER_PATTERN.fullmatch(article_number):
         return Identifier("article_number", article_number)
+    return None
+
+
+def parse_identifier(value: str, provider: str = "auto") -> Identifier:
+    from quirebase.discovery.providers import (
+        identifier_provider,
+        identifier_provider_names,
+        provider_registrations,
+    )
+
+    provider_names = identifier_provider_names()
+    if provider != "auto" and provider not in provider_names:
+        raise ValueError(
+            f"provider must be auto, {', '.join(provider_names[:-1])} or {provider_names[-1]}"
+        )
+    candidate = normalize_doi(value)
+    if not candidate or len(candidate) > 500 or any(ord(character) < 32 for character in candidate):
+        raise ValueError("identifier is invalid")
+    if provider == "auto":
+        for registration in provider_registrations():
+            if not registration.auto_detect_identifier or registration.identifier_parser is None:
+                continue
+            identifier = registration.identifier_parser(candidate, provider)
+            if identifier is not None:
+                return identifier
+    else:
+        selected_registration = identifier_provider(provider)
+        if (
+            selected_registration is not None
+            and selected_registration.identifier_parser is not None
+        ):
+            identifier = selected_registration.identifier_parser(candidate, provider)
+            if identifier is not None:
+                return identifier
     if provider != "auto":
         raise ValueError(f"identifier is not a valid {provider}")
     raise ValueError("identifier is not a recognized DOI, PMID, arXiv ID, ISBN or OpenAlex ID")
@@ -234,15 +271,19 @@ class MetadataRecord:
 
 
 class LookupAdapter(Protocol):
-    def lookup(self, client: MetadataClient, value: str, settings: Settings) -> MetadataRecord: ...
+    def lookup(
+        self, client: MetadataClient, value: str, settings: Settings, *, endpoint: str
+    ) -> MetadataRecord: ...
 
 
 class CrossrefLookupAdapter:
-    def lookup(self, client: MetadataClient, value: str, settings: Settings) -> MetadataRecord:
+    def lookup(
+        self, client: MetadataClient, value: str, settings: Settings, *, endpoint: str
+    ) -> MetadataRecord:
         params = (
             {"mailto": settings.metadata_contact_email} if settings.metadata_contact_email else None
         )
-        body = client._get(f"https://api.crossref.org/works/{quote(value, safe='')}", params)
+        body = client._get(f"{endpoint}/{quote(value, safe='')}", params)
         try:
             payload = json.loads(body)
         except (json.JSONDecodeError, TypeError) as error:
@@ -306,9 +347,11 @@ class CrossrefLookupAdapter:
 
 
 class DataCiteLookupAdapter:
-    def lookup(self, client: MetadataClient, value: str, settings: Settings) -> MetadataRecord:
+    def lookup(
+        self, client: MetadataClient, value: str, settings: Settings, *, endpoint: str
+    ) -> MetadataRecord:
         try:
-            body = client._get(f"https://api.datacite.org/dois/{quote(value, safe='')}")
+            body = client._get(f"{endpoint}/{quote(value, safe='')}")
             payload = json.loads(body)
         except (json.JSONDecodeError, TypeError) as error:
             raise MetadataLookupError("DataCite returned invalid metadata") from error
@@ -361,13 +404,15 @@ class DataCiteLookupAdapter:
 
 
 class PubMedLookupAdapter:
-    def lookup(self, client: MetadataClient, value: str, settings: Settings) -> MetadataRecord:
+    def lookup(
+        self, client: MetadataClient, value: str, settings: Settings, *, endpoint: str
+    ) -> MetadataRecord:
         params = {"db": "pubmed", "id": value, "retmode": "json", "tool": "quirebase"}
         if settings.metadata_contact_email:
             params["email"] = settings.metadata_contact_email
         if settings.ncbi_api_key:
             params["api_key"] = settings.ncbi_api_key
-        body = client._get("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi", params)
+        body = client._get(f"{endpoint}/esummary.fcgi", params)
         try:
             payload = json.loads(body)
         except (json.JSONDecodeError, TypeError) as error:
@@ -410,9 +455,11 @@ class PubMedLookupAdapter:
 
 
 class ArxivLookupAdapter:
-    def lookup(self, client: MetadataClient, value: str, settings: Settings) -> MetadataRecord:
+    def lookup(
+        self, client: MetadataClient, value: str, settings: Settings, *, endpoint: str
+    ) -> MetadataRecord:
         body = client._get(
-            "https://export.arxiv.org/api/query",
+            endpoint,
             {"id_list": value, "max_results": "1"},
         )
         try:
@@ -469,12 +516,14 @@ class ArxivLookupAdapter:
 
 
 class OpenLibraryLookupAdapter:
-    def lookup(self, client: MetadataClient, value: str, settings: Settings) -> MetadataRecord:
+    def lookup(
+        self, client: MetadataClient, value: str, settings: Settings, *, endpoint: str
+    ) -> MetadataRecord:
         key = f"ISBN:{value}"
         try:
             payload = json.loads(
                 client._get(
-                    "https://openlibrary.org/api/books",
+                    f"{endpoint}/api/books",
                     {"bibkeys": key, "format": "json", "jscmd": "data"},
                 )
             )
@@ -503,18 +552,20 @@ class OpenLibraryLookupAdapter:
 
 
 class OpenAlexLookupAdapter:
-    def lookup(self, client: MetadataClient, value: str, settings: Settings) -> MetadataRecord:
+    def lookup(
+        self, client: MetadataClient, value: str, settings: Settings, *, endpoint: str
+    ) -> MetadataRecord:
         params = {"api_key": settings.openalex_api_key} if settings.openalex_api_key else None
         lookup_target = f"doi:{value}" if DOI_PATTERN.fullmatch(value) else value
         try:
             body = client._get(
-                f"https://api.openalex.org/works/{quote(lookup_target, safe=':')}",
+                f"{endpoint}/works/{quote(lookup_target, safe=':')}",
                 params,
             )
         except (MetadataNotFoundError, MetadataLookupError):
             if lookup_target.startswith("doi:"):
                 body = client._get(
-                    f"https://api.openalex.org/works/https://doi.org/{quote(value, safe='')}",
+                    f"{endpoint}/works/https://doi.org/{quote(value, safe='')}",
                     params,
                 )
             else:
@@ -574,18 +625,17 @@ class OpenAlexLookupAdapter:
 
 
 class NasaAdsLookupAdapter:
-    def lookup(self, client: MetadataClient, value: str, settings: Settings) -> MetadataRecord:
-        if not settings.nasa_ads_token:
-            raise MetadataLookupError("NASA ADS requires QUIREBASE_NASA_ADS_TOKEN")
+    def lookup(
+        self, client: MetadataClient, value: str, settings: Settings, *, endpoint: str
+    ) -> MetadataRecord:
+        token = cast("str", settings.nasa_ads_token)
         params = {
             "q": f'bibcode:"{value}"',
             "fl": "bibcode,title,author,doi,pubdate,pub,abstract",
             "rows": "1",
         }
-        headers = {"Authorization": f"Bearer {settings.nasa_ads_token}"}
-        body = client._get(
-            "https://api.adsabs.harvard.edu/v1/search/query", params, headers=headers
-        )
+        headers = {"Authorization": f"Bearer {token}"}
+        body = client._get(endpoint, params, headers=headers)
         try:
             payload = json.loads(body)
         except (json.JSONDecodeError, TypeError) as error:
@@ -617,15 +667,16 @@ class NasaAdsLookupAdapter:
 
 
 class IeeeLookupAdapter:
-    def lookup(self, client: MetadataClient, value: str, settings: Settings) -> MetadataRecord:
-        if not settings.ieee_api_key:
-            raise MetadataLookupError("IEEE Xplore requires QUIREBASE_IEEE_API_KEY")
+    def lookup(
+        self, client: MetadataClient, value: str, settings: Settings, *, endpoint: str
+    ) -> MetadataRecord:
+        api_key = cast("str", settings.ieee_api_key)
         params = {
-            "apikey": settings.ieee_api_key,
+            "apikey": api_key,
             "format": "json",
             "article_number": value,
         }
-        body = client._get("https://ieeexploreapi.ieee.org/api/v1/search/articles", params)
+        body = client._get(endpoint, params)
         try:
             payload = json.loads(body)
         except (json.JSONDecodeError, TypeError) as error:
@@ -659,20 +710,6 @@ class IeeeLookupAdapter:
             identifiers=json.dumps(identifiers),
             reference_type="article",
         )
-
-
-LOOKUP_ADAPTERS: dict[str, LookupAdapter] = {
-    "doi": CrossrefLookupAdapter(),
-    "crossref": CrossrefLookupAdapter(),
-    "datacite": DataCiteLookupAdapter(),
-    "pmid": PubMedLookupAdapter(),
-    "pubmed": PubMedLookupAdapter(),
-    "arxiv": ArxivLookupAdapter(),
-    "isbn": OpenLibraryLookupAdapter(),
-    "openalex": OpenAlexLookupAdapter(),
-    "bibcode": NasaAdsLookupAdapter(),
-    "article_number": IeeeLookupAdapter(),
-}
 
 
 class MetadataClient:
@@ -722,10 +759,19 @@ class MetadataClient:
             raise MetadataLookupError("metadata provider request failed") from error
 
     def lookup(self, identifier: Identifier) -> MetadataRecord:
-        adapter = LOOKUP_ADAPTERS.get(identifier.provider)
-        if adapter is None:
+        from quirebase.discovery.providers import identifier_provider
+
+        registration = identifier_provider(identifier.provider)
+        if registration is None or registration.lookup_adapter is None:
             raise ValueError(f"unknown identifier provider: {identifier.provider}")
-        return adapter.lookup(self, identifier.value, self.settings)
+        registration.require_credentials(self.settings)
+        adapter = cast("LookupAdapter", registration.lookup_adapter)
+        return adapter.lookup(
+            self,
+            identifier.value,
+            self.settings,
+            endpoint=registration.endpoint,
+        )
 
 
 def lookup_metadata(

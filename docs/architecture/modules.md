@@ -53,6 +53,14 @@ section-specific read model; only the Web adapter maps those views to template c
 validation, section query selection and recent-reading persistence remain coordinated behind the
 same operation seam.
 
+Discovery keeps `search_metadata` and `lookup_metadata` as its Provider-facing business
+interfaces. A private Provider registration co-locates identity, identifier aliases and parsing,
+supported Search/Lookup capabilities, fixed endpoints and credential requirements. Callers do
+not select concrete adapters or inspect the registration; Provider HTTP implementations and
+MockTransport contract examples remain behind the two operations. Search-only Providers such as
+PMC and lookup-only Providers such as DataCite are represented as capabilities in that one
+registration rather than repeated allowlists.
+
 An internal helper imported across Modules is an architectural pressure point. Repeated use is
 a signal to move the concept to its owner or deepen the owning interface; it is not a reason to
 create a generic shared-utilities package.

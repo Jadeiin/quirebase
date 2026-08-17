@@ -144,6 +144,8 @@ def response(request: httpx.Request) -> httpx.Response:
     ("value", "provider", "expected"),
     [
         ("https://doi.org/10.1234/sample", "auto", Identifier("doi", "10.1234/sample")),
+        ("10.1234/sample", "doi", Identifier("doi", "10.1234/sample")),
+        ("10.1234/sample", "crossref", Identifier("crossref", "10.1234/sample")),
         ("PMID: 42", "auto", Identifier("pmid", "42")),
         ("arXiv:1706.03762v7", "auto", Identifier("arxiv", "1706.03762v7")),
         ("ISBN 978-0-13-110362-7", "auto", Identifier("isbn", "9780131103627")),
@@ -165,6 +167,24 @@ def test_auto_detection_does_not_match_bibcode():
 def test_identifier_input_cannot_be_used_as_an_arbitrary_url():
     with pytest.raises(ValueError):
         parse_identifier("https://127.0.0.1/admin", "auto")
+
+
+def test_pmc_is_search_only():
+    with pytest.raises(ValueError, match="provider must be"):
+        lookup_metadata("PMC123", "pmc", transport=httpx.MockTransport(response))
+
+
+@pytest.mark.parametrize(
+    ("value", "provider", "message"),
+    [
+        ("2025ApJ...123..456A", "bibcode", "NASA ADS requires QUIREBASE_NASA_ADS_TOKEN"),
+        ("1234567", "article_number", "IEEE Xplore requires QUIREBASE_IEEE_API_KEY"),
+    ],
+)
+def test_credentialed_lookup_errors_remain_provider_specific(value, provider, message):
+    with pytest.raises(MetadataLookupError) as error:
+        lookup_metadata(value, provider, transport=httpx.MockTransport(response))
+    assert str(error.value) == message
 
 
 @pytest.mark.parametrize(

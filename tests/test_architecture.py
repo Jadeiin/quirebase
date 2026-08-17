@@ -281,10 +281,30 @@ def test_item_workspace_uses_typed_section_views():
 
 def test_discovery_provider_modules_do_not_depend_on_orm_or_web():
     forbidden = ("sqlalchemy", "quirebase.models", "quirebase.web", "quirebase.access")
-    for filename in ("lookup.py", "search.py"):
+    for filename in ("lookup.py", "providers.py", "search.py"):
         py_file = SRC_ROOT / "discovery" / filename
         for module in imported_modules(py_file):
             assert not module.startswith(forbidden), f"{py_file} illegally imports {module}"
+
+
+def test_discovery_provider_registration_stays_private_and_local():
+    forbidden_registries = {"PROVIDERS", "SEARCH_PROVIDERS", "LOOKUP_ADAPTERS", "SEARCH_ADAPTERS"}
+    for filename in ("lookup.py", "search.py"):
+        py_file = SRC_ROOT / "discovery" / filename
+        tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+        assigned_names = {
+            target.id
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.Assign, ast.AnnAssign))
+            for target in (node.targets if isinstance(node, ast.Assign) else [node.target])
+            if isinstance(target, ast.Name)
+        }
+        assert not assigned_names & forbidden_registries, (
+            f"{py_file} restores duplicated Provider registration knowledge"
+        )
+
+    discovery_facade = SRC_ROOT / "discovery" / "__init__.py"
+    assert "quirebase.discovery.providers" not in imported_modules(discovery_facade)
 
 
 def test_search_adapters_do_not_depend_on_each_other():

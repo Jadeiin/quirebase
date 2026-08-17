@@ -182,6 +182,8 @@ def test_online_search_page_keeps_search_separate_from_import(db, tmp_path, monk
 def test_search_rejects_invalid_or_excessive_clauses():
     with pytest.raises(ValueError, match="unknown search provider"):
         search_metadata("other", [SearchClause("any", "and", "term")])
+    with pytest.raises(ValueError, match="unknown search provider"):
+        search_metadata("datacite", [SearchClause("any", "and", "term")])
     with pytest.raises(ValueError, match="one to five"):
         search_metadata("openalex", [SearchClause("any", "and", "term")] * 6)
     with pytest.raises(ValueError, match="clause is invalid"):
@@ -428,18 +430,21 @@ def test_pmc_forwards_credentials_to_esearch_and_esummary():
 
 
 def test_credentialed_sources_require_keys():
-    with pytest.raises(MetadataLookupError, match="QUIREBASE_NASA_ADS_TOKEN"):
+    with pytest.raises(MetadataLookupError) as nasa_error:
         search_metadata(
             "nasa",
             [SearchClause("title", "and", "term")],
             transport=httpx.MockTransport(extra_search_response),
         )
-    with pytest.raises(MetadataLookupError, match="QUIREBASE_IEEE_API_KEY"):
+    assert str(nasa_error.value) == "NASA ADS requires QUIREBASE_NASA_ADS_TOKEN"
+
+    with pytest.raises(MetadataLookupError) as ieee_error:
         search_metadata(
             "ieee",
             [SearchClause("title", "and", "term")],
             transport=httpx.MockTransport(extra_search_response),
         )
+    assert str(ieee_error.value) == "IEEE Xplore requires QUIREBASE_IEEE_API_KEY"
 
 
 def test_extra_search_fallback_identifiers_without_doi():
