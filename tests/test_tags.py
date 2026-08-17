@@ -100,6 +100,26 @@ def test_batch_add_and_set_item_tags(db):
     assert tag_vision.id in assigned_tag_ids
 
 
+def test_batch_and_set_tags_normalize_names_and_skip_empty_values(db):
+    user = User(username="normalized_tag_user", password_hash="hash")
+    db.add(user)
+    db.flush()
+    item = Item(title="Normalization", created_by=user.id)
+    db.add(item)
+    db.flush()
+
+    created = batch_add_tags_to_item(db, user, item.id, ["  Deep   Learning  ", "  "])
+    assert [tag.name for tag in created] == ["Deep Learning"]
+
+    set_item_tags(db, user, item.id, [], ["  Machine   Learning ", "\t"])
+    assigned_names = list(
+        db.scalars(
+            select(Tag.name).join(ItemTag).where(ItemTag.item_id == item.id).order_by(Tag.name)
+        ).all()
+    )
+    assert assigned_names == ["Machine Learning"]
+
+
 def test_merge_tags(db):
     admin = User(username="admin_merge", password_hash="hash", role="administrator")
     db.add(admin)

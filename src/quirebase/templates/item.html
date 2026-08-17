@@ -165,7 +165,7 @@
         <label class="span-2">{{ _('Title') }} <input name="title" value="{{ item.title }}" required></label>
 
         <!-- Structured Authors Editor -->
-        <div class="span-2 author-editor-container" x-data="authorEditor" data-initial-authors="[{% for link in author_links %}{&quot;last_name&quot;: &quot;{{ link.author.last_name }}&quot;, &quot;first_name&quot;: &quot;{{ link.author.first_name or '' }}&quot;, &quot;is_corresponding&quot;: {{ 'true' if link.is_corresponding else 'false' }}}{% if not loop.last %},{% endif %}{% endfor %}]">
+        <div class="span-2 author-editor-container" x-data="authorEditor" data-initial-authors='{{ initial_authors|tojson }}'>
           <label><strong>{{ _('Authors (Structured & Ranked)') }}</strong></label>
           <template x-for="(author, index) in authors" :key="index">
             <div class="author-input-row">
@@ -188,7 +188,8 @@
         </div>
 
         <!-- Structured Editors Editor -->
-        <div class="span-2 author-editor-container" x-data="editorEditor" data-initial-editors="[{% for link in editor_links %}{&quot;last_name&quot;: &quot;{{ link.author.last_name }}&quot;, &quot;first_name&quot;: &quot;{{ link.author.first_name or '' }}&quot;}{% if not loop.last %},{% endif %}{% endfor %}]">
+        <div class="span-2 author-editor-container" x-data="editorEditor" data-initial-editors='{{ initial_editors|tojson }}'>
+          <input type="hidden" name="structured_editors_present" value="true">
           <label><strong>{{ _('Editors (Structured)') }}</strong></label>
           <template x-for="(editor, index) in editors" :key="index">
             <div class="author-input-row">

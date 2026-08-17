@@ -29,9 +29,10 @@ from quirebase.discovery.lookup import normalize_reference_type
 from quirebase.library.audit import record_audit_event
 from quirebase.library.authors import (
     get_item_authors,
-    parse_author_list_string,
     set_item_authors,
+    set_item_authors_from_string,
 )
+from quirebase.library.identifiers import set_item_identifiers
 from quirebase.library.tags import get_or_create_tag, get_tag_matrix_for_item
 from quirebase.models import (
     Attachment,
@@ -127,10 +128,7 @@ def create_item(
     )
     db.add(item)
     db.flush()
-    if item.authors:
-        parsed_authors = parse_author_list_string(item.authors)
-        if parsed_authors:
-            set_item_authors(db, user, item.id, parsed_authors, role="author")
+    set_item_authors_from_string(db, user, item)
     search_index(db).index_item(db, item.id)
     record_audit_event(db, user.id, "item.create", "item", item.id)
     db.commit()
@@ -144,17 +142,25 @@ def update_item(
     item_id: str,
     data: ItemMetadataUpdate,
 ) -> Item:
-    require_editable_item(db, user, item_id)
+    item = require_editable_item(db, user, item_id)
     if not data.title.strip():
         raise ValidationFailure("title is required")
-    parsed_identifiers: dict[str, Any] | None = None
+    parsed_identifiers: dict[str, str] = {}
     if data.identifiers.strip():
         try:
-            parsed_identifiers = json.loads(data.identifiers)
+            raw_identifiers = json.loads(data.identifiers)
         except json.JSONDecodeError as error:
             raise ValidationFailure("identifiers must be valid JSON") from error
-        if not isinstance(parsed_identifiers, dict):
+        if not isinstance(raw_identifiers, dict):
             raise ValidationFailure("identifiers must be a JSON object")
+        if not all(isinstance(provider, str) and isinstance(value, str) for provider, value in raw_identifiers.items()):
+            raise ValidationFailure("identifier names and values must be strings")
+        parsed_identifiers = raw_identifiers
+
+    # The dedicated DOI field is authoritative over the advanced JSON cache.
+    parsed_identifiers.pop("doi", None)
+    if data.doi.strip():
+        parsed_identifiers["doi"] = data.doi
     parsed_custom: dict[str, Any] | None = None
     if data.custom_fields.strip():
         try:
@@ -163,6 +169,9 @@ def update_item(
             raise ValidationFailure("custom fields must be valid JSON") from error
         if not isinstance(parsed_custom, dict):
             raise ValidationFailure("custom fields must be a JSON object")
+
+    authors_before_update = item.authors
+    editors_before_update = item.editors
 
     updated_id = db.scalar(
         update(Item)
@@ -175,7 +184,6 @@ def update_item(
             keywords=data.keywords.strip() or None,
             publication_date=data.publication_date.strip() or None,
             publication_title=data.publication_title.strip() or None,
-            doi=data.doi.strip() or None,
             reference_type=normalize_reference_type(data.reference_type),
             volume=data.volume.strip() or None,
             issue=data.issue.strip() or None,
@@ -187,9 +195,6 @@ def update_item(
             bibtex_id=data.bibtex_id.strip() or None,
             bibtex_type=data.bibtex_type.strip() or None,
             urls=data.urls.strip() or None,
-            identifiers=json.dumps(parsed_identifiers, ensure_ascii=False)
-            if parsed_identifiers is not None
-            else None,
             custom_fields=json.dumps(parsed_custom, ensure_ascii=False)
             if parsed_custom is not None
             else None,
@@ -205,35 +210,33 @@ def update_item(
         raise VersionConflict(current.version if current else None)
     db.flush()
 
+    set_item_identifiers(db, user, item_id, list(parsed_identifiers.items()))
+
     if data.structured_authors is not None:
         set_item_authors(db, user, item_id, data.structured_authors, role="author")
-    elif data.authors.strip():
-        parsed_authors = parse_author_list_string(data.authors)
-        if parsed_authors:
-            set_item_authors(db, user, item_id, parsed_authors, role="author")
+    elif data.authors.strip() and data.authors.strip() != (authors_before_update or ""):
+        set_item_authors_from_string(db, user, item)
 
     if data.structured_editors is not None:
         set_item_authors(db, user, item_id, data.structured_editors, role="editor")
-    elif data.editors.strip():
-        parsed_editors = parse_author_list_string(data.editors)
-        if parsed_editors:
-            set_item_authors(db, user, item_id, parsed_editors, role="editor")
+    elif data.editors.strip() and data.editors.strip() != (editors_before_update or ""):
+        set_item_authors_from_string(db, user, item, role="editor")
 
     db.expire_all()
-    item = db.get(Item, item_id)
-    if item is None:
+    updated_item = db.get(Item, item_id)
+    if updated_item is None:
         raise ResourceNotFound("item not found")
-    search_index(db).index_item(db, item.id)
+    search_index(db).index_item(db, updated_item.id)
     record_audit_event(
         db,
         user.id,
         "item.update",
         "item",
-        item.id,
+        updated_item.id,
         detail={"version": data.version + 1},
     )
     db.commit()
-    return item
+    return updated_item
 
 
 def mark_item_read(db: Session, user: User, item_id: str) -> None:

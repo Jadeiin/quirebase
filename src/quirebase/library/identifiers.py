@@ -3,7 +3,6 @@ from __future__ import annotations
 import contextlib
 import json
 import re
-from dataclasses import asdict
 from typing import TYPE_CHECKING
 
 from sqlalchemy import delete, select
@@ -18,7 +17,7 @@ from quirebase.discovery.lookup import (
     normalize_reference_type,
 )
 from quirebase.library.audit import record_audit_event
-from quirebase.library.authors import parse_author_list_string, set_item_authors
+from quirebase.library.authors import parse_author_name, set_item_authors_from_string
 from quirebase.models import FileRevision, Item, ItemIdentifier, User
 from quirebase.pipeline.inspection import first_doi_from_text
 from quirebase.search import search_index
@@ -92,7 +91,7 @@ def generate_bibtex_key(item: Item) -> str:
     author_part = "Unknown"
     if item.authors:
         first_author = item.authors.split(";")[0].strip()
-        last_name = first_author.split(",")[0].strip()
+        last_name, _first_name = parse_author_name(first_author)
         # Clean non-alphanumeric
         last_clean = re.sub(r"[^A-Za-z0-9]", "", last_name)
         if last_clean:
@@ -147,6 +146,7 @@ def apply_metadata_record(
     record: MetadataRecord | dict,
     *,
     merge: bool = False,
+    forced_identifiers: dict[str, str] | None = None,
 ) -> Item:
     """Map a metadata record onto an item.
 
@@ -154,18 +154,26 @@ def apply_metadata_record(
     are taken from the record; with merge=True (existing items) they are
     merged with the item's current values.
     """
-    rec = asdict(record) if isinstance(record, MetadataRecord) else record
+    rec = record.to_dict() if isinstance(record, MetadataRecord) else record
 
-    if rec.get("title") and (title := _clean_markup(rec["title"])):
-        item.title = title
-    if rec.get("abstract") and (abstract := _clean_markup(rec["abstract"])):
-        item.abstract = abstract
-    if rec.get("publication_date") and (pub_date := str(rec["publication_date"]).strip()):
-        item.publication_date = pub_date
-    if rec.get("publication_title") and (pub_title := _clean_markup(rec["publication_title"])):
-        item.publication_title = pub_title
-    if rec.get("journal_abbreviation") and (abbr := _clean_markup(rec["journal_abbreviation"])):
-        item.journal_abbreviation = abbr
+    scalar_fields = {
+        "title": ("title", _clean_markup),
+        "abstract": ("abstract", _clean_markup),
+        "publication_date": ("publication_date", lambda value: str(value).strip()),
+        "publication_title": ("publication_title", _clean_markup),
+        "journal_abbreviation": ("journal_abbreviation", _clean_markup),
+        "volume": ("volume", lambda value: str(value).strip()),
+        "issue": ("issue", lambda value: str(value).strip()),
+        "pages": ("pages", lambda value: str(value).strip()),
+        "publisher": ("publisher", _clean_markup),
+        "affiliation": ("affiliation", _clean_markup),
+        "place_published": ("place_published", _clean_markup),
+    }
+    for field, (record_field, transform) in scalar_fields.items():
+        value = rec.get(record_field)
+        if value and (cleaned_value := transform(value)):
+            setattr(item, field, cleaned_value)
+
     if rec.get("reference_type") and (ref_type := normalize_reference_type(rec["reference_type"])):
         item.reference_type = ref_type
         bib_type = rec.get("bibtex_type") or REFERENCE_TYPE_TO_BIBTEX.get(ref_type, ref_type)
@@ -173,31 +181,14 @@ def apply_metadata_record(
             item.bibtex_type = str(bib_type).strip().lower()
     elif rec.get("bibtex_type"):
         item.bibtex_type = str(rec["bibtex_type"]).strip().lower()
-    if rec.get("volume") and (volume := str(rec["volume"]).strip()):
-        item.volume = volume
-    if rec.get("issue") and (issue := str(rec["issue"]).strip()):
-        item.issue = issue
-    if rec.get("pages") and (pages := str(rec["pages"]).strip()):
-        item.pages = pages
-    if rec.get("publisher") and (publisher := _clean_markup(rec["publisher"])):
-        item.publisher = publisher
-    if rec.get("affiliation") and (affiliation := _clean_markup(rec["affiliation"])):
-        item.affiliation = affiliation
-    if rec.get("place_published") and (place := _clean_markup(rec["place_published"])):
-        item.place_published = place
-    if rec.get("doi") and (doi := clean_identifier_value("doi", rec["doi"])):
-        item.doi = doi
 
     for role, raw in (("author", rec.get("authors")), ("editor", rec.get("editors"))):
         if raw:
-            names = str(raw).strip()
-            parsed = parse_author_list_string(names)
-            if parsed:
-                if role == "author":
-                    item.authors = names
-                else:
-                    item.editors = names
-                set_item_authors(db, user, item.id, parsed, role=role)
+            if role == "author":
+                item.authors = str(raw).strip() or None
+            else:
+                item.editors = str(raw).strip() or None
+            set_item_authors_from_string(db, user, item, role=role)
 
     if merge:
         urls = [u.strip() for u in (item.urls or "").splitlines() if u.strip()]
@@ -236,6 +227,10 @@ def apply_metadata_record(
                         identifiers[provider] = clean_identifier_value(provider, value)
     if rec.get("doi") and (doi := clean_identifier_value("doi", rec["doi"])):
         identifiers["doi"] = doi
+    for provider, value in (forced_identifiers or {}).items():
+        cleaned_value = clean_identifier_value(provider, value)
+        if cleaned_value:
+            identifiers[provider] = cleaned_value
     if identifiers:
         set_item_identifiers(db, user, item.id, list(identifiers.items()))
 
@@ -252,17 +247,15 @@ def sync_metadata_from_upstream(
     item = require_editable_item(db, user, item_id)
 
     _, record = lookup_metadata(uid_value, provider=provider)
-    apply_metadata_record(db, user, item, record, merge=True)
-
-    current_idents = {ident.provider: ident.value for ident in get_item_identifiers(db, item_id)}
-    if provider and uid_value:
-        clean_val = clean_identifier_value(provider, uid_value)
-        if clean_val:
-            current_idents[provider] = clean_val
-    if current_idents:
-        set_item_identifiers(db, user, item_id, list(current_idents.items()))
-    if provider == "doi" and uid_value and not item.doi:
-        item.doi = clean_identifier_value("doi", uid_value)
+    forced_identifiers = {provider: uid_value} if provider and uid_value else None
+    apply_metadata_record(
+        db,
+        user,
+        item,
+        record,
+        merge=True,
+        forced_identifiers=forced_identifiers,
+    )
 
     item.updated_by = user.id
     item.version += 1

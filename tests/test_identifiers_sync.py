@@ -62,6 +62,20 @@ def test_generate_bibtex_key(db):
     assert key.startswith("Shannon1948Mathematical")
 
 
+def test_generate_bibtex_key_parses_first_last_author_name(db):
+    user = User(username="first_last_key_user", password_hash="hash")
+    db.add(user)
+    db.flush()
+    item = Item(
+        title="Computing Machinery and Intelligence",
+        authors="Alan Turing",
+        publication_date="1950",
+        created_by=user.id,
+    )
+
+    assert generate_bibtex_key(item).startswith("Turing1950Computing")
+
+
 def test_rescan_pdf_doi(db):
     user = User(username="pdf_doi_user", password_hash="hash")
     db.add(user)

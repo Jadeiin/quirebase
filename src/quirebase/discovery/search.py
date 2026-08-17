@@ -14,7 +14,7 @@ from quirebase.discovery.lookup import (
     _clean_markup,
     _date_parts,
     _first,
-    _reconstruct_openalex_abstract,
+    reconstruct_openalex_abstract,
 )
 
 SEARCH_PROVIDERS = {"crossref", "pubmed", "pmc", "arxiv", "openlibrary", "openalex", "nasa", "ieee"}
@@ -492,7 +492,7 @@ class OpenAlexSearchAdapter:
                 for authorship in work.get("authorships", [])
                 if (author_name := _first((authorship.get("author") or {}).get("display_name")))
             )
-            abstract = _reconstruct_openalex_abstract(
+            abstract = reconstruct_openalex_abstract(
                 work.get("abstract_inverted_index")
             ) or _clean_markup(_first(work.get("abstract")))
             source = (work.get("primary_location") or {}).get("source") or {}

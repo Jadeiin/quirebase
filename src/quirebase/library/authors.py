@@ -7,7 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from quirebase.access.items import require_editable_item
 from quirebase.core.errors import ValidationFailure
-from quirebase.models import Author, ItemAuthor, User
+from quirebase.models import Author, Item, ItemAuthor, User
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -104,6 +104,19 @@ def set_item_authors(
 
     db.flush()
     return links
+
+
+def set_item_authors_from_string(
+    db: Session,
+    user: User,
+    item: Item,
+    role: str = "author",
+) -> list[ItemAuthor]:
+    raw = item.authors if role == "author" else item.editors
+    parsed_authors = parse_author_list_string(raw)
+    if not parsed_authors:
+        return []
+    return set_item_authors(db, user, item.id, parsed_authors, role=role)
 
 
 def get_item_authors(db: Session, item_id: str, role: str = "author") -> list[ItemAuthor]:

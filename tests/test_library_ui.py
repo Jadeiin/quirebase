@@ -10,7 +10,7 @@ from test_http import authenticated_client
 
 from quirebase.core.config import get_settings
 from quirebase.discovery.lookup import MetadataNotFoundError
-from quirebase.models import Item, ItemRead, ItemTag, Project, ProjectItem, ProjectMember, Tag
+from quirebase.models import Item, ItemRead, ItemTag, Project, ProjectItem, ProjectMember, Tag, User
 from quirebase.web.app import app
 
 
@@ -64,6 +64,21 @@ def test_dashboard_sidebar_limits_and_recent_reading(db, tmp_path, monkeypatch):
     finally:
         app.dependency_overrides.clear()
         get_settings.cache_clear()
+
+
+def test_item_page_validates_access_before_recording_read(db, tmp_path, monkeypatch):
+    client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+    other_user = User(username="private-owner", password_hash="unused")
+    db.add(other_user)
+    db.flush()
+    private_item = Item(title="Private paper", created_by=other_user.id)
+    db.add(private_item)
+    db.commit()
+
+    assert client.get("/items/missing-item").status_code == 404
+    assert client.get(f"/items/{private_item.id}").status_code == 404
+    assert db.get(ItemRead, (item.created_by, "missing-item")) is None
+    assert db.get(ItemRead, (item.created_by, private_item.id)) is None
 
 
 def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
 from typing import TYPE_CHECKING, BinaryIO
 
 from quirebase.access.items import require_accessible_items, visible_items_query
@@ -34,7 +33,7 @@ from quirebase.documents.revisions import (
     stage_pdf,
 )
 from quirebase.library.audit import record_audit_event
-from quirebase.library.authors import parse_author_list_string, set_item_authors
+from quirebase.library.authors import set_item_authors_from_string
 from quirebase.models import ImportBatch, Item, User
 from quirebase.pipeline.inspection import extract_doi
 from quirebase.search import search_index
@@ -99,7 +98,7 @@ def stage_metadata_batch(
         raise ResourceNotFound(str(error)) from error
     except MetadataLookupError as error:
         raise UpstreamServiceError(str(error)) from error
-    rec_dict = asdict(record) if isinstance(record, MetadataRecord) else record
+    rec_dict = record.to_dict() if isinstance(record, MetadataRecord) else record
     batch = ImportBatch(
         owner_id=user.id,
         file_format=f"metadata:{parsed.provider}",
@@ -238,10 +237,7 @@ def import_unpublished_pdf(
         db.add(item)
         db.flush()
 
-        if item.authors:
-            parsed_authors = parse_author_list_string(item.authors)
-            if parsed_authors:
-                set_item_authors(db, user, item.id, parsed_authors, role="author")
+        set_item_authors_from_string(db, user, item)
 
         attach_staged_pdf(db, user, item, staged)
         search_index(db).index_item(db, item.id)

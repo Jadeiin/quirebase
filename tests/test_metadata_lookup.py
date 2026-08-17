@@ -286,8 +286,6 @@ def test_online_preview_uses_existing_confirmed_import_flow(db, tmp_path, monkey
 
 
 def test_metadata_record_dto_attributes_and_mapping():
-    from dataclasses import asdict
-
     from quirebase.discovery.lookup import MetadataRecord
 
     record = MetadataRecord(
@@ -306,7 +304,7 @@ def test_metadata_record_dto_attributes_and_mapping():
     assert record.title == "Attention Is All You Need"
     assert record.volume == "30"
 
-    as_dict = asdict(record)
+    as_dict = record.to_dict()
     assert as_dict["volume"] == "30"
     assert as_dict["authors"] == "Vaswani, Ashish; Shazeer, Noam"
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import html
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any, Protocol
 from urllib.parse import quote
 from xml.etree import ElementTree
@@ -138,7 +138,7 @@ def _date_parts(message: dict) -> str | None:
     )
 
 
-def _reconstruct_openalex_abstract(inverted_index: Any) -> str | None:
+def reconstruct_openalex_abstract(inverted_index: Any) -> str | None:
     if not isinstance(inverted_index, dict) or not inverted_index:
         return None
     word_positions: list[tuple[int, str]] = []
@@ -149,6 +149,20 @@ def _reconstruct_openalex_abstract(inverted_index: Any) -> str | None:
         return None
     word_positions.sort(key=lambda item: item[0])
     return _clean_markup(" ".join(word for _, word in word_positions))
+
+
+def _collect_openalex_keyword_names(*collections: Any) -> list[str]:
+    names: list[str] = []
+    for entries in collections:
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            name = _clean_markup(_first(entry.get("display_name")))
+            if name and name not in names:
+                names.append(name)
+    return names
 
 
 # Keyed on dash-form lower-case aliases only; normalize_reference_type replaces
@@ -214,6 +228,9 @@ class MetadataRecord:
     urls: str | None = None
     identifiers: str | None = None
     reference_type: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
 
 
 class LookupAdapter(Protocol):
@@ -311,6 +328,7 @@ class DataCiteLookupAdapter:
         )
         canonical_doi = _first(attributes.get("doi")) or value
         resource_type = attributes.get("types", {})
+        publisher = _first(attributes.get("publisher"))
         urls = _collect_urls(f"https://doi.org/{canonical_doi}", _first(attributes.get("url")))
         keywords = (
             "; ".join(
@@ -331,13 +349,8 @@ class DataCiteLookupAdapter:
             publication_date=_first(
                 attributes.get("published") or attributes.get("publicationYear")
             ),
-            publication_title=_first(attributes.get("publisher")),
-            volume=None,
-            issue=None,
-            pages=None,
-            publisher=_first(attributes.get("publisher")),
-            journal_abbreviation=None,
-            affiliation=None,
+            publication_title=publisher,
+            publisher=publisher,
             doi=canonical_doi,
             urls=urls,
             identifiers=json.dumps({"doi": canonical_doi}),
@@ -526,20 +539,12 @@ class OpenAlexLookupAdapter:
             _first((payload.get("open_access") or {}).get("oa_url")),
         )
 
-        abstract = _reconstruct_openalex_abstract(
+        abstract = reconstruct_openalex_abstract(
             payload.get("abstract_inverted_index")
         ) or _clean_markup(_first(payload.get("abstract")))
-        kw_list: list[str] = []
-        for topic in payload.get("topics", []):
-            if (kw := _clean_markup(_first(topic.get("display_name")))) and kw not in kw_list:
-                kw_list.append(kw)
-        for kw_obj in payload.get("keywords", []):
-            if (kw := _clean_markup(_first(kw_obj.get("display_name")))) and kw not in kw_list:
-                kw_list.append(kw)
+        kw_list = _collect_openalex_keyword_names(payload.get("topics"), payload.get("keywords"))
         if not kw_list:
-            for concept in payload.get("concepts", []):
-                if (kw := _clean_markup(_first(concept.get("display_name")))) and kw not in kw_list:
-                    kw_list.append(kw)
+            kw_list = _collect_openalex_keyword_names(payload.get("concepts"))
         keywords_val = "; ".join(kw_list) if kw_list else None
         title = _clean_markup(_first(payload.get("display_name") or payload.get("title"))) or ""
 

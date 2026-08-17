@@ -1,5 +1,7 @@
 import Alpine from "@alpinejs/csp";
 
+const matchesTag = (name, query) => !query || Boolean(name && name.toLowerCase().includes(query));
+
 Alpine.data("appShell", () => ({
   sidebarOpen: false,
   toggleSidebar() {
@@ -66,7 +68,6 @@ Alpine.data("tagManager", () => ({
   page: 1,
   pageSize: 20,
   tags: [],
-  filtered: [],
   visibleIds: new Set(),
   init() {
     const script = document.getElementById("tools-tags-data");
@@ -85,12 +86,12 @@ Alpine.data("tagManager", () => ({
     this.$watch("page", () => this.refresh());
   },
   refresh() {
-    const q = this.tagFilter.trim().toLowerCase();
-    this.filtered = q
-      ? this.tags.filter((t) => t.name && t.name.toLowerCase().includes(q))
-      : this.tags;
     const start = (this.page - 1) * this.pageSize;
     this.visibleIds = new Set(this.filtered.slice(start, start + this.pageSize).map((t) => t.id));
+  },
+  get filtered() {
+    const query = this.tagFilter.trim().toLowerCase();
+    return this.tags.filter((tag) => matchesTag(tag.name, query));
   },
   get totalPages() {
     return Math.max(1, Math.ceil(this.filtered.length / this.pageSize));
@@ -165,14 +166,10 @@ Alpine.data("formattedCitation", () => ({
 Alpine.data("tagMatrix", () => ({
   filter: "",
   matches(name) {
-    const q = this.query;
-    if (!q) return true;
-    return name.toLowerCase().includes(q);
+    return matchesTag(name, this.query);
   },
   groupMatches(names) {
-    const q = this.query;
-    if (!q) return true;
-    return names.some((n) => n.toLowerCase().includes(q));
+    return names.some((name) => matchesTag(name, this.query));
   },
   get query() {
     return this.filter.trim().toLowerCase();

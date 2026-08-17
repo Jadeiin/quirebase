@@ -115,8 +115,7 @@ def recommend_tags_for_item(db: Session, user: User, item_id: str) -> list[Tag]:
     item = db.get(Item, item_id)
     if item is None:
         return []
-    text = f"{item.title or ''} {item.abstract or ''} {item.keywords or ''}"
-    words = {w.lower() for w in re.findall(r"[A-Za-z0-9\u4e00-\u9fa5]+", text) if len(w) > 1}
+    words = _recommendation_words(item)
     if not words:
         return []
     # Limit word pool
@@ -126,13 +125,22 @@ def recommend_tags_for_item(db: Session, user: User, item_id: str) -> list[Tag]:
     )
 
 
+def _recommendation_words(item: Item) -> set[str]:
+    text = f"{item.title or ''} {item.abstract or ''} {item.keywords or ''}"
+    return {
+        word.lower() for word in re.findall(r"[A-Za-z0-9\u4e00-\u9fa5]+", text) if len(word) > 1
+    }
+
+
 def get_tag_matrix_for_item(db: Session, user: User, item_id: str) -> dict[str, Any]:
     if not can_read_item(db, user, item_id):
         raise ResourceUnavailable("item not found")
     all_tags = list(db.scalars(select(Tag).order_by(Tag.name)).all())
     assigned_ids = set(db.scalars(select(ItemTag.tag_id).where(ItemTag.item_id == item_id)).all())
-    recommended_tags = recommend_tags_for_item(db, user, item_id)
-    recommended_ids = {t.id for t in recommended_tags}
+    item = db.get(Item, item_id)
+    word_pool = list(_recommendation_words(item))[:500] if item is not None else []
+    recommended_words = set(word_pool)
+    recommended_ids = {tag.id for tag in all_tags if tag.name.lower() in recommended_words}
 
     # Group by first letter A-Z or '#'
     groups_dict: dict[str, list[Tag]] = {}
@@ -164,10 +172,9 @@ def batch_add_tags_to_item(db: Session, user: User, item_id: str, names: list[st
         raise ResourceUnavailable("item not found or cannot be edited")
     added: list[Tag] = []
     for raw_name in names:
-        cleaned = " ".join(raw_name.split())
-        if not cleaned:
+        if not raw_name.strip():
             continue
-        tag = get_or_create_tag(db, user, cleaned)
+        tag = get_or_create_tag(db, user, raw_name)
         assignment = db.get(ItemTag, (item_id, tag.id))
         if assignment is None:
             assignment = ItemTag(item_id=item_id, tag_id=tag.id)
@@ -191,9 +198,8 @@ def set_item_tags(
         raise ResourceUnavailable("item not found or cannot be edited")
     tag_ids = list(tag_ids)
     for raw_name in new_names or []:
-        cleaned = " ".join(raw_name.split())
-        if cleaned:
-            tag = get_or_create_tag(db, user, cleaned)
+        if raw_name.strip():
+            tag = get_or_create_tag(db, user, raw_name)
             if tag.id not in tag_ids:
                 tag_ids.append(tag.id)
     db.execute(delete(ItemTag).where(ItemTag.item_id == item_id))

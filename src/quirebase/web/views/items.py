@@ -45,6 +45,7 @@ from quirebase.library import (
     update_item as update_item_op,
 )
 from quirebase.models import (
+    ItemAuthor,
     LoginSession,
     User,
 )
@@ -64,6 +65,39 @@ if TYPE_CHECKING:
 router = APIRouter()
 
 
+def _structured_people(
+    last_names: list[str],
+    first_names: list[str],
+    corresponding_indices: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    corresponding = set(corresponding_indices or [])
+    return [
+        {
+            "last_name": last.strip(),
+            "first_name": first_names[index] if index < len(first_names) else None,
+            "is_corresponding": str(index) in corresponding or "true" in corresponding,
+        }
+        for index, last in enumerate(last_names)
+        if last.strip()
+    ]
+
+
+def _initial_structured_people(
+    links: list[ItemAuthor], include_corresponding: bool = False
+) -> list[dict[str, Any]]:
+    people: list[dict[str, Any]] = [
+        {
+            "last_name": link.author.last_name,
+            "first_name": link.author.first_name or "",
+        }
+        for link in links
+    ]
+    if include_corresponding:
+        for person, link in zip(people, links, strict=True):
+            person["is_corresponding"] = link.is_corresponding
+    return people
+
+
 def render_item_workspace(
     request: Request,
     item_id: str,
@@ -72,8 +106,10 @@ def render_item_workspace(
     login_session: LoginSession,
     db: Session,
 ):
-    mark_item_read(db, user, item_id)
     data = get_item_workspace_data(db, user, item_id, section)
+    mark_item_read(db, user, item_id)
+    initial_authors = _initial_structured_people(data["author_links"], include_corresponding=True)
+    initial_editors = _initial_structured_people(data["editor_links"])
     return templates.TemplateResponse(
         request,
         "item.html",
@@ -84,6 +120,8 @@ def render_item_workspace(
             "item_section": section,
             "builtin_styles": available_builtin_styles(),
             "custom_styles": list_custom_citation_styles(db, user),
+            "initial_authors": initial_authors,
+            "initial_editors": initial_editors,
             **data,
         },
     )
@@ -154,31 +192,20 @@ def edit_item(
     author_is_corr: list[str] = Form(default=[]),
     editor_last_name: list[str] = Form(default=[]),
     editor_first_name: list[str] = Form(default=[]),
+    structured_editors_present: bool = Form(default=False),
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    structured_authors: list[dict[str, Any]] | None = None
-    if author_last_name:
-        structured_authors = [
-            {
-                "last_name": last.strip(),
-                "first_name": author_first_name[idx] if idx < len(author_first_name) else None,
-                "is_corresponding": str(idx) in author_is_corr or "true" in author_is_corr,
-            }
-            for idx, last in enumerate(author_last_name)
-            if last.strip()
-        ]
-
-    structured_editors: list[dict[str, Any]] | None = None
-    if editor_last_name:
-        structured_editors = [
-            {
-                "last_name": last.strip(),
-                "first_name": editor_first_name[idx] if idx < len(editor_first_name) else None,
-            }
-            for idx, last in enumerate(editor_last_name)
-            if last.strip()
-        ]
+    structured_authors = (
+        _structured_people(author_last_name, author_first_name, author_is_corr)
+        if author_last_name
+        else None
+    )
+    structured_editors = (
+        _structured_people(editor_last_name, editor_first_name)
+        if editor_last_name or structured_editors_present
+        else None
+    )
 
     data = ItemMetadataUpdate(
         title=title,
@@ -265,6 +292,7 @@ def update_tag_matrix_route(
 @router.get("/api/authors/suggest")
 def suggest_authors(
     q: str = "",
+    _user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
     return search_authors_typeahead(db, query=q)
