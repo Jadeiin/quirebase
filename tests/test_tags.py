@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import pytest
 from sqlalchemy import select
 
+from quirebase.core.errors import ResourceUnavailable
 from quirebase.library.tags import (
     add_tag_to_item,
     batch_add_tags_to_item,
@@ -147,3 +149,23 @@ def test_merge_tags(db):
         db.scalars(select(ItemTag.tag_id).where(ItemTag.item_id == item1.id)).all()
     )
     assert tag_new.id in item1_tag_ids
+
+
+def test_merge_tags_requires_ownership_of_source_tag(db):
+    source_owner = User(username="source_owner", password_hash="hash")
+    target_owner = User(username="target_owner", password_hash="hash")
+    db.add_all([source_owner, target_owner])
+    db.flush()
+    item = Item(title="Protected source tag", created_by=source_owner.id)
+    source = Tag(name="Source", created_by=source_owner.id)
+    target = Tag(name="Target", created_by=target_owner.id)
+    db.add_all([item, source, target])
+    db.flush()
+    db.add(ItemTag(item_id=item.id, tag_id=source.id))
+    db.commit()
+
+    with pytest.raises(ResourceUnavailable, match="not authorized"):
+        merge_tags(db, target_owner, source_tag_id=source.id, target_tag_id=target.id)
+
+    assert db.get(Tag, source.id) is not None
+    assert db.get(ItemTag, (item.id, source.id)) is not None

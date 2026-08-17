@@ -165,11 +165,11 @@ def _item_metadata_from_form(
     urls: str = Form(default=""),
     identifiers: str = Form(default=""),
     custom_fields: str = Form(default=""),
-    author_last_name: list[str] = Form(default=[]),
-    author_first_name: list[str] = Form(default=[]),
-    author_is_corr: list[str] = Form(default=[]),
-    editor_last_name: list[str] = Form(default=[]),
-    editor_first_name: list[str] = Form(default=[]),
+    author_last_name: list[str] = Form(default=[], alias="author_last_name[]"),
+    author_first_name: list[str] = Form(default=[], alias="author_first_name[]"),
+    author_is_corr: list[str] = Form(default=[], alias="author_is_corr[]"),
+    editor_last_name: list[str] = Form(default=[], alias="editor_last_name[]"),
+    editor_first_name: list[str] = Form(default=[], alias="editor_first_name[]"),
     structured_editors_present: bool = Form(default=False),
 ) -> ItemMetadata:
     parsed_authors = (

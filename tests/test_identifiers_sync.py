@@ -97,11 +97,16 @@ def test_rescan_pdf_doi(db):
     db.add(revision)
     db.flush()
 
-    found_doi = rescan_pdf_doi(db, user, item.id)
+    initial_version = item.version
+    with patch("quirebase.library.identifiers.search_index") as search_index_factory:
+        found_doi = rescan_pdf_doi(db, user, item.id)
     assert found_doi == "10.1038/s41586-020-2649-2"
 
     loaded_item = db.get(Item, item.id)
     assert loaded_item.doi == "10.1038/s41586-020-2649-2"
+    assert loaded_item.version == initial_version + 1
+    assert loaded_item.updated_by == user.id
+    search_index_factory.return_value.index_item.assert_called_once_with(db, item.id)
 
 
 def test_sync_metadata_from_upstream(db):

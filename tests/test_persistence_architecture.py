@@ -84,6 +84,69 @@ assert not any(name.startswith("quirebase.web") for name in sys.modules)
     assert EXPECTED_TABLES | {"alembic_version"} <= tables
 
 
+def test_rich_metadata_migration_deduplicates_contributors_per_role(tmp_path: Path):
+    database = tmp_path / "duplicate-contributors.db"
+    script = """
+import json
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session
+
+from quirebase.models import Item, User
+
+config = Config()
+config.set_main_option("script_location", "migrations")
+command.upgrade(config, "0011_system_settings")
+engine = create_engine("sqlite:///" + __import__("os").environ["MIGRATION_DATABASE"])
+with Session(engine) as db:
+    user = User(username="migration-user", password_hash="hash")
+    db.add(user)
+    db.flush()
+    item = Item(
+        title="Repeated contributors",
+        authors="Lovelace, Ada; Lovelace, Ada; Turing, Alan",
+        editors="Hopper, Grace; Hopper, Grace",
+        created_by=user.id,
+    )
+    db.add(item)
+    db.commit()
+    item_id = item.id
+engine.dispose()
+
+command.upgrade(config, "head")
+engine = create_engine("sqlite:///" + __import__("os").environ["MIGRATION_DATABASE"])
+with engine.connect() as connection:
+    rows = connection.execute(
+        text(
+            "SELECT ia.role, ia.position, a.last_name, a.first_name "
+            "FROM item_authors AS ia "
+            "JOIN authors AS a ON a.id = ia.author_id "
+            "WHERE ia.item_id = :item_id "
+            "ORDER BY ia.role, ia.position"
+        ),
+        {"item_id": item_id},
+    ).all()
+print(json.dumps([list(row) for row in rows]))
+engine.dispose()
+"""
+    environment = os.environ.copy()
+    environment["QUIREBASE_DATABASE_URL"] = f"sqlite:///{database}"
+    environment["MIGRATION_DATABASE"] = str(database)
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+    assert json.loads(result.stdout) == [
+        ["author", 1, "Lovelace", "Ada"],
+        ["author", 3, "Turing", "Alan"],
+        ["editor", 1, "Hopper", "Grace"],
+    ]
+
+
 def test_alembic_imports_the_mapping_module_without_a_package_facade():
     source = Path("migrations/env.py").read_text(encoding="utf-8")
     assert "import quirebase.models" in source

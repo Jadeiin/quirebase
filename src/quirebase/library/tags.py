@@ -219,11 +219,7 @@ def merge_tags(db: Session, user: User, source_tag_id: str, target_tag_id: str) 
     target_tag = db.get(Tag, target_tag_id)
     if source_tag is None or target_tag is None:
         raise ResourceUnavailable("tags not found")
-    if (
-        user.role != "administrator"
-        and source_tag.created_by != user.id
-        and target_tag.created_by != user.id
-    ):
+    if user.role != "administrator" and source_tag.created_by != user.id:
         raise ResourceUnavailable("not authorized to merge these tags")
 
     # Re-link items from source to target

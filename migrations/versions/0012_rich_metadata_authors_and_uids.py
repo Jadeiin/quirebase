@@ -133,14 +133,19 @@ def upgrade() -> None:
         for role, raw in (("author", item_row[1]), ("editor", item_row[2])):
             if not (raw and raw.strip()):
                 continue
+            linked_author_ids: set[str] = set()
             for pos, name in enumerate(raw.split(";"), start=1):
                 if not name.strip():
                     continue
                 last, first = parse_author_name(name.strip())
+                author_id = author_id_for(last, first)
+                if author_id in linked_author_ids:
+                    continue
+                linked_author_ids.add(author_id)
                 link_rows.append({
                     "id": str(uuid.uuid4()),
                     "item_id": item_id,
-                    "author_id": author_id_for(last, first),
+                    "author_id": author_id,
                     "position": pos,
                     "role": role,
                     "is_corresponding": False,

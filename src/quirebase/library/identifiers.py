@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import json
 import re
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import delete, select
@@ -133,6 +134,10 @@ def rescan_pdf_doi(db: Session, user: User, item_id: str) -> str | None:
                 existing_pairs.append(("doi", found_doi))
                 set_item_identifiers(db, user, item_id, existing_pairs)
                 item.updated_by = user.id
+                item.updated_at = datetime.now(UTC)
+                item.version += 1
+                db.flush()
+                search_index(db).index_item(db, item_id)
                 record_event(db, user.id, "item.rescan_doi", "item", item_id)
                 db.commit()
                 return found_doi

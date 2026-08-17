@@ -345,8 +345,8 @@ def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(db, tmp_path, monke
             data={
                 "version": str(item.version),
                 "title": "Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives",
-                "author_last_name": ["Hasanein", "Sobaih"],
-                "author_first_name": ["Ahmed M.", "Abu Elnasr E."],
+                "author_last_name[]": ["Hasanein", "Sobaih"],
+                "author_first_name[]": ["Ahmed M.", "Abu Elnasr E."],
                 "volume": "13",
                 "issue": "11",
                 "pages": "2599-2614",
