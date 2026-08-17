@@ -35,6 +35,7 @@ router = APIRouter()
 @router.get("/tools", response_class=HTMLResponse)
 def tools_page(
     request: Request,
+    tab: str = "",
     mode: str = "",
     user: User = Depends(current_user),
     login_session: LoginSession = Depends(current_login),
@@ -42,8 +43,12 @@ def tools_page(
 ):
     if mode not in ("", "doi", "pdf", "title", "similar"):
         raise HTTPException(404)
+    if tab not in ("", "duplicates", "tags", "citation-styles"):
+        tab = "duplicates"
+    active_tool = tab or "duplicates"
     groups = find_duplicates(db, user, mode)
     tags = list_accessible_tags_with_counts(db, user)
+    tags_data = [{"id": tag.id, "name": tag.name, "count": count} for tag, count in tags]
     custom_styles = list_custom_citation_styles(db, user)
     return templates.TemplateResponse(
         request,
@@ -51,9 +56,12 @@ def tools_page(
         {
             "user": user,
             "csrf": login_session.csrf_token,
+            "tab": tab,
             "mode": mode,
+            "active_tool": active_tool,
             "groups": groups,
             "tags": tags,
+            "tags_data": tags_data,
             "custom_styles": custom_styles,
             "builtin_styles": available_builtin_styles(),
             "active_page": "tools",
@@ -69,7 +77,7 @@ def create_citation_style(
     db: Session = Depends(get_db),
 ):
     create_custom_citation_style(db, user, name, csl)
-    return RedirectResponse("/tools#citation-styles", status_code=303)
+    return RedirectResponse("/tools?tab=citation-styles#citation-styles", status_code=303)
 
 
 @router.post("/citation-styles/{style_id}/delete", dependencies=[Depends(require_csrf)])
@@ -79,7 +87,7 @@ def delete_citation_style(
     db: Session = Depends(get_db),
 ):
     delete_custom_citation_style(db, user, style_id)
-    return RedirectResponse("/tools#citation-styles", status_code=303)
+    return RedirectResponse("/tools?tab=citation-styles#citation-styles", status_code=303)
 
 
 @router.post("/tools/tags/{tag_id}", dependencies=[Depends(require_csrf)])
@@ -90,7 +98,7 @@ def rename_tag(
     db: Session = Depends(get_db),
 ):
     rename_tag_op(db, user, tag_id, name)
-    return RedirectResponse("/tools#tags", status_code=303)
+    return RedirectResponse("/tools?tab=tags#tags", status_code=303)
 
 
 @router.post("/tools/tags/{tag_id}/delete", dependencies=[Depends(require_csrf)])
@@ -100,4 +108,4 @@ def delete_tag(
     db: Session = Depends(get_db),
 ):
     delete_tag_op(db, user, tag_id)
-    return RedirectResponse("/tools#tags", status_code=303)
+    return RedirectResponse("/tools?tab=tags#tags", status_code=303)

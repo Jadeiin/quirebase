@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import and_, delete, func, select
 
-from quirebase.access.items import can_edit_item, visible_items_query
+from quirebase.access.items import can_edit_item, can_read_item, visible_items_query
 from quirebase.core.errors import (
     DomainError,
     ResourceUnavailable,
@@ -99,13 +99,14 @@ def list_accessible_tags_with_counts(db: Session, user: User) -> list[tuple[Tag,
             and_(ItemTag.tag_id == Tag.id, ItemTag.item_id.in_(select(accessible_ids.c.id))),
         )
         .group_by(Tag.id)
-        .having(func.count(ItemTag.item_id) > 0)
         .order_by(Tag.name)
     ).all()
     return [(row[0], row[1]) for row in rows]
 
 
-def recommend_tags_for_item(db: Session, item_id: str) -> list[Tag]:
+def recommend_tags_for_item(db: Session, user: User, item_id: str) -> list[Tag]:
+    if not can_read_item(db, user, item_id):
+        return []
     item = db.get(Item, item_id)
     if item is None:
         return []
@@ -120,10 +121,12 @@ def recommend_tags_for_item(db: Session, item_id: str) -> list[Tag]:
     )
 
 
-def get_tag_matrix_for_item(db: Session, item_id: str) -> dict[str, Any]:
+def get_tag_matrix_for_item(db: Session, user: User, item_id: str) -> dict[str, Any]:
+    if not can_read_item(db, user, item_id):
+        raise ResourceUnavailable("item not found")
     all_tags = list(db.scalars(select(Tag).order_by(Tag.name)).all())
     assigned_ids = set(db.scalars(select(ItemTag.tag_id).where(ItemTag.item_id == item_id)).all())
-    recommended_tags = recommend_tags_for_item(db, item_id)
+    recommended_tags = recommend_tags_for_item(db, user, item_id)
     recommended_ids = {t.id for t in recommended_tags}
 
     # Group by first letter A-Z or '#'

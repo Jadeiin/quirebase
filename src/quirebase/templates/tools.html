@@ -1,15 +1,167 @@
 {% extends "base.html" %}
 {% block title %}{{ _('Tools') }} · Quirebase{% endblock %}
 {% block content %}
-<div class="page-heading"><div><p class="eyebrow">{{ _('Library maintenance') }}</p><h1>{{ _('Tools') }}</h1><p>{{ _('Inspect possible duplicates and maintain shared classification data.') }}</p></div></div>
-<section class="tool-grid">
-  <a class="panel tool-card" href="/tools?mode=doi"><span>DOI</span><div><h2>{{ _('Matching DOI') }}</h2><p>{{ _('Highest-confidence metadata duplicate check.') }}</p></div></a>
-  <a class="panel tool-card" href="/tools?mode=pdf"><span>PDF</span><div><h2>{{ _('Identical PDF') }}</h2><p>{{ _('Compare exact file hashes without reading content.') }}</p></div></a>
-  <a class="panel tool-card" href="/tools?mode=title"><span>＝</span><div><h2>{{ _('Matching title') }}</h2><p>{{ _('Find titles equal after punctuation and case normalization.') }}</p></div></a>
-  <a class="panel tool-card" href="/tools?mode=similar"><span>≈</span><div><h2>{{ _('Similar title') }}</h2><p>{{ _('Broader check that may include false positives.') }}</p></div></a>
-</section>
-{% if mode %}<section class="panel duplicate-results"><div class="section-heading"><div><p class="eyebrow">{{ _('Duplicate review') }}</p><h2>{{ _('{count} possible group(s)', count=groups|length) }}</h2></div><a href="/tools">{{ _('Clear') }}</a></div>{% for group in groups %}<article><span class="duplicate-number">{{ loop.index }}</span><div>{% for item in group %}<a href="/items/{{ item.id }}"><strong>{{ item.title }}</strong><small>{{ item.authors or _('No authors') }}{% if item.doi %} · {{ item.doi }}{% endif %}</small></a>{% endfor %}</div></article>{% else %}<div class="empty-state">{{ _('No possible duplicates found with this method.') }}</div>{% endfor %}</section>{% endif %}
-<section class="panel tag-manager" id="tags"><div class="section-heading"><div><p class="eyebrow">{{ _('Classification') }}</p><h2>{{ _('Manage tags') }}</h2></div></div><div class="tag-management-list">{% for tag, count in tags %}<article><form method="post" action="/tools/tags/{{ tag.id }}?csrf_token={{ csrf }}"><input name="name" value="{{ tag.name }}" {% if tag.created_by != user.id and user.role != 'administrator' %}disabled{% endif %}><span>{{ _('{count} paper(s)', count=count) }}</span>{% if tag.created_by == user.id or user.role == 'administrator' %}<button class="secondary-button compact-button">{{ _('Rename') }}</button>{% endif %}</form>{% if tag.created_by == user.id or user.role == 'administrator' %}<form method="post" action="/tools/tags/{{ tag.id }}/delete?csrf_token={{ csrf }}" onsubmit="return confirm('{{ _('Delete this tag from every paper?') }}')"><button class="text-danger">{{ _('Delete') }}</button></form>{% endif %}</article>{% else %}<div class="empty-state">{{ _('No tags.') }}</div>{% endfor %}</div></section>
+<div class="page-heading">
+  <div>
+    <p class="eyebrow">{{ _('Library maintenance') }}</p>
+    <h1>{{ _('Tools') }}</h1>
+    <p>{{ _('Inspect possible duplicates and maintain shared classification data.') }}</p>
+  </div>
+</div>
 
-<section class="panel tag-manager" id="citation-styles"><div class="section-heading"><div><p class="eyebrow">{{ _('Citation styles') }}</p><h2>{{ _('Manage citation styles') }}</h2></div></div>{% if builtin_styles %}<p>{{ _('Built-in styles are ready to use. Add a custom CSL style to use a journal-specific format.') }}</p><ul class="citation-style-list">{% for key, name in builtin_styles.items() %}<li>{{ name }} <small>{{ key }}</small></li>{% endfor %}</ul>{% else %}<p>{{ _('Built-in styles require the optional citation extra. Install it with: uv sync --extra citation.') }}</p>{% endif %}<div class="citation-style-list">{% for style in custom_styles %}<article><span>{{ style.name }}</span><form method="post" action="/citation-styles/{{ style.id }}/delete?csrf_token={{ csrf }}"><button class="text-danger">{{ _('Delete') }}</button></form></article>{% endfor %}</div><form method="post" action="/citation-styles?csrf_token={{ csrf }}" class="citation-style-form"><label>{{ _('Style name') }}<input name="name" maxlength="120" required></label><label>{{ _('CSL XML') }}<textarea name="csl" rows="8" required placeholder="&lt;style xmlns=&quot;http://purl.org/net/xbiblio/csl&quot; version=&quot;1.0&quot;&gt;…&lt;/style&gt;"></textarea></label><button>{{ _('Add style') }}</button></form></section>
+<div x-data="toolsWorkspace" data-initial-active="{{ active_tool }}">
+  <nav class="import-methods" aria-label="{{ _('Tools') }}">
+    <button type="button" data-tool="duplicates" @click="selectTool('duplicates')" :aria-selected="active === 'duplicates'">{{ _('Duplicate review') }}</button>
+    <button type="button" data-tool="tags" @click="selectTool('tags')" :aria-selected="active === 'tags'">{{ _('Manage tags') }}</button>
+    <button type="button" data-tool="citation-styles" @click="selectTool('citation-styles')" :aria-selected="active === 'citation-styles'">{{ _('Citation styles') }}</button>
+  </nav>
+
+  <!-- 1. Duplicate Review Tool -->
+  <div x-show="active === 'duplicates'">
+    <section class="tool-grid">
+      <a class="panel tool-card" href="/tools?tab=duplicates&mode=doi"><span>DOI</span><div><h2>{{ _('Matching DOI') }}</h2><p>{{ _('Highest-confidence metadata duplicate check.') }}</p></div></a>
+      <a class="panel tool-card" href="/tools?tab=duplicates&mode=pdf"><span>PDF</span><div><h2>{{ _('Identical PDF') }}</h2><p>{{ _('Compare exact file hashes without reading content.') }}</p></div></a>
+      <a class="panel tool-card" href="/tools?tab=duplicates&mode=title"><span>＝</span><div><h2>{{ _('Matching title') }}</h2><p>{{ _('Find titles equal after punctuation and case normalization.') }}</p></div></a>
+      <a class="panel tool-card" href="/tools?tab=duplicates&mode=similar"><span>≈</span><div><h2>{{ _('Similar title') }}</h2><p>{{ _('Broader check that may include false positives.') }}</p></div></a>
+    </section>
+
+    {% if mode %}
+    <section class="panel duplicate-results">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">{{ _('Duplicate review') }}</p>
+          <h2>{{ _('{count} possible group(s)', count=groups|length) }}</h2>
+        </div>
+        <a href="/tools?tab=duplicates">{{ _('Clear') }}</a>
+      </div>
+      {% for group in groups %}
+      <article>
+        <span class="duplicate-number">{{ loop.index }}</span>
+        <div>
+          {% for item in group %}
+          <a href="/items/{{ item.id }}">
+            <strong>{{ item.title }}</strong>
+            <small>{{ item.authors or _('No authors') }}{% if item.doi %} · {{ item.doi }}{% endif %}</small>
+          </a>
+          {% endfor %}
+        </div>
+      </article>
+      {% else %}
+      <div class="empty-state">{{ _('No possible duplicates found with this method.') }}</div>
+      {% endfor %}
+    </section>
+    {% endif %}
+  </div>
+
+  <!-- 2. Tag Management (Classification) -->
+  <section
+    class="panel tag-manager"
+    x-show="active === 'tags'"
+    id="tags"
+    x-data="tagManager"
+  >
+    <script id="tools-tags-data" type="application/json">{{ tags_data|tojson }}</script>
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">{{ _('Classification') }}</p>
+        <h2>{{ _('Manage tags') }}</h2>
+        <p class="text-muted" style="margin-top: 0.25rem;">{{ _('Inspect possible duplicates and maintain shared classification data.') }}</p>
+      </div>
+      <span class="text-muted">{{ tags|length }}</span>
+    </div>
+
+    <div class="tools-filter-bar" style="margin-block: 0.75rem 1.25rem;">
+      <input type="search" x-model="tagFilter" placeholder="{{ _('Filter tags (e.g. machine learning)...') }}">
+    </div>
+
+    <div class="tag-management-list">
+      {% for tag, count in tags %}
+      <article x-show="isTagVisible('{{ tag.id }}')">
+        <form method="post" action="/tools/tags/{{ tag.id }}?csrf_token={{ csrf }}">
+          <input name="name" value="{{ tag.name }}" {% if tag.created_by != user.id and user.role != 'administrator' %}disabled{% endif %}>
+          {% if count > 0 %}
+          <a href="/library?tag={{ tag.name|urlencode }}" class="tag-paper-count tag-paper-link" title="{{ tag.name }}">{{ _('{count} paper(s)', count=count) }}</a>
+          {% else %}
+          <span class="tag-paper-count is-zero">{{ _('{count} paper(s)', count=count) }}</span>
+          {% endif %}
+          {% if tag.created_by == user.id or user.role == 'administrator' %}
+          <button class="secondary-button compact-button">{{ _('Rename') }}</button>
+          {% endif %}
+        </form>
+        {% if tag.created_by == user.id or user.role == 'administrator' %}
+        <form method="post" action="/tools/tags/{{ tag.id }}/delete?csrf_token={{ csrf }}" onsubmit="return confirm('{{ _('Delete this tag from every paper?') }}')">
+          <button class="text-danger">{{ _('Delete') }}</button>
+        </form>
+        {% endif %}
+      </article>
+      {% else %}
+      <div class="empty-state">{{ _('No tags.') }}</div>
+      {% endfor %}
+    </div>
+
+    <nav class="pagination" x-show="totalPages > 1" aria-label="{{ _('Library pages') }}" style="margin-top: 1.25rem;">
+      <button type="button" class="secondary-button compact-button" @click="prevPage" :disabled="page <= 1">{{ _('Previous') }}</button>
+      <span x-text="`${page} / ${totalPages}`"></span>
+      <button type="button" class="secondary-button compact-button" @click="nextPage" :disabled="page >= totalPages">{{ _('Next page') }}</button>
+    </nav>
+  </section>
+
+  <!-- 3. Citation Styles Management -->
+  <section class="panel tag-manager" x-show="active === 'citation-styles'" id="citation-styles">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">{{ _('Citation styles') }}</p>
+        <h2>{{ _('Manage citation styles') }}</h2>
+      </div>
+    </div>
+
+    <div class="citation-styles-layout">
+      <div class="citation-styles-catalog">
+        <h3>{{ _('Citation styles') }}</h3>
+        {% if builtin_styles %}
+        <p class="text-muted" style="font-size: 0.85rem; margin-block: 0.35rem 0.75rem;">{{ _('Built-in styles are ready to use. Add a custom CSL style to use a journal-specific format.') }}</p>
+        <div class="style-pills-list">
+          {% for key, name in builtin_styles.items() %}
+          <div class="style-pill">
+            <span class="style-name">{{ name }}</span>
+            <small class="style-key">{{ key }}</small>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted">{{ _('Built-in styles require the optional citation extra. Install it with: uv sync --extra citation.') }}</p>
+        {% endif %}
+
+        {% if custom_styles %}
+        <h3 style="margin-top: 1.5rem;">{{ _('Citation styles') }}</h3>
+        <div class="custom-styles-list">
+          {% for style in custom_styles %}
+          <article class="custom-style-item">
+            <span>{{ style.name }}</span>
+            <form method="post" action="/citation-styles/{{ style.id }}/delete?csrf_token={{ csrf }}">
+              <button class="text-danger compact-button">{{ _('Delete') }}</button>
+            </form>
+          </article>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="citation-style-create-card panel">
+        <h3>{{ _('Add style') }}</h3>
+        <form method="post" action="/citation-styles?csrf_token={{ csrf }}" class="citation-style-form">
+          <label>{{ _('Style name') }}
+            <input name="name" maxlength="120" placeholder="e.g. Nature Custom" required>
+          </label>
+          <label>{{ _('CSL XML') }}
+            <textarea name="csl" rows="8" required placeholder="&lt;style xmlns=&quot;http://purl.org/net/xbiblio/csl&quot; version=&quot;1.0&quot;&gt;…&lt;/style&gt;"></textarea>
+          </label>
+          <div>
+            <button>{{ _('Add style') }}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+</div>
 {% endblock %}

@@ -43,6 +43,16 @@ def test_tools_detect_duplicates_and_manage_owned_tags(db, tmp_path, monkeypatch
         assert tools.status_code == 200
         assert "1 组可能重复项" in tools.text
         assert "Old tag" in tools.text
+        assert 'href="/library?tag=Old%20tag"' in tools.text
+
+        orphan_tag = Tag(name="Orphan tag", created_by=item.created_by)
+        db.add(orphan_tag)
+        db.commit()
+
+        tools_tags = client.get("/tools?tab=tags")
+        assert tools_tags.status_code == 200
+        assert "Orphan tag" in tools_tags.text
+        assert "0 篇论文" in tools_tags.text
 
         renamed = client.post(
             f"/tools/tags/{tag.id}?csrf_token=test-csrf",
@@ -50,6 +60,7 @@ def test_tools_detect_duplicates_and_manage_owned_tags(db, tmp_path, monkeypatch
             follow_redirects=False,
         )
         assert renamed.status_code == 303
+        assert renamed.headers["location"] == "/tools?tab=tags#tags"
         db.refresh(tag)
         assert tag.name == "Reviewed"
 
@@ -58,6 +69,7 @@ def test_tools_detect_duplicates_and_manage_owned_tags(db, tmp_path, monkeypatch
             follow_redirects=False,
         )
         assert removed.status_code == 303
+        assert removed.headers["location"] == "/tools?tab=tags#tags"
         assert db.get(Tag, tag.id) is None
     finally:
         app.dependency_overrides.clear()

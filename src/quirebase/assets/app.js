@@ -42,6 +42,70 @@ Alpine.data("importWorkspace", () => ({
   },
 }));
 
+Alpine.data("toolsWorkspace", () => ({
+  active: "duplicates",
+  init() {
+    const hash = window.location.hash ? window.location.hash.replace("#", "") : "";
+    const initial = this.$root.dataset.initialActive;
+    if (["duplicates", "tags", "citation-styles"].includes(hash)) {
+      this.active = hash;
+    } else if (initial && ["duplicates", "tags", "citation-styles"].includes(initial)) {
+      this.active = initial;
+    }
+  },
+  selectTool(tool) {
+    this.active = tool;
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState(null, "", `#${tool}`);
+    }
+  },
+}));
+
+Alpine.data("tagManager", () => ({
+  tagFilter: "",
+  page: 1,
+  pageSize: 20,
+  tags: [],
+  init() {
+    const script = document.getElementById("tools-tags-data");
+    if (script && script.textContent) {
+      try {
+        this.tags = JSON.parse(script.textContent);
+      } catch (e) {
+        this.tags = [];
+      }
+    }
+    this.$watch("tagFilter", () => {
+      this.page = 1;
+    });
+  },
+  get filteredTags() {
+    const q = this.tagFilter.trim().toLowerCase();
+    if (!q) return this.tags;
+    return this.tags.filter((t) => t.name && t.name.toLowerCase().includes(q));
+  },
+  get totalPages() {
+    if (!this.tags || this.tags.length === 0) return 1;
+    return Math.max(1, Math.ceil(this.filteredTags.length / this.pageSize));
+  },
+  get pagedTagIds() {
+    if (!this.tags || this.tags.length === 0) return null;
+    const start = (this.page - 1) * this.pageSize;
+    const paged = this.filteredTags.slice(start, start + this.pageSize);
+    return new Set(paged.map((t) => t.id));
+  },
+  isTagVisible(tagId) {
+    if (this.pagedTagIds === null) return true;
+    return this.pagedTagIds.has(tagId);
+  },
+  prevPage() {
+    if (this.page > 1) this.page--;
+  },
+  nextPage() {
+    if (this.page < this.totalPages) this.page++;
+  },
+}));
+
 Alpine.data("onlineSearch", () => ({
   visibleClauses: 1,
   init() {

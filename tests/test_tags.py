@@ -33,7 +33,7 @@ def test_recommend_tags_for_item(db):
     db.add(item)
     db.flush()
 
-    recommended = recommend_tags_for_item(db, item.id)
+    recommended = recommend_tags_for_item(db, user, item.id)
     rec_names = {t.name for t in recommended}
     assert "Transformer" in rec_names
     assert "Robotics" in rec_names
@@ -61,7 +61,7 @@ def test_get_tag_matrix_for_item(db):
     add_tag_to_item(db, user, item.id, "Algorithms")
     db.commit()
 
-    matrix = get_tag_matrix_for_item(db, item.id)
+    matrix = get_tag_matrix_for_item(db, user, item.id)
     assert len(matrix["groups"]) >= 3
     assert t1.id in matrix["assigned_ids"]
     assert t2.id not in matrix["assigned_ids"]

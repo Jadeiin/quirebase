@@ -2112,4 +2112,3 @@ msgstr ""
 #: src/quirebase/templates/tools.html:14
 msgid "Add style"
 msgstr ""
-

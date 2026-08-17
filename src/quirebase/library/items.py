@@ -31,7 +31,7 @@ from quirebase.library.authors import (
     parse_author_list_string,
     set_item_authors,
 )
-from quirebase.library.tags import get_tag_matrix_for_item
+from quirebase.library.tags import get_tag_matrix_for_item, normalize_tag_name
 from quirebase.models import (
     Attachment,
     DiscussionMessage,
@@ -410,7 +410,7 @@ def get_item_workspace_data(db: Session, user: User, item_id: str, section: str)
         ).all()
     )
 
-    tag_matrix = get_tag_matrix_for_item(db, item_id) if section == "organize" else None
+    tag_matrix = get_tag_matrix_for_item(db, user, item_id) if section == "organize" else None
 
     return {
         "item": item,
@@ -493,9 +493,7 @@ def bulk_action(
                 search_index(db).index_item(db, item.id)
         audit_action = "library.bulk.add_project"
     elif action in ("add_tag", "tag"):
-        normalized = " ".join(tag_name.split())
-        if not normalized or len(normalized) > 120:
-            raise ValidationFailure("enter a tag containing 1 to 120 characters")
+        normalized = normalize_tag_name(tag_name)
         tag_record = db.scalar(select(Tag).where(Tag.name == normalized))
         if tag_record is None:
             tag_record = Tag(name=normalized, created_by=user.id)

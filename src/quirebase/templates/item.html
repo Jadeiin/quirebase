@@ -163,7 +163,7 @@
       <form class="metadata-form" method="post" action="/items/{{ item.id }}/edit?csrf_token={{ csrf }}">
         <input type="hidden" name="version" value="{{ item.version }}">
         <label class="span-2">{{ _('Title') }} <input name="title" value="{{ item.title }}" required></label>
-        
+
         <!-- Structured Authors Editor -->
         <div class="span-2 author-editor-container" x-data="authorEditor" data-initial-authors="[{% for link in author_links %}{&quot;last_name&quot;: &quot;{{ link.author.last_name }}&quot;, &quot;first_name&quot;: &quot;{{ link.author.first_name or '' }}&quot;, &quot;is_corresponding&quot;: {{ 'true' if link.is_corresponding else 'false' }}}{% if not loop.last %},{% endif %}{% endfor %}]">
           <label><strong>{{ _('Authors (Structured & Ranked)') }}</strong></label>
@@ -236,7 +236,7 @@
         <label class="span-2">{{ _('URLs (one per line)') }} <textarea name="urls" rows="2">{{ item.urls or '' }}</textarea></label>
         <label class="span-2">{{ _('Keywords') }} <input name="keywords" value="{{ item.keywords or '' }}"></label>
         <label class="span-2">{{ _('Abstract') }} <textarea name="abstract" rows="6">{{ item.abstract or '' }}</textarea></label>
-        
+
         <details class="span-2 advanced-fields"><summary>{{ _('Advanced identifiers & Custom fields') }}</summary><div class="metadata-form">
           <label>{{ _('Identifiers (JSON object)') }} <textarea name="identifiers">{{ item.identifiers or '' }}</textarea></label>
           <label>{{ _('Custom fields (JSON object)') }} <textarea name="custom_fields">{{ item.custom_fields or '' }}</textarea></label>
@@ -334,7 +334,7 @@
               </div>
               <div class="tag-items-grid">
                 {% for t in group.tags %}
-                <label class="tag-checkbox-label {% if t.id in tag_matrix.recommended_ids %}is-recommended{% endif %}" x-show="matches('{{ t.name }}')" title="{{ t.name }}">
+                <label class="tag-checkbox-label {% if t.id in tag_matrix.recommended_ids %}is-recommended{% endif %}" x-show="matches({{ t.name|tojson }})" title="{{ t.name }}">
                   <input type="checkbox" name="tag_ids" value="{{ t.id }}" {% if t.id in tag_matrix.assigned_ids %}checked{% endif %}>
                   <span class="tag-name">{{ t.name }}</span>
                   {% if t.id in tag_matrix.recommended_ids %}
