@@ -6,10 +6,11 @@ import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 
 from quirebase.access.items import require_editable_item
 from quirebase.audit import record_event
+from quirebase.core.errors import VersionConflict
 from quirebase.discovery.bibliography import REFERENCE_TYPE_TO_BIBTEX, extract_year
 from quirebase.discovery.lookup import (
     MetadataRecord,
@@ -25,6 +26,9 @@ from quirebase.search import search_index
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
+
+    from quirebase.core.config import Settings
+
 
 STOP_WORDS = {
     "a",
@@ -242,16 +246,34 @@ def apply_metadata_record(
     return item
 
 
-def sync_metadata_from_upstream(
+def _sync_metadata_from_upstream(
     db: Session,
     user: User,
     item_id: str,
+    expected_version: int,
     provider: str,
     uid_value: str,
+    settings: Settings | None = None,
 ) -> Item:
     item = require_editable_item(db, user, item_id)
 
-    _, record = lookup_metadata(uid_value, provider=provider)
+    _, record = lookup_metadata(uid_value, provider=provider, settings=settings)
+    version = db.scalar(
+        update(Item)
+        .where(Item.id == item_id, Item.version == expected_version)
+        .values(
+            updated_by=user.id,
+            updated_at=datetime.now(UTC),
+            version=Item.version + 1,
+        )
+        .returning(Item.version)
+    )
+    if version is None:
+        db.rollback()
+        current = db.get(Item, item_id)
+        raise VersionConflict(current.version if current else None)
+
+    db.refresh(item)
     forced_identifiers = {provider: uid_value} if provider and uid_value else None
     apply_metadata_record(
         db,
@@ -262,11 +284,33 @@ def sync_metadata_from_upstream(
         forced_identifiers=forced_identifiers,
     )
 
-    item.updated_by = user.id
-    item.version += 1
     db.flush()
 
     search_index(db).index_item(db, item_id)
     record_event(db, user.id, "item.sync_upstream", "item", item_id)
     db.commit()
     return item
+
+
+def sync_metadata_from_upstream(
+    db: Session,
+    user: User,
+    item_id: str,
+    expected_version: int,
+    provider: str,
+    uid_value: str,
+    settings: Settings | None = None,
+) -> Item:
+    try:
+        return _sync_metadata_from_upstream(
+            db,
+            user,
+            item_id,
+            expected_version,
+            provider,
+            uid_value,
+            settings,
+        )
+    except Exception:
+        db.rollback()
+        raise

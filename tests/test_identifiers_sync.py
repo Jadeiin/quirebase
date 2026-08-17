@@ -3,6 +3,10 @@ from __future__ import annotations
 import json
 from unittest.mock import patch
 
+import pytest
+from sqlalchemy.orm import Session
+
+from quirebase.core.errors import VersionConflict
 from quirebase.library.identifiers import (
     generate_bibtex_key,
     get_item_identifiers,
@@ -137,7 +141,12 @@ def test_sync_metadata_from_upstream(db):
 
     with patch("quirebase.library.identifiers.lookup_metadata", return_value=(None, mock_record)):
         updated_item = sync_metadata_from_upstream(
-            db, user, item.id, provider="doi", uid_value="10.1002/j.1538-7305.1948.tb01338.x"
+            db,
+            user,
+            item.id,
+            item.version,
+            provider="doi",
+            uid_value="10.1002/j.1538-7305.1948.tb01338.x",
         )
         db.commit()
 
@@ -182,7 +191,12 @@ def test_sync_metadata_cleans_html_and_syncs_bibtex_type(db):
 
     with patch("quirebase.library.identifiers.lookup_metadata", return_value=(None, mock_record)):
         updated = sync_metadata_from_upstream(
-            db, user, item.id, provider="doi", uid_value="10.1038/s41586-019-1666-5"
+            db,
+            user,
+            item.id,
+            item.version,
+            provider="doi",
+            uid_value="10.1038/s41586-019-1666-5",
         )
         db.commit()
 
@@ -197,3 +211,47 @@ def test_sync_metadata_cleans_html_and_syncs_bibtex_type(db):
     assert updated.reference_type == "article"
     assert updated.bibtex_type == "article"
     assert updated.bibtex_id.startswith("Arute2019")
+
+
+def test_sync_metadata_from_upstream_rejects_a_stale_version(db):
+    owner = User(username="concurrent_sync_owner", password_hash="hash")
+    db.add(owner)
+    db.flush()
+    item = Item(title="Original title", created_by=owner.id)
+    db.add(item)
+    db.commit()
+
+    record = {"title": "Upstream title"}
+    with (
+        Session(db.bind, expire_on_commit=False) as first,
+        Session(db.bind, expire_on_commit=False) as second,
+        patch("quirebase.library.identifiers.lookup_metadata", return_value=(None, record)),
+    ):
+        first_owner = first.get(User, owner.id)
+        second_owner = second.get(User, owner.id)
+        first_item = first.get(Item, item.id)
+        second_item = second.get(Item, item.id)
+        assert first_owner and second_owner and first_item and second_item
+
+        sync_metadata_from_upstream(
+            first,
+            first_owner,
+            item.id,
+            first_item.version,
+            provider="doi",
+            uid_value="10.1000/current",
+        )
+        with pytest.raises(VersionConflict):
+            sync_metadata_from_upstream(
+                second,
+                second_owner,
+                item.id,
+                second_item.version,
+                provider="doi",
+                uid_value="10.1000/stale",
+            )
+
+    db.expire_all()
+    saved = db.get(Item, item.id)
+    assert saved.title == "Upstream title"
+    assert saved.version == 2

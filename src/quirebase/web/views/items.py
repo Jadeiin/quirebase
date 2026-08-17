@@ -8,8 +8,11 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 from quirebase.core.config import get_settings
 from quirebase.core.database import get_db
-from quirebase.core.errors import ValidationFailure
+from quirebase.core.errors import ResourceNotFound, ValidationFailure
 from quirebase.discovery import (
+    MetadataLookupError,
+    MetadataNotFoundError,
+    UpstreamServiceError,
     available_builtin_styles,
     list_custom_citation_styles,
 )
@@ -59,7 +62,7 @@ from quirebase.models import (
     LoginSession,
     User,
 )
-from quirebase.operations.settings import get_effective_setting
+from quirebase.operations.settings import get_effective_setting, get_effective_settings_model
 from quirebase.projects import (
     add_item_to_project as add_item_to_project_op,
 )
@@ -337,12 +340,28 @@ def edit_item(
 @router.post("/items/{item_id}/sync-metadata", dependencies=[Depends(require_csrf)])
 def sync_metadata_route(
     item_id: str,
+    version: int = Form(),
     provider: str = Form(),
     uid: str = Form(),
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    sync_metadata_from_upstream(db, user, item_id, provider=provider, uid_value=uid)
+    try:
+        sync_metadata_from_upstream(
+            db,
+            user,
+            item_id,
+            version,
+            provider=provider,
+            uid_value=uid,
+            settings=get_effective_settings_model(db),
+        )
+    except ValueError as error:
+        raise ValidationFailure(str(error)) from error
+    except MetadataNotFoundError as error:
+        raise ResourceNotFound(str(error)) from error
+    except MetadataLookupError as error:
+        raise UpstreamServiceError(str(error)) from error
     return RedirectResponse(f"/items/{item_id}", status_code=303)
 
 

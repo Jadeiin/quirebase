@@ -233,7 +233,12 @@ def test_seam3_oa_corpus_upstream_sync_and_reconciliation(db):
         return_value=(Identifier("doi", "10.3390/ejihpe13110181"), mock_rec),
     ):
         updated = sync_metadata_from_upstream(
-            db, user, item.id, provider="doi", uid_value="10.3390/ejihpe13110181"
+            db,
+            user,
+            item.id,
+            item.version,
+            provider="doi",
+            uid_value="10.3390/ejihpe13110181",
         )
 
     assert (

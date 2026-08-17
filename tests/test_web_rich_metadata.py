@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 from unittest.mock import patch
 
+import pytest
 from test_http import authenticated_client
 
-from quirebase.models import Author, Item, ItemAuthor, ItemIdentifier, ItemTag, Tag
+from quirebase.discovery import MetadataLookupError, MetadataNotFoundError
+from quirebase.models import Author, Item, ItemAuthor, ItemIdentifier, ItemTag, SystemSetting, Tag
 
 
 def test_web_new_item_exposes_and_saves_complete_metadata(db, tmp_path, monkeypatch):
@@ -229,7 +231,11 @@ def test_web_sync_metadata_and_bibtex_key_update(db, tmp_path, monkeypatch):
         response = client.post(
             f"/items/{item.id}/sync-metadata",
             params={"csrf_token": csrf},
-            data={"provider": "doi", "uid": "10.1038/s41586-019-1666-5"},
+            data={
+                "version": item.version,
+                "provider": "doi",
+                "uid": "10.1038/s41586-019-1666-5",
+            },
             follow_redirects=True,
         )
         assert response.status_code == 200
@@ -238,6 +244,52 @@ def test_web_sync_metadata_and_bibtex_key_update(db, tmp_path, monkeypatch):
     assert item.title == "Quantum Supremacy Using a Programmable Superconducting Processor"
     assert item.volume == "574"
     assert item.doi == "10.1038/s41586-019-1666-5"
+
+
+def test_web_sync_metadata_uses_effective_runtime_provider_settings(db, tmp_path, monkeypatch):
+    client, item, _ = authenticated_client(db, tmp_path, monkeypatch)
+    db.add(SystemSetting(key="nasa_ads_token", value="runtime-ads-token"))
+    db.commit()
+
+    with patch(
+        "quirebase.library.identifiers.lookup_metadata",
+        return_value=(None, {"title": "Runtime-configured metadata"}),
+    ) as lookup:
+        response = client.post(
+            f"/items/{item.id}/sync-metadata?csrf_token=test-csrf",
+            data={
+                "version": item.version,
+                "provider": "bibcode",
+                "uid": "2024ApJ...123A...1X",
+            },
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 303
+    assert lookup.call_args.kwargs["settings"].nasa_ads_token == "runtime-ads-token"
+
+
+@pytest.mark.parametrize(
+    ("error", "status_code"),
+    [
+        (ValueError("identifier is malformed"), 422),
+        (MetadataNotFoundError("metadata not found"), 404),
+        (MetadataLookupError("provider unavailable"), 502),
+    ],
+)
+def test_web_sync_metadata_translates_expected_lookup_failures(
+    db, tmp_path, monkeypatch, error, status_code
+):
+    client, item, _ = authenticated_client(db, tmp_path, monkeypatch)
+
+    with patch("quirebase.library.identifiers.lookup_metadata", side_effect=error):
+        response = client.post(
+            f"/items/{item.id}/sync-metadata?csrf_token=test-csrf",
+            data={"version": item.version, "provider": "doi", "uid": "invalid"},
+            follow_redirects=False,
+        )
+
+    assert response.status_code == status_code
 
 
 def test_web_author_suggest_api(db, tmp_path, monkeypatch):

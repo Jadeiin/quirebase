@@ -100,6 +100,7 @@
               {% if can_edit %}
               <div class="identifier-actions">
                 <form method="post" action="/items/{{ item.id }}/sync-metadata?csrf_token={{ csrf }}" class="inline-sync-form">
+                  <input type="hidden" name="version" value="{{ item.version }}">
                   <input type="hidden" name="uid" value="{{ item.doi }}">
                   <select name="provider" class="provider-select" title="{{ _('Select upstream provider') }}">
                     <option value="doi">{{ _('Auto') }}</option>
@@ -135,6 +136,7 @@
               {% if can_edit %}
               <div class="identifier-actions">
                 <form method="post" action="/items/{{ item.id }}/sync-metadata?csrf_token={{ csrf }}">
+                  <input type="hidden" name="version" value="{{ item.version }}">
                   <input type="hidden" name="provider" value="{{ ident.provider }}">
                   <input type="hidden" name="uid" value="{{ ident.value }}">
                   <button class="secondary-button compact-action-btn" type="submit">{{ _('Autoupdate') }}</button>
