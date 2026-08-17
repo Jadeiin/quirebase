@@ -96,6 +96,12 @@ knowledge.
 Prune package exports only after callers use the deeper interfaces. Internal Python paths are not
 a compatibility commitment, so do not add long-lived re-export shims.
 
+Selected direction: the prototype preserved on `prototype/issue-9-orm-layouts` showed that
+capability-local mappings require a metadata aggregator while cross-capability ORM relationships
+remain coupled. Keep the centralized persistence mapping, enforce a complete conceptual-owner
+map, load it directly from Alembic, and keep concrete adapters and internal collaborators out of
+package facades. The detailed comparison is in `docs/architecture/orm-ownership.md`.
+
 ## TDD execution rules
 
 - Agree and name the seam in each issue before the first test.

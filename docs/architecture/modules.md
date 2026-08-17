@@ -23,10 +23,12 @@ Planned deepening work is ordered in `docs/architecture/deep-module-roadmap.md`.
 | `web` | Inbound adapter Module | HTTP parsing, authentication dependencies and response formatting |
 | `core` | Infrastructure Module | Configuration, database setup, storage, cryptography, i18n and base errors |
 
-`cli.py` is an inbound adapter. `models.py` is currently a shared persistence mapping, not
-a business Module and not the owner of the concepts it maps. It remains unified until the
-ownership above and the lifecycle invariants tracked in #3 are stable enough to split without
-creating cyclic ORM Modules.
+`cli.py` is an inbound adapter. `models.py` is a shared persistence mapping, not a business Module
+and not the owner of the concepts it maps. The prototype and decision in
+`docs/architecture/orm-ownership.md` retain the centralized mapping: splitting it across
+capability packages would distribute SQLAlchemy relationship and import-order knowledge without
+deepening business interfaces. Architecture tests enforce one conceptual owner for every mapped
+class.
 
 ## Interfaces
 
@@ -37,8 +39,13 @@ the implementation.
 
 Package `__init__.py` files are convenience entry points, not a published compatibility ABI.
 Add exports only for caller-facing use cases, results or errors. Do not re-export concrete
-adapters or another Module's interface: callers import Search from `quirebase.search`, for
-example, never through `quirebase.operations`.
+adapters or another Module's interface: callers resolve Library Search through
+`quirebase.search.search_index`, never through `quirebase.operations`.
+
+Concrete Search adapters and the Search port remain internal to the outbound adapter Module;
+callers select the configured implementation through `search_index`. Mutable Job registries,
+low-level document staging, ORM synchronization helpers and operational file utilities likewise
+stay in their owning implementation modules rather than package facades.
 
 Item metadata mutation crosses the Library interface through typed `CreateItem`,
 `ReviseItemMetadata` and `RegenerateBibtexKey` commands. Contributor, identifier and custom

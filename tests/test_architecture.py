@@ -72,6 +72,72 @@ SESSION_METHODS = {
     "scalars",
 }
 
+ORM_MODEL_OWNERS = {
+    "Attachment": "documents",
+    "AuditEvent": "audit",
+    "Author": "library",
+    "CitationStyle": "discovery",
+    "DiscussionMessage": "library",
+    "FileRevision": "documents",
+    "ImportBatch": "discovery",
+    "Invitation": "accounts",
+    "Item": "library",
+    "ItemAuthor": "library",
+    "ItemIdentifier": "library",
+    "ItemRead": "library",
+    "ItemTag": "library",
+    "Job": "pipeline",
+    "LoginSession": "accounts",
+    "LoginThrottle": "accounts",
+    "PdfAnnotation": "documents",
+    "PdfAnnotationSegment": "documents",
+    "Project": "projects",
+    "ProjectItem": "projects",
+    "ProjectMember": "projects",
+    "SystemSetting": "operations",
+    "Tag": "library",
+    "User": "accounts",
+}
+
+FORBIDDEN_FACADE_EXPORTS = {
+    "documents": {"attach_staged_pdf", "stage_pdf"},
+    "library": {
+        "batch_add_tags_to_item",
+        "find_or_create_author",
+        "generate_bibtex_key",
+        "get_item_authors",
+        "get_item_identifiers",
+        "get_tag_matrix_for_item",
+        "parse_author_name",
+        "recommend_tags_for_item",
+        "set_item_authors",
+        "set_item_identifiers",
+    },
+    "operations": {
+        "cleanup_exports",
+        "get_effective_setting",
+        "get_effective_settings_model",
+        "get_runtime_setting",
+        "sha256_file",
+        "sqlite_path",
+    },
+    "pipeline": {
+        "JOB_HANDLERS",
+        "JobHandler",
+        "claim_job",
+        "get_job_handler",
+        "job_payload",
+        "register_job_handler",
+        "run_once",
+    },
+    "search": {
+        "PostgreSQLSearchIndex",
+        "SQLiteSearchIndex",
+        "SearchIndex",
+        "extract_search_facets",
+    },
+}
+
 
 def get_python_files(directory: Path) -> list[Path]:
     return list(directory.rglob("*.py"))
@@ -98,6 +164,25 @@ def imported_quirebase_packages(package_dir: Path) -> set[str]:
                 packages.add(module.split(".", 2)[1])
     packages.discard(package_dir.name)
     return packages
+
+
+def exported_names(package: str) -> set[str]:
+    init_file = SRC_ROOT / package / "__init__.py"
+    tree = ast.parse(init_file.read_text(encoding="utf-8"), filename=str(init_file))
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if not any(
+            isinstance(target, ast.Name) and target.id == "__all__" for target in node.targets
+        ):
+            continue
+        assert isinstance(node.value, (ast.List, ast.Tuple))
+        return {
+            item.value
+            for item in node.value.elts
+            if isinstance(item, ast.Constant) and isinstance(item.value, str)
+        }
+    return set()
 
 
 def annotation_mentions_session(annotation: ast.expr | None, session_types: set[str]) -> bool:
@@ -277,6 +362,29 @@ def test_item_workspace_uses_typed_section_views():
                 isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
                 and node.name in forbidden_operations
             ), f"{py_file} restores an untyped or separately committed Item Workspace operation"
+
+
+def test_orm_models_have_one_documented_owner_without_capability_mapping_files():
+    models_file = SRC_ROOT / "models.py"
+    tree = ast.parse(models_file.read_text(encoding="utf-8"), filename=str(models_file))
+    mapped_classes = {
+        node.name
+        for node in tree.body
+        if isinstance(node, ast.ClassDef)
+        and any(isinstance(base, ast.Name) and base.id == "Base" for base in node.bases)
+    }
+    assert mapped_classes == set(ORM_MODEL_OWNERS)
+    assert set(ORM_MODEL_OWNERS.values()) <= set(PACKAGE_ROLES)
+    for owner in set(ORM_MODEL_OWNERS.values()):
+        assert not (SRC_ROOT / owner / "models.py").exists(), (
+            f"{owner} restores capability-local ORM mappings rejected by issue #9"
+        )
+
+
+def test_package_facades_do_not_export_internal_persistence_collaborators():
+    for package, forbidden in FORBIDDEN_FACADE_EXPORTS.items():
+        leaked = exported_names(package) & forbidden
+        assert not leaked, f"quirebase.{package} facade leaks internal symbols {sorted(leaked)}"
 
 
 def test_discovery_provider_modules_do_not_depend_on_orm_or_web():

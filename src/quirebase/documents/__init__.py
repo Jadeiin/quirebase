@@ -14,19 +14,16 @@ from quirebase.documents.exports import (
 )
 from quirebase.documents.revisions import (
     UnsupportedMediaType,
-    attach_staged_pdf,
     create_attachment,
     get_attachment_file,
     get_pdf_viewer_data,
     get_revision_file,
-    stage_pdf,
     store_pdf_revision,
 )
 
 __all__ = [
     "DocumentNotReady",
     "UnsupportedMediaType",
-    "attach_staged_pdf",
     "create_attachment",
     "create_document_annotation",
     "create_export_job",
@@ -37,7 +34,6 @@ __all__ = [
     "get_pdf_viewer_data",
     "get_revision_file",
     "list_document_annotations",
-    "stage_pdf",
     "store_pdf_revision",
     "update_document_annotation",
 ]

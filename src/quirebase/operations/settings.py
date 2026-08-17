@@ -74,9 +74,6 @@ def get_effective_setting(db: Session, key: str, default: Any = None) -> Any:
     return getattr(get_settings(), key, default)
 
 
-get_runtime_setting = get_effective_setting
-
-
 def get_effective_settings_model(db: Session) -> Any:
     from quirebase.core.config import Settings
 
