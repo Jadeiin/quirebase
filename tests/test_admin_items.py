@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 
 import pytest
+from item_helpers import create_item_record as create_item
 from sqlalchemy import select
 from test_library_ui import pdf_bytes
 
@@ -12,7 +13,6 @@ from quirebase.core.storage import LocalObjectStore
 from quirebase.documents.revisions import store_pdf_revision
 from quirebase.library import (
     admin_delete_item,
-    create_item,
     get_storage_metrics,
     list_global_items,
 )

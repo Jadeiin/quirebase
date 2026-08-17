@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
-from quirebase.access.items import require_editable_item
 from quirebase.core.config import get_settings
 from quirebase.core.database import get_db
+from quirebase.core.errors import ValidationFailure
 from quirebase.discovery import (
     available_builtin_styles,
     list_custom_citation_styles,
@@ -21,13 +22,25 @@ from quirebase.documents import (
     store_pdf_revision,
 )
 from quirebase.library import (
-    ItemMetadataUpdate,
+    BibliographicMetadata,
+    Contributor,
+    Contributors,
+    CreateItem,
+    CustomField,
+    ExternalIdentifier,
+    Identifiers,
+    ItemMetadata,
+    JsonValue,
+    RegenerateBibtexKey,
+    ReviseItemMetadata,
     add_tag_to_item,
-    generate_bibtex_key,
     get_item_workspace_data,
     mark_item_read,
+    parse_author_list_string,
+    regenerate_bibtex_key,
     remove_tag_from_item,
     rescan_pdf_doi,
+    revise_item_metadata,
     search_authors_typeahead,
     set_item_tags,
     sync_metadata_from_upstream,
@@ -40,9 +53,6 @@ from quirebase.library import (
 )
 from quirebase.library import (
     delete_discussion_message as delete_discussion_message_op,
-)
-from quirebase.library import (
-    update_item as update_item_op,
 )
 from quirebase.models import (
     ItemAuthor,
@@ -69,17 +79,68 @@ def _structured_people(
     last_names: list[str],
     first_names: list[str],
     corresponding_indices: list[str] | None = None,
-) -> list[dict[str, Any]]:
+) -> tuple[Contributor, ...]:
     corresponding = set(corresponding_indices or [])
-    return [
-        {
-            "last_name": last.strip(),
-            "first_name": first_names[index] if index < len(first_names) else None,
-            "is_corresponding": str(index) in corresponding or "true" in corresponding,
-        }
+    return tuple(
+        Contributor(
+            last_name=last.strip(),
+            first_name=first_names[index] if index < len(first_names) else None,
+            is_corresponding=str(index) in corresponding or "true" in corresponding,
+        )
         for index, last in enumerate(last_names)
         if last.strip()
-    ]
+    )
+
+
+def _people_from_text(value: str) -> tuple[Contributor, ...]:
+    return tuple(
+        Contributor(
+            last_name=str(person.get("last_name") or ""),
+            first_name=str(person["first_name"]) if person.get("first_name") else None,
+            is_corresponding=bool(person.get("is_corresponding", False)),
+        )
+        for person in parse_author_list_string(value)
+    )
+
+
+def _identifiers_from_form(doi: str, encoded: str) -> Identifiers:
+    entries: tuple[ExternalIdentifier, ...] = ()
+    if encoded.strip():
+        try:
+            parsed = json.loads(encoded)
+        except json.JSONDecodeError as error:
+            raise ValidationFailure("identifiers must be valid JSON") from error
+        if not isinstance(parsed, dict):
+            raise ValidationFailure("identifiers must be a JSON object")
+        if not all(
+            isinstance(provider, str) and isinstance(value, str)
+            for provider, value in parsed.items()
+        ):
+            raise ValidationFailure("identifier names and values must be strings")
+        entries = tuple(ExternalIdentifier(provider, value) for provider, value in parsed.items())
+    return Identifiers(doi=doi.strip() or None, others=entries)
+
+
+def _custom_fields_from_form(encoded: str) -> tuple[CustomField, ...]:
+    if not encoded.strip():
+        return ()
+    try:
+        parsed = json.loads(encoded)
+    except json.JSONDecodeError as error:
+        raise ValidationFailure("custom fields must be valid JSON") from error
+    if not isinstance(parsed, dict):
+        raise ValidationFailure("custom fields must be a JSON object")
+    return tuple(CustomField(str(name), _json_value(value)) for name, value in parsed.items())
+
+
+def _json_value(value: object) -> JsonValue:
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+    if isinstance(value, list):
+        return tuple(_json_value(entry) for entry in value)
+    if isinstance(value, dict) and all(isinstance(key, str) for key in value):
+        return {str(key): _json_value(entry) for key, entry in value.items()}
+    raise ValidationFailure("custom fields contain an unsupported value")
 
 
 def _initial_structured_people(
@@ -135,8 +196,17 @@ def create_item(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    item = create_item_op(db, user, title=title, abstract=abstract, authors=authors)
-    return RedirectResponse(f"/items/{item.id}", status_code=303)
+    result = create_item_op(
+        db,
+        user,
+        CreateItem(
+            metadata=ItemMetadata(
+                bibliography=BibliographicMetadata(title=title, abstract=abstract),
+                contributors=Contributors(authors=_people_from_text(authors)),
+            )
+        ),
+    )
+    return RedirectResponse(f"/items/{result.item_id}", status_code=303)
 
 
 @router.get("/items/{item_id}", response_class=HTMLResponse)
@@ -196,45 +266,46 @@ def edit_item(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    structured_authors = (
+    parsed_authors = (
         _structured_people(author_last_name, author_first_name, author_is_corr)
         if author_last_name
-        else None
+        else _people_from_text(authors)
     )
-    structured_editors = (
+    parsed_editors = (
         _structured_people(editor_last_name, editor_first_name)
         if editor_last_name or structured_editors_present
-        else None
+        else _people_from_text(editors)
     )
 
-    data = ItemMetadataUpdate(
-        title=title,
-        version=version,
-        abstract=abstract,
-        authors=authors,
-        editors=editors,
-        keywords=keywords,
-        publication_date=publication_date,
-        publication_title=publication_title,
-        doi=doi,
-        reference_type=reference_type,
-        volume=volume,
-        issue=issue,
-        pages=pages,
-        affiliation=affiliation,
-        publisher=publisher,
-        place_published=place_published,
-        journal_abbreviation=journal_abbreviation,
-        bibtex_id=bibtex_id,
-        bibtex_type=bibtex_type,
-        urls=urls,
-        identifiers=identifiers,
-        custom_fields=custom_fields,
-        structured_authors=structured_authors,
-        structured_editors=structured_editors,
+    command = ReviseItemMetadata(
+        item_id=item_id,
+        expected_version=version,
+        metadata=ItemMetadata(
+            bibliography=BibliographicMetadata(
+                title=title,
+                abstract=abstract,
+                keywords=tuple(value.strip() for value in keywords.split(";") if value.strip()),
+                publication_date=publication_date,
+                publication_title=publication_title,
+                reference_type=reference_type,
+                volume=volume,
+                issue=issue,
+                pages=pages,
+                affiliation=affiliation,
+                publisher=publisher,
+                place_published=place_published,
+                journal_abbreviation=journal_abbreviation,
+                bibtex_key=bibtex_id,
+                bibtex_type=bibtex_type,
+                urls=tuple(value.strip() for value in urls.splitlines() if value.strip()),
+            ),
+            contributors=Contributors(authors=parsed_authors, editors=parsed_editors),
+            identifiers=_identifiers_from_form(doi, identifiers),
+            custom_fields=_custom_fields_from_form(custom_fields),
+        ),
     )
-    item = update_item_op(db, user, item_id=item_id, data=data)
-    return RedirectResponse(f"/items/{item.id}/metadata", status_code=303)
+    result = revise_item_metadata(db, user, command)
+    return RedirectResponse(f"/items/{result.item_id}/metadata", status_code=303)
 
 
 @router.post("/items/{item_id}/sync-metadata", dependencies=[Depends(require_csrf)])
@@ -262,16 +333,14 @@ def rescan_doi_route(
 @router.post("/items/{item_id}/update-bibtex-key", dependencies=[Depends(require_csrf)])
 def update_bibtex_key_route(
     item_id: str,
+    version: int = Form(),
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    item = require_editable_item(db, user, item_id)
-    key = generate_bibtex_key(item)
-    update_item_op(
+    regenerate_bibtex_key(
         db,
         user,
-        item_id=item_id,
-        data=ItemMetadataUpdate.from_item(item, bibtex_id=key),
+        RegenerateBibtexKey(item_id=item_id, expected_version=version),
     )
     return RedirectResponse(f"/items/{item_id}", status_code=303)
 

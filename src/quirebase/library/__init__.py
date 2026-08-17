@@ -22,14 +22,28 @@ from quirebase.library.identifiers import (
     set_item_identifiers,
     sync_metadata_from_upstream,
 )
+from quirebase.library.item_mutations import (
+    BibliographicMetadata,
+    Contributor,
+    Contributors,
+    CreateItem,
+    CustomField,
+    ExternalIdentifier,
+    Identifiers,
+    ItemMetadata,
+    ItemMutationResult,
+    JsonValue,
+    RegenerateBibtexKey,
+    ReviseItemMetadata,
+    create_item,
+    regenerate_bibtex_key,
+    revise_item_metadata,
+)
 from quirebase.library.items import (
-    ItemMetadataUpdate,
     bulk_action,
     bulk_download_pdfs,
-    create_item,
     get_item_workspace_data,
     mark_item_read,
-    update_item,
 )
 from quirebase.library.tags import (
     TagConflict,
@@ -46,7 +60,18 @@ from quirebase.library.tags import (
 )
 
 __all__ = [
-    "ItemMetadataUpdate",
+    "BibliographicMetadata",
+    "Contributor",
+    "Contributors",
+    "CreateItem",
+    "CustomField",
+    "ExternalIdentifier",
+    "Identifiers",
+    "ItemMetadata",
+    "ItemMutationResult",
+    "JsonValue",
+    "RegenerateBibtexKey",
+    "ReviseItemMetadata",
     "TagConflict",
     "add_discussion_message",
     "add_tag_to_item",
@@ -73,14 +98,15 @@ __all__ = [
     "parse_author_list_string",
     "parse_author_name",
     "recommend_tags_for_item",
+    "regenerate_bibtex_key",
     "remove_tag_from_item",
     "rename_tag",
     "rescan_pdf_doi",
+    "revise_item_metadata",
     "search_authors_typeahead",
     "search_library",
     "set_item_authors",
     "set_item_identifiers",
     "set_item_tags",
     "sync_metadata_from_upstream",
-    "update_item",
 ]

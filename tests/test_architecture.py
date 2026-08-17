@@ -252,6 +252,22 @@ def test_only_audit_module_constructs_audit_events():
                     )
 
 
+def test_item_metadata_mutations_cross_the_typed_library_seam():
+    item_routes = SRC_ROOT / "web" / "views" / "items.py"
+    assert "quirebase.access.items" not in imported_modules(item_routes)
+
+    for py_file in get_python_files(SRC_ROOT):
+        tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+        for node in ast.walk(tree):
+            assert not (isinstance(node, ast.ClassDef) and node.name == "ItemMetadataUpdate"), (
+                f"{py_file} restores the transport-shaped ItemMetadataUpdate command"
+            )
+            assert not (
+                isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.name == "update_item"
+            ), f"{py_file} restores the superseded update_item seam"
+
+
 def test_discovery_provider_modules_do_not_depend_on_orm_or_web():
     forbidden = ("sqlalchemy", "quirebase.models", "quirebase.web", "quirebase.access")
     for filename in ("lookup.py", "search.py"):

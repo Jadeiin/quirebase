@@ -40,6 +40,13 @@ Add exports only for caller-facing use cases, results or errors. Do not re-expor
 adapters or another Module's interface: callers import Search from `quirebase.search`, for
 example, never through `quirebase.operations`.
 
+Item metadata mutation crosses the Library interface through typed `CreateItem`,
+`ReviseItemMetadata` and `RegenerateBibtexKey` commands. Contributor, identifier and custom
+field values are parsed before crossing the seam; permission, optimistic concurrency,
+persistence caches, Search synchronization, Audit Event recording and commit order remain in
+the Library implementation. These operations return an immutable Item identity and version,
+not a mutable ORM aggregate.
+
 An internal helper imported across Modules is an architectural pressure point. Repeated use is
 a signal to move the concept to its owner or deepen the owning interface; it is not a reason to
 create a generic shared-utilities package.

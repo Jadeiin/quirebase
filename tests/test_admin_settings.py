@@ -89,12 +89,12 @@ def test_non_admin_cannot_update_settings(db):
 def test_runtime_settings_applied_to_pdf_upload_limit(db, tmp_path, monkeypatch):
     import io
 
+    from item_helpers import create_item_record as create_item
     from test_library_ui import pdf_bytes
 
     from quirebase.core.config import get_settings
     from quirebase.core.errors import ValidationFailure
     from quirebase.documents import store_pdf_revision
-    from quirebase.library import create_item
 
     monkeypatch.chdir(tmp_path)
     get_settings.cache_clear()

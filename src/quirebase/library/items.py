@@ -1,20 +1,17 @@
 from __future__ import annotations
 
-import json
 import zipfile
-from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from quirebase.access.items import (
     can_edit_item,
     require_accessible_items,
-    require_editable_item,
     require_readable_item,
 )
 from quirebase.access.projects import project_member
@@ -23,16 +20,11 @@ from quirebase.core.errors import (
     PermissionDenied,
     ResourceNotFound,
     ValidationFailure,
-    VersionConflict,
 )
 from quirebase.core.storage import LocalObjectStore
-from quirebase.discovery.lookup import normalize_reference_type
 from quirebase.library.authors import (
     get_item_authors,
-    set_item_authors,
-    set_item_authors_from_string,
 )
-from quirebase.library.identifiers import set_item_identifiers
 from quirebase.library.tags import get_or_create_tag, get_tag_matrix_for_item
 from quirebase.models import (
     AnnotationScope,
@@ -52,195 +44,6 @@ from quirebase.models import (
     User,
 )
 from quirebase.search import search_index
-
-
-@dataclass
-class ItemMetadataUpdate:
-    title: str
-    version: int
-    abstract: str = ""
-    authors: str = ""
-    editors: str = ""
-    keywords: str = ""
-    publication_date: str = ""
-    publication_title: str = ""
-    doi: str = ""
-    reference_type: str = ""
-    volume: str = ""
-    issue: str = ""
-    pages: str = ""
-    affiliation: str = ""
-    publisher: str = ""
-    place_published: str = ""
-    journal_abbreviation: str = ""
-    bibtex_id: str = ""
-    bibtex_type: str = ""
-    urls: str = ""
-    identifiers: str = ""
-    custom_fields: str = ""
-    structured_authors: list[dict[str, Any]] | None = None
-    structured_editors: list[dict[str, Any]] | None = None
-
-    @classmethod
-    def from_item(cls, item: Item, **overrides: Any) -> ItemMetadataUpdate:
-        """Snapshot an item's scalar fields so a narrow update preserves the rest."""
-        data = cls(
-            title=item.title or "",
-            version=item.version,
-            abstract=item.abstract or "",
-            authors=item.authors or "",
-            editors=item.editors or "",
-            keywords=item.keywords or "",
-            publication_date=item.publication_date or "",
-            publication_title=item.publication_title or "",
-            doi=item.doi or "",
-            reference_type=item.reference_type or "",
-            volume=item.volume or "",
-            issue=item.issue or "",
-            pages=item.pages or "",
-            affiliation=item.affiliation or "",
-            publisher=item.publisher or "",
-            place_published=item.place_published or "",
-            journal_abbreviation=item.journal_abbreviation or "",
-            bibtex_id=item.bibtex_id or "",
-            bibtex_type=item.bibtex_type or "",
-            urls=item.urls or "",
-            identifiers=item.identifiers or "",
-            custom_fields=item.custom_fields or "",
-        )
-        return replace(data, **overrides)
-
-
-def create_item(
-    db: Session,
-    user: User,
-    *,
-    title: str,
-    abstract: str = "",
-    authors: str = "",
-) -> Item:
-    if not title.strip():
-        raise ValidationFailure("title is required")
-    item = Item(
-        title=title.strip(),
-        abstract=abstract.strip() or None,
-        authors=authors.strip() or None,
-        created_by=user.id,
-    )
-    db.add(item)
-    db.flush()
-    set_item_authors_from_string(db, user, item)
-    search_index(db).index_item(db, item.id)
-    record_event(db, user.id, "item.create", "item", item.id)
-    db.commit()
-    return item
-
-
-def update_item(
-    db: Session,
-    user: User,
-    *,
-    item_id: str,
-    data: ItemMetadataUpdate,
-) -> Item:
-    item = require_editable_item(db, user, item_id)
-    if not data.title.strip():
-        raise ValidationFailure("title is required")
-    parsed_identifiers: dict[str, str] = {}
-    if data.identifiers.strip():
-        try:
-            raw_identifiers = json.loads(data.identifiers)
-        except json.JSONDecodeError as error:
-            raise ValidationFailure("identifiers must be valid JSON") from error
-        if not isinstance(raw_identifiers, dict):
-            raise ValidationFailure("identifiers must be a JSON object")
-        if not all(
-            isinstance(provider, str) and isinstance(value, str)
-            for provider, value in raw_identifiers.items()
-        ):
-            raise ValidationFailure("identifier names and values must be strings")
-        parsed_identifiers = raw_identifiers
-
-    # The dedicated DOI field is authoritative over the advanced JSON cache.
-    parsed_identifiers.pop("doi", None)
-    if data.doi.strip():
-        parsed_identifiers["doi"] = data.doi
-    parsed_custom: dict[str, Any] | None = None
-    if data.custom_fields.strip():
-        try:
-            parsed_custom = json.loads(data.custom_fields)
-        except json.JSONDecodeError as error:
-            raise ValidationFailure("custom fields must be valid JSON") from error
-        if not isinstance(parsed_custom, dict):
-            raise ValidationFailure("custom fields must be a JSON object")
-
-    authors_before_update = item.authors
-    editors_before_update = item.editors
-
-    updated_id = db.scalar(
-        update(Item)
-        .where(Item.id == item_id, Item.version == data.version)
-        .values(
-            title=data.title.strip(),
-            abstract=data.abstract.strip() or None,
-            authors=data.authors.strip() or None,
-            editors=data.editors.strip() or None,
-            keywords=data.keywords.strip() or None,
-            publication_date=data.publication_date.strip() or None,
-            publication_title=data.publication_title.strip() or None,
-            reference_type=normalize_reference_type(data.reference_type),
-            volume=data.volume.strip() or None,
-            issue=data.issue.strip() or None,
-            pages=data.pages.strip() or None,
-            affiliation=data.affiliation.strip() or None,
-            publisher=data.publisher.strip() or None,
-            place_published=data.place_published.strip() or None,
-            journal_abbreviation=data.journal_abbreviation.strip() or None,
-            bibtex_id=data.bibtex_id.strip() or None,
-            bibtex_type=data.bibtex_type.strip() or None,
-            urls=data.urls.strip() or None,
-            custom_fields=json.dumps(parsed_custom, ensure_ascii=False)
-            if parsed_custom is not None
-            else None,
-            updated_by=user.id,
-            version=Item.version + 1,
-            updated_at=datetime.now(UTC),
-        )
-        .returning(Item.id)
-    )
-    if updated_id is None:
-        db.rollback()
-        current = db.get(Item, item_id)
-        raise VersionConflict(current.version if current else None)
-    db.flush()
-
-    set_item_identifiers(db, user, item_id, list(parsed_identifiers.items()))
-
-    if data.structured_authors is not None:
-        set_item_authors(db, user, item_id, data.structured_authors, role="author")
-    elif data.authors.strip() and data.authors.strip() != (authors_before_update or ""):
-        set_item_authors_from_string(db, user, item)
-
-    if data.structured_editors is not None:
-        set_item_authors(db, user, item_id, data.structured_editors, role="editor")
-    elif data.editors.strip() and data.editors.strip() != (editors_before_update or ""):
-        set_item_authors_from_string(db, user, item, role="editor")
-
-    db.expire_all()
-    updated_item = db.get(Item, item_id)
-    if updated_item is None:
-        raise ResourceNotFound("item not found")
-    search_index(db).index_item(db, updated_item.id)
-    record_event(
-        db,
-        user.id,
-        "item.update",
-        "item",
-        updated_item.id,
-        detail={"version": data.version + 1},
-    )
-    db.commit()
-    return updated_item
 
 
 def mark_item_read(db: Session, user: User, item_id: str) -> None:

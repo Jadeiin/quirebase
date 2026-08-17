@@ -84,6 +84,7 @@
               {% if can_edit %}
               <div class="identifier-actions">
                 <form method="post" action="/items/{{ item.id }}/update-bibtex-key?csrf_token={{ csrf }}">
+                  <input type="hidden" name="version" value="{{ item.version }}">
                   <button class="secondary-button compact-action-btn" type="submit">{{ _('Update key') }}</button>
                 </form>
               </div>

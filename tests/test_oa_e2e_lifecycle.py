@@ -4,6 +4,7 @@ import json
 from unittest.mock import patch
 
 import httpx
+from item_helpers import create_item_record as create_item
 from sqlalchemy import select
 from test_http import authenticated_client
 
@@ -23,7 +24,7 @@ from quirebase.discovery.lookup import (
     lookup_metadata,
 )
 from quirebase.library.identifiers import sync_metadata_from_upstream
-from quirebase.library.items import create_item, get_item_workspace_data
+from quirebase.library.items import get_item_workspace_data
 from quirebase.models import (
     AuditEvent,
     Item,

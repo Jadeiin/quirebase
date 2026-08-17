@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from unittest.mock import Mock
-
 from quirebase.library.authors import (
     find_or_create_author,
     get_item_authors,
@@ -10,7 +8,6 @@ from quirebase.library.authors import (
     set_item_authors,
     set_item_authors_from_string,
 )
-from quirebase.library.items import ItemMetadataUpdate, create_item, update_item
 from quirebase.models import Item, User
 
 
@@ -63,19 +60,6 @@ def test_set_item_authors_from_string(db):
 
     assert item.authors == "Turing, Alan"
     assert [link.author.last_name for link in get_item_authors(db, item.id)] == ["Turing"]
-
-
-def test_update_item_skips_unchanged_author_string(db, monkeypatch):
-    user = User(username="unchanged_author_user", password_hash="hash")
-    db.add(user)
-    db.flush()
-    item = create_item(db, user, title="Computing Machinery", authors="Turing, Alan")
-    sync_authors = Mock()
-    monkeypatch.setattr("quirebase.library.items.set_item_authors_from_string", sync_authors)
-
-    update_item(db, user, item_id=item.id, data=ItemMetadataUpdate.from_item(item))
-
-    sync_authors.assert_not_called()
 
 
 def test_search_authors_typeahead(db):

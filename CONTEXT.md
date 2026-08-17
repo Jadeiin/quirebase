@@ -11,6 +11,16 @@ A bibliographic record representing a paper, book, preprint, manuscript or
 other research output.
 _Avoid_: Paper, Work, Document when referring to the stored bibliographic record
 
+**Item Owner**:
+The User with inherent authority to edit and permanently delete an Item, independently of
+Project membership. Ownership is assigned when the Item is created and is not currently
+transferable.
+_Avoid_: Creator when discussing authorization
+
+**Contributor**:
+A person credited in an Item's bibliographic metadata, with a role such as author or editor.
+_Avoid_: Creator, User
+
 **Project**:
 A collaborative collection that grants members access to assigned Items.
 _Avoid_: Folder, Group
@@ -105,7 +115,9 @@ An immutable record of a security-sensitive or data-changing action.
 
 ## Relationships
 
-- A User owns zero or more Items and Login Sessions, and has one System Role.
+- A User is the Item Owner of zero or more Items, owns zero or more Login Sessions, and has one
+  System Role.
+- An Item has zero or more Contributors in an ordered bibliographic role.
 - An Invitation provisions one new User with an assigned System Role.
 - An Item has zero or more File Revisions, Attachments, Tags, and Discussion Messages.
 - An Item may belong to multiple Projects.

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from unittest.mock import patch
 
 from test_http import authenticated_client
@@ -32,6 +33,7 @@ def test_web_edit_rich_metadata_and_structured_authors(db, tmp_path, monkeypatch
             "bibtex_id": "vaswani2017attention",
             "bibtex_type": "inproceedings",
             "urls": "https://arxiv.org/abs/1706.03762\nhttps://proceedings.neurips.cc/paper/7181",
+            "custom_fields": '{"rating": 5, "flags": ["reviewed"], "meta": {"source": "manual"}}',
             "author_last_name": ["Vaswani", "Shazeer", "Parmar"],
             "author_first_name": ["Ashish", "Noam", "Niki"],
             "author_is_corr": ["0"],
@@ -50,6 +52,11 @@ def test_web_edit_rich_metadata_and_structured_authors(db, tmp_path, monkeypatch
     assert updated.pages == "5998-6008"
     assert updated.affiliation == "Google Brain"
     assert updated.bibtex_id == "vaswani2017attention"
+    assert json.loads(updated.custom_fields or "") == {
+        "rating": 5,
+        "flags": ["reviewed"],
+        "meta": {"source": "manual"},
+    }
     assert updated.updated_by is not None
     assert updated.authors == "Vaswani, Ashish; Shazeer, Noam; Parmar, Niki"
     assert updated.editors == "Guyon, Isabelle; von Luxburg, Ulrike"
@@ -116,6 +123,7 @@ def test_web_sync_metadata_and_bibtex_key_update(db, tmp_path, monkeypatch):
     response = client.post(
         f"/items/{item.id}/update-bibtex-key",
         params={"csrf_token": csrf},
+        data={"version": item.version},
         follow_redirects=True,
     )
     assert response.status_code == 200

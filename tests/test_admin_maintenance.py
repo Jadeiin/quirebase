@@ -3,11 +3,11 @@ from __future__ import annotations
 import json
 
 import pytest
+from item_helpers import create_item_record as create_item
 
 from quirebase.core.config import get_settings
 from quirebase.core.crypto import hash_password
 from quirebase.core.errors import ResourceUnavailable
-from quirebase.library import create_item
 from quirebase.models import AuditEvent, Job, User
 from quirebase.pipeline import (
     dispatch_maintenance_job,
