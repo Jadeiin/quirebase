@@ -1,12 +1,25 @@
 from __future__ import annotations
 
+import pytest
 from test_http import authenticated_client
 
 from quirebase.core.config import get_settings
-from quirebase.library import get_item_workspace_data
+from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
+from quirebase.library import (
+    AnnotationsWorkspace,
+    DiscussionWorkspace,
+    FilesWorkspace,
+    MetadataWorkspace,
+    OrganizeWorkspace,
+    SummaryWorkspace,
+    WorkspaceSection,
+    open_item_workspace,
+)
 from quirebase.models import (
     AuditEvent,
     DiscussionMessage,
+    Item,
+    ItemRead,
     PdfAnnotation,
     Project,
     ProjectItem,
@@ -14,6 +27,63 @@ from quirebase.models import (
     User,
 )
 from quirebase.web.app import app
+
+
+def test_open_summary_workspace_returns_a_typed_view_and_records_reading(db):
+    user = User(username="workspace-reader", password_hash="unused")
+    db.add(user)
+    db.flush()
+    item = Item(title="Typed workspace", created_by=user.id)
+    db.add(item)
+    db.commit()
+
+    view = open_item_workspace(db, user, item.id, WorkspaceSection.summary)
+
+    assert isinstance(view, SummaryWorkspace)
+    assert view.item.id == item.id
+    assert view.item_owner.id == user.id
+    assert view.revision_count == 0
+    assert db.get(ItemRead, (user.id, item.id)) is not None
+
+
+def test_workspace_section_rejects_unknown_names_before_query_branching():
+    with pytest.raises(ResourceNotFound, match="unknown item section"):
+        WorkspaceSection.parse("unknown")
+
+
+def test_open_item_workspace_returns_a_section_specific_view(db):
+    user = User(username="section-reader", password_hash="unused")
+    db.add(user)
+    db.flush()
+    item = Item(title="Section views", created_by=user.id)
+    db.add(item)
+    db.commit()
+
+    expected_types = {
+        WorkspaceSection.summary: SummaryWorkspace,
+        WorkspaceSection.metadata: MetadataWorkspace,
+        WorkspaceSection.files: FilesWorkspace,
+        WorkspaceSection.organize: OrganizeWorkspace,
+        WorkspaceSection.annotations: AnnotationsWorkspace,
+        WorkspaceSection.discussion: DiscussionWorkspace,
+    }
+    for section, expected_type in expected_types.items():
+        assert isinstance(open_item_workspace(db, user, item.id, section), expected_type)
+
+
+def test_inaccessible_item_never_records_reading(db):
+    owner = User(username="workspace-owner", password_hash="unused")
+    outsider = User(username="workspace-outsider", password_hash="unused")
+    db.add_all([owner, outsider])
+    db.flush()
+    item = Item(title="Private workspace", created_by=owner.id)
+    db.add(item)
+    db.commit()
+
+    with pytest.raises(ResourceUnavailable, match="item not found"):
+        open_item_workspace(db, outsider, item.id, WorkspaceSection.summary)
+
+    assert db.get(ItemRead, (outsider.id, item.id)) is None
 
 
 def test_item_workspace_separates_page_responsibilities(db, tmp_path, monkeypatch):
@@ -135,11 +205,11 @@ def test_item_summary_reports_exact_activity_counts(db, tmp_path, monkeypatch):
         ])
         db.commit()
 
-        data = get_item_workspace_data(db, user, item.id, "summary")
+        data = open_item_workspace(db, user, item.id, WorkspaceSection.summary)
 
-        assert data["revision_count"] == 1
-        assert data["annotation_count"] == 2
-        assert data["message_count"] == 2
+        assert data.revision_count == 1
+        assert data.annotation_count == 2
+        assert data.message_count == 2
     finally:
         app.dependency_overrides.clear()
         get_settings.cache_clear()

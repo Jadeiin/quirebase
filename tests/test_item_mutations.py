@@ -12,10 +12,13 @@ from quirebase.library import (
     ExternalIdentifier,
     Identifiers,
     ItemMetadata,
+    MetadataWorkspace,
     RegenerateBibtexKey,
     ReviseItemMetadata,
+    SummaryWorkspace,
+    WorkspaceSection,
     create_item,
-    get_item_workspace_data,
+    open_item_workspace,
     regenerate_bibtex_key,
     revise_item_metadata,
     search_library,
@@ -48,8 +51,9 @@ def test_regenerate_bibtex_key_is_a_narrow_atomic_item_mutation(db):
         RegenerateBibtexKey(item_id=item.id, expected_version=item.version),
     )
 
-    workspace = get_item_workspace_data(db, owner, item.id, "metadata")
-    updated = workspace["item"]
+    workspace = open_item_workspace(db, owner, item.id, WorkspaceSection.metadata)
+    assert isinstance(workspace, MetadataWorkspace)
+    updated = workspace.item
     events, total = query_events(db, owner, action="item.bibtex_key.regenerate")
     assert result.item_id == item.id
     assert result.version == 2
@@ -97,9 +101,10 @@ def test_revise_item_metadata_makes_the_dedicated_doi_authoritative(db):
         ),
     )
 
-    workspace = get_item_workspace_data(db, owner, item.id, "summary")
-    updated = workspace["item"]
-    identifiers = {link.provider: link.value for link in workspace["identifier_links"]}
+    workspace = open_item_workspace(db, owner, item.id, WorkspaceSection.summary)
+    assert isinstance(workspace, SummaryWorkspace)
+    updated = workspace.item
+    identifiers = {link.provider: link.value for link in workspace.identifiers}
     assert result.version == 2
     assert updated.doi == "10.1000/new"
     assert identifiers == {"arxiv": "2401.12345", "doi": "10.1000/new"}
@@ -135,15 +140,16 @@ def test_revise_item_metadata_replaces_contributors_in_order(db):
         ),
     )
 
-    workspace = get_item_workspace_data(db, owner, item.id, "metadata")
-    assert workspace["item"].authors == "Shannon, Claude; Weaver, Warren"
-    assert workspace["item"].editors is None
-    assert [link.author.last_name for link in workspace["author_links"]] == [
+    workspace = open_item_workspace(db, owner, item.id, WorkspaceSection.metadata)
+    assert isinstance(workspace, MetadataWorkspace)
+    assert workspace.item.authors == "Shannon, Claude; Weaver, Warren"
+    assert workspace.item.editors is None
+    assert [link.author.last_name for link in workspace.authors] == [
         "Shannon",
         "Weaver",
     ]
-    assert [link.position for link in workspace["author_links"]] == [1, 2]
-    assert workspace["author_links"][0].is_corresponding
+    assert [link.position for link in workspace.authors] == [1, 2]
+    assert workspace.authors[0].is_corresponding
     matches, total, _, _ = search_library(db, owner, q="Contributor replacement")
     assert total == 1
     assert matches[0].id == item.id
@@ -173,8 +179,9 @@ def test_create_item_accepts_typed_metadata_and_returns_a_mutation_result(db):
         ),
     )
 
-    workspace = get_item_workspace_data(db, owner, result.item_id, "summary")
-    created = workspace["item"]
+    workspace = open_item_workspace(db, owner, result.item_id, WorkspaceSection.summary)
+    assert isinstance(workspace, SummaryWorkspace)
+    created = workspace.item
     assert result.version == 1
     assert created.title == "A Mathematical Theory of Communication"
     assert created.created_by == owner.id

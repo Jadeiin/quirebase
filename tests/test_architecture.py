@@ -268,6 +268,17 @@ def test_item_metadata_mutations_cross_the_typed_library_seam():
             ), f"{py_file} restores the superseded update_item seam"
 
 
+def test_item_workspace_uses_typed_section_views():
+    forbidden_operations = {"get_item_workspace_data", "mark_item_read"}
+    for py_file in get_python_files(SRC_ROOT / "library"):
+        tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+        for node in ast.walk(tree):
+            assert not (
+                isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.name in forbidden_operations
+            ), f"{py_file} restores an untyped or separately committed Item Workspace operation"
+
+
 def test_discovery_provider_modules_do_not_depend_on_orm_or_web():
     forbidden = ("sqlalchemy", "quirebase.models", "quirebase.web", "quirebase.access")
     for filename in ("lookup.py", "search.py"):

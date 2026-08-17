@@ -23,8 +23,13 @@ from quirebase.discovery.lookup import (
     MetadataRecord,
     lookup_metadata,
 )
+from quirebase.library import (
+    MetadataWorkspace,
+    SummaryWorkspace,
+    WorkspaceSection,
+    open_item_workspace,
+)
 from quirebase.library.identifiers import sync_metadata_from_upstream
-from quirebase.library.items import get_item_workspace_data
 from quirebase.models import (
     AuditEvent,
     Item,
@@ -357,12 +362,15 @@ def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(db, tmp_path, monke
 
         # 3. Verify structured relations in DB
         db.expire_all()
-        workspace_data = get_item_workspace_data(db, user, item.id, "summary")
+        workspace_data = open_item_workspace(db, user, item.id, WorkspaceSection.summary)
+        assert isinstance(workspace_data, SummaryWorkspace)
         assert (
-            workspace_data["item"].title
+            workspace_data.item.title
             == "Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives"
         )
-        author_links = get_item_workspace_data(db, user, item.id, "metadata")["author_links"]
+        metadata = open_item_workspace(db, user, item.id, WorkspaceSection.metadata)
+        assert isinstance(metadata, MetadataWorkspace)
+        author_links = metadata.authors
         assert len(author_links) == 2
         assert author_links[0].author.last_name == "Hasanein"
         assert author_links[1].author.last_name == "Sobaih"

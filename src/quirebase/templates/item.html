@@ -66,7 +66,7 @@
             <div><dt>{{ _('DOI') }}</dt><dd>{% if item.doi %}<a href="https://doi.org/{{ item.doi }}" rel="noreferrer" target="_blank">{{ item.doi }}</a>{% else %}—{% endif %}</dd></div>
           </dl>
           <div class="provenance-meta">
-            <div><strong>{{ _('Added') }}:</strong> {{ item.created_at.strftime('%Y-%m-%d %H:%M') }}{% if creator %} · {{ creator.username }}{% endif %}</div>
+            <div><strong>{{ _('Added') }}:</strong> {{ item.created_at.strftime('%Y-%m-%d %H:%M') }}{% if item_owner %} · {{ item_owner.username }}{% endif %}</div>
             {% if item.updated_by and updater %}
             <div><strong>{{ _('Modified') }}:</strong> {{ item.updated_at.strftime('%Y-%m-%d %H:%M') }} · {{ updater.username }}</div>
             {% endif %}

@@ -47,6 +47,12 @@ persistence caches, Search synchronization, Audit Event recording and commit ord
 the Library implementation. These operations return an immutable Item identity and version,
 not a mutable ORM aggregate.
 
+Opening an Item crosses the Library interface through `open_item_workspace` with a typed
+`WorkspaceSection`. Summary, Metadata, Files, Organize, Annotations and Discussion each return a
+section-specific read model; only the Web adapter maps those views to template context. Access
+validation, section query selection and recent-reading persistence remain coordinated behind the
+same operation seam.
+
 An internal helper imported across Modules is an architectural pressure point. Repeated use is
 a signal to move the concept to its owner or deepen the owning interface; it is not a reason to
 create a generic shared-utilities package.

@@ -22,20 +22,26 @@ from quirebase.documents import (
     store_pdf_revision,
 )
 from quirebase.library import (
+    AnnotationsWorkspace,
     BibliographicMetadata,
     Contributor,
     Contributors,
     CreateItem,
     CustomField,
+    DiscussionWorkspace,
     ExternalIdentifier,
+    FilesWorkspace,
     Identifiers,
     ItemMetadata,
     JsonValue,
+    MetadataWorkspace,
+    OrganizeWorkspace,
     RegenerateBibtexKey,
     ReviseItemMetadata,
+    SummaryWorkspace,
+    WorkspaceSection,
     add_tag_to_item,
-    get_item_workspace_data,
-    mark_item_read,
+    open_item_workspace,
     parse_author_list_string,
     regenerate_bibtex_key,
     remove_tag_from_item,
@@ -167,10 +173,49 @@ def render_item_workspace(
     login_session: LoginSession,
     db: Session,
 ):
-    data = get_item_workspace_data(db, user, item_id, section)
-    mark_item_read(db, user, item_id)
-    initial_authors = _initial_structured_people(data["author_links"], include_corresponding=True)
-    initial_editors = _initial_structured_people(data["editor_links"])
+    selected = WorkspaceSection.parse(section)
+    view = open_item_workspace(db, user, item_id, selected)
+    context: dict[str, Any] = {
+        "item": view.item,
+        "can_edit": view.can_edit,
+        "revisions": view.revisions,
+    }
+    match view:
+        case SummaryWorkspace():
+            context.update(
+                revision_count=view.revision_count,
+                annotation_count=view.annotation_count,
+                message_count=view.message_count,
+                item_owner=view.item_owner,
+                updater=view.updater,
+                identifier_links=view.identifiers,
+            )
+        case MetadataWorkspace():
+            context.update(
+                author_links=view.authors,
+                editor_links=view.editors,
+                initial_authors=_initial_structured_people(
+                    list(view.authors), include_corresponding=True
+                ),
+                initial_editors=_initial_structured_people(list(view.editors)),
+            )
+        case FilesWorkspace():
+            context["attachments"] = view.attachments
+        case OrganizeWorkspace():
+            context.update(
+                tags=view.tags,
+                memberships=tuple(
+                    (membership.project, membership.role) for membership in view.memberships
+                ),
+                assigned=view.assigned_project_ids,
+                tag_matrix=view.tag_matrix,
+            )
+        case AnnotationsWorkspace():
+            context["annotations"] = tuple(
+                (entry.annotation, entry.revision, entry.author) for entry in view.annotations
+            )
+        case DiscussionWorkspace():
+            context["messages"] = view.messages
     return templates.TemplateResponse(
         request,
         "item.html",
@@ -178,12 +223,10 @@ def render_item_workspace(
             "user": user,
             "csrf": login_session.csrf_token,
             "active_page": "library",
-            "item_section": section,
+            "item_section": selected.value,
             "builtin_styles": available_builtin_styles(),
             "custom_styles": list_custom_citation_styles(db, user),
-            "initial_authors": initial_authors,
-            "initial_editors": initial_editors,
-            **data,
+            **context,
         },
     )
 

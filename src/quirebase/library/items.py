@@ -1,236 +1,32 @@
 from __future__ import annotations
 
 import zipfile
-from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Any
 
-from sqlalchemy import and_, func, or_, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from quirebase.access.items import (
     can_edit_item,
     require_accessible_items,
-    require_readable_item,
 )
 from quirebase.access.projects import project_member
 from quirebase.audit import record_event
 from quirebase.core.errors import (
     PermissionDenied,
-    ResourceNotFound,
     ValidationFailure,
 )
 from quirebase.core.storage import LocalObjectStore
-from quirebase.library.authors import (
-    get_item_authors,
-)
-from quirebase.library.tags import get_or_create_tag, get_tag_matrix_for_item
+from quirebase.library.tags import get_or_create_tag
 from quirebase.models import (
-    AnnotationScope,
     Attachment,
-    DiscussionMessage,
     FileRevision,
-    Item,
-    ItemAuthor,
-    ItemIdentifier,
-    ItemRead,
     ItemTag,
-    PdfAnnotation,
-    Project,
     ProjectItem,
-    ProjectMember,
-    Tag,
     User,
 )
 from quirebase.search import search_index
-
-
-def mark_item_read(db: Session, user: User, item_id: str) -> None:
-    read = db.get(ItemRead, (user.id, item_id))
-    if read is None:
-        db.add(ItemRead(user_id=user.id, item_id=item_id))
-    else:
-        read.last_read_at = datetime.now(UTC)
-    db.commit()
-
-
-def get_item_workspace_data(db: Session, user: User, item_id: str, section: str) -> dict[str, Any]:
-    sections = {"summary", "metadata", "files", "organize", "annotations", "discussion"}
-    if section not in sections:
-        raise ResourceNotFound(f"unknown item section: {section}")
-    require_readable_item(db, user, item_id)
-
-    item = db.get(Item, item_id)
-    if item is None:
-        raise ResourceNotFound("item not found")
-
-    can_edit = can_edit_item(db, user, item_id)
-
-    # Base workspace data with lazy defaults
-    revisions = list(
-        db.scalars(
-            select(FileRevision)
-            .where(FileRevision.item_id == item_id)
-            .order_by(FileRevision.created_at.desc())
-            .limit(1)
-        ).all()
-    )
-    revision_count = len(revisions)
-    annotation_count = 0
-    message_count = 0
-    memberships: Any = ()
-    assigned: set[str] = set()
-    tags: list[Tag] = []
-    messages: Any = ()
-    attachments: list[Attachment] = []
-    annotations: Any = ()
-    creator: User | None = None
-    updater: User | None = None
-    identifier_links: list[ItemIdentifier] = []
-    author_links: list[ItemAuthor] = []
-    editor_links: list[ItemAuthor] = []
-
-    if section in ("files", "annotations"):
-        revisions = list(
-            db.scalars(
-                select(FileRevision)
-                .where(FileRevision.item_id == item_id)
-                .order_by(FileRevision.created_at.desc())
-            ).all()
-        )
-        revision_count = len(revisions)
-
-    if section == "summary":
-        revision_ids = list(
-            db.scalars(select(FileRevision.id).where(FileRevision.item_id == item_id)).all()
-        )
-        revision_count = len(revision_ids)
-        member_projects = select(ProjectMember.project_id).where(ProjectMember.user_id == user.id)
-        if revision_ids:
-            annotation_count = (
-                db.scalar(
-                    select(func.count(PdfAnnotation.id)).where(
-                        PdfAnnotation.file_revision_id.in_(revision_ids),
-                        PdfAnnotation.deleted_at.is_(None),
-                        or_(
-                            and_(
-                                PdfAnnotation.scope == AnnotationScope.private,
-                                PdfAnnotation.author_id == user.id,
-                            ),
-                            and_(
-                                PdfAnnotation.scope == AnnotationScope.project,
-                                PdfAnnotation.project_id.in_(member_projects),
-                            ),
-                        ),
-                    )
-                )
-                or 0
-            )
-        message_count = (
-            db.scalar(
-                select(func.count(DiscussionMessage.id)).where(DiscussionMessage.item_id == item_id)
-            )
-            or 0
-        )
-        creator = db.get(User, item.created_by) if item.created_by else None
-        updater = db.get(User, item.updated_by) if item.updated_by else None
-        identifier_links = list(
-            db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item_id)).all()
-        )
-
-    elif section == "metadata":
-        author_links = get_item_authors(db, item_id, role="author")
-        editor_links = get_item_authors(db, item_id, role="editor")
-
-    elif section == "files":
-        attachments = list(
-            db.scalars(
-                select(Attachment)
-                .where(Attachment.item_id == item_id)
-                .order_by(Attachment.created_at)
-            ).all()
-        )
-
-    elif section == "organize":
-        tags = list(
-            db.scalars(
-                select(Tag)
-                .join(ItemTag, ItemTag.tag_id == Tag.id)
-                .where(ItemTag.item_id == item_id)
-                .order_by(Tag.name)
-            ).all()
-        )
-        memberships = db.execute(
-            select(Project, ProjectMember.role)
-            .join(ProjectMember, ProjectMember.project_id == Project.id)
-            .where(ProjectMember.user_id == user.id)
-            .order_by(Project.name)
-        ).all()
-        assigned = set(
-            db.scalars(select(ProjectItem.project_id).where(ProjectItem.item_id == item_id)).all()
-        )
-
-    elif section == "annotations":
-        if revisions:
-            member_projects = select(ProjectMember.project_id).where(
-                ProjectMember.user_id == user.id
-            )
-            annotations = db.execute(
-                select(PdfAnnotation, FileRevision, User)
-                .join(FileRevision, FileRevision.id == PdfAnnotation.file_revision_id)
-                .join(User, User.id == PdfAnnotation.author_id)
-                .where(
-                    PdfAnnotation.file_revision_id.in_([r.id for r in revisions]),
-                    PdfAnnotation.deleted_at.is_(None),
-                    or_(
-                        and_(
-                            PdfAnnotation.scope == AnnotationScope.private,
-                            PdfAnnotation.author_id == user.id,
-                        ),
-                        and_(
-                            PdfAnnotation.scope == AnnotationScope.project,
-                            PdfAnnotation.project_id.in_(member_projects),
-                        ),
-                    ),
-                )
-                .order_by(PdfAnnotation.updated_at.desc())
-            ).all()
-            annotation_count = len(annotations)
-
-    elif section == "discussion":
-        messages = list(
-            db.scalars(
-                select(DiscussionMessage)
-                .options(selectinload(DiscussionMessage.author))
-                .where(DiscussionMessage.item_id == item_id)
-                .order_by(DiscussionMessage.created_at)
-            ).all()
-        )
-        message_count = len(messages)
-
-    tag_matrix = get_tag_matrix_for_item(db, user, item_id) if section == "organize" else None
-
-    return {
-        "item": item,
-        "revisions": revisions,
-        "revision_count": revision_count,
-        "memberships": memberships,
-        "assigned": assigned,
-        "tags": tags,
-        "tag_matrix": tag_matrix,
-        "messages": messages,
-        "attachments": attachments,
-        "annotations": annotations,
-        "annotation_count": annotation_count,
-        "message_count": message_count,
-        "can_edit": can_edit,
-        "creator": creator,
-        "updater": updater,
-        "identifier_links": identifier_links,
-        "author_links": author_links,
-        "editor_links": editor_links,
-    }
 
 
 def bulk_download_pdfs(db: Session, user: User, item_ids: list[str]) -> BytesIO:
