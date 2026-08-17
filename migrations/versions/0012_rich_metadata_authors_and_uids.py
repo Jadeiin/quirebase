@@ -46,6 +46,8 @@ def upgrade() -> None:
     items_table = sa.table(
         "items",
         sa.column("id", sa.String),
+        sa.column("authors", sa.String),
+        sa.column("editors", sa.String),
         sa.column("doi", sa.String),
     )
     identifiers_table = sa.table(
@@ -64,17 +66,19 @@ def upgrade() -> None:
     existing_items = bind.execute(
         sa.select(items_table.c.id, items_table.c.doi).where(items_table.c.doi.is_not(None))
     ).fetchall()
-    for row in existing_items:
-        if row[1] and row[1].strip():
-            bind.execute(
-                identifiers_table.insert().values(
-                    id=str(uuid.uuid4()),
-                    item_id=row[0],
-                    provider="doi",
-                    value=row[1].strip(),
-                    created_at=now_utc,
-                )
-            )
+    doi_rows = [
+        {
+            "id": str(uuid.uuid4()),
+            "item_id": row[0],
+            "provider": "doi",
+            "value": row[1].strip(),
+            "created_at": now_utc,
+        }
+        for row in existing_items
+        if row[1] and row[1].strip()
+    ]
+    if doi_rows:
+        bind.execute(identifiers_table.insert(), doi_rows)
 
     # Backfill existing authors into authors and item_authors tables
     authors_table = sa.table(
@@ -95,93 +99,54 @@ def upgrade() -> None:
     )
     from quirebase.library.authors import parse_author_name
 
-    items_with_authors = bind.execute(
-        sa.select(
-            items_table.c.id, sa.column("authors", sa.String), sa.column("editors", sa.String)
-        ).select_from(
-            sa.table(
-                "items",
-                sa.column("id", sa.String),
-                sa.column("authors", sa.String),
-                sa.column("editors", sa.String),
+    # Preload existing authors keyed like find_or_create_author matches them:
+    # case-insensitive exact match on last/first name (None = no first name).
+    author_ids: dict[tuple[str, str | None], str] = {}
+    for row in bind.execute(
+        sa.select(authors_table.c.id, authors_table.c.last_name, authors_table.c.first_name)
+    ).fetchall():
+        author_ids[row[1].lower(), row[2].lower() if row[2] else None] = row[0]
+
+    def author_id_for(last_name: str, first_name: str | None) -> str:
+        key = (last_name.lower(), first_name.lower() if first_name else None)
+        author_id = author_ids.get(key)
+        if author_id is None:
+            author_id = str(uuid.uuid4())
+            author_ids[key] = author_id
+            bind.execute(
+                authors_table.insert().values(
+                    id=author_id,
+                    last_name=last_name,
+                    first_name=first_name,
+                    created_at=now_utc,
+                )
             )
-        )
+        return author_id
+
+    items_with_authors = bind.execute(
+        sa.select(items_table.c.id, items_table.c.authors, items_table.c.editors)
     ).fetchall()
 
+    link_rows: list[dict] = []
     for item_row in items_with_authors:
         item_id = item_row[0]
-        raw_authors = item_row[1]
-        raw_editors = item_row[2] if len(item_row) > 2 else None
-
-        if raw_authors and raw_authors.strip():
-            for pos, a_str in enumerate(raw_authors.split(";"), start=1):
-                if a_str.strip():
-                    last, first = parse_author_name(a_str.strip())
-                    existing_author = bind.execute(
-                        sa.select(authors_table.c.id).where(
-                            authors_table.c.last_name == last,
-                            authors_table.c.first_name == first
-                            if first
-                            else authors_table.c.first_name.is_(None),
-                        )
-                    ).scalar()
-                    if not existing_author:
-                        author_id = str(uuid.uuid4())
-                        bind.execute(
-                            authors_table.insert().values(
-                                id=author_id,
-                                last_name=last,
-                                first_name=first,
-                                created_at=now_utc,
-                            )
-                        )
-                    else:
-                        author_id = existing_author
-                    bind.execute(
-                        item_authors_table.insert().values(
-                            id=str(uuid.uuid4()),
-                            item_id=item_id,
-                            author_id=author_id,
-                            position=pos,
-                            role="author",
-                            is_corresponding=False,
-                        )
-                    )
-
-        if raw_editors and raw_editors.strip():
-            for pos, e_str in enumerate(raw_editors.split(";"), start=1):
-                if e_str.strip():
-                    last, first = parse_author_name(e_str.strip())
-                    existing_author = bind.execute(
-                        sa.select(authors_table.c.id).where(
-                            authors_table.c.last_name == last,
-                            authors_table.c.first_name == first
-                            if first
-                            else authors_table.c.first_name.is_(None),
-                        )
-                    ).scalar()
-                    if not existing_author:
-                        author_id = str(uuid.uuid4())
-                        bind.execute(
-                            authors_table.insert().values(
-                                id=author_id,
-                                last_name=last,
-                                first_name=first,
-                                created_at=now_utc,
-                            )
-                        )
-                    else:
-                        author_id = existing_author
-                    bind.execute(
-                        item_authors_table.insert().values(
-                            id=str(uuid.uuid4()),
-                            item_id=item_id,
-                            author_id=author_id,
-                            position=pos,
-                            role="editor",
-                            is_corresponding=False,
-                        )
-                    )
+        for role, raw in (("author", item_row[1]), ("editor", item_row[2])):
+            if not (raw and raw.strip()):
+                continue
+            for pos, name in enumerate(raw.split(";"), start=1):
+                if not name.strip():
+                    continue
+                last, first = parse_author_name(name.strip())
+                link_rows.append({
+                    "id": str(uuid.uuid4()),
+                    "item_id": item_id,
+                    "author_id": author_id_for(last, first),
+                    "position": pos,
+                    "role": role,
+                    "is_corresponding": False,
+                })
+    if link_rows:
+        bind.execute(item_authors_table.insert(), link_rows)
 
 
 def downgrade() -> None:

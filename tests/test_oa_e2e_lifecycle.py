@@ -361,10 +361,11 @@ def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(db, tmp_path, monke
             workspace_data["item"].title
             == "Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives"
         )
-        assert len(workspace_data["author_links"]) == 2
-        assert workspace_data["author_links"][0].author.last_name == "Hasanein"
-        assert workspace_data["author_links"][1].author.last_name == "Sobaih"
-        assert workspace_data["author_links"][1].author.first_name == "Abu Elnasr E."
+        author_links = get_item_workspace_data(db, user, item.id, "metadata")["author_links"]
+        assert len(author_links) == 2
+        assert author_links[0].author.last_name == "Hasanein"
+        assert author_links[1].author.last_name == "Sobaih"
+        assert author_links[1].author.first_name == "Abu Elnasr E."
     finally:
         app.dependency_overrides.clear()
         get_settings.cache_clear()

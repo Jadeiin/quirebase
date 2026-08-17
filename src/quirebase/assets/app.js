@@ -66,6 +66,8 @@ Alpine.data("tagManager", () => ({
   page: 1,
   pageSize: 20,
   tags: [],
+  filtered: [],
+  visibleIds: new Set(),
   init() {
     const script = document.getElementById("tools-tags-data");
     if (script && script.textContent) {
@@ -75,28 +77,26 @@ Alpine.data("tagManager", () => ({
         this.tags = [];
       }
     }
+    this.refresh();
     this.$watch("tagFilter", () => {
       this.page = 1;
+      this.refresh();
     });
+    this.$watch("page", () => this.refresh());
   },
-  get filteredTags() {
+  refresh() {
     const q = this.tagFilter.trim().toLowerCase();
-    if (!q) return this.tags;
-    return this.tags.filter((t) => t.name && t.name.toLowerCase().includes(q));
+    this.filtered = q
+      ? this.tags.filter((t) => t.name && t.name.toLowerCase().includes(q))
+      : this.tags;
+    const start = (this.page - 1) * this.pageSize;
+    this.visibleIds = new Set(this.filtered.slice(start, start + this.pageSize).map((t) => t.id));
   },
   get totalPages() {
-    if (!this.tags || this.tags.length === 0) return 1;
-    return Math.max(1, Math.ceil(this.filteredTags.length / this.pageSize));
-  },
-  get pagedTagIds() {
-    if (!this.tags || this.tags.length === 0) return null;
-    const start = (this.page - 1) * this.pageSize;
-    const paged = this.filteredTags.slice(start, start + this.pageSize);
-    return new Set(paged.map((t) => t.id));
+    return Math.max(1, Math.ceil(this.filtered.length / this.pageSize));
   },
   isTagVisible(tagId) {
-    if (this.pagedTagIds === null) return true;
-    return this.pagedTagIds.has(tagId);
+    return this.visibleIds.has(tagId);
   },
   prevPage() {
     if (this.page > 1) this.page--;
@@ -165,109 +165,85 @@ Alpine.data("formattedCitation", () => ({
 Alpine.data("tagMatrix", () => ({
   filter: "",
   matches(name) {
-    if (!this.filter.trim()) return true;
-    return name.toLowerCase().includes(this.filter.trim().toLowerCase());
+    const q = this.query;
+    if (!q) return true;
+    return name.toLowerCase().includes(q);
   },
   groupMatches(names) {
-    if (!this.filter.trim()) return true;
-    const q = this.filter.trim().toLowerCase();
+    const q = this.query;
+    if (!q) return true;
     return names.some((n) => n.toLowerCase().includes(q));
   },
-}));
-
-Alpine.data("authorEditor", () => ({
-  authors: [],
-  init() {
-    try {
-      const initial = JSON.parse(this.$root.dataset.initialAuthors || "[]");
-      this.authors = initial.length
-        ? initial
-        : [{ last_name: "", first_name: "", is_corresponding: false, suggestions: [] }];
-    } catch {
-      this.authors = [{ last_name: "", first_name: "", is_corresponding: false, suggestions: [] }];
-    }
-  },
-  add() {
-    this.authors.push({ last_name: "", first_name: "", is_corresponding: false, suggestions: [] });
-  },
-  remove(index) {
-    if (this.authors.length > 1) {
-      this.authors.splice(index, 1);
-    } else {
-      this.authors[0] = { last_name: "", first_name: "", is_corresponding: false, suggestions: [] };
-    }
-  },
-  moveUp(index) {
-    if (index > 0) {
-      const item = this.authors.splice(index, 1)[0];
-      this.authors.splice(index - 1, 0, item);
-    }
-  },
-  moveDown(index) {
-    if (index < this.authors.length - 1) {
-      const item = this.authors.splice(index, 1)[0];
-      this.authors.splice(index + 1, 0, item);
-    }
-  },
-  suggest(index) {
-    const q = this.authors[index].last_name;
-    if (!q || q.length < 2) {
-      this.authors[index].suggestions = [];
-      return;
-    }
-    fetch(`/api/authors/suggest?q=${encodeURIComponent(q)}`)
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data) => {
-        this.authors[index].suggestions = data || [];
-      })
-      .catch(() => {
-        this.authors[index].suggestions = [];
-      });
-  },
-  selectSuggestion(index, s) {
-    this.authors[index].last_name = s.last_name;
-    this.authors[index].first_name = s.first_name || "";
-    this.authors[index].suggestions = [];
+  get query() {
+    return this.filter.trim().toLowerCase();
   },
 }));
 
-Alpine.data("editorEditor", () => ({
-  editors: [],
-  init() {
-    try {
-      const initial = JSON.parse(this.$root.dataset.initialEditors || "[]");
-      this.editors = initial.length ? initial : [];
-    } catch {
-      this.editors = [];
-    }
-  },
-  add() {
-    this.editors.push({ last_name: "", first_name: "", suggestions: [] });
-  },
-  remove(index) {
-    this.editors.splice(index, 1);
-  },
-  suggest(index) {
-    const q = this.editors[index].last_name;
-    if (!q || q.length < 2) {
-      this.editors[index].suggestions = [];
-      return;
-    }
-    fetch(`/api/authors/suggest?q=${encodeURIComponent(q)}`)
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data) => {
-        this.editors[index].suggestions = data || [];
-      })
-      .catch(() => {
-        this.editors[index].suggestions = [];
-      });
-  },
-  selectSuggestion(index, s) {
-    this.editors[index].last_name = s.last_name;
-    this.editors[index].first_name = s.first_name || "";
-    this.editors[index].suggestions = [];
-  },
-}));
+function makePersonEditor(field, { keepOneRow = false, corresponding = false } = {}) {
+  const initialKey = `initial${field[0].toUpperCase()}${field.slice(1)}`;
+  const emptyRow = () => {
+    const row = { last_name: "", first_name: "", suggestions: [] };
+    if (corresponding) row.is_corresponding = false;
+    return row;
+  };
+  return () => ({
+    [field]: [],
+    init() {
+      const placeholder = () => (keepOneRow ? [emptyRow()] : []);
+      try {
+        const initial = JSON.parse(this.$root.dataset[initialKey] || "[]");
+        this[field] = initial.length ? initial : placeholder();
+      } catch {
+        this[field] = placeholder();
+      }
+    },
+    add() {
+      this[field].push(emptyRow());
+    },
+    remove(index) {
+      if (keepOneRow && this[field].length === 1) {
+        this[field][0] = emptyRow();
+      } else {
+        this[field].splice(index, 1);
+      }
+    },
+    moveUp(index) {
+      if (index > 0) {
+        const item = this[field].splice(index, 1)[0];
+        this[field].splice(index - 1, 0, item);
+      }
+    },
+    moveDown(index) {
+      if (index < this[field].length - 1) {
+        const item = this[field].splice(index, 1)[0];
+        this[field].splice(index + 1, 0, item);
+      }
+    },
+    suggest(index) {
+      const q = this[field][index].last_name;
+      if (!q || q.length < 2) {
+        this[field][index].suggestions = [];
+        return;
+      }
+      fetch(`/api/authors/suggest?q=${encodeURIComponent(q)}`)
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => {
+          this[field][index].suggestions = data || [];
+        })
+        .catch(() => {
+          this[field][index].suggestions = [];
+        });
+    },
+    selectSuggestion(index, s) {
+      this[field][index].last_name = s.last_name;
+      this[field][index].first_name = s.first_name || "";
+      this[field][index].suggestions = [];
+    },
+  });
+}
+
+Alpine.data("authorEditor", makePersonEditor("authors", { keepOneRow: true, corresponding: true }));
+Alpine.data("editorEditor", makePersonEditor("editors"));
 
 window.Alpine = Alpine;
 Alpine.start();

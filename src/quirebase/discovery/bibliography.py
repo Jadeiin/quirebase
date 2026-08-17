@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any
 
 import bibtexparser
 import rispy
 from bibtexparser.bibdatabase import BibDatabase
+
+from quirebase.discovery.lookup import normalize_reference_type
 
 if TYPE_CHECKING:
     from quirebase.models import Item
@@ -25,61 +28,47 @@ ENDNOTE_TYPE_TO_REFERENCE: dict[str, str] = {
     "Generic": "article",
 }
 
+# Maps are keyed on canonical types only; callers normalize first (see
+# normalize_reference_type), so the alias tables live in one place.
 REFERENCE_TYPE_TO_ENDNOTE: dict[str, str] = {
     "article": "Journal Article",
-    "journal-article": "Journal Article",
-    "journal_article": "Journal Article",
-    "jour": "Journal Article",
     "book": "Book",
     "chapter": "Book Section",
-    "book-chapter": "Book Section",
-    "book_section": "Book Section",
-    "chap": "Book Section",
     "conference": "Conference Proceedings",
-    "conference-paper": "Conference Proceedings",
-    "conference_paper": "Conference Proceedings",
-    "proceedings": "Conference Proceedings",
-    "conf": "Conference Proceedings",
     "thesis": "Thesis",
-    "dissertation": "Thesis",
-    "thes": "Thesis",
     "report": "Report",
-    "rprt": "Report",
     "webpage": "Web Page",
 }
 
 REFERENCE_TYPE_TO_BIBTEX: dict[str, str] = {
     "article": "article",
-    "journal-article": "article",
-    "journal_article": "article",
-    "jour": "article",
     "book": "book",
     "chapter": "incollection",
-    "book-chapter": "incollection",
-    "book_chapter": "incollection",
-    "book_section": "incollection",
-    "book-section": "incollection",
-    "chap": "incollection",
     "conference": "inproceedings",
-    "conference-paper": "inproceedings",
-    "conference_paper": "inproceedings",
-    "proceedings": "proceedings",
-    "conf": "inproceedings",
-    "thesis": "phdthesis",
-    "dissertation": "phdthesis",
-    "thes": "phdthesis",
-    "mastersthesis": "mastersthesis",
-    "report": "techreport",
-    "rprt": "techreport",
-    "techreport": "techreport",
     "preprint": "misc",
-    "webpage": "misc",
-    "dataset": "misc",
-    "unpublished": "unpublished",
+    "thesis": "phdthesis",
+    "report": "techreport",
     "generic": "misc",
+    "unpublished": "unpublished",
+    "webpage": "misc",
 }
 
 _ENDNOTE_TAGS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ@"
+
+_YEAR_PATTERN = re.compile(r"\b(19\d\d|20\d\d)\b")
+
+
+def extract_year(publication_date: str | None) -> str | None:
+    if not publication_date:
+        return None
+    match = _YEAR_PATTERN.search(publication_date)
+    return match.group(1) if match else None
+
+
+def first_url(urls: str | None) -> str | None:
+    if not urls:
+        return None
+    return urls.splitlines()[0].strip()
 
 
 def _text(value: Any, separator: str = "; ") -> str | None:
@@ -201,7 +190,7 @@ def _export_endnote(items: list[Item]) -> str:
     lines: list[str] = []
     for item in items:
         reference_type = REFERENCE_TYPE_TO_ENDNOTE.get(
-            (item.reference_type or "article").lower(), "Journal Article"
+            normalize_reference_type(item.reference_type) or "article", "Journal Article"
         )
         lines.append(f"%0 {reference_type}")
         lines.extend(
@@ -239,7 +228,9 @@ def export_bibliography(items: list[Item], file_format: str) -> str:
         for number, item in enumerate(items, start=1):
             entry_type = (
                 item.bibtex_type
-                or REFERENCE_TYPE_TO_BIBTEX.get((item.reference_type or "").lower(), "article")
+                or REFERENCE_TYPE_TO_BIBTEX.get(
+                    normalize_reference_type(item.reference_type) or "", "article"
+                )
             ).lower()
             entry = {
                 "ID": item.bibtex_id or f"quirebase-{number}",
@@ -250,18 +241,14 @@ def export_bibliography(items: list[Item], file_format: str) -> str:
                 "abstract": item.abstract,
                 "author": item.authors.replace("; ", " and ") if item.authors else None,
                 "keywords": item.keywords,
-                "year": item.publication_date[:4]
-                if item.publication_date
-                and len(item.publication_date) >= 4
-                and item.publication_date[:4].isdigit()
-                else item.publication_date,
+                "year": extract_year(item.publication_date) or item.publication_date,
                 "journal": item.publication_title,
                 "volume": item.volume,
                 "number": item.issue,
                 "pages": item.pages,
                 "publisher": item.publisher,
                 "doi": item.doi,
-                "url": (item.urls or "").splitlines()[0] if item.urls else None,
+                "url": first_url(item.urls),
             }
             entry.update({key: value for key, value in optional.items() if value})
             entries.append(entry)

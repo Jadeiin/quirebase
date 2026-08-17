@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import zipfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
@@ -28,10 +28,11 @@ from quirebase.core.storage import LocalObjectStore
 from quirebase.discovery.lookup import normalize_reference_type
 from quirebase.library.audit import record_audit_event
 from quirebase.library.authors import (
+    get_item_authors,
     parse_author_list_string,
     set_item_authors,
 )
-from quirebase.library.tags import get_tag_matrix_for_item, normalize_tag_name
+from quirebase.library.tags import get_or_create_tag, get_tag_matrix_for_item
 from quirebase.models import (
     Attachment,
     DiscussionMessage,
@@ -78,6 +79,35 @@ class ItemMetadataUpdate:
     structured_authors: list[dict[str, Any]] | None = None
     structured_editors: list[dict[str, Any]] | None = None
 
+    @classmethod
+    def from_item(cls, item: Item, **overrides: Any) -> ItemMetadataUpdate:
+        """Snapshot an item's scalar fields so a narrow update preserves the rest."""
+        data = cls(
+            title=item.title or "",
+            version=item.version,
+            abstract=item.abstract or "",
+            authors=item.authors or "",
+            editors=item.editors or "",
+            keywords=item.keywords or "",
+            publication_date=item.publication_date or "",
+            publication_title=item.publication_title or "",
+            doi=item.doi or "",
+            reference_type=item.reference_type or "",
+            volume=item.volume or "",
+            issue=item.issue or "",
+            pages=item.pages or "",
+            affiliation=item.affiliation or "",
+            publisher=item.publisher or "",
+            place_published=item.place_published or "",
+            journal_abbreviation=item.journal_abbreviation or "",
+            bibtex_id=item.bibtex_id or "",
+            bibtex_type=item.bibtex_type or "",
+            urls=item.urls or "",
+            identifiers=item.identifiers or "",
+            custom_fields=item.custom_fields or "",
+        )
+        return replace(data, **overrides)
+
 
 def create_item(
     db: Session,
@@ -112,41 +142,8 @@ def update_item(
     user: User,
     *,
     item_id: str,
-    version: int | None = None,
-    title: str | None = None,
-    data: ItemMetadataUpdate | None = None,
-    **kwargs: Any,
+    data: ItemMetadataUpdate,
 ) -> Item:
-    if data is None:
-        if version is None or title is None:
-            raise ValidationFailure("version and title are required")
-        data = ItemMetadataUpdate(
-            title=title,
-            version=version,
-            abstract=str(kwargs.get("abstract", "") or ""),
-            authors=str(kwargs.get("authors", "") or ""),
-            editors=str(kwargs.get("editors", "") or ""),
-            keywords=str(kwargs.get("keywords", "") or ""),
-            publication_date=str(kwargs.get("publication_date", "") or ""),
-            publication_title=str(kwargs.get("publication_title", "") or ""),
-            doi=str(kwargs.get("doi", "") or ""),
-            reference_type=str(kwargs.get("reference_type", "") or ""),
-            volume=str(kwargs.get("volume", "") or ""),
-            issue=str(kwargs.get("issue", "") or ""),
-            pages=str(kwargs.get("pages", "") or ""),
-            affiliation=str(kwargs.get("affiliation", "") or ""),
-            publisher=str(kwargs.get("publisher", "") or ""),
-            place_published=str(kwargs.get("place_published", "") or ""),
-            journal_abbreviation=str(kwargs.get("journal_abbreviation", "") or ""),
-            bibtex_id=str(kwargs.get("bibtex_id", "") or ""),
-            bibtex_type=str(kwargs.get("bibtex_type", "") or ""),
-            urls=str(kwargs.get("urls", "") or ""),
-            identifiers=str(kwargs.get("identifiers", "") or ""),
-            custom_fields=str(kwargs.get("custom_fields", "") or ""),
-            structured_authors=kwargs.get("structured_authors"),
-            structured_editors=kwargs.get("structured_editors"),
-        )
-
     require_editable_item(db, user, item_id)
     if not data.title.strip():
         raise ValidationFailure("title is required")
@@ -278,6 +275,11 @@ def get_item_workspace_data(db: Session, user: User, item_id: str, section: str)
     messages: Any = ()
     attachments: list[Attachment] = []
     annotations: Any = ()
+    creator: User | None = None
+    updater: User | None = None
+    identifier_links: list[ItemIdentifier] = []
+    author_links: list[ItemAuthor] = []
+    editor_links: list[ItemAuthor] = []
 
     if section in ("files", "annotations"):
         revisions = list(
@@ -321,6 +323,15 @@ def get_item_workspace_data(db: Session, user: User, item_id: str, section: str)
             )
             or 0
         )
+        creator = db.get(User, item.created_by) if item.created_by else None
+        updater = db.get(User, item.updated_by) if item.updated_by else None
+        identifier_links = list(
+            db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item_id)).all()
+        )
+
+    elif section == "metadata":
+        author_links = get_item_authors(db, item_id, role="author")
+        editor_links = get_item_authors(db, item_id, role="editor")
 
     elif section == "files":
         attachments = list(
@@ -387,28 +398,6 @@ def get_item_workspace_data(db: Session, user: User, item_id: str, section: str)
             ).all()
         )
         message_count = len(messages)
-
-    creator = db.get(User, item.created_by) if item.created_by else None
-    updater = db.get(User, item.updated_by) if item.updated_by else None
-    identifier_links = list(
-        db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item_id)).all()
-    )
-    author_links = list(
-        db.scalars(
-            select(ItemAuthor)
-            .options(selectinload(ItemAuthor.author))
-            .where(ItemAuthor.item_id == item_id, ItemAuthor.role == "author")
-            .order_by(ItemAuthor.position)
-        ).all()
-    )
-    editor_links = list(
-        db.scalars(
-            select(ItemAuthor)
-            .options(selectinload(ItemAuthor.author))
-            .where(ItemAuthor.item_id == item_id, ItemAuthor.role == "editor")
-            .order_by(ItemAuthor.position)
-        ).all()
-    )
 
     tag_matrix = get_tag_matrix_for_item(db, user, item_id) if section == "organize" else None
 
@@ -493,12 +482,7 @@ def bulk_action(
                 search_index(db).index_item(db, item.id)
         audit_action = "library.bulk.add_project"
     elif action in ("add_tag", "tag"):
-        normalized = normalize_tag_name(tag_name)
-        tag_record = db.scalar(select(Tag).where(Tag.name == normalized))
-        if tag_record is None:
-            tag_record = Tag(name=normalized, created_by=user.id)
-            db.add(tag_record)
-            db.flush()
+        tag_record = get_or_create_tag(db, user, tag_name)
         for item in items:
             if db.get(ItemTag, (item.id, tag_record.id)) is None:
                 db.add(ItemTag(item_id=item.id, tag_id=tag_record.id))

@@ -3,10 +3,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sqlalchemy import delete, or_, select
+from sqlalchemy.orm import selectinload
 
 from quirebase.access.items import require_editable_item
 from quirebase.core.errors import ValidationFailure
-from quirebase.models import Author, Item, ItemAuthor, User
+from quirebase.models import Author, ItemAuthor, User
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -64,10 +65,7 @@ def set_item_authors(
     authors_data: list[dict],
     role: str = "author",
 ) -> list[ItemAuthor]:
-    require_editable_item(db, user, item_id)
-    item = db.get(Item, item_id)
-    if item is None:
-        raise ValidationFailure("item not found")
+    item = require_editable_item(db, user, item_id)
 
     db.execute(delete(ItemAuthor).where(ItemAuthor.item_id == item_id, ItemAuthor.role == role))
     db.flush()
@@ -112,6 +110,7 @@ def get_item_authors(db: Session, item_id: str, role: str = "author") -> list[It
     return list(
         db.scalars(
             select(ItemAuthor)
+            .options(selectinload(ItemAuthor.author))
             .where(ItemAuthor.item_id == item_id, ItemAuthor.role == role)
             .order_by(ItemAuthor.position)
         ).all()

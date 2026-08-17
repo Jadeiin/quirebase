@@ -43,7 +43,16 @@ def test_tools_detect_duplicates_and_manage_owned_tags(db, tmp_path, monkeypatch
         assert tools.status_code == 200
         assert "1 组可能重复项" in tools.text
         assert "Old tag" in tools.text
-        assert 'href="/library?tag=Old%20tag"' in tools.text
+        assert f'href="/library?tag={tag.id}"' in tools.text
+
+        # Verify clicking tag filter in library works by UUID and by name
+        filtered_by_id = client.get(f"/library?tag={tag.id}")
+        assert filtered_by_id.status_code == 200
+        assert item.title in filtered_by_id.text
+
+        filtered_by_name = client.get("/library?tag=Old%20tag")
+        assert filtered_by_name.status_code == 200
+        assert item.title in filtered_by_name.text
 
         orphan_tag = Tag(name="Orphan tag", created_by=item.created_by)
         db.add(orphan_tag)

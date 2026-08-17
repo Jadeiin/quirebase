@@ -62,6 +62,13 @@ def inspect_pdf(path: Path) -> tuple[int, str, list[list[float]]]:
         return page_count, "\n\f\n".join(text), geometry
 
 
+def first_doi_from_text(text: str) -> str | None:
+    """Return the first plausible DOI found in free text, if any."""
+    normalized = re.sub(r"\s+", " ", text or "")
+    match = PDF_DOI_PATTERN.search(normalized)
+    return match.group(0).rstrip(".,;)]}") if match else None
+
+
 def extract_doi(path: Path, maximum_pages: int = 8) -> str | None:
     """Extract the first plausible DOI from PDF metadata or early-page text."""
     with pymupdf.open(path) as document:
@@ -74,10 +81,9 @@ def extract_doi(path: Path, maximum_pages: int = 8) -> str | None:
             for index in range(min(document.page_count, maximum_pages))
         )
     for candidate in candidates:
-        normalized = re.sub(r"\s+", " ", candidate or "")
-        match = PDF_DOI_PATTERN.search(normalized)
-        if match:
-            return match.group(0).rstrip(".,;)]}")
+        doi = first_doi_from_text(candidate)
+        if doi:
+            return doi
     return None
 
 

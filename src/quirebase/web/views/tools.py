@@ -44,7 +44,7 @@ def tools_page(
     if mode not in ("", "doi", "pdf", "title", "similar"):
         raise HTTPException(404)
     if tab not in ("", "duplicates", "tags", "citation-styles"):
-        tab = "duplicates"
+        tab = ""
     active_tool = tab or "duplicates"
     groups = find_duplicates(db, user, mode)
     tags = list_accessible_tags_with_counts(db, user)

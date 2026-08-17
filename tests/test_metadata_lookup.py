@@ -206,8 +206,8 @@ def test_provider_adapters_map_records(value, provider, title):
         transport=httpx.MockTransport(response),
     )
     assert parsed.provider == provider
-    assert record["title"] == title
-    assert json.loads(record["identifiers"])
+    assert record.title == title
+    assert json.loads(record.identifiers or "")
 
 
 def test_metadata_response_size_is_limited():
@@ -241,7 +241,7 @@ def test_pubmed_lookup_passes_configured_identity_and_api_key():
         transport=httpx.MockTransport(handler),
     )
 
-    assert record["title"] == "Configured PubMed"
+    assert record.title == "Configured PubMed"
     assert captured["tool"] == "quirebase"
     assert captured["email"] == "operator@example.org"
     assert captured["api_key"] == "secret-key"
@@ -286,6 +286,8 @@ def test_online_preview_uses_existing_confirmed_import_flow(db, tmp_path, monkey
 
 
 def test_metadata_record_dto_attributes_and_mapping():
+    from dataclasses import asdict
+
     from quirebase.discovery.lookup import MetadataRecord
 
     record = MetadataRecord(
@@ -302,12 +304,9 @@ def test_metadata_record_dto_attributes_and_mapping():
     )
 
     assert record.title == "Attention Is All You Need"
-    assert record["title"] == "Attention Is All You Need"
-    assert record.get("volume") == "30"
-    assert "doi" in record
-    assert "nonexistent" not in record
+    assert record.volume == "30"
 
-    as_dict = record.to_dict()
+    as_dict = asdict(record)
     assert as_dict["volume"] == "30"
     assert as_dict["authors"] == "Vaswani, Ashish; Shazeer, Noam"
 

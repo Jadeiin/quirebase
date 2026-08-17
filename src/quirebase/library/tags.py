@@ -30,15 +30,20 @@ def normalize_tag_name(name: str) -> str:
     return normalized
 
 
-def add_tag_to_item(db: Session, user: User, item_id: str, name: str) -> ItemTag:
-    if not can_edit_item(db, user, item_id):
-        raise ResourceUnavailable("item not found or cannot be edited")
+def get_or_create_tag(db: Session, user: User, name: str) -> Tag:
     normalized = normalize_tag_name(name)
     tag = db.scalar(select(Tag).where(Tag.name == normalized))
     if tag is None:
         tag = Tag(name=normalized, created_by=user.id)
         db.add(tag)
         db.flush()
+    return tag
+
+
+def add_tag_to_item(db: Session, user: User, item_id: str, name: str) -> ItemTag:
+    if not can_edit_item(db, user, item_id):
+        raise ResourceUnavailable("item not found or cannot be edited")
+    tag = get_or_create_tag(db, user, name)
     assignment = db.get(ItemTag, (item_id, tag.id))
     if assignment is None:
         assignment = ItemTag(item_id=item_id, tag_id=tag.id)
@@ -151,7 +156,6 @@ def get_tag_matrix_for_item(db: Session, user: User, item_id: str) -> dict[str, 
         "groups": groups,
         "assigned_ids": assigned_ids,
         "recommended_ids": recommended_ids,
-        "all_tags": all_tags,
     }
 
 
@@ -163,12 +167,7 @@ def batch_add_tags_to_item(db: Session, user: User, item_id: str, names: list[st
         cleaned = " ".join(raw_name.split())
         if not cleaned:
             continue
-        normalized = normalize_tag_name(cleaned)
-        tag = db.scalar(select(Tag).where(Tag.name == normalized))
-        if tag is None:
-            tag = Tag(name=normalized, created_by=user.id)
-            db.add(tag)
-            db.flush()
+        tag = get_or_create_tag(db, user, cleaned)
         assignment = db.get(ItemTag, (item_id, tag.id))
         if assignment is None:
             assignment = ItemTag(item_id=item_id, tag_id=tag.id)
@@ -181,13 +180,27 @@ def batch_add_tags_to_item(db: Session, user: User, item_id: str, names: list[st
     return added
 
 
-def set_item_tags(db: Session, user: User, item_id: str, tag_ids: list[str]) -> None:
+def set_item_tags(
+    db: Session,
+    user: User,
+    item_id: str,
+    tag_ids: list[str],
+    new_names: list[str] | None = None,
+) -> None:
     if not can_edit_item(db, user, item_id):
         raise ResourceUnavailable("item not found or cannot be edited")
+    tag_ids = list(tag_ids)
+    for raw_name in new_names or []:
+        cleaned = " ".join(raw_name.split())
+        if cleaned:
+            tag = get_or_create_tag(db, user, cleaned)
+            if tag.id not in tag_ids:
+                tag_ids.append(tag.id)
     db.execute(delete(ItemTag).where(ItemTag.item_id == item_id))
     db.flush()
+    valid_ids = set(db.scalars(select(Tag.id).where(Tag.id.in_(tag_ids))).all())
     for tag_id in tag_ids:
-        if db.get(Tag, tag_id) is not None:
+        if tag_id in valid_ids:
             db.add(ItemTag(item_id=item_id, tag_id=tag_id))
     db.flush()
     search_index(db).index_item(db, item_id)
@@ -211,9 +224,15 @@ def merge_tags(db: Session, user: User, source_tag_id: str, target_tag_id: str) 
     source_items = list(
         db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == source_tag.id)).all()
     )
+    already_linked = set(
+        db.scalars(
+            select(ItemTag.item_id).where(
+                ItemTag.tag_id == target_tag.id, ItemTag.item_id.in_(source_items)
+            )
+        ).all()
+    )
     for item_id in source_items:
-        existing = db.get(ItemTag, (item_id, target_tag.id))
-        if existing is None:
+        if item_id not in already_linked:
             db.add(ItemTag(item_id=item_id, tag_id=target_tag.id))
     db.execute(delete(ItemTag).where(ItemTag.tag_id == source_tag.id))
     db.delete(source_tag)

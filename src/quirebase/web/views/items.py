@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
+from quirebase.access.items import require_editable_item
 from quirebase.core.config import get_settings
 from quirebase.core.database import get_db
 from quirebase.discovery import (
@@ -22,7 +23,6 @@ from quirebase.documents import (
 from quirebase.library import (
     ItemMetadataUpdate,
     add_tag_to_item,
-    batch_add_tags_to_item,
     generate_bibtex_key,
     get_item_workspace_data,
     mark_item_read,
@@ -238,16 +238,13 @@ def update_bibtex_key_route(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    data = get_item_workspace_data(db, user, item_id, "summary")
-    item = data["item"]
+    item = require_editable_item(db, user, item_id)
     key = generate_bibtex_key(item)
     update_item_op(
         db,
         user,
         item_id=item_id,
-        version=item.version,
-        title=item.title,
-        bibtex_id=key,
+        data=ItemMetadataUpdate.from_item(item, bibtex_id=key),
     )
     return RedirectResponse(f"/items/{item_id}", status_code=303)
 
@@ -260,15 +257,8 @@ def update_tag_matrix_route(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    all_selected = list(tag_ids)
-    if new_tags.strip():
-        lines = [line.strip() for line in new_tags.splitlines() if line.strip()]
-        if lines:
-            created = batch_add_tags_to_item(db, user, item_id, lines)
-            for t in created:
-                if t.id not in all_selected:
-                    all_selected.append(t.id)
-    set_item_tags(db, user, item_id, all_selected)
+    new_names = [line.strip() for line in new_tags.splitlines() if line.strip()]
+    set_item_tags(db, user, item_id, tag_ids, new_names=new_names)
     return RedirectResponse(f"/items/{item_id}/organize", status_code=303)
 
 

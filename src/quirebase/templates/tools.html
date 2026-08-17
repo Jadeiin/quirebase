@@ -80,7 +80,7 @@
         <form method="post" action="/tools/tags/{{ tag.id }}?csrf_token={{ csrf }}">
           <input name="name" value="{{ tag.name }}" {% if tag.created_by != user.id and user.role != 'administrator' %}disabled{% endif %}>
           {% if count > 0 %}
-          <a href="/library?tag={{ tag.name|urlencode }}" class="tag-paper-count tag-paper-link" title="{{ tag.name }}">{{ _('{count} paper(s)', count=count) }}</a>
+          <a href="/library?tag={{ tag.id }}" class="tag-paper-count tag-paper-link" title="{{ tag.name }}">{{ _('{count} paper(s)', count=count) }}</a>
           {% else %}
           <span class="tag-paper-count is-zero">{{ _('{count} paper(s)', count=count) }}</span>
           {% endif %}

@@ -51,16 +51,20 @@ class Identifier:
     value: str
 
 
+def normalize_doi(value: str) -> str:
+    cleaned = value.strip()
+    cleaned = re.sub(r"^https?://(?:dx\.)?doi\.org/", "", cleaned, flags=re.IGNORECASE)
+    return re.sub(r"^doi:\s*", "", cleaned, flags=re.IGNORECASE)
+
+
 def parse_identifier(value: str, provider: str = "auto") -> Identifier:
     if provider not in PROVIDERS:
         raise ValueError(
             "provider must be auto, doi, crossref, datacite, pmid, pubmed, arxiv, isbn, openalex, bibcode or article_number"
         )
-    candidate = value.strip()
+    candidate = normalize_doi(value)
     if not candidate or len(candidate) > 500 or any(ord(character) < 32 for character in candidate):
         raise ValueError("identifier is invalid")
-    candidate = re.sub(r"^https?://(?:dx\.)?doi\.org/", "", candidate, flags=re.IGNORECASE)
-    candidate = re.sub(r"^doi:\s*", "", candidate, flags=re.IGNORECASE)
     if provider in ("auto", "doi", "crossref", "datacite") and DOI_PATTERN.fullmatch(candidate):
         target_provider = provider if provider in ("crossref", "datacite") else "doi"
         return Identifier(target_provider, candidate.rstrip(".,; "))
@@ -95,6 +99,14 @@ def parse_identifier(value: str, provider: str = "auto") -> Identifier:
     if provider != "auto":
         raise ValueError(f"identifier is not a valid {provider}")
     raise ValueError("identifier is not a recognized DOI, PMID, arXiv ID, ISBN or OpenAlex ID")
+
+
+def _collect_urls(*candidates: Any) -> str | None:
+    urls: list[str] = []
+    for candidate in candidates:
+        if candidate and candidate not in urls:
+            urls.append(candidate)
+    return "\n".join(urls) if urls else None
 
 
 def _first(value: Any) -> str | None:
@@ -139,11 +151,11 @@ def _reconstruct_openalex_abstract(inverted_index: Any) -> str | None:
     return _clean_markup(" ".join(word for _, word in word_positions))
 
 
+# Keyed on dash-form lower-case aliases only; normalize_reference_type replaces
+# "_" and spaces with "-" before lookup, so variant forms need no entries here.
 CANONICAL_REFERENCE_TYPE_MAP: dict[str, str] = {
     "article": "article",
     "journal-article": "article",
-    "journal_article": "article",
-    "journal article": "article",
     "article-journal": "article",
     "jour": "article",
     "book": "book",
@@ -151,16 +163,10 @@ CANONICAL_REFERENCE_TYPE_MAP: dict[str, str] = {
     "edited-book": "book",
     "chapter": "chapter",
     "book-chapter": "chapter",
-    "book_chapter": "chapter",
-    "book chapter": "chapter",
     "book-section": "chapter",
-    "book_section": "chapter",
     "conference": "conference",
     "conference-paper": "conference",
-    "conference_paper": "conference",
-    "conference paper": "conference",
     "proceedings-article": "conference",
-    "proceedings_article": "conference",
     "proceedings": "conference",
     "paper-conference": "conference",
     "preprint": "preprint",
@@ -187,9 +193,7 @@ def normalize_reference_type(value: Any) -> str | None:
         return None
     val_str = str(value).strip().lower()
     cleaned = val_str.replace("_", "-").replace(" ", "-")
-    return CANONICAL_REFERENCE_TYPE_MAP.get(
-        cleaned, CANONICAL_REFERENCE_TYPE_MAP.get(val_str, cleaned)
-    )
+    return CANONICAL_REFERENCE_TYPE_MAP.get(cleaned, cleaned)
 
 
 @dataclass
@@ -210,37 +214,6 @@ class MetadataRecord:
     urls: str | None = None
     identifiers: str | None = None
     reference_type: str | None = None
-
-    def to_dict(self) -> dict[str, str | None]:
-        return {
-            "title": self.title,
-            "abstract": self.abstract,
-            "authors": self.authors,
-            "keywords": self.keywords,
-            "publication_date": self.publication_date,
-            "publication_title": self.publication_title,
-            "journal_abbreviation": self.journal_abbreviation,
-            "volume": self.volume,
-            "issue": self.issue,
-            "pages": self.pages,
-            "publisher": self.publisher,
-            "affiliation": self.affiliation,
-            "doi": self.doi,
-            "urls": self.urls,
-            "identifiers": self.identifiers,
-            "reference_type": self.reference_type,
-        }
-
-    def get(self, key: str, default: Any = None) -> Any:
-        return getattr(self, key, default)
-
-    def __getitem__(self, key: str) -> Any:
-        if hasattr(self, key):
-            return getattr(self, key)
-        raise KeyError(key)
-
-    def __contains__(self, key: str) -> bool:
-        return hasattr(self, key) and getattr(self, key) is not None
 
 
 class LookupAdapter(Protocol):
@@ -284,14 +257,11 @@ class CrossrefLookupAdapter:
         short_titles = message.get("short-container-title", [])
         journal_abbr = _clean_markup(_first(short_titles)) if short_titles else None
 
-        urls = [f"https://doi.org/{canonical_doi}"]
-        resource_url = _first((message.get("resource") or {}).get("primary", {}).get("URL"))
-        if resource_url and resource_url not in urls:
-            urls.append(resource_url)
-        for link_obj in message.get("link", []):
-            u = _first(link_obj.get("URL"))
-            if u and u not in urls:
-                urls.append(u)
+        urls = _collect_urls(
+            f"https://doi.org/{canonical_doi}",
+            _first((message.get("resource") or {}).get("primary", {}).get("URL")),
+            *(_first(link.get("URL")) for link in message.get("link", [])),
+        )
 
         abstract_val = _clean_markup(message.get("abstract"))
         keywords_val = (
@@ -312,7 +282,7 @@ class CrossrefLookupAdapter:
             publisher=_clean_markup(_first(message.get("publisher"))),
             affiliation=affiliation_str,
             doi=canonical_doi,
-            urls="\n".join(urls) if urls else None,
+            urls=urls,
             identifiers=json.dumps({"doi": canonical_doi}),
             reference_type=normalize_reference_type(_first(message.get("type"))),
         )
@@ -341,10 +311,7 @@ class DataCiteLookupAdapter:
         )
         canonical_doi = _first(attributes.get("doi")) or value
         resource_type = attributes.get("types", {})
-        urls = [f"https://doi.org/{canonical_doi}"]
-        url_attr = _first(attributes.get("url"))
-        if url_attr and url_attr not in urls:
-            urls.append(url_attr)
+        urls = _collect_urls(f"https://doi.org/{canonical_doi}", _first(attributes.get("url")))
         keywords = (
             "; ".join(
                 item.get("subject")
@@ -372,7 +339,7 @@ class DataCiteLookupAdapter:
             journal_abbreviation=None,
             affiliation=None,
             doi=canonical_doi,
-            urls="\n".join(urls) if urls else None,
+            urls=urls,
             identifiers=json.dumps({"doi": canonical_doi}),
             reference_type=normalize_reference_type(
                 resource_type.get("resourceType") or resource_type.get("resourceTypeGeneral")
@@ -404,10 +371,12 @@ class PubMedLookupAdapter:
             None,
         )
         identifiers: dict[str, str] = {"pmid": value}
-        urls = [f"https://pubmed.ncbi.nlm.nih.gov/{value}/"]
+        urls = _collect_urls(
+            f"https://pubmed.ncbi.nlm.nih.gov/{value}/",
+            f"https://doi.org/{doi}" if doi else None,
+        )
         if doi:
             identifiers["doi"] = doi
-            urls.append(f"https://doi.org/{doi}")
         return MetadataRecord(
             title=_clean_markup(item.get("title")) or "",
             abstract=None,
@@ -421,7 +390,7 @@ class PubMedLookupAdapter:
             pages=_first(item.get("pages")),
             publisher=_first(item.get("publishername")),
             doi=doi,
-            urls="\n".join(urls) if urls else None,
+            urls=urls,
             identifiers=json.dumps(identifiers),
             reference_type="article",
         )
@@ -450,14 +419,15 @@ class ArxivLookupAdapter:
         doi = entry.findtext("arxiv:doi", default="", namespaces=namespace) or None
         doi_link = entry.find("atom:link[@title='doi']", namespace)
         if not doi and doi_link is not None:
-            doi = (
-                re.sub(r"^https?://(?:dx\.)?doi\.org/", "", doi_link.attrib.get("href", "")) or None
-            )
+            doi = normalize_doi(doi_link.attrib.get("href", "")) or None
         identifiers: dict[str, str] = {"arxiv": value}
-        urls = [f"https://arxiv.org/abs/{value}", f"https://arxiv.org/pdf/{value}.pdf"]
+        urls = _collect_urls(
+            f"https://arxiv.org/abs/{value}",
+            f"https://arxiv.org/pdf/{value}.pdf",
+            f"https://doi.org/{doi}" if doi else None,
+        )
         if doi:
             identifiers["doi"] = doi
-            urls.append(f"https://doi.org/{doi}")
         published = entry.findtext("atom:published", default="", namespaces=namespace)
         return MetadataRecord(
             title=_first(entry.findtext("atom:title", default="", namespaces=namespace)) or "",
@@ -479,7 +449,7 @@ class ArxivLookupAdapter:
                 entry.findtext("arxiv:journal_ref", default="", namespaces=namespace)
             ),
             doi=doi,
-            urls="\n".join(urls) if urls else None,
+            urls=urls,
             identifiers=json.dumps(identifiers),
             reference_type="preprint",
         )
@@ -522,7 +492,7 @@ class OpenLibraryLookupAdapter:
 class OpenAlexLookupAdapter:
     def lookup(self, client: MetadataClient, value: str, settings: Settings) -> MetadataRecord:
         params = {"api_key": settings.openalex_api_key} if settings.openalex_api_key else None
-        lookup_target = f"doi:{value}" if (value.startswith("10.") or "/" in value) else value
+        lookup_target = f"doi:{value}" if DOI_PATTERN.fullmatch(value) else value
         try:
             body = client._get(
                 f"https://api.openalex.org/works/{quote(lookup_target, safe=':')}",
@@ -541,15 +511,7 @@ class OpenAlexLookupAdapter:
         except (json.JSONDecodeError, TypeError) as error:
             raise MetadataLookupError("OpenAlex returned invalid metadata") from error
         openalex_id = (_first(payload.get("id")) or "").rsplit("/", 1)[-1]
-        doi = (
-            re.sub(
-                r"^https?://(?:dx\.)?doi\.org/",
-                "",
-                _first(payload.get("doi")) or "",
-                flags=re.IGNORECASE,
-            )
-            or None
-        )
+        doi = normalize_doi(_first(payload.get("doi")) or "") or None
         source = (payload.get("primary_location") or {}).get("source") or {}
         biblio = payload.get("biblio") or {}
         pages = None
@@ -558,15 +520,11 @@ class OpenAlexLookupAdapter:
         elif biblio.get("first_page"):
             pages = str(biblio.get("first_page"))
 
-        urls = []
-        if doi:
-            urls.append(f"https://doi.org/{doi}")
-        landing_url = _first((payload.get("primary_location") or {}).get("landing_page_url"))
-        if landing_url and landing_url not in urls:
-            urls.append(landing_url)
-        oa_url = _first((payload.get("open_access") or {}).get("oa_url"))
-        if oa_url and oa_url not in urls:
-            urls.append(oa_url)
+        urls = _collect_urls(
+            f"https://doi.org/{doi}" if doi else None,
+            _first((payload.get("primary_location") or {}).get("landing_page_url")),
+            _first((payload.get("open_access") or {}).get("oa_url")),
+        )
 
         abstract = _reconstruct_openalex_abstract(
             payload.get("abstract_inverted_index")
@@ -602,7 +560,7 @@ class OpenAlexLookupAdapter:
             pages=pages,
             publisher=_first(source.get("host_organization_name")),
             doi=doi,
-            urls="\n".join(urls) if urls else None,
+            urls=urls,
             identifiers=json.dumps({
                 key: val for key, val in {"openalex": openalex_id, "doi": doi}.items() if val
             }),

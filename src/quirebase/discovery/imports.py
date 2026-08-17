@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import contextlib
 import json
-from typing import TYPE_CHECKING, Any, BinaryIO
+from dataclasses import asdict
+from typing import TYPE_CHECKING, BinaryIO
 
 from quirebase.access.items import require_accessible_items, visible_items_query
 from quirebase.core.config import Settings, get_settings
@@ -27,7 +27,6 @@ from quirebase.discovery.lookup import (
     MetadataNotFoundError,
     MetadataRecord,
     lookup_metadata,
-    normalize_reference_type,
 )
 from quirebase.documents.revisions import (
     attach_staged_pdf,
@@ -100,7 +99,7 @@ def stage_metadata_batch(
         raise ResourceNotFound(str(error)) from error
     except MetadataLookupError as error:
         raise UpstreamServiceError(str(error)) from error
-    rec_dict = record.to_dict() if isinstance(record, MetadataRecord) else dict(record)
+    rec_dict = asdict(record) if isinstance(record, MetadataRecord) else record
     batch = ImportBatch(
         owner_id=user.id,
         file_format=f"metadata:{parsed.provider}",
@@ -121,66 +120,15 @@ def stage_metadata_batch(
     return batch, [rec_dict], []
 
 
-def _create_item_from_record(db: Session, user: User, record: dict | Any) -> Item:
-    from quirebase.discovery.bibliography import REFERENCE_TYPE_TO_BIBTEX
-    from quirebase.discovery.lookup import _clean_markup
-    from quirebase.library.authors import parse_author_list_string
-    from quirebase.library.identifiers import generate_bibtex_key, set_item_identifiers
+def _create_item_from_record(db: Session, user: User, record: dict | MetadataRecord) -> Item:
+    # Imported lazily: library.identifiers imports this package, so a
+    # module-level import would deadlock during package initialization.
+    from quirebase.library.identifiers import apply_metadata_record
 
-    rec_dict = record.to_dict() if isinstance(record, MetadataRecord) else dict(record)
-    title = _clean_markup(rec_dict.get("title")) or "Untitled"
-    ref_type = normalize_reference_type(rec_dict.get("reference_type"))
-    bib_type = (rec_dict.get("bibtex_type") or "").strip().lower() or (
-        REFERENCE_TYPE_TO_BIBTEX.get(ref_type, "article") if ref_type else None
-    )
-
-    item = Item(
-        title=title,
-        abstract=_clean_markup(rec_dict.get("abstract")),
-        authors=rec_dict.get("authors"),
-        editors=rec_dict.get("editors"),
-        publication_date=rec_dict.get("publication_date"),
-        publication_title=_clean_markup(rec_dict.get("publication_title")),
-        journal_abbreviation=_clean_markup(rec_dict.get("journal_abbreviation")),
-        volume=rec_dict.get("volume"),
-        issue=rec_dict.get("issue"),
-        pages=rec_dict.get("pages"),
-        affiliation=_clean_markup(rec_dict.get("affiliation")),
-        publisher=_clean_markup(rec_dict.get("publisher")),
-        place_published=_clean_markup(rec_dict.get("place_published")),
-        doi=rec_dict.get("doi"),
-        urls=rec_dict.get("urls"),
-        keywords=rec_dict.get("keywords"),
-        identifiers=rec_dict.get("identifiers"),
-        bibtex_id=rec_dict.get("bibtex_id"),
-        bibtex_type=bib_type,
-        reference_type=ref_type,
-        created_by=user.id,
-    )
-    if not item.bibtex_id:
-        item.bibtex_id = generate_bibtex_key(item)
+    item = Item(title="Untitled", created_by=user.id)
     db.add(item)
     db.flush()
-
-    if item.authors:
-        parsed_authors = parse_author_list_string(item.authors)
-        if parsed_authors:
-            set_item_authors(db, user, item.id, parsed_authors, role="author")
-
-    id_pairs: list[tuple[str, str]] = []
-    if item.doi:
-        id_pairs.append(("doi", item.doi))
-    if rec_dict.get("identifiers"):
-        with contextlib.suppress(Exception):
-            idents_val = rec_dict["identifiers"]
-            parsed_idents = json.loads(idents_val) if isinstance(idents_val, str) else idents_val
-            if isinstance(parsed_idents, dict):
-                for p, v in parsed_idents.items():
-                    if isinstance(v, str) and (p, v) not in id_pairs:
-                        id_pairs.append((p, v))
-    if id_pairs:
-        set_item_identifiers(db, user, item.id, id_pairs)
-
+    apply_metadata_record(db, user, item, record)
     return item
 
 
@@ -279,8 +227,6 @@ def import_unpublished_pdf(
         max_bytes = get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes)
     staged = stage_pdf(source, filename, max_bytes)
     try:
-        from quirebase.library.authors import set_item_authors
-
         item = Item(
             title=title.strip(),
             authors=authors.strip() or None,

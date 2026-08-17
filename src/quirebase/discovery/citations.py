@@ -10,7 +10,9 @@ from sqlalchemy import select
 
 from quirebase.access.items import require_readable_item
 from quirebase.core.errors import ResourceNotFound, ValidationFailure
-from quirebase.discovery.bibliography import SUPPORTED_FORMATS, export_bibliography
+from quirebase.discovery.bibliography import SUPPORTED_FORMATS, export_bibliography, first_url
+from quirebase.discovery.lookup import normalize_reference_type
+from quirebase.library.authors import parse_author_list_string
 from quirebase.models import CitationStyle
 
 try:
@@ -49,19 +51,15 @@ BUILTIN_STYLES: dict[str, str] = {
     "ieee": "IEEE",
 }
 
+# Keyed on canonical types only; callers normalize first (see
+# normalize_reference_type), so the alias tables live in one place.
 REFERENCE_TYPE_TO_CSL: dict[str, str] = {
     "article": "article-journal",
-    "journal-article": "article-journal",
-    "journal_article": "article-journal",
     "book": "book",
     "chapter": "chapter",
-    "book-chapter": "chapter",
     "preprint": "article",
     "conference": "paper-conference",
-    "conference-paper": "paper-conference",
-    "proceedings": "paper-conference",
     "thesis": "thesis",
-    "dissertation": "thesis",
     "report": "report",
     "webpage": "webpage",
     "dataset": "dataset",
@@ -105,26 +103,14 @@ def _date_parts(value: str | None) -> list[list[int]] | None:
     return [[year]]
 
 
-def _parse_name(name: str) -> dict[str, str]:
-    name = name.strip()
-    if not name:
-        return {}
-    if "," in name:
-        family, _, given = name.partition(",")
-        family = family.strip()
-        given = given.strip()
-        return {"family": family, "given": given} if given else {"family": family}
-    parts = name.split()
-    if len(parts) == 1:
-        return {"family": parts[0]}
-    return {"family": parts[-1], "given": " ".join(parts[:-1])}
-
-
-def _parse_names(value: str | None) -> list[dict[str, str]]:
-    if not value:
-        return []
-    names = [name for name in value.split(";") if name.strip()]
-    return [_parse_name(name) for name in names if _parse_name(name)]
+def _parse_names(value: str | None) -> list[dict[str, str | None]]:
+    return [
+        {
+            "family": name["last_name"],
+            **({"given": name["first_name"]} if name.get("first_name") else {}),
+        }
+        for name in parse_author_list_string(value)
+    ]
 
 
 def _parse_keywords(value: str | None) -> list[str]:
@@ -134,8 +120,9 @@ def _parse_keywords(value: str | None) -> list[str]:
 
 
 def item_to_csl_json(item: Item) -> dict[str, Any]:
-    reference_type = (item.reference_type or "").lower()
-    csl_type = REFERENCE_TYPE_TO_CSL.get(reference_type, "article")
+    csl_type = REFERENCE_TYPE_TO_CSL.get(
+        normalize_reference_type(item.reference_type) or "", "article"
+    )
     record: dict[str, Any] = {
         "id": item.id,
         "type": csl_type,
@@ -151,7 +138,7 @@ def item_to_csl_json(item: Item) -> dict[str, Any]:
         "page": item.pages,
         "publisher": item.publisher,
         "publisher-place": item.place_published,
-        "URL": item.urls.splitlines()[0].strip() if item.urls else None,
+        "URL": first_url(item.urls),
     }
     record.update({key: value for key, value in optional.items() if value})
     author = _parse_names(item.authors)

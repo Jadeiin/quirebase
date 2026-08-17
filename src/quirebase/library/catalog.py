@@ -4,7 +4,7 @@ import re
 from difflib import SequenceMatcher
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from quirebase.access.items import visible_items_query
 from quirebase.access.projects import visible_projects
@@ -44,7 +44,11 @@ def search_library(
         item_query = item_query.where(Item.id.in_(matching_ids))
     if tag:
         item_query = item_query.where(
-            Item.id.in_(select(ItemTag.item_id).where(ItemTag.tag_id == tag))
+            Item.id.in_(
+                select(ItemTag.item_id)
+                .join(Tag, Tag.id == ItemTag.tag_id)
+                .where(or_(Tag.id == tag, Tag.name == tag))
+            )
         )
     if project:
         item_query = item_query.where(

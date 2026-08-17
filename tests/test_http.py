@@ -13,7 +13,7 @@ from quirebase.core.crypto import token_hash
 from quirebase.core.database import get_db
 from quirebase.core.errors import VersionConflict
 from quirebase.core.storage import LocalObjectStore
-from quirebase.library.items import update_item
+from quirebase.library.items import ItemMetadataUpdate, update_item
 from quirebase.models import AuditEvent, FileRevision, Item, LoginSession, User
 from quirebase.web.app import app
 
@@ -182,16 +182,14 @@ def test_item_edit_uses_atomic_optimistic_lock(db):
             first,
             first_owner,
             item_id=item.id,
-            version=1,
-            title="First update",
+            data=ItemMetadataUpdate.from_item(first_item, title="First update"),
         )
         with pytest.raises(VersionConflict):
             update_item(
                 second,
                 second_owner,
                 item_id=item.id,
-                version=1,
-                title="Lost update",
+                data=ItemMetadataUpdate.from_item(second_item, title="Lost update"),
             )
     db.expire_all()
     assert db.get(Item, item.id).title == "First update"
