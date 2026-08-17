@@ -4,6 +4,8 @@ Quirebase is one bounded context implemented as a modular monolith. Top-level Py
 packages are Modules with explicit roles and ownership; directory placement alone does not
 make a seam. The enforceable dependency baseline lives in `tests/test_architecture.py`.
 
+Planned deepening work is ordered in `docs/architecture/deep-module-roadmap.md`.
+
 ## Package roles and ownership
 
 | Package | Role | Owns |
