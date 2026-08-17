@@ -4,10 +4,11 @@ import uuid
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
+from test_domain_states import assert_closed_state_constraints
 
 from quirebase.core.database import Base
 from quirebase.models import Item, User
-from quirebase.operations import search_index
+from quirebase.search import search_index
 
 
 @pytest.mark.skipif(
@@ -33,5 +34,19 @@ def test_postgresql_search_contract():
     finally:
         with engine.begin() as connection:
             connection.execute(text("DROP TABLE IF EXISTS item_search"))
+        Base.metadata.drop_all(engine)
+        engine.dispose()
+
+
+@pytest.mark.skipif(
+    not os.getenv("QUIREBASE_TEST_POSTGRES_URL"), reason="PostgreSQL is not configured"
+)
+def test_postgresql_domain_state_constraints():
+    engine = create_engine(os.environ["QUIREBASE_TEST_POSTGRES_URL"])
+    Base.metadata.create_all(engine)
+    try:
+        with Session(engine) as db:
+            assert_closed_state_constraints(db)
+    finally:
         Base.metadata.drop_all(engine)
         engine.dispose()

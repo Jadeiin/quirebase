@@ -19,7 +19,9 @@ from quirebase.core.errors import (
 )
 from quirebase.library.audit import record_audit_event
 from quirebase.models import (
+    AnnotationScope,
     FileRevision,
+    FileRevisionProcessingState,
     PdfAnnotation,
     PdfAnnotationSegment,
     ProjectItem,
@@ -74,7 +76,10 @@ def annotation_json(record: PdfAnnotation, current_user_id: str) -> dict[str, An
 
 
 def validate_segments(data: AnnotationCreate, revision: FileRevision) -> None:
-    if revision.page_count is None or revision.processing_state != "ready":
+    if (
+        revision.page_count is None
+        or revision.processing_state != FileRevisionProcessingState.ready
+    ):
         raise DocumentNotReady("PDF is not ready")
     geometry = json.loads(revision.page_geometry or "[]")
     if len(geometry) != revision.page_count:
@@ -117,7 +122,9 @@ def list_document_annotations(
     revision = require_revision(db, user, revision_id)
     if revision.item_id != item_id:
         raise ResourceNotFound("revision not found for item")
-    scopes = [and_(PdfAnnotation.scope == "private", PdfAnnotation.author_id == user.id)]
+    scopes = [
+        and_(PdfAnnotation.scope == AnnotationScope.private, PdfAnnotation.author_id == user.id)
+    ]
     if project_id:
         if (
             project_member(db, user, project_id) is None
@@ -125,7 +132,10 @@ def list_document_annotations(
         ):
             raise ResourceUnavailable("project membership or project item not found")
         scopes.append(
-            and_(PdfAnnotation.scope == "project", PdfAnnotation.project_id == project_id)
+            and_(
+                PdfAnnotation.scope == AnnotationScope.project,
+                PdfAnnotation.project_id == project_id,
+            )
         )
     records = db.scalars(
         select(PdfAnnotation)
@@ -149,7 +159,7 @@ def create_document_annotation(
     revision = require_revision(db, user, data.revision_id)
     if revision.item_id != item_id:
         raise ResourceNotFound("revision not found for item")
-    if data.scope == "project" and (
+    if data.scope is AnnotationScope.project and (
         project_member(db, user, data.project_id) is None
         or db.get(ProjectItem, (data.project_id, item_id)) is None
     ):
@@ -202,8 +212,8 @@ def update_document_annotation(
         raise VersionConflict(record.version)
     if data.scope is not None:
         record.scope = data.scope
-        record.project_id = data.project_id if data.scope == "project" else None
-        if record.scope == "project" and (
+        record.project_id = data.project_id if data.scope is AnnotationScope.project else None
+        if record.scope == AnnotationScope.project and (
             project_member(db, user, record.project_id) is None
             or db.get(ProjectItem, (record.project_id, item_id)) is None
         ):

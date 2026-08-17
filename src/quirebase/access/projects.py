@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 
 from quirebase.core.errors import PermissionDenied, ResourceUnavailable
-from quirebase.models import Project, ProjectMember, SystemRole, User
+from quirebase.models import Project, ProjectMember, ProjectRole, SystemRole, User
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -25,7 +25,7 @@ def editable_projects(db: Session, user: User) -> list[Project]:
             .join(ProjectMember)
             .where(
                 ProjectMember.user_id == user.id,
-                ProjectMember.role.in_(["owner", "editor"]),
+                ProjectMember.role.in_([ProjectRole.owner, ProjectRole.editor]),
             )
             .order_by(Project.name)
         ).all()

@@ -12,7 +12,7 @@ from quirebase.core.errors import (
     ResourceUnavailable,
     ValidationFailure,
 )
-from quirebase.models import AuditEvent, ProjectMember, User
+from quirebase.models import AuditEvent, ProjectMember, ProjectRole, User
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -22,7 +22,9 @@ class ProjectMemberConflict(DomainError):
     pass
 
 
-def list_project_members(db: Session, user: User, project_id: str) -> list[tuple[User, str]]:
+def list_project_members(
+    db: Session, user: User, project_id: str
+) -> list[tuple[User, ProjectRole]]:
     require_project_member(db, user, project_id)
     rows = db.execute(
         select(User, ProjectMember.role)
@@ -38,22 +40,24 @@ def add_project_member(
     user: User,
     project_id: str,
     username: str,
-    role: str = "viewer",
+    role: ProjectRole | str = ProjectRole.viewer,
 ) -> ProjectMember:
     actor = project_member(db, user, project_id)
-    if actor is None or actor.role != "owner":
+    if actor is None or actor.role != ProjectRole.owner:
         raise ResourceUnavailable("project not found or owner role required")
-    if role not in ("owner", "editor", "viewer"):
-        raise ValidationFailure("invalid project role")
+    try:
+        requested_role = ProjectRole(role)
+    except ValueError as error:
+        raise ValidationFailure("invalid project role") from error
     target = db.scalar(select(User).where(User.username == username.strip(), User.active.is_(True)))
     if target is None:
         raise ResourceNotFound("user not found")
     existing = db.get(ProjectMember, (project_id, target.id))
     if existing:
-        existing.role = role
+        existing.role = requested_role
         member = existing
     else:
-        member = ProjectMember(project_id=project_id, user_id=target.id, role=role)
+        member = ProjectMember(project_id=project_id, user_id=target.id, role=requested_role)
         db.add(member)
     db.add(
         AuditEvent(
@@ -61,7 +65,7 @@ def add_project_member(
             action="project.member.set",
             target_type="project",
             target_id=project_id,
-            detail=json.dumps({"user_id": target.id, "role": role}),
+            detail=json.dumps({"user_id": target.id, "role": requested_role}),
         )
     )
     db.commit()
@@ -76,14 +80,14 @@ def remove_project_member(
 ) -> None:
     actor = project_member(db, user, project_id)
     target = db.get(ProjectMember, (project_id, member_id))
-    if actor is None or actor.role != "owner" or target is None:
+    if actor is None or actor.role != ProjectRole.owner or target is None:
         raise ResourceUnavailable("project or member not found")
     owner_count = db.scalar(
         select(func.count())
         .select_from(ProjectMember)
-        .where(ProjectMember.project_id == project_id, ProjectMember.role == "owner")
+        .where(ProjectMember.project_id == project_id, ProjectMember.role == ProjectRole.owner)
     )
-    if target.role == "owner" and (owner_count or 0) <= 1:
+    if target.role == ProjectRole.owner and (owner_count or 0) <= 1:
         raise ProjectMemberConflict("a project must retain an owner")
     db.delete(target)
     db.commit()

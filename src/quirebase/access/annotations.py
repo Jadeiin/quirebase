@@ -5,7 +5,14 @@ from typing import TYPE_CHECKING
 from quirebase.access.items import can_read_item
 from quirebase.access.projects import project_member
 from quirebase.core.errors import ResourceUnavailable
-from quirebase.models import FileRevision, PdfAnnotation, SystemRole, User
+from quirebase.models import (
+    AnnotationScope,
+    FileRevision,
+    PdfAnnotation,
+    ProjectRole,
+    SystemRole,
+    User,
+)
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -14,9 +21,9 @@ if TYPE_CHECKING:
 def can_edit_annotation(db: Session, user: User, annotation: PdfAnnotation) -> bool:
     if annotation.author_id == user.id or user.role == SystemRole.administrator.value:
         return True
-    if annotation.scope == "project" and annotation.project_id:
+    if annotation.scope is AnnotationScope.project and annotation.project_id:
         member = project_member(db, user, annotation.project_id)
-        return member is not None and member.role == "owner"
+        return member is not None and member.role == ProjectRole.owner
     return False
 
 

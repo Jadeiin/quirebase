@@ -11,12 +11,15 @@ from sqlalchemy.orm import selectinload
 
 from quirebase.core.config import get_settings
 from quirebase.core.database import SessionLocal
-from quirebase.core.errors import ResourceUnavailable
+from quirebase.core.errors import ResourceUnavailable, ValidationFailure
 from quirebase.core.storage import LocalObjectStore
 from quirebase.library.audit import record_audit_event
 from quirebase.models import (
+    AnnotationScope,
     FileRevision,
+    FileRevisionProcessingState,
     Job,
+    JobState,
     PdfAnnotation,
     ProjectItem,
     ProjectMember,
@@ -31,6 +34,52 @@ if TYPE_CHECKING:
 
 JobHandler = Callable[["Session", Job, dict[str, Any]], dict[str, Any]]
 JOB_HANDLERS: dict[str, JobHandler] = {}
+
+
+def normalize_job_kind(kind: str) -> str:
+    normalized = kind.strip()
+    if not normalized or len(normalized) > 40:
+        raise ValidationFailure("job kind must contain 1 to 40 characters")
+    return normalized
+
+
+def complete_revision_inspection(
+    revision: FileRevision,
+    *,
+    page_count: int,
+    page_geometry: str,
+    full_text: str,
+) -> None:
+    revision.page_count = page_count
+    revision.page_geometry = page_geometry
+    revision.full_text = full_text
+    revision.processing_state = FileRevisionProcessingState.ready
+
+
+def reset_job_for_retry(job: Job) -> None:
+    job.state = JobState.pending
+    job.attempts = 0
+    job.error = None
+    job.lease_until = None
+
+
+def mark_job_running(job: Job, now: datetime) -> None:
+    job.state = JobState.running
+    job.lease_until = now + timedelta(minutes=10)
+    job.attempts += 1
+
+
+def mark_job_succeeded(job: Job, result: dict[str, Any]) -> None:
+    job.result = json.dumps(result)
+    job.state = JobState.succeeded
+    job.error = None
+    job.lease_until = None
+
+
+def record_job_failure(job: Job, error: Exception, attempts: int) -> None:
+    job.error = f"{type(error).__name__}: {error}"[:4000]
+    job.state = JobState.pending if attempts < 3 else JobState.failed
+    job.lease_until = None
 
 
 def register_job_handler(kind: str, handler: JobHandler) -> None:
@@ -54,12 +103,15 @@ def handle_pdf_inspect(db: Session, job: Job, payload: dict[str, Any]) -> dict[s
     pages, text, geometry = inspect_pdf(path)
     if pages < 1:
         raise ValueError("PDF contains no pages")
-    revision.page_count = pages
-    revision.page_geometry = json.dumps(geometry, separators=(",", ":"))
-    revision.full_text = text
+    geometry_json = json.dumps(geometry, separators=(",", ":"))
+    complete_revision_inspection(
+        revision,
+        page_count=pages,
+        page_geometry=geometry_json,
+        full_text=text,
+    )
     create_thumbnail(path, get_settings().object_dir / "thumbnails" / f"{revision.id}.png")
     search_index(db).index_item(db, revision.item_id)
-    revision.processing_state = "ready"
     return {"page_count": pages}
 
 
@@ -70,7 +122,10 @@ def handle_pdf_export_annotations(db: Session, job: Job, payload: dict[str, Any]
     scopes = []
     if payload.get("include_private"):
         scopes.append(
-            and_(PdfAnnotation.scope == "private", PdfAnnotation.author_id == job.owner_id)
+            and_(
+                PdfAnnotation.scope == AnnotationScope.private,
+                PdfAnnotation.author_id == job.owner_id,
+            )
         )
     if payload.get("project_id"):
         membership = db.get(ProjectMember, (payload["project_id"], job.owner_id))
@@ -79,7 +134,7 @@ def handle_pdf_export_annotations(db: Session, job: Job, payload: dict[str, Any]
             raise PermissionError("project membership no longer exists")
         scopes.append(
             and_(
-                PdfAnnotation.scope == "project",
+                PdfAnnotation.scope == AnnotationScope.project,
                 PdfAnnotation.project_id == payload["project_id"],
             )
         )
@@ -144,9 +199,10 @@ def enqueue_job(
 ) -> Job:
     import uuid
 
-    key = idempotency_key or f"{kind}:{uuid.uuid4()}"
+    normalized_kind = normalize_job_kind(kind)
+    key = idempotency_key or f"{normalized_kind}:{uuid.uuid4()}"
     job = Job(
-        kind=kind,
+        kind=normalized_kind,
         payload=json.dumps(payload, ensure_ascii=False),
         owner_id=owner_id,
         idempotency_key=key,
@@ -157,8 +213,6 @@ def enqueue_job(
 
 
 def dispatch_maintenance_job(db: Session, admin: User, kind: str) -> Job:
-    from quirebase.core.errors import ValidationFailure
-
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")
     if kind not in ("system.reindex_all", "system.check_objects", "system.backup"):
@@ -187,7 +241,11 @@ def list_jobs_admin(
         raise ResourceUnavailable("administrator required")
     query = select(Job)
     if state.strip():
-        query = query.where(Job.state == state.strip())
+        try:
+            requested_state = JobState(state.strip())
+        except ValueError as error:
+            raise ValidationFailure(f"unknown job state: {state.strip()}") from error
+        query = query.where(Job.state == requested_state)
     if kind_prefix.strip():
         query = query.where(Job.kind.startswith(kind_prefix.strip()))
     return list(db.scalars(query.order_by(Job.created_at.desc()).limit(limit)).all())
@@ -196,12 +254,9 @@ def list_jobs_admin(
 def retry_all_failed_jobs(db: Session, admin: User) -> int:
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")
-    failed = list(db.scalars(select(Job).where(Job.state == "failed")).all())
+    failed = list(db.scalars(select(Job).where(Job.state == JobState.failed)).all())
     for job in failed:
-        job.state = "pending"
-        job.attempts = 0
-        job.error = None
-        job.lease_until = None
+        reset_job_for_retry(job)
     if failed:
         record_audit_event(
             db,
@@ -220,7 +275,7 @@ def claim_job(db: Session) -> Job | None:
     query = (
         select(Job)
         .where(
-            Job.state.in_(["pending", "running"]),
+            Job.state.in_([JobState.pending, JobState.running]),
             or_(Job.lease_until.is_(None), Job.lease_until < now),
             Job.attempts < 3,
         )
@@ -231,9 +286,7 @@ def claim_job(db: Session) -> Job | None:
         query = query.with_for_update(skip_locked=True)
     job = db.scalar(query)
     if job:
-        job.state = "running"
-        job.lease_until = now + timedelta(minutes=10)
-        job.attempts += 1
+        mark_job_running(job, now)
         db.commit()
     return job
 
@@ -247,18 +300,13 @@ def run_job(db: Session, job: Job) -> None:
             raise TypeError("job payload must be a JSON object")
         handler = get_job_handler(job.kind)
         result = handler(db, job, payload)
-        job.result = json.dumps(result)
-        job.state = "succeeded"
-        job.error = None
-        job.lease_until = None
+        mark_job_succeeded(job, result)
         db.commit()
     except Exception as error:
         db.rollback()
         failed_job = db.get(Job, job_id)
         if failed_job:
-            failed_job.error = f"{type(error).__name__}: {error}"[:4000]
-            failed_job.state = "pending" if attempts < 3 else "failed"
-            failed_job.lease_until = None
+            record_job_failure(failed_job, error, attempts)
             db.commit()
 
 

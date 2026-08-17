@@ -13,8 +13,8 @@ Use the canonical `needs-triage`, `needs-info`, `ready-for-agent`,
 `ready-for-human`, and `wontfix` states.
 See `docs/agents/triage-labels.md`.
 
-### Domain docs
+### Domain and module architecture
 
-Quirebase uses a single root `CONTEXT.md` and repository-wide decisions in
-`docs/adr/`.
+Before changing business behaviour, capability ownership, cross-package dependencies or test
+seams, use the root domain glossary, repository decisions and module policy.
 See `docs/agents/domain.md`.

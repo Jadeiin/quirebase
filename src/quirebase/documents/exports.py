@@ -8,7 +8,7 @@ from quirebase.access.documents import require_revision
 from quirebase.access.projects import project_member
 from quirebase.core.config import get_settings
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
-from quirebase.models import Job, ProjectItem, User
+from quirebase.models import Job, JobState, ProjectItem, User
 from quirebase.pipeline.inspection import job_payload
 
 if TYPE_CHECKING:
@@ -56,7 +56,7 @@ def get_export_file_path(db: Session, user: User, job_id: str) -> Path:
         job is None
         or job.kind != "pdf.export_annotations"
         or job.owner_id != user.id
-        or job.state != "succeeded"
+        or job.state != JobState.succeeded
     ):
         raise ResourceNotFound("export job not found or not ready")
     result = json.loads(job.result or "{}")

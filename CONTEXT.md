@@ -21,7 +21,8 @@ Attachment.
 _Avoid_: Item
 
 **File Revision**:
-An immutable primary PDF version associated with an Item.
+An immutable primary PDF version associated with an Item. It is pending while awaiting
+inspection and ready after its text and page geometry have been successfully extracted.
 _Avoid_: Attachment, Item version
 
 **Attachment**:
@@ -92,7 +93,12 @@ _Avoid_: Invite Code, Signup Token
 A revocable authenticated device session belonging to one User.
 
 **Job**:
-A durable background task with lease, retry and terminal-state semantics.
+A durable background task classified by a Job Kind. A Job moves from pending to running and
+then to succeeded or failed; a failed attempt may return to pending while retries remain.
+
+**Job Kind**:
+A name classifying the work performed by a Job. Job Kinds are extensible and are not a closed
+enumeration.
 
 **Audit Event**:
 An immutable record of a security-sensitive or data-changing action.

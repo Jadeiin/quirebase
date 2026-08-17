@@ -16,7 +16,7 @@ from sqlalchemy import select
 
 from quirebase.core.config import get_settings
 from quirebase.core.storage import LocalObjectStore
-from quirebase.models import Attachment, FileRevision, User
+from quirebase.models import Attachment, FileRevision, JobState, User
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -184,7 +184,12 @@ def get_backup_artifact(db: Session, admin: User, job_id: str) -> tuple[Path, st
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")
     job = db.get(Job, job_id)
-    if job is None or job.kind != "system.backup" or job.state != "succeeded" or not job.result:
+    if (
+        job is None
+        or job.kind != "system.backup"
+        or job.state != JobState.succeeded
+        or not job.result
+    ):
         raise ResourceNotFound("backup artifact not found or not ready")
     try:
         data = json.loads(job.result)

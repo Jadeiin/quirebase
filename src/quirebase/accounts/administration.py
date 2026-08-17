@@ -12,7 +12,7 @@ from quirebase.core.errors import (
     ValidationFailure,
 )
 from quirebase.library.audit import record_audit_event
-from quirebase.models import Invitation, Job, LoginSession, SystemRole, User
+from quirebase.models import Invitation, Job, JobState, LoginSession, SystemRole, User
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -186,7 +186,9 @@ def list_failed_jobs(db: Session, admin: User) -> list[Job]:
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")
     return list(
-        db.scalars(select(Job).where(Job.state == "failed").order_by(Job.updated_at.desc())).all()
+        db.scalars(
+            select(Job).where(Job.state == JobState.failed).order_by(Job.updated_at.desc())
+        ).all()
     )
 
 
@@ -194,9 +196,9 @@ def retry_job(db: Session, admin: User, job_id: str) -> None:
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")
     job = db.get(Job, job_id)
-    if job is None or job.state != "failed":
+    if job is None or job.state != JobState.failed:
         raise ResourceNotFound("failed job not found")
-    job.state = "pending"
+    job.state = JobState.pending
     job.attempts = 0
     job.error = None
     job.lease_until = None

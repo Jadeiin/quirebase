@@ -35,6 +35,7 @@ from quirebase.library.authors import (
 from quirebase.library.identifiers import set_item_identifiers
 from quirebase.library.tags import get_or_create_tag, get_tag_matrix_for_item
 from quirebase.models import (
+    AnnotationScope,
     Attachment,
     DiscussionMessage,
     FileRevision,
@@ -153,7 +154,10 @@ def update_item(
             raise ValidationFailure("identifiers must be valid JSON") from error
         if not isinstance(raw_identifiers, dict):
             raise ValidationFailure("identifiers must be a JSON object")
-        if not all(isinstance(provider, str) and isinstance(value, str) for provider, value in raw_identifiers.items()):
+        if not all(
+            isinstance(provider, str) and isinstance(value, str)
+            for provider, value in raw_identifiers.items()
+        ):
             raise ValidationFailure("identifier names and values must be strings")
         parsed_identifiers = raw_identifiers
 
@@ -308,11 +312,11 @@ def get_item_workspace_data(db: Session, user: User, item_id: str, section: str)
                         PdfAnnotation.deleted_at.is_(None),
                         or_(
                             and_(
-                                PdfAnnotation.scope == "private",
+                                PdfAnnotation.scope == AnnotationScope.private,
                                 PdfAnnotation.author_id == user.id,
                             ),
                             and_(
-                                PdfAnnotation.scope == "project",
+                                PdfAnnotation.scope == AnnotationScope.project,
                                 PdfAnnotation.project_id.in_(member_projects),
                             ),
                         ),
@@ -378,11 +382,11 @@ def get_item_workspace_data(db: Session, user: User, item_id: str, section: str)
                     PdfAnnotation.deleted_at.is_(None),
                     or_(
                         and_(
-                            PdfAnnotation.scope == "private",
+                            PdfAnnotation.scope == AnnotationScope.private,
                             PdfAnnotation.author_id == user.id,
                         ),
                         and_(
-                            PdfAnnotation.scope == "project",
+                            PdfAnnotation.scope == AnnotationScope.project,
                             PdfAnnotation.project_id.in_(member_projects),
                         ),
                     ),

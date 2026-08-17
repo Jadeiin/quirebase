@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from quirebase.models import AnnotationKind, AnnotationScope
+
 
 class SegmentInput(BaseModel):
     page_index: int = Field(ge=0)
@@ -20,8 +22,8 @@ class SegmentInput(BaseModel):
 
 class AnnotationCreate(BaseModel):
     revision_id: str
-    kind: Literal["highlight", "note"]
-    scope: Literal["private", "project"] = "private"
+    kind: AnnotationKind
+    scope: AnnotationScope = AnnotationScope.private
     project_id: str | None = None
     color: Literal["yellow", "green", "blue", "red"] = "yellow"
     body: str | None = Field(default=None, max_length=20_000)
@@ -30,20 +32,22 @@ class AnnotationCreate(BaseModel):
 
     @model_validator(mode="after")
     def valid_scope_and_kind(self):
-        if (self.scope == "project") != (self.project_id is not None):
+        if (self.scope is AnnotationScope.project) != (self.project_id is not None):
             raise ValueError("project_id is required exactly for project scope")
-        if self.kind == "highlight" and any(
+        if self.kind is AnnotationKind.highlight and any(
             segment.quad_points is None for segment in self.segments
         ):
             raise ValueError("highlights require quad points")
-        if self.kind == "note" and (len(self.segments) != 1 or self.segments[0].anchor_x is None):
+        if self.kind is AnnotationKind.note and (
+            len(self.segments) != 1 or self.segments[0].anchor_x is None
+        ):
             raise ValueError("notes require one anchor")
         return self
 
 
 class AnnotationUpdate(BaseModel):
     version: int = Field(ge=1)
-    scope: Literal["private", "project"] | None = None
+    scope: AnnotationScope | None = None
     project_id: str | None = None
     color: Literal["yellow", "green", "blue", "red"] | None = None
     body: str | None = Field(default=None, max_length=20_000)

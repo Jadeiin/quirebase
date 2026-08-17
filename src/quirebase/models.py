@@ -4,7 +4,20 @@ import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy import (
+    Enum as SqlEnum,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .core.database import Base
@@ -34,6 +47,32 @@ class JobState(StrEnum):
     running = "running"
     succeeded = "succeeded"
     failed = "failed"
+
+
+class AnnotationKind(StrEnum):
+    highlight = "highlight"
+    note = "note"
+
+
+class AnnotationScope(StrEnum):
+    private = "private"
+    project = "project"
+
+
+class FileRevisionProcessingState(StrEnum):
+    pending = "pending"
+    ready = "ready"
+
+
+def enum_type(enum_class: type[StrEnum], name: str) -> SqlEnum:
+    return SqlEnum(
+        enum_class,
+        name=name,
+        native_enum=False,
+        create_constraint=False,
+        validate_strings=True,
+        values_callable=lambda members: [member.value for member in members],
+    )
 
 
 class User(Base):
@@ -181,13 +220,16 @@ class Project(Base):
 
 class ProjectMember(Base):
     __tablename__ = "project_members"
+    __table_args__ = (
+        CheckConstraint("role IN ('owner', 'editor', 'viewer')", name="ck_project_members_role"),
+    )
     project_id: Mapped[str] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True
     )
     user_id: Mapped[str] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
-    role: Mapped[str] = mapped_column(String(16))
+    role: Mapped[ProjectRole] = mapped_column(enum_type(ProjectRole, "project_role"))
 
 
 class ProjectItem(Base):
@@ -229,6 +271,12 @@ class DiscussionMessage(Base):
 
 class FileRevision(Base):
     __tablename__ = "file_revisions"
+    __table_args__ = (
+        CheckConstraint(
+            "processing_state IN ('pending', 'ready')",
+            name="ck_file_revisions_processing_state",
+        ),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     item_id: Mapped[str] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
     object_key: Mapped[str] = mapped_column(String(200), index=True)
@@ -239,7 +287,10 @@ class FileRevision(Base):
     page_count: Mapped[int | None] = mapped_column(Integer)
     page_geometry: Mapped[str | None] = mapped_column(Text)
     full_text: Mapped[str | None] = mapped_column(Text)
-    processing_state: Mapped[str] = mapped_column(String(32), default="pending")
+    processing_state: Mapped[FileRevisionProcessingState] = mapped_column(
+        enum_type(FileRevisionProcessingState, "file_revision_processing_state"),
+        default=FileRevisionProcessingState.pending,
+    )
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     item: Mapped[Item] = relationship(back_populates="revisions")
@@ -260,13 +311,24 @@ class Attachment(Base):
 
 class PdfAnnotation(Base):
     __tablename__ = "pdf_annotations"
+    __table_args__ = (
+        CheckConstraint("kind IN ('highlight', 'note')", name="ck_pdf_annotations_kind"),
+        CheckConstraint("scope IN ('private', 'project')", name="ck_pdf_annotations_scope"),
+        CheckConstraint(
+            "(scope = 'private' AND project_id IS NULL) OR "
+            "(scope = 'project' AND project_id IS NOT NULL)",
+            name="ck_pdf_annotations_project_scope",
+        ),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     file_revision_id: Mapped[str] = mapped_column(
         ForeignKey("file_revisions.id", ondelete="CASCADE"), index=True
     )
     author_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    kind: Mapped[str] = mapped_column(String(16))
-    scope: Mapped[str] = mapped_column(String(16), default="private")
+    kind: Mapped[AnnotationKind] = mapped_column(enum_type(AnnotationKind, "annotation_kind"))
+    scope: Mapped[AnnotationScope] = mapped_column(
+        enum_type(AnnotationScope, "annotation_scope"), default=AnnotationScope.private
+    )
     project_id: Mapped[str | None] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), index=True
     )
@@ -308,9 +370,17 @@ class PdfAnnotationSegment(Base):
 
 class Job(Base):
     __tablename__ = "jobs"
+    __table_args__ = (
+        CheckConstraint("length(kind) BETWEEN 1 AND 40", name="ck_jobs_kind_shape"),
+        CheckConstraint(
+            "state IN ('pending', 'running', 'succeeded', 'failed')", name="ck_jobs_state"
+        ),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     kind: Mapped[str] = mapped_column(String(40), index=True)
-    state: Mapped[str] = mapped_column(String(16), default=JobState.pending.value, index=True)
+    state: Mapped[JobState] = mapped_column(
+        enum_type(JobState, "job_state"), default=JobState.pending, index=True
+    )
     payload: Mapped[str] = mapped_column(Text)
     result: Mapped[str | None] = mapped_column(Text)
     error: Mapped[str | None] = mapped_column(Text)

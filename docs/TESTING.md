@@ -1,5 +1,30 @@
 # Testing
 
+## Test seams
+
+Select the seam before writing a behavior test and name it in the issue or specification. Use
+the narrowest seam that proves the caller-visible behavior:
+
+1. **Business-operation seam** — call a public business operation with real local persistence.
+   Use this for permissions, validation, transactions, audit rules and state transitions.
+2. **Inbound-adapter seam** — call HTTP or CLI and assert transport behavior plus outcomes
+   visible through the same interface. Do not repeat business-operation cases at every adapter.
+3. **Adapter-contract seam** — run the same behavioral contract against interchangeable
+   adapters, such as SQLite and PostgreSQL Library Search. Mock only true external systems;
+   prefer real local substitutes for databases, files and other local dependencies.
+4. **End-to-end seam** — retain a small number of critical vertical workflows crossing HTTP,
+   jobs, storage and search. These are tracer bullets, not the default home for every branch.
+
+Assertions should use the seam under test. Direct database assertions are reserved for
+persistence contracts or outcomes with no public query interface, such as an internal Audit
+Event. A test that starts through HTTP and verifies ordinary behavior only through ORM tables is
+coupled to implementation structure and should instead assert the returned page/interface or
+move the behavior to a business-operation test.
+
+Work one vertical slice at a time: one failing behavior test, the minimal implementation that
+makes it pass, then the next behavior. Test names describe domain behavior rather than function
+calls or collaborator interactions.
+
 ## Fast suite
 
 ```sh

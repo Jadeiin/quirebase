@@ -12,8 +12,8 @@ from quirebase.core.errors import (
     ValidationFailure,
 )
 from quirebase.library.audit import record_audit_event
-from quirebase.models import Item, Project, ProjectItem, ProjectMember, User
-from quirebase.operations import search_index
+from quirebase.models import Item, Project, ProjectItem, ProjectMember, ProjectRole, User
+from quirebase.search import search_index
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -26,7 +26,7 @@ def create_project(db: Session, user: User, name: str) -> Project:
     project = Project(name=normalized, created_by=user.id)
     db.add(project)
     db.flush()
-    db.add(ProjectMember(project_id=project.id, user_id=user.id, role="owner"))
+    db.add(ProjectMember(project_id=project.id, user_id=user.id, role=ProjectRole.owner))
     record_audit_event(db, user.id, "project.create", "project", project.id)
     db.commit()
     return project
@@ -79,7 +79,7 @@ def add_item_to_project(db: Session, user: User, project_id: str, item_id: str) 
         item is None
         or not can_read_item(db, user, item_id)
         or membership is None
-        or membership.role not in ("owner", "editor")
+        or membership.role not in (ProjectRole.owner, ProjectRole.editor)
     ):
         raise ResourceUnavailable("item or project not accessible or insufficient permissions")
     if db.get(ProjectItem, (project_id, item_id)) is None:
@@ -104,7 +104,7 @@ def remove_item_from_project(db: Session, user: User, project_id: str, item_id: 
         assignment is None
         or not can_read_item(db, user, item_id)
         or membership is None
-        or membership.role not in ("owner", "editor")
+        or membership.role not in (ProjectRole.owner, ProjectRole.editor)
     ):
         raise ResourceUnavailable("item or project not accessible or insufficient permissions")
     db.delete(assignment)

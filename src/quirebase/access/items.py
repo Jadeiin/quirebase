@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Select, exists, or_, select
 
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable, ValidationFailure
-from quirebase.models import Item, ProjectItem, ProjectMember, SystemRole, User
+from quirebase.models import Item, ProjectItem, ProjectMember, ProjectRole, SystemRole, User
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -42,7 +42,7 @@ def can_edit_item(db: Session, user: User, item_id: str) -> bool:
         ProjectItem.item_id == item_id,
         ProjectMember.project_id == ProjectItem.project_id,
         ProjectMember.user_id == user.id,
-        ProjectMember.role.in_(["owner", "editor"]),
+        ProjectMember.role.in_([ProjectRole.owner, ProjectRole.editor]),
     )
     return bool(db.scalar(select(editable)))
 

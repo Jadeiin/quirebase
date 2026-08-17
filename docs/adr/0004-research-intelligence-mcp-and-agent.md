@@ -4,7 +4,9 @@ Date: 2026-08-15
 
 ## Status
 
-Accepted
+Proposed
+
+Tracking: [#1 Plan staged Research Intelligence and MCP capabilities](https://github.com/Jadeiin/quirebase/issues/1)
 
 ## Context
 
@@ -15,9 +17,11 @@ Specifically:
 2. External AI tools (such as Claude Desktop, Cursor, IDE plugins, CLI agents) require a standardized protocol to inspect libraries, query full-text, and create annotations.
 3. PDF text extraction for research papers requires structural fidelity—preserving LaTeX mathematical formulas, markdown tables, section hierarchies, and figure captions.
 
-## Decision
+## Candidate Direction
 
-We establish two decoupled layers for AI and language model integration:
+If the proposal is validated, Quirebase would establish two decoupled layers for AI and
+language model integration. The concrete libraries, protocols, transports, and module
+interfaces remain subject to staged research and implementation decisions tracked in #1.
 
 ### 1. Domain Capability: `quirebase.intelligence`
 A dedicated capability module providing:
@@ -66,7 +70,7 @@ graph LR
   Extractor --> Documents
 ```
 
-## Consequences
+## Expected Consequences If Accepted
 
 - Core library and storage operations remain 100% independent of AI dependencies.
 - External agent ecosystems can read and write to Quirebase without custom integration code.
