@@ -8,7 +8,7 @@ from test_http import authenticated_client
 
 from quirebase.core.crypto import hash_password
 from quirebase.core.errors import PermissionDenied
-from quirebase.library import bulk_action, bulk_download_pdfs
+from quirebase.library import apply_bulk_item_action, download_item_pdfs
 from quirebase.models import AuditEvent, Item, Project, ProjectItem, ProjectMember, User
 
 
@@ -40,7 +40,7 @@ def test_bulk_action_blocks_unauthorized_assignment_to_project(db, tmp_path, mon
 
     # Attempt to bulk-assign item to target project as viewer_user
     with pytest.raises(PermissionDenied, match="all selected items must be editable"):
-        bulk_action(
+        apply_bulk_item_action(
             db,
             viewer_user,
             item_ids=[item.id],
@@ -63,7 +63,7 @@ def test_bulk_action_records_single_bulk_audit_event(db, tmp_path, monkeypatch):
     db.add(ProjectMember(project_id=target_project.id, user_id=owner.id, role="owner"))
     db.commit()
 
-    bulk_action(
+    apply_bulk_item_action(
         db,
         owner,
         item_ids=[item.id],
@@ -84,7 +84,7 @@ def test_bulk_download_pdfs_records_audit_event(db, tmp_path, monkeypatch):
     _client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
     owner = db.get(User, item.created_by)
 
-    archive = bulk_download_pdfs(db, owner, [item.id])
+    archive = download_item_pdfs(db, owner, [item.id])
     assert archive.getvalue()
 
     event = db.scalar(

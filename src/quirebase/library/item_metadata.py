@@ -1,8 +1,10 @@
+"""Create and revise one Item's bibliographic metadata."""
+
 from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -37,21 +39,9 @@ class Contributor:
 
 
 @dataclass(frozen=True)
-class Contributors:
-    authors: tuple[Contributor, ...] = ()
-    editors: tuple[Contributor, ...] = ()
-
-
-@dataclass(frozen=True)
 class ExternalIdentifier:
     provider: str
     value: str
-
-
-@dataclass(frozen=True)
-class Identifiers:
-    doi: str | None = None
-    others: tuple[ExternalIdentifier, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -61,7 +51,7 @@ class CustomField:
 
 
 @dataclass(frozen=True)
-class BibliographicMetadata:
+class ItemMetadata:
     title: str
     abstract: str | None = None
     keywords: tuple[str, ...] = ()
@@ -78,45 +68,24 @@ class BibliographicMetadata:
     bibtex_key: str | None = None
     bibtex_type: str | None = None
     urls: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True)
-class ItemMetadata:
-    bibliography: BibliographicMetadata
-    contributors: Contributors = field(default_factory=Contributors)
-    identifiers: Identifiers = field(default_factory=Identifiers)
+    authors: tuple[Contributor, ...] = ()
+    editors: tuple[Contributor, ...] = ()
+    doi: str | None = None
+    identifiers: tuple[ExternalIdentifier, ...] = ()
     custom_fields: tuple[CustomField, ...] = ()
 
 
 @dataclass(frozen=True)
-class CreateItem:
-    metadata: ItemMetadata
-
-
-@dataclass(frozen=True)
-class ReviseItemMetadata:
-    item_id: str
-    expected_version: int
-    metadata: ItemMetadata
-
-
-@dataclass(frozen=True)
-class ItemMutationResult:
+class ItemWriteResult:
     item_id: str
     version: int
-
-
-@dataclass(frozen=True)
-class RegenerateBibtexKey:
-    item_id: str
-    expected_version: int
 
 
 def _optional_text(value: str | None) -> str | None:
     return value.strip() or None if value else None
 
 
-def _bibliographic_values(metadata: BibliographicMetadata) -> dict[str, object]:
+def _bibliographic_values(metadata: ItemMetadata) -> dict[str, object]:
     title = metadata.title.strip()
     if not title:
         raise ValidationFailure("title is required")
@@ -141,16 +110,16 @@ def _bibliographic_values(metadata: BibliographicMetadata) -> dict[str, object]:
     }
 
 
-def _identifier_pairs(identifiers: Identifiers) -> list[tuple[str, str]]:
+def _identifier_pairs(metadata: ItemMetadata) -> list[tuple[str, str]]:
     pairs: dict[str, str] = {}
-    for identifier in identifiers.others:
+    for identifier in metadata.identifiers:
         provider = identifier.provider.strip().lower()
         if not provider or provider == "doi":
             continue
         value = clean_identifier_value(provider, identifier.value)
         if value:
             pairs[provider] = value
-    if identifiers.doi and (doi := clean_identifier_value("doi", identifiers.doi)):
+    if metadata.doi and (doi := clean_identifier_value("doi", metadata.doi)):
         pairs["doi"] = doi
     return list(pairs.items())
 
@@ -192,44 +161,44 @@ def _serialize_custom_fields(fields: tuple[CustomField, ...]) -> str | None:
 def _create_item(
     db: Session,
     actor: User,
-    command: CreateItem,
-) -> ItemMutationResult:
-    values = _bibliographic_values(command.metadata.bibliography)
+    metadata: ItemMetadata,
+) -> ItemWriteResult:
+    values = _bibliographic_values(metadata)
     values.update(
-        custom_fields=_serialize_custom_fields(command.metadata.custom_fields),
+        custom_fields=_serialize_custom_fields(metadata.custom_fields),
         created_by=actor.id,
     )
     item = Item(**values)
     db.add(item)
     db.flush()
-    set_item_identifiers(db, actor, item.id, _identifier_pairs(command.metadata.identifiers))
+    set_item_identifiers(db, actor, item.id, _identifier_pairs(metadata))
     set_item_authors(
         db,
         actor,
         item.id,
-        _contributor_payload(command.metadata.contributors.authors, editor=False),
+        _contributor_payload(metadata.authors, editor=False),
         role="author",
     )
     set_item_authors(
         db,
         actor,
         item.id,
-        _contributor_payload(command.metadata.contributors.editors, editor=True),
+        _contributor_payload(metadata.editors, editor=True),
         role="editor",
     )
     search_index(db).index_item(db, item.id)
     record_event(db, actor.id, "item.create", "item", item.id)
     db.commit()
-    return ItemMutationResult(item_id=item.id, version=item.version)
+    return ItemWriteResult(item_id=item.id, version=item.version)
 
 
 def create_item(
     db: Session,
     actor: User,
-    command: CreateItem,
-) -> ItemMutationResult:
+    metadata: ItemMetadata,
+) -> ItemWriteResult:
     try:
-        return _create_item(db, actor, command)
+        return _create_item(db, actor, metadata)
     except Exception:
         db.rollback()
         raise
@@ -238,65 +207,67 @@ def create_item(
 def _revise_item_metadata(
     db: Session,
     actor: User,
-    command: ReviseItemMetadata,
-) -> ItemMutationResult:
-    require_editable_item(db, actor, command.item_id)
-    values = _bibliographic_values(command.metadata.bibliography)
+    item_id: str,
+    expected_version: int,
+    metadata: ItemMetadata,
+) -> ItemWriteResult:
+    require_editable_item(db, actor, item_id)
+    values = _bibliographic_values(metadata)
     values.update(
-        custom_fields=_serialize_custom_fields(command.metadata.custom_fields),
+        custom_fields=_serialize_custom_fields(metadata.custom_fields),
         updated_by=actor.id,
         updated_at=datetime.now(UTC),
         version=Item.version + 1,
     )
     version = db.scalar(
         update(Item)
-        .where(Item.id == command.item_id, Item.version == command.expected_version)
+        .where(Item.id == item_id, Item.version == expected_version)
         .values(**values)
         .returning(Item.version)
     )
     if version is None:
         db.rollback()
-        current = db.get(Item, command.item_id)
+        current = db.get(Item, item_id)
         raise VersionConflict(current.version if current else None)
 
-    set_item_identifiers(
-        db, actor, command.item_id, _identifier_pairs(command.metadata.identifiers)
-    )
+    set_item_identifiers(db, actor, item_id, _identifier_pairs(metadata))
     set_item_authors(
         db,
         actor,
-        command.item_id,
-        _contributor_payload(command.metadata.contributors.authors, editor=False),
+        item_id,
+        _contributor_payload(metadata.authors, editor=False),
         role="author",
     )
     set_item_authors(
         db,
         actor,
-        command.item_id,
-        _contributor_payload(command.metadata.contributors.editors, editor=True),
+        item_id,
+        _contributor_payload(metadata.editors, editor=True),
         role="editor",
     )
     db.expire_all()
-    search_index(db).index_item(db, command.item_id)
+    search_index(db).index_item(db, item_id)
     record_event(
         db,
         actor.id,
         "item.update",
         "item",
-        command.item_id,
+        item_id,
         detail={"version": version},
     )
     db.commit()
-    return ItemMutationResult(item_id=command.item_id, version=version)
+    return ItemWriteResult(item_id=item_id, version=version)
 
 
 def revise_item_metadata(
     db: Session,
     actor: User,
-    command: ReviseItemMetadata,
-) -> ItemMutationResult:
+    item_id: str,
+    expected_version: int,
+    metadata: ItemMetadata,
+) -> ItemWriteResult:
     try:
-        return _revise_item_metadata(db, actor, command)
+        return _revise_item_metadata(db, actor, item_id, expected_version, metadata)
     except Exception:
         db.rollback()
         raise
@@ -305,13 +276,14 @@ def revise_item_metadata(
 def _regenerate_bibtex_key(
     db: Session,
     actor: User,
-    command: RegenerateBibtexKey,
-) -> ItemMutationResult:
-    item = require_editable_item(db, actor, command.item_id)
+    item_id: str,
+    expected_version: int,
+) -> ItemWriteResult:
+    item = require_editable_item(db, actor, item_id)
     key = generate_bibtex_key(item)
     version = db.scalar(
         update(Item)
-        .where(Item.id == command.item_id, Item.version == command.expected_version)
+        .where(Item.id == item_id, Item.version == expected_version)
         .values(
             bibtex_id=key,
             updated_by=actor.id,
@@ -322,29 +294,30 @@ def _regenerate_bibtex_key(
     )
     if version is None:
         db.rollback()
-        current = db.get(Item, command.item_id)
+        current = db.get(Item, item_id)
         raise VersionConflict(current.version if current else None)
     db.expire_all()
-    search_index(db).index_item(db, command.item_id)
+    search_index(db).index_item(db, item_id)
     record_event(
         db,
         actor.id,
         "item.bibtex_key.regenerate",
         "item",
-        command.item_id,
+        item_id,
         detail={"version": version},
     )
     db.commit()
-    return ItemMutationResult(item_id=command.item_id, version=version)
+    return ItemWriteResult(item_id=item_id, version=version)
 
 
 def regenerate_bibtex_key(
     db: Session,
     actor: User,
-    command: RegenerateBibtexKey,
-) -> ItemMutationResult:
+    item_id: str,
+    expected_version: int,
+) -> ItemWriteResult:
     try:
-        return _regenerate_bibtex_key(db, actor, command)
+        return _regenerate_bibtex_key(db, actor, item_id, expected_version)
     except Exception:
         db.rollback()
         raise

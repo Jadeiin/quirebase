@@ -1,0 +1,82 @@
+<form class="metadata-form" method="post" action="{{ form_action }}?csrf_token={{ csrf }}">
+  {% if form_version is defined and form_version is not none %}<input type="hidden" name="version" value="{{ form_version }}">{% endif %}
+  <label class="span-2">{{ _('Title') }} <input name="title" value="{{ form_item.title or '' }}" required></label>
+
+  <div class="span-2 author-editor-container" x-data="authorEditor" data-initial-authors='{{ initial_authors|tojson }}'>
+    <label><strong>{{ _('Authors (Structured & Ranked)') }}</strong></label>
+    <template x-for="(author, index) in authors" :key="index">
+      <div class="author-input-row">
+        <div class="author-suggest-wrapper">
+          <input name="author_last_name[]" x-model="author.last_name" placeholder="{{ _('Last name') }}" @input.debounce.300ms="suggest(index)" autocomplete="off">
+          <ul class="suggest-dropdown" x-show="author.suggestions && author.suggestions.length > 0">
+            <template x-for="s in author.suggestions" :key="s.id">
+              <li class="suggest-item" @click="selectSuggestion(index, s)" x-text="s.full_name"></li>
+            </template>
+          </ul>
+        </div>
+        <input name="author_first_name[]" x-model="author.first_name" placeholder="{{ _('First name / initials') }}">
+        <label class="corr-label"><input type="checkbox" name="author_is_corr[]" :value="index" x-model="author.is_corresponding"> {{ _('Corr.') }}</label>
+        <button type="button" class="secondary-button compact-button" @click="moveUp(index)" :disabled="index === 0" title="{{ _('Move up') }}">↑</button>
+        <button type="button" class="secondary-button compact-button" @click="moveDown(index)" :disabled="index === authors.length - 1" title="{{ _('Move down') }}">↓</button>
+        <button type="button" class="secondary-button compact-button" @click="remove(index)" title="{{ _('Remove author') }}">×</button>
+      </div>
+    </template>
+    <div><button type="button" class="secondary-button compact-button" @click="add()">+ {{ _('Add author') }}</button></div>
+  </div>
+
+  <div class="span-2 author-editor-container" x-data="editorEditor" data-initial-editors='{{ initial_editors|tojson }}'>
+    <input type="hidden" name="structured_editors_present" value="true">
+    <label><strong>{{ _('Editors (Structured)') }}</strong></label>
+    <template x-for="(editor, index) in editors" :key="index">
+      <div class="author-input-row">
+        <div class="author-suggest-wrapper">
+          <input name="editor_last_name[]" x-model="editor.last_name" placeholder="{{ _('Editor last name') }}" @input.debounce.300ms="suggest(index)" autocomplete="off">
+          <ul class="suggest-dropdown" x-show="editor.suggestions && editor.suggestions.length > 0">
+            <template x-for="s in editor.suggestions" :key="s.id">
+              <li class="suggest-item" @click="selectSuggestion(index, s)" x-text="s.full_name"></li>
+            </template>
+          </ul>
+        </div>
+        <input name="editor_first_name[]" x-model="editor.first_name" placeholder="{{ _('Editor first name') }}">
+        <button type="button" class="secondary-button compact-button" @click="remove(index)">×</button>
+      </div>
+    </template>
+    <div><button type="button" class="secondary-button compact-button" @click="add()">+ {{ _('Add editor') }}</button></div>
+  </div>
+
+  <label>{{ _('Reference type') }}
+    <select name="reference_type">
+      <option value="article" {% if form_item.reference_type == 'article' %}selected{% endif %}>{{ _('Article / Journal') }}</option>
+      <option value="book" {% if form_item.reference_type == 'book' %}selected{% endif %}>{{ _('Book') }}</option>
+      <option value="chapter" {% if form_item.reference_type == 'chapter' %}selected{% endif %}>{{ _('Chapter / Incollection') }}</option>
+      <option value="conference" {% if form_item.reference_type == 'conference' %}selected{% endif %}>{{ _('Conference Paper') }}</option>
+      <option value="dataset" {% if form_item.reference_type == 'dataset' %}selected{% endif %}>{{ _('Dataset') }}</option>
+      <option value="thesis" {% if form_item.reference_type == 'thesis' %}selected{% endif %}>{{ _('Thesis / Dissertation') }}</option>
+      <option value="patent" {% if form_item.reference_type == 'patent' %}selected{% endif %}>{{ _('Patent') }}</option>
+      <option value="report" {% if form_item.reference_type == 'report' %}selected{% endif %}>{{ _('Report / Tech Report') }}</option>
+      <option value="standard" {% if form_item.reference_type == 'standard' %}selected{% endif %}>{{ _('Standard') }}</option>
+      <option value="generic" {% if form_item.reference_type in ('generic', none, '') %}selected{% endif %}>{{ _('Generic / Misc') }}</option>
+    </select>
+  </label>
+  <label>{{ _('Publication date (YYYY-MM-DD)') }} <input name="publication_date" value="{{ form_item.publication_date or '' }}" placeholder="2026-05-12"></label>
+  <label>{{ _('Publication / Journal name') }} <input name="publication_title" value="{{ form_item.publication_title or '' }}"></label>
+  <label>{{ _('Journal abbreviation') }} <input name="journal_abbreviation" value="{{ form_item.journal_abbreviation or '' }}" placeholder="e.g. Nat. Mach. Intell."></label>
+  <label>{{ _('Volume') }} <input name="volume" value="{{ form_item.volume or '' }}"></label>
+  <label>{{ _('Issue') }} <input name="issue" value="{{ form_item.issue or '' }}"></label>
+  <label>{{ _('Pages') }} <input name="pages" value="{{ form_item.pages or '' }}" placeholder="e.g. 100-115"></label>
+  <label>{{ _('Affiliation / Institution') }} <input name="affiliation" value="{{ form_item.affiliation or '' }}" placeholder="e.g. Stanford University"></label>
+  <label>{{ _('Publisher') }} <input name="publisher" value="{{ form_item.publisher or '' }}"></label>
+  <label>{{ _('Place published') }} <input name="place_published" value="{{ form_item.place_published or '' }}"></label>
+  <label class="span-2">{{ _('DOI') }} <input name="doi" value="{{ form_item.doi or '' }}"></label>
+  <label>{{ _('BibTeX ID (Citation key)') }} <input name="bibtex_id" value="{{ form_item.bibtex_id or '' }}"></label>
+  <label>{{ _('BibTeX type') }} <input name="bibtex_type" value="{{ form_item.bibtex_type or '' }}" placeholder="e.g. article"></label>
+  <label class="span-2">{{ _('URLs (one per line)') }} <textarea name="urls" rows="2">{{ form_item.urls or '' }}</textarea></label>
+  <label class="span-2">{{ _('Keywords') }} <input name="keywords" value="{{ form_item.keywords or '' }}" placeholder="{{ _('Separate keywords with semicolons') }}"></label>
+  <label class="span-2">{{ _('Abstract') }} <textarea name="abstract" rows="6">{{ form_item.abstract or '' }}</textarea></label>
+
+  <details class="span-2 advanced-fields"><summary>{{ _('Advanced identifiers & Custom fields') }}</summary><div class="metadata-form">
+    <label>{{ _('Identifiers (JSON object)') }} <textarea name="identifiers">{{ form_item.identifiers or '' }}</textarea></label>
+    <label>{{ _('Custom fields (JSON object)') }} <textarea name="custom_fields">{{ form_item.custom_fields or '' }}</textarea></label>
+  </div></details>
+  <div class="form-actions span-2"><button>{{ form_submit_label }}</button></div>
+</form>

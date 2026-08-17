@@ -47,7 +47,13 @@ def import_page(
     return templates.TemplateResponse(
         request,
         "import.html",
-        {"user": user, "csrf": login.csrf_token, "active_page": "import"},
+        {
+            "user": user,
+            "csrf": login.csrf_token,
+            "active_page": "import",
+            "initial_authors": [],
+            "initial_editors": [],
+        },
     )
 
 

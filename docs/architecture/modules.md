@@ -47,18 +47,25 @@ callers select the configured implementation through `search_index`. Mutable Job
 low-level document staging, ORM synchronization helpers and operational file utilities likewise
 stay in their owning implementation modules rather than package facades.
 
-Item metadata mutation crosses the Library interface through typed `CreateItem`,
-`ReviseItemMetadata` and `RegenerateBibtexKey` commands. Contributor, identifier and custom
-field values are parsed before crossing the seam; permission, optimistic concurrency,
-persistence caches, Search synchronization, Audit Event recording and commit order remain in
-the Library implementation. These operations return an immutable Item identity and version,
-not a mutable ORM aggregate.
+Item metadata mutation crosses the Library interface through `create_item`,
+`revise_item_metadata` and `regenerate_bibtex_key`. Creation and revision share one flat,
+typed `ItemMetadata` value; Contributor, identifier and custom-field values are parsed before
+crossing the seam. Permission, optimistic concurrency, persistence caches, Search
+synchronization, Audit Event recording and commit order remain in the Library implementation.
+These operations return an immutable Item identity and version, not a mutable ORM aggregate.
+Their implementation lives in `library.item_metadata`; that internal Module owns writes to one
+Item's bibliographic record, not unrelated Item operations.
+
+Operations over a user-selected set of Items live in `library.bulk_items`. This Module owns the
+bulk-operation transaction, all-selected authorization rule, audit event and post-commit file
+cleanup. It does not define single-Item metadata behaviour or Item workspace queries.
 
 Opening an Item crosses the Library interface through `open_item_workspace` with a typed
 `WorkspaceSection`. Summary, Metadata, Files, Organize, Annotations and Discussion each return a
 section-specific read model; only the Web adapter maps those views to template context. Access
 validation, section query selection and recent-reading persistence remain coordinated behind the
-same operation seam.
+same operation seam. The implementation lives in `library.item_workspace`, which owns reads for
+one opened Item and no Item mutation or bulk behaviour.
 
 Discovery keeps `search_metadata` and `lookup_metadata` as its Provider-facing business
 interfaces. A private Provider registration co-locates identity, identifier aliases and parsing,

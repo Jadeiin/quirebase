@@ -1,3 +1,5 @@
+"""Open one Item and build the read model for its selected workspace section."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

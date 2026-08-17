@@ -12,7 +12,7 @@ from quirebase.discovery import (
     export_selected_bibliography,
     list_custom_citation_styles,
 )
-from quirebase.library import bulk_action, bulk_download_pdfs, search_library
+from quirebase.library import apply_bulk_item_action, download_item_pdfs, search_library
 from quirebase.models import LoginSession, User
 from quirebase.web.deps import current_login, current_user, require_csrf
 from quirebase.web.templates import templates
@@ -110,14 +110,14 @@ def library_bulk_action(
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
     if action == "download_pdfs":
-        archive = bulk_download_pdfs(db, user, item_ids)
+        archive = download_item_pdfs(db, user, item_ids)
         return StreamingResponse(
             archive,
             media_type="application/zip",
             headers={"Content-Disposition": 'attachment; filename="quirebase-pdfs.zip"'},
         )
 
-    bulk_action(
+    apply_bulk_item_action(
         db,
         user,
         item_ids=item_ids,

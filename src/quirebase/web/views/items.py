@@ -23,21 +23,15 @@ from quirebase.documents import (
 )
 from quirebase.library import (
     AnnotationsWorkspace,
-    BibliographicMetadata,
     Contributor,
-    Contributors,
-    CreateItem,
     CustomField,
     DiscussionWorkspace,
     ExternalIdentifier,
     FilesWorkspace,
-    Identifiers,
     ItemMetadata,
     JsonValue,
     MetadataWorkspace,
     OrganizeWorkspace,
-    RegenerateBibtexKey,
-    ReviseItemMetadata,
     SummaryWorkspace,
     WorkspaceSection,
     add_tag_to_item,
@@ -109,7 +103,7 @@ def _people_from_text(value: str) -> tuple[Contributor, ...]:
     )
 
 
-def _identifiers_from_form(doi: str, encoded: str) -> Identifiers:
+def _identifiers_from_form(encoded: str) -> tuple[ExternalIdentifier, ...]:
     entries: tuple[ExternalIdentifier, ...] = ()
     if encoded.strip():
         try:
@@ -124,7 +118,7 @@ def _identifiers_from_form(doi: str, encoded: str) -> Identifiers:
         ):
             raise ValidationFailure("identifier names and values must be strings")
         entries = tuple(ExternalIdentifier(provider, value) for provider, value in parsed.items())
-    return Identifiers(doi=doi.strip() or None, others=entries)
+    return entries
 
 
 def _custom_fields_from_form(encoded: str) -> tuple[CustomField, ...]:
@@ -147,6 +141,70 @@ def _json_value(value: object) -> JsonValue:
     if isinstance(value, dict) and all(isinstance(key, str) for key in value):
         return {str(key): _json_value(entry) for key, entry in value.items()}
     raise ValidationFailure("custom fields contain an unsupported value")
+
+
+def _item_metadata_from_form(
+    title: str = Form(),
+    abstract: str = Form(default=""),
+    authors: str = Form(default=""),
+    editors: str = Form(default=""),
+    keywords: str = Form(default=""),
+    publication_date: str = Form(default=""),
+    publication_title: str = Form(default=""),
+    doi: str = Form(default=""),
+    reference_type: str = Form(default=""),
+    volume: str = Form(default=""),
+    issue: str = Form(default=""),
+    pages: str = Form(default=""),
+    affiliation: str = Form(default=""),
+    publisher: str = Form(default=""),
+    place_published: str = Form(default=""),
+    journal_abbreviation: str = Form(default=""),
+    bibtex_id: str = Form(default=""),
+    bibtex_type: str = Form(default=""),
+    urls: str = Form(default=""),
+    identifiers: str = Form(default=""),
+    custom_fields: str = Form(default=""),
+    author_last_name: list[str] = Form(default=[]),
+    author_first_name: list[str] = Form(default=[]),
+    author_is_corr: list[str] = Form(default=[]),
+    editor_last_name: list[str] = Form(default=[]),
+    editor_first_name: list[str] = Form(default=[]),
+    structured_editors_present: bool = Form(default=False),
+) -> ItemMetadata:
+    parsed_authors = (
+        _structured_people(author_last_name, author_first_name, author_is_corr)
+        if author_last_name
+        else _people_from_text(authors)
+    )
+    parsed_editors = (
+        _structured_people(editor_last_name, editor_first_name)
+        if editor_last_name or structured_editors_present
+        else _people_from_text(editors)
+    )
+    return ItemMetadata(
+        title=title,
+        abstract=abstract,
+        keywords=tuple(value.strip() for value in keywords.split(";") if value.strip()),
+        publication_date=publication_date,
+        publication_title=publication_title,
+        reference_type=reference_type,
+        volume=volume,
+        issue=issue,
+        pages=pages,
+        affiliation=affiliation,
+        publisher=publisher,
+        place_published=place_published,
+        journal_abbreviation=journal_abbreviation,
+        bibtex_key=bibtex_id,
+        bibtex_type=bibtex_type,
+        urls=tuple(value.strip() for value in urls.splitlines() if value.strip()),
+        authors=parsed_authors,
+        editors=parsed_editors,
+        doi=doi,
+        identifiers=_identifiers_from_form(identifiers),
+        custom_fields=_custom_fields_from_form(custom_fields),
+    )
 
 
 def _initial_structured_people(
@@ -233,22 +291,11 @@ def render_item_workspace(
 
 @router.post("/items", dependencies=[Depends(require_csrf)])
 def create_item(
-    title: str = Form(),
-    abstract: str = Form(default=""),
-    authors: str = Form(default=""),
+    metadata: ItemMetadata = Depends(_item_metadata_from_form),
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    result = create_item_op(
-        db,
-        user,
-        CreateItem(
-            metadata=ItemMetadata(
-                bibliography=BibliographicMetadata(title=title, abstract=abstract),
-                contributors=Contributors(authors=_people_from_text(authors)),
-            )
-        ),
-    )
+    result = create_item_op(db, user, metadata)
     return RedirectResponse(f"/items/{result.item_id}", status_code=303)
 
 
@@ -279,75 +326,11 @@ def item_section_page(
 def edit_item(
     item_id: str,
     version: int = Form(),
-    title: str = Form(),
-    abstract: str = Form(default=""),
-    authors: str = Form(default=""),
-    editors: str = Form(default=""),
-    keywords: str = Form(default=""),
-    publication_date: str = Form(default=""),
-    publication_title: str = Form(default=""),
-    doi: str = Form(default=""),
-    reference_type: str = Form(default=""),
-    volume: str = Form(default=""),
-    issue: str = Form(default=""),
-    pages: str = Form(default=""),
-    affiliation: str = Form(default=""),
-    publisher: str = Form(default=""),
-    place_published: str = Form(default=""),
-    journal_abbreviation: str = Form(default=""),
-    bibtex_id: str = Form(default=""),
-    bibtex_type: str = Form(default=""),
-    urls: str = Form(default=""),
-    identifiers: str = Form(default=""),
-    custom_fields: str = Form(default=""),
-    author_last_name: list[str] = Form(default=[]),
-    author_first_name: list[str] = Form(default=[]),
-    author_is_corr: list[str] = Form(default=[]),
-    editor_last_name: list[str] = Form(default=[]),
-    editor_first_name: list[str] = Form(default=[]),
-    structured_editors_present: bool = Form(default=False),
+    metadata: ItemMetadata = Depends(_item_metadata_from_form),
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    parsed_authors = (
-        _structured_people(author_last_name, author_first_name, author_is_corr)
-        if author_last_name
-        else _people_from_text(authors)
-    )
-    parsed_editors = (
-        _structured_people(editor_last_name, editor_first_name)
-        if editor_last_name or structured_editors_present
-        else _people_from_text(editors)
-    )
-
-    command = ReviseItemMetadata(
-        item_id=item_id,
-        expected_version=version,
-        metadata=ItemMetadata(
-            bibliography=BibliographicMetadata(
-                title=title,
-                abstract=abstract,
-                keywords=tuple(value.strip() for value in keywords.split(";") if value.strip()),
-                publication_date=publication_date,
-                publication_title=publication_title,
-                reference_type=reference_type,
-                volume=volume,
-                issue=issue,
-                pages=pages,
-                affiliation=affiliation,
-                publisher=publisher,
-                place_published=place_published,
-                journal_abbreviation=journal_abbreviation,
-                bibtex_key=bibtex_id,
-                bibtex_type=bibtex_type,
-                urls=tuple(value.strip() for value in urls.splitlines() if value.strip()),
-            ),
-            contributors=Contributors(authors=parsed_authors, editors=parsed_editors),
-            identifiers=_identifiers_from_form(doi, identifiers),
-            custom_fields=_custom_fields_from_form(custom_fields),
-        ),
-    )
-    result = revise_item_metadata(db, user, command)
+    result = revise_item_metadata(db, user, item_id, version, metadata)
     return RedirectResponse(f"/items/{result.item_id}/metadata", status_code=303)
 
 
@@ -383,7 +366,8 @@ def update_bibtex_key_route(
     regenerate_bibtex_key(
         db,
         user,
-        RegenerateBibtexKey(item_id=item_id, expected_version=version),
+        item_id,
+        version,
     )
     return RedirectResponse(f"/items/{item_id}", status_code=303)
 

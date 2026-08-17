@@ -7,7 +7,7 @@
   <button type="button" data-method="doi" @click="selectMethod" :aria-selected="active === 'doi'">{{ _('Online identifier') }}</button>
   <button type="button" data-method="bibliography" @click="selectMethod" :aria-selected="active === 'bibliography'">{{ _('Bibliography file') }}</button>
   <button type="button" data-method="published" @click="selectMethod" :aria-selected="active === 'published'">{{ _('Published PDF') }}</button>
-  <button type="button" data-method="unpublished" @click="selectMethod" :aria-selected="active === 'unpublished'">{{ _('Unpublished PDF') }}</button>
+  <button type="button" data-method="manual" @click="selectMethod" :aria-selected="active === 'manual'">{{ _('New item') }}</button>
 </nav>
 <div class="import-grid">
   <section class="panel import-card featured" x-show="active === 'doi'">
@@ -40,17 +40,13 @@
     </form>
   </section>
 
-  <section class="panel import-card" x-show="active === 'unpublished'">
-    <span class="module-number">04</span><h2>{{ _('Unpublished PDF') }}</h2>
-    <p>{{ _('Add a preprint, manuscript, report, or private document and enter its metadata manually.') }}</p>
-    <form method="post" action="/imports/pdf/unpublished?csrf_token={{ csrf }}" enctype="multipart/form-data">
-      <label>{{ _('Title') }}<input name="title" required></label>
-      <label>{{ _('Authors') }}<input name="authors" placeholder="{{ _('Separate authors with semicolons') }}"></label>
-      <label>{{ _('Keywords') }}<input name="keywords" placeholder="{{ _('Separate keywords with semicolons') }}"></label>
-      <label>{{ _('Abstract') }}<textarea name="abstract" rows="3"></textarea></label>
-      <label>PDF<input type="file" name="pdf" accept="application/pdf,.pdf" required></label>
-      <button>{{ _('Import unpublished PDF') }}</button>
-    </form>
+  <section class="panel import-card manual-item-card" x-show="active === 'manual'">
+    <span class="module-number">04</span><h2>{{ _('New item') }}</h2>
+    <p>{{ _('Enter a complete bibliographic record manually. Files, tags, and projects can be added after creation.') }}</p>
+    {% set form_action = '/items' %}
+    {% set form_item = {} %}
+    {% set form_submit_label = _('Create item') %}
+    {% include "_item_metadata_form.html" %}
   </section>
 
   <section class="panel import-card future-card">

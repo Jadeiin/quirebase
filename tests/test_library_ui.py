@@ -196,7 +196,7 @@ def test_pdf_import_modules(db, tmp_path, monkeypatch):
         assert "通过标识符导入" in import_page.text
         assert "文献记录文件" in import_page.text
         assert "已发表 PDF" in import_page.text
-        assert "未发表 PDF" in import_page.text
+        assert 'data-method="manual"' in import_page.text
         assert "IEEE Xplore" in import_page.text
 
         uploaded = client.post(

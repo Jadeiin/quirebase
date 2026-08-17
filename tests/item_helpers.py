@@ -1,10 +1,7 @@
 from __future__ import annotations
 
 from quirebase.library import (
-    BibliographicMetadata,
     Contributor,
-    Contributors,
-    CreateItem,
     ItemMetadata,
     create_item,
     parse_author_list_string,
@@ -30,12 +27,7 @@ def create_item_record(
     result = create_item(
         db,
         actor,
-        CreateItem(
-            metadata=ItemMetadata(
-                bibliography=BibliographicMetadata(title=title, abstract=abstract),
-                contributors=Contributors(authors=contributors),
-            )
-        ),
+        ItemMetadata(title=title, abstract=abstract, authors=contributors),
     )
     item = db.get(Item, result.item_id)
     assert item is not None

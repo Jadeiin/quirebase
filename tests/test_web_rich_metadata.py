@@ -8,6 +8,84 @@ from test_http import authenticated_client
 from quirebase.models import Author, Item, ItemAuthor, ItemIdentifier, ItemTag, Tag
 
 
+def test_web_new_item_exposes_and_saves_complete_metadata(db, tmp_path, monkeypatch):
+    client, _item, _ = authenticated_client(db, tmp_path, monkeypatch)
+
+    page = client.get("/bibliography/import")
+    assert page.status_code == 200
+    assert 'data-method="manual"' in page.text
+    for field in (
+        "title",
+        "author_last_name[]",
+        "editor_last_name[]",
+        "reference_type",
+        "publication_date",
+        "publication_title",
+        "journal_abbreviation",
+        "volume",
+        "issue",
+        "pages",
+        "affiliation",
+        "publisher",
+        "place_published",
+        "doi",
+        "bibtex_id",
+        "bibtex_type",
+        "urls",
+        "keywords",
+        "abstract",
+        "identifiers",
+        "custom_fields",
+    ):
+        assert f'name="{field}"' in page.text
+
+    response = client.post(
+        "/items?csrf_token=test-csrf",
+        data={
+            "title": "Complete manual record",
+            "abstract": "All editable metadata is accepted during creation.",
+            "reference_type": "article",
+            "publication_date": "2026-08-17",
+            "publication_title": "Journal of Complete Forms",
+            "journal_abbreviation": "JCF",
+            "volume": "12",
+            "issue": "3",
+            "pages": "10-20",
+            "affiliation": "Quirebase Lab",
+            "publisher": "Example Press",
+            "place_published": "Shanghai",
+            "doi": "https://doi.org/10.1000/complete",
+            "bibtex_id": "complete2026record",
+            "bibtex_type": "article",
+            "urls": "https://example.test/record\nhttps://example.test/pdf",
+            "keywords": "forms; metadata",
+            "identifiers": '{"pmid": "12345"}',
+            "custom_fields": '{"rating": 5}',
+            "author_last_name": ["Lovelace", "Turing"],
+            "author_first_name": ["Ada", "Alan"],
+            "author_is_corr": ["0"],
+            "editor_last_name": ["Hopper"],
+            "editor_first_name": ["Grace"],
+            "structured_editors_present": "true",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    created = db.query(Item).filter_by(title="Complete manual record").one()
+    assert response.headers["location"] == f"/items/{created.id}"
+    assert created.authors == "Lovelace, Ada; Turing, Alan"
+    assert created.editors == "Hopper, Grace"
+    assert created.doi == "10.1000/complete"
+    assert json.loads(created.identifiers or "") == {
+        "doi": "10.1000/complete",
+        "pmid": "12345",
+    }
+    assert created.keywords == "forms; metadata"
+    assert created.urls == "https://example.test/record\nhttps://example.test/pdf"
+    assert json.loads(created.custom_fields or "") == {"rating": 5}
+
+
 def test_web_edit_rich_metadata_and_structured_authors(db, tmp_path, monkeypatch):
     client, item, _ = authenticated_client(db, tmp_path, monkeypatch)
     csrf = "test-csrf"

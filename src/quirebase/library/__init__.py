@@ -9,44 +9,28 @@ from quirebase.library.authors import (
     parse_author_list_string,
     search_authors_typeahead,
 )
+from quirebase.library.bulk_items import (
+    apply_bulk_item_action,
+    download_item_pdfs,
+)
 from quirebase.library.catalog import find_duplicates, get_dashboard_data, search_library
 from quirebase.library.discussions import add_discussion_message, delete_discussion_message
 from quirebase.library.identifiers import (
     rescan_pdf_doi,
     sync_metadata_from_upstream,
 )
-from quirebase.library.item_mutations import (
-    BibliographicMetadata,
+from quirebase.library.item_metadata import (
     Contributor,
-    Contributors,
-    CreateItem,
     CustomField,
     ExternalIdentifier,
-    Identifiers,
     ItemMetadata,
-    ItemMutationResult,
+    ItemWriteResult,
     JsonValue,
-    RegenerateBibtexKey,
-    ReviseItemMetadata,
     create_item,
     regenerate_bibtex_key,
     revise_item_metadata,
 )
-from quirebase.library.items import (
-    bulk_action,
-    bulk_download_pdfs,
-)
-from quirebase.library.tags import (
-    TagConflict,
-    add_tag_to_item,
-    delete_tag,
-    list_accessible_tags_with_counts,
-    merge_tags,
-    remove_tag_from_item,
-    rename_tag,
-    set_item_tags,
-)
-from quirebase.library.workspace import (
+from quirebase.library.item_workspace import (
     AnnotationsWorkspace,
     AnnotationView,
     DiscussionWorkspace,
@@ -62,28 +46,32 @@ from quirebase.library.workspace import (
     WorkspaceView,
     open_item_workspace,
 )
+from quirebase.library.tags import (
+    TagConflict,
+    add_tag_to_item,
+    delete_tag,
+    list_accessible_tags_with_counts,
+    merge_tags,
+    remove_tag_from_item,
+    rename_tag,
+    set_item_tags,
+)
 
 __all__ = [
     "AnnotationView",
     "AnnotationsWorkspace",
-    "BibliographicMetadata",
     "Contributor",
-    "Contributors",
-    "CreateItem",
     "CustomField",
     "DiscussionWorkspace",
     "ExternalIdentifier",
     "FilesWorkspace",
-    "Identifiers",
     "ItemMetadata",
-    "ItemMutationResult",
     "ItemWorkspace",
+    "ItemWriteResult",
     "JsonValue",
     "MetadataWorkspace",
     "OrganizeWorkspace",
     "ProjectMembership",
-    "RegenerateBibtexKey",
-    "ReviseItemMetadata",
     "SummaryWorkspace",
     "TagConflict",
     "TagGroup",
@@ -93,11 +81,11 @@ __all__ = [
     "add_discussion_message",
     "add_tag_to_item",
     "admin_delete_item",
-    "bulk_action",
-    "bulk_download_pdfs",
+    "apply_bulk_item_action",
     "create_item",
     "delete_discussion_message",
     "delete_tag",
+    "download_item_pdfs",
     "find_duplicates",
     "get_dashboard_data",
     "get_storage_metrics",

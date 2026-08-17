@@ -5,16 +5,10 @@ import pytest
 from quirebase.audit import query_events
 from quirebase.core.errors import ResourceUnavailable, ValidationFailure
 from quirebase.library import (
-    BibliographicMetadata,
     Contributor,
-    Contributors,
-    CreateItem,
     ExternalIdentifier,
-    Identifiers,
     ItemMetadata,
     MetadataWorkspace,
-    RegenerateBibtexKey,
-    ReviseItemMetadata,
     SummaryWorkspace,
     WorkspaceSection,
     create_item,
@@ -48,7 +42,8 @@ def test_regenerate_bibtex_key_is_a_narrow_atomic_item_mutation(db):
     result = regenerate_bibtex_key(
         db,
         owner,
-        RegenerateBibtexKey(item_id=item.id, expected_version=item.version),
+        item.id,
+        item.version,
     )
 
     workspace = open_item_workspace(db, owner, item.id, WorkspaceSection.metadata)
@@ -85,18 +80,14 @@ def test_revise_item_metadata_makes_the_dedicated_doi_authoritative(db):
     result = revise_item_metadata(
         db,
         owner,
-        ReviseItemMetadata(
-            item_id=item.id,
-            expected_version=item.version,
-            metadata=ItemMetadata(
-                bibliography=BibliographicMetadata(title=item.title),
-                identifiers=Identifiers(
-                    doi="https://doi.org/10.1000/new",
-                    others=(
-                        ExternalIdentifier("doi", "10.1000/stale"),
-                        ExternalIdentifier("arxiv", "2401.12345"),
-                    ),
-                ),
+        item.id,
+        item.version,
+        ItemMetadata(
+            title=item.title,
+            doi="https://doi.org/10.1000/new",
+            identifiers=(
+                ExternalIdentifier("doi", "10.1000/stale"),
+                ExternalIdentifier("arxiv", "2401.12345"),
             ),
         ),
     )
@@ -124,19 +115,15 @@ def test_revise_item_metadata_replaces_contributors_in_order(db):
     revise_item_metadata(
         db,
         owner,
-        ReviseItemMetadata(
-            item_id=item.id,
-            expected_version=item.version,
-            metadata=ItemMetadata(
-                bibliography=BibliographicMetadata(title=item.title),
-                contributors=Contributors(
-                    authors=(
-                        Contributor("Shannon", "Claude", is_corresponding=True),
-                        Contributor("Weaver", "Warren"),
-                    ),
-                    editors=(),
-                ),
+        item.id,
+        item.version,
+        ItemMetadata(
+            title=item.title,
+            authors=(
+                Contributor("Shannon", "Claude", is_corresponding=True),
+                Contributor("Weaver", "Warren"),
             ),
+            editors=(),
         ),
     )
 
@@ -163,19 +150,13 @@ def test_create_item_accepts_typed_metadata_and_returns_a_mutation_result(db):
     result = create_item(
         db,
         owner,
-        CreateItem(
-            metadata=ItemMetadata(
-                bibliography=BibliographicMetadata(
-                    title="A Mathematical Theory of Communication",
-                    abstract="The fundamental problem of communication.",
-                    publication_date="1948",
-                    keywords=("Information Theory", "Communication"),
-                ),
-                contributors=Contributors(
-                    authors=(Contributor("Shannon", "Claude"),),
-                ),
-                identifiers=Identifiers(doi="10.1002/j.1538-7305.1948.tb01338.x"),
-            )
+        ItemMetadata(
+            title="A Mathematical Theory of Communication",
+            abstract="The fundamental problem of communication.",
+            publication_date="1948",
+            keywords=("Information Theory", "Communication"),
+            authors=(Contributor("Shannon", "Claude"),),
+            doi="10.1002/j.1538-7305.1948.tb01338.x",
         ),
     )
 
@@ -202,16 +183,12 @@ def test_revise_item_metadata_rolls_back_every_change_when_a_group_is_invalid(db
         revise_item_metadata(
             db,
             owner,
-            ReviseItemMetadata(
-                item_id=item.id,
-                expected_version=item.version,
-                metadata=ItemMetadata(
-                    bibliography=BibliographicMetadata(title="Partially updated title"),
-                    contributors=Contributors(
-                        editors=(Contributor("Invalid", is_corresponding=True),)
-                    ),
-                    identifiers=Identifiers(doi="10.1000/should-not-persist"),
-                ),
+            item.id,
+            item.version,
+            ItemMetadata(
+                title="Partially updated title",
+                editors=(Contributor("Invalid", is_corresponding=True),),
+                doi="10.1000/should-not-persist",
             ),
         )
 
@@ -236,13 +213,9 @@ def test_revise_item_metadata_enforces_item_owner_permissions(db):
         revise_item_metadata(
             db,
             outsider,
-            ReviseItemMetadata(
-                item_id=item.id,
-                expected_version=item.version,
-                metadata=ItemMetadata(
-                    bibliography=BibliographicMetadata(title="Unauthorized update")
-                ),
-            ),
+            item.id,
+            item.version,
+            ItemMetadata(title="Unauthorized update"),
         )
 
     db.expire_all()

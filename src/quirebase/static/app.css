@@ -82,6 +82,7 @@ label { display: grid; gap: .3rem; color: #46514c; font-size: .82rem; font-weigh
 .import-methods button { flex: 1 0 auto; color: var(--muted); border-color: transparent; background: transparent; }
 .import-methods button:hover, .import-methods button[aria-selected="true"] { color: var(--accent-strong); border-color: #b8d4c8; background: var(--accent-soft); }
 .import-card { position: relative; overflow: hidden; }
+.manual-item-card { grid-column: 1 / -1; }
 .import-card.featured { border-color: #a8cbbb; background: linear-gradient(145deg, white, #f0f8f4); }
 .import-card p { color: var(--muted); }
 .module-number { display: inline-block; margin-bottom: .9rem; padding: .18rem .48rem; border-radius: 999px; color: var(--accent); font-size: .72rem; font-weight: 850; background: var(--accent-soft); }
@@ -351,7 +352,7 @@ label { display: grid; gap: .3rem; color: #46514c; font-size: .82rem; font-weigh
   #pdf-app { left: 0; }
   #pdf-search { width: 8rem; }
   .dashboard-search, .dashboard-grid, .import-grid { grid-template-columns: 1fr; }
-  .dashboard-module.wide, .future-card { grid-column: auto; }
+  .dashboard-module.wide, .future-card, .manual-item-card { grid-column: auto; }
   .dashboard-search { gap: 1rem; }
   .search-form, .compact-form { grid-template-columns: 1fr; }
   .filter-grid { grid-template-columns: 1fr; }

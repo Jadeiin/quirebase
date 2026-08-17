@@ -1,3 +1,5 @@
+"""Apply one operation to a user-selected set of Items."""
+
 from __future__ import annotations
 
 import zipfile
@@ -29,7 +31,7 @@ from quirebase.models import (
 from quirebase.search import search_index
 
 
-def bulk_download_pdfs(db: Session, user: User, item_ids: list[str]) -> BytesIO:
+def download_item_pdfs(db: Session, user: User, item_ids: list[str]) -> BytesIO:
     items = require_accessible_items(db, user, item_ids)
     archive = BytesIO()
     used_names: set[str] = set()
@@ -62,7 +64,7 @@ def bulk_download_pdfs(db: Session, user: User, item_ids: list[str]) -> BytesIO:
     return archive
 
 
-def bulk_action(
+def apply_bulk_item_action(
     db: Session,
     user: User,
     item_ids: list[str],
