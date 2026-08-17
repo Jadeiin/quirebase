@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>PROTOTYPE — Quirebase ORM ownership</title>
+<style>
+body{font:16px system-ui;max-width:920px;margin:40px auto;padding:0 20px;color:#1f2937;background:#f8fafc}h1{color:#0f766e}.panel{background:white;border:1px solid #cbd5e1;border-radius:12px;padding:20px;margin:16px 0}button{margin:4px;padding:9px 13px;border:0;border-radius:8px;background:#0f766e;color:white}button.alt{background:#475569}dt{font-weight:700;margin-top:8px}.tabs button.active{background:#b45309}code{color:#9a3412}
+</style>
+<h1>PROTOTYPE — Where should ORM mappings live?</h1>
+<p>This demo tests whether capability-local mappings improve ownership without turning shared persistence relationships into business Module dependencies.</p>
+<div class="panel"><h2>Current comparison</h2><dl id="state"></dl></div>
+<div class="panel"><h2>Free play</h2><button onclick="dispatch('local')">Choose capability-local</button><button onclick="dispatch('central')">Choose centralized</button><button class="alt" onclick="dispatch('migration')">Load migration metadata</button><button class="alt" onclick="dispatch('relationship')">Follow Item → File Revision</button><button class="alt" onclick="dispatch('facade')">Inspect package facades</button></div>
+<div class="panel tabs"><h2>Guided walkthroughs</h2><button onclick="walk('migration')">Migration setup</button><button onclick="walk('change')">Cross-capability change</button><button onclick="walk('interface')">Business interface</button><p id="guide"></p></div>
+<script>
+const initial={layout:'none',metadataImports:0,crossPackageRelationshipKnowledge:false,businessInterfaceLeak:false,facadeDecision:'unreviewed',last:'Choose a layout.'};
+let state={...initial};
+function reduce(s,a){let n={...s,last:a};if(a==='local'){n.layout='capability-local + aggregator';n.metadataImports=4;n.crossPackageRelationshipKnowledge=true}if(a==='central'){n.layout='centralized persistence mapping';n.metadataImports=1;n.crossPackageRelationshipKnowledge=false}if(a==='migration')n.last=n.layout==='capability-local + aggregator'?'Alembic must import every mapping owner through an aggregator.':'Alembic imports one side-effect-free persistence mapping.';if(a==='relationship')n.last=n.layout==='capability-local + aggregator'?'Library and Documents must coordinate string relationships and import order.':'The relationship stays local to persistence; business Modules still use operations.';if(a==='facade'){n.facadeDecision='export only use cases, results, errors';n.businessInterfaceLeak=false;n.last='Concrete adapters and internal helpers are not facade exports.'}return n}
+function dispatch(a){state=reduce(state,a);render()}
+function render(){document.querySelector('#state').innerHTML=Object.entries(state).map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')}
+const guides={migration:'Choose each layout, then load migration metadata. Watch how many mapping modules Alembic must know.',change:'Choose capability-local, follow Item → File Revision, then compare centralized. Watch whether persistence relationships create business coupling.',interface:'Inspect package facades. ORM relationships remain implementation details in either layout; only use cases, results and errors belong at the business interface.'};
+function walk(k){state={...initial};document.querySelector('#guide').textContent=guides[k];render()}
+render();
+</script>
+</html>

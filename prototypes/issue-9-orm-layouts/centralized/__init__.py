@@ -1,0 +1,1 @@
+"""PROTOTYPE — centralized persistence mapping."""
