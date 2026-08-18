@@ -7,7 +7,6 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from quirebase.core.database import get_db
 from quirebase.discovery import (
-    available_builtin_styles,
     create_custom_citation_style,
     delete_custom_citation_style,
     list_custom_citation_styles,
@@ -63,7 +62,6 @@ def tools_page(
             "tags": tags,
             "tags_data": tags_data,
             "custom_styles": custom_styles,
-            "builtin_styles": available_builtin_styles(),
             "active_page": "tools",
         },
     )

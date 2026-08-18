@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import io
 import re
+from contextlib import suppress
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -33,23 +35,70 @@ except ImportError:
     CiteProcJSON = None
 
 try:
-    from citeproc_styles import get_style_filepath
+    from citeproc_styles import get_style_filepath, get_style_name
 except ImportError:  # optional `citation` extra is not installed
     get_style_filepath = None
+    get_style_name = None
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
     from quirebase.models import Item, User
 
-BUILTIN_STYLES: dict[str, str] = {
-    "apa": "APA 7th edition",
-    "chicago-author-date": "Chicago (author-date)",
-    "modern-language-association": "MLA",
-    "harvard-cite-them-right": "Harvard",
-    "american-medical-association": "Vancouver / AMA",
-    "ieee": "IEEE",
-}
+
+@dataclass(frozen=True)
+class CitationStyleOption:
+    key: str
+    name: str
+
+
+@dataclass(frozen=True)
+class ExportOptions:
+    include_abstract: bool = True
+    preserve_case: bool = False
+    abbreviate_journal: bool = False
+    include_identifiers: bool = False
+    include_custom_fields: bool = False
+
+
+@lru_cache
+def _builtin_style_catalog() -> tuple[CitationStyleOption, ...]:
+    if get_style_filepath is None:
+        return ()
+    try:
+        import importlib.resources
+
+        roots = (
+            importlib.resources.files("citeproc_styles") / "styles",
+            importlib.resources.files("citeproc_styles") / "styles" / "dependent",
+        )
+        options: dict[str, CitationStyleOption] = {}
+        for root in roots:
+            for resource in root.iterdir():
+                if resource.name.endswith(".csl"):
+                    key = resource.name.removesuffix(".csl")
+                    name = key
+                    if get_style_name is not None:
+                        with suppress(Exception):
+                            name = get_style_name(key)
+                    options[key] = CitationStyleOption(key=key, name=name)
+        return tuple(sorted(options.values(), key=lambda option: option.name.casefold()))
+    except Exception:
+        return ()
+
+
+def list_builtin_citation_styles(
+    query: str = "", limit: int = 50
+) -> tuple[CitationStyleOption, ...]:
+    """Return installed CSL styles filtered by name or slug."""
+    query = query.strip().casefold()
+    matches = (
+        option
+        for option in _builtin_style_catalog()
+        if not query or query in option.key.casefold() or query in option.name.casefold()
+    )
+    return tuple(list(matches)[: max(1, min(limit, 200))])
+
 
 # Keyed on canonical types only; callers normalize first (see
 # normalize_reference_type), so the alias tables live in one place.
@@ -119,7 +168,8 @@ def _parse_keywords(value: str | None) -> list[str]:
     return [keyword.strip() for keyword in value.split(";") if keyword.strip()]
 
 
-def item_to_csl_json(item: Item) -> dict[str, Any]:
+def item_to_csl_json(item: Item, options: ExportOptions | None = None) -> dict[str, Any]:
+    options = options or ExportOptions()
     csl_type = REFERENCE_TYPE_TO_CSL.get(
         normalize_reference_type(item.reference_type) or "", "article"
     )
@@ -129,9 +179,13 @@ def item_to_csl_json(item: Item) -> dict[str, Any]:
         "title": item.title,
     }
     optional: dict[str, Any] = {
-        "abstract": item.abstract,
+        "abstract": item.abstract if options.include_abstract else None,
         "DOI": item.doi,
-        "container-title": item.publication_title,
+        "container-title": (
+            item.journal_abbreviation
+            if options.abbreviate_journal and item.journal_abbreviation
+            else item.publication_title
+        ),
         "container-title-short": item.journal_abbreviation,
         "volume": item.volume,
         "issue": item.issue,
@@ -189,9 +243,16 @@ def render_bibliography(
     return [str(record.get("title", "")) for record in csl_json]
 
 
-def render_citation(item: Item, style_xml: str, output_format: str = "text") -> str:
+def render_citation(
+    item: Item,
+    style_xml: str,
+    output_format: str = "text",
+    options: ExportOptions | None = None,
+) -> str:
     """Render a single item to one formatted citation."""
-    entries = render_bibliography([item_to_csl_json(item)], style_xml, output_format)
+    entries = render_bibliography(
+        [item_to_csl_json(item, options=options)], style_xml, output_format
+    )
     return entries[0] if entries else ""
 
 
@@ -204,12 +265,6 @@ def builtin_style_xml(style_key: str) -> str | None:
     except Exception:
         return None
     return Path(path).read_text(encoding="utf-8")
-
-
-@lru_cache
-def available_builtin_styles() -> dict[str, str]:
-    """Return built-in styles whose CSL files are installed."""
-    return {key: name for key, name in BUILTIN_STYLES.items() if builtin_style_xml(key)}
 
 
 def is_valid_csl(xml_text: str) -> bool:
@@ -268,19 +323,36 @@ def delete_custom_citation_style(db: Session, user: User, style_id: str) -> None
 
 
 def format_csl_export(
-    db: Session, user: User, items: list[Item], style_key: str = "apa"
+    db: Session,
+    user: User,
+    items: list[Item],
+    style_key: str = "apa",
+    options: ExportOptions | None = None,
 ) -> tuple[str, str, str]:
     style_xml = resolve_style_xml(db, user, style_key)
     if style_xml is None:
         raise ValidationFailure("unknown citation style")
-    entries = render_bibliography([item_to_csl_json(item) for item in items], style_xml)
+    entries = render_bibliography(
+        [item_to_csl_json(item, options=options) for item in items], style_xml
+    )
     return "\n\n".join(entries), "text/plain", "quirebase-citations.txt"
 
 
-def format_standard_export(items: list[Item], file_format: str) -> tuple[str, str, str]:
+def format_standard_export(
+    items: list[Item], file_format: str, options: ExportOptions | None = None
+) -> tuple[str, str, str]:
     if file_format not in SUPPORTED_FORMATS:
         raise ValidationFailure("format must be bibtex, ris, or endnote")
-    contents = export_bibliography(items, file_format)
+    options = options or ExportOptions()
+    contents = export_bibliography(
+        items,
+        file_format,
+        include_abstract=options.include_abstract,
+        preserve_case=options.preserve_case,
+        abbreviate_journal=options.abbreviate_journal,
+        include_identifiers=options.include_identifiers,
+        include_custom_fields=options.include_custom_fields,
+    )
     media_type = BIBLIOGRAPHY_MEDIA_TYPES[file_format]
     extension = BIBLIOGRAPHY_EXTENSIONS[file_format]
     filename = f"quirebase-export.{extension}"
@@ -288,12 +360,17 @@ def format_standard_export(items: list[Item], file_format: str) -> tuple[str, st
 
 
 def get_item_citation_response(
-    db: Session, user: User, item_id: str, file_format: str, style_key: str = "apa"
+    db: Session,
+    user: User,
+    item_id: str,
+    file_format: str,
+    style_key: str = "apa",
+    options: ExportOptions | None = None,
 ) -> tuple[str, str, str]:
     item = require_readable_item(db, user, item_id)
     if file_format == "csl":
-        return format_csl_export(db, user, [item], style_key=style_key)
-    return format_standard_export([item], file_format)
+        return format_csl_export(db, user, [item], style_key=style_key, options=options)
+    return format_standard_export([item], file_format, options=options)
 
 
 def get_item_citation_text_response(

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse, JSONResponse
 
 from quirebase.core.database import get_db
+from quirebase.discovery import list_builtin_citation_styles, list_custom_citation_styles
 from quirebase.documents import (
     create_export_job,
     get_export_file_path,
@@ -19,6 +20,28 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
 router = APIRouter()
+
+
+@router.get("/api/citation-styles")
+def citation_styles(
+    query: str = "",
+    limit: int = 50,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    normalized = query.strip().casefold()
+    custom = [
+        {"key": style.id, "name": style.name, "scope": "custom"}
+        for style in list_custom_citation_styles(db, user)
+        if not normalized or normalized in style.name.casefold()
+    ]
+    return {
+        "styles": [
+            {"key": style.key, "name": style.name, "scope": "builtin"}
+            for style in list_builtin_citation_styles(query, limit=limit)
+        ][:limit]
+        + custom[:limit]
+    }
 
 
 @router.post("/documents/{item_id}/annotation-exports", dependencies=[Depends(require_csrf)])

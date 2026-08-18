@@ -116,21 +116,14 @@
     </div>
 
     <div class="citation-styles-layout">
-      <div class="citation-styles-catalog">
+      <div class="citation-styles-catalog" x-data="citationStyleCatalog">
         <h3>{{ _('Citation styles') }}</h3>
-        {% if builtin_styles %}
         <p class="text-muted" style="font-size: 0.85rem; margin-block: 0.35rem 0.75rem;">{{ _('Built-in styles are ready to use. Add a custom CSL style to use a journal-specific format.') }}</p>
+        <input type="search" x-model="query" @input.debounce.250ms="search()" placeholder="{{ _('Search citation styles') }}">
         <div class="style-pills-list">
-          {% for key, name in builtin_styles.items() %}
-          <div class="style-pill">
-            <span class="style-name">{{ name }}</span>
-            <small class="style-key">{{ key }}</small>
-          </div>
-          {% endfor %}
+          <div class="style-pill" x-show="styles.length === 0"><span class="style-name text-muted">{{ _('No matching styles.') }}</span></div>
+          <template x-for="style in styles" :key="style.key"><div class="style-pill"><span class="style-name" x-text="style.name"></span><small class="style-key" x-text="style.key"></small></div></template>
         </div>
-        {% else %}
-        <p class="text-muted">{{ _('Built-in styles require the optional citation extra. Install it with: uv sync --extra citation.') }}</p>
-        {% endif %}
 
         {% if custom_styles %}
         <h3 style="margin-top: 1.5rem;">{{ _('Citation styles') }}</h3>

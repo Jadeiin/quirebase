@@ -34,6 +34,20 @@ def test_enhanced_workspaces_keep_native_form_fallbacks():
     assert 'method="post" action="/metadata/preview' in online_search
 
 
+def test_export_preferences_use_validated_per_user_browser_storage():
+    source = read("src/quirebase/assets/app.js")
+    library = read("src/quirebase/templates/library.html")
+    item = read("src/quirebase/templates/item.html")
+    assert "readExportPreferences" in source
+    assert "storeExportPreferences" in source
+    assert "window.localStorage" in source
+    assert "schemaVersion: 1" in source
+    assert "data-export-preferences-key" in library
+    assert "data-export-preferences-key" in item
+    assert "account:{{ user.id }}" in library
+    assert "account:{{ user.id }}" in item
+
+
 def test_pdf_toolbar_exposes_navigation_search_zoom_and_download():
     template = read("src/quirebase/templates/pdf.html")
     script = read("src/quirebase/static/pdf_viewer.js")
@@ -52,3 +66,17 @@ def test_pdf_toolbar_exposes_navigation_search_zoom_and_download():
     assert 'id="annotation-detail"' in template
     assert "showAnnotation(annotation)" in script
     assert "status.textContent = node.title" not in script
+    assert 'id="annotation-mark-kind"' in template
+    assert 'value="underline"' in template
+    assert 'class="pdf-download-options citation-panel' in template
+    assert 'id="pdf-download-options-button"' in template
+    assert 'id="pdf-download-original"' in template
+    assert 'id="pdf-download-annotated"' in template
+    assert 'id="pdf-download-project"' in template
+    assert 'x-data="itemDownload"' not in template
+    assert 'href="/items/{{ item.id }}/download' not in template
+    assert 'id="export-annotations"' not in template
+    assert 'querySelector("#export-annotations")' not in script
+    assert 'querySelector("#pdf-download-annotated")' in script
+    assert "revision_id: revisionId" in script
+    assert 'annotation.kind === "underline"' in script

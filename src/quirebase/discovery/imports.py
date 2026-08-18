@@ -19,6 +19,7 @@ from quirebase.discovery.bibliography import (
     parse_bibliography,
 )
 from quirebase.discovery.citations import (
+    ExportOptions,
     format_csl_export,
     format_standard_export,
 )
@@ -251,12 +252,16 @@ def import_unpublished_pdf(
 
 
 def export_accessible_bibliography(
-    db: Session, user: User, file_format: str, style_key: str = "apa"
+    db: Session,
+    user: User,
+    file_format: str,
+    style_key: str = "apa",
+    options: ExportOptions | None = None,
 ) -> tuple[str, str, str]:
     items = list(db.scalars(visible_items_query(user).order_by(Item.updated_at.desc())).all())
     if file_format == "csl":
-        return format_csl_export(db, user, items, style_key=style_key)
-    return format_standard_export(items, file_format)
+        return format_csl_export(db, user, items, style_key=style_key, options=options)
+    return format_standard_export(items, file_format, options=options)
 
 
 def export_selected_bibliography(
@@ -265,8 +270,9 @@ def export_selected_bibliography(
     item_ids: list[str],
     file_format: str,
     style_key: str = "apa",
+    options: ExportOptions | None = None,
 ) -> tuple[str, str, str]:
     items = require_accessible_items(db, user, item_ids)
     if file_format == "csl":
-        return format_csl_export(db, user, items, style_key=style_key)
-    return format_standard_export(items, file_format)
+        return format_csl_export(db, user, items, style_key=style_key, options=options)
+    return format_standard_export(items, file_format, options=options)

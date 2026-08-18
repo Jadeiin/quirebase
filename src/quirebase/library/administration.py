@@ -108,12 +108,14 @@ def get_storage_metrics(db: Session, admin: User) -> dict[str, Any]:
     }
 
 
-def admin_delete_item(db: Session, admin: User, item_id: str) -> None:
-    if admin.role != "administrator":
+def _delete_item(db: Session, actor: User, item_id: str, *, require_admin: bool = False) -> None:
+    if require_admin and actor.role != "administrator":
         raise ResourceUnavailable("administrator required")
     item = db.get(Item, item_id)
     if item is None:
         raise ResourceNotFound("item not found")
+    if not require_admin and item.created_by != actor.id and actor.role != "administrator":
+        raise ResourceUnavailable("item owner required")
 
     title = item.title
     # Collect keys to clean up from storage
@@ -145,8 +147,8 @@ def admin_delete_item(db: Session, admin: User, item_id: str) -> None:
     # Record audit event before commit
     record_event(
         db,
-        admin.id,
-        "admin.item.delete",
+        actor.id,
+        "admin.item.delete" if require_admin else "item.delete",
         "item",
         item.id,
         detail={"title": title},
@@ -165,3 +167,12 @@ def admin_delete_item(db: Session, admin: User, item_id: str) -> None:
                 )
                 if not still_used:
                     store.delete(object_key)
+
+
+def delete_item(db: Session, actor: User, item_id: str) -> None:
+    """Permanently delete one Item owned by the actor or an administrator."""
+    _delete_item(db, actor, item_id)
+
+
+def admin_delete_item(db: Session, admin: User, item_id: str) -> None:
+    _delete_item(db, admin, item_id, require_admin=True)

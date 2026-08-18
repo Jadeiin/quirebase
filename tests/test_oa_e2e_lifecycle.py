@@ -191,7 +191,8 @@ def test_seam2_oa_corpus_batch_import_and_relational_mapping(db):
     idents = list(db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item.id)).all())
     ident_dict = {i.provider: i.value for i in idents}
     assert ident_dict.get("openalex") == "W4388656112"
-    assert ident_dict.get("doi") == "10.3390/ejihpe13110181"
+    assert "doi" not in ident_dict
+    assert item.doi == "10.3390/ejihpe13110181"
 
 
 def test_seam3_oa_corpus_upstream_sync_and_reconciliation(db):

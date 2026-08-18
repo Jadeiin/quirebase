@@ -1,3 +1,5 @@
+import json
+
 import bibtexparser
 import rispy
 
@@ -26,6 +28,97 @@ def test_bibtex_parse_and_round_trip(db):
     exported = bibtexparser.loads(output).entries[0]
     assert exported["title"] == "An Example Paper"
     assert exported["doi"] == "10.1234/example"
+
+
+def test_bibtex_export_can_protect_text_field_capitalization(db):
+    user = User(username="bibtex-case", password_hash="unused")
+    db.add(user)
+    db.flush()
+    item = Item(
+        title="An API for GraphQL and eBPF",
+        abstract="Using CUDA with an LLM",
+        authors="Doe, Jane; Smith, Alex",
+        keywords="API; GraphQL",
+        publication_title="Journal of eBPF Research",
+        publisher="ACM Press",
+        bibtex_id="case-protection",
+        created_by=user.id,
+    )
+
+    ordinary = export_bibliography([item], "bibtex", preserve_case=False)
+    protected = export_bibliography([item], "bibtex", preserve_case=True)
+
+    assert "title = {An API for GraphQL and eBPF}" in ordinary
+    assert "title = {{A}n {API} for {G}raph{QL} and e{BPF}}" in protected
+    assert "abstract = {{U}sing {CUDA} with an {LLM}}" in protected
+    assert "keywords = {{API}; {G}raph{QL}}" in protected
+    assert "journal = {{J}ournal of e{BPF} {R}esearch}" in protected
+    assert "publisher = {{ACM} {P}ress}" in protected
+    assert "author = {{D}oe, {J}ane and {S}mith, {A}lex}" in protected
+
+
+def test_bibtex_case_protection_does_not_add_repeated_outer_braces(db):
+    user = User(username="bibtex-braces", password_hash="unused")
+    db.add(user)
+    db.flush()
+    item = Item(title="{Already Protected}", created_by=user.id)
+
+    protected = export_bibliography([item], "bibtex", preserve_case=True)
+
+    assert "title = {{Already Protected}}" in protected
+
+
+def test_bibtex_case_protection_leaves_latex_commands_intact(db):
+    user = User(username="bibtex-latex", password_hash="unused")
+    db.add(user)
+    db.flush()
+    item = Item(title=r"Using \LaTeX with {CUDA}", created_by=user.id)
+
+    protected = export_bibliography([item], "bibtex", preserve_case=True)
+
+    assert r"title = {{U}sing \LaTeX with {CUDA}}" in protected
+
+
+def test_bibtex_export_can_include_identifiers_and_custom_fields(db):
+    user = User(username="bibtex-extras", password_hash="unused")
+    db.add(user)
+    db.flush()
+    item = Item(
+        title="Extra fields",
+        identifiers=json.dumps({"openalex": "W123", "arxiv": "2401.00001"}),
+        custom_fields=json.dumps({"dataset_id": "DS-42", "reviewed": True}),
+        created_by=user.id,
+    )
+
+    output = export_bibliography(
+        [item],
+        "bibtex",
+        include_identifiers=True,
+        include_custom_fields=True,
+    )
+
+    assert "openalex = {W123}" in output
+    assert "arxiv = {2401.00001}" in output
+    assert "dataset_id = {DS-42}" in output
+    assert "reviewed = {True}" in output
+
+
+def test_bibtex_import_preserves_braced_case_identifiers_and_custom_fields():
+    source = """@article{braced,
+      title = {{An {API} for GraphQL}},
+      author = {Doe, Jane},
+      openalex = {W123},
+      arxiv = {2401.00001},
+      dataset_id = {DS-42}
+    }"""
+
+    records, errors = parse_bibliography(source, "bibtex")
+
+    assert errors == []
+    assert records[0]["title"] == "{An {API} for GraphQL}"
+    assert records[0]["bibtex_id"] == "braced"
+    assert json.loads(records[0]["identifiers"]) == {"openalex": "W123", "arxiv": "2401.00001"}
+    assert json.loads(records[0]["custom_fields"]) == {"dataset_id": "DS-42"}
 
 
 def test_ris_parse_and_round_trip(db):

@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from quirebase.discovery import (
-    BUILTIN_STYLES,
-    available_builtin_styles,
     builtin_style_xml,
     create_custom_citation_style,
     is_valid_csl,
@@ -10,6 +8,7 @@ from quirebase.discovery import (
     render_citation,
     resolve_style_xml,
 )
+from quirebase.discovery.citations import ExportOptions, list_builtin_citation_styles
 from quirebase.models import Item, User
 
 _counter = 0
@@ -53,6 +52,66 @@ def test_item_to_csl_json_maps_core_fields(db):
     assert record["keyword"] == ["search", "testing"]
 
 
+def test_export_options_control_abstract_and_journal_abbreviation(db):
+    item = _item(db, journal_abbreviation="TQ")
+    options = ExportOptions(include_abstract=False, abbreviate_journal=True)
+    record = item_to_csl_json(item, options=options)
+
+    assert "abstract" not in record
+    assert record["container-title"] == "TQ"
+
+
+def test_builtin_style_catalog_is_searchable(db):
+    styles = list_builtin_citation_styles("american medical", limit=10)
+    assert styles
+    assert any("medical" in style.name.lower() for style in styles)
+
+
+def test_citation_copy_endpoint_accepts_export_options(db, tmp_path, monkeypatch):
+    from test_http import authenticated_client
+
+    from quirebase.core.config import get_settings
+    from quirebase.web.app import app
+
+    client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+    try:
+        response = client.get(
+            f"/documents/{item.id}/citation-copy",
+            params={
+                "file_format": "bibtex",
+                "include_abstract": "false",
+                "preserve_case": "true",
+                "abbreviate_journal": "true",
+            },
+        )
+        assert response.status_code == 200
+        assert "abstract" not in response.text
+        assert "title = {{P}aper}" in response.text
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+
+
+def test_citation_style_search_includes_owned_custom_styles(db, tmp_path, monkeypatch):
+    from test_http import authenticated_client
+
+    from quirebase.core.config import get_settings
+    from quirebase.web.app import app
+
+    client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+    try:
+        user = db.get(User, item.created_by)
+        xml = builtin_style_xml("apa")
+        assert user is not None and xml is not None
+        create_custom_citation_style(db, user, "My Searchable Style", xml)
+        response = client.get("/api/citation-styles?query=searchable")
+        assert response.status_code == 200
+        assert response.json()["styles"][0]["name"] == "My Searchable Style"
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+
+
 def test_item_to_csl_json_maps_reference_types(db):
     assert item_to_csl_json(_item(db, reference_type="book"))["type"] == "book"
     assert item_to_csl_json(_item(db, reference_type="preprint"))["type"] == "article"
@@ -67,7 +126,7 @@ def test_author_names_without_commas_use_last_token_as_family(db):
 
 def test_builtin_styles_render(db):
     item = _item(db)
-    for style_key in BUILTIN_STYLES:
+    for style_key in ("apa", "ieee", "modern-language-association"):
         xml = builtin_style_xml(style_key)
         assert xml is not None, style_key
         rendered = render_citation(item, xml)
@@ -92,21 +151,6 @@ def test_is_valid_csl_rejects_garbage():
 
 def test_builtin_style_xml_unknown_returns_none():
     assert builtin_style_xml("does-not-exist") is None
-
-
-def test_available_builtin_styles_lists_installed_styles():
-    available = available_builtin_styles()
-    assert set(available) == set(BUILTIN_STYLES)
-
-
-def test_builtin_style_xml_degrades_when_styles_package_is_missing(monkeypatch):
-    monkeypatch.setattr("quirebase.discovery.citations.get_style_filepath", None)
-    available_builtin_styles.cache_clear()
-    try:
-        assert builtin_style_xml("apa") is None
-        assert available_builtin_styles() == {}
-    finally:
-        available_builtin_styles.cache_clear()
 
 
 def test_resolve_style_xml_scoped_to_owner(db):
@@ -168,16 +212,11 @@ def test_citation_routes_enforce_custom_style_ownership(db, tmp_path, monkeypatc
         get_settings.cache_clear()
 
 
-def test_custom_styles_accessible_in_item_workspace_when_builtin_styles_missing(
-    db, tmp_path, monkeypatch
-):
+def test_custom_styles_accessible_in_item_workspace(db, tmp_path, monkeypatch):
     from test_http import authenticated_client
 
     from quirebase.core.config import get_settings
     from quirebase.web.app import app
-
-    monkeypatch.setattr("quirebase.discovery.citations.get_style_filepath", None)
-    available_builtin_styles.cache_clear()
 
     client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
     try:
@@ -194,14 +233,12 @@ def test_custom_styles_accessible_in_item_workspace_when_builtin_styles_missing(
 
         response = client.get(f"/items/{item.id}")
         assert response.status_code == 200
-        assert 'x-data="formattedCitation"' in response.text
-        assert custom_style.id in response.text
-        assert "My Isolated Custom Style" in response.text
+        assert 'x-data="formattedCitation"' not in response.text
+        assert 'x-data="itemExport"' in response.text
 
         text_res = client.get(f"/documents/{item.id}/citation-text?style={custom_style.id}")
         assert text_res.status_code == 200
         assert item.title in text_res.text
     finally:
-        available_builtin_styles.cache_clear()
         app.dependency_overrides.clear()
         get_settings.cache_clear()

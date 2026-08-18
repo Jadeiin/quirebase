@@ -26,6 +26,8 @@ const detailText = document.querySelector("#annotation-detail-text");
 const detailBody = document.querySelector("#annotation-detail-body");
 const detailSave = document.querySelector("#annotation-detail-save");
 const detailDelete = document.querySelector("#annotation-detail-delete");
+const markKind = document.querySelector("#annotation-mark-kind");
+const downloadProject = document.querySelector("#pdf-download-project");
 const eventBus = new EventBus();
 const linkService = new PDFLinkService({ eventBus });
 const findController = new PDFFindController({ eventBus, linkService });
@@ -55,7 +57,7 @@ const showAnnotation = (annotation) => {
     node.classList.toggle("is-selected", node.dataset.annotationId === annotation.id);
   });
   const firstSegment = annotation.segments[0];
-  detailKind.textContent = annotation.kind === "highlight" ? message("highlight") : message("noteText");
+  detailKind.textContent = annotation.kind === "note" ? message("noteText") : message(annotation.kind);
   detailPage.textContent = message("page", { page: (firstSegment?.page_index ?? 0) + 1 });
   detailScope.textContent = message(annotation.scope === "project" ? "project" : "private");
   detailText.textContent = annotation.selected_text || "";
@@ -126,7 +128,7 @@ const selectionSegments = () => {
   return segments;
 };
 
-const saveHighlight = async (color) => {
+const saveTextAnnotation = async (color) => {
   const selection = window.getSelection();
   const segments = selectionSegments();
   if (!segments.length) return alert(message("selectTextFirst"));
@@ -135,7 +137,7 @@ const saveHighlight = async (color) => {
     const saved = await api(annotationUrl, {
       method: "POST",
       body: JSON.stringify({
-        revision_id: revisionId, kind: "highlight", ...visibility(), color,
+        revision_id: revisionId, kind: markKind.value, ...visibility(), color,
         selected_text: selection.toString(), segments,
       }),
     });
@@ -193,16 +195,25 @@ const renderAllOverlays = () => {
         node.dataset.annotationId = annotation.id;
         node.title = annotation.body || annotation.selected_text || message("highlight");
         node.addEventListener("click", (event) => { event.stopPropagation(); showAnnotation(annotation); });
-        if (annotation.kind === "highlight") {
+        if (annotation.kind === "highlight" || annotation.kind === "underline") {
           const points = [];
           for (let i = 0; i < 8; i += 2) points.push(target.viewport.convertToViewportPoint(segment.quad_points[i], segment.quad_points[i + 1]));
           const xs = points.map((p) => p[0]); const ys = points.map((p) => p[1]);
-          Object.assign(node.style, {
-            left: `${Math.min(...xs)}px`, top: `${Math.min(...ys)}px`,
-            width: `${Math.max(...xs) - Math.min(...xs)}px`, height: `${Math.max(...ys) - Math.min(...ys)}px`,
-            background: annotation.color,
-          });
-          node.className = "quirebase-highlight";
+          const left = Math.min(...xs); const top = Math.min(...ys);
+          const width = Math.max(...xs) - left; const height = Math.max(...ys) - top;
+          if (annotation.kind === "underline") {
+            Object.assign(node.style, {
+              left: `${left}px`, top: `${top + height - 3}px`, width: `${width}px`,
+              height: "3px", background: annotation.color,
+            });
+            node.className = "quirebase-underline";
+          } else {
+            Object.assign(node.style, {
+              left: `${left}px`, top: `${top}px`, width: `${width}px`, height: `${height}px`,
+              background: annotation.color,
+            });
+            node.className = "quirebase-highlight";
+          }
         } else {
           const [x, y] = target.viewport.convertToViewportPoint(segment.anchor_x, segment.anchor_y);
           Object.assign(node.style, { left: `${x - 9}px`, top: `${y - 9}px` });
@@ -214,7 +225,7 @@ const renderAllOverlays = () => {
   }
 };
 
-document.querySelectorAll("[data-color]").forEach((button) => button.addEventListener("click", () => saveHighlight(button.dataset.color)));
+document.querySelectorAll("[data-color]").forEach((button) => button.addEventListener("click", () => saveTextAnnotation(button.dataset.color)));
 document.querySelector("#pdf-previous-page").addEventListener("click", () => { viewer.currentPageNumber -= 1; });
 document.querySelector("#pdf-next-page").addEventListener("click", () => { viewer.currentPageNumber += 1; });
 document.querySelector("#pdf-zoom-out").addEventListener("click", () => viewer.decreaseScale());
@@ -233,16 +244,25 @@ search.addEventListener("keydown", (event) => {
 document.querySelector("#add-note").addEventListener("click", () => { noteMode = true; status.textContent = message("clickPage"); });
 document.querySelector("#viewer").addEventListener("click", saveNote, true);
 projectPicker.addEventListener("change", loadAnnotations);
-document.querySelector("#export-annotations").addEventListener("click", async () => {
+document.querySelector("#pdf-download-annotated").addEventListener("click", async () => {
   try {
     const created = await api(`${annotationUrl.replace("/annotations", "/annotation-exports")}`, {
-      method: "POST", body: JSON.stringify({ revision_id: revisionId, project_id: projectPicker.value || null, include_private: true }),
+      method: "POST",
+      body: JSON.stringify({
+        revision_id: revisionId,
+        project_id: downloadProject.value || null,
+        include_private: true,
+      }),
     });
     status.textContent = message("preparingExport");
     while (true) {
       await new Promise((resolve) => setTimeout(resolve, 700));
       const job = await api(`/annotation-exports/${created.id}`);
-      if (job.state === "succeeded") { window.location.assign(`/annotation-exports/${created.id}/content`); status.textContent = message("exportReady"); break; }
+      if (job.state === "succeeded") {
+        window.location.assign(`/annotation-exports/${created.id}/content`);
+        status.textContent = message("exportReady");
+        break;
+      }
       if (job.state === "failed") throw new Error(job.error || message("exportFailed"));
     }
   } catch (error) { status.textContent = error.message; }

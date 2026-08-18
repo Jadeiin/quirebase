@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
+from fastapi.testclient import TestClient
 from test_http import authenticated_client
 
 from quirebase.core.config import get_settings
+from quirebase.core.crypto import token_hash
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
 from quirebase.library import (
     AnnotationsWorkspace,
@@ -16,14 +20,19 @@ from quirebase.library import (
     open_item_workspace,
 )
 from quirebase.models import (
+    Attachment,
     AuditEvent,
     DiscussionMessage,
     Item,
+    ItemIdentifier,
     ItemRead,
+    ItemTag,
+    LoginSession,
     PdfAnnotation,
     Project,
     ProjectItem,
     ProjectMember,
+    Tag,
     User,
 )
 from quirebase.web.app import app
@@ -43,6 +52,7 @@ def test_open_summary_workspace_returns_a_typed_view_and_records_reading(db):
     assert view.item.id == item.id
     assert view.item_owner.id == user.id
     assert view.revision_count == 0
+    assert view.attachment_count == 0
     assert db.get(ItemRead, (user.id, item.id)) is not None
 
 
@@ -89,10 +99,29 @@ def test_inaccessible_item_never_records_reading(db):
 def test_item_workspace_separates_page_responsibilities(db, tmp_path, monkeypatch):
     client, item, revision = authenticated_client(db, tmp_path, monkeypatch)
     try:
+        tag = Tag(name="User priority", created_by=item.created_by)
+        db.add(tag)
+        db.flush()
+        db.add_all([
+            ItemTag(item_id=item.id, tag_id=tag.id),
+            ItemIdentifier(item_id=item.id, provider="openalex", value="W123"),
+            ItemIdentifier(item_id=item.id, provider="arxiv", value="2401.00001"),
+        ])
+        db.commit()
         summary = client.get(f"/items/{item.id}")
         assert summary.status_code == 200
         assert 'aria-current="page"><span>⌂</span>' in summary.text
         assert "摘要与关键信息" in summary.text
+        assert 'x-data="itemDownload"' in summary.text
+        assert "x-show=\"format === 'bibtex'\"" in summary.text
+        assert "x-show=\"format === 'bibtex' || format === 'csl'\"" in summary.text
+        assert 'class="panel publication-snapshot"' in summary.text
+        assert 'class="panel reading-files-panel"' in summary.text
+        assert 'class="panel discovery-panel"' in summary.text
+        assert "User priority" in summary.text
+        assert 'href="https://openalex.org/W123"' in summary.text
+        assert 'href="https://arxiv.org/abs/2401.00001"' in summary.text
+        assert "Workspace activity" not in summary.text
         assert f'action="/items/{item.id}/edit' not in summary.text
         assert f'action="/items/{item.id}/pdf' not in summary.text
 
@@ -146,6 +175,43 @@ def test_item_workspace_separates_page_responsibilities(db, tmp_path, monkeypatc
         get_settings.cache_clear()
 
 
+def test_project_editor_can_edit_item_without_seeing_permanent_delete(db, tmp_path, monkeypatch):
+    owner_client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+    editor = User(username="workspace-editor", password_hash="unused")
+    project = Project(name="Shared editing", created_by=item.created_by)
+    db.add_all([editor, project])
+    db.flush()
+    db.add_all([
+        ProjectItem(project_id=project.id, item_id=item.id),
+        ProjectMember(project_id=project.id, user_id=editor.id, role="editor"),
+        LoginSession(
+            token_hash=token_hash("editor-session"),
+            csrf_token="editor-csrf",
+            user_id=editor.id,
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+        ),
+    ])
+    db.commit()
+
+    try:
+        owner_page = owner_client.get(f"/items/{item.id}")
+        assert "删除条目" in owner_page.text
+
+        editor_client = TestClient(app)
+        editor_client.cookies.set(get_settings().session_cookie, "editor-session")
+        editor_page = editor_client.get(f"/items/{item.id}")
+        assert editor_page.status_code == 200
+        assert "编辑元数据" in editor_page.text
+        assert "删除条目" not in editor_page.text
+
+        view = open_item_workspace(db, editor, item.id, WorkspaceSection.summary)
+        assert view.can_edit is True
+        assert view.can_delete is False
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+
+
 def test_item_citation_export_and_project_removal(db, tmp_path, monkeypatch):
     client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
     try:
@@ -168,6 +234,11 @@ def test_item_citation_export_and_project_removal(db, tmp_path, monkeypatch):
         assert item.title in cited.text
         assert "quirebase-citations.txt" in cited.headers["content-disposition"]
 
+        plain_download = client.get(f"/items/{item.id}/download")
+        assert "Paper-pdfs.zip" in plain_download.headers["content-disposition"]
+        annotated_download = client.get(f"/items/{item.id}/download?include_annotations=true")
+        assert "Paper-annotated-pdfs.zip" in annotated_download.headers["content-disposition"]
+
         removed = client.post(
             f"/items/{item.id}/projects/{project.id}/remove?csrf_token=test-csrf",
             follow_redirects=False,
@@ -186,6 +257,15 @@ def test_item_summary_reports_exact_activity_counts(db, tmp_path, monkeypatch):
     try:
         user = db.get(User, item.created_by)
         db.add_all([
+            Attachment(
+                item_id=item.id,
+                object_key="attachments/supplement.txt",
+                sha256="a" * 64,
+                size=12,
+                mime_type="text/plain",
+                original_name="supplement.txt",
+                created_by=user.id,
+            ),
             DiscussionMessage(item_id=item.id, author_id=user.id, body="First"),
             DiscussionMessage(item_id=item.id, author_id=user.id, body="Second"),
             PdfAnnotation(
@@ -208,6 +288,7 @@ def test_item_summary_reports_exact_activity_counts(db, tmp_path, monkeypatch):
         data = open_item_workspace(db, user, item.id, WorkspaceSection.summary)
 
         assert data.revision_count == 1
+        assert data.attachment_count == 1
         assert data.annotation_count == 2
         assert data.message_count == 2
     finally:

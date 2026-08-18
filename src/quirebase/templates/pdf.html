@@ -8,6 +8,7 @@
   'saved': _('Saved'),
   'noteText': _('Note text'),
   'highlight': _('Highlight'),
+  'underline': _('Underline'),
   'clickPage': _('Click a page to place the note'),
   'preparingExport': _('Preparing export…'),
   'exportReady': _('Export ready'),
@@ -41,15 +42,22 @@
       <button id="pdf-find-next" type="button" aria-label="{{ _('Next result') }}">↓</button>
     </div>
     <button class="secondary-button" type="button" @click="toggleAnnotations" :aria-expanded="annotationOpen">{{ _('Annotation tools') }}</button>
-    <a class="toolbar-link" href="/documents/{{ item.id }}/revisions/{{ revision.id }}/content" download>{{ _('Download') }}</a>
+    <button id="pdf-download-options-button" class="secondary-button" type="button" @click="downloadOpen = !downloadOpen" :aria-expanded="downloadOpen">{{ _('Download PDF') }}</button>
     <span id="pdf-status">{{ _('Loading…') }}</span>
   </nav>
+  <div class="pdf-download-options citation-panel export-options download-options" x-cloak x-show="downloadOpen" @click.outside="downloadOpen = false">
+    <div class="option-panel-heading"><strong>{{ _('Current PDF') }}</strong><small>{{ revision.original_name }}</small></div>
+    <a id="pdf-download-original" class="button-link" href="/documents/{{ item.id }}/revisions/{{ revision.id }}/content" download>{{ _('Download original PDF') }}</a>
+    <label>{{ _('Annotations to include') }}<select id="pdf-download-project"><option value="">{{ _('Private annotations only') }}</option>{% for project in projects %}<option value="{{ project.id }}">{{ _('Private annotations and {project}', project=project.name) }}</option>{% endfor %}</select></label>
+    <button id="pdf-download-annotated" type="button">{{ _('Download annotated PDF') }}</button>
+    <p class="option-panel-note">{{ _('This download contains only the current PDF revision.') }}</p>
+  </div>
   <div class="pdf-annotation-tools" x-cloak x-show="annotationOpen">
+    <select id="annotation-mark-kind" aria-label="{{ _('Text annotation type') }}"><option value="highlight">{{ _('Highlight') }}</option><option value="underline">{{ _('Underline') }}</option></select>
     <button data-color="yellow">{{ _('Yellow') }}</button><button data-color="green">{{ _('Green') }}</button>
     <button data-color="blue">{{ _('Blue') }}</button><button data-color="red">{{ _('Red') }}</button>
     <button id="add-note">{{ _('Note') }}</button><button id="delete-annotation">{{ _('Delete selected') }}</button>
     <select id="annotation-project"><option value="">{{ _('Private') }}</option>{% for project in projects %}<option value="{{ project.id }}">{{ project.name }}</option>{% endfor %}</select>
-    <button id="export-annotations">{{ _('Export') }}</button>
   </div>
   <aside id="annotation-detail" class="annotation-detail" hidden>
     <header><div><p class="eyebrow">{{ _('Annotation details') }}</p><h2 id="annotation-detail-kind"></h2></div><button id="annotation-detail-close" class="secondary-button compact-button" type="button" aria-label="{{ _('Close') }}">×</button></header>

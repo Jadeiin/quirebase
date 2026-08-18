@@ -1,15 +1,29 @@
 from __future__ import annotations
 
 import json
+import zipfile
+from io import BytesIO
 
+import pymupdf
 import pytest
 from sqlalchemy import select
 from test_http import authenticated_client
 
 from quirebase.core.crypto import hash_password
 from quirebase.core.errors import PermissionDenied
-from quirebase.library import apply_bulk_item_action, download_item_pdfs
-from quirebase.models import AuditEvent, Item, Project, ProjectItem, ProjectMember, User
+from quirebase.core.storage import LocalObjectStore
+from quirebase.library import apply_bulk_item_action, download_item_bundle, download_item_pdfs
+from quirebase.models import (
+    AuditEvent,
+    FileRevision,
+    Item,
+    PdfAnnotation,
+    PdfAnnotationSegment,
+    Project,
+    ProjectItem,
+    ProjectMember,
+    User,
+)
 
 
 def test_bulk_action_blocks_unauthorized_assignment_to_project(db, tmp_path, monkeypatch):
@@ -85,7 +99,12 @@ def test_bulk_download_pdfs_records_audit_event(db, tmp_path, monkeypatch):
     owner = db.get(User, item.created_by)
 
     archive = download_item_pdfs(db, owner, [item.id])
-    assert archive.getvalue()
+    assert archive.content.getvalue()
+    assert archive.filename == "quirebase-selected-pdfs.zip"
+    with zipfile.ZipFile(archive.content) as bundle:
+        assert "manifest.json" in bundle.namelist()
+        assert "Paper/manifest.json" in bundle.namelist()
+        assert "Paper/Paper-pdf-v01-paper.pdf" in bundle.namelist()
 
     event = db.scalar(
         select(AuditEvent)
@@ -93,7 +112,107 @@ def test_bulk_download_pdfs_records_audit_event(db, tmp_path, monkeypatch):
         .order_by(AuditEvent.created_at.desc())
     )
     assert event is not None
-    assert json.loads(event.detail)["item_ids"] == [item.id]
+    detail = json.loads(event.detail)
+    assert detail["item_ids"] == [item.id]
+    assert detail["include_annotations"] is False
+    assert detail["include_supplements"] is False
+
+
+def test_item_download_bundle_contains_all_pdf_versions_with_manifest(db, tmp_path, monkeypatch):
+    _client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+    owner = db.get(User, item.created_by)
+    key, digest, size = LocalObjectStore().put_pdf(
+        source=BytesIO(b"%PDF-1.4\nsecond-pdf"), maximum=100
+    )
+    db.add(
+        FileRevision(
+            item_id=item.id,
+            object_key=key,
+            sha256=digest,
+            size=size,
+            original_name="published.pdf",
+            processing_state="ready",
+            created_by=owner.id,
+        )
+    )
+    db.commit()
+
+    archive = download_item_bundle(db, owner, item.id)
+    assert archive.filename == "Paper-pdfs.zip"
+    with zipfile.ZipFile(archive.content) as bundle:
+        names = bundle.namelist()
+        assert "manifest.json" in names
+        assert sum(name.endswith("paper.pdf") for name in names) == 1
+        assert sum(name.endswith("published.pdf") for name in names) == 1
+        manifest = json.loads(bundle.read("manifest.json"))
+        assert len(manifest["pdf_revisions"]) == 2
+        assert all("-pdf-v" in name for name in names if name.endswith(".pdf"))
+
+
+def test_item_download_embeds_annotations_in_pdf_without_a_sidecar(db, tmp_path, monkeypatch):
+    _client, item, revision = authenticated_client(db, tmp_path, monkeypatch)
+    owner = db.get(User, item.created_by)
+    with pymupdf.open() as document:
+        document.new_page(width=300, height=400)
+        source = BytesIO(document.tobytes())
+    key, digest, size = LocalObjectStore().put_pdf(source=source, maximum=100_000)
+    revision.object_key = key
+    revision.sha256 = digest
+    revision.size = size
+    annotation = PdfAnnotation(
+        file_revision_id=revision.id,
+        author_id=owner.id,
+        kind="highlight",
+        scope="private",
+        color="yellow",
+        selected_text="Result",
+    )
+    annotation.segments = [
+        PdfAnnotationSegment(
+            page_index=0,
+            ordinal=0,
+            x1=20,
+            y1=300,
+            x2=100,
+            y2=300,
+            x3=20,
+            y3=280,
+            x4=100,
+            y4=280,
+        )
+    ]
+    db.add(annotation)
+    db.commit()
+
+    archive = download_item_bundle(db, owner, item.id, include_annotations=True)
+
+    assert archive.filename == "Paper-annotated-pdfs.zip"
+    with zipfile.ZipFile(archive.content) as bundle:
+        names = bundle.namelist()
+        assert not any(name.startswith("annotations-") for name in names)
+        pdf_name = next(name for name in names if name.endswith(".pdf"))
+        assert "-annotated-pdf-" in pdf_name
+        with pymupdf.open(stream=bundle.read(pdf_name), filetype="pdf") as document:
+            page = document[0]
+            exported = list(page.annots())
+            assert [record.type[1] for record in exported] == ["Highlight"]
+            assert exported[0].info["title"] == owner.username
+
+    bulk_archive = download_item_pdfs(db, owner, [item.id], include_annotations=True)
+    assert bulk_archive.filename == "quirebase-selected-annotated-pdfs.zip"
+    with zipfile.ZipFile(bulk_archive.content) as bundle:
+        assert "manifest.json" in bundle.namelist()
+        assert "Paper/manifest.json" in bundle.namelist()
+        pdf_name = next(
+            name
+            for name in bundle.namelist()
+            if name.startswith("Paper/") and name.endswith(".pdf")
+        )
+        assert "-annotated-pdf-" in pdf_name
+        with pymupdf.open(stream=bundle.read(pdf_name), filetype="pdf") as document:
+            page = document[0]
+            exported = next(page.annots())
+            assert exported.info["title"] == owner.username
 
 
 def test_bulk_export_rejects_inaccessible_items(db, tmp_path, monkeypatch):

@@ -7,9 +7,9 @@ from quirebase.discovery.bibliography import (
     parse_bibliography,
 )
 from quirebase.discovery.citations import (
-    BUILTIN_STYLES,
     REFERENCE_TYPE_TO_CSL,
-    available_builtin_styles,
+    CitationStyleOption,
+    ExportOptions,
     builtin_style_xml,
     create_custom_citation_style,
     delete_custom_citation_style,
@@ -19,6 +19,7 @@ from quirebase.discovery.citations import (
     get_item_citation_text_response,
     is_valid_csl,
     item_to_csl_json,
+    list_builtin_citation_styles,
     list_custom_citation_styles,
     render_bibliography,
     render_citation,
@@ -51,10 +52,11 @@ from quirebase.discovery.search import (
 )
 
 __all__ = [
-    "BUILTIN_STYLES",
     "REFERENCE_TYPE_TO_CSL",
     "SUPPORTED_FORMATS",
     "BatchConflict",
+    "CitationStyleOption",
+    "ExportOptions",
     "Identifier",
     "MetadataLookupError",
     "MetadataNotFoundError",
@@ -63,7 +65,6 @@ __all__ = [
     "SearchPage",
     "SearchResult",
     "UpstreamServiceError",
-    "available_builtin_styles",
     "builtin_style_xml",
     "commit_import_batch",
     "create_custom_citation_style",
@@ -80,6 +81,7 @@ __all__ = [
     "import_unpublished_pdf",
     "is_valid_csl",
     "item_to_csl_json",
+    "list_builtin_citation_styles",
     "list_custom_citation_styles",
     "lookup_metadata",
     "parse_bibliography",

@@ -98,12 +98,20 @@ def create_thumbnail(path: Path, output: Path) -> None:
         pixmap.save(output)
 
 
-def export_annotations(source: Path, output: Path, annotations: list[PdfAnnotation]) -> None:
+def export_annotations(
+    source: Path,
+    output: Path,
+    annotations: list[PdfAnnotation],
+    *,
+    author_names: dict[str, str] | None = None,
+) -> None:
+    author_names = author_names or {}
     with pymupdf.open(source) as document:
         if document.needs_pass:
             raise ValueError("password-protected PDFs cannot be exported")
         for record in annotations:
-            if record.kind == "highlight":
+            author_name = author_names.get(record.author_id, "")
+            if record.kind in ("highlight", "underline"):
                 for segment in record.segments:
                     values = [
                         segment.x1,
@@ -122,10 +130,15 @@ def export_annotations(source: Path, output: Path, annotations: list[PdfAnnotati
                         pdf_point_to_page(page, pymupdf.Point(values[i], values[i + 1]))
                         for i in range(0, 8, 2)
                     ]
-                    annotation = page.add_highlight_annot(pymupdf.Quad(*points))
+                    quad = pymupdf.Quad(*points)
+                    annotation = (
+                        page.add_highlight_annot(quad)
+                        if record.kind == "highlight"
+                        else page.add_underline_annot(quad)
+                    )
                     annotation.set_colors(stroke=COLORS[record.color])
-                    annotation.set_info(title=record.author_id, content=record.selected_text or "")
-                    annotation.update(opacity=0.35)
+                    annotation.set_info(title=author_name, content=record.body or "")
+                    annotation.update(opacity=0.35 if record.kind == "highlight" else 0.9)
             else:
                 segment = record.segments[0]
                 page = document[segment.page_index]
@@ -133,7 +146,7 @@ def export_annotations(source: Path, output: Path, annotations: list[PdfAnnotati
                     page, pymupdf.Point(segment.anchor_x or 0, segment.anchor_y or 0)
                 )
                 annotation = page.add_text_annot(point, record.body or "")
-                annotation.set_info(title=record.author_id, content=record.body or "")
+                annotation.set_info(title=author_name, content=record.body or "")
                 annotation.update()
         output.parent.mkdir(parents=True, exist_ok=True)
         document.save(output, garbage=4, deflate=True)

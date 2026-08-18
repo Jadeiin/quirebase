@@ -4,18 +4,12 @@ import json
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
 
 from quirebase.core.config import get_settings
 from quirebase.core.database import get_db
 from quirebase.core.errors import ResourceNotFound, ValidationFailure
-from quirebase.discovery import (
-    MetadataLookupError,
-    MetadataNotFoundError,
-    UpstreamServiceError,
-    available_builtin_styles,
-    list_custom_citation_styles,
-)
+from quirebase.discovery import MetadataLookupError, MetadataNotFoundError, UpstreamServiceError
 from quirebase.documents import (
     create_attachment as create_attachment_op,
 )
@@ -38,6 +32,7 @@ from quirebase.library import (
     SummaryWorkspace,
     WorkspaceSection,
     add_tag_to_item,
+    download_item_bundle,
     open_item_workspace,
     parse_author_list_string,
     regenerate_bibtex_key,
@@ -56,6 +51,9 @@ from quirebase.library import (
 )
 from quirebase.library import (
     delete_discussion_message as delete_discussion_message_op,
+)
+from quirebase.library import (
+    delete_item as delete_item_op,
 )
 from quirebase.models import (
     ItemAuthor,
@@ -239,14 +237,17 @@ def render_item_workspace(
     context: dict[str, Any] = {
         "item": view.item,
         "can_edit": view.can_edit,
+        "can_delete": view.can_delete,
         "revisions": view.revisions,
     }
     match view:
         case SummaryWorkspace():
             context.update(
                 revision_count=view.revision_count,
+                attachment_count=view.attachment_count,
                 annotation_count=view.annotation_count,
                 message_count=view.message_count,
+                summary_tags=view.tags,
                 item_owner=view.item_owner,
                 updater=view.updater,
                 identifier_links=view.identifiers,
@@ -285,8 +286,6 @@ def render_item_workspace(
             "csrf": login_session.csrf_token,
             "active_page": "library",
             "item_section": selected.value,
-            "builtin_styles": available_builtin_styles(),
-            "custom_styles": list_custom_citation_styles(db, user),
             **context,
         },
     )
@@ -313,6 +312,28 @@ def item_page(
     return render_item_workspace(request, item_id, "summary", user, login_session, db)
 
 
+@router.get("/items/{item_id}/download")
+def download_item_route(
+    item_id: str,
+    include_annotations: bool = False,
+    include_supplements: bool = False,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    bundle = download_item_bundle(
+        db,
+        user,
+        item_id,
+        include_annotations=include_annotations,
+        include_supplements=include_supplements,
+    )
+    return StreamingResponse(
+        bundle.content,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{bundle.filename}"'},
+    )
+
+
 @router.get("/items/{item_id}/{section}", response_class=HTMLResponse)
 def item_section_page(
     request: Request,
@@ -335,6 +356,19 @@ def edit_item(
 ):
     result = revise_item_metadata(db, user, item_id, version, metadata)
     return RedirectResponse(f"/items/{result.item_id}/metadata", status_code=303)
+
+
+@router.post("/items/{item_id}/delete", dependencies=[Depends(require_csrf)])
+def delete_item_route(
+    item_id: str,
+    confirm: str = Form(default=""),
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    if confirm != "delete":
+        raise ValidationFailure("confirm deletion to continue")
+    delete_item_op(db, user, item_id)
+    return RedirectResponse("/library", status_code=303)
 
 
 @router.post("/items/{item_id}/sync-metadata", dependencies=[Depends(require_csrf)])

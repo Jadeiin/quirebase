@@ -8,9 +8,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response, Streamin
 from quirebase.access import editable_projects, visible_projects
 from quirebase.core.database import get_db
 from quirebase.discovery import (
-    available_builtin_styles,
+    ExportOptions,
     export_selected_bibliography,
-    list_custom_citation_styles,
 )
 from quirebase.library import apply_bulk_item_action, download_item_pdfs, search_library
 from quirebase.models import LoginSession, User
@@ -63,8 +62,6 @@ def library(
             "years": years,
             "csrf": login_session.csrf_token,
             "active_page": "library",
-            "builtin_styles": available_builtin_styles(),
-            "custom_styles": list_custom_citation_styles(db, user),
             "filters": {
                 "q": q,
                 "tag": tag,
@@ -88,12 +85,30 @@ def library_bulk_action(
     tag_name: str = Form(default=""),
     confirm_delete: str = Form(default=""),
     style: str = Form(default="apa"),
+    include_abstract: bool = Form(default=True),
+    preserve_case: bool = Form(default=False),
+    abbreviate_journal: bool = Form(default=False),
+    include_identifiers: bool = Form(default=False),
+    include_custom_fields: bool = Form(default=False),
+    include_annotations: bool = Form(default=False),
+    include_supplements: bool = Form(default=False),
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
     if action == "export_csl":
         contents, media_type, filename = export_selected_bibliography(
-            db, user, item_ids, "csl", style_key=style
+            db,
+            user,
+            item_ids,
+            "csl",
+            style_key=style,
+            options=ExportOptions(
+                include_abstract=include_abstract,
+                preserve_case=preserve_case,
+                abbreviate_journal=abbreviate_journal,
+                include_identifiers=include_identifiers,
+                include_custom_fields=include_custom_fields,
+            ),
         )
         return Response(
             contents,
@@ -102,7 +117,17 @@ def library_bulk_action(
         )
     if action.startswith("export_"):
         contents, media_type, filename = export_selected_bibliography(
-            db, user, item_ids, action.removeprefix("export_")
+            db,
+            user,
+            item_ids,
+            action.removeprefix("export_"),
+            options=ExportOptions(
+                include_abstract=include_abstract,
+                preserve_case=preserve_case,
+                abbreviate_journal=abbreviate_journal,
+                include_identifiers=include_identifiers,
+                include_custom_fields=include_custom_fields,
+            ),
         )
         return Response(
             contents,
@@ -110,11 +135,17 @@ def library_bulk_action(
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
     if action == "download_pdfs":
-        archive = download_item_pdfs(db, user, item_ids)
+        archive = download_item_pdfs(
+            db,
+            user,
+            item_ids,
+            include_annotations=include_annotations,
+            include_supplements=include_supplements,
+        )
         return StreamingResponse(
-            archive,
+            archive.content,
             media_type="application/zip",
-            headers={"Content-Disposition": 'attachment; filename="quirebase-pdfs.zip"'},
+            headers={"Content-Disposition": f'attachment; filename="{archive.filename}"'},
         )
 
     apply_bulk_item_action(

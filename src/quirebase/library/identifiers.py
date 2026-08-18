@@ -13,6 +13,7 @@ from quirebase.audit import record_event
 from quirebase.core.errors import VersionConflict
 from quirebase.discovery.bibliography import REFERENCE_TYPE_TO_BIBTEX, extract_year
 from quirebase.discovery.lookup import (
+    DOI_PATTERN,
     MetadataRecord,
     _clean_markup,
     lookup_metadata,
@@ -75,12 +76,14 @@ def set_item_identifiers(
         cleaned_val = clean_identifier_value(prov, val)
         if not prov or not cleaned_val:
             continue
+        if prov == "doi":
+            # DOI is canonical on Item; it is not an upstream identifier row.
+            doi_value = cleaned_val
+            continue
         link = ItemIdentifier(item_id=item_id, provider=prov, value=cleaned_val)
         db.add(link)
         links.append(link)
         idents_dict[prov] = cleaned_val
-        if prov == "doi":
-            doi_value = cleaned_val
 
     item.doi = doi_value
     item.identifiers = json.dumps(idents_dict) if idents_dict else None
@@ -218,6 +221,17 @@ def apply_metadata_record(
     if rec.get("keywords") or not merge:
         item.keywords = "; ".join(keywords) if keywords else None
 
+    raw_custom_fields = rec.get("custom_fields")
+    if raw_custom_fields:
+        with contextlib.suppress(json.JSONDecodeError, TypeError):
+            parsed_custom_fields = (
+                json.loads(raw_custom_fields)
+                if isinstance(raw_custom_fields, str)
+                else raw_custom_fields
+            )
+            if isinstance(parsed_custom_fields, dict):
+                item.custom_fields = json.dumps(parsed_custom_fields, ensure_ascii=False)
+
     if not item.bibtex_id:
         item.bibtex_id = str(rec.get("bibtex_id") or "").strip() or generate_bibtex_key(item)
 
@@ -226,6 +240,10 @@ def apply_metadata_record(
         if merge
         else {}
     )
+    if merge and item.doi:
+        # DOI is canonical on Item rather than an ItemIdentifier row. Seed it
+        # into the merge so non-DOI providers cannot erase it by omission.
+        identifiers["doi"] = item.doi
     raw_idents = rec.get("identifiers")
     if raw_idents:
         with contextlib.suppress(json.JSONDecodeError, TypeError):
@@ -256,6 +274,8 @@ def _sync_metadata_from_upstream(
     settings: Settings | None = None,
 ) -> Item:
     item = require_editable_item(db, user, item_id)
+    previous_generated_key = generate_bibtex_key(item)
+    previous_key = item.bibtex_id
 
     _, record = lookup_metadata(uid_value, provider=provider, settings=settings)
     version = db.scalar(
@@ -274,7 +294,12 @@ def _sync_metadata_from_upstream(
         raise VersionConflict(current.version if current else None)
 
     db.refresh(item)
-    forced_identifiers = {provider: uid_value} if provider and uid_value else None
+    normalized_uid = normalize_doi(uid_value)
+    forced_identifiers = (
+        {provider: uid_value}
+        if provider and uid_value and not DOI_PATTERN.fullmatch(normalized_uid)
+        else None
+    )
     apply_metadata_record(
         db,
         user,
@@ -284,10 +309,30 @@ def _sync_metadata_from_upstream(
         forced_identifiers=forced_identifiers,
     )
 
+    # Upstream changes commonly alter the title, first author or year. Keep a
+    # key that was generated from the previous metadata in sync, while leaving
+    # an explicitly edited key untouched.
+    if not previous_key or previous_key == previous_generated_key:
+        regenerated_key = generate_bibtex_key(item)
+        if regenerated_key != item.bibtex_id:
+            item.bibtex_id = regenerated_key
+
     db.flush()
 
     search_index(db).index_item(db, item_id)
-    record_event(db, user.id, "item.sync_upstream", "item", item_id)
+    record_event(
+        db,
+        user.id,
+        "item.sync_upstream",
+        "item",
+        item_id,
+        detail={
+            "provider": provider,
+            "bibtex_key_updated": bool(
+                previous_key != item.bibtex_id and previous_key == previous_generated_key
+            ),
+        },
+    )
     db.commit()
     return item
 

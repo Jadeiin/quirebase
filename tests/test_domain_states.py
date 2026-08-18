@@ -82,6 +82,19 @@ def test_closed_domain_states_are_loaded_as_domain_types(db):
     assert db.get(Job, job.id).state is JobState.pending
 
 
+def test_underline_is_an_allowed_annotation_kind(db):
+    _member, _revision, annotation, _job, _project = state_records(db)
+
+    db.execute(
+        text("UPDATE pdf_annotations SET kind = 'underline' WHERE id = :id"),
+        {"id": annotation.id},
+    )
+    db.commit()
+    db.expire_all()
+
+    assert db.get(PdfAnnotation, annotation.id).kind is AnnotationKind.underline
+
+
 def test_annotation_commands_use_domain_types():
     command = AnnotationCreate(
         revision_id="revision",

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ item.title }} · Quirebase{% endblock %}
 {% block content %}
+{% set annotation_kind_labels = {'highlight': _('Highlight'), 'underline': _('Underline'), 'note': _('Note')} %}
 <header class="item-header">
   <p class="item-breadcrumb"><a href="/library">{{ _('Library') }}</a> / {{ _('Paper') }}</p>
   <div class="item-title-row">
@@ -10,18 +11,33 @@
     </div>
     <div class="item-header-actions">
       {% if revisions %}<a class="button-link" href="/items/{{ item.id }}/pdf/{{ revisions[0].id }}">{{ _('Read PDF') }}</a>{% endif %}
-      <details class="export-menu">
-        <summary>{{ _('Export citation') }}</summary>
-        <div><a href="/documents/{{ item.id }}/citation?file_format=bibtex">BibTeX</a><a href="/documents/{{ item.id }}/citation?file_format=ris">RIS</a><a href="/documents/{{ item.id }}/citation?file_format=endnote">EndNote</a>{% if builtin_styles or custom_styles %}<a href="/documents/{{ item.id }}/citation?file_format=csl&style={{ (builtin_styles.keys()|list)[0] if builtin_styles else custom_styles[0].id }}">{{ _('Formatted citation (CSL)') }}</a>{% endif %}</div>
-      </details>
-      {% if builtin_styles or custom_styles %}<details class="export-menu" x-data="formattedCitation" data-item-id="{{ item.id }}">
-        <summary>{{ _('Formatted citation') }}</summary>
-        <div class="citation-panel">
-          <label>{{ _('Style') }}<select x-model="style" @change="render()">{% for key, name in builtin_styles.items() %}<option value="{{ key }}">{{ name }}</option>{% endfor %}{% for style in custom_styles %}<option value="{{ style.id }}">{{ style.name }}</option>{% endfor %}</select></label>
-          <pre class="citation-output" x-text="output"></pre>
-          <button type="button" class="secondary-button compact-button" @click="copy()">{{ _('Copy') }}</button>
+      {% if revisions %}
+      <details class="export-menu" x-data="itemDownload" data-item-id="{{ item.id }}" data-export-preferences-key="quirebase:export-preferences:v1:account:{{ user.id }}">
+        <summary class="secondary-button">{{ _('Download PDF') }}</summary>
+        <div class="citation-panel export-options download-options">
+          <div class="option-panel-heading"><strong>{{ _('Download options') }}</strong><small>{{ _('Choose what to package with the reading copy.') }}</small></div>
+          <label class="export-check"><input type="checkbox" x-model="includeAnnotations">{{ _('Include annotations') }}</label>
+          <label class="export-check"><input type="checkbox" x-model="includeSupplements">{{ _('Include supplements') }}</label>
+          <p class="option-panel-note">{{ _('Stored files remain unchanged.') }}</p>
+          <div class="export-actions"><button type="button" @click="download()">{{ _('Download') }}</button></div>
         </div>
-      </details>{% endif %}
+      </details>
+      {% endif %}
+      <details class="export-menu" x-data="itemExport" data-item-id="{{ item.id }}" data-export-preferences-key="quirebase:export-preferences:v1:account:{{ user.id }}">
+        <summary>{{ _('Export') }}</summary>
+        <div class="citation-panel export-options">
+          <label>{{ _('Format') }}<select x-model="format"><option value="csl">CSL citation</option><option value="bibtex">BibTeX</option><option value="ris">RIS</option><option value="endnote">EndNote</option></select></label>
+          <label x-show="format === 'csl'">{{ _('CSL style') }}<input type="search" x-model="query" @input.debounce.250ms="searchStyles()" placeholder="{{ _('Search citation styles') }}"><select name="style" x-model="style"><template x-for="option in styles" :key="option.key"><option :value="option.key" x-text="option.name"></option></template></select></label>
+          <label class="export-check"><input type="checkbox" x-model="includeAbstract">{{ _('Include abstract') }}</label>
+          <label class="export-check" x-show="format === 'bibtex'"><input type="checkbox" x-model="preserveCase">{{ _('Preserve bibitem case') }}</label>
+          <label class="export-check" x-show="format === 'bibtex' || format === 'csl'"><input type="checkbox" x-model="abbreviateJournal">{{ _('Use abbreviated journal') }}</label>
+          <label class="export-check" x-show="format === 'bibtex'"><input type="checkbox" x-model="includeIdentifiers">{{ _('Include additional identifiers') }}</label>
+          <label class="export-check" x-show="format === 'bibtex'"><input type="checkbox" x-model="includeCustomFields">{{ _('Include custom fields') }}</label>
+          <div class="export-actions"><button type="button" @click="download()">{{ _('Download file') }}</button><button type="button" class="secondary-button" @click="copy()">{{ _('Copy to clipboard') }}</button></div>
+          <small x-show="copied" x-cloak>{{ _('Copied') }}</small>
+        </div>
+      </details>
+      {% if can_delete %}<details class="export-menu"><summary class="danger-summary">{{ _('More') }}</summary><div><form method="post" action="/items/{{ item.id }}/delete?csrf_token={{ csrf }}" onsubmit="return confirm('{{ _('Delete this item permanently?') }}')"><input type="hidden" name="confirm" value="delete"><button type="submit" class="text-danger">{{ _('Delete item') }}</button></form></div></details>{% endif %}
     </div>
   </div>
 </header>
@@ -39,58 +55,88 @@
   <div class="item-content">
     {% if item_section == 'summary' %}
     <div class="item-summary-grid">
-      <section class="panel item-abstract">
-        <div class="section-heading"><h2>{{ _('Abstract') }}</h2>{% if can_edit %}<a href="/items/{{ item.id }}/metadata">{{ _('Edit metadata') }}</a>{% endif %}</div>
-        {% if item.abstract %}<p class="long-copy">{{ item.abstract }}</p>{% else %}<div class="empty-state">{{ _('No abstract available.') }}</div>{% endif %}
+      <main class="item-summary-main">
+        <section class="panel item-abstract">
+          <div class="section-heading"><div><p class="eyebrow">{{ _('Paper overview') }}</p><h2>{{ _('Abstract') }}</h2></div>{% if can_edit %}<a href="/items/{{ item.id }}/metadata">{{ _('Edit metadata') }}</a>{% endif %}</div>
+          {% if item.abstract %}<p class="long-copy">{{ item.abstract }}</p>{% else %}<div class="empty-state">{{ _('No abstract available.') }}</div>{% endif %}
+        </section>
 
-        {% if item.urls %}
-        <div class="section-heading" style="margin-top: 1.5rem;"><h2>{{ _('External links') }}</h2></div>
-        <ul style="margin: 0; padding-left: 1.25rem; display: flex; flex-direction: column; gap: .35rem;">
-          {% for url in item.urls.splitlines() if url.strip() %}
-          <li><a href="{{ url.strip() }}" target="_blank" rel="noreferrer">{{ url.strip() }}</a></li>
-          {% endfor %}
-        </ul>
-        {% endif %}
-      </section>
-      <aside class="item-facts">
-        <section class="panel">
-          <h2>{{ _('At a glance') }}</h2>
-          <dl class="metadata-list">
-            <div><dt>{{ _('Type') }}</dt><dd>{{ _(item.reference_type) if item.reference_type else '—' }}</dd></div>
-            {% if item.journal_abbreviation %}<div><dt>{{ _('Journal abbr.') }}</dt><dd>{{ item.journal_abbreviation }}</dd></div>{% endif %}
-            {% if item.volume or item.issue or item.pages %}
-            <div><dt>{{ _('Volume / Pages') }}</dt><dd>{% if item.volume %}Vol. {{ item.volume }}{% endif %}{% if item.issue %} ({{ item.issue }}){% endif %}{% if item.pages %} pp. {{ item.pages }}{% endif %}</dd></div>
-            {% endif %}
-            {% if item.affiliation %}<div><dt>{{ _('Affiliation') }}</dt><dd>{{ item.affiliation }}</dd></div>{% endif %}
-            {% if item.publisher %}<div><dt>{{ _('Publisher') }}</dt><dd>{{ item.publisher }}{% if item.place_published %} ({{ item.place_published }}){% endif %}</dd></div>{% endif %}
-            <div><dt>{{ _('DOI') }}</dt><dd>{% if item.doi %}<a href="https://doi.org/{{ item.doi }}" rel="noreferrer" target="_blank">{{ item.doi }}</a>{% else %}—{% endif %}</dd></div>
+        <section class="panel publication-snapshot">
+          <div class="section-heading"><h2>{{ _('Publication details') }}</h2><a href="/items/{{ item.id }}/metadata">{{ _('View all metadata') }}</a></div>
+          <dl class="snapshot-grid">
+            <div class="snapshot-wide"><dt>{{ _('Publication') }}</dt><dd>{{ item.publication_title or '—' }}{% if item.journal_abbreviation %}<small>{{ item.journal_abbreviation }}</small>{% endif %}</dd></div>
+            <div><dt>{{ _('Date') }}</dt><dd>{{ item.publication_date or '—' }}</dd></div>
+            <div><dt>{{ _('Volume / Issue') }}</dt><dd>{% if item.volume %}{{ item.volume }}{% else %}—{% endif %}{% if item.issue %} / {{ item.issue }}{% endif %}</dd></div>
+            <div><dt>{{ _('Pages') }}</dt><dd>{{ item.pages or '—' }}</dd></div>
+            <div><dt>{{ _('Publisher') }}</dt><dd>{{ item.publisher or '—' }}{% if item.place_published %}<small>{{ item.place_published }}</small>{% endif %}</dd></div>
+            <div class="snapshot-wide"><dt>{{ _('Affiliation') }}</dt><dd>{{ item.affiliation or '—' }}</dd></div>
           </dl>
-          <div class="provenance-meta">
-            <div><strong>{{ _('Added') }}:</strong> {{ item.created_at.strftime('%Y-%m-%d %H:%M') }}{% if item_owner %} · {{ item_owner.username }}{% endif %}</div>
-            {% if item.updated_by and updater %}
-            <div><strong>{{ _('Modified') }}:</strong> {{ item.updated_at.strftime('%Y-%m-%d %H:%M') }} · {{ updater.username }}</div>
-            {% endif %}
+        </section>
+
+        <section class="panel reading-files-panel">
+          <div class="section-heading"><h2>{{ _('Reading and files') }}</h2><a href="/items/{{ item.id }}/files">{{ _('Manage files') }}</a></div>
+          {% if revisions %}
+          <article class="latest-file">
+            <span class="file-icon">PDF</span>
+            <div><strong>{{ revisions[0].original_name }}</strong><small>{{ _(revisions[0].processing_state) }}{% if revisions[0].page_count %} · {{ _('{count} pages', count=revisions[0].page_count) }}{% endif %}</small></div>
+            <a class="secondary-button compact-button" href="/items/{{ item.id }}/pdf/{{ revisions[0].id }}">{{ _('Read') }}</a>
+          </article>
+          {% else %}
+          <div class="empty-state">{{ _('No PDF uploaded.') }}</div>
+          {% endif %}
+          <div class="item-stat-grid item-stat-grid-four">
+            <a href="/items/{{ item.id }}/files"><strong>{{ revision_count }}</strong><span>{{ _('PDF versions') }}</span></a>
+            <a href="/items/{{ item.id }}/files"><strong>{{ attachment_count }}</strong><span>{{ _('Supplements') }}</span></a>
+            <a href="/items/{{ item.id }}/annotations"><strong>{{ annotation_count }}</strong><span>{{ _('Annotations') }}</span></a>
+            <a href="/items/{{ item.id }}/discussion"><strong>{{ message_count }}</strong><span>{{ _('Messages') }}</span></a>
           </div>
         </section>
 
-        <section class="panel">
-          <h2>{{ _('Identifiers & Sync') }}</h2>
-          <div class="identifier-list">
-            <div class="identifier-row">
-              <div class="identifier-info">
-                <strong>{{ _('Citation key') }}</strong>
-                <span>{{ item.bibtex_id or '—' }}</span>
-              </div>
-              {% if can_edit %}
-              <div class="identifier-actions">
-                <form method="post" action="/items/{{ item.id }}/update-bibtex-key?csrf_token={{ csrf }}">
-                  <input type="hidden" name="version" value="{{ item.version }}">
-                  <button class="secondary-button compact-action-btn" type="submit">{{ _('Update key') }}</button>
-                </form>
-              </div>
-              {% endif %}
+        <section class="panel discovery-panel">
+          <div class="discovery-section item-tags-section">
+            <div class="section-heading"><div><p class="eyebrow">{{ _('User-curated') }}</p><h2>{{ _('Tags') }}</h2></div><a href="/items/{{ item.id }}/organize">{{ _('Manage tags') }}</a></div>
+            <div class="keyword-chips item-tag-chips">
+              {% for tag in summary_tags %}<a href="/library?tag={{ tag.id }}">{{ tag.name }}</a>{% else %}<p class="text-muted">{{ _('No tags assigned yet.') }}</p>{% endfor %}
             </div>
+          </div>
+          <div class="discovery-section">
+            <div class="section-heading"><h2>{{ _('Keywords') }}</h2><a href="/items/{{ item.id }}/organize">{{ _('Organize') }}</a></div>
+            {% set keyword_values = item.keywords.replace(';', ',').replace('\n', ',').split(',') if item.keywords else [] %}
+            <div class="keyword-chips">
+              {% for keyword in keyword_values if keyword.strip() %}<span>{{ keyword.strip() }}</span>{% else %}<p class="text-muted">{{ _('No keywords.') }}</p>{% endfor %}
+            </div>
+          </div>
+          <div class="discovery-section">
+            <div class="section-heading"><h2>{{ _('External links') }}</h2></div>
+            <div class="external-link-list">
+              {% set external_urls = item.urls.splitlines() if item.urls else [] %}
+              {% for url in external_urls if url.strip() %}
+              <a href="{{ url.strip() }}" target="_blank" rel="noreferrer"><span>{{ _('External source {number}', number=loop.index) }}</span><small>{{ url.strip() }}</small><b aria-hidden="true">↗</b></a>
+              {% else %}<p class="text-muted">{{ _('No external links.') }}</p>{% endfor %}
+            </div>
+          </div>
+        </section>
+      </main>
 
+      <aside class="item-facts">
+        <section class="panel record-identity-panel">
+          <p class="eyebrow">{{ _('Record identity') }}</p>
+          <h2>{{ _('Key details') }}</h2>
+          <dl class="metadata-list compact-metadata-list">
+            <div><dt>{{ _('Type') }}</dt><dd>{{ _(item.reference_type) if item.reference_type else '—' }}</dd></div>
+            <div><dt>{{ _('Citation key') }}</dt><dd><code>{{ item.bibtex_id or '—' }}</code></dd></div>
+          </dl>
+          {% if can_edit %}
+          <form class="identity-action" method="post" action="/items/{{ item.id }}/update-bibtex-key?csrf_token={{ csrf }}">
+            <input type="hidden" name="version" value="{{ item.version }}">
+            <button class="secondary-button compact-action-btn" type="submit">{{ _('Update citation key') }}</button>
+          </form>
+          {% endif %}
+        </section>
+
+        <section class="panel sync-panel">
+          <div class="section-heading"><div><p class="eyebrow">{{ _('Metadata sources') }}</p><h2>{{ _('Upstream sync') }}</h2></div></div>
+          <div class="identifier-list">
             {% if item.doi %}
             <div class="identifier-row">
               <div class="identifier-info">
@@ -131,7 +177,9 @@
             <div class="identifier-row">
               <div class="identifier-info">
                 <strong>{{ ident.provider|upper }}</strong>
-                <span>{{ ident.value }}</span>
+                {% if ident.provider == 'openalex' %}<a href="https://openalex.org/{{ ident.value }}" target="_blank" rel="noreferrer">{{ ident.value }}</a>
+                {% elif ident.provider == 'arxiv' %}<a href="https://arxiv.org/abs/{{ ident.value }}" target="_blank" rel="noreferrer">{{ ident.value }}</a>
+                {% else %}<span>{{ ident.value }}</span>{% endif %}
               </div>
               {% if can_edit %}
               <div class="identifier-actions">
@@ -148,13 +196,13 @@
           </div>
         </section>
 
-        <section class="panel">
-          <h2>{{ _('Workspace activity') }}</h2>
-          <div class="item-stat-grid"><a href="/items/{{ item.id }}/files"><strong>{{ revision_count }}</strong><span>PDF</span></a><a href="/items/{{ item.id }}/annotations"><strong>{{ annotation_count }}</strong><span>{{ _('Annotations') }}</span></a><a href="/items/{{ item.id }}/discussion"><strong>{{ message_count }}</strong><span>{{ _('Messages') }}</span></a></div>
-        </section>
-        <section class="panel">
-          <h2>{{ _('Keywords') }}</h2>
-          <p>{{ item.keywords or _('No keywords.') }}</p>
+        <section class="panel record-history-panel">
+          <p class="eyebrow">{{ _('Record history') }}</p>
+          <h2>{{ _('Ownership and changes') }}</h2>
+          <dl class="history-list">
+            <div><dt>{{ _('Added by') }}</dt><dd>{{ item_owner.username }}</dd><small>{{ item.created_at.strftime('%Y-%m-%d %H:%M') }}</small></div>
+            {% if item.updated_by and updater %}<div><dt>{{ _('Last modified by') }}</dt><dd>{{ updater.username }}</dd><small>{{ item.updated_at.strftime('%Y-%m-%d %H:%M') }}</small></div>{% endif %}
+          </dl>
         </section>
       </aside>
     </div>
@@ -282,8 +330,8 @@
     </div>
 
     {% elif item_section == 'annotations' %}
-    <section class="panel page-section-heading"><p class="eyebrow">{{ _('Reading workspace') }}</p><h2>{{ _('Notes and annotations') }}</h2><p>{{ _('Highlights and margin notes are created in the PDF reader and collected here for review.') }}</p>{% if revisions %}<a class="button-link" href="/items/{{ item.id }}/pdf/{{ revisions[0].id }}">{{ _('Open annotation tools') }}</a>{% endif %}</section>
-    <section class="panel annotation-list"><div class="section-heading"><h2>{{ _('All annotations') }}</h2><span>{{ _('{count} annotation(s)', count=annotations|length) }}</span></div>{% for annotation, revision, author in annotations %}<article><span class="annotation-swatch" style="--annotation-color: {{ annotation.color }}"></span><div><div class="annotation-meta"><strong>{{ _(annotation.kind) }}</strong><span>{{ author.username }} · {{ _(annotation.scope) }} · {{ revision.original_name }}{% if annotation.segments %} · {{ _('Page {page}', page=annotation.segments[0].page_index + 1) }}{% endif %}</span></div>{% if annotation.selected_text %}<blockquote>{{ annotation.selected_text }}</blockquote>{% endif %}{% if annotation.body %}<p>{{ annotation.body }}</p>{% endif %}</div><a href="/items/{{ item.id }}/pdf/{{ revision.id }}">{{ _('Open') }}</a></article>{% else %}<div class="empty-state">{{ _('No annotations yet. Open a PDF to highlight text or add a note.') }}</div>{% endfor %}</section>
+    <section class="panel page-section-heading"><p class="eyebrow">{{ _('Reading workspace') }}</p><h2>{{ _('Notes and annotations') }}</h2><p>{{ _('Highlights, underlines and margin notes are created in the PDF reader and collected here for review.') }}</p>{% if revisions %}<a class="button-link" href="/items/{{ item.id }}/pdf/{{ revisions[0].id }}">{{ _('Open annotation tools') }}</a>{% endif %}</section>
+    <section class="panel annotation-list"><div class="section-heading"><h2>{{ _('All annotations') }}</h2><span>{{ _('{count} annotation(s)', count=annotations|length) }}</span></div>{% for annotation, revision, author in annotations %}<article><span class="annotation-swatch" style="--annotation-color: {{ annotation.color }}"></span><div><div class="annotation-meta"><strong>{{ annotation_kind_labels[annotation.kind.value] }}</strong><span>{{ author.username }} · {{ _(annotation.scope) }} · {{ revision.original_name }}{% if annotation.segments %} · {{ _('Page {page}', page=annotation.segments[0].page_index + 1) }}{% endif %}</span></div>{% if annotation.selected_text %}<blockquote>{{ annotation.selected_text }}</blockquote>{% endif %}{% if annotation.body %}<p>{{ annotation.body }}</p>{% endif %}</div><a href="/items/{{ item.id }}/pdf/{{ revision.id }}">{{ _('Open') }}</a></article>{% else %}<div class="empty-state">{{ _('No annotations yet. Open a PDF to highlight, underline or add a note.') }}</div>{% endfor %}</section>
 
     {% elif item_section == 'discussion' %}
     <section class="panel page-section-heading"><p class="eyebrow">{{ _('Collaboration') }}</p><h2>{{ _('Discussion') }}</h2><p>{{ _('Keep paper-specific questions and decisions with the research record.') }}</p></section>

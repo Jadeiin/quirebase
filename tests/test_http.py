@@ -102,6 +102,28 @@ def test_pdf_range_and_annotation_api(db, tmp_path, monkeypatch):
         annotation = created.json()
         assert annotation["mine"] is True
 
+        underlined = client.post(
+            f"/documents/{item.id}/annotations",
+            headers={"X-CSRF-Token": "test-csrf"},
+            json={
+                "revision_id": revision.id,
+                "kind": "underline",
+                "scope": "private",
+                "color": "red",
+                "selected_text": "underlined text",
+                "body": "underline comment",
+                "segments": [
+                    {
+                        "page_index": 0,
+                        "quad_points": [10, 20, 30, 20, 10, 10, 30, 10],
+                    }
+                ],
+            },
+        )
+        assert underlined.status_code == 201
+        assert underlined.json()["kind"] == "underline"
+        assert underlined.json()["color"] == "red"
+
         conflict = client.patch(
             f"/documents/{item.id}/annotations/{annotation['id']}",
             headers={"X-CSRF-Token": "test-csrf"},

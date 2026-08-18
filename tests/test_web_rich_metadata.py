@@ -79,10 +79,7 @@ def test_web_new_item_exposes_and_saves_complete_metadata(db, tmp_path, monkeypa
     assert created.authors == "Lovelace, Ada; Turing, Alan"
     assert created.editors == "Hopper, Grace"
     assert created.doi == "10.1000/complete"
-    assert json.loads(created.identifiers or "") == {
-        "doi": "10.1000/complete",
-        "pmid": "12345",
-    }
+    assert json.loads(created.identifiers or "") == {"pmid": "12345"}
     assert created.keywords == "forms; metadata"
     assert created.urls == "https://example.test/record\nhttps://example.test/pdf"
     assert json.loads(created.custom_fields or "") == {"rating": 5}
@@ -314,10 +311,7 @@ def test_web_author_suggest_api(db, tmp_path, monkeypatch):
 
 def test_web_edit_synchronizes_identifier_rows(db, tmp_path, monkeypatch):
     client, item, _ = authenticated_client(db, tmp_path, monkeypatch)
-    db.add_all([
-        ItemIdentifier(item_id=item.id, provider="doi", value="10.1000/old"),
-        ItemIdentifier(item_id=item.id, provider="pmid", value="old-pmid"),
-    ])
+    db.add(ItemIdentifier(item_id=item.id, provider="pmid", value="old-pmid"))
     item.doi = "10.1000/old"
     item.identifiers = '{"doi": "10.1000/old", "pmid": "old-pmid"}'
     db.commit()
@@ -337,11 +331,10 @@ def test_web_edit_synchronizes_identifier_rows(db, tmp_path, monkeypatch):
     db.expire_all()
     updated = db.get(Item, item.id)
     assert updated.doi == "10.1000/new"
-    assert updated.identifiers == '{"arxiv": "2401.12345", "doi": "10.1000/new"}'
+    assert updated.identifiers == '{"arxiv": "2401.12345"}'
     links = db.query(ItemIdentifier).filter_by(item_id=item.id).all()
     assert {(link.provider, link.value) for link in links} == {
         ("arxiv", "2401.12345"),
-        ("doi", "10.1000/new"),
     }
 
 

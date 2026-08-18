@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import json
+from io import BytesIO
 
+import pymupdf
 import pytest
 from sqlalchemy import select
 from test_http import authenticated_client
 from test_library_ui import pdf_bytes
 
+from quirebase.core.config import get_settings
+from quirebase.core.storage import LocalObjectStore
 from quirebase.documents.revisions import store_pdf_revision
-from quirebase.models import FileRevision, Job, User
+from quirebase.models import FileRevision, Job, PdfAnnotation, PdfAnnotationSegment, User
 from quirebase.pipeline.jobs import (
     get_job_handler,
     register_job_handler,
@@ -19,8 +23,6 @@ from quirebase.pipeline.jobs import (
 def test_job_failure_rolls_back_partial_revision_state(db, tmp_path, monkeypatch):
     _client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
     user = db.get(User, item.created_by)
-
-    from io import BytesIO
 
     revision = store_pdf_revision(
         db,
@@ -54,6 +56,62 @@ def test_job_failure_rolls_back_partial_revision_state(db, tmp_path, monkeypatch
     assert updated_job.state == "pending"
     assert "Thumbnail generation crashed" in updated_job.error
     assert updated_job.lease_until is None
+
+
+def test_current_pdf_annotation_export_uses_username_and_annotation_body(db, tmp_path, monkeypatch):
+    _client, item, revision = authenticated_client(db, tmp_path, monkeypatch)
+    user = db.get(User, item.created_by)
+    with pymupdf.open() as document:
+        document.new_page(width=300, height=400)
+        source = BytesIO(document.tobytes())
+    key, digest, size = LocalObjectStore().put_pdf(source=source, maximum=100_000)
+    revision.object_key = key
+    revision.sha256 = digest
+    revision.size = size
+    annotation = PdfAnnotation(
+        file_revision_id=revision.id,
+        author_id=user.id,
+        kind="highlight",
+        scope="private",
+        color="green",
+        body="Reviewer-facing annotation",
+        selected_text="Selected source text",
+    )
+    annotation.segments = [
+        PdfAnnotationSegment(
+            page_index=0,
+            ordinal=0,
+            x1=20,
+            y1=300,
+            x2=100,
+            y2=300,
+            x3=20,
+            y3=280,
+            x4=100,
+            y4=280,
+        )
+    ]
+    job = Job(
+        kind="pdf.export_annotations",
+        payload=json.dumps({
+            "revision_id": revision.id,
+            "project_id": None,
+            "include_private": True,
+        }),
+        idempotency_key="pdf-export-username-and-body",
+        owner_id=user.id,
+    )
+    db.add_all([annotation, job])
+    db.commit()
+
+    run_job(db, job)
+
+    result = json.loads(job.result)
+    with pymupdf.open(get_settings().export_dir / result["filename"]) as document:
+        page = document[0]
+        exported = next(page.annots())
+        assert exported.info["title"] == user.username
+        assert exported.info["content"] == "Reviewer-facing annotation"
 
 
 def test_custom_job_handler_registry(db, tmp_path, monkeypatch):

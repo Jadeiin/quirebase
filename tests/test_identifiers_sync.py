@@ -35,16 +35,15 @@ def test_set_and_get_item_identifiers(db):
     db.commit()
 
     loaded_ids = get_item_identifiers(db, item.id)
-    assert len(loaded_ids) == 3
+    assert len(loaded_ids) == 2
     providers = {link.provider: link.value for link in loaded_ids}
-    assert providers["doi"] == "10.1002/j.1538-7305.1948.tb01338.x"
     assert providers["arxiv"] == "2401.00001"
 
     # Check cache on Item
     loaded_item = db.get(Item, item.id)
     assert loaded_item.doi == "10.1002/j.1538-7305.1948.tb01338.x"
     idents_dict = json.loads(loaded_item.identifiers)
-    assert idents_dict["doi"] == "10.1002/j.1538-7305.1948.tb01338.x"
+    assert "doi" not in idents_dict
     assert idents_dict["arxiv"] == "2401.00001"
 
 
@@ -161,6 +160,55 @@ def test_sync_metadata_from_upstream(db):
     assert updated_item.updated_by == user.id
     assert len(updated_item.author_links) == 1
     assert updated_item.author_links[0].author.last_name == "Shannon"
+
+
+def test_sync_by_doi_does_not_store_doi_as_provider_identifier(db):
+    user = User(username="canonical_doi_sync", password_hash="hash")
+    db.add(user)
+    db.flush()
+    item = Item(title="Initial", created_by=user.id)
+    db.add(item)
+    db.commit()
+
+    record = {"title": "Updated", "doi": "10.1000/canonical"}
+    with patch("quirebase.library.identifiers.lookup_metadata", return_value=(None, record)):
+        sync_metadata_from_upstream(
+            db,
+            user,
+            item.id,
+            item.version,
+            provider="openalex",
+            uid_value="https://doi.org/10.1000/canonical",
+        )
+
+    assert item.doi == "10.1000/canonical"
+    assert get_item_identifiers(db, item.id) == []
+
+
+def test_non_doi_sync_preserves_existing_canonical_doi_when_upstream_omits_it(db):
+    user = User(username="preserve_canonical_doi", password_hash="hash")
+    db.add(user)
+    db.flush()
+    item = Item(title="Initial", doi="10.1000/existing", created_by=user.id)
+    db.add(item)
+    db.commit()
+
+    record = {"title": "Updated", "identifiers": {"pmid": "12345678"}}
+    with patch("quirebase.library.identifiers.lookup_metadata", return_value=(None, record)):
+        sync_metadata_from_upstream(
+            db,
+            user,
+            item.id,
+            item.version,
+            provider="openalex",
+            uid_value="W123",
+        )
+
+    assert item.doi == "10.1000/existing"
+    assert {record.provider: record.value for record in get_item_identifiers(db, item.id)} == {
+        "openalex": "W123",
+        "pmid": "12345678",
+    }
 
 
 def test_sync_metadata_cleans_html_and_syncs_bibtex_type(db):

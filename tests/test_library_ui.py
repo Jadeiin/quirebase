@@ -97,6 +97,7 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
         for number in range(30):
             item = Item(
                 title=f"Library paper {number:02d}",
+                abstract="This abstract should be optional." if number == 0 else None,
                 authors="Alice Researcher" if number % 2 == 0 else "Bob Scientist",
                 keywords="imaging" if number % 3 == 0 else "simulation",
                 publication_date="2025" if number % 2 == 0 else "2024",
@@ -118,6 +119,9 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
         assert "第 1 页" in first_page.text
         assert "共 2 页" in first_page.text
         assert "Library paper 29" in first_page.text
+        assert 'x-model="styleQuery"' in first_page.text
+        assert 'x-for="citationStyle in citationStyles"' in first_page.text
+        assert 'x-model="style"' in first_page.text
         second_page = client.get("/library?page=2")
         assert second_page.status_code == 200
         assert "Library paper 00" in second_page.text
@@ -162,6 +166,29 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
         assert exported.status_code == 200
         assert "quirebase-export.enw" in exported.headers["content-disposition"]
         assert "Library paper 00" in exported.text
+        assert "This abstract should be optional." in exported.text
+
+        native_checkbox_export = client.post(
+            "/library/bulk?csrf_token=test-csrf",
+            data={
+                "action": "export_endnote",
+                "item_ids": selected[0].id,
+                "include_abstract": ["false", "true"],
+            },
+        )
+        assert native_checkbox_export.status_code == 200
+        assert "This abstract should be optional." in native_checkbox_export.text
+
+        exported_without_abstract = client.post(
+            "/library/bulk?csrf_token=test-csrf",
+            data={
+                "action": "export_endnote",
+                "item_ids": selected[0].id,
+                "include_abstract": "false",
+            },
+        )
+        assert exported_without_abstract.status_code == 200
+        assert "This abstract should be optional." not in exported_without_abstract.text
 
         pdf_archive = client.post(
             "/library/bulk?csrf_token=test-csrf",
@@ -169,8 +196,27 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
         )
         assert pdf_archive.status_code == 200
         assert pdf_archive.headers["content-type"] == "application/zip"
+        assert "quirebase-selected-pdfs.zip" in pdf_archive.headers["content-disposition"]
         with zipfile.ZipFile(io.BytesIO(pdf_archive.content)) as archive:
-            assert archive.namelist() == ["paper.pdf"]
+            assert archive.namelist() == [
+                "Paper/Paper-pdf-v01-paper.pdf",
+                "Paper/manifest.json",
+                "manifest.json",
+            ]
+
+        annotated_pdf_archive = client.post(
+            "/library/bulk?csrf_token=test-csrf",
+            data={
+                "action": "download_pdfs",
+                "item_ids": original.id,
+                "include_annotations": "true",
+            },
+        )
+        assert annotated_pdf_archive.status_code == 200
+        assert (
+            "quirebase-selected-annotated-pdfs.zip"
+            in annotated_pdf_archive.headers["content-disposition"]
+        )
 
         deleted = client.post(
             "/library/bulk?csrf_token=test-csrf",

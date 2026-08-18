@@ -3,7 +3,7 @@
 {% block content %}
 <div class="page-heading"><div><p class="eyebrow">{{ _('{count} papers available', count=total) }}</p><h1>{{ _('Paper library') }}</h1></div><a class="button-link" href="/bibliography/import">{{ _('Import papers') }}</a></div>
 
-<div x-data="libraryWorkspace" data-selection-label="{{ _('{count} paper(s) selected') }}">
+<div x-data="libraryWorkspace" data-selection-label="{{ _('{count} paper(s) selected') }}" data-export-preferences-key="quirebase:export-preferences:v1:account:{{ user.id }}">
 <section class="panel filter-panel">
   <div class="panel-heading-row">
     <h2>{{ _('Filters') }}</h2>
@@ -30,11 +30,21 @@
       <option value="export_bibtex">{{ _('Export BibTeX') }}</option>
       <option value="export_ris">{{ _('Export RIS') }}</option>
       <option value="export_endnote">{{ _('Export EndNote') }}</option>
-      {% if builtin_styles or custom_styles %}<option value="export_csl">{{ _('Export citation (CSL)') }}</option>{% endif %}
+      <option value="export_csl">{{ _('Export citation (CSL)') }}</option>
       <option value="download_pdfs">{{ _('Download PDFs') }}</option>
       <option value="delete_items">{{ _('Delete papers') }}</option>
     </select>
-    {% if builtin_styles or custom_styles %}<select name="style" x-show="action === 'export_csl'">{% for key, name in builtin_styles.items() %}<option value="{{ key }}">{{ name }}</option>{% endfor %}{% for style in custom_styles %}<option value="{{ style.id }}">{{ style.name }}</option>{% endfor %}</select>{% endif %}
+    <div class="bulk-csl-style" x-show="action === 'export_csl'">
+      <input type="search" x-model="styleQuery" @input.debounce.250ms="searchCitationStyles()" placeholder="{{ _('Search citation styles') }}">
+      <select name="style" x-model="style"><template x-for="citationStyle in citationStyles" :key="citationStyle.key"><option :value="citationStyle.key" x-text="citationStyle.name"></option></template></select>
+    </div>
+    <label class="bulk-export-option" x-show="action.startsWith('export_')"><input type="hidden" name="include_abstract" value="false" :disabled="includeAbstract"><input type="checkbox" name="include_abstract" value="true" x-model="includeAbstract" checked>{{ _('Include abstract') }}</label>
+    <label class="bulk-export-option" x-show="action === 'export_bibtex'"><input type="checkbox" name="preserve_case" value="true" x-model="preserveCase">{{ _('Preserve bibitem case') }}</label>
+    <label class="bulk-export-option" x-show="action === 'export_bibtex' || action === 'export_csl'"><input type="checkbox" name="abbreviate_journal" value="true" x-model="abbreviateJournal">{{ _('Use abbreviated journal') }}</label>
+    <label class="bulk-export-option" x-show="action === 'export_bibtex'"><input type="checkbox" name="include_identifiers" value="true" x-model="includeIdentifiers">{{ _('Include additional identifiers') }}</label>
+    <label class="bulk-export-option" x-show="action === 'export_bibtex'"><input type="checkbox" name="include_custom_fields" value="true" x-model="includeCustomFields">{{ _('Include custom fields') }}</label>
+    <label class="bulk-export-option" x-show="action === 'download_pdfs'"><input type="checkbox" name="include_annotations" value="true" x-model="includeAnnotations">{{ _('Include annotations') }}</label>
+    <label class="bulk-export-option" x-show="action === 'download_pdfs'"><input type="checkbox" name="include_supplements" value="true" x-model="includeSupplements">{{ _('Include supplements') }}</label>
     <select name="project_id" x-show="action === 'add_project'"><option value="">{{ _('Choose project') }}</option>{% for option in editable_projects %}<option value="{{ option.id }}">{{ option.name }}</option>{% endfor %}</select>
     <input name="tag_name" x-show="action === 'add_tag'" placeholder="{{ _('Tag for selected papers') }}">
     <label class="bulk-confirm" x-show="action === 'delete_items'"><input type="checkbox" name="confirm_delete" value="delete" :required="action === 'delete_items'">{{ _('Confirm permanent deletion') }}</label>

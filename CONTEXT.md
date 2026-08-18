@@ -40,7 +40,7 @@ A supplementary file associated with an Item that is not its primary PDF.
 _Avoid_: File Revision
 
 **Annotation**:
-A user-authored highlight or note anchored to a File Revision and scoped either
+A user-authored highlight, underline or note anchored to a File Revision and scoped either
 privately or to a Project.
 _Avoid_: Comment
 
@@ -82,6 +82,13 @@ _Avoid_: Reference Template, CSL Profile
 A fixed external scholarly metadata source such as OpenAlex, Crossref or
 PubMed.
 _Avoid_: Plugin
+
+**Upstream Identifier**:
+An identifier issued by a Provider for an Item, stored as a provider/value pair
+when it is not the canonical DOI. The pair is used to refetch metadata and to
+show provenance; DOI remains the Item's canonical identifier rather than a
+second provider-specific record.
+_Avoid_: Source ID, External ID when the issuing Provider matters
 
 **User**:
 An authenticated human account with an assigned System Role.
@@ -127,6 +134,8 @@ An immutable record of a security-sensitive or data-changing action.
 - Discovery produces Candidate Records; selecting one refetches metadata into Import.
 - An Import Batch holds parsed Candidate Records until confirmed into Items.
 - Citation Styles format Items during export or citation generation.
+- An Item may have zero or more Upstream Identifiers; DOI is represented by the
+  Item's canonical DOI field and is not duplicated as an Upstream Identifier.
 - A Job has one kind and may be owned by one User.
 - An Audit Event may reference an actor and a target.
 

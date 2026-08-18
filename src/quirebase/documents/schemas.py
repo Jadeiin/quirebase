@@ -34,10 +34,10 @@ class AnnotationCreate(BaseModel):
     def valid_scope_and_kind(self):
         if (self.scope is AnnotationScope.project) != (self.project_id is not None):
             raise ValueError("project_id is required exactly for project scope")
-        if self.kind is AnnotationKind.highlight and any(
+        if self.kind in (AnnotationKind.highlight, AnnotationKind.underline) and any(
             segment.quad_points is None for segment in self.segments
         ):
-            raise ValueError("highlights require quad points")
+            raise ValueError("text annotations require quad points")
         if self.kind is AnnotationKind.note and (
             len(self.segments) != 1 or self.segments[0].anchor_x is None
         ):

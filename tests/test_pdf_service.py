@@ -48,7 +48,12 @@ def test_export_writes_standard_annotations_without_touching_source(tmp_path):
     sample_pdf(source)
     original = source.read_bytes()
     highlight = PdfAnnotation(
-        file_revision_id="revision", author_id="author", kind="highlight", color="yellow"
+        file_revision_id="revision",
+        author_id="author",
+        kind="highlight",
+        color="yellow",
+        body="My highlight comment",
+        selected_text="Selected source text",
     )
     highlight.segments = [
         PdfAnnotationSegment(
@@ -68,13 +73,48 @@ def test_export_writes_standard_annotations_without_touching_source(tmp_path):
         file_revision_id="revision", author_id="author", kind="note", body="Review this"
     )
     note.segments = [PdfAnnotationSegment(page_index=0, ordinal=0, anchor_x=120, anchor_y=250)]
+    underline = PdfAnnotation(
+        file_revision_id="revision",
+        author_id="author",
+        kind="underline",
+        color="red",
+        body="My underline comment",
+        selected_text="Underlined source text",
+    )
+    underline.segments = [
+        PdfAnnotationSegment(
+            page_index=0,
+            ordinal=0,
+            x1=30,
+            y1=240,
+            x2=130,
+            y2=240,
+            x3=30,
+            y3=220,
+            x4=130,
+            y4=220,
+        )
+    ]
 
-    export_annotations(source, output, [highlight, note])
+    export_annotations(
+        source,
+        output,
+        [highlight, note, underline],
+        author_names={"author": "alice"},
+    )
 
     with pymupdf.open(output) as document:
-        subtypes = [annotation.type[1] for annotation in document[0].annots()]
+        page = document[0]
+        exported = list(page.annots())
+        subtypes = [annotation.type[1] for annotation in exported]
+        info = {annotation.type[1]: annotation.info for annotation in exported}
     assert "Highlight" in subtypes
+    assert "Underline" in subtypes
     assert "Text" in subtypes
+    assert info["Highlight"]["title"] == "alice"
+    assert info["Highlight"]["content"] == "My highlight comment"
+    assert info["Underline"]["title"] == "alice"
+    assert info["Underline"]["content"] == "My underline comment"
     assert source.read_bytes() == original
 
 

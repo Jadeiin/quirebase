@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from quirebase.library.administration import (
     admin_delete_item,
+    delete_item,
     get_storage_metrics,
     list_global_items,
 )
@@ -10,7 +11,9 @@ from quirebase.library.authors import (
     search_authors_typeahead,
 )
 from quirebase.library.bulk_items import (
+    ItemDownloadBundle,
     apply_bulk_item_action,
+    download_item_bundle,
     download_item_pdfs,
 )
 from quirebase.library.catalog import find_duplicates, get_dashboard_data, search_library
@@ -65,6 +68,7 @@ __all__ = [
     "DiscussionWorkspace",
     "ExternalIdentifier",
     "FilesWorkspace",
+    "ItemDownloadBundle",
     "ItemMetadata",
     "ItemWorkspace",
     "ItemWriteResult",
@@ -84,7 +88,9 @@ __all__ = [
     "apply_bulk_item_action",
     "create_item",
     "delete_discussion_message",
+    "delete_item",
     "delete_tag",
+    "download_item_bundle",
     "download_item_pdfs",
     "find_duplicates",
     "get_dashboard_data",

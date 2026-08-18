@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, cast
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import selectinload
 
-from quirebase.access.items import can_edit_item, require_readable_item
+from quirebase.access.items import can_delete_item, can_edit_item, require_readable_item
 from quirebase.core.errors import ResourceNotFound
 from quirebase.library.authors import get_item_authors
 from quirebase.library.tags import get_tag_matrix_for_item
@@ -57,14 +57,17 @@ class WorkspaceSection(StrEnum):
 class WorkspaceView:
     item: Item
     can_edit: bool
+    can_delete: bool
     revisions: tuple[FileRevision, ...]
 
 
 @dataclass(frozen=True)
 class SummaryWorkspace(WorkspaceView):
     revision_count: int
+    attachment_count: int
     annotation_count: int
     message_count: int
+    tags: tuple[Tag, ...]
     item_owner: User
     updater: User | None
     identifiers: tuple[ItemIdentifier, ...]
@@ -181,19 +184,33 @@ def _open_summary(db: Session, user: User, item: Item) -> SummaryWorkspace:
         )
         or 0
     )
+    attachment_count = (
+        db.scalar(select(func.count(Attachment.id)).where(Attachment.item_id == item.id)) or 0
+    )
     item_owner = db.get(User, item.created_by)
     if item_owner is None:
         raise ResourceNotFound("item owner not found")
     identifiers = tuple(
         db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item.id)).all()
     )
+    tags = tuple(
+        db.scalars(
+            select(Tag)
+            .join(ItemTag, ItemTag.tag_id == Tag.id)
+            .where(ItemTag.item_id == item.id)
+            .order_by(Tag.name)
+        ).all()
+    )
     return SummaryWorkspace(
         item=item,
         can_edit=can_edit_item(db, user, item.id),
+        can_delete=can_delete_item(db, user, item),
         revisions=revisions[:1],
         revision_count=len(revisions),
+        attachment_count=attachment_count,
         annotation_count=annotation_count,
         message_count=message_count,
+        tags=tags,
         item_owner=item_owner,
         updater=db.get(User, item.updated_by) if item.updated_by else None,
         identifiers=identifiers,
@@ -217,6 +234,7 @@ def _open_metadata(db: Session, user: User, item: Item) -> MetadataWorkspace:
     return MetadataWorkspace(
         item=item,
         can_edit=can_edit_item(db, user, item.id),
+        can_delete=can_delete_item(db, user, item),
         revisions=_revisions(db, item.id),
         authors=tuple(get_item_authors(db, item.id, role="author")),
         editors=tuple(get_item_authors(db, item.id, role="editor")),
@@ -232,6 +250,7 @@ def _open_files(db: Session, user: User, item: Item) -> FilesWorkspace:
     return FilesWorkspace(
         item=item,
         can_edit=can_edit_item(db, user, item.id),
+        can_delete=can_delete_item(db, user, item),
         revisions=_revisions(db, item.id, all_revisions=True),
         attachments=attachments,
     )
@@ -275,6 +294,7 @@ def _open_organize(db: Session, user: User, item: Item) -> OrganizeWorkspace:
     return OrganizeWorkspace(
         item=item,
         can_edit=can_edit_item(db, user, item.id),
+        can_delete=can_delete_item(db, user, item),
         revisions=_revisions(db, item.id),
         tags=tags,
         memberships=memberships,
@@ -314,6 +334,7 @@ def _open_annotations(db: Session, user: User, item: Item) -> AnnotationsWorkspa
     return AnnotationsWorkspace(
         item=item,
         can_edit=can_edit_item(db, user, item.id),
+        can_delete=can_delete_item(db, user, item),
         revisions=revisions,
         annotations=annotations,
     )
@@ -331,6 +352,7 @@ def _open_discussion(db: Session, user: User, item: Item) -> DiscussionWorkspace
     return DiscussionWorkspace(
         item=item,
         can_edit=can_edit_item(db, user, item.id),
+        can_delete=can_delete_item(db, user, item),
         revisions=_revisions(db, item.id),
         messages=messages,
     )

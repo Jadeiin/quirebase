@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 
 from quirebase.core.database import get_db
 from quirebase.discovery import (
+    ExportOptions,
     get_item_citation_response,
     get_item_citation_text_response,
 )
@@ -74,17 +75,63 @@ def export_item(
     item_id: str,
     file_format: str,
     style: str = "apa",
+    include_abstract: bool = True,
+    preserve_case: bool = False,
+    abbreviate_journal: bool = False,
+    include_identifiers: bool = False,
+    include_custom_fields: bool = False,
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
     contents, media_type, filename = get_item_citation_response(
-        db, user, item_id, file_format, style_key=style
+        db,
+        user,
+        item_id,
+        file_format,
+        style_key=style,
+        options=ExportOptions(
+            include_abstract=include_abstract,
+            preserve_case=preserve_case,
+            abbreviate_journal=abbreviate_journal,
+            include_identifiers=include_identifiers,
+            include_custom_fields=include_custom_fields,
+        ),
     )
     return Response(
         contents,
         media_type=f"{media_type}; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/documents/{item_id}/citation-copy")
+def copy_citation(
+    item_id: str,
+    file_format: str = "csl",
+    style: str = "apa",
+    include_abstract: bool = True,
+    preserve_case: bool = False,
+    abbreviate_journal: bool = False,
+    include_identifiers: bool = False,
+    include_custom_fields: bool = False,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    contents, _media_type, _filename = get_item_citation_response(
+        db,
+        user,
+        item_id,
+        file_format,
+        style_key=style,
+        options=ExportOptions(
+            include_abstract=include_abstract,
+            preserve_case=preserve_case,
+            abbreviate_journal=abbreviate_journal,
+            include_identifiers=include_identifiers,
+            include_custom_fields=include_custom_fields,
+        ),
+    )
+    return Response(contents, media_type="text/plain; charset=utf-8")
 
 
 @router.get("/documents/{item_id}/citation-text")

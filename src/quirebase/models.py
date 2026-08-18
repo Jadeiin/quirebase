@@ -51,6 +51,7 @@ class JobState(StrEnum):
 
 class AnnotationKind(StrEnum):
     highlight = "highlight"
+    underline = "underline"
     note = "note"
 
 
@@ -312,7 +313,9 @@ class Attachment(Base):
 class PdfAnnotation(Base):
     __tablename__ = "pdf_annotations"
     __table_args__ = (
-        CheckConstraint("kind IN ('highlight', 'note')", name="ck_pdf_annotations_kind"),
+        CheckConstraint(
+            "kind IN ('highlight', 'underline', 'note')", name="ck_pdf_annotations_kind"
+        ),
         CheckConstraint("scope IN ('private', 'project')", name="ck_pdf_annotations_scope"),
         CheckConstraint(
             "(scope = 'private' AND project_id IS NULL) OR "

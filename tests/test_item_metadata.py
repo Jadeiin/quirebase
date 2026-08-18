@@ -71,10 +71,7 @@ def test_revise_item_metadata_makes_the_dedicated_doi_authoritative(db):
     )
     db.add(item)
     db.flush()
-    db.add_all([
-        ItemIdentifier(item_id=item.id, provider="doi", value="10.1000/old"),
-        ItemIdentifier(item_id=item.id, provider="pmid", value="old-pmid"),
-    ])
+    db.add(ItemIdentifier(item_id=item.id, provider="pmid", value="old-pmid"))
     db.commit()
 
     result = revise_item_metadata(
@@ -98,7 +95,7 @@ def test_revise_item_metadata_makes_the_dedicated_doi_authoritative(db):
     identifiers = {link.provider: link.value for link in workspace.identifiers}
     assert result.version == 2
     assert updated.doi == "10.1000/new"
-    assert identifiers == {"arxiv": "2401.12345", "doi": "10.1000/new"}
+    assert identifiers == {"arxiv": "2401.12345"}
 
 
 def test_revise_item_metadata_replaces_contributors_in_order(db):

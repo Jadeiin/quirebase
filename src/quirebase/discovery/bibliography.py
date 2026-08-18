@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import re
+from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
 import bibtexparser
@@ -71,6 +73,89 @@ def first_url(urls: str | None) -> str | None:
     return urls.splitlines()[0].strip()
 
 
+def _protect_bibtex_case(value: str) -> str:
+    """Protect uppercase runs without obscuring the field's BibTeX structure."""
+    protected: list[str] = []
+    depth = 0
+    position = 0
+    while position < len(value):
+        character = value[position]
+        if character == "{":
+            depth += 1
+            protected.append(character)
+            position += 1
+        elif character == "}":
+            depth = max(0, depth - 1)
+            protected.append(character)
+            position += 1
+        elif character == "\\":
+            command_end = position + 1
+            while command_end < len(value) and value[command_end].isalpha():
+                command_end += 1
+            if command_end == position + 1 and command_end < len(value):
+                command_end += 1
+            protected.append(value[position:command_end])
+            position = command_end
+        elif depth == 0 and character.isalpha() and character.isupper():
+            run_end = position + 1
+            while run_end < len(value) and value[run_end].isalpha() and value[run_end].isupper():
+                run_end += 1
+            protected.append(f"{{{value[position:run_end]}}}")
+            position = run_end
+        else:
+            protected.append(character)
+            position += 1
+    return "".join(protected)
+
+
+def _bibtex_extra_fields(
+    item: Item, *, include_identifiers: bool, include_custom_fields: bool
+) -> dict[str, str]:
+    extras: dict[str, str] = {}
+    reserved = {
+        "abstract",
+        "author",
+        "doi",
+        "entrytype",
+        "id",
+        "journal",
+        "keywords",
+        "number",
+        "pages",
+        "publisher",
+        "title",
+        "url",
+        "volume",
+        "year",
+    }
+    if include_identifiers:
+        identifiers: dict[str, Any] = {}
+        if item.identifiers:
+            with suppress(json.JSONDecodeError):
+                parsed = json.loads(item.identifiers)
+                if isinstance(parsed, dict):
+                    identifiers.update(parsed)
+        if item.doi:
+            identifiers["doi"] = item.doi
+        for key, value in identifiers.items():
+            field = str(key).strip()
+            if field and field.casefold() not in reserved and value not in (None, ""):
+                extras[field] = str(value)
+    if include_custom_fields and item.custom_fields:
+        with suppress(json.JSONDecodeError):
+            parsed = json.loads(item.custom_fields)
+            if isinstance(parsed, dict):
+                for key, value in parsed.items():
+                    field = str(key).strip()
+                    if field and field.casefold() not in reserved and value not in (None, ""):
+                        extras[field] = (
+                            json.dumps(value, ensure_ascii=False)
+                            if isinstance(value, (dict, list))
+                            else str(value)
+                        )
+    return extras
+
+
 def _text(value: Any, separator: str = "; ") -> str | None:
     if value is None:
         return None
@@ -85,6 +170,34 @@ def _normalise(entry: dict[str, Any], file_format: str) -> dict[str, str | None]
         authors = _text(entry.get("author"))
         if authors:
             authors = "; ".join(part.strip() for part in authors.split(" and "))
+        known_fields = {
+            "abstract",
+            "author",
+            "booktitle",
+            "date",
+            "doi",
+            "editor",
+            "entrytype",
+            "id",
+            "journal",
+            "keywords",
+            "number",
+            "pages",
+            "publisher",
+            "title",
+            "url",
+            "volume",
+            "year",
+        }
+        identifiers: dict[str, str] = {}
+        custom_fields: dict[str, str] = {}
+        for key, value in entry.items():
+            normalized_key = key.casefold()
+            if normalized_key in {"openalex", "arxiv", "pmid", "pmc", "issn", "isbn"}:
+                if text_value := _text(value):
+                    identifiers[normalized_key] = text_value
+            elif normalized_key not in known_fields and (text_value := _text(value)):
+                custom_fields[key] = text_value
         return {
             "title": _text(entry.get("title")),
             "abstract": _text(entry.get("abstract")),
@@ -94,6 +207,11 @@ def _normalise(entry: dict[str, Any], file_format: str) -> dict[str, str | None]
             "publication_title": _text(entry.get("journal") or entry.get("booktitle")),
             "doi": _text(entry.get("doi")),
             "reference_type": _text(entry.get("ENTRYTYPE")),
+            "bibtex_id": _text(entry.get("ID")),
+            "identifiers": json.dumps(identifiers, ensure_ascii=False) if identifiers else None,
+            "custom_fields": json.dumps(custom_fields, ensure_ascii=False)
+            if custom_fields
+            else None,
         }
     return {
         "title": _text(entry.get("title") or entry.get("primary_title")),
@@ -186,7 +304,7 @@ def parse_bibliography(contents: str, file_format: str) -> tuple[list[dict], lis
     return records, errors
 
 
-def _export_endnote(items: list[Item]) -> str:
+def _export_endnote(items: list[Item], *, include_abstract: bool = True) -> str:
     lines: list[str] = []
     for item in items:
         reference_type = REFERENCE_TYPE_TO_ENDNOTE.get(
@@ -212,17 +330,26 @@ def _export_endnote(items: list[Item]) -> str:
             for keyword in (item.keywords or "").split(";")
             if keyword.strip()
         )
-        if item.abstract:
+        if include_abstract and item.abstract:
             lines.append(f"%X {item.abstract}")
         lines.append("")
     return "\n".join(lines)
 
 
-def export_bibliography(items: list[Item], file_format: str) -> str:
+def export_bibliography(
+    items: list[Item],
+    file_format: str,
+    *,
+    include_abstract: bool = True,
+    preserve_case: bool = False,
+    abbreviate_journal: bool = False,
+    include_identifiers: bool = False,
+    include_custom_fields: bool = False,
+) -> str:
     if file_format not in SUPPORTED_FORMATS:
         raise ValueError("format must be bibtex, ris or endnote")
     if file_format == "endnote":
-        return _export_endnote(items)
+        return _export_endnote(items, include_abstract=include_abstract)
     if file_format == "bibtex":
         entries = []
         for number, item in enumerate(items, start=1):
@@ -238,11 +365,13 @@ def export_bibliography(items: list[Item], file_format: str) -> str:
                 "title": item.title,
             }
             optional: dict[str, Any] = {
-                "abstract": item.abstract,
+                "abstract": item.abstract if include_abstract else None,
                 "author": item.authors.replace("; ", " and ") if item.authors else None,
                 "keywords": item.keywords,
                 "year": extract_year(item.publication_date) or item.publication_date,
-                "journal": item.publication_title,
+                "journal": item.journal_abbreviation
+                if abbreviate_journal and item.journal_abbreviation
+                else item.publication_title,
                 "volume": item.volume,
                 "number": item.issue,
                 "pages": item.pages,
@@ -251,6 +380,24 @@ def export_bibliography(items: list[Item], file_format: str) -> str:
                 "url": first_url(item.urls),
             }
             entry.update({key: value for key, value in optional.items() if value})
+            extra_fields = _bibtex_extra_fields(
+                item,
+                include_identifiers=include_identifiers,
+                include_custom_fields=include_custom_fields,
+            )
+            entry.update(extra_fields)
+            if preserve_case:
+                for field in (
+                    "title",
+                    "abstract",
+                    "keywords",
+                    "journal",
+                    "publisher",
+                    "author",
+                    *extra_fields,
+                ):
+                    if value := entry.get(field):
+                        entry[field] = _protect_bibtex_case(value)
             entries.append(entry)
         database = BibDatabase()
         database.entries = entries
@@ -262,7 +409,7 @@ def export_bibliography(items: list[Item], file_format: str) -> str:
             "title": item.title,
         }
         ris_optional: dict[str, Any] = {
-            "abstract": item.abstract,
+            "abstract": item.abstract if include_abstract else None,
             "authors": item.authors.split("; ") if item.authors else None,
             "keywords": item.keywords.split("; ") if item.keywords else None,
             "year": item.publication_date,
