@@ -7,6 +7,12 @@ from quirebase.documents.annotations import (
     list_document_annotations,
     update_document_annotation,
 )
+from quirebase.documents.bundles import (
+    ItemDownloadBundle,
+    assemble_document_bundle,
+    create_item_document_bundle,
+    export_revision_pdf,
+)
 from quirebase.documents.exports import (
     create_export_job,
     get_export_file_path,
@@ -23,11 +29,15 @@ from quirebase.documents.revisions import (
 
 __all__ = [
     "DocumentNotReady",
+    "ItemDownloadBundle",
     "UnsupportedMediaType",
+    "assemble_document_bundle",
     "create_attachment",
     "create_document_annotation",
     "create_export_job",
+    "create_item_document_bundle",
     "delete_document_annotation",
+    "export_revision_pdf",
     "get_attachment_file",
     "get_export_file_path",
     "get_export_status",

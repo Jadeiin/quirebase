@@ -50,11 +50,11 @@ def test_bibtex_export_can_protect_text_field_capitalization(db):
 
     assert "title = {An API for GraphQL and eBPF}" in ordinary
     assert "title = {{A}n {API} for {G}raph{QL} and e{BPF}}" in protected
-    assert "abstract = {{U}sing {CUDA} with an {LLM}}" in protected
-    assert "keywords = {{API}; {G}raph{QL}}" in protected
-    assert "journal = {{J}ournal of e{BPF} {R}esearch}" in protected
-    assert "publisher = {{ACM} {P}ress}" in protected
-    assert "author = {{D}oe, {J}ane and {S}mith, {A}lex}" in protected
+    assert "abstract = {Using CUDA with an LLM}" in protected
+    assert "keywords = {API; GraphQL}" in protected
+    assert "journal = {Journal of eBPF Research}" in protected
+    assert "publisher = {ACM Press}" in protected
+    assert "author = {Doe, Jane and Smith, Alex}" in protected
 
 
 def test_bibtex_case_protection_does_not_add_repeated_outer_braces(db):

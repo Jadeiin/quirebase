@@ -83,22 +83,23 @@ def test_po_catalog_coverage_and_interpolation_fields():
 
 
 def test_default_locale_and_translation_lookup():
-    assert DEFAULT_LOCALE == "zh_CN"
-    assert gettext("Dashboard") == "仪表盘"
-    assert _("Dashboard") == "仪表盘"
-    assert _("Administration") == "管理"
+    assert DEFAULT_LOCALE == "en_US"
+    assert gettext("Dashboard") == "Dashboard"
+    assert gettext("Dashboard", locale="zh_CN") == "仪表盘"
+    assert _("Dashboard", locale="zh_CN") == "仪表盘"
+    assert _("Administration", locale="zh_CN") == "管理"
     assert gettext("Dashboard", locale="en_US") == "Dashboard"
     assert gettext("Uncatalogued product name") == "Uncatalogued product name"
 
 
 def test_babel_gettext_and_plural_and_contextual():
-    assert gettext("Dashboard") == "仪表盘"
+    assert gettext("Dashboard", locale="zh_CN") == "仪表盘"
     assert gettext("Nonexistent String") == "Nonexistent String"
     # Singular/plural
-    plural_res = ngettext("{n} item", "{n} items", 1)
+    plural_res = ngettext("{n} item", "{n} items", 1, locale="zh_CN")
     assert plural_res in ("{n} item", "{n} items", "1 个条目", "{n} 个条目")
     # Contextual translation
-    assert pgettext("Admin", "Dashboard") == "仪表盘"
+    assert pgettext("Admin", "Dashboard", locale="zh_CN") == "仪表盘"
 
 
 def test_babel_formatting_and_locale_negotiation():
@@ -115,7 +116,7 @@ def test_babel_formatting_and_locale_negotiation():
 
     assert negotiate_locale("zh-CN,zh;q=0.9,en;q=0.8") == "zh_CN"
     assert negotiate_locale("en-US,en;q=0.9") == "en_US"
-    assert negotiate_locale("") == "zh_CN"
+    assert negotiate_locale("") == "en_US"
 
 
 def test_normalize_locale():
@@ -123,7 +124,7 @@ def test_normalize_locale():
     assert normalize_locale("zh_CN") == "zh_CN"
     assert normalize_locale("en-US") == "en_US"
     assert normalize_locale("en") == "en"
-    assert normalize_locale("") == "zh_CN"
+    assert normalize_locale("") == "en_US"
 
 
 def test_get_translations_caching():

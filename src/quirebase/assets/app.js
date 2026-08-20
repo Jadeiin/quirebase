@@ -70,17 +70,172 @@ function storeExportPreferences(key, section, values) {
   }
 }
 
+function resetExportPreferences(key) {
+  if (!key) return;
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // best-effort
+  }
+}
+
+function readSidebarCollapsed() {
+  try {
+    const collapsed = JSON.parse(window.localStorage.getItem("quirebase:sidebar-collapsed") || "false");
+    return typeof collapsed === "boolean" ? collapsed : false;
+  } catch {
+    return false;
+  }
+}
+
 Alpine.data("appShell", () => ({
   sidebarOpen: false,
+  sidebarCollapsed: readSidebarCollapsed(),
+  init() {
+    if (this.sidebarCollapsed) {
+      document.documentElement.classList.add("sidebar-collapsed");
+    } else {
+      document.documentElement.classList.remove("sidebar-collapsed");
+    }
+  },
   toggleSidebar() {
     this.sidebarOpen = !this.sidebarOpen;
   },
   closeSidebar() {
     this.sidebarOpen = false;
   },
+  toggleCollapse() {
+    document.documentElement.classList.add("sidebar-animatable");
+    this.sidebarCollapsed = !this.sidebarCollapsed;
+    try {
+      window.localStorage.setItem(
+        "quirebase:sidebar-collapsed",
+        JSON.stringify(this.sidebarCollapsed),
+      );
+    } catch {
+      // ignore storage failure
+    }
+    if (this.sidebarCollapsed) {
+      document.documentElement.classList.add("sidebar-collapsed");
+    } else {
+      document.documentElement.classList.remove("sidebar-collapsed");
+    }
+  },
   openDetails() {
     const details = document.querySelector(this.$event.currentTarget.hash);
     if (details) details.open = true;
+  },
+}));
+
+Alpine.data("userSettings", () => ({
+  format: "csl",
+  style: "apa",
+  query: "",
+  styles: [],
+  includeAbstract: true,
+  preserveCase: false,
+  abbreviateJournal: false,
+  includeIdentifiers: false,
+  includeCustomFields: false,
+  includeAnnotations: false,
+  includeSupplements: false,
+  savedToast: false,
+  storageKey: "",
+  sidebarCollapsed: readSidebarCollapsed(),
+  init() {
+    this.storageKey = this.$root.dataset.exportPreferencesKey || "";
+    const prefs = readExportPreferences(this.storageKey);
+    this.format = prefs.citation.format;
+    this.style = prefs.citation.style;
+    this.includeAbstract = prefs.citation.includeAbstract;
+    this.preserveCase = prefs.citation.preserveCase;
+    this.abbreviateJournal = prefs.citation.abbreviateJournal;
+    this.includeIdentifiers = prefs.citation.includeIdentifiers;
+    this.includeCustomFields = prefs.citation.includeCustomFields;
+    this.includeAnnotations = prefs.document.includeAnnotations;
+    this.includeSupplements = prefs.document.includeSupplements;
+    this.loadStyles();
+    ["format", "style", ...citationBooleanPreferences].forEach((field) => {
+      this.$watch(field, () => this.save());
+    });
+    documentBooleanPreferences.forEach((field) => {
+      this.$watch(field, () => this.save());
+    });
+  },
+  toggleCollapse() {
+    this.sidebarCollapsed = !this.sidebarCollapsed;
+    try {
+      window.localStorage.setItem(
+        "quirebase:sidebar-collapsed",
+        JSON.stringify(this.sidebarCollapsed),
+      );
+    } catch {
+      // ignore
+    }
+    const shellEl = document.querySelector(".app-layout");
+    if (shellEl && window.Alpine && window.Alpine.$data(shellEl)) {
+      window.Alpine.$data(shellEl).sidebarCollapsed = this.sidebarCollapsed;
+    }
+  },
+  save() {
+    storeExportPreferences(this.storageKey, "citation", {
+      format: this.format,
+      style: this.style,
+      includeAbstract: this.includeAbstract,
+      preserveCase: this.preserveCase,
+      abbreviateJournal: this.abbreviateJournal,
+      includeIdentifiers: this.includeIdentifiers,
+      includeCustomFields: this.includeCustomFields,
+    });
+    storeExportPreferences(this.storageKey, "document", {
+      includeAnnotations: this.includeAnnotations,
+      includeSupplements: this.includeSupplements,
+    });
+    this.savedToast = true;
+    setTimeout(() => {
+      this.savedToast = false;
+    }, 2000);
+  },
+  resetDefaults() {
+    resetExportPreferences(this.storageKey);
+    this.format = exportPreferenceDefaults.citation.format;
+    this.style = exportPreferenceDefaults.citation.style;
+    this.includeAbstract = exportPreferenceDefaults.citation.includeAbstract;
+    this.preserveCase = exportPreferenceDefaults.citation.preserveCase;
+    this.abbreviateJournal = exportPreferenceDefaults.citation.abbreviateJournal;
+    this.includeIdentifiers = exportPreferenceDefaults.citation.includeIdentifiers;
+    this.includeCustomFields = exportPreferenceDefaults.citation.includeCustomFields;
+    this.includeAnnotations = exportPreferenceDefaults.document.includeAnnotations;
+    this.includeSupplements = exportPreferenceDefaults.document.includeSupplements;
+    this.savedToast = true;
+    setTimeout(() => {
+      this.savedToast = false;
+    }, 2000);
+  },
+  async loadStyles() {
+    try {
+      const response = await fetch("/api/citation-styles");
+      if (response.ok) {
+        const data = await response.json();
+        this.styles = data.styles || [];
+      }
+    } catch {
+      this.styles = [];
+    }
+  },
+  async searchStyles() {
+    if (!this.query.trim()) {
+      return this.loadStyles();
+    }
+    try {
+      const response = await fetch(`/api/citation-styles?query=${encodeURIComponent(this.query.trim())}`);
+      if (response.ok) {
+        const data = await response.json();
+        this.styles = data.styles || [];
+      }
+    } catch {
+      this.styles = [];
+    }
   },
 }));
 
@@ -138,6 +293,19 @@ Alpine.data("libraryWorkspace", () => ({
       includeAnnotations: this.includeAnnotations,
       includeSupplements: this.includeSupplements,
     });
+  },
+  resetDefaults() {
+    resetExportPreferences(this.storageKey);
+    const preferences = exportPreferenceDefaults.citation;
+    this.style = preferences.style;
+    this.includeAbstract = preferences.includeAbstract;
+    this.preserveCase = preferences.preserveCase;
+    this.abbreviateJournal = preferences.abbreviateJournal;
+    this.includeIdentifiers = preferences.includeIdentifiers;
+    this.includeCustomFields = preferences.includeCustomFields;
+    const documentPreferences = exportPreferenceDefaults.document;
+    this.includeAnnotations = documentPreferences.includeAnnotations;
+    this.includeSupplements = documentPreferences.includeSupplements;
   },
   searchCitationStyles() {
     fetch(`/api/citation-styles?query=${encodeURIComponent(this.styleQuery)}&limit=100`)
@@ -264,6 +432,7 @@ Alpine.data("pdfToolbar", () => ({
 Alpine.data("itemDownload", () => ({
   includeAnnotations: false,
   includeSupplements: false,
+  selectedRevisions: [],
   storageKey: "",
   init() {
     this.storageKey = this.$root.dataset.exportPreferencesKey || "";
@@ -280,11 +449,21 @@ Alpine.data("itemDownload", () => ({
       includeSupplements: this.includeSupplements,
     });
   },
+  resetDefaults() {
+    resetExportPreferences(this.storageKey);
+    const preferences = exportPreferenceDefaults.document;
+    this.includeAnnotations = preferences.includeAnnotations;
+    this.includeSupplements = preferences.includeSupplements;
+    this.selectedRevisions = [];
+  },
   download() {
     const params = new URLSearchParams({
       include_annotations: String(this.includeAnnotations),
       include_supplements: String(this.includeSupplements),
     });
+    if (this.selectedRevisions.length > 0) {
+      params.set("revisions", this.selectedRevisions.join(","));
+    }
     window.location.href = `/items/${this.$root.dataset.itemId}/download?${params.toString()}`;
   },
 }));
@@ -328,6 +507,17 @@ Alpine.data("itemExport", () => ({
       includeIdentifiers: this.includeIdentifiers,
       includeCustomFields: this.includeCustomFields,
     });
+  },
+  resetDefaults() {
+    resetExportPreferences(this.storageKey);
+    const preferences = exportPreferenceDefaults.citation;
+    this.format = preferences.format;
+    this.style = preferences.style;
+    this.includeAbstract = preferences.includeAbstract;
+    this.preserveCase = preferences.preserveCase;
+    this.abbreviateJournal = preferences.abbreviateJournal;
+    this.includeIdentifiers = preferences.includeIdentifiers;
+    this.includeCustomFields = preferences.includeCustomFields;
   },
   searchStyles() {
     fetch(`/api/citation-styles?query=${encodeURIComponent(this.query)}`)

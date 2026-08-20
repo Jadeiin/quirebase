@@ -58,7 +58,9 @@ Item's bibliographic record, not unrelated Item operations.
 
 Operations over a user-selected set of Items live in `library.bulk_items`. This Module owns the
 bulk-operation transaction, all-selected authorization rule, audit event and post-commit file
-cleanup. It does not define single-Item metadata behaviour or Item workspace queries.
+cleanup. Multi-Item document download crosses this Library seam; its implementation may call the
+Documents assembly interface for archive construction after selection authorization. Library does
+not define single-Item metadata behaviour or Item workspace queries.
 
 Opening an Item crosses the Library interface through `open_item_workspace` with a typed
 `WorkspaceSection`. Summary, Metadata, Files, Organize, Annotations and Discussion each return a
@@ -89,7 +91,7 @@ directions are:
 | `access` | `core`, `models` | Evaluate policies using persisted identities and domain errors |
 | `accounts` | `audit`, `core`, `models` | Authentication persistence and Audit Event recording |
 | `audit` | `core`, `models` | Authorization errors and Audit Event persistence |
-| `library` | `access`, `audit`, `core`, `models`, `discovery`, `pipeline`, `search` | Authorization, persistence and auditing; upstream metadata/identifier integration; PDF inspection; search-index synchronization |
+| `library` | `access`, `audit`, `core`, `models`, `discovery`, `documents`, `pipeline`, `search` | Authorization, persistence and auditing; upstream metadata/identifier integration; PDF inspection; selected-Item document assembly; search-index synchronization |
 | `projects` | `access`, `audit`, `core`, `models`, `search` | Authorization, Project persistence, audit recording and Item index synchronization |
 | `documents` | `access`, `audit`, `core`, `models`, `operations`, `pipeline` | Authorization, file persistence, auditing, runtime settings and durable export/inspection jobs |
 | `discovery` | `access`, `audit`, `core`, `models`, `documents`, `library`, `operations`, `pipeline`, `search` | Candidate authorization, import/file operations, Item creation and audit, provider settings, inspection and indexing |

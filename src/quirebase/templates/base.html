@@ -4,34 +4,63 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Quirebase{% endblock %}</title>
+  <script>
+    try {
+      if (JSON.parse(localStorage.getItem('quirebase:sidebar-collapsed') || 'false')) {
+        document.documentElement.classList.add('sidebar-collapsed');
+      }
+    } catch (e) {}
+  </script>
   <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
   <script defer src="{{ url_for('static', path='/app.js') }}"></script>
   {% block head %}{% endblock %}
 </head>
-<body class="{% if user %}app-layout{% else %}public-layout{% endif %}" x-data="appShell">
+<body class="{% if user %}app-layout{% else %}public-layout{% endif %}" :class="{ 'sidebar-collapsed': sidebarCollapsed }" x-data="appShell">
   {% if user %}
   <button class="mobile-nav-toggle" type="button" @click="toggleSidebar" :aria-expanded="sidebarOpen" aria-controls="app-sidebar" aria-label="{{ _('Toggle navigation') }}">☰</button>
   <button class="sidebar-scrim" type="button" x-show="sidebarOpen" @click="closeSidebar" aria-label="{{ _('Close navigation') }}"></button>
   <aside class="app-sidebar" id="app-sidebar" :class="{ 'is-open': sidebarOpen }">
-    <a href="/" class="brand">Quirebase</a>
+    <div class="sidebar-header">
+      <a href="/" class="brand">Quirebase</a>
+      <a href="/" class="brand-mini">Q</a>
+      <button type="button" class="sidebar-collapse-btn" @click="toggleCollapse" :title="sidebarCollapsed ? '{{ _('Expand sidebar') }}' : '{{ _('Collapse sidebar') }}'" aria-label="{{ _('Toggle sidebar width') }}">
+        <span x-text="sidebarCollapsed ? '›' : '‹'"></span>
+      </button>
+    </div>
     <nav aria-label="{{ _('Main navigation') }}" @click="closeSidebar">
-      <a href="/" {% if active_page == 'dashboard' %}aria-current="page"{% endif %}><span>⌂</span>{{ _('Dashboard') }}</a>
-      <a href="/library" {% if active_page == 'library' %}aria-current="page"{% endif %}><span>▤</span>{{ _('Library') }}</a>
-      <a href="/bibliography/import" {% if active_page == 'import' %}aria-current="page"{% endif %}><span>＋</span>{{ _('Import') }}</a>
-      <a href="/online-search" {% if active_page == 'online_search' %}aria-current="page"{% endif %}><span>⌕</span>{{ _('Online search') }}</a>
-      <a href="/projects" {% if active_page == 'projects' %}aria-current="page"{% endif %}><span>◇</span>{{ _('Projects') }}</a>
-      <a href="/tools" {% if active_page == 'tools' %}aria-current="page"{% endif %}><span>⌘</span>{{ _('Tools') }}</a>
-      <a href="/account/sessions" {% if active_page == 'sessions' %}aria-current="page"{% endif %}><span>◉</span>{{ _('Devices') }}</a>
+      <a href="/" {% if active_page == 'dashboard' %}aria-current="page"{% endif %} title="{{ _('Dashboard') }}"><span>⌂</span><span>{{ _('Dashboard') }}</span></a>
+      <a href="/library" {% if active_page == 'library' %}aria-current="page"{% endif %} title="{{ _('Library') }}"><span>▤</span><span>{{ _('Library') }}</span></a>
+      <a href="/bibliography/import" {% if active_page == 'import' %}aria-current="page"{% endif %} title="{{ _('Import') }}"><span>＋</span><span>{{ _('Import') }}</span></a>
+      <a href="/online-search" {% if active_page == 'online_search' %}aria-current="page"{% endif %} title="{{ _('Online search') }}"><span>⌕</span><span>{{ _('Online search') }}</span></a>
+      <a href="/projects" {% if active_page == 'projects' %}aria-current="page"{% endif %} title="{{ _('Projects') }}"><span>◇</span><span>{{ _('Projects') }}</span></a>
+      <a href="/tools" {% if active_page == 'tools' %}aria-current="page"{% endif %} title="{{ _('Tools') }}"><span>⌘</span><span>{{ _('Tools') }}</span></a>
       {% if user.role == 'administrator' %}
-      <a href="/admin" {% if active_page == 'admin' %}aria-current="page"{% endif %}><span>⚙</span>{{ _('Administration') }}</a>
+      <a href="/admin" {% if active_page == 'admin' %}aria-current="page"{% endif %} title="{{ _('Administration') }}"><span>🛡</span><span>{{ _('Administration') }}</span></a>
       {% endif %}
     </nav>
-    <div class="app-sidebar-account">
-      <strong>{{ user.username }}</strong>
-      <small>{{ _(user.role) }}</small>
-      {% if csrf %}
-      <form method="post" action="/logout?csrf_token={{ csrf }}"><button class="quiet-button">{{ _('Sign out') }}</button></form>
-      {% endif %}
+    <div class="app-sidebar-account" x-data="{ menuOpen: false }" @click.outside="menuOpen = false">
+      <button type="button" class="account-menu-trigger" @click="menuOpen = !menuOpen" :aria-expanded="menuOpen" title="{{ _('Account menu') }}">
+        <span class="user-avatar">{{ user.username[0]|upper }}</span>
+        <span class="account-details">
+          <strong>{{ user.username }}</strong>
+          <small>{{ _(user.role) }}</small>
+        </span>
+        <span class="menu-caret" x-text="menuOpen ? '▾' : '▴'"></span>
+      </button>
+      <div class="account-dropup" x-show="menuOpen" x-cloak>
+        <a href="/account/settings" class="dropup-item" @click="menuOpen = false">
+          <span>⚙</span>
+          <span>{{ _('Account settings') }}</span>
+        </a>
+        {% if csrf %}
+        <form method="post" action="/logout?csrf_token={{ csrf }}" class="dropup-form">
+          <button type="submit" class="dropup-item text-danger">
+            <span>⏻</span>
+            <span>{{ _('Sign out') }}</span>
+          </button>
+        </form>
+        {% endif %}
+      </div>
     </div>
   </aside>
   {% endif %}

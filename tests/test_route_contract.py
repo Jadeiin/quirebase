@@ -16,6 +16,7 @@ EXPECTED_OPERATIONAL_ROUTES = {
     ("GET", "/"),
     ("GET", "/accept-invitation/{token}"),
     ("GET", "/account/sessions"),
+    ("GET", "/account/settings"),
     ("GET", "/admin"),
     ("GET", "/admin/audit"),
     ("GET", "/admin/items"),
@@ -33,6 +34,7 @@ EXPECTED_OPERATIONAL_ROUTES = {
     ("GET", "/documents/{item_id}/citation-text"),
     ("GET", "/documents/{item_id}/citation-copy"),
     ("GET", "/documents/{item_id}/revisions/{revision_id}/content"),
+    ("GET", "/documents/{item_id}/revisions/{revision_id}/export"),
     ("GET", "/healthz"),
     ("GET", "/items/{item_id}"),
     ("GET", "/items/{item_id}/attachments/{attachment_id}"),
@@ -51,6 +53,8 @@ EXPECTED_OPERATIONAL_ROUTES = {
     ("POST", "/accept-invitation/{token}"),
     ("POST", "/account/sessions/revoke-all"),
     ("POST", "/account/sessions/{session_id}/revoke"),
+    ("POST", "/account/settings/locale"),
+    ("POST", "/account/settings/password"),
     ("POST", "/admin/invitations"),
     ("POST", "/admin/items/{item_id}/delete"),
     ("POST", "/admin/jobs/retry-all"),
@@ -125,7 +129,7 @@ def test_operational_routes_contract():
                 continue
             operational_routes.add((method, route.path))
 
-    assert len(operational_routes) == 85, f"Expected 85 routes, found {len(operational_routes)}"
+    assert len(operational_routes) == 89, f"Expected 89 routes, found {len(operational_routes)}"
     assert operational_routes == EXPECTED_OPERATIONAL_ROUTES
 
 

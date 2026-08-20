@@ -122,6 +122,7 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
         assert 'x-model="styleQuery"' in first_page.text
         assert 'x-for="citationStyle in citationStyles"' in first_page.text
         assert 'x-model="style"' in first_page.text
+        assert 'name="tag_name"' in first_page.text
         second_page = client.get("/library?page=2")
         assert second_page.status_code == 200
         assert "Library paper 00" in second_page.text

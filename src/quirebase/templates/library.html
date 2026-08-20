@@ -38,6 +38,7 @@
       <input type="search" x-model="styleQuery" @input.debounce.250ms="searchCitationStyles()" placeholder="{{ _('Search citation styles') }}">
       <select name="style" x-model="style"><template x-for="citationStyle in citationStyles" :key="citationStyle.key"><option :value="citationStyle.key" x-text="citationStyle.name"></option></template></select>
     </div>
+    <input class="bulk-tag-name" name="tag_name" x-show="action === 'add_tag'" :required="action === 'add_tag'" placeholder="{{ _('Tag name') }}">
     <label class="bulk-export-option" x-show="action.startsWith('export_')"><input type="hidden" name="include_abstract" value="false" :disabled="includeAbstract"><input type="checkbox" name="include_abstract" value="true" x-model="includeAbstract" checked>{{ _('Include abstract') }}</label>
     <label class="bulk-export-option" x-show="action === 'export_bibtex'"><input type="checkbox" name="preserve_case" value="true" x-model="preserveCase">{{ _('Preserve bibitem case') }}</label>
     <label class="bulk-export-option" x-show="action === 'export_bibtex' || action === 'export_csl'"><input type="checkbox" name="abbreviate_journal" value="true" x-model="abbreviateJournal">{{ _('Use abbreviated journal') }}</label>
@@ -46,7 +47,6 @@
     <label class="bulk-export-option" x-show="action === 'download_pdfs'"><input type="checkbox" name="include_annotations" value="true" x-model="includeAnnotations">{{ _('Include annotations') }}</label>
     <label class="bulk-export-option" x-show="action === 'download_pdfs'"><input type="checkbox" name="include_supplements" value="true" x-model="includeSupplements">{{ _('Include supplements') }}</label>
     <select name="project_id" x-show="action === 'add_project'"><option value="">{{ _('Choose project') }}</option>{% for option in editable_projects %}<option value="{{ option.id }}">{{ option.name }}</option>{% endfor %}</select>
-    <input name="tag_name" x-show="action === 'add_tag'" placeholder="{{ _('Tag for selected papers') }}">
     <label class="bulk-confirm" x-show="action === 'delete_items'"><input type="checkbox" name="confirm_delete" value="delete" :required="action === 'delete_items'">{{ _('Confirm permanent deletion') }}</label>
     <button :disabled="selected.length === 0">{{ _('Apply') }}</button>
   </div>

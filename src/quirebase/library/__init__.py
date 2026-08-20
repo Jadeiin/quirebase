@@ -11,10 +11,8 @@ from quirebase.library.authors import (
     search_authors_typeahead,
 )
 from quirebase.library.bulk_items import (
-    ItemDownloadBundle,
     apply_bulk_item_action,
-    download_item_bundle,
-    download_item_pdfs,
+    download_selected_item_documents,
 )
 from quirebase.library.catalog import find_duplicates, get_dashboard_data, search_library
 from quirebase.library.discussions import add_discussion_message, delete_discussion_message
@@ -68,7 +66,6 @@ __all__ = [
     "DiscussionWorkspace",
     "ExternalIdentifier",
     "FilesWorkspace",
-    "ItemDownloadBundle",
     "ItemMetadata",
     "ItemWorkspace",
     "ItemWriteResult",
@@ -90,8 +87,7 @@ __all__ = [
     "delete_discussion_message",
     "delete_item",
     "delete_tag",
-    "download_item_bundle",
-    "download_item_pdfs",
+    "download_selected_item_documents",
     "find_duplicates",
     "get_dashboard_data",
     "get_storage_metrics",

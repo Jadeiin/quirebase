@@ -106,3 +106,14 @@ def accept_invitation(db: Session, token: str, password: str) -> User:
     record_event(db, user.id, "invitation.accept", "user", user.id)
     db.commit()
     return user
+
+
+def change_own_password(db: Session, user: User, current_password: str, new_password: str) -> None:
+    if not verify_password(user.password_hash, current_password):
+        raise InvalidCredentials("Current password incorrect")
+    try:
+        user.password_hash = hash_password(new_password)
+    except ValueError as error:
+        raise ValidationFailure(str(error)) from error
+    record_event(db, user.id, "account.password.changed", "user", user.id)
+    db.commit()

@@ -11,14 +11,14 @@ from babel.support import NullTranslations, Translations
 if TYPE_CHECKING:
     from datetime import date, datetime
 
-DEFAULT_LOCALE = "zh_CN"
+DEFAULT_LOCALE = "en_US"
 LOCALES_DIR = Path(__file__).resolve().parent.parent / "locales"
 
 
 def normalize_locale(locale: str) -> str:
     """Normalize locale strings like 'zh-CN', 'zh_CN', 'en-US' to standard gettext directory name 'zh_CN'."""
     if not locale:
-        return "zh_CN"
+        return "en_US"
     clean = locale.replace("-", "_")
     parts = clean.split("_")
     if len(parts) == 1:

@@ -10,9 +10,7 @@
   'highlight': _('Highlight'),
   'underline': _('Underline'),
   'clickPage': _('Click a page to place the note'),
-  'preparingExport': _('Preparing export…'),
-  'exportReady': _('Export ready'),
-  'exportFailed': _('Export failed'),
+  'downloading': _('Preparing download…'),
   'selectOwnAnnotation': _('Select one of your annotations.'),
   'page': _('Page {page}'),
   'private': _('Private'),
@@ -47,10 +45,10 @@
   </nav>
   <div class="pdf-download-options citation-panel export-options download-options" x-cloak x-show="downloadOpen" @click.outside="downloadOpen = false">
     <div class="option-panel-heading"><strong>{{ _('Current PDF') }}</strong><small>{{ revision.original_name }}</small></div>
-    <a id="pdf-download-original" class="button-link" href="/documents/{{ item.id }}/revisions/{{ revision.id }}/content" download>{{ _('Download original PDF') }}</a>
+    <label class="export-check"><input id="pdf-export-annotations" type="checkbox" checked>{{ _('Include annotations') }}</label>
     <label>{{ _('Annotations to include') }}<select id="pdf-download-project"><option value="">{{ _('Private annotations only') }}</option>{% for project in projects %}<option value="{{ project.id }}">{{ _('Private annotations and {project}', project=project.name) }}</option>{% endfor %}</select></label>
-    <button id="pdf-download-annotated" type="button">{{ _('Download annotated PDF') }}</button>
-    <p class="option-panel-note">{{ _('This download contains only the current PDF revision.') }}</p>
+    <button id="pdf-download-current" type="button">{{ _('Download current PDF') }}</button>
+    <p class="option-panel-note">{{ _('This download contains only the current PDF revision. Stored files remain unchanged.') }}</p>
   </div>
   <div class="pdf-annotation-tools" x-cloak x-show="annotationOpen">
     <select id="annotation-mark-kind" aria-label="{{ _('Text annotation type') }}"><option value="highlight">{{ _('Highlight') }}</option><option value="underline">{{ _('Underline') }}</option></select>

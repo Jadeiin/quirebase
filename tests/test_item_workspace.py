@@ -197,7 +197,7 @@ def test_project_editor_can_edit_item_without_seeing_permanent_delete(db, tmp_pa
         owner_page = owner_client.get(f"/items/{item.id}")
         assert "删除条目" in owner_page.text
 
-        editor_client = TestClient(app)
+        editor_client = TestClient(app, headers={"Accept-Language": "zh-CN,zh;q=0.9"})
         editor_client.cookies.set(get_settings().session_cookie, "editor-session")
         editor_page = editor_client.get(f"/items/{item.id}")
         assert editor_page.status_code == 200

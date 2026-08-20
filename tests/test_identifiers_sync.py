@@ -4,6 +4,7 @@ import json
 from unittest.mock import patch
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from quirebase.core.errors import VersionConflict
@@ -14,7 +15,7 @@ from quirebase.library.identifiers import (
     set_item_identifiers,
     sync_metadata_from_upstream,
 )
-from quirebase.models import FileRevision, Item, User
+from quirebase.models import AuditEvent, FileRevision, Item, User
 
 
 def test_set_and_get_item_identifiers(db):
@@ -259,6 +260,17 @@ def test_sync_metadata_cleans_html_and_syncs_bibtex_type(db):
     assert updated.reference_type == "article"
     assert updated.bibtex_type == "article"
     assert updated.bibtex_id.startswith("Arute2019")
+
+    event = db.scalar(
+        select(AuditEvent)
+        .where(AuditEvent.action == "item.sync_upstream")
+        .order_by(AuditEvent.created_at.desc())
+    )
+    assert event is not None
+    detail = json.loads(event.detail)
+    assert detail["provider"] == "doi"
+    assert detail["new_bibtex_key"].startswith("Arute2019")
+    assert detail["bibtex_key_updated"] is True
 
 
 def test_sync_metadata_from_upstream_rejects_a_stale_version(db):

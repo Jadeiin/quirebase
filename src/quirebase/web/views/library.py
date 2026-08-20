@@ -11,7 +11,11 @@ from quirebase.discovery import (
     ExportOptions,
     export_selected_bibliography,
 )
-from quirebase.library import apply_bulk_item_action, download_item_pdfs, search_library
+from quirebase.library import (
+    apply_bulk_item_action,
+    download_selected_item_documents,
+    search_library,
+)
 from quirebase.models import LoginSession, User
 from quirebase.web.deps import current_login, current_user, require_csrf
 from quirebase.web.templates import templates
@@ -135,7 +139,7 @@ def library_bulk_action(
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
     if action == "download_pdfs":
-        archive = download_item_pdfs(
+        archive = download_selected_item_documents(
             db,
             user,
             item_ids,

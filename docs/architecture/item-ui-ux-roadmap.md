@@ -24,21 +24,21 @@ File Revision、Attachment、Annotation、Tag 和 Citation Style 领域语言。
 
 把长排链接改为固定、分组且可响应式折叠的操作栏：
 
-- 主要动作：`打开 PDF`、`下载 PDF`；
-- 次要动作：`同步元数据`、`复制引用`、`导出`；
-- 危险动作：`删除 Item`，放入“更多”菜单并要求二次确认；
+- 主要动作：`打开 PDF`、`下载 PDF`（带下拉支持选择主 PDF 或特定 Revision）；
+- 次要动作：`同步元数据`、`复制引用`（一键复制常用格式）、`导出`（打开导出模态）；
+- 危险动作：`删除 Item`，放入“更多”菜单并弹出详细影响确认框；
 - 标题下显示作者、出版物、年份和来源徽标，不再把这些字段挤进右栏。
 
 `复制引用` 使用最近一次导出设置生成文本并写入 Clipboard API；首次使用或
 浏览器不支持时，回退为选中可复制的文本框并显示明确状态。`导出` 打开模态/抽屉，
-而不是把每个格式直接铺成链接。
+集中提供引用与文件归档选项。
 
 ### Summary 的两列改造
 
 中栏成为可滚动的阅读摘要区，右栏变成窄的“快速事实”区，且右栏只放可在
 一屏内扫完的内容：
 
-- 中栏：摘要（默认折叠到约 5 行，可展开）、图形摘要/首个 PDF 缩略图、外链
+- 中栏：摘要（默认折叠到约 5 行，底部提供渐变遮罩与“展开/收起”切换）、图形摘要/首个 PDF 缩略图、外链
   作为带图标的来源卡片、关键词作为可点击 Tag-like chips；
 - 右栏：年份、类型、期刊/出版社、卷期页、DOI/Provider 标识符、PDF/Attachment/
   Annotation/Discussion 数量；
@@ -53,10 +53,38 @@ File Revision、Attachment、Annotation、Tag 和 Citation Style 领域语言。
 
 保留现有 `Overview / Metadata / Files / Organize / Notes and annotations /
 Discussion` 六个 workspace section；在 `Overview` 只放“判断和行动”内容。
-导航项显示计数（PDF、Attachment、Annotation、Discussion），计数为 0 时仍保留
-入口，避免用户猜测功能是否存在。
+导航项显示计数徽标（例如 `Files (2)`、`Notes & annotations (5)`、`Discussion (1)`），
+计数为 0 时仍保留入口，避免用户猜测功能是否存在。
 
-## 导出设计
+## 三级业务导出体系
+
+导出功能按用户操作场景划分为三个清晰层级：
+
+```mermaid
+graph TD
+    subgraph L1["1. PDF 阅读器页 (/pdf/<id>)"]
+        P1["单 File Revision PDF"] --> P2["选项: 是否包含标注(Annotations)"]
+        P2 --> P3["导出: 独立 PDF 文件"]
+    end
+
+    subgraph L2["2. 条目详情页 (/item/<id>)"]
+        I1["单 Item 工作台"] --> I2["引用导出: BibTeX/RIS/CSL (复制/下载)"]
+        I1 --> I3["文件导出: 勾选 Revision(正文/预印本/译文) + 附件(Supplements) + 标注"]
+        I3 --> I4["导出: 单条目 ZIP 归档包"]
+    end
+
+    subgraph L3["3. 文献库总览页 (/library)"]
+        B1["批量选定 Items"] --> B2["批量引用导出: 合并 BibTeX/RIS/CSL"]
+        B1 --> B3["批量数据包下载: 多条目 PDF/附件/标注打包"]
+        B3 --> B4["导出: 批量 ZIP 归档包 (Job)"]
+    end
+```
+
+| 层级 | 场景 | 导出对象 | 核心选项 | 输出形态 | 负责模块 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **层级 1：PDF 阅读器** | `/pdf/<id>` | 当前打开的单一 File Revision | • 是否包含标注（高亮与下划线） | 单个 PDF 文件（即时流式下载） | `documents` |
+| **层级 2：条目工作台** | `/item/<id>` | 单个 Item 的完整工作台 | • **引用**：格式、CSL 样式、摘要/期刊缩写/标题大小写保护<br>• **文件**：勾选 Revision、附件、标注 | 剪贴板文本 / `.bib` / `.ris` / 单条目 ZIP 归档 | `discovery` (引用)<br>`documents` (文件归档) |
+| **层级 3：文献库总览** | `/library` | 批量选中的多个 Items | • **批量引用**：合并导出<br>• **批量文件**：主 PDF、附件、标注 | 批量引用文本/文件 / 批量 ZIP 归档 | `discovery` (引用)<br>`library.bulk_items` + `documents` (批量归档) |
 
 ### 一个 Export Options 模型
 
@@ -68,11 +96,16 @@ Discussion` 六个 workspace section；在 `Overview` 只放“判断和行动�
 - BibTeX/CSL 选项：`包含摘要`、`保护 bibitem 大小写`、`期刊名使用缩写`；
 - 输出目标：`下载文件` 或 `复制到剪贴板`；复制目标禁用不适合纯文本的选项，
   并显示成功/失败反馈；
-- 多 Item 导出时显示数量和缺失字段提示，而不是逐条弹错。
+- 多 Item 导出时显示数量和缺失字段提示，而不是逐条弹错；
+- 提供“恢复导出默认设置”按钮，一键重置本地持久化偏好。
 
-“保护 bibitem 大小写”必须在 BibTeX 序列化层实现（对标题中的已有 `{...}`
-保护标记保持不变），不能通过 CSS 或预览文本模拟；“期刊名缩写”应明确优先级：
-有 `journal_abbreviation` 时使用它，否则保持完整刊名，不猜测或联网补全。
+### BibTeX 大小写保护规则
+
+“保护 bibitem 大小写”必须在 BibTeX 序列化层实现：
+- **严格限定作用域**：仅应用于 `title`、`booktitle`、`series` 等标题类字段。
+- **严禁作用于作者名**：BibTeX 规范依靠 `format.names$` 解析人名，且从不对 `author` / `editor` 调用 `change.case$`；给作者名添加内部大括号会破坏姓氏缩写、von 前缀判定及机构作者语义。
+- **防止重复嵌套**：序列化时需检测既有大括号深度，对已包裹 `{...}` 的词素保持原样，不生成双重嵌套 `{{...}}`。
+- “期刊名缩写”明确优先级：有 `journal_abbreviation` 时使用它，否则保持完整刊名，不猜测或联网补全。
 
 ### CSL 样式来源
 
@@ -81,7 +114,7 @@ Discussion` 六个 workspace section；在 `Overview` 只放“判断和行动�
 目录（slug、title、language、categories、filepath），并在启动/依赖变更时缓存。
 用户自定义 `CitationStyle` 继续单独显示为“我的样式”。
 
-样式选择器应支持服务端查询或前端按目录筛选；不能把完整数千项目录一次性塞入
+样式选择器支持服务端查询或前端按目录筛选；不能把完整数千项目录一次性塞入
 HTML。样式缺失、CSL 无效或 citeproc 额外依赖未安装时，导出接口返回可操作错误，
 不得回退到硬编码样式。
 
@@ -90,18 +123,27 @@ HTML。样式缺失、CSL 无效或 citeproc 额外依赖未安装时，导出�
 Web 只负责表单解析和响应格式；样式解析、BibTeX 选项和媒体类型留在
 `discovery`/其导出实现内。
 
+## 下划线标注（Underline Annotation）能力
+
+在原有高亮（Highlight）与文本笔记（Note）基础上，补充下划线标注形态支持：
+
+1. **领域与模型**：`AnnotationKind.UNDERLINE`，经由数据库迁移 `0015_annotation_underline.py` 支持。
+2. **阅读器工具**：PDF 阅读器顶部工具栏提供“下划线”标注笔刷与快捷键切换，颜色与样式遵循设计系统规范。
+3. **几何与段落**：下划线标注与高亮共享同一基于 PDF 视口与文本盒的四边形坐标（Quads）计算逻辑。
+4. **导出支持**：导出带标注的 PDF 时，由 `documents` / `pipeline` 注释层生成器将下划线转换为标准 PDF `/Underline` 注释或展平渲染。
+
 ## Item 级文件和危险操作
 
-顶部操作栏提供：
+顶部操作栏与工作区分区提供：
 
 - `下载 PDF`：选择 File Revision；若存在多个版本，显示版本、页数、处理状态和
   文件名；
 - `下载 PDF（高级）`：选项 `保留 Annotation`、`包含 Attachment/supplements`。
   选择后生成一个临时 ZIP（主 PDF + 可选 sidecar/Attachment），沿用现有 Job、
   TTL 和清理机制；不改变原始 File Revision；
-- `删除 Item`：只对 Item Owner/管理员显示，明确“Item、File Revision、Attachment、
-  Annotation、Project membership 将永久删除”，要求输入标题或勾选确认，并记录
-  Audit Event。单条删除应调用 Library 的单 Item 删除用例，不复用 bulk 表单。
+- `删除 Item`：只对 Item Owner/管理员显示，弹出确认模态框，明确“Item、File Revision、Attachment、
+  Annotation、Project membership 将永久删除”，要求输入确认，并记录
+  Audit Event。单条删除调用 Library 的单 Item 删除用例，不复用 bulk 表单。
 
 Files 分区仍提供逐文件下载；顶部动作只做高频快捷入口。Annotation 保留应明确
 导出的格式（建议 PDF 注释层 + JSON sidecar），无法嵌入的 Annotation 必须给出
@@ -167,23 +209,18 @@ DOI 只保留在 Item.canonical DOI 字段，不再额外建立 `provider=doi` �
 
 - CSL 样式可搜索且来自实际安装目录；卸载 citation extra 时不会出现假样式或静默回退；
 - 单 Item 和批量导出共享同一 `ExportOptions` 语义，下载与复制内容完全一致；
+- BibTeX 大小写保护仅作用于标题字段，不修改作者名与专有缩写；
 - PDF 高级下载不会修改源文件，Annotation/Attachment 选择可验证；
 - OpenAlex `W...` 等 Upstream Identifier 可直接同步，DOI 不重复显示；
-- 同步后的引用键遵守“自动键可更新、手工键需确认”的规则；
+- 同步后的引用键遵守“自动键可更新、手工键需确认”的规则，并记录新旧引用键审计；
 - Summary 首屏不再出现右栏长滚动，所有高频动作在顶部或 Files 卡片可达；
 - 删除、下载、同步和导出均有权限、并发、错误和审计测试。
 
-## 需要在开工前确认的产品决策
-
-1. “包含 Attachment”是将所有 Attachment 打包，还是只打包标记为 supplement 的文件；
-2. Annotation 导出首选 PDF 内嵌、sidecar JSON，还是两者都提供；
-3. 手工引用键的“锁定”是显式开关，还是由首次手工编辑自动推断；
-4. CSL 目录是否允许管理员隐藏不适用语言/领域的样式。
-
 ## 当前实现状态
 
-- 已完成：统一导出选项、动态 CSL 搜索、用户自定义样式搜索、剪贴板复制、单 Item
+- 已完成：三级导出选项与模型统一、动态 CSL 搜索、用户自定义样式搜索、剪贴板复制、单 Item
   删除、带 Annotation/Attachment 选项的 PDF Bundle、同步后的自动引用键策略。
+- 已完成：下划线标注（Underline Annotation）类型与迁移 `0015_annotation_underline`，阅读器绘制与导出支持。
 - 已完成：Summary 右栏的动态和关键词改为按需展开，Tools 页不再展示固定的 CSL
   白名单，而是使用动态搜索目录。
 - 已完成：迁移 `0014_canonical_doi` 删除历史 `ItemIdentifier(provider="doi")`，并从

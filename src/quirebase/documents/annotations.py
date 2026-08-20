@@ -112,16 +112,14 @@ def validate_segments(data: AnnotationCreate, revision: FileRevision) -> None:
             raise ValidationFailure("annotation is outside the PDF page")
 
 
-def list_document_annotations(
+def select_visible_annotations(
     db: Session,
     user: User,
-    item_id: str,
     revision_id: str,
+    item_id: str,
     project_id: str | None = None,
-) -> list[dict[str, Any]]:
-    revision = require_revision(db, user, revision_id)
-    if revision.item_id != item_id:
-        raise ResourceNotFound("revision not found for item")
+) -> list[PdfAnnotation]:
+    """Load the annotations visible to one user: own private ones, plus a project's."""
     scopes = [
         and_(PdfAnnotation.scope == AnnotationScope.private, PdfAnnotation.author_id == user.id)
     ]
@@ -137,16 +135,31 @@ def list_document_annotations(
                 PdfAnnotation.project_id == project_id,
             )
         )
-    records = db.scalars(
-        select(PdfAnnotation)
-        .options(selectinload(PdfAnnotation.segments))
-        .where(
-            PdfAnnotation.file_revision_id == revision_id,
-            PdfAnnotation.deleted_at.is_(None),
-            or_(*scopes),
-        )
-        .order_by(PdfAnnotation.created_at)
-    ).all()
+    return list(
+        db.scalars(
+            select(PdfAnnotation)
+            .options(selectinload(PdfAnnotation.segments))
+            .where(
+                PdfAnnotation.file_revision_id == revision_id,
+                PdfAnnotation.deleted_at.is_(None),
+                or_(*scopes),
+            )
+            .order_by(PdfAnnotation.created_at)
+        ).all()
+    )
+
+
+def list_document_annotations(
+    db: Session,
+    user: User,
+    item_id: str,
+    revision_id: str,
+    project_id: str | None = None,
+) -> list[dict[str, Any]]:
+    revision = require_revision(db, user, revision_id)
+    if revision.item_id != item_id:
+        raise ResourceNotFound("revision not found for item")
+    records = select_visible_annotations(db, user, revision_id, item_id, project_id)
     return [annotation_json(row, user.id) for row in records]
 
 

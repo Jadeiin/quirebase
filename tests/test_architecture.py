@@ -37,7 +37,16 @@ ALLOWED_PACKAGE_DEPENDENCIES = {
         "search",
     },
     "documents": {"access", "audit", "core", "models", "operations", "pipeline"},
-    "library": {"access", "audit", "core", "discovery", "models", "pipeline", "search"},
+    "library": {
+        "access",
+        "audit",
+        "core",
+        "discovery",
+        "documents",
+        "models",
+        "pipeline",
+        "search",
+    },
     "operations": {"audit", "core", "models"},
     "pipeline": {"audit", "core", "models", "operations", "search"},
     "projects": {"access", "audit", "core", "models", "search"},
@@ -362,6 +371,20 @@ def test_item_workspace_uses_typed_section_views():
                 isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
                 and node.name in forbidden_operations
             ), f"{py_file} restores an untyped or separately committed Item Workspace operation"
+
+
+def test_multi_item_document_downloads_cross_the_library_bulk_seam():
+    library_routes = SRC_ROOT / "web" / "views" / "library.py"
+    assert "quirebase.documents" not in imported_modules(library_routes)
+
+    documents_bundle = SRC_ROOT / "documents" / "bundles.py"
+    tree = ast.parse(documents_bundle.read_text(encoding="utf-8"))
+    function_names = {
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    assert "create_bulk_document_bundle" not in function_names
 
 
 def test_orm_models_have_one_documented_owner_without_capability_mapping_files():

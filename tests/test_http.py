@@ -56,7 +56,7 @@ def authenticated_client(db, tmp_path, monkeypatch):
         yield db
 
     app.dependency_overrides[get_db] = override_db
-    client = TestClient(app)
+    client = TestClient(app, headers={"Accept-Language": "zh-CN,zh;q=0.9"})
     client.cookies.set(get_settings().session_cookie, raw)
     return client, item, revision
 
@@ -101,6 +101,45 @@ def test_pdf_range_and_annotation_api(db, tmp_path, monkeypatch):
         assert created.status_code == 201
         annotation = created.json()
         assert annotation["mine"] is True
+
+        other_item = Item(title="Different paper", created_by=item.created_by)
+        db.add(other_item)
+        db.commit()
+        mismatched = client.get(f"/documents/{other_item.id}/revisions/{revision.id}/export")
+        assert mismatched.status_code == 404
+
+        revision.original_name = "论文.pdf"
+        db.commit()
+        unicode_download = client.get(
+            f"/documents/{item.id}/revisions/{revision.id}/export",
+            params={"include_annotations": False},
+        )
+        assert unicode_download.status_code == 200
+        assert (
+            "filename*=utf-8''%E8%AE%BA%E6%96%87.pdf"
+            in unicode_download.headers["content-disposition"]
+        )
+        revision.original_name = "paper.pdf"
+        db.commit()
+
+        exported_paths = []
+
+        def fake_export_annotations(source, target, annotations, author_names):
+            target.write_bytes(source.read_bytes())
+            exported_paths.append(target)
+
+        monkeypatch.setattr(
+            "quirebase.documents.bundles.export_annotations",
+            fake_export_annotations,
+        )
+        exported = client.get(
+            f"/documents/{item.id}/revisions/{revision.id}/export",
+            params={"include_annotations": True},
+        )
+        assert exported.status_code == 200
+        assert "paper-annotated.pdf" in exported.headers["content-disposition"]
+        assert len(exported_paths) == 1
+        assert not exported_paths[0].exists()
 
         underlined = client.post(
             f"/documents/{item.id}/annotations",

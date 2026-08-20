@@ -387,15 +387,7 @@ def export_bibliography(
             )
             entry.update(extra_fields)
             if preserve_case:
-                for field in (
-                    "title",
-                    "abstract",
-                    "keywords",
-                    "journal",
-                    "publisher",
-                    "author",
-                    *extra_fields,
-                ):
+                for field in ("title", "booktitle", "series"):
                     if value := entry.get(field):
                         entry[field] = _protect_bibtex_case(value)
             entries.append(entry)

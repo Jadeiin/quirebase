@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Account settings') }} · Quirebase{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div>
+    <p class="eyebrow">{{ _('Account management') }}</p>
+    <h1>{{ _('Account settings') }}</h1>
+  </div>
+</div>
+
+{% if error %}
+<div class="panel search-error" role="alert" style="margin-bottom: 1.25rem;">
+  <p>{{ _(error) }}</p>
+</div>
+{% endif %}
+
+{% if success %}
+<div class="panel" role="status" style="margin-bottom: 1.25rem; border-color: #93c5ae; background: #eef7f2;">
+  <p style="color: var(--accent-strong); font-weight: 700; margin: 0;">{{ _(success) }}</p>
+</div>
+{% endif %}
+
+<div class="item-two-column" style="gap: 1.5rem; align-items: start;">
+  <div style="display: grid; gap: 1.5rem;">
+    <section class="panel">
+      <div class="section-heading">
+        <h2>{{ _('User profile') }}</h2>
+      </div>
+      <dl class="metadata-list compact-metadata-list" style="margin-top: .5rem;">
+        <div><dt>{{ _('Username') }}</dt><dd><strong>{{ user.username }}</strong></dd></div>
+        <div><dt>{{ _('Role') }}</dt><dd><span class="role-badge">{{ _(user.role) }}</span></dd></div>
+        <div><dt>{{ _('Created') }}</dt><dd>{{ user.created_at.strftime('%Y-%m-%d') if user.created_at else '—' }}</dd></div>
+      </dl>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <h2>{{ _('Interface & Language') }}</h2>
+      </div>
+      <div style="display: grid; gap: 1rem; margin-top: .5rem;">
+        <form method="post" action="/account/settings/locale?csrf_token={{ csrf }}">
+          <label>
+            {{ _('Display language') }}
+            <div style="display: flex; gap: .5rem; margin-top: .25rem;">
+              <select name="locale" style="flex: 1 1 auto;">
+                <option value="zh_CN" {% if active_locale == 'zh_CN' %}selected{% endif %}>简体中文 (Simplified Chinese)</option>
+                <option value="en_US" {% if active_locale == 'en_US' or not active_locale %}selected{% endif %}>English (US)</option>
+              </select>
+              <button type="submit" class="secondary-button compact-button" style="flex: 0 0 auto;">{{ _('Switch') }}</button>
+            </div>
+          </label>
+        </form>
+
+        <label class="export-check" x-data="appShell">
+          <input type="checkbox" :checked="sidebarCollapsed" @change="toggleCollapse()">
+          {{ _('Collapse navigation sidebar by default') }}
+        </label>
+        <p class="text-muted" style="font-size: .82rem; margin: 0;">{{ _('Collapsing the sidebar frees up horizontal canvas space for reading papers and managing records.') }}</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <h2>{{ _('Change password') }}</h2>
+      </div>
+      <form method="post" action="/account/settings/password?csrf_token={{ csrf }}" style="margin-top: 1rem;">
+        <label>
+          {{ _('Current password') }}
+          <input type="password" name="current_password" required autocomplete="current-password">
+        </label>
+        <label>
+          {{ _('New password') }}
+          <input type="password" name="new_password" required autocomplete="new-password" minlength="8">
+        </label>
+        <label>
+          {{ _('Confirm new password') }}
+          <input type="password" name="confirm_password" required autocomplete="new-password" minlength="8">
+        </label>
+        <div class="form-actions" style="margin-top: .5rem;">
+          <button type="submit">{{ _('Update password') }}</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <div style="display: grid; gap: 1.5rem;" x-data="userSettings" data-export-preferences-key="quirebase:export-preferences:v1:account:{{ user.id }}">
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">{{ _('Defaults') }}</p>
+          <h2>{{ _('Export preferences') }}</h2>
+        </div>
+        <button type="button" class="secondary-button compact-button" @click="resetDefaults()">{{ _('Reset to defaults') }}</button>
+      </div>
+      <p class="text-muted" style="font-size: .85rem; margin-bottom: 1rem;">{{ _('Configure your default options for citation and document exports across the library and paper workspaces.') }}</p>
+
+      <div style="display: grid; gap: 1rem;">
+        <label>
+          {{ _('Default citation format') }}
+          <select x-model="format">
+            <option value="csl">CSL citation</option>
+            <option value="bibtex">BibTeX</option>
+            <option value="ris">RIS</option>
+            <option value="endnote">EndNote</option>
+          </select>
+        </label>
+
+        <label x-show="format === 'csl'">
+          {{ _('Default CSL style') }}
+          <input type="search" x-model="query" @input.debounce.250ms="searchStyles()" placeholder="{{ _('Search citation styles') }}">
+          <select name="style" x-model="style" style="margin-top: .4rem;">
+            <template x-for="option in styles" :key="option.key">
+              <option :value="option.key" x-text="option.name"></option>
+            </template>
+          </select>
+        </label>
+
+        <div style="display: grid; gap: .5rem; margin-top: .5rem;">
+          <label class="export-check">
+            <input type="checkbox" x-model="includeAbstract">
+            {{ _('Include abstract') }}
+          </label>
+          <label class="export-check" x-show="format === 'bibtex'">
+            <input type="checkbox" x-model="preserveCase">
+            {{ _('Preserve bibitem case') }}
+          </label>
+          <label class="export-check" x-show="format === 'bibtex' || format === 'csl'">
+            <input type="checkbox" x-model="abbreviateJournal">
+            {{ _('Use abbreviated journal') }}
+          </label>
+          <label class="export-check" x-show="format === 'bibtex'">
+            <input type="checkbox" x-model="includeIdentifiers">
+            {{ _('Include additional identifiers') }}
+          </label>
+          <label class="export-check" x-show="format === 'bibtex'">
+            <input type="checkbox" x-model="includeCustomFields">
+            {{ _('Include custom fields') }}
+          </label>
+          <label class="export-check">
+            <input type="checkbox" x-model="includeAnnotations">
+            {{ _('Include annotations in PDF downloads') }}
+          </label>
+          <label class="export-check">
+            <input type="checkbox" x-model="includeSupplements">
+            {{ _('Include supplements in PDF downloads') }}
+          </label>
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-top: .5rem; padding-top: .75rem; border-top: 1px solid var(--line);">
+          <small class="text-muted">{{ _('Preferences are automatically saved to your browser.') }}</small>
+          <span class="imported-badge" x-show="savedToast" x-cloak>{{ _('Saved') }}</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel session-list" id="sessions">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">{{ _('Security') }}</p>
+          <h2>{{ _('Login devices') }}</h2>
+        </div>
+        {% if sessions|length > 1 %}
+        <form method="post" action="/account/sessions/revoke-all?csrf_token={{ csrf }}" onsubmit="return confirm('{{ _('Sign out every device, including this one?') }}')">
+          <button class="danger-button compact-button">{{ _('Sign out all') }}</button>
+        </form>
+        {% endif %}
+      </div>
+      <div style="display: grid; gap: .75rem; margin-top: .75rem;">
+        {% for s in sessions %}
+        <article style="display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .65rem .85rem; border: 1px solid var(--line); border-radius: .45rem; background: var(--surface-soft);">
+          <div style="display: flex; align-items: center; gap: .65rem; min-width: 0;">
+            <span class="status-dot" style="width: .55rem; height: .55rem; border-radius: 999px; background: {% if s.id == login.id %}var(--accent){% else %}var(--muted){% endif %};"></span>
+            <div style="display: grid; min-width: 0;">
+              <strong>{% if s.id == login.id %}{{ _('This device') }}{% else %}{{ _('Signed-in device') }}{% endif %}</strong>
+              <small class="text-muted">{{ s.created_at.strftime('%Y-%m-%d %H:%M') }} · {{ _('Session') }} {{ s.id[:8] }}</small>
+            </div>
+          </div>
+          <div>
+            {% if s.id == login.id %}
+            <span class="role-badge">{{ _('current') }}</span>
+            {% else %}
+            <form method="post" action="/account/sessions/{{ s.id }}/revoke?csrf_token={{ csrf }}">
+              <button class="secondary-button compact-action-btn" type="submit">{{ _('Revoke') }}</button>
+            </form>
+            {% endif %}
+          </div>
+        </article>
+        {% else %}
+        <div class="empty-state">{{ _('No active sessions.') }}</div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

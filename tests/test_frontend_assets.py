@@ -70,13 +70,13 @@ def test_pdf_toolbar_exposes_navigation_search_zoom_and_download():
     assert 'value="underline"' in template
     assert 'class="pdf-download-options citation-panel' in template
     assert 'id="pdf-download-options-button"' in template
-    assert 'id="pdf-download-original"' in template
-    assert 'id="pdf-download-annotated"' in template
-    assert 'id="pdf-download-project"' in template
+    assert 'id="pdf-download-current"' in template
+    assert 'id="pdf-export-annotations"' in template
     assert 'x-data="itemDownload"' not in template
     assert 'href="/items/{{ item.id }}/download' not in template
     assert 'id="export-annotations"' not in template
     assert 'querySelector("#export-annotations")' not in script
-    assert 'querySelector("#pdf-download-annotated")' in script
+    assert 'querySelector("#pdf-download-current")' in script
+    assert "/export?include_annotations=" in script
     assert "revision_id: revisionId" in script
     assert 'annotation.kind === "underline"' in script

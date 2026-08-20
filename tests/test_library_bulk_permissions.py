@@ -12,7 +12,8 @@ from test_http import authenticated_client
 from quirebase.core.crypto import hash_password
 from quirebase.core.errors import PermissionDenied
 from quirebase.core.storage import LocalObjectStore
-from quirebase.library import apply_bulk_item_action, download_item_bundle, download_item_pdfs
+from quirebase.documents import create_item_document_bundle
+from quirebase.library import apply_bulk_item_action, download_selected_item_documents
 from quirebase.models import (
     AuditEvent,
     FileRevision,
@@ -98,7 +99,7 @@ def test_bulk_download_pdfs_records_audit_event(db, tmp_path, monkeypatch):
     _client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
     owner = db.get(User, item.created_by)
 
-    archive = download_item_pdfs(db, owner, [item.id])
+    archive = download_selected_item_documents(db, owner, [item.id])
     assert archive.content.getvalue()
     assert archive.filename == "quirebase-selected-pdfs.zip"
     with zipfile.ZipFile(archive.content) as bundle:
@@ -137,7 +138,7 @@ def test_item_download_bundle_contains_all_pdf_versions_with_manifest(db, tmp_pa
     )
     db.commit()
 
-    archive = download_item_bundle(db, owner, item.id)
+    archive = create_item_document_bundle(db, owner, item.id)
     assert archive.filename == "Paper-pdfs.zip"
     with zipfile.ZipFile(archive.content) as bundle:
         names = bundle.namelist()
@@ -184,7 +185,7 @@ def test_item_download_embeds_annotations_in_pdf_without_a_sidecar(db, tmp_path,
     db.add(annotation)
     db.commit()
 
-    archive = download_item_bundle(db, owner, item.id, include_annotations=True)
+    archive = create_item_document_bundle(db, owner, item.id, include_annotations=True)
 
     assert archive.filename == "Paper-annotated-pdfs.zip"
     with zipfile.ZipFile(archive.content) as bundle:
@@ -198,7 +199,7 @@ def test_item_download_embeds_annotations_in_pdf_without_a_sidecar(db, tmp_path,
             assert [record.type[1] for record in exported] == ["Highlight"]
             assert exported[0].info["title"] == owner.username
 
-    bulk_archive = download_item_pdfs(db, owner, [item.id], include_annotations=True)
+    bulk_archive = download_selected_item_documents(db, owner, [item.id], include_annotations=True)
     assert bulk_archive.filename == "quirebase-selected-annotated-pdfs.zip"
     with zipfile.ZipFile(bulk_archive.content) as bundle:
         assert "manifest.json" in bundle.namelist()

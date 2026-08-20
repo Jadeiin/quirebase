@@ -328,8 +328,11 @@ def _sync_metadata_from_upstream(
         item_id,
         detail={
             "provider": provider,
+            "old_bibtex_key": previous_key,
+            "new_bibtex_key": item.bibtex_id,
             "bibtex_key_updated": bool(
-                previous_key != item.bibtex_id and previous_key == previous_generated_key
+                previous_key != item.bibtex_id
+                and (not previous_key or previous_key == previous_generated_key)
             ),
         },
     )

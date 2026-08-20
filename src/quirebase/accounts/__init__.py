@@ -17,6 +17,7 @@ from quirebase.accounts.authentication import (
     InvalidCredentials,
     accept_invitation,
     authenticate_user,
+    change_own_password,
     logout,
 )
 from quirebase.accounts.invitations import (
@@ -45,6 +46,7 @@ __all__ = [
     "LoginThrottled",
     "accept_invitation",
     "authenticate_user",
+    "change_own_password",
     "change_user_role",
     "check_login_throttle",
     "clear_login_failures",

@@ -1,7 +1,7 @@
 # Export preference storage
 
 本文研究 Quirebase 是否应在前端保存每个用户的导出偏好。结论是：现阶段适合把
-低敏感、体积很小的导出选项保存在 `localStorage`，但必须按账户隔离、校验数据并在
+低敏感、体积很小的导出选项保存在 `localStorage`，但必须按账号隔离、校验数据并在
 存储不可用时退化为页面默认值。若产品要求跨浏览器或跨设备同步，服务端用户设置才
 应成为真源，`localStorage` 最多作为缓存。
 
@@ -14,24 +14,24 @@
 
 Alpine 官方说明 `$watch` 会在属性变化时调用回调，因此手写一个小型、带校验和异常处理
 的存储适配器可以沿用现有代码风格。[Alpine Persist][alpine-persist] 也能自动使用
-`localStorage`、支持自定义 key，但它并不替代账户隔离、schema 校验、异常处理和迁移。
+`localStorage`、支持自定义 key，但它并不替代账号隔离、schema 校验、异常处理和迁移。
 仅为这一组布尔值和枚举引入插件没有明显必要。
 
 ## 方案比较
 
 | 方案 | 生命周期与范围 | 优点 | 局限 | 结论 |
 | --- | --- | --- | --- | --- |
-| `localStorage` | 按 origin 保存并跨浏览器会话保留；隐私浏览结束时通常清除 | 不随 HTTP 请求发送；无需后端迁移；适合少量设置 | 只存在当前浏览器 profile/设备；同 origin 下不会自动按登录账户隔离；用户可清除，浏览器也可能拒绝或驱逐数据 | 当前推荐 |
+| `localStorage` | 按 origin 保存并跨浏览器会话保留；隐私浏览结束时通常清除 | 不随 HTTP 请求发送；无需后端迁移；适合少量设置 | 只存在当前浏览器 profile/设备；同 origin 下不会自动按登录账号隔离；用户可清除，浏览器也可能拒绝或驱逐数据 | 当前推荐 |
 | `sessionStorage` | 同时按 origin 和浏览器 tab 分区；page session 结束即清除 | tab 隔离，适合临时表单状态 | 关闭 tab 后偏好消失，无法满足“记住导出偏好” | 不推荐 |
 | Cookie | 可设过期时间并由服务端读取 | 请求到达前服务端可见 | Cookie 随每个匹配请求发送，通常单个约 4 KB；`document.cookie` 是同步 API；扩大不必要的数据传输和服务端暴露面 | 不推荐用于导出偏好 |
-| 服务端用户设置 | 由已认证用户记录拥有，页面加载或 API 请求时读取 | 可跨浏览器/设备同步；天然按账户授权；可集中重置和审计 | 需要 schema/迁移/API/数据库写入；有网络延迟，离线不可用；服务端保留更多用户行为数据 | 有跨设备需求时推荐为真源 |
+| 服务端用户设置 | 由已认证用户记录拥有，页面加载或 API 请求时读取 | 可跨浏览器/设备同步；天然按账号授权；可集中重置和审计 | 需要 schema/迁移/API/数据库写入；有网络延迟，离线不可用；服务端保留更多用户行为数据 | 有跨设备需求时推荐为真源 |
 
 `localStorage` 与 `sessionStorage` 都是同步 API；MDN 提醒大量读写会阻塞其他
 JavaScript。不过导出偏好只有数个布尔值和短字符串，一次初始化读取、变化后一次写入的
 规模足够小。不要在每次渲染或输入事件中反复读取存储。
 
 “服务端能够跨设备同步”是架构推论：Web Storage 的规范范围是当前 origin 下的浏览器
-存储，并没有账户或设备同步语义；把设置关联到已认证用户的服务端记录，才使其他设备能
+存储，并没有账号或设备同步语义；把设置关联到已认证用户的服务端记录，才使其他设备能
 取回同一份值。
 
 ## 推荐 key 与 schema
@@ -45,7 +45,7 @@ quirebase:export-preferences:v1:account:<opaque-account-scope>
 - `quirebase` 防止与同 origin 的其他应用冲突；
 - `export-preferences` 表明能力所有权；
 - `v1` 让不兼容 schema 可以并存并显式迁移；
-- `opaque-account-scope` 防止同一浏览器中先后登录的账户互相加载偏好。它只用于分区，
+- `opaque-account-scope` 防止同一浏览器中先后登录的账号互相加载偏好。它只用于分区，
   不能是访问令牌、session ID、电子邮件或其他秘密/敏感标识。
 
 值使用 JSON 字符串，并同时携带 payload 版本，以便解析后验证：
@@ -117,9 +117,9 @@ missing v2 -> read v1 -> validate -> migrate -> write v2 -> remove v1
 含义变化时必须升级版本。Alpine Persist 官方也特别提醒：持久化变量类型变化后需要清除
 旧值或更换 key，这与显式版本迁移的要求一致。
 
-## 隐私与多账户边界
+## 隐私与多账号边界
 
-- Web Storage 按 origin 而不是 Quirebase 用户分区。在共享浏览器 profile 上，不带账户
+- Web Storage 按 origin 而不是 Quirebase 用户分区。在共享浏览器 profile 上，不带账号
   scope 的 key 会把 A 用户的选择展示给之后登录的 B 用户。
 - `localStorage` 不会像 Cookie 一样自动随请求上传，但同 origin 的前端脚本可以读取它；
   因而只保存低敏感设置，不能把“留在浏览器”当作安全边界。

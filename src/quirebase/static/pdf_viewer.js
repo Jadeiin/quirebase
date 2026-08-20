@@ -27,6 +27,7 @@ const detailBody = document.querySelector("#annotation-detail-body");
 const detailSave = document.querySelector("#annotation-detail-save");
 const detailDelete = document.querySelector("#annotation-detail-delete");
 const markKind = document.querySelector("#annotation-mark-kind");
+const exportAnnotationsToggle = document.querySelector("#pdf-export-annotations");
 const downloadProject = document.querySelector("#pdf-download-project");
 const eventBus = new EventBus();
 const linkService = new PDFLinkService({ eventBus });
@@ -244,28 +245,13 @@ search.addEventListener("keydown", (event) => {
 document.querySelector("#add-note").addEventListener("click", () => { noteMode = true; status.textContent = message("clickPage"); });
 document.querySelector("#viewer").addEventListener("click", saveNote, true);
 projectPicker.addEventListener("change", loadAnnotations);
-document.querySelector("#pdf-download-annotated").addEventListener("click", async () => {
-  try {
-    const created = await api(`${annotationUrl.replace("/annotations", "/annotation-exports")}`, {
-      method: "POST",
-      body: JSON.stringify({
-        revision_id: revisionId,
-        project_id: downloadProject.value || null,
-        include_private: true,
-      }),
-    });
-    status.textContent = message("preparingExport");
-    while (true) {
-      await new Promise((resolve) => setTimeout(resolve, 700));
-      const job = await api(`/annotation-exports/${created.id}`);
-      if (job.state === "succeeded") {
-        window.location.assign(`/annotation-exports/${created.id}/content`);
-        status.textContent = message("exportReady");
-        break;
-      }
-      if (job.state === "failed") throw new Error(job.error || message("exportFailed"));
-    }
-  } catch (error) { status.textContent = error.message; }
+document.querySelector("#pdf-download-current").addEventListener("click", () => {
+  const includeAnnotations = exportAnnotationsToggle.checked ? 1 : 0;
+  const project = downloadProject.value && includeAnnotations
+    ? `&project_id=${encodeURIComponent(downloadProject.value)}`
+    : "";
+  status.textContent = message("downloading");
+  window.location.assign(`${contentUrl}/export?include_annotations=${includeAnnotations}${project}`);
 });
 document.querySelector("#delete-annotation").addEventListener("click", async () => {
   if (!selectedAnnotation || !selectedAnnotation.mine) return alert(message("selectOwnAnnotation"));

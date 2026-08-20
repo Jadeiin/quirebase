@@ -14,6 +14,7 @@ from quirebase.documents import (
     create_attachment as create_attachment_op,
 )
 from quirebase.documents import (
+    create_item_document_bundle,
     get_attachment_file,
     get_pdf_viewer_data,
     store_pdf_revision,
@@ -32,7 +33,6 @@ from quirebase.library import (
     SummaryWorkspace,
     WorkspaceSection,
     add_tag_to_item,
-    download_item_bundle,
     open_item_workspace,
     parse_author_list_string,
     regenerate_bibtex_key,
@@ -315,15 +315,18 @@ def item_page(
 @router.get("/items/{item_id}/download")
 def download_item_route(
     item_id: str,
+    revisions: str | None = None,
     include_annotations: bool = False,
     include_supplements: bool = False,
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    bundle = download_item_bundle(
+    revision_ids = [r.strip() for r in revisions.split(",") if r.strip()] if revisions else None
+    bundle = create_item_document_bundle(
         db,
         user,
         item_id,
+        revision_ids=revision_ids,
         include_annotations=include_annotations,
         include_supplements=include_supplements,
     )

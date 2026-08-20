@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
+from starlette.background import BackgroundTask
 
 from quirebase.core.database import get_db
 from quirebase.discovery import (
@@ -14,6 +15,7 @@ from quirebase.discovery import (
     get_item_citation_text_response,
 )
 from quirebase.documents import (
+    export_revision_pdf,
     get_revision_file,
 )
 from quirebase.models import User
@@ -158,3 +160,30 @@ def pdf_content(
 ):
     path, original_name, sha256 = get_revision_file(db, user, item_id, revision_id)
     return ranged_file(request, path, sha256, original_name)
+
+
+@router.get("/documents/{item_id}/revisions/{revision_id}/export")
+def export_revision_pdf_route(
+    item_id: str,
+    revision_id: str,
+    include_annotations: bool = True,
+    project_id: str | None = None,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    path, filename, media_type, temporary = export_revision_pdf(
+        db,
+        user,
+        item_id,
+        revision_id,
+        include_annotations=include_annotations,
+        project_id=project_id,
+    )
+    cleanup_task = BackgroundTask(path.unlink, missing_ok=True) if temporary else None
+    return FileResponse(
+        path,
+        media_type=media_type,
+        filename=filename,
+        content_disposition_type="attachment",
+        background=cleanup_task,
+    )

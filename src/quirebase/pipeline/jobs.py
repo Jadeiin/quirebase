@@ -154,13 +154,10 @@ def handle_pdf_export_annotations(db: Session, job: Job, payload: dict[str, Any]
         )
     )
     filename = f"{job.id}.pdf"
-    author_names = dict(
-        db.execute(
-            select(User.id, User.username).where(
-                User.id.in_({record.author_id for record in records})
-            )
-        ).all()
-    )
+    author_rows = db.execute(
+        select(User.id, User.username).where(User.id.in_({record.author_id for record in records}))
+    ).all()
+    author_names: dict[str, str] = {row[0]: row[1] for row in author_rows}
     export_annotations(
         LocalObjectStore().path(revision.object_key),
         get_settings().export_dir / filename,
