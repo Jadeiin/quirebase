@@ -127,6 +127,39 @@ Alpine.data("appShell", () => ({
   },
 }));
 
+Alpine.data("passwordStrength", () => ({
+  password: "",
+  score: -1,
+  async init() {
+    try {
+      const [
+        { ZxcvbnFactory },
+        zxcvbnCommonPackage,
+        zxcvbnEnglishPackage,
+      ] = await Promise.all([
+        import("@zxcvbn-ts/core"),
+        import("@zxcvbn-ts/language-common"),
+        import("@zxcvbn-ts/language-en"),
+      ]);
+      const passwordStrengthAnalyzer = new ZxcvbnFactory({
+        dictionary: {
+          ...zxcvbnCommonPackage.dictionary,
+          ...zxcvbnEnglishPackage.dictionary,
+        },
+        graphs: zxcvbnCommonPackage.adjacencyGraphs,
+      });
+      this.$watch("password", (value) => {
+        this.score = value ? passwordStrengthAnalyzer.check(value).score : -1;
+      });
+      if (this.password) {
+        this.score = passwordStrengthAnalyzer.check(this.password).score;
+      }
+    } catch {
+      this.score = -1;
+    }
+  },
+}));
+
 Alpine.data("userSettings", () => ({
   format: "csl",
   style: "apa",

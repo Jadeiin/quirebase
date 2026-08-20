@@ -130,6 +130,16 @@ form.inline { display: inline; }
 label { display: grid; gap: .3rem; color: #46514c; font-size: .82rem; font-weight: 700; }
 .row { grid-template-columns: 2fr 1fr 2fr auto; }
 .error { color: var(--danger); }
+.password-strength { display: grid; gap: .4rem; margin: -.5rem 0 .2rem; font-size: .84rem; color: var(--muted); }
+.password-strength p { margin: 0; }
+.password-strength-meter { display: block; height: .35rem; overflow: hidden; border-radius: 999px; background: var(--surface-soft); }
+.password-strength-meter::before { display: block; width: 100%; height: 100%; border-radius: inherit; background: #dc5757; transform: scaleX(0); transform-origin: left; transition: transform .18s ease, background-color .18s ease; content: ""; }
+.password-strength[data-score="0"] .password-strength-meter::before { background: #dc5757; transform: scaleX(.2); }
+.password-strength[data-score="1"] .password-strength-meter::before { background: #dc8357; transform: scaleX(.4); }
+.password-strength[data-score="2"] .password-strength-meter::before { background: #d3b342; transform: scaleX(.6); }
+.password-strength[data-score="3"] .password-strength-meter::before { background: #7ba972; transform: scaleX(.8); }
+.password-strength[data-score="4"] .password-strength-meter::before { background: var(--accent-strong); transform: scaleX(1); }
+.password-strength-value { display: inline; font-weight: 700; color: var(--ink); }
 .empty-state { padding: 1.1rem; border: 1px dashed var(--line); border-radius: .55rem; color: var(--muted); background: var(--surface-soft); }
 
 .dashboard-search { display: grid; grid-template-columns: minmax(220px, .8fr) minmax(320px, 1.2fr); gap: 2rem; align-items: center; margin-bottom: 1rem; background: linear-gradient(115deg, #fff 55%, var(--accent-soft)); }
@@ -496,8 +506,32 @@ label { display: grid; gap: .3rem; color: #46514c; font-size: .82rem; font-weigh
 
 @media (max-width: 640px) {
   .app-layout { padding-left: 0; }
+  html.sidebar-collapsed body.app-layout,
+  body.sidebar-collapsed.app-layout { padding-left: 0; }
   main { padding: 4.5rem .8rem 3rem; }
   .app-sidebar { width: min(82vw, 280px); transform: translateX(-105%); transition: transform .2s ease; }
+  html.sidebar-collapsed .app-sidebar,
+  body.sidebar-collapsed .app-sidebar { width: min(82vw, 280px); padding: 1.4rem 1rem 1rem; }
+  html.sidebar-collapsed .app-sidebar .brand,
+  body.sidebar-collapsed .app-sidebar .brand { display: block; padding-inline: 0; }
+  html.sidebar-collapsed .app-sidebar .brand-mini,
+  body.sidebar-collapsed .app-sidebar .brand-mini { display: none; }
+  html.sidebar-collapsed .app-sidebar .sidebar-header,
+  body.sidebar-collapsed .app-sidebar .sidebar-header { flex-direction: row; justify-content: space-between; gap: 0; padding: 0 .4rem 1.4rem; }
+  html.sidebar-collapsed .app-sidebar nav a,
+  body.sidebar-collapsed .app-sidebar nav a { justify-content: flex-start; padding: .65rem .75rem; }
+  html.sidebar-collapsed .app-sidebar nav a span:not(:first-child),
+  body.sidebar-collapsed .app-sidebar nav a span:not(:first-child) { display: inline; }
+  html.sidebar-collapsed .app-sidebar nav a span:first-child,
+  body.sidebar-collapsed .app-sidebar nav a span:first-child { font-size: 1.05rem; }
+  html.sidebar-collapsed .app-sidebar .account-menu-trigger,
+  body.sidebar-collapsed .app-sidebar .account-menu-trigger { justify-content: flex-start; padding: .45rem .55rem; background: rgb(255 255 255 / 8%); }
+  html.sidebar-collapsed .app-sidebar .account-details,
+  body.sidebar-collapsed .app-sidebar .account-details { display: grid; }
+  html.sidebar-collapsed .app-sidebar .menu-caret,
+  body.sidebar-collapsed .app-sidebar .menu-caret { display: inline; }
+  html.sidebar-collapsed .app-sidebar .account-dropup,
+  body.sidebar-collapsed .app-sidebar .account-dropup { left: 0; right: 0; bottom: calc(100% + .5rem); min-width: 0; }
   .app-sidebar.is-open { transform: translateX(0); }
   .mobile-nav-toggle { position: fixed; z-index: 45; top: .8rem; left: .8rem; display: inline-flex; width: 2.7rem; min-height: 2.7rem; padding: 0; box-shadow: var(--shadow); }
   .sidebar-scrim { position: fixed; z-index: 25; inset: 0; display: block; width: 100%; padding: 0; border: 0; border-radius: 0; background: rgb(0 0 0 / 42%); }
@@ -505,7 +539,9 @@ label { display: grid; gap: .3rem; color: #46514c; font-size: .82rem; font-weigh
   .app-sidebar nav a { justify-content: flex-start; font-size: inherit; }
   .app-sidebar-account strong, .app-sidebar-account small, .app-sidebar-account button { font-size: inherit; }
   .app-sidebar-account button::after { content: none; }
-  #pdf-app { left: 0; }
+  #pdf-app,
+  html.sidebar-collapsed #pdf-app,
+  body.sidebar-collapsed #pdf-app { left: 0; }
   #pdf-search { width: 8rem; }
   .dashboard-search, .dashboard-grid, .import-grid { grid-template-columns: 1fr; }
   .dashboard-module.wide, .future-card, .manual-item-card { grid-column: auto; }

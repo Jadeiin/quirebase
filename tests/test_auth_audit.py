@@ -175,7 +175,7 @@ def test_account_settings_and_password_update(db, tmp_path, monkeypatch):
         },
     )
     assert mismatch.status_code == 422
-    assert "New passwords do not match" in mismatch.text
+    assert "两次输入的新密码不一致" in mismatch.text
 
     # Wrong current password returns 422
     wrong = client.post(
@@ -187,7 +187,7 @@ def test_account_settings_and_password_update(db, tmp_path, monkeypatch):
         },
     )
     assert wrong.status_code == 422
-    assert "Current password incorrect" in wrong.text
+    assert "当前密码不正确" in wrong.text
 
     # Successful update
     success = client.post(
@@ -199,7 +199,7 @@ def test_account_settings_and_password_update(db, tmp_path, monkeypatch):
         },
     )
     assert success.status_code == 200
-    assert "Password updated successfully" in success.text
+    assert "密码更新成功" in success.text
 
     event = db.scalar(select(AuditEvent).where(AuditEvent.action == "account.password.changed"))
     assert event is not None

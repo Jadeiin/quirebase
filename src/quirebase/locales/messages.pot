@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: quirebase VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-20 11:42+0800\n"
+"POT-Creation-Date: 2026-08-20 14:51+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -221,203 +221,243 @@ msgid "This invitation is invalid, expired, or already used."
 msgstr ""
 
 #: src/quirebase/templates/account_settings.html:2
-#: src/quirebase/templates/account_settings.html:7
+#: src/quirebase/templates/account_settings.html:13
 #: src/quirebase/templates/base.html:53
 msgid "Account settings"
 msgstr ""
 
+#: src/quirebase/templates/account_settings.html:5
+msgid "Current password incorrect"
+msgstr ""
+
 #: src/quirebase/templates/account_settings.html:6
+msgid "password must contain at least 12 characters"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:7
+msgid "New passwords do not match"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:8
+msgid "Password updated successfully"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:12
 msgid "Account management"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:27
+#: src/quirebase/templates/account_settings.html:33
 msgid "User profile"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:30
+#: src/quirebase/templates/account_settings.html:36
 #: src/quirebase/templates/admin.html:171
 #: src/quirebase/templates/admin.html:191 src/quirebase/templates/login.html:8
 msgid "Username"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:31
+#: src/quirebase/templates/account_settings.html:37
 #: src/quirebase/templates/admin.html:138
 #: src/quirebase/templates/admin.html:173
 #: src/quirebase/templates/admin.html:192
 msgid "Role"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:32
+#: src/quirebase/templates/account_settings.html:38
 #: src/quirebase/templates/admin.html:396
 #: src/quirebase/templates/admin.html:524
 msgid "Created"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:38
+#: src/quirebase/templates/account_settings.html:44
 msgid "Interface & Language"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:43
+#: src/quirebase/templates/account_settings.html:49
 msgid "Display language"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:49
+#: src/quirebase/templates/account_settings.html:55
 msgid "Switch"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:56
+#: src/quirebase/templates/account_settings.html:62
 msgid "Collapse navigation sidebar by default"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:58
+#: src/quirebase/templates/account_settings.html:64
 msgid ""
 "Collapsing the sidebar frees up horizontal canvas space for reading "
 "papers and managing records."
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:64
+#: src/quirebase/templates/account_settings.html:70
 msgid "Change password"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:68
+#: src/quirebase/templates/account_settings.html:74
 msgid "Current password"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:72
+#: src/quirebase/templates/account_settings.html:78
 #: src/quirebase/templates/admin.html:222
 msgid "New password"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:76
-msgid "Confirm new password"
+#: src/quirebase/templates/account_settings.html:84
+msgid "Password strength"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:80
-msgid "Update password"
+#: src/quirebase/templates/account_settings.html:86
+msgid "Very weak"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:87
+msgid "Weak"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:88
+msgid "Fair"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:89
+msgid "Strong"
 msgstr ""
 
 #: src/quirebase/templates/account_settings.html:90
+msgid "Very strong"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:95
+msgid "Confirm new password"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:99
+msgid "Update password"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:109
 msgid "Defaults"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:91
+#: src/quirebase/templates/account_settings.html:110
 msgid "Export preferences"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:93
+#: src/quirebase/templates/account_settings.html:112
 #: src/quirebase/templates/item.html:31 src/quirebase/templates/item.html:47
 msgid "Reset to defaults"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:95
+#: src/quirebase/templates/account_settings.html:114
 msgid ""
 "Configure your default options for citation and document exports across "
 "the library and paper workspaces."
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:99
+#: src/quirebase/templates/account_settings.html:118
 msgid "Default citation format"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:109
+#: src/quirebase/templates/account_settings.html:128
 msgid "Default CSL style"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:110
+#: src/quirebase/templates/account_settings.html:129
 #: src/quirebase/templates/item.html:39 src/quirebase/templates/library.html:38
 #: src/quirebase/templates/tools.html:122
 msgid "Search citation styles"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:121
+#: src/quirebase/templates/account_settings.html:140
 #: src/quirebase/templates/item.html:40 src/quirebase/templates/library.html:42
 msgid "Include abstract"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:125
+#: src/quirebase/templates/account_settings.html:144
 #: src/quirebase/templates/item.html:41 src/quirebase/templates/library.html:43
 msgid "Preserve bibitem case"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:129
+#: src/quirebase/templates/account_settings.html:148
 #: src/quirebase/templates/item.html:42 src/quirebase/templates/library.html:44
 msgid "Use abbreviated journal"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:133
+#: src/quirebase/templates/account_settings.html:152
 #: src/quirebase/templates/item.html:43 src/quirebase/templates/library.html:45
 msgid "Include additional identifiers"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:137
+#: src/quirebase/templates/account_settings.html:156
 #: src/quirebase/templates/item.html:44 src/quirebase/templates/library.html:46
 msgid "Include custom fields"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:141
+#: src/quirebase/templates/account_settings.html:160
 msgid "Include annotations in PDF downloads"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:145
+#: src/quirebase/templates/account_settings.html:164
 msgid "Include supplements in PDF downloads"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:150
+#: src/quirebase/templates/account_settings.html:169
 msgid "Preferences are automatically saved to your browser."
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:151
+#: src/quirebase/templates/account_settings.html:170
 #: src/quirebase/templates/pdf.html:8
 msgid "Saved"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:159
+#: src/quirebase/templates/account_settings.html:178
 msgid "Security"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:160
+#: src/quirebase/templates/account_settings.html:179
 #: src/quirebase/templates/index.html:48
 #: src/quirebase/templates/sessions.html:4
 msgid "Login devices"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:163
+#: src/quirebase/templates/account_settings.html:182
 #: src/quirebase/templates/sessions.html:5
 msgid "Sign out every device, including this one?"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:164
+#: src/quirebase/templates/account_settings.html:183
 msgid "Sign out all"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:174
+#: src/quirebase/templates/account_settings.html:193
 #: src/quirebase/templates/index.html:51
 #: src/quirebase/templates/sessions.html:6
 msgid "This device"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:174
+#: src/quirebase/templates/account_settings.html:193
 #: src/quirebase/templates/index.html:51
 #: src/quirebase/templates/sessions.html:6
 msgid "Signed-in device"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:175
+#: src/quirebase/templates/account_settings.html:194
 #: src/quirebase/templates/sessions.html:6
 msgid "Session"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:180
+#: src/quirebase/templates/account_settings.html:199
 #: src/quirebase/templates/sessions.html:6
 msgid "current"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:183
+#: src/quirebase/templates/account_settings.html:202
 #: src/quirebase/templates/sessions.html:6
 msgid "Revoke"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:189
+#: src/quirebase/templates/account_settings.html:208
 #: src/quirebase/templates/index.html:52
 #: src/quirebase/templates/sessions.html:6
 msgid "No active sessions."
@@ -738,7 +778,7 @@ msgid ""
 msgstr ""
 
 #: src/quirebase/templates/admin.html:293 src/quirebase/templates/item.html:355
-#: src/quirebase/templates/pdf.html:66 src/quirebase/templates/tools.html:93
+#: src/quirebase/templates/pdf.html:65 src/quirebase/templates/tools.html:93
 #: src/quirebase/templates/tools.html:135
 msgid "Delete"
 msgstr ""
@@ -1278,16 +1318,16 @@ msgid "Return to administration"
 msgstr ""
 
 #: src/quirebase/templates/item.html:4 src/quirebase/templates/pdf.html:10
-#: src/quirebase/templates/pdf.html:55
+#: src/quirebase/templates/pdf.html:54
 msgid "Highlight"
 msgstr ""
 
 #: src/quirebase/templates/item.html:4 src/quirebase/templates/pdf.html:11
-#: src/quirebase/templates/pdf.html:55
+#: src/quirebase/templates/pdf.html:54
 msgid "Underline"
 msgstr ""
 
-#: src/quirebase/templates/item.html:4 src/quirebase/templates/pdf.html:58
+#: src/quirebase/templates/item.html:4 src/quirebase/templates/pdf.html:57
 msgid "Note"
 msgstr ""
 
@@ -1299,7 +1339,7 @@ msgstr ""
 msgid "Read PDF"
 msgstr ""
 
-#: src/quirebase/templates/item.html:16 src/quirebase/templates/pdf.html:44
+#: src/quirebase/templates/item.html:16 src/quirebase/templates/pdf.html:43
 msgid "Download PDF"
 msgstr ""
 
@@ -1316,7 +1356,7 @@ msgid "Select PDF versions"
 msgstr ""
 
 #: src/quirebase/templates/item.html:27 src/quirebase/templates/library.html:47
-#: src/quirebase/templates/pdf.html:49
+#: src/quirebase/templates/pdf.html:48
 msgid "Include annotations"
 msgstr ""
 
@@ -1464,7 +1504,7 @@ msgid "Manage files"
 msgstr ""
 
 #: src/quirebase/templates/item.html:98 src/quirebase/templates/item.html:254
-#: src/quirebase/templates/pdf.html:19
+#: src/quirebase/templates/pdf.html:18
 #, python-brace-format
 msgid "{count} pages"
 msgstr ""
@@ -1764,7 +1804,7 @@ msgstr ""
 
 #: src/quirebase/templates/item.html:351
 #: src/quirebase/templates/online_search.html:16
-#: src/quirebase/templates/pdf.html:16
+#: src/quirebase/templates/pdf.html:15
 #, python-brace-format
 msgid "Page {page}"
 msgstr ""
@@ -1830,7 +1870,7 @@ msgstr ""
 msgid "All tags"
 msgstr ""
 
-#: src/quirebase/templates/library.html:15 src/quirebase/templates/pdf.html:18
+#: src/quirebase/templates/library.html:15 src/quirebase/templates/pdf.html:17
 msgid "Project"
 msgstr ""
 
@@ -2068,7 +2108,7 @@ msgstr ""
 msgid "Saving…"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:9 src/quirebase/templates/pdf.html:65
+#: src/quirebase/templates/pdf.html:9 src/quirebase/templates/pdf.html:64
 msgid "Note text"
 msgstr ""
 
@@ -2081,142 +2121,138 @@ msgid "Preparing download…"
 msgstr ""
 
 #: src/quirebase/templates/pdf.html:14
-msgid "Export failed"
-msgstr ""
-
-#: src/quirebase/templates/pdf.html:15
 msgid "Select one of your annotations."
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:17 src/quirebase/templates/pdf.html:59
+#: src/quirebase/templates/pdf.html:16 src/quirebase/templates/pdf.html:58
 msgid "Private"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:20
+#: src/quirebase/templates/pdf.html:19
 #, python-brace-format
 msgid "Unable to open PDF: {message}"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:24
+#: src/quirebase/templates/pdf.html:23
 msgid "Previous PDF page"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:25
+#: src/quirebase/templates/pdf.html:24
 msgid "Page"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:27
+#: src/quirebase/templates/pdf.html:26
 msgid "Next PDF page"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:30
+#: src/quirebase/templates/pdf.html:29
 msgid "Zoom out"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:31 src/quirebase/templates/pdf.html:34
+#: src/quirebase/templates/pdf.html:30 src/quirebase/templates/pdf.html:33
 msgid "Automatic zoom"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:32
+#: src/quirebase/templates/pdf.html:31
 msgid "Fit width"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:33
+#: src/quirebase/templates/pdf.html:32
 msgid "Fit page"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:36
+#: src/quirebase/templates/pdf.html:35
 msgid "Zoom in"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:39
+#: src/quirebase/templates/pdf.html:38
 msgid "Search PDF"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:40
+#: src/quirebase/templates/pdf.html:39
 msgid "Previous result"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:41
+#: src/quirebase/templates/pdf.html:40
 msgid "Next result"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:43
+#: src/quirebase/templates/pdf.html:42
 msgid "Annotation tools"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:45
+#: src/quirebase/templates/pdf.html:44
 msgid "Loading…"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:48
+#: src/quirebase/templates/pdf.html:47
 msgid "Current PDF"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:50
+#: src/quirebase/templates/pdf.html:49
 msgid "Annotations to include"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:50
+#: src/quirebase/templates/pdf.html:49
 msgid "Private annotations only"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:50
+#: src/quirebase/templates/pdf.html:49
 #, python-brace-format
 msgid "Private annotations and {project}"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:51
+#: src/quirebase/templates/pdf.html:50
 msgid "Download current PDF"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:52
+#: src/quirebase/templates/pdf.html:51
 msgid ""
 "This download contains only the current PDF revision. Stored files remain"
 " unchanged."
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:55
+#: src/quirebase/templates/pdf.html:54
 msgid "Text annotation type"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:56
+#: src/quirebase/templates/pdf.html:55
 msgid "Yellow"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:56
+#: src/quirebase/templates/pdf.html:55
 msgid "Green"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:57
+#: src/quirebase/templates/pdf.html:56
 msgid "Blue"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:57
+#: src/quirebase/templates/pdf.html:56
 msgid "Red"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:58
+#: src/quirebase/templates/pdf.html:57
 msgid "Delete selected"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:62
+#: src/quirebase/templates/pdf.html:61
 msgid "Annotation details"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:62
+#: src/quirebase/templates/pdf.html:61
 msgid "Close"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:63
+#: src/quirebase/templates/pdf.html:62
 msgid "Location"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:63
+#: src/quirebase/templates/pdf.html:62
 msgid "Visibility"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:66 src/quirebase/templates/project.html:7
+#: src/quirebase/templates/pdf.html:65 src/quirebase/templates/project.html:7
 msgid "Save"
 msgstr ""
 

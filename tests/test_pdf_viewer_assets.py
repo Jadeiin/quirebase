@@ -29,6 +29,15 @@ def test_application_sidebar_does_not_collide_with_pdfjs_sidebar_styles():
     assert "\n.sidebar {" not in application_css
 
 
+def test_saved_sidebar_collapse_preserves_mobile_layout():
+    css = (ROOT / "src/quirebase/static/app.css").read_text(encoding="utf-8")
+    mobile_rules = css.split("@media (max-width: 640px)", 1)[1]
+    assert "html.sidebar-collapsed body.app-layout" in mobile_rules
+    assert "body.sidebar-collapsed.app-layout" in mobile_rules
+    assert "width: min(82vw, 280px)" in mobile_rules
+    assert "body.sidebar-collapsed #pdf-app { left: 0; }" in mobile_rules
+
+
 def ensure_vendor_assets():
     vendor = ROOT / "src/quirebase/static/vendor"
     if not (vendor / "pdf.mjs").is_file():

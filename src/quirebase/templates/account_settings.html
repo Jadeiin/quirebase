@@ -1,6 +1,12 @@
 {% extends "base.html" %}
 {% block title %}{{ _('Account settings') }} · Quirebase{% endblock %}
 {% block content %}
+{% set status_messages = {
+  'Current password incorrect': _('Current password incorrect'),
+  'password must contain at least 12 characters': _('password must contain at least 12 characters'),
+  'New passwords do not match': _('New passwords do not match'),
+  'Password updated successfully': _('Password updated successfully'),
+} %}
 <div class="page-heading">
   <div>
     <p class="eyebrow">{{ _('Account management') }}</p>
@@ -10,13 +16,13 @@
 
 {% if error %}
 <div class="panel search-error" role="alert" style="margin-bottom: 1.25rem;">
-  <p>{{ _(error) }}</p>
+  <p>{{ status_messages.get(error, error) }}</p>
 </div>
 {% endif %}
 
 {% if success %}
 <div class="panel" role="status" style="margin-bottom: 1.25rem; border-color: #93c5ae; background: #eef7f2;">
-  <p style="color: var(--accent-strong); font-weight: 700; margin: 0;">{{ _(success) }}</p>
+  <p style="color: var(--accent-strong); font-weight: 700; margin: 0;">{{ status_messages.get(success, success) }}</p>
 </div>
 {% endif %}
 
@@ -63,18 +69,31 @@
       <div class="section-heading">
         <h2>{{ _('Change password') }}</h2>
       </div>
-      <form method="post" action="/account/settings/password?csrf_token={{ csrf }}" style="margin-top: 1rem;">
+      <form method="post" action="/account/settings/password?csrf_token={{ csrf }}" x-data="passwordStrength" style="margin-top: 1rem;">
         <label>
           {{ _('Current password') }}
           <input type="password" name="current_password" required autocomplete="current-password">
         </label>
         <label>
           {{ _('New password') }}
-          <input type="password" name="new_password" required autocomplete="new-password" minlength="8">
+          <input type="password" name="new_password" x-model="password" required autocomplete="new-password" minlength="12" aria-describedby="new-password-strength">
         </label>
+        <div class="password-strength" id="new-password-strength" x-show="password" x-cloak role="status" data-score="-1" :data-score="score">
+          <span class="password-strength-meter" aria-hidden="true"></span>
+          <p>
+            {{ _('Password strength') }}:
+            <span class="password-strength-value">
+              <span x-show="score === 0">{{ _('Very weak') }}</span>
+              <span x-show="score === 1">{{ _('Weak') }}</span>
+              <span x-show="score === 2">{{ _('Fair') }}</span>
+              <span x-show="score === 3">{{ _('Strong') }}</span>
+              <span x-show="score === 4">{{ _('Very strong') }}</span>
+            </span>
+          </p>
+        </div>
         <label>
           {{ _('Confirm new password') }}
-          <input type="password" name="confirm_password" required autocomplete="new-password" minlength="8">
+          <input type="password" name="confirm_password" required autocomplete="new-password" minlength="12">
         </label>
         <div class="form-actions" style="margin-top: .5rem;">
           <button type="submit">{{ _('Update password') }}</button>

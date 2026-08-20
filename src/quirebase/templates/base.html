@@ -12,7 +12,7 @@
     } catch (e) {}
   </script>
   <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
-  <script defer src="{{ url_for('static', path='/app.js') }}"></script>
+  <script type="module" src="{{ url_for('static', path='/app.js') }}"></script>
   {% block head %}{% endblock %}
 </head>
 <body class="{% if user %}app-layout{% else %}public-layout{% endif %}" :class="{ 'sidebar-collapsed': sidebarCollapsed }" x-data="appShell">

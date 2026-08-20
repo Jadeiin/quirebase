@@ -14,7 +14,9 @@ def test_alpine_is_bundled_locally_with_csp_compatible_build():
     bundle = read("src/quirebase/static/app.js")
     base = read("src/quirebase/templates/base.html")
     assert '"@alpinejs/csp": "3.15.12"' in package
-    assert "app.js" in base
+    assert (
+        "<script type=\"module\" src=\"{{ url_for('static', path='/app.js') }}\"></script>" in base
+    )
     assert len(bundle) > 10_000
     assert "sourceMappingURL" not in bundle
     assert "new Function" not in bundle
@@ -80,3 +82,22 @@ def test_pdf_toolbar_exposes_navigation_search_zoom_and_download():
     assert "/export?include_annotations=" in script
     assert "revision_id: revisionId" in script
     assert 'annotation.kind === "underline"' in script
+
+
+def test_password_form_aligns_frontend_validation_with_backend_policy():
+    package = read("package.json")
+    source = read("src/quirebase/assets/app.js")
+    bundle = read("src/quirebase/static/app.js")
+    template = read("src/quirebase/templates/account_settings.html")
+    assert '"@zxcvbn-ts/core": "4.2.0"' in package
+    assert '"@zxcvbn-ts/language-common": "4.1.3"' in package
+    assert '"@zxcvbn-ts/language-en": "4.1.1"' in package
+    assert 'import("@zxcvbn-ts/core")' in source
+    assert "new ZxcvbnFactory" in source
+    assert "passwordStrengthAnalyzer.check(value).score" in source
+    assert "--splitting" in package
+    assert len(bundle) < 200_000
+    assert 'import("./' in bundle
+    assert template.count('minlength="12"') == 2
+    assert template.count('minlength="8"') == 0
+    assert 'x-data="passwordStrength"' in template

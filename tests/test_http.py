@@ -141,6 +141,24 @@ def test_pdf_range_and_annotation_api(db, tmp_path, monkeypatch):
         assert len(exported_paths) == 1
         assert not exported_paths[0].exists()
 
+        failed_export_paths = []
+
+        def failing_export_annotations(source, target, annotations, author_names):
+            failed_export_paths.append(target)
+            raise RuntimeError("annotation export failed")
+
+        monkeypatch.setattr(
+            "quirebase.documents.bundles.export_annotations",
+            failing_export_annotations,
+        )
+        with pytest.raises(RuntimeError, match="annotation export failed"):
+            client.get(
+                f"/documents/{item.id}/revisions/{revision.id}/export",
+                params={"include_annotations": True},
+            )
+        assert len(failed_export_paths) == 1
+        assert not failed_export_paths[0].exists()
+
         underlined = client.post(
             f"/documents/{item.id}/annotations",
             headers={"X-CSRF-Token": "test-csrf"},

@@ -274,19 +274,23 @@ def export_revision_pdf(
 
     with NamedTemporaryFile(suffix=".pdf", delete=False) as target:
         target_path = Path(target.name)
-    author_names = {user.id: user.username}
-    if project_id:
-        author_rows = db.execute(
-            select(User.id, User.username).where(
-                User.id.in_({record.author_id for record in annotations})
-            )
-        ).all()
-        author_names = {row[0]: row[1] for row in author_rows}
-    export_annotations(
-        source,
-        target_path,
-        annotations,
-        author_names=author_names,
-    )
-    safe_name = _archive_name(Path(revision.original_name).stem, "document")
+    try:
+        author_names = {user.id: user.username}
+        if project_id:
+            author_rows = db.execute(
+                select(User.id, User.username).where(
+                    User.id.in_({record.author_id for record in annotations})
+                )
+            ).all()
+            author_names = {row[0]: row[1] for row in author_rows}
+        export_annotations(
+            source,
+            target_path,
+            annotations,
+            author_names=author_names,
+        )
+        safe_name = _archive_name(Path(revision.original_name).stem, "document")
+    except BaseException:
+        target_path.unlink(missing_ok=True)
+        raise
     return target_path, f"{safe_name}-annotated.pdf", "application/pdf", True

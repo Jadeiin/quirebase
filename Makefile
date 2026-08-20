@@ -24,7 +24,7 @@ make-p:
 
 # --- i18n / Babel Workflow ---
 i18n-extract:
-	$(PYBABEL) extract -F $(BABEL_CFG) -o $(POT_FILE) $(SRC_DIR)
+	$(PYBABEL) extract -F $(BABEL_CFG) -o $(POT_FILE) --project quirebase $(SRC_DIR)
 
 i18n-update:
 	$(PYBABEL) update -i $(POT_FILE) -d $(LOCALES_DIR)
