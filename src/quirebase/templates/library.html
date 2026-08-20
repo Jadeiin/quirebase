@@ -20,9 +20,10 @@
   </form>
 </section>
 
-<form method="post" action="/library/bulk?csrf_token={{ csrf }}" class="library-form">
-  <div class="bulk-bar">
-    <strong><span x-text="selectionLabel">{{ _('{count} paper(s) selected', count=0) }}</span></strong>
+  <form method="post" action="/library/bulk?csrf_token={{ csrf }}" class="library-form">
+    <div class="bulk-bar">
+      <input type="hidden" name="timezone" :value="browserTimezone()">
+      <strong><span x-text="selectionLabel">{{ _('{count} paper(s) selected', count=0) }}</span></strong>
     <select name="action" x-model="action" required>
       <option value="">{{ _('Choose action') }}</option>
       <option value="add_project">{{ _('Add to project') }}</option>

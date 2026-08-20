@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 from test_http import authenticated_client
 
-from quirebase.discovery import MetadataLookupError, MetadataNotFoundError
+from quirebase.discovery import Identifier, MetadataLookupError, MetadataNotFoundError
 from quirebase.models import Author, Item, ItemAuthor, ItemIdentifier, ItemTag, SystemSetting, Tag
 
 
@@ -223,7 +223,7 @@ def test_web_sync_metadata_and_bibtex_key_update(db, tmp_path, monkeypatch):
 
     with patch(
         "quirebase.library.identifiers.lookup_metadata",
-        return_value=("doi", mock_payload),
+        return_value=(Identifier("doi", "10.1038/s41586-019-1666-5"), mock_payload),
     ):
         response = client.post(
             f"/items/{item.id}/sync-metadata",
@@ -250,7 +250,10 @@ def test_web_sync_metadata_uses_effective_runtime_provider_settings(db, tmp_path
 
     with patch(
         "quirebase.library.identifiers.lookup_metadata",
-        return_value=(None, {"title": "Runtime-configured metadata"}),
+        return_value=(
+            Identifier("bibcode", "2024ApJ...123A...1X"),
+            {"title": "Runtime-configured metadata"},
+        ),
     ) as lookup:
         response = client.post(
             f"/items/{item.id}/sync-metadata?csrf_token=test-csrf",

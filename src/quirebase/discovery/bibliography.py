@@ -42,6 +42,29 @@ REFERENCE_TYPE_TO_ENDNOTE: dict[str, str] = {
     "webpage": "Web Page",
 }
 
+_BIBTEX_FIELD_NAME = re.compile(r"[^A-Za-z0-9_]")
+
+
+def _safe_bibtex_field_name(key: Any) -> str | None:
+    field = _BIBTEX_FIELD_NAME.sub("_", str(key).strip()).strip("_")
+    if not field:
+        return None
+    return f"field_{field}" if field[0].isdigit() else field
+
+
+def _add_bibtex_extra(extras: dict[str, str], reserved: set[str], key: Any, value: str) -> None:
+    field = _safe_bibtex_field_name(key)
+    if not field or field.casefold() in reserved:
+        return
+    candidate = field
+    suffix = 2
+    existing = {existing_field.casefold() for existing_field in extras}
+    while candidate.casefold() in existing:
+        candidate = f"{field}_{suffix}"
+        suffix += 1
+    extras[candidate] = value
+
+
 REFERENCE_TYPE_TO_BIBTEX: dict[str, str] = {
     "article": "article",
     "book": "book",
@@ -138,20 +161,21 @@ def _bibtex_extra_fields(
         if item.doi:
             identifiers["doi"] = item.doi
         for key, value in identifiers.items():
-            field = str(key).strip()
-            if field and field.casefold() not in reserved and value not in (None, ""):
-                extras[field] = str(value)
+            if value not in (None, ""):
+                _add_bibtex_extra(extras, reserved, key, str(value))
     if include_custom_fields and item.custom_fields:
         with suppress(json.JSONDecodeError):
             parsed = json.loads(item.custom_fields)
             if isinstance(parsed, dict):
                 for key, value in parsed.items():
-                    field = str(key).strip()
-                    if field and field.casefold() not in reserved and value not in (None, ""):
-                        extras[field] = (
+                    if value not in (None, ""):
+                        _add_bibtex_extra(
+                            extras,
+                            reserved,
+                            key,
                             json.dumps(value, ensure_ascii=False)
                             if isinstance(value, (dict, list))
-                            else str(value)
+                            else str(value),
                         )
     return extras
 

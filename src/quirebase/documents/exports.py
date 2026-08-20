@@ -34,6 +34,7 @@ def create_export_job(db: Session, user: User, item_id: str, data: ExportCreate)
             revision_id=data.revision_id,
             project_id=data.project_id,
             include_private=data.include_private,
+            timezone=data.timezone,
         ),
         idempotency_key=f"pdf.export:{user.id}:{data.revision_id}:{data.project_id}:{datetime.now(UTC).isoformat()}",
         owner_id=user.id,

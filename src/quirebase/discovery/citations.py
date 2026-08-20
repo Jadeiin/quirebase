@@ -53,6 +53,12 @@ class CitationStyleOption:
 
 
 @dataclass(frozen=True)
+class CitationStyleSelection:
+    matches: tuple[CitationStyleOption, ...]
+    included: CitationStyleOption | None
+
+
+@dataclass(frozen=True)
 class ExportOptions:
     include_abstract: bool = True
     preserve_case: bool = False
@@ -87,17 +93,32 @@ def _builtin_style_catalog() -> tuple[CitationStyleOption, ...]:
         return ()
 
 
-def list_builtin_citation_styles(
-    query: str = "", limit: int = 50
-) -> tuple[CitationStyleOption, ...]:
-    """Return installed CSL styles filtered by name or slug."""
-    query = query.strip().casefold()
+def select_builtin_citation_styles(
+    query: str = "", limit: int = 50, include: str = ""
+) -> CitationStyleSelection:
+    """Filter CSL styles and resolve an explicitly included style from one catalog snapshot."""
+    catalog = _builtin_style_catalog()
+    normalized_query = query.strip().casefold()
     matches = (
         option
-        for option in _builtin_style_catalog()
-        if not query or query in option.key.casefold() or query in option.name.casefold()
+        for option in catalog
+        if not normalized_query
+        or normalized_query in option.key.casefold()
+        or normalized_query in option.name.casefold()
     )
-    return tuple(list(matches)[: max(1, min(limit, 200))])
+    styles = tuple(list(matches)[: max(1, min(limit, 200))])
+    normalized_include = include.strip().casefold()
+    included = next(
+        (
+            option
+            for option in catalog
+            if normalized_include and option.key.casefold() == normalized_include
+        ),
+        None,
+    )
+    if included is not None and any(option.key == included.key for option in styles):
+        included = None
+    return CitationStyleSelection(matches=styles, included=included)
 
 
 # Keyed on canonical types only; callers normalize first (see

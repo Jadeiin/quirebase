@@ -2,7 +2,7 @@
   "private": true,
   "scripts": {
     "build": "bun scripts/build-assets.mjs && bun run build:app",
-    "build:app": "bun build src/quirebase/assets/app.js --outdir src/quirebase/static --entry-naming \"[name].[ext]\" --chunk-naming \"[name]-[hash].[ext]\" --minify --splitting",
+    "build:app": "bun build src/quirebase/assets/app.js src/quirebase/assets/sidebar-init.js src/quirebase/assets/pdf_viewer.js --outdir src/quirebase/static --entry-naming \"[name].[ext]\" --chunk-naming \"[name]-[hash].[ext]\" --minify --splitting",
     "test:oa:pdfjs": "bun scripts/check-oa-pdfjs.mjs"
   },
   "dependencies": {

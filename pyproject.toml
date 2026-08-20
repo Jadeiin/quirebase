@@ -24,6 +24,8 @@ dependencies = [
   "typer>=0.16,<1",
   "uvicorn[standard]>=0.35,<1",
   "babel>=2.18.0",
+  "tzdata>=2025.2; sys_platform == 'win32'",
+  "tzlocal>=5.3,<6",
 ]
 
 [project.optional-dependencies]
@@ -49,9 +51,13 @@ quirebase = "quirebase.cli:app"
 packages = ["src/quirebase"]
 
 [tool.hatch.build.targets.wheel.force-include]
+"src/quirebase/static" = "quirebase/static"
 "migrations" = "quirebase/migrations"
 "docs" = "quirebase/docs"
 "THIRD_PARTY.md" = "quirebase/THIRD_PARTY.md"
+
+[tool.hatch.build.targets.sdist.force-include]
+"src/quirebase/static" = "src/quirebase/static"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

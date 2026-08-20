@@ -44,6 +44,7 @@
           <label class="export-check" x-show="format === 'bibtex'"><input type="checkbox" x-model="includeCustomFields">{{ _('Include custom fields') }}</label>
           <div class="export-actions"><button type="button" @click="download()">{{ _('Download file') }}</button><button type="button" class="secondary-button" @click="copy()">{{ _('Copy to clipboard') }}</button></div>
           <small x-show="copied" x-cloak>{{ _('Copied') }}</small>
+          <small x-show="copyError" x-cloak>{{ _('Copy failed') }}</small>
           <div class="option-panel-footer"><button type="button" class="reset-preferences-btn" @click="resetDefaults()">{{ _('Reset to defaults') }}</button></div>
         </div>
       </details>

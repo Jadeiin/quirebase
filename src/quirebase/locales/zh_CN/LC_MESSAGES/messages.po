@@ -1387,6 +1387,9 @@ msgstr "复制到剪贴板"
 msgid "Copied"
 msgstr "已复制"
 
+msgid "Copy failed"
+msgstr "复制失败"
+
 #: src/quirebase/templates/item.html:50
 msgid "More"
 msgstr "更多"

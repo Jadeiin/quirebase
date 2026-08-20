@@ -4,18 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Quirebase{% endblock %}</title>
-  <script>
-    try {
-      if (JSON.parse(localStorage.getItem('quirebase:sidebar-collapsed') || 'false')) {
-        document.documentElement.classList.add('sidebar-collapsed');
-      }
-    } catch (e) {}
-  </script>
+  <script src="{{ url_for('static', path='/sidebar-init.js') }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
   <script type="module" src="{{ url_for('static', path='/app.js') }}"></script>
   {% block head %}{% endblock %}
 </head>
-<body class="{% if user %}app-layout{% else %}public-layout{% endif %}" :class="{ 'sidebar-collapsed': sidebarCollapsed }" x-data="appShell">
+<body class="{% if user %}app-layout{% else %}public-layout{% endif %}" x-data="appShell">
   {% if user %}
   <button class="mobile-nav-toggle" type="button" @click="toggleSidebar" :aria-expanded="sidebarOpen" aria-controls="app-sidebar" aria-label="{{ _('Toggle navigation') }}">☰</button>
   <button class="sidebar-scrim" type="button" x-show="sidebarOpen" @click="closeSidebar" aria-label="{{ _('Close navigation') }}"></button>

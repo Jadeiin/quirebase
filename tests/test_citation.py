@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 from quirebase.discovery import (
+    ExportOptions,
     builtin_style_xml,
     create_custom_citation_style,
     is_valid_csl,
     item_to_csl_json,
     render_citation,
     resolve_style_xml,
+    select_builtin_citation_styles,
 )
-from quirebase.discovery.citations import ExportOptions, list_builtin_citation_styles
 from quirebase.models import Item, User
 
 _counter = 0
@@ -62,9 +63,34 @@ def test_export_options_control_abstract_and_journal_abbreviation(db):
 
 
 def test_builtin_style_catalog_is_searchable(db):
-    styles = list_builtin_citation_styles("american medical", limit=10)
-    assert styles
-    assert any("medical" in style.name.lower() for style in styles)
+    selection = select_builtin_citation_styles("american medical", limit=10)
+
+    assert selection.included is None
+    assert selection.matches
+    assert any("medical" in style.name.lower() for style in selection.matches)
+
+
+def test_builtin_style_selection_reuses_one_catalog_snapshot(monkeypatch):
+    from quirebase.discovery import citations
+
+    catalog_calls = 0
+    catalog = (
+        citations.CitationStyleOption(key="matching", name="Matching Style"),
+        citations.CitationStyleOption(key="saved", name="Saved Style"),
+    )
+
+    def load_catalog():
+        nonlocal catalog_calls
+        catalog_calls += 1
+        return catalog
+
+    monkeypatch.setattr(citations, "_builtin_style_catalog", load_catalog)
+
+    selection = citations.select_builtin_citation_styles("matching", limit=1, include="saved")
+
+    assert catalog_calls == 1
+    assert selection.matches == (catalog[0],)
+    assert selection.included == catalog[1]
 
 
 def test_citation_copy_endpoint_accepts_export_options(db, tmp_path, monkeypatch):
@@ -107,6 +133,28 @@ def test_citation_style_search_includes_owned_custom_styles(db, tmp_path, monkey
         response = client.get("/api/citation-styles?query=searchable")
         assert response.status_code == 200
         assert response.json()["styles"][0]["name"] == "My Searchable Style"
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+
+
+def test_citation_style_search_includes_requested_saved_style(db, tmp_path, monkeypatch):
+    from test_http import authenticated_client
+
+    from quirebase.core.config import get_settings
+    from quirebase.web.app import app
+
+    client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+    try:
+        response = client.get("/api/citation-styles", params={"limit": 1, "include": "apa"})
+        assert response.status_code == 200
+        styles = response.json()["styles"]
+        assert len(styles) == 2
+        assert styles[-1] == {
+            "key": "apa",
+            "name": "APA Style 7th edition",
+            "scope": "builtin",
+        }
     finally:
         app.dependency_overrides.clear()
         get_settings.cache_clear()

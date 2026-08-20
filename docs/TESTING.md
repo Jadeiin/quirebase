@@ -29,6 +29,7 @@ calls or collaborator interactions.
 
 ```sh
 uv sync
+bun install && bun run build   # src/quirebase/static is generated, not tracked
 uv run prek install --hook-type pre-commit --hook-type pre-push --hook-type commit-msg
 uv run prek run --all-files
 uv run pytest -q -m "not oa"

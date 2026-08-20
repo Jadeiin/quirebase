@@ -1,5 +1,5 @@
-import * as pdfjsLib from "/static/vendor/pdf.mjs";
-import { EventBus, PDFLinkService, PDFFindController, PDFViewer } from "/static/vendor/pdf_viewer.mjs";
+import * as pdfjsLib from "pdfjs-dist";
+import { EventBus, PDFLinkService, PDFFindController, PDFViewer } from "pdfjs-dist/web/pdf_viewer.mjs";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = "/static/vendor/pdf.worker.mjs";
 
@@ -51,6 +51,14 @@ const api = async (url, options = {}) => {
 
 const annotationUrl = `/documents/${itemId}/annotations`;
 const contentUrl = `/documents/${itemId}/revisions/${revisionId}/content`;
+const exportUrl = `/documents/${itemId}/revisions/${revisionId}/export`;
+const browserTimezone = () => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+  } catch {
+    return "";
+  }
+};
 
 const showAnnotation = (annotation) => {
   selectedAnnotation = annotation;
@@ -247,11 +255,15 @@ document.querySelector("#viewer").addEventListener("click", saveNote, true);
 projectPicker.addEventListener("change", loadAnnotations);
 document.querySelector("#pdf-download-current").addEventListener("click", () => {
   const includeAnnotations = exportAnnotationsToggle.checked ? 1 : 0;
-  const project = downloadProject.value && includeAnnotations
-    ? `&project_id=${encodeURIComponent(downloadProject.value)}`
-    : "";
+  const params = new URLSearchParams({
+    include_annotations: String(includeAnnotations),
+    timezone: browserTimezone(),
+  });
+  if (downloadProject.value && includeAnnotations) {
+    params.set("project_id", downloadProject.value);
+  }
   status.textContent = message("downloading");
-  window.location.assign(`${contentUrl}/export?include_annotations=${includeAnnotations}${project}`);
+  window.location.assign(`${exportUrl}?${params.toString()}`);
 });
 document.querySelector("#delete-annotation").addEventListener("click", async () => {
   if (!selectedAnnotation || !selectedAnnotation.mine) return alert(message("selectOwnAnnotation"));

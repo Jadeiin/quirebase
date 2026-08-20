@@ -168,6 +168,7 @@ def export_revision_pdf_route(
     revision_id: str,
     include_annotations: bool = True,
     project_id: str | None = None,
+    timezone: str | None = None,
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
@@ -178,6 +179,7 @@ def export_revision_pdf_route(
         revision_id,
         include_annotations=include_annotations,
         project_id=project_id,
+        timezone=timezone,
     )
     cleanup_task = BackgroundTask(path.unlink, missing_ok=True) if temporary else None
     return FileResponse(

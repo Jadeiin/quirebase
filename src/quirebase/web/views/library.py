@@ -96,6 +96,7 @@ def library_bulk_action(
     include_custom_fields: bool = Form(default=False),
     include_annotations: bool = Form(default=False),
     include_supplements: bool = Form(default=False),
+    timezone: str = Form(default=""),
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
@@ -145,6 +146,7 @@ def library_bulk_action(
             item_ids,
             include_annotations=include_annotations,
             include_supplements=include_supplements,
+            timezone=timezone,
         )
         return StreamingResponse(
             archive.content,

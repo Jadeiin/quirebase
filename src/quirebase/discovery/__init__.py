@@ -9,6 +9,7 @@ from quirebase.discovery.bibliography import (
 from quirebase.discovery.citations import (
     REFERENCE_TYPE_TO_CSL,
     CitationStyleOption,
+    CitationStyleSelection,
     ExportOptions,
     builtin_style_xml,
     create_custom_citation_style,
@@ -19,11 +20,11 @@ from quirebase.discovery.citations import (
     get_item_citation_text_response,
     is_valid_csl,
     item_to_csl_json,
-    list_builtin_citation_styles,
     list_custom_citation_styles,
     render_bibliography,
     render_citation,
     resolve_style_xml,
+    select_builtin_citation_styles,
 )
 from quirebase.discovery.imports import (
     BatchConflict,
@@ -56,6 +57,7 @@ __all__ = [
     "SUPPORTED_FORMATS",
     "BatchConflict",
     "CitationStyleOption",
+    "CitationStyleSelection",
     "ExportOptions",
     "Identifier",
     "MetadataLookupError",
@@ -81,7 +83,6 @@ __all__ = [
     "import_unpublished_pdf",
     "is_valid_csl",
     "item_to_csl_json",
-    "list_builtin_citation_styles",
     "list_custom_citation_styles",
     "lookup_metadata",
     "parse_bibliography",
@@ -91,6 +92,7 @@ __all__ = [
     "render_citation",
     "resolve_style_xml",
     "search_metadata",
+    "select_builtin_citation_styles",
     "stage_import_batch",
     "stage_metadata_batch",
 ]

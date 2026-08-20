@@ -318,6 +318,7 @@ def download_item_route(
     revisions: str | None = None,
     include_annotations: bool = False,
     include_supplements: bool = False,
+    timezone: str | None = None,
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
@@ -329,6 +330,7 @@ def download_item_route(
         revision_ids=revision_ids,
         include_annotations=include_annotations,
         include_supplements=include_supplements,
+        timezone=timezone,
     )
     return StreamingResponse(
         bundle.content,

@@ -57,3 +57,4 @@ class ExportCreate(BaseModel):
     revision_id: str
     project_id: str | None = None
     include_private: bool = True
+    timezone: str | None = None

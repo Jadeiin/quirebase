@@ -6,7 +6,10 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse, JSONResponse
 
 from quirebase.core.database import get_db
-from quirebase.discovery import list_builtin_citation_styles, list_custom_citation_styles
+from quirebase.discovery import (
+    list_custom_citation_styles,
+    select_builtin_citation_styles,
+)
 from quirebase.documents import (
     create_export_job,
     get_export_file_path,
@@ -26,21 +29,44 @@ router = APIRouter()
 def citation_styles(
     query: str = "",
     limit: int = 50,
+    include: str = "",
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
     normalized = query.strip().casefold()
+    builtin_selection = select_builtin_citation_styles(query, limit=limit, include=include)
+    owned_custom_styles = list_custom_citation_styles(db, user)
     custom = [
         {"key": style.id, "name": style.name, "scope": "custom"}
-        for style in list_custom_citation_styles(db, user)
-        if not normalized or normalized in style.name.casefold()
+        for style in owned_custom_styles
+        if style.id != include and (not normalized or normalized in style.name.casefold())
+    ]
+    exact_custom = next(
+        (
+            {"key": style.id, "name": style.name, "scope": "custom"}
+            for style in owned_custom_styles
+            if include and style.id == include
+        ),
+        None,
+    )
+    included = []
+    if builtin_selection.included is not None:
+        included.append({
+            "key": builtin_selection.included.key,
+            "name": builtin_selection.included.name,
+            "scope": "builtin",
+        })
+    if exact_custom is not None:
+        included.append(exact_custom)
+    styles = [
+        {"key": style.key, "name": style.name, "scope": "builtin"}
+        for style in builtin_selection.matches
+    ][:limit] + custom[:limit]
+    included = [
+        style for style in included if not any(style["key"] == item["key"] for item in styles)
     ]
     return {
-        "styles": [
-            {"key": style.key, "name": style.name, "scope": "builtin"}
-            for style in list_builtin_citation_styles(query, limit=limit)
-        ][:limit]
-        + custom[:limit]
+        "styles": styles + included,
     }
 
 

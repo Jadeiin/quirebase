@@ -70,13 +70,42 @@ function storeExportPreferences(key, section, values) {
   }
 }
 
-function resetExportPreferences(key) {
+function resetExportPreferences(key, sections) {
   if (!key) return;
+  const sectionsToReset = Array.isArray(sections) ? sections : [sections];
+  const preferences = readExportPreferences(key);
+  sectionsToReset.forEach((section) => {
+    preferences[section] = { ...exportPreferenceDefaults[section] };
+  });
   try {
-    window.localStorage.removeItem(key);
+    window.localStorage.setItem(key, JSON.stringify({ schemaVersion: 1, ...preferences }));
   } catch {
     // best-effort
   }
+}
+
+async function fetchCitationStyles(query, limit, includeKey) {
+  const params = new URLSearchParams({ query, limit: String(limit) });
+  if (includeKey) params.set("include", includeKey);
+  const response = await fetch(`/api/citation-styles?${params.toString()}`);
+  if (!response.ok) throw new Error("failed to load citation styles");
+  const data = await response.json();
+  return data.styles || [];
+}
+
+function browserTimezone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+  } catch {
+    return "";
+  }
+ }
+
+function resolveCitationStyle(styles, requestedKey) {
+  if (!Array.isArray(styles) || styles.length === 0) return requestedKey;
+  return styles.some((style) => style.key === requestedKey)
+    ? requestedKey
+    : styles[0].key;
 }
 
 function readSidebarCollapsed() {
@@ -230,7 +259,7 @@ Alpine.data("userSettings", () => ({
     }, 2000);
   },
   resetDefaults() {
-    resetExportPreferences(this.storageKey);
+    resetExportPreferences(this.storageKey, ["citation", "document"]);
     this.format = exportPreferenceDefaults.citation.format;
     this.style = exportPreferenceDefaults.citation.style;
     this.includeAbstract = exportPreferenceDefaults.citation.includeAbstract;
@@ -328,7 +357,7 @@ Alpine.data("libraryWorkspace", () => ({
     });
   },
   resetDefaults() {
-    resetExportPreferences(this.storageKey);
+    resetExportPreferences(this.storageKey, ["citation", "document"]);
     const preferences = exportPreferenceDefaults.citation;
     this.style = preferences.style;
     this.includeAbstract = preferences.includeAbstract;
@@ -340,16 +369,15 @@ Alpine.data("libraryWorkspace", () => ({
     this.includeAnnotations = documentPreferences.includeAnnotations;
     this.includeSupplements = documentPreferences.includeSupplements;
   },
-  searchCitationStyles() {
-    fetch(`/api/citation-styles?query=${encodeURIComponent(this.styleQuery)}&limit=100`)
-      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("failed"))))
-      .then((data) => {
-        this.citationStyles = data.styles || [];
-        if (!this.citationStyles.some((style) => style.key === this.style)) {
-          this.style = this.citationStyles[0]?.key || "apa";
-        }
-      })
-      .catch(() => { this.citationStyles = []; });
+  browserTimezone,
+  async searchCitationStyles() {
+    try {
+      const styles = await fetchCitationStyles(this.styleQuery, 100, this.style);
+      this.style = resolveCitationStyle(styles, this.style);
+      this.citationStyles = styles;
+    } catch {
+      this.citationStyles = [];
+    }
   },
   get allSelected() {
     const checkboxes = this.$root.querySelectorAll('input[name="item_ids"]');
@@ -483,16 +511,18 @@ Alpine.data("itemDownload", () => ({
     });
   },
   resetDefaults() {
-    resetExportPreferences(this.storageKey);
+    resetExportPreferences(this.storageKey, "document");
     const preferences = exportPreferenceDefaults.document;
     this.includeAnnotations = preferences.includeAnnotations;
     this.includeSupplements = preferences.includeSupplements;
     this.selectedRevisions = [];
   },
+  browserTimezone,
   download() {
     const params = new URLSearchParams({
       include_annotations: String(this.includeAnnotations),
       include_supplements: String(this.includeSupplements),
+      timezone: browserTimezone(),
     });
     if (this.selectedRevisions.length > 0) {
       params.set("revisions", this.selectedRevisions.join(","));
@@ -512,6 +542,7 @@ Alpine.data("itemExport", () => ({
   includeIdentifiers: false,
   includeCustomFields: false,
   copied: false,
+  copyError: false,
   storageKey: "",
   init() {
     this.storageKey = this.$root.dataset.exportPreferencesKey || "";
@@ -542,7 +573,7 @@ Alpine.data("itemExport", () => ({
     });
   },
   resetDefaults() {
-    resetExportPreferences(this.storageKey);
+    resetExportPreferences(this.storageKey, "citation");
     const preferences = exportPreferenceDefaults.citation;
     this.format = preferences.format;
     this.style = preferences.style;
@@ -552,11 +583,12 @@ Alpine.data("itemExport", () => ({
     this.includeIdentifiers = preferences.includeIdentifiers;
     this.includeCustomFields = preferences.includeCustomFields;
   },
-  searchStyles() {
-    fetch(`/api/citation-styles?query=${encodeURIComponent(this.query)}`)
-      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("failed"))))
-      .then((data) => { this.styles = data.styles || []; })
-      .catch(() => { this.styles = []; });
+  async searchStyles() {
+    try {
+      this.styles = await fetchCitationStyles(this.query, 50, this.style);
+    } catch {
+      this.styles = [];
+    }
   },
   params() {
     const params = new URLSearchParams({
@@ -574,21 +606,41 @@ Alpine.data("itemExport", () => ({
     window.location.href = `/documents/${this.$root.dataset.itemId}/citation?${this.params()}`;
   },
   async copy() {
-    const response = await fetch(`/documents/${this.$root.dataset.itemId}/citation-copy?${this.params()}`);
-    if (!response.ok) return;
-    const text = await response.text();
+    this.copied = false;
+    this.copyError = false;
     try {
-      await navigator.clipboard.writeText(text);
+      const response = await fetch(
+        `/documents/${this.$root.dataset.itemId}/citation-copy?${this.params()}`,
+      );
+      if (!response.ok) throw new Error("citation request failed");
+      const text = await response.text();
+      let succeeded = false;
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          succeeded = true;
+        } catch {
+          succeeded = false;
+        }
+      }
+      if (!succeeded) {
+        const node = document.createElement("textarea");
+        node.value = text;
+        document.body.appendChild(node);
+        node.select();
+        try {
+          succeeded = document.execCommand("copy");
+        } finally {
+          node.remove();
+        }
+      }
+      if (!succeeded) throw new Error("clipboard copy failed");
+      this.copied = true;
+      window.setTimeout(() => { this.copied = false; }, 1800);
     } catch {
-      const node = document.createElement("textarea");
-      node.value = text;
-      document.body.appendChild(node);
-      node.select();
-      document.execCommand("copy");
-      node.remove();
+      this.copyError = true;
+      window.setTimeout(() => { this.copyError = false; }, 1800);
     }
-    this.copied = true;
-    window.setTimeout(() => { this.copied = false; }, 1800);
   },
 }));
 

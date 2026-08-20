@@ -86,7 +86,13 @@ def test_bibtex_export_can_include_identifiers_and_custom_fields(db):
     item = Item(
         title="Extra fields",
         identifiers=json.dumps({"openalex": "W123", "arxiv": "2401.00001"}),
-        custom_fields=json.dumps({"dataset_id": "DS-42", "reviewed": True}),
+        custom_fields=json.dumps({
+            "dataset_id": "DS-42",
+            "Study Quality": "High",
+            "study_quality": "Medium",
+            "foo:bar": "Baz",
+            "reviewed": True,
+        }),
         created_by=user.id,
     )
 
@@ -100,7 +106,19 @@ def test_bibtex_export_can_include_identifiers_and_custom_fields(db):
     assert "openalex = {W123}" in output
     assert "arxiv = {2401.00001}" in output
     assert "dataset_id = {DS-42}" in output
+    assert "Study_Quality = {High}" in output
+    assert "study_quality_2 = {Medium}" in output
+    assert "foo_bar = {Baz}" in output
     assert "reviewed = {True}" in output
+    records, errors = parse_bibliography(output, "bibtex")
+    assert errors == []
+    assert json.loads(records[0]["custom_fields"]) == {
+        "dataset_id": "DS-42",
+        "study_quality": "High",
+        "study_quality_2": "Medium",
+        "foo_bar": "Baz",
+        "reviewed": "True",
+    }
 
 
 def test_bibtex_import_preserves_braced_case_identifiers_and_custom_fields():

@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import UTC, tzinfo
 from typing import TYPE_CHECKING
 
 import pymupdf
 
+from quirebase.core.timezones import server_timezone
+
 if TYPE_CHECKING:
+    from datetime import datetime
     from pathlib import Path
 
     from quirebase.models import PdfAnnotation
@@ -98,12 +102,28 @@ def create_thumbnail(path: Path, output: Path) -> None:
         pixmap.save(output)
 
 
+def _pdf_date(value: datetime | None, display_timezone: tzinfo | None = None) -> str:
+    if value is None:
+        return ""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    value = value.astimezone(display_timezone or server_timezone())
+    total_minutes = int((value.utcoffset() or UTC.utcoffset(None)).total_seconds() // 60)
+    sign = "+" if total_minutes >= 0 else "-"
+    absolute_minutes = abs(total_minutes)
+    return (
+        value.strftime("D:%Y%m%d%H%M%S")
+        + f"{sign}{absolute_minutes // 60:02d}'{absolute_minutes % 60:02d}'"
+    )
+
+
 def export_annotations(
     source: Path,
     output: Path,
     annotations: list[PdfAnnotation],
     *,
     author_names: dict[str, str] | None = None,
+    display_timezone: tzinfo | None = None,
 ) -> None:
     author_names = author_names or {}
     with pymupdf.open(source) as document:
@@ -111,7 +131,14 @@ def export_annotations(
             raise ValueError("password-protected PDFs cannot be exported")
         for record in annotations:
             author_name = author_names.get(record.author_id, "")
+            info = {
+                "title": author_name,
+                "content": record.body or "",
+                "creationDate": _pdf_date(record.created_at, display_timezone),
+                "modDate": _pdf_date(record.updated_at or record.created_at, display_timezone),
+            }
             if record.kind in ("highlight", "underline"):
+                quads_by_page: dict[int, list[pymupdf.Quad]] = {}
                 for segment in record.segments:
                     values = [
                         segment.x1,
@@ -131,13 +158,16 @@ def export_annotations(
                         for i in range(0, 8, 2)
                     ]
                     quad = pymupdf.Quad(*points)
+                    quads_by_page.setdefault(segment.page_index, []).append(quad)
+                for page_index, quads in quads_by_page.items():
+                    page = document[page_index]
                     annotation = (
-                        page.add_highlight_annot(quad)
+                        page.add_highlight_annot(quads)
                         if record.kind == "highlight"
-                        else page.add_underline_annot(quad)
+                        else page.add_underline_annot(quads)
                     )
                     annotation.set_colors(stroke=COLORS[record.color])
-                    annotation.set_info(title=author_name, content=record.body or "")
+                    annotation.set_info(**info)
                     annotation.update(opacity=0.35 if record.kind == "highlight" else 0.9)
             else:
                 segment = record.segments[0]
@@ -146,7 +176,7 @@ def export_annotations(
                     page, pymupdf.Point(segment.anchor_x or 0, segment.anchor_y or 0)
                 )
                 annotation = page.add_text_annot(point, record.body or "")
-                annotation.set_info(title=author_name, content=record.body or "")
+                annotation.set_info(**info)
                 annotation.update()
         output.parent.mkdir(parents=True, exist_ok=True)
         document.save(output, garbage=4, deflate=True)

@@ -1,11 +1,22 @@
 import re
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).parents[1]
+VENDOR = ROOT / "src/quirebase/static/vendor"
+
+
+def require_vendor_assets() -> None:
+    if not (VENDOR / "pdf.mjs").is_file():
+        pytest.skip(
+            "src/quirebase/static is a build output directory; "
+            "run `bun install && bun run build` to exercise vendor asset checks"
+        )
 
 
 def test_pdf_viewer_container_meets_pdfjs_layout_contract():
-    css = (ROOT / "src/quirebase/static/app.css").read_text(encoding="utf-8")
+    css = (ROOT / "src/quirebase/assets/styles.css").read_text(encoding="utf-8")
     rule = re.search(r"#viewerContainer\s*\{([^}]*)\}", css)
     assert rule is not None
     declarations = rule.group(1)
@@ -15,14 +26,14 @@ def test_pdf_viewer_container_meets_pdfjs_layout_contract():
 
 def test_pdf_pages_use_one_content_origin_for_canvas_text_and_annotations():
     template = (ROOT / "src/quirebase/templates/pdf.html").read_text(encoding="utf-8")
-    script = (ROOT / "src/quirebase/static/pdf_viewer.js").read_text(encoding="utf-8")
+    script = (ROOT / "src/quirebase/assets/pdf_viewer.js").read_text(encoding="utf-8")
     assert 'class="pdfViewer removePageBorders"' in template
     assert 'page.querySelector(".canvasWrapper")' in script
 
 
 def test_application_sidebar_does_not_collide_with_pdfjs_sidebar_styles():
     base = (ROOT / "src/quirebase/templates/base.html").read_text(encoding="utf-8")
-    application_css = (ROOT / "src/quirebase/static/app.css").read_text(encoding="utf-8")
+    application_css = (ROOT / "src/quirebase/assets/styles.css").read_text(encoding="utf-8")
     assert 'class="app-sidebar"' in base
     assert ".app-sidebar {" in application_css
     assert 'class="sidebar"' not in base
@@ -30,7 +41,7 @@ def test_application_sidebar_does_not_collide_with_pdfjs_sidebar_styles():
 
 
 def test_saved_sidebar_collapse_preserves_mobile_layout():
-    css = (ROOT / "src/quirebase/static/app.css").read_text(encoding="utf-8")
+    css = (ROOT / "src/quirebase/assets/styles.css").read_text(encoding="utf-8")
     mobile_rules = css.split("@media (max-width: 640px)", 1)[1]
     assert "html.sidebar-collapsed body.app-layout" in mobile_rules
     assert "body.sidebar-collapsed.app-layout" in mobile_rules
@@ -38,31 +49,18 @@ def test_saved_sidebar_collapse_preserves_mobile_layout():
     assert "body.sidebar-collapsed #pdf-app { left: 0; }" in mobile_rules
 
 
-def ensure_vendor_assets():
-    vendor = ROOT / "src/quirebase/static/vendor"
-    if not (vendor / "pdf.mjs").is_file():
-        import shutil
-        import subprocess
-
-        bun = shutil.which("bun") or shutil.which("node")
-        if bun:
-            subprocess.run([bun, "scripts/build-assets.mjs"], cwd=str(ROOT), check=False)
-
-
 def test_bundled_pdfjs_assets_do_not_reference_missing_source_maps():
-    ensure_vendor_assets()
-    vendor = ROOT / "src/quirebase/static/vendor"
+    require_vendor_assets()
     for filename in ("pdf.mjs", "pdf.worker.mjs", "pdf_viewer.mjs"):
-        file_path = vendor / filename
+        file_path = VENDOR / filename
         if file_path.is_file():
             contents = file_path.read_text(encoding="utf-8")
             assert "sourceMappingURL" not in contents
 
 
 def test_pdf_viewer_stylesheet_does_not_reference_unused_image_assets():
-    ensure_vendor_assets()
-    vendor = ROOT / "src/quirebase/static/vendor"
-    css_file = vendor / "pdf_viewer.css"
+    require_vendor_assets()
+    css_file = VENDOR / "pdf_viewer.css"
     if css_file.is_file():
         stylesheet = css_file.read_text(encoding="utf-8")
         assert not re.findall(r'url\(["\']?images/', stylesheet)

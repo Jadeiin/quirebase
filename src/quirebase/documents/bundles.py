@@ -18,6 +18,7 @@ from quirebase.access.items import require_accessible_items
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceNotFound
 from quirebase.core.storage import LocalObjectStore
+from quirebase.core.timezones import annotation_export_timezone
 from quirebase.documents.annotations import select_visible_annotations
 from quirebase.models import Attachment, FileRevision, Item, PdfAnnotation, User
 from quirebase.pipeline.inspection import export_annotations
@@ -54,7 +55,12 @@ def _own_annotations(db: Session, user: User, revision_id: str) -> list[PdfAnnot
 
 
 def _write_annotated_pdf(
-    source: Path, target: Path, db: Session, user: User, revision_id: str
+    source: Path,
+    target: Path,
+    db: Session,
+    user: User,
+    revision_id: str,
+    timezone: str | None,
 ) -> bool:
     """Flatten the user's annotations onto a copy; return False when none exist."""
     annotations = _own_annotations(db, user, revision_id)
@@ -65,6 +71,7 @@ def _write_annotated_pdf(
         target,
         annotations,
         author_names={user.id: user.username},
+        display_timezone=annotation_export_timezone(timezone),
     )
     return True
 
@@ -103,6 +110,7 @@ def _write_item_bundle_entries(
     revision_ids: list[str] | None = None,
     include_annotations: bool = False,
     include_supplements: bool = False,
+    timezone: str | None = None,
 ) -> str:
     query = (
         select(FileRevision)
@@ -125,7 +133,7 @@ def _write_item_bundle_entries(
         exported = source
         if include_annotations:
             annotated = temporary_root / f"{revision.id}.pdf"
-            if _write_annotated_pdf(source, annotated, db, user, revision.id):
+            if _write_annotated_pdf(source, annotated, db, user, revision.id, timezone):
                 exported = annotated
         archive_filename = _bundle_path(root, filename)
         bundle.write(exported, archive_filename)
@@ -166,6 +174,7 @@ def create_item_document_bundle(
     revision_ids: list[str] | None = None,
     include_annotations: bool = False,
     include_supplements: bool = False,
+    timezone: str | None = None,
 ) -> ItemDownloadBundle:
     """Create a single-Item document bundle without changing source files."""
     item = require_accessible_items(db, user, [item_id])[0]
@@ -187,6 +196,7 @@ def create_item_document_bundle(
             revision_ids=revision_ids,
             include_annotations=include_annotations,
             include_supplements=include_supplements,
+            timezone=timezone,
         )
     record_event(
         db,
@@ -213,6 +223,7 @@ def assemble_document_bundle(
     *,
     include_annotations: bool = False,
     include_supplements: bool = False,
+    timezone: str | None = None,
 ) -> ItemDownloadBundle:
     """Assemble document archives for already-selected Items."""
     archive = BytesIO()
@@ -239,6 +250,7 @@ def assemble_document_bundle(
                 root=root,
                 include_annotations=include_annotations,
                 include_supplements=include_supplements,
+                timezone=timezone,
             )
             item_manifest.append({"item_id": item.id, "title": item.title, "folder": root})
         bundle.writestr(
@@ -250,6 +262,30 @@ def assemble_document_bundle(
     return ItemDownloadBundle(content=archive, filename=f"quirebase-selected-{kind}.zip")
 
 
+def _record_revision_pdf_export(
+    db: Session,
+    user: User,
+    item_id: str,
+    revision_id: str,
+    *,
+    include_annotations: bool,
+    project_id: str | None,
+) -> None:
+    record_event(
+        db,
+        user.id,
+        "item.download_revision_pdf",
+        "revision",
+        revision_id,
+        detail={
+            "item_id": item_id,
+            "include_annotations": include_annotations,
+            "project_id": project_id,
+        },
+    )
+    db.commit()
+
+
 def export_revision_pdf(
     db: Session,
     user: User,
@@ -258,6 +294,7 @@ def export_revision_pdf(
     *,
     include_annotations: bool = True,
     project_id: str | None = None,
+    timezone: str | None = None,
 ) -> tuple[Path, str, str, bool]:
     """Export a single FileRevision, optionally flattening annotations onto the PDF."""
     revision = require_revision(db, user, revision_id)
@@ -266,10 +303,26 @@ def export_revision_pdf(
     store = LocalObjectStore()
     source = store.path(revision.object_key)
     if not include_annotations:
+        _record_revision_pdf_export(
+            db,
+            user,
+            item_id,
+            revision_id,
+            include_annotations=include_annotations,
+            project_id=project_id,
+        )
         return source, revision.original_name, "application/pdf", False
 
     annotations = select_visible_annotations(db, user, revision.id, item_id, project_id)
     if not annotations:
+        _record_revision_pdf_export(
+            db,
+            user,
+            item_id,
+            revision_id,
+            include_annotations=include_annotations,
+            project_id=project_id,
+        )
         return source, revision.original_name, "application/pdf", False
 
     with NamedTemporaryFile(suffix=".pdf", delete=False) as target:
@@ -288,8 +341,21 @@ def export_revision_pdf(
             target_path,
             annotations,
             author_names=author_names,
+            display_timezone=annotation_export_timezone(timezone),
         )
         safe_name = _archive_name(Path(revision.original_name).stem, "document")
+    except BaseException:
+        target_path.unlink(missing_ok=True)
+        raise
+    try:
+        _record_revision_pdf_export(
+            db,
+            user,
+            item_id,
+            revision_id,
+            include_annotations=include_annotations,
+            project_id=project_id,
+        )
     except BaseException:
         target_path.unlink(missing_ok=True)
         raise

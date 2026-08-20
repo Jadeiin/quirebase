@@ -277,7 +277,7 @@ def _sync_metadata_from_upstream(
     previous_generated_key = generate_bibtex_key(item)
     previous_key = item.bibtex_id
 
-    _, record = lookup_metadata(uid_value, provider=provider, settings=settings)
+    upstream_identifier, record = lookup_metadata(uid_value, provider=provider, settings=settings)
     version = db.scalar(
         update(Item)
         .where(Item.id == item_id, Item.version == expected_version)
@@ -294,10 +294,12 @@ def _sync_metadata_from_upstream(
         raise VersionConflict(current.version if current else None)
 
     db.refresh(item)
-    normalized_uid = normalize_doi(uid_value)
+    normalized_upstream_value = normalize_doi(upstream_identifier.value)
     forced_identifiers = (
-        {provider: uid_value}
-        if provider and uid_value and not DOI_PATTERN.fullmatch(normalized_uid)
+        {upstream_identifier.provider: upstream_identifier.value}
+        if upstream_identifier.provider
+        and upstream_identifier.value
+        and not DOI_PATTERN.fullmatch(normalized_upstream_value)
         else None
     )
     apply_metadata_record(
@@ -327,7 +329,7 @@ def _sync_metadata_from_upstream(
         "item",
         item_id,
         detail={
-            "provider": provider,
+            "provider": upstream_identifier.provider,
             "old_bibtex_key": previous_key,
             "new_bibtex_key": item.bibtex_id,
             "bibtex_key_updated": bool(

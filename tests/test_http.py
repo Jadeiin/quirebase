@@ -13,8 +13,18 @@ from quirebase.core.crypto import token_hash
 from quirebase.core.database import get_db
 from quirebase.core.errors import VersionConflict
 from quirebase.core.storage import LocalObjectStore
+from quirebase.documents.bundles import export_revision_pdf
 from quirebase.library import ItemMetadata, revise_item_metadata
-from quirebase.models import AuditEvent, FileRevision, Item, LoginSession, User
+from quirebase.models import (
+    AuditEvent,
+    FileRevision,
+    Item,
+    LoginSession,
+    Project,
+    ProjectItem,
+    ProjectMember,
+    User,
+)
 from quirebase.web.app import app
 
 
@@ -123,27 +133,55 @@ def test_pdf_range_and_annotation_api(db, tmp_path, monkeypatch):
         db.commit()
 
         exported_paths = []
+        exported_timezones = []
 
-        def fake_export_annotations(source, target, annotations, author_names):
+        def fake_export_annotations(source, target, annotations, author_names, **kwargs):
             target.write_bytes(source.read_bytes())
             exported_paths.append(target)
+            exported_timezones.append(kwargs.get("display_timezone"))
 
         monkeypatch.setattr(
             "quirebase.documents.bundles.export_annotations",
             fake_export_annotations,
         )
+        project = Project(name="Current revision export", created_by=item.created_by)
+        db.add(project)
+        db.flush()
+        db.add_all([
+            ProjectMember(project_id=project.id, user_id=item.created_by, role="owner"),
+            ProjectItem(project_id=project.id, item_id=item.id),
+        ])
+        db.commit()
         exported = client.get(
             f"/documents/{item.id}/revisions/{revision.id}/export",
-            params={"include_annotations": True},
+            params={
+                "include_annotations": True,
+                "project_id": project.id,
+                "timezone": "Asia/Shanghai",
+            },
         )
         assert exported.status_code == 200
         assert "paper-annotated.pdf" in exported.headers["content-disposition"]
         assert len(exported_paths) == 1
         assert not exported_paths[0].exists()
+        assert str(exported_timezones[0]) == "Asia/Shanghai"
+        events = (
+            db
+            .query(AuditEvent)
+            .filter_by(action="item.download_revision_pdf", target_id=revision.id)
+            .all()
+        )
+        details = [json.loads(event.detail) for event in events]
+        assert {
+            "item_id": item.id,
+            "include_annotations": True,
+            "project_id": project.id,
+        } in details
+        assert all(event.actor_id == item.created_by for event in events)
 
         failed_export_paths = []
 
-        def failing_export_annotations(source, target, annotations, author_names):
+        def failing_export_annotations(source, target, annotations, author_names, **kwargs):
             failed_export_paths.append(target)
             raise RuntimeError("annotation export failed")
 
@@ -158,6 +196,31 @@ def test_pdf_range_and_annotation_api(db, tmp_path, monkeypatch):
             )
         assert len(failed_export_paths) == 1
         assert not failed_export_paths[0].exists()
+
+        monkeypatch.setattr(
+            "quirebase.documents.bundles.export_annotations",
+            fake_export_annotations,
+        )
+
+        def failing_record(*args, **kwargs):
+            raise RuntimeError("audit recording failed")
+
+        monkeypatch.setattr(
+            "quirebase.documents.bundles._record_revision_pdf_export",
+            failing_record,
+        )
+        exported_paths.clear()
+        user = db.get(User, item.created_by)
+        with pytest.raises(RuntimeError, match="audit recording failed"):
+            export_revision_pdf(
+                db,
+                user,
+                item.id,
+                revision.id,
+                include_annotations=True,
+            )
+        assert len(exported_paths) == 1
+        assert not exported_paths[0].exists()
 
         underlined = client.post(
             f"/documents/{item.id}/annotations",

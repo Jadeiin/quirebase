@@ -14,6 +14,7 @@ from quirebase.core.config import get_settings
 from quirebase.core.database import SessionLocal
 from quirebase.core.errors import ResourceUnavailable, ValidationFailure
 from quirebase.core.storage import LocalObjectStore
+from quirebase.core.timezones import annotation_export_timezone
 from quirebase.models import (
     AnnotationScope,
     FileRevision,
@@ -158,11 +159,13 @@ def handle_pdf_export_annotations(db: Session, job: Job, payload: dict[str, Any]
         select(User.id, User.username).where(User.id.in_({record.author_id for record in records}))
     ).all()
     author_names: dict[str, str] = {row[0]: row[1] for row in author_rows}
+    display_timezone = annotation_export_timezone(payload.get("timezone"))
     export_annotations(
         LocalObjectStore().path(revision.object_key),
         get_settings().export_dir / filename,
         records,
         author_names=author_names,
+        display_timezone=display_timezone,
     )
     return {"filename": filename}
 

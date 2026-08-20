@@ -116,6 +116,7 @@ def download_selected_item_documents(
     *,
     include_annotations: bool = False,
     include_supplements: bool = False,
+    timezone: str | None = None,
 ) -> ItemDownloadBundle:
     items = require_accessible_items(db, user, item_ids)
     bundle = assemble_document_bundle(
@@ -124,6 +125,7 @@ def download_selected_item_documents(
         items,
         include_annotations=include_annotations,
         include_supplements=include_supplements,
+        timezone=timezone,
     )
     record_event(
         db,

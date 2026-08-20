@@ -13,4 +13,6 @@ dist/
 .agents/
 .claude/
 skills-lock.json
-src/quirebase/static/vendor/
+# src/quirebase/static is a pure build output directory (bun run build);
+# only src/quirebase/assets, package.json and bun.lock are tracked sources.
+src/quirebase/static/

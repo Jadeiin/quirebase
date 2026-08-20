@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from quirebase.core.errors import VersionConflict
+from quirebase.discovery.lookup import Identifier
 from quirebase.library.identifiers import (
     generate_bibtex_key,
     get_item_identifiers,
@@ -139,7 +140,10 @@ def test_sync_metadata_from_upstream(db):
         "reference_type": "article",
     }
 
-    with patch("quirebase.library.identifiers.lookup_metadata", return_value=(None, mock_record)):
+    with patch(
+        "quirebase.library.identifiers.lookup_metadata",
+        return_value=(Identifier("doi", "10.1002/j.1538-7305.1948.tb01338.x"), mock_record),
+    ):
         updated_item = sync_metadata_from_upstream(
             db,
             user,
@@ -172,7 +176,10 @@ def test_sync_by_doi_does_not_store_doi_as_provider_identifier(db):
     db.commit()
 
     record = {"title": "Updated", "doi": "10.1000/canonical"}
-    with patch("quirebase.library.identifiers.lookup_metadata", return_value=(None, record)):
+    with patch(
+        "quirebase.library.identifiers.lookup_metadata",
+        return_value=(Identifier("openalex", "10.1000/canonical"), record),
+    ):
         sync_metadata_from_upstream(
             db,
             user,
@@ -195,7 +202,10 @@ def test_non_doi_sync_preserves_existing_canonical_doi_when_upstream_omits_it(db
     db.commit()
 
     record = {"title": "Updated", "identifiers": {"pmid": "12345678"}}
-    with patch("quirebase.library.identifiers.lookup_metadata", return_value=(None, record)):
+    with patch(
+        "quirebase.library.identifiers.lookup_metadata",
+        return_value=(Identifier("openalex", "W123"), record),
+    ):
         sync_metadata_from_upstream(
             db,
             user,
@@ -238,7 +248,10 @@ def test_sync_metadata_cleans_html_and_syncs_bibtex_type(db):
         "reference_type": "journal-article",
     }
 
-    with patch("quirebase.library.identifiers.lookup_metadata", return_value=(None, mock_record)):
+    with patch(
+        "quirebase.library.identifiers.lookup_metadata",
+        return_value=(Identifier("doi", "10.1038/s41586-019-1666-5"), mock_record),
+    ):
         updated = sync_metadata_from_upstream(
             db,
             user,
@@ -285,7 +298,10 @@ def test_sync_metadata_from_upstream_rejects_a_stale_version(db):
     with (
         Session(db.bind, expire_on_commit=False) as first,
         Session(db.bind, expire_on_commit=False) as second,
-        patch("quirebase.library.identifiers.lookup_metadata", return_value=(None, record)),
+        patch(
+            "quirebase.library.identifiers.lookup_metadata",
+            return_value=(Identifier("doi", "10.1000/current"), record),
+        ),
     ):
         first_owner = first.get(User, owner.id)
         second_owner = second.get(User, owner.id)
@@ -315,3 +331,31 @@ def test_sync_metadata_from_upstream_rejects_a_stale_version(db):
     saved = db.get(Item, item.id)
     assert saved.title == "Upstream title"
     assert saved.version == 2
+
+
+def test_sync_metadata_uses_normalized_upstream_identifier(db):
+    user = User(username="normalized_upstream_sync", password_hash="hash")
+    db.add(user)
+    db.flush()
+    item = Item(title="Initial", doi="10.1000/canonical", created_by=user.id)
+    db.add(item)
+    db.commit()
+
+    record = {"title": "Updated"}
+    with patch(
+        "quirebase.library.identifiers.lookup_metadata",
+        return_value=(Identifier("openalex", "W123"), record),
+    ):
+        sync_metadata_from_upstream(
+            db,
+            user,
+            item.id,
+            item.version,
+            provider="openalex",
+            uid_value="https://openalex.org/W123",
+        )
+
+    assert item.doi == "10.1000/canonical"
+    assert [
+        (identifier.provider, identifier.value) for identifier in get_item_identifiers(db, item.id)
+    ] == [("openalex", "W123")]
