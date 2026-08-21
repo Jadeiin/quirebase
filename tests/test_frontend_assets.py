@@ -37,18 +37,19 @@ def test_alpine_is_bundled_locally_with_csp_compatible_build():
     assert "new Function" not in bundle
 
 
-def test_wheel_force_includes_generated_static_assets():
+def test_wheel_includes_generated_static_assets_as_optional_artifacts():
     with (ROOT / "pyproject.toml").open("rb") as pyproject:
         config = tomllib.load(pyproject)
-    force_include = config["tool"]["hatch"]["build"]["targets"]["wheel"]["force-include"]
-    assert force_include["src/quirebase/static"] == "quirebase/static"
+    wheel = config["tool"]["hatch"]["build"]["targets"]["wheel"]
+    assert wheel["artifacts"] == ["src/quirebase/static"]
+    assert "src/quirebase/static" not in wheel["force-include"]
 
 
-def test_sdist_force_includes_generated_static_assets():
+def test_sdist_includes_generated_static_assets_as_optional_artifacts():
     with (ROOT / "pyproject.toml").open("rb") as pyproject:
         config = tomllib.load(pyproject)
-    force_include = config["tool"]["hatch"]["build"]["targets"]["sdist"]["force-include"]
-    assert force_include["src/quirebase/static"] == "src/quirebase/static"
+    sdist = config["tool"]["hatch"]["build"]["targets"]["sdist"]
+    assert sdist["artifacts"] == ["src/quirebase/static"]
 
 
 def test_asset_build_cleans_output_before_writing_files():
