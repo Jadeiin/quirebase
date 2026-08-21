@@ -26,11 +26,13 @@ dependencies = [
   "babel>=2.18.0",
   "tzdata>=2025.2; sys_platform == 'win32'",
   "tzlocal>=5.3,<6",
+  "yake>=0.7,<0.8",
 ]
 
 [project.optional-dependencies]
 postgres = ["psycopg[binary]>=3.2,<4"]
 citation = ["citeproc-py>=0.10,<0.11", "citeproc-py-styles>=0.1.6,<0.2"]
+keybert = ["keybert>=0.9,<0.10", "model2vec>=0.6,<1"]
 
 [dependency-groups]
 dev = [
@@ -113,7 +115,20 @@ warn_unused_ignores = true
 exclude = ["migrations/"]
 
 [[tool.mypy.overrides]]
-module = ["bibtexparser", "bibtexparser.*", "rispy", "citeproc", "citeproc.*", "citeproc_styles"]
+module = [
+  "bibtexparser",
+  "bibtexparser.*",
+  "citeproc",
+  "citeproc.*",
+  "citeproc_styles",
+  "keybert",
+  "keybert.*",
+  "model2vec",
+  "model2vec.*",
+  "rispy",
+  "yake",
+  "yake.*",
+]
 ignore_missing_imports = true
 
 [tool.commitizen]

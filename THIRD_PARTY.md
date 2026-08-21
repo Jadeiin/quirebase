@@ -8,6 +8,13 @@ Core PDF components:
 - PyMuPDF — AGPL-3.0-only or commercial license. Quirebase uses it under AGPL-3.0-only.
 - bibtexparser — LGPL-3.0-or-later, used for BibTeX parsing and serialization.
 - RISpy — MIT, used for RIS parsing and serialization.
+- YAKE 0.7.x — used as the default local keyword extractor. Its package metadata says LGPL-3.0,
+  while the upstream distribution's actual LICENSE is AGPL-3.0-or-later; Quirebase records and
+  distributes it under the latter, more restrictive license.
+- KeyBERT 0.9.x — MIT, optional (`keybert` extra) semantic keyphrase extraction.
+- Model2Vec — MIT, optional (`keybert` extra) static embedding runtime. Administrator-provided
+  model files are separate works: deployments must record each model's source, license and SHA-256
+  independently and may configure `QUIREBASE_KEYBERT_MODEL_SHA256` for verification.
 - citeproc-py — BSD-2-Clause-Views, the CSL 1.0.1 processor for formatted citations.
 - citeproc-py-styles — MIT, optional (`citation` extra) CSL style repository used for built-in styles.
 - Alpine.js CSP build 3.15.12 — MIT, bundled from the pinned `@alpinejs/csp` package for local UI interactions without enabling `unsafe-eval`.

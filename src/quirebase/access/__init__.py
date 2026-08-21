@@ -1,11 +1,7 @@
 from __future__ import annotations
 
 from quirebase.access.annotations import can_edit_annotation, require_editable_annotation
-from quirebase.access.documents import (
-    can_read_attachment,
-    require_attachment,
-    require_revision,
-)
+from quirebase.access.documents import require_attachment, require_revision
 from quirebase.access.items import (
     can_delete_item,
     can_edit_item,
@@ -26,7 +22,6 @@ __all__ = [
     "can_delete_item",
     "can_edit_annotation",
     "can_edit_item",
-    "can_read_attachment",
     "can_read_item",
     "editable_projects",
     "project_member",

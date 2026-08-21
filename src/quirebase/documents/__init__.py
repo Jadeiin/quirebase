@@ -21,6 +21,7 @@ from quirebase.documents.exports import (
 from quirebase.documents.revisions import (
     UnsupportedMediaType,
     create_attachment,
+    delete_unreferenced_objects,
     get_attachment_file,
     get_pdf_viewer_data,
     get_revision_file,
@@ -37,6 +38,7 @@ __all__ = [
     "create_export_job",
     "create_item_document_bundle",
     "delete_document_annotation",
+    "delete_unreferenced_objects",
     "export_revision_pdf",
     "get_attachment_file",
     "get_export_file_path",

@@ -17,6 +17,7 @@ from quirebase.library.bulk_items import (
 from quirebase.library.catalog import find_duplicates, get_dashboard_data, search_library
 from quirebase.library.discussions import add_discussion_message, delete_discussion_message
 from quirebase.library.identifiers import (
+    create_item_from_metadata_record,
     rescan_pdf_doi,
     sync_metadata_from_upstream,
 )
@@ -84,6 +85,7 @@ __all__ = [
     "admin_delete_item",
     "apply_bulk_item_action",
     "create_item",
+    "create_item_from_metadata_record",
     "delete_discussion_message",
     "delete_item",
     "delete_tag",

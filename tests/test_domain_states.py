@@ -26,10 +26,9 @@ from quirebase.pipeline.jobs import enqueue_job
 from quirebase.projects.members import (
     ProjectMemberConflict,
     add_project_member,
-    list_project_members,
     remove_project_member,
 )
-from quirebase.projects.workspaces import create_project
+from quirebase.projects.workspaces import create_project, open_project_workspace
 
 
 def state_records(db):
@@ -120,7 +119,8 @@ def test_project_membership_preserves_an_owner_and_returns_domain_roles(db):
     added = add_project_member(db, owner, project.id, teammate.username, ProjectRole.editor)
     assert added.role == ProjectRole.editor
     assert [
-        (user.username, role) for user, role in list_project_members(db, owner, project.id)
+        (member.user.username, member.role)
+        for member in open_project_workspace(db, owner, project.id).members
     ] == [
         (owner.username, ProjectRole.owner),
         (teammate.username, ProjectRole.editor),
@@ -128,7 +128,8 @@ def test_project_membership_preserves_an_owner_and_returns_domain_roles(db):
 
     remove_project_member(db, owner, project.id, teammate.id)
     assert [
-        (user.username, role) for user, role in list_project_members(db, owner, project.id)
+        (member.user.username, member.role)
+        for member in open_project_workspace(db, owner, project.id).members
     ] == [(owner.username, ProjectRole.owner)]
 
 

@@ -74,6 +74,18 @@
       <input type="search" x-model="tagFilter" placeholder="{{ _('Filter tags (e.g. machine learning)...') }}">
     </div>
 
+    {% if manageable_tags and tags|length > 1 %}
+    <form class="tag-merge-form" x-data="tagMerge" method="post" action="/tools/tags/merge?csrf_token={{ csrf }}" onsubmit="return confirm('{{ _('Merge the source Tag into the target Tag? The source Tag will be deleted.') }}')">
+      <label>{{ _('Source Tag') }}
+        <select name="source_tag_id" required @change="ensureDifferentTags">{% for tag in manageable_tags %}<option value="{{ tag.id }}">{{ tag.name }}</option>{% endfor %}</select>
+      </label>
+      <label>{{ _('Target Tag') }}
+        <select name="target_tag_id" required>{% for tag, count in tags %}<option value="{{ tag.id }}">{{ tag.name }} · {{ _('{count} paper(s)', count=count) }}</option>{% endfor %}</select>
+      </label>
+      <button>{{ _('Merge Tags') }}</button>
+    </form>
+    {% endif %}
+
     <div class="tag-management-list">
       {% for tag, count in tags %}
       <article x-show="isTagVisible('{{ tag.id }}')">

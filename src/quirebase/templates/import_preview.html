@@ -5,17 +5,26 @@
   <h1>{{ _('Import preview') }}</h1>
   <p>{{ _('{count} record(s) parsed.', count=records|length) }}</p>
   {% if errors %}
-    <h2>{{ _('Errors') }}</h2>
-    <ul>{% for error in errors %}<li>{{ _('Record {row}: {message}', row=error.row, message=_(error.message)) }}</li>{% endfor %}</ul>
-    <p>{{ _('Fix the source file and {try_again}. No records were imported.', try_again='<a href="/bibliography/import">' ~ _('try again') ~ '</a>')|safe }}</p>
-  {% else %}
+    <h2>{{ _('Diagnostics') }}</h2>
+    <ul>{% for error in errors %}<li><strong>{{ error.filename or _('Record {row}', row=error.row) }}</strong>:
+      {% if error.code == 'missing_doi' %}{{ _('No DOI was found in this PDF.') }}
+      {% elif error.code == 'existing_doi' %}{{ _('An accessible item already has this DOI.') }}
+      {% elif error.code == 'duplicate_batch_doi' %}{{ _('Another PDF in this batch has the same DOI.') }}
+      {% else %}{{ _(error.message) }}{% endif %}
+    </li>{% endfor %}</ul>
+    {% if batch.file_format != 'pdf' %}<p>{{ _('Fix the source file and {try_again}. No records were imported.', try_again='<a href="/bibliography/import">' ~ _('try again') ~ '</a>')|safe }}</p>{% endif %}
+  {% endif %}
+  {% if records and (not errors or batch.file_format == 'pdf') %}
     <form method="post" action="/bibliography/import/{{ batch.id }}?csrf_token={{ csrf }}">
       <button>{{ _('Import all records') }}</button>
     </form>
   {% endif %}
+  <form method="post" action="/bibliography/import/{{ batch.id }}/discard?csrf_token={{ csrf }}">
+    <button class="secondary-button">{{ _('Discard import batch') }}</button>
+  </form>
   <ol>
     {% for record in records %}
-      <li><strong>{{ record.title or _('(missing title)') }}</strong> — {{ record.authors or '' }}</li>
+      <li><strong>{{ record.title or _('(missing title)') }}</strong> — {{ record.authors or '' }}{% if record._pdf %}<small> · {{ record._pdf.original_name }} · {{ record._pdf.detected_doi }}</small>{% endif %}</li>
     {% endfor %}
   </ol>
 </section>

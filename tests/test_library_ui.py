@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import zipfile
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
@@ -9,8 +10,18 @@ import pymupdf
 from test_http import authenticated_client
 
 from quirebase.core.config import get_settings
-from quirebase.discovery.lookup import MetadataNotFoundError
-from quirebase.models import Item, ItemRead, ItemTag, Project, ProjectItem, ProjectMember, Tag, User
+from quirebase.core.storage import LocalObjectStore
+from quirebase.models import (
+    ImportBatch,
+    Item,
+    ItemRead,
+    ItemTag,
+    Project,
+    ProjectItem,
+    ProjectMember,
+    Tag,
+    User,
+)
 from quirebase.web.app import app
 
 
@@ -22,10 +33,10 @@ def pdf_bytes() -> bytes:
     return contents
 
 
-def published_pdf_bytes() -> bytes:
+def published_pdf_bytes(doi: str = "10.1000/published") -> bytes:
     document = pymupdf.open()
     page = document.new_page()
-    page.insert_text((72, 72), "https://doi.org/10.1000/published")
+    page.insert_text((72, 72), f"https://doi.org/{doi}")
     contents = document.tobytes()
     document.close()
     return contents
@@ -235,7 +246,7 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
         get_settings.cache_clear()
 
 
-def test_pdf_import_modules(db, tmp_path, monkeypatch):
+def test_pdf_import_batch_previews_before_creating_items(db, tmp_path, monkeypatch):
     client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
     try:
         import_page = client.get("/bibliography/import")
@@ -246,64 +257,263 @@ def test_pdf_import_modules(db, tmp_path, monkeypatch):
         assert 'data-method="manual"' in import_page.text
         assert "IEEE Xplore" in import_page.text
 
-        uploaded = client.post(
-            "/imports/pdf/unpublished?csrf_token=test-csrf",
-            data={
-                "title": "Working manuscript",
-                "authors": "A. Author",
-                "keywords": "draft; methods",
-            },
-            files={"pdf": ("draft.pdf", BytesIO(pdf_bytes()), "application/pdf")},
-            follow_redirects=False,
-        )
-        assert uploaded.status_code == 303
-        manuscript = db.query(Item).filter_by(title="Working manuscript").one()
-        assert manuscript.reference_type == "unpublished"
-        assert manuscript.revisions[0].original_name == "draft.pdf"
-
         monkeypatch.setattr(
             "quirebase.discovery.imports.lookup_metadata",
-            lambda _identifier, _provider, *args, **kwargs: (
+            lambda identifier, _provider, *args, **kwargs: (
                 object(),
                 {
-                    "title": "Published article",
-                    "doi": "10.1000/published",
+                    "title": f"Article {identifier.rsplit('/', 1)[-1]}",
+                    "doi": identifier,
                     "authors": "P. Author",
                 },
             ),
         )
-        published = client.post(
+        preview = client.post(
             "/imports/pdf/published?csrf_token=test-csrf",
-            files={"pdf": ("published.pdf", BytesIO(published_pdf_bytes()), "application/pdf")},
-            follow_redirects=False,
+            files=[
+                (
+                    "pdfs",
+                    ("first.pdf", BytesIO(published_pdf_bytes("10.1000/first")), "application/pdf"),
+                ),
+                (
+                    "pdfs",
+                    (
+                        "second.pdf",
+                        BytesIO(published_pdf_bytes("10.1000/second")),
+                        "application/pdf",
+                    ),
+                ),
+            ],
         )
-        assert published.status_code == 303
-        article = db.query(Item).filter_by(title="Published article").one()
-        assert article.doi == "10.1000/published"
-        assert article.revisions[0].original_name == "published.pdf"
+        assert preview.status_code == 200
+        assert "first.pdf" in preview.text
+        assert "second.pdf" in preview.text
+        assert db.query(Item).filter(Item.title.like("Article %")).count() == 0
+
+        batch = db.query(ImportBatch).filter_by(file_format="pdf").one()
+        assert f"/bibliography/import/{batch.id}" in preview.text
+
+        committed = client.post(
+            f"/bibliography/import/{batch.id}?csrf_token=test-csrf", follow_redirects=False
+        )
+        assert committed.status_code == 303
+        first = db.query(Item).filter_by(doi="10.1000/first").one()
+        second = db.query(Item).filter_by(doi="10.1000/second").one()
+        assert first.revisions[0].original_name == "first.pdf"
+        assert second.revisions[0].original_name == "second.pdf"
+        assert db.get(ImportBatch, batch.id) is None
     finally:
         app.dependency_overrides.clear()
         get_settings.cache_clear()
 
 
-def test_failed_published_pdf_import_removes_unreferenced_object(db, tmp_path, monkeypatch):
+def test_pdf_import_batch_keeps_successes_and_reports_failed_files(db, tmp_path, monkeypatch):
     client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
     objects_before = set(get_settings().object_dir.rglob("*.pdf"))
     monkeypatch.setattr(
         "quirebase.discovery.imports.lookup_metadata",
-        lambda _identifier, _provider, *args, **kwargs: (_ for _ in ()).throw(
-            MetadataNotFoundError("metadata not found")
+        lambda identifier, _provider, *args, **kwargs: (
+            object(),
+            {"title": "Importable article", "doi": identifier},
         ),
     )
     try:
-        response = client.post(
+        preview = client.post(
             "/imports/pdf/published?csrf_token=test-csrf",
-            data={"doi": "10.1000/missing"},
-            files={"pdf": ("missing.pdf", BytesIO(pdf_bytes()), "application/pdf")},
+            files=[
+                (
+                    "pdfs",
+                    ("valid.pdf", BytesIO(published_pdf_bytes("10.1000/valid")), "application/pdf"),
+                ),
+                ("pdfs", ("missing-doi.pdf", BytesIO(pdf_bytes()), "application/pdf")),
+            ],
         )
+        assert preview.status_code == 200
+        assert "valid.pdf" in preview.text
+        assert "missing-doi.pdf" in preview.text
+        batch = db.query(ImportBatch).filter_by(file_format="pdf").one()
+        assert '"code": "missing_doi"' in batch.errors
+        assert f"/bibliography/import/{batch.id}" in preview.text
+        assert len(set(get_settings().object_dir.rglob("*.pdf")) - objects_before) == 1
 
-        assert response.status_code == 404
+        committed = client.post(
+            f"/bibliography/import/{batch.id}?csrf_token=test-csrf", follow_redirects=False
+        )
+        assert committed.status_code == 303
+        article = db.query(Item).filter_by(doi="10.1000/valid").one()
+        assert article.revisions[0].original_name == "valid.pdf"
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+
+
+def test_pdf_import_batch_rejects_an_accessible_duplicate_doi(db, tmp_path, monkeypatch):
+    client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+    item.doi = "10.1000/existing"
+    db.commit()
+    objects_before = set(get_settings().object_dir.rglob("*.pdf"))
+    try:
+        preview = client.post(
+            "/imports/pdf/published?csrf_token=test-csrf",
+            files=[
+                (
+                    "pdfs",
+                    (
+                        "duplicate.pdf",
+                        BytesIO(published_pdf_bytes("10.1000/existing")),
+                        "application/pdf",
+                    ),
+                )
+            ],
+        )
+        assert preview.status_code == 200
+        assert "duplicate.pdf" in preview.text
+        batch = db.query(ImportBatch).filter_by(file_format="pdf").one()
+        assert '"code": "existing_doi"' in batch.errors
+        assert batch.records == "[]"
+        assert f'action="/bibliography/import/{batch.id}?csrf_token=' not in preview.text
         assert set(get_settings().object_dir.rglob("*.pdf")) == objects_before
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+
+
+def test_discard_pdf_import_batch_removes_staged_objects(db, tmp_path, monkeypatch):
+    client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+    objects_before = set(get_settings().object_dir.rglob("*.pdf"))
+    monkeypatch.setattr(
+        "quirebase.discovery.imports.lookup_metadata",
+        lambda identifier, _provider, *args, **kwargs: (
+            object(),
+            {"title": "Discarded candidate", "doi": identifier},
+        ),
+    )
+    try:
+        preview = client.post(
+            "/imports/pdf/published?csrf_token=test-csrf",
+            files=[
+                (
+                    "pdfs",
+                    (
+                        "discard.pdf",
+                        BytesIO(published_pdf_bytes("10.1000/discard")),
+                        "application/pdf",
+                    ),
+                )
+            ],
+        )
+        assert preview.status_code == 200
+        batch = db.query(ImportBatch).filter_by(file_format="pdf").one()
+        assert len(set(get_settings().object_dir.rglob("*.pdf")) - objects_before) == 1
+
+        discarded = client.post(
+            f"/bibliography/import/{batch.id}/discard?csrf_token=test-csrf",
+            follow_redirects=False,
+        )
+        assert discarded.status_code == 303
+        assert discarded.headers["location"] == "/bibliography/import"
+        assert db.get(ImportBatch, batch.id) is None
+        assert set(get_settings().object_dir.rglob("*.pdf")) == objects_before
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+
+
+def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(db, tmp_path, monkeypatch):
+    client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+    shared_pdf = published_pdf_bytes("10.1000/shared-staged")
+    monkeypatch.setattr(
+        "quirebase.discovery.imports.lookup_metadata",
+        lambda identifier, _provider, *args, **kwargs: (
+            object(),
+            {"title": "Shared staged PDF", "doi": identifier},
+        ),
+    )
+    try:
+        for filename in ("first-copy.pdf", "second-copy.pdf"):
+            preview = client.post(
+                "/imports/pdf/published?csrf_token=test-csrf",
+                files=[
+                    (
+                        "pdfs",
+                        (
+                            filename,
+                            BytesIO(shared_pdf),
+                            "application/pdf",
+                        ),
+                    )
+                ],
+            )
+            assert preview.status_code == 200
+
+        batches = db.query(ImportBatch).filter_by(file_format="pdf").all()
+        assert len(batches) == 2
+        first_pdf = json.loads(batches[0].records)[0]["_pdf"]
+        second_pdf = json.loads(batches[1].records)[0]["_pdf"]
+        assert first_pdf["object_key"] == second_pdf["object_key"]
+        object_path = LocalObjectStore().path(first_pdf["object_key"])
+        assert object_path.is_file()
+
+        discarded = client.post(
+            f"/bibliography/import/{batches[0].id}/discard?csrf_token=test-csrf",
+            follow_redirects=False,
+        )
+        assert discarded.status_code == 303
+        assert object_path.is_file()
+
+        committed = client.post(
+            f"/bibliography/import/{batches[1].id}?csrf_token=test-csrf",
+            follow_redirects=False,
+        )
+        assert committed.status_code == 303
+        imported = db.query(Item).filter_by(doi="10.1000/shared-staged").one()
+        assert LocalObjectStore().path(imported.revisions[0].object_key).is_file()
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+
+
+def test_commit_pdf_import_batch_rechecks_doi_after_stale_preview(db, tmp_path, monkeypatch):
+    client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        "quirebase.discovery.imports.lookup_metadata",
+        lambda identifier, _provider, *args, **kwargs: (
+            object(),
+            {"title": "Stale DOI candidate", "doi": identifier},
+        ),
+    )
+    try:
+        for filename in ("first-preview.pdf", "stale-preview.pdf"):
+            preview = client.post(
+                "/imports/pdf/published?csrf_token=test-csrf",
+                files=[
+                    (
+                        "pdfs",
+                        (
+                            filename,
+                            BytesIO(published_pdf_bytes("10.1000/stale-preview")),
+                            "application/pdf",
+                        ),
+                    )
+                ],
+            )
+            assert preview.status_code == 200
+
+        batches = db.query(ImportBatch).filter_by(file_format="pdf").all()
+        assert len(batches) == 2
+        first = client.post(
+            f"/bibliography/import/{batches[0].id}?csrf_token=test-csrf",
+            follow_redirects=False,
+        )
+        assert first.status_code == 303
+
+        stale = client.post(
+            f"/bibliography/import/{batches[1].id}?csrf_token=test-csrf",
+            follow_redirects=False,
+        )
+        assert stale.status_code == 409
+        assert db.query(Item).filter_by(doi="10.1000/stale-preview").count() == 1
+        assert db.get(ImportBatch, batches[1].id) is not None
     finally:
         app.dependency_overrides.clear()
         get_settings.cache_clear()

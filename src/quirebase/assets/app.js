@@ -398,8 +398,26 @@ Alpine.data("libraryWorkspace", () => ({
 
 Alpine.data("importWorkspace", () => ({
   active: "doi",
+  pdfFileNames: [],
   selectMethod() {
     this.active = this.$event.currentTarget.dataset.method;
+  },
+  addPdfFiles() {
+    const input = this.$event.currentTarget;
+    const selectedByFingerprint = new Map();
+    const previouslySelected = input._quirebaseSelectedFiles || [];
+    [...previouslySelected, ...Array.from(input.files || [])].forEach((file) => {
+      const fingerprint = `${file.name}:${file.size}:${file.lastModified}`;
+      selectedByFingerprint.set(fingerprint, file);
+    });
+    const selectedFiles = [...selectedByFingerprint.values()];
+    if (typeof DataTransfer === "function") {
+      const transfer = new DataTransfer();
+      selectedFiles.forEach((file) => transfer.items.add(file));
+      input.files = transfer.files;
+    }
+    input._quirebaseSelectedFiles = selectedFiles;
+    this.pdfFileNames = selectedFiles.map((file) => file.name);
   },
 }));
 
@@ -666,6 +684,24 @@ Alpine.data("tagMatrix", () => ({
   },
   get query() {
     return this.filter.trim().toLowerCase();
+  },
+}));
+
+Alpine.data("tagMerge", () => ({
+  init() {
+    this.ensureDifferentTags();
+  },
+  ensureDifferentTags() {
+    const source = this.$root.querySelector('select[name="source_tag_id"]');
+    const target = this.$root.querySelector('select[name="target_tag_id"]');
+    if (!source || !target) return;
+    Array.from(target.options).forEach((option) => {
+      option.disabled = option.value === source.value;
+    });
+    if (target.value === source.value) {
+      const alternative = Array.from(target.options).find((option) => !option.disabled);
+      if (alternative) target.value = alternative.value;
+    }
   },
 }));
 

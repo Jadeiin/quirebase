@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from quirebase.access.items import (
     can_edit_item,
@@ -15,8 +16,11 @@ from quirebase.core.errors import (
     PermissionDenied,
     ValidationFailure,
 )
-from quirebase.core.storage import LocalObjectStore
-from quirebase.documents import ItemDownloadBundle, assemble_document_bundle
+from quirebase.documents import (
+    ItemDownloadBundle,
+    assemble_document_bundle,
+    delete_unreferenced_objects,
+)
 from quirebase.library.tags import get_or_create_tag
 from quirebase.models import (
     Attachment,
@@ -26,6 +30,9 @@ from quirebase.models import (
     User,
 )
 from quirebase.search import search_index
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 
 def apply_bulk_item_action(
@@ -96,15 +103,7 @@ def apply_bulk_item_action(
     )
     db.commit()
 
-    for object_key in cleanup_keys:
-        with Session(db.bind) as cleanup_db:
-            still_used = cleanup_db.scalar(
-                select(FileRevision.id).where(FileRevision.object_key == object_key).limit(1)
-            ) or cleanup_db.scalar(
-                select(Attachment.id).where(Attachment.object_key == object_key).limit(1)
-            )
-        if not still_used:
-            LocalObjectStore().delete(object_key)
+    delete_unreferenced_objects(db, cleanup_keys)
 
     return cleanup_keys
 

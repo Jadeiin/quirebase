@@ -17,6 +17,7 @@ from quirebase.library import (
 from quirebase.library import (
     find_duplicates,
     list_accessible_tags_with_counts,
+    merge_tags,
 )
 from quirebase.library import (
     rename_tag as rename_tag_op,
@@ -48,6 +49,9 @@ def tools_page(
     groups = find_duplicates(db, user, mode)
     tags = list_accessible_tags_with_counts(db, user)
     tags_data = [{"id": tag.id, "name": tag.name, "count": count} for tag, count in tags]
+    manageable_tags = [
+        tag for tag, _count in tags if tag.created_by == user.id or user.role == "administrator"
+    ]
     custom_styles = list_custom_citation_styles(db, user)
     return templates.TemplateResponse(
         request,
@@ -61,6 +65,7 @@ def tools_page(
             "groups": groups,
             "tags": tags,
             "tags_data": tags_data,
+            "manageable_tags": manageable_tags,
             "custom_styles": custom_styles,
             "active_page": "tools",
         },
@@ -86,6 +91,17 @@ def delete_citation_style(
 ):
     delete_custom_citation_style(db, user, style_id)
     return RedirectResponse("/tools?tab=citation-styles#citation-styles", status_code=303)
+
+
+@router.post("/tools/tags/merge", dependencies=[Depends(require_csrf)])
+def merge_tag_route(
+    source_tag_id: str = Form(),
+    target_tag_id: str = Form(),
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    merge_tags(db, user, source_tag_id, target_tag_id)
+    return RedirectResponse("/tools?tab=tags#tags", status_code=303)
 
 
 @router.post("/tools/tags/{tag_id}", dependencies=[Depends(require_csrf)])

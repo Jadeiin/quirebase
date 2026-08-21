@@ -102,6 +102,11 @@ class TagMatrix:
     groups: tuple[TagGroup, ...]
     assigned_ids: frozenset[str]
     recommended_ids: frozenset[str]
+    suggested_names: tuple[str, ...]
+    suggested_single_words: tuple[str, ...]
+    suggested_phrases: tuple[str, ...]
+    recommendation_state: str
+    recommendation_error: str | None
 
 
 @dataclass(frozen=True)
@@ -269,6 +274,13 @@ def _typed_tag_matrix(raw: dict[str, Any]) -> TagMatrix:
         ),
         assigned_ids=frozenset(cast("set[str]", raw["assigned_ids"])),
         recommended_ids=frozenset(cast("set[str]", raw["recommended_ids"])),
+        suggested_names=tuple(cast("tuple[str, ...]", raw["suggested_names"])),
+        suggested_single_words=tuple(cast("tuple[str, ...]", raw["suggested_single_words"])),
+        suggested_phrases=tuple(cast("tuple[str, ...]", raw["suggested_phrases"])),
+        recommendation_state=str(raw["recommendation_state"]),
+        recommendation_error=(
+            str(raw["recommendation_error"]) if raw["recommendation_error"] else None
+        ),
     )
 
 

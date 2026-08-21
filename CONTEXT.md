@@ -50,14 +50,26 @@ _Avoid_: Annotation, Comment
 
 **Tag**:
 A user-defined taxonomy label attached to Items for cross-cutting categorization.
+Item Keywords may be presented as suggested Tag names, but become Tags only after explicit User
+selection.
 _Avoid_: Category, Keyword, Folder
+
+**Item Tag Recommendation**:
+A transient, ranked set of single-word and compound-phrase candidate Tag names generated from an
+Item's title, abstract and latest ready File Revision. A recommendation is never a Tag until a User
+selects it.
+_Avoid_: Item Keyword, Tag, automatic Tag
 
 **Candidate Record**:
 An uncommitted bibliographic metadata payload retrieved via Discovery or Identifier Lookup, subject to preview before Import.
 _Avoid_: Staged Item, Provisional Work
 
 **Import Batch**:
-A staged collection of parsed Candidate Records and diagnostics from a bibliography file awaiting confirmation into the Library.
+A staged collection of Candidate Records and diagnostics from a bibliography file, Identifier
+Lookup or uploaded PDFs awaiting confirmation into the Library. A PDF Candidate Record retains
+its staged file until confirmation creates the Item and associated File Revision, or until the
+Import Batch is discarded. Content-addressed staged files shared by multiple pending Import
+Batches remain stored until the final referencing batch is confirmed or discarded.
 _Avoid_: Staged Import, Import Queue
 
 **Import**:
@@ -127,6 +139,7 @@ An immutable record of a security-sensitive or data-changing action.
 - An Item has zero or more Contributors in an ordered bibliographic role.
 - An Invitation provisions one new User with an assigned System Role.
 - An Item has zero or more File Revisions, Attachments, Tags, and Discussion Messages.
+- An Item has at most one current Item Tag Recommendation generation.
 - An Item may belong to multiple Projects.
 - A Project has members with an assigned Project Role (owner, editor, or viewer).
 - An Annotation belongs to exactly one File Revision.

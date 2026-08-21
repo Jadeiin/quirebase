@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     openalex_api_key: str | None = None
     nasa_ads_token: str | None = None
     ieee_api_key: str | None = None
+    recommendation_engine: str = "yake"
+    recommendation_max_chars: int = Field(default=200_000, ge=1_000, le=2_000_000)
+    keybert_model_path: Path | None = None
+    keybert_model_sha256: str | None = None
 
     @property
     def allowed_host_list(self) -> list[str]:

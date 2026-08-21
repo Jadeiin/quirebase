@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
-from typing import Any, BinaryIO
+from typing import TYPE_CHECKING, Any, BinaryIO
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -20,6 +21,7 @@ from quirebase.core.storage import LocalObjectStore
 from quirebase.models import (
     Attachment,
     FileRevision,
+    ImportBatch,
     Item,
     Job,
     Project,
@@ -28,6 +30,9 @@ from quirebase.models import (
     User,
 )
 from quirebase.pipeline.inspection import job_payload, validate_pdf_container
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 
 class UnsupportedMediaType(DomainError):
@@ -77,16 +82,51 @@ def attach_staged_pdf(
     return revision
 
 
-def discard_staged_object(db: Session, object_key: str) -> None:
-    """Remove a staged object only when no committed record references it."""
+def _pdf_import_object_keys(records_json: str) -> set[str]:
+    try:
+        records = json.loads(records_json)
+    except (json.JSONDecodeError, TypeError):
+        return set()
+    if not isinstance(records, list):
+        return set()
+    return {
+        object_key
+        for record in records
+        if isinstance(record, dict)
+        and isinstance((pdf := record.get("_pdf")), dict)
+        and isinstance((object_key := pdf.get("object_key")), str)
+    }
+
+
+def delete_unreferenced_objects(db: Session, object_keys: Iterable[str]) -> tuple[str, ...]:
+    """Delete objects only when no committed or pending domain record references them."""
+    keys = tuple(dict.fromkeys(key for key in object_keys if key))
+    if not keys:
+        return ()
     with Session(db.bind) as check_db:
-        used = check_db.scalar(
-            select(FileRevision.id).where(FileRevision.object_key == object_key).limit(1)
-        ) or check_db.scalar(
-            select(Attachment.id).where(Attachment.object_key == object_key).limit(1)
+        referenced = set(
+            check_db.scalars(
+                select(FileRevision.object_key).where(FileRevision.object_key.in_(keys))
+            ).all()
         )
-    if not used:
-        LocalObjectStore().delete(object_key)
+        referenced.update(
+            check_db.scalars(
+                select(Attachment.object_key).where(Attachment.object_key.in_(keys))
+            ).all()
+        )
+        for records in check_db.scalars(
+            select(ImportBatch.records).where(ImportBatch.file_format == "pdf")
+        ):
+            referenced.update(_pdf_import_object_keys(records))
+    deleted = tuple(key for key in keys if key not in referenced)
+    store = LocalObjectStore()
+    for object_key in deleted:
+        store.delete(object_key)
+    return deleted
+
+
+def discard_staged_object(db: Session, object_key: str) -> None:
+    delete_unreferenced_objects(db, (object_key,))
 
 
 def store_pdf_revision(

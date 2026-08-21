@@ -21,6 +21,7 @@ EXPECTED_TABLES = {
     "item_identifiers",
     "item_reads",
     "item_tags",
+    "item_tag_recommendations",
     "items",
     "jobs",
     "login_sessions",

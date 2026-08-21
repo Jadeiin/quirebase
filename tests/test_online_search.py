@@ -505,7 +505,7 @@ def test_extra_search_fallback_identifiers_without_doi():
 
 
 def test_fallback_identifiers_can_be_staged_for_import(db, monkeypatch):
-    from quirebase.discovery.imports import stage_metadata_batch
+    from quirebase.discovery.imports import stage_identifier_import_batch
     from quirebase.models import User
 
     monkeypatch.setenv("QUIREBASE_NASA_ADS_TOKEN", "ads-token")
@@ -551,7 +551,7 @@ def test_fallback_identifiers_can_be_staged_for_import(db, monkeypatch):
     db.add(user)
     db.flush()
 
-    batch_nasa, records_nasa, errors_nasa = stage_metadata_batch(
+    batch_nasa, records_nasa, errors_nasa = stage_identifier_import_batch(
         db,
         user,
         "2025ApJ...123..456A",
@@ -562,7 +562,7 @@ def test_fallback_identifiers_can_be_staged_for_import(db, monkeypatch):
     assert len(records_nasa) == 1
     assert batch_nasa.file_format == "metadata:bibcode"
 
-    batch_ieee, records_ieee, errors_ieee = stage_metadata_batch(
+    batch_ieee, records_ieee, errors_ieee = stage_identifier_import_batch(
         db,
         user,
         "9876543",

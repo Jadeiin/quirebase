@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from quirebase.discovery.activity import get_user_imported_identifiers, record_search_audit
+from quirebase.discovery.activity import (
+    get_accessible_item_identifiers,
+    record_discovery_search_audit,
+)
 from quirebase.discovery.bibliography import (
     SUPPORTED_FORMATS,
     export_bibliography,
@@ -30,12 +33,12 @@ from quirebase.discovery.imports import (
     BatchConflict,
     UpstreamServiceError,
     commit_import_batch,
+    discard_import_batch,
     export_accessible_bibliography,
     export_selected_bibliography,
-    import_published_pdf,
-    import_unpublished_pdf,
+    stage_identifier_import_batch,
     stage_import_batch,
-    stage_metadata_batch,
+    stage_pdf_import_batch,
 )
 from quirebase.discovery.lookup import (
     Identifier,
@@ -71,28 +74,28 @@ __all__ = [
     "commit_import_batch",
     "create_custom_citation_style",
     "delete_custom_citation_style",
+    "discard_import_batch",
     "export_accessible_bibliography",
     "export_bibliography",
     "export_selected_bibliography",
     "format_csl_export",
     "format_standard_export",
+    "get_accessible_item_identifiers",
     "get_item_citation_response",
     "get_item_citation_text_response",
-    "get_user_imported_identifiers",
-    "import_published_pdf",
-    "import_unpublished_pdf",
     "is_valid_csl",
     "item_to_csl_json",
     "list_custom_citation_styles",
     "lookup_metadata",
     "parse_bibliography",
     "parse_identifier",
-    "record_search_audit",
+    "record_discovery_search_audit",
     "render_bibliography",
     "render_citation",
     "resolve_style_xml",
     "search_metadata",
     "select_builtin_citation_styles",
+    "stage_identifier_import_batch",
     "stage_import_batch",
-    "stage_metadata_batch",
+    "stage_pdf_import_batch",
 ]

@@ -23,6 +23,7 @@ from quirebase.discovery.lookup import (
 from quirebase.library.authors import parse_author_name, set_item_authors_from_string
 from quirebase.models import FileRevision, Item, ItemIdentifier, User
 from quirebase.pipeline.inspection import first_doi_from_text
+from quirebase.recommendations import request_item_tag_recommendation
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
@@ -264,6 +265,20 @@ def apply_metadata_record(
     return item
 
 
+def create_item_from_metadata_record(
+    db: Session,
+    user: User,
+    record: MetadataRecord | dict,
+) -> Item:
+    """Create an imported Item and enqueue its initial Tag recommendation."""
+    item = Item(title="Untitled", created_by=user.id)
+    db.add(item)
+    db.flush()
+    apply_metadata_record(db, user, item, record)
+    request_item_tag_recommendation(db, item.id, owner_id=user.id)
+    return item
+
+
 def _sync_metadata_from_upstream(
     db: Session,
     user: User,
@@ -322,6 +337,7 @@ def _sync_metadata_from_upstream(
     db.flush()
 
     search_index(db).index_item(db, item_id)
+    request_item_tag_recommendation(db, item_id, owner_id=user.id)
     record_event(
         db,
         user.id,

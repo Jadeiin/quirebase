@@ -14,8 +14,8 @@ from quirebase.projects import (
     create_project as create_project_op,
 )
 from quirebase.projects import (
-    get_project_workspace_data,
     list_user_projects,
+    open_project_workspace,
 )
 from quirebase.projects import (
     remove_project_member as remove_project_member_op,
@@ -67,7 +67,7 @@ def project_page(
     login_session: LoginSession = Depends(current_login),
     db: Session = Depends(get_db),
 ):
-    data = get_project_workspace_data(db, user, project_id)
+    workspace = open_project_workspace(db, user, project_id)
     return templates.TemplateResponse(
         request,
         "project.html",
@@ -75,7 +75,10 @@ def project_page(
             "user": user,
             "csrf": login_session.csrf_token,
             "active_page": "projects",
-            **data,
+            "project": workspace.project,
+            "membership": workspace.membership,
+            "members": tuple((member.user, member.role) for member in workspace.members),
+            "items": workspace.items,
         },
     )
 

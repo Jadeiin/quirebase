@@ -21,6 +21,7 @@ from quirebase.library.identifiers import (
     set_item_identifiers,
 )
 from quirebase.models import Item
+from quirebase.recommendations import request_item_tag_recommendation
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
@@ -187,6 +188,7 @@ def _create_item(
         role="editor",
     )
     search_index(db).index_item(db, item.id)
+    request_item_tag_recommendation(db, item.id, owner_id=actor.id)
     record_event(db, actor.id, "item.create", "item", item.id)
     db.commit()
     return ItemWriteResult(item_id=item.id, version=item.version)
@@ -247,6 +249,7 @@ def _revise_item_metadata(
     )
     db.expire_all()
     search_index(db).index_item(db, item_id)
+    request_item_tag_recommendation(db, item_id, owner_id=actor.id)
     record_event(
         db,
         actor.id,

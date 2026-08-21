@@ -73,7 +73,7 @@ def ranged_file(request: Request, path: Path, etag: str, filename: str):
 
 
 @router.get("/documents/{item_id}/citation")
-def export_item(
+def export_item_bibliography(
     item_id: str,
     file_format: str,
     style: str = "apa",

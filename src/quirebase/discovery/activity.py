@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from quirebase.models import User
 
 
-def record_search_audit(
+def record_discovery_search_audit(
     db: Session,
     user: User,
     provider: str,
@@ -34,16 +34,16 @@ def record_search_audit(
     db.commit()
 
 
-def get_user_imported_identifiers(db: Session, user: User) -> set[tuple[str, str]]:
-    imported: set[tuple[str, str]] = set()
+def get_accessible_item_identifiers(db: Session, user: User) -> set[tuple[str, str]]:
+    identifiers_by_provider: set[tuple[str, str]] = set()
     for item in db.scalars(visible_items_query(user)).all():
         if item.doi:
-            imported.add(("doi", item.doi.casefold()))
+            identifiers_by_provider.add(("doi", item.doi.casefold()))
         try:
             identifiers = json.loads(item.identifiers or "{}")
         except json.JSONDecodeError:
             identifiers = {}
         for key, value in identifiers.items():
             if value:
-                imported.add((str(key), str(value).casefold()))
-    return imported
+                identifiers_by_provider.add((str(key), str(value).casefold()))
+    return identifiers_by_provider

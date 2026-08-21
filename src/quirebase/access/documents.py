@@ -17,10 +17,6 @@ def require_revision(db: Session, user: User, revision_id: str) -> FileRevision:
     return revision
 
 
-def can_read_attachment(db: Session, user: User, attachment: Attachment) -> bool:
-    return can_read_item(db, user, attachment.item_id)
-
-
 def require_attachment(db: Session, user: User, item_id: str, attachment_id: str) -> Attachment:
     attachment = db.get(Attachment, attachment_id)
     if attachment is None or attachment.item_id != item_id or not can_read_item(db, user, item_id):

@@ -16,6 +16,7 @@ PACKAGE_ROLES = {
     "operations": "business",
     "pipeline": "business",
     "projects": "business",
+    "recommendations": "business",
     "search": "outbound-adapter",
     "web": "inbound-adapter",
 }
@@ -45,11 +46,13 @@ ALLOWED_PACKAGE_DEPENDENCIES = {
         "documents",
         "models",
         "pipeline",
+        "recommendations",
         "search",
     },
     "operations": {"audit", "core", "models"},
-    "pipeline": {"audit", "core", "models", "operations", "search"},
+    "pipeline": {"audit", "core", "models", "operations", "recommendations", "search"},
     "projects": {"access", "audit", "core", "models", "search"},
+    "recommendations": {"access", "core", "models"},
     "search": {"models"},
     "web": {
         "access",
@@ -63,6 +66,7 @@ ALLOWED_PACKAGE_DEPENDENCIES = {
         "operations",
         "pipeline",
         "projects",
+        "recommendations",
     },
 }
 
@@ -95,6 +99,7 @@ ORM_MODEL_OWNERS = {
     "ItemIdentifier": "library",
     "ItemRead": "library",
     "ItemTag": "library",
+    "ItemTagRecommendation": "recommendations",
     "Job": "pipeline",
     "LoginSession": "accounts",
     "LoginThrottle": "accounts",
@@ -111,14 +116,12 @@ ORM_MODEL_OWNERS = {
 FORBIDDEN_FACADE_EXPORTS = {
     "documents": {"attach_staged_pdf", "stage_pdf"},
     "library": {
-        "batch_add_tags_to_item",
         "find_or_create_author",
         "generate_bibtex_key",
         "get_item_authors",
         "get_item_identifiers",
         "get_tag_matrix_for_item",
         "parse_author_name",
-        "recommend_tags_for_item",
         "set_item_authors",
         "set_item_identifiers",
     },
@@ -143,7 +146,6 @@ FORBIDDEN_FACADE_EXPORTS = {
         "PostgreSQLSearchIndex",
         "SQLiteSearchIndex",
         "SearchIndex",
-        "extract_search_facets",
     },
 }
 

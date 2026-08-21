@@ -1,13 +1,25 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 import pytest
 from test_http import authenticated_client
 
 from quirebase.discovery import Identifier, MetadataLookupError, MetadataNotFoundError
-from quirebase.models import Author, Item, ItemAuthor, ItemIdentifier, ItemTag, SystemSetting, Tag
+from quirebase.models import (
+    Author,
+    Item,
+    ItemAuthor,
+    ItemIdentifier,
+    ItemTag,
+    ItemTagRecommendation,
+    Job,
+    JobState,
+    SystemSetting,
+    Tag,
+)
 
 
 def test_web_new_item_exposes_and_saves_complete_metadata(db, tmp_path, monkeypatch):
@@ -154,11 +166,30 @@ def test_web_edit_rich_metadata_and_structured_authors(db, tmp_path, monkeypatch
 def test_web_tag_matrix_batch_and_selection(db, tmp_path, monkeypatch):
     client, item, _ = authenticated_client(db, tmp_path, monkeypatch)
     csrf = "test-csrf"
+    item.keywords = "Natural Language Processing; New Research Direction"
 
     tag1 = Tag(name="Machine Learning", created_by=item.created_by)
     tag2 = Tag(name="Transformers", created_by=item.created_by)
     db.add_all([tag1, tag2])
+    recommendation = db.query(ItemTagRecommendation).filter_by(item_id=item.id).one_or_none()
+    if recommendation is None:
+        recommendation = ItemTagRecommendation(
+            item_id=item.id,
+            input_fingerprint="b" * 64,
+            generation_token=1,
+            engine="yake",
+            engine_version="0.7.3",
+        )
+        db.add(recommendation)
+    recommendation.single_words = json.dumps([])
+    recommendation.phrases = json.dumps(["Natural Language Processing", "New Research Direction"])
+    recommendation.generated_at = datetime.now(UTC)
     db.commit()
+
+    organize = client.get(f"/items/{item.id}/organize")
+    assert organize.status_code == 200
+    assert "New Research Direction" in organize.text
+    assert 'name="suggested_tags" value="New Research Direction"' in organize.text
 
     # Submit matrix form with selected tag1 and newly added tags
     response = client.post(
@@ -166,7 +197,8 @@ def test_web_tag_matrix_batch_and_selection(db, tmp_path, monkeypatch):
         params={"csrf_token": csrf},
         data={
             "tag_ids": [tag1.id],
-            "new_tags": "Natural Language Processing\nDeep Learning",
+            "suggested_tags": ["Natural Language Processing", "New Research Direction"],
+            "new_tags": "Deep Learning",
         },
         follow_redirects=True,
     )
@@ -183,8 +215,58 @@ def test_web_tag_matrix_batch_and_selection(db, tmp_path, monkeypatch):
     ]
     assert "Machine Learning" in item_tags
     assert "Natural Language Processing" in item_tags
+    assert "New Research Direction" in item_tags
     assert "Deep Learning" in item_tags
     assert "Transformers" not in item_tags
+
+
+def test_web_tag_recommendation_pending_failed_and_retry_states(db, tmp_path, monkeypatch):
+    client, item, _ = authenticated_client(db, tmp_path, monkeypatch)
+    job = Job(
+        kind="item.recommend_tags",
+        payload="{}",
+        idempotency_key=f"recommendation-ui:{item.id}",
+        owner_id=item.created_by,
+    )
+    db.add(job)
+    db.flush()
+    recommendation = ItemTagRecommendation(
+        item_id=item.id,
+        input_fingerprint="c" * 64,
+        generation_token=1,
+        job_id=job.id,
+        engine="yake",
+        engine_version="0.7.3",
+        single_words=json.dumps(["stale-candidate"]),
+        phrases=json.dumps([]),
+    )
+    db.add(recommendation)
+    db.commit()
+
+    pending = client.get(f"/items/{item.id}/organize")
+    assert "正在生成标签推荐" in pending.text
+    assert "stale-candidate" not in pending.text
+    assert pending.text.index("tag-recommendation-action") < pending.text.index(
+        'class="metadata-form"'
+    )
+
+    job.state = JobState.failed
+    job.error = "RuntimeError: extraction failed"
+    db.commit()
+    failed = client.get(f"/items/{item.id}/organize")
+    assert "标签推荐生成失败" in failed.text
+    assert "extraction failed" in failed.text
+    assert "重试推荐" in failed.text
+
+    retry = client.post(
+        f"/items/{item.id}/tag-recommendations",
+        params={"csrf_token": "test-csrf"},
+        follow_redirects=False,
+    )
+    assert retry.status_code == 303
+    db.refresh(recommendation)
+    assert recommendation.generation_token == 2
+    assert recommendation.generated_at is None
 
 
 def test_web_sync_metadata_and_bibtex_key_update(db, tmp_path, monkeypatch):

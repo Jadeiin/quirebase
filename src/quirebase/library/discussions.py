@@ -2,9 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
-
 from quirebase.access.items import can_read_item
 from quirebase.audit import record_event
 from quirebase.core.errors import (
@@ -42,16 +39,3 @@ def delete_discussion_message(db: Session, user: User, item_id: str, message_id:
     db.delete(message)
     record_event(db, user.id, "discussion.delete", "discussion", message_id)
     db.commit()
-
-
-def list_discussion_messages(db: Session, user: User, item_id: str) -> list[DiscussionMessage]:
-    if not can_read_item(db, user, item_id):
-        raise ResourceUnavailable("item not found or inaccessible")
-    return list(
-        db.scalars(
-            select(DiscussionMessage)
-            .options(selectinload(DiscussionMessage.author))
-            .where(DiscussionMessage.item_id == item_id)
-            .order_by(DiscussionMessage.created_at)
-        ).all()
-    )

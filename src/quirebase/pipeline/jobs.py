@@ -28,6 +28,11 @@ from quirebase.models import (
 )
 from quirebase.operations.maintenance import check_objects, cleanup_exports
 from quirebase.pipeline.inspection import create_thumbnail, export_annotations, inspect_pdf
+from quirebase.recommendations import (
+    handle_item_tag_recommendation,
+    request_item_tag_recommendation,
+)
+from quirebase.recommendations.persistence import enqueue_all_item_tag_recommendations
 from quirebase.search import reindex_all, search_index
 
 if TYPE_CHECKING:
@@ -111,6 +116,7 @@ def handle_pdf_inspect(db: Session, job: Job, payload: dict[str, Any]) -> dict[s
         page_geometry=geometry_json,
         full_text=text,
     )
+    request_item_tag_recommendation(db, revision.item_id, owner_id=job.owner_id)
     create_thumbnail(path, get_settings().object_dir / "thumbnails" / f"{revision.id}.png")
     search_index(db).index_item(db, revision.item_id)
     return {"page_count": pages}
@@ -189,12 +195,20 @@ def handle_system_backup(db: Session, job: Job, payload: dict[str, Any]) -> dict
     return {"filename": filename, "size_bytes": dest_path.stat().st_size}
 
 
+def handle_system_recommend_tags_all(
+    db: Session, job: Job, payload: dict[str, Any]
+) -> dict[str, Any]:
+    return {"enqueued_items": enqueue_all_item_tag_recommendations(db, owner_id=job.owner_id)}
+
+
 JOB_HANDLERS.update({
     "pdf.inspect": handle_pdf_inspect,
     "pdf.export_annotations": handle_pdf_export_annotations,
     "system.reindex_all": handle_system_reindex,
     "system.check_objects": handle_system_check_objects,
     "system.backup": handle_system_backup,
+    "system.recommend_tags_all": handle_system_recommend_tags_all,
+    "item.recommend_tags": handle_item_tag_recommendation,
 })
 
 
@@ -223,7 +237,12 @@ def enqueue_job(
 def dispatch_maintenance_job(db: Session, admin: User, kind: str) -> Job:
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")
-    if kind not in ("system.reindex_all", "system.check_objects", "system.backup"):
+    if kind not in (
+        "system.reindex_all",
+        "system.check_objects",
+        "system.backup",
+        "system.recommend_tags_all",
+    ):
         raise ValidationFailure(f"unknown maintenance job kind: {kind}")
     job = enqueue_job(db, kind, {}, owner_id=admin.id)
     record_event(

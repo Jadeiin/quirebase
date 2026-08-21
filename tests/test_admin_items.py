@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 
 import pytest
 from item_helpers import create_item_record as create_item
@@ -10,13 +11,14 @@ from test_library_ui import pdf_bytes
 from quirebase.core.crypto import hash_password
 from quirebase.core.errors import ResourceUnavailable
 from quirebase.core.storage import LocalObjectStore
+from quirebase.discovery import commit_import_batch
 from quirebase.documents.revisions import store_pdf_revision
 from quirebase.library import (
     admin_delete_item,
     get_storage_metrics,
     list_global_items,
 )
-from quirebase.models import AuditEvent, FileRevision, Item, User
+from quirebase.models import AuditEvent, FileRevision, ImportBatch, Item, User
 
 
 def create_test_admin(db, username="admin_item_test"):
@@ -145,6 +147,43 @@ def test_admin_delete_item_preserves_shared_objects(db, tmp_path, monkeypatch):
     # Deleting item2 now removes the file
     admin_delete_item(db, admin, item2.id)
     assert not object_path.exists()
+
+
+def test_admin_delete_item_preserves_object_referenced_by_pending_pdf_import(
+    db, tmp_path, monkeypatch
+):
+    admin = create_test_admin(db, "admin_pending_import")
+    member = create_test_member(db, "member_pending_import")
+    item = create_item(db, member, title="Committed copy")
+    revision = store_pdf_revision(db, member, item.id, io.BytesIO(pdf_bytes()), "shared.pdf")
+    object_path = LocalObjectStore().path(revision.object_key)
+    batch = ImportBatch(
+        owner_id=member.id,
+        file_format="pdf",
+        records=json.dumps([
+            {
+                "title": "Pending copy",
+                "_pdf": {
+                    "object_key": revision.object_key,
+                    "sha256": revision.sha256,
+                    "size": revision.size,
+                    "original_name": "pending-copy.pdf",
+                },
+            }
+        ]),
+        errors="[]",
+    )
+    db.add(batch)
+    db.commit()
+
+    admin_delete_item(db, admin, item.id)
+
+    assert object_path.is_file()
+    commit_import_batch(db, member, batch.id)
+    imported = db.scalar(select(Item).where(Item.title == "Pending copy"))
+    imported_revision = db.scalar(select(FileRevision).where(FileRevision.item_id == imported.id))
+    assert imported_revision.object_key == revision.object_key
+    assert object_path.is_file()
 
 
 def test_non_admin_cannot_admin_delete_item(db):

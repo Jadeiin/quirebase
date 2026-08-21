@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select
 
@@ -17,6 +18,20 @@ from quirebase.search import search_index
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
+
+
+@dataclass(frozen=True)
+class ProjectWorkspaceMember:
+    user: User
+    role: ProjectRole
+
+
+@dataclass(frozen=True)
+class ProjectWorkspace:
+    project: Project
+    membership: ProjectMember
+    members: tuple[ProjectWorkspaceMember, ...]
+    items: tuple[Item, ...]
 
 
 def create_project(db: Session, user: User, name: str) -> Project:
@@ -44,7 +59,7 @@ def list_user_projects(db: Session, user: User) -> list[tuple[Project, str, int]
     return [(row[0], row[1], row[2]) for row in rows]
 
 
-def get_project_workspace_data(db: Session, user: User, project_id: str) -> dict[str, Any]:
+def open_project_workspace(db: Session, user: User, project_id: str) -> ProjectWorkspace:
     membership = require_project_member(db, user, project_id)
     project = db.get(Project, project_id)
     if project is None:
@@ -55,8 +70,8 @@ def get_project_workspace_data(db: Session, user: User, project_id: str) -> dict
         .where(ProjectMember.project_id == project_id)
         .order_by(User.username)
     ).all()
-    members = [(row[0], row[1]) for row in members_rows]
-    items = list(
+    members = tuple(ProjectWorkspaceMember(user=row[0], role=row[1]) for row in members_rows)
+    items = tuple(
         db.scalars(
             select(Item)
             .join(ProjectItem, ProjectItem.item_id == Item.id)
@@ -64,12 +79,12 @@ def get_project_workspace_data(db: Session, user: User, project_id: str) -> dict
             .order_by(Item.updated_at.desc())
         ).all()
     )
-    return {
-        "project": project,
-        "membership": membership,
-        "members": members,
-        "items": items,
-    }
+    return ProjectWorkspace(
+        project=project,
+        membership=membership,
+        members=members,
+        items=items,
+    )
 
 
 def add_item_to_project(db: Session, user: User, project_id: str, item_id: str) -> None:

@@ -473,6 +473,15 @@ def trigger_backup_job(
     return RedirectResponse("/admin/jobs", status_code=303)
 
 
+@router.post("/admin/maintenance/recommend-tags", dependencies=[Depends(require_csrf)])
+def trigger_recommend_tags_job(
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    dispatch_maintenance_job(db, user, "system.recommend_tags_all")
+    return RedirectResponse("/admin/jobs", status_code=303)
+
+
 @router.get("/admin/maintenance/backups/{job_id}/download")
 def download_backup_endpoint(
     job_id: str,

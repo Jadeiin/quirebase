@@ -63,23 +63,37 @@ def test_tools_detect_duplicates_and_manage_owned_tags(db, tmp_path, monkeypatch
         assert "Orphan tag" in tools_tags.text
         assert "0 篇论文" in tools_tags.text
 
+        target_tag = Tag(name="Reviewed topic", created_by=item.created_by)
+        db.add(target_tag)
+        db.commit()
+        tools_tags = client.get("/tools?tab=tags")
+        assert 'action="/tools/tags/merge' in tools_tags.text
+        merged = client.post(
+            "/tools/tags/merge?csrf_token=test-csrf",
+            data={"source_tag_id": tag.id, "target_tag_id": target_tag.id},
+            follow_redirects=False,
+        )
+        assert merged.status_code == 303
+        assert db.get(Tag, tag.id) is None
+        assert db.get(ItemTag, (item.id, target_tag.id)) is not None
+
         renamed = client.post(
-            f"/tools/tags/{tag.id}?csrf_token=test-csrf",
+            f"/tools/tags/{target_tag.id}?csrf_token=test-csrf",
             data={"name": "Reviewed"},
             follow_redirects=False,
         )
         assert renamed.status_code == 303
         assert renamed.headers["location"] == "/tools?tab=tags#tags"
-        db.refresh(tag)
-        assert tag.name == "Reviewed"
+        db.refresh(target_tag)
+        assert target_tag.name == "Reviewed"
 
         removed = client.post(
-            f"/tools/tags/{tag.id}/delete?csrf_token=test-csrf",
+            f"/tools/tags/{target_tag.id}/delete?csrf_token=test-csrf",
             follow_redirects=False,
         )
         assert removed.status_code == 303
         assert removed.headers["location"] == "/tools?tab=tags#tags"
-        assert db.get(Tag, tag.id) is None
+        assert db.get(Tag, target_tag.id) is None
     finally:
         app.dependency_overrides.clear()
         get_settings.cache_clear()

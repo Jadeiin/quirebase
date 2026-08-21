@@ -62,17 +62,34 @@ def test_asset_build_cleans_output_before_writing_files():
 
 
 def test_enhanced_workspaces_keep_native_form_fallbacks():
+    app_source = read("src/quirebase/assets/app.js")
     library = read("src/quirebase/templates/library.html")
     imports = read("src/quirebase/templates/import.html")
     online_search = read("src/quirebase/templates/online_search.html")
     assert 'x-data="libraryWorkspace"' in library
     assert 'method="post" action="/library/bulk' in library
     assert 'x-data="importWorkspace"' in imports
+    assert 'name="pdfs" accept="application/pdf,.pdf" multiple required' in imports
+    assert '@change="addPdfFiles"' in imports
+    assert "new DataTransfer()" in app_source
     assert 'method="post" action="/metadata/preview' in imports
     assert 'method="post" action="/bibliography/preview' in imports
     assert 'x-data="onlineSearch"' in online_search
     assert 'method="get" action="/online-search"' in online_search
     assert 'method="post" action="/metadata/preview' in online_search
+
+
+def test_tag_suggestions_and_merge_keep_native_form_contracts():
+    source = read("src/quirebase/assets/app.js")
+    item = read("src/quirebase/templates/item.html")
+    tools = read("src/quirebase/templates/tools.html")
+    assert 'name="suggested_tags"' in item
+    assert 'action="/items/{{ item.id }}/tags/matrix' in item
+    assert 'action="/tools/tags/merge' in tools
+    assert 'name="source_tag_id"' in tools
+    assert 'name="target_tag_id"' in tools
+    assert 'Alpine.data("tagMerge"' in source
+    assert "ensureDifferentTags" in source
 
 
 def test_export_preferences_use_validated_per_user_browser_storage():

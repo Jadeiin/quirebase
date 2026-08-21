@@ -14,6 +14,7 @@ from .core.database import SessionLocal, engine
 from .models import User
 from .operations import check_objects, create_backup, restore_backup, verify_backup
 from .pipeline import run_forever
+from .recommendations.processing import validate_engine_configuration
 from .search import reindex_all
 
 app = typer.Typer(help="Quirebase administration")
@@ -87,6 +88,13 @@ def doctor():
     except Exception as error:
         failures += 1
         typer.echo(f"[failed] PDF dependencies: {error}")
+    try:
+        descriptor = validate_engine_configuration(get_settings())
+        model = f", model {descriptor.model_fingerprint}" if descriptor.model_fingerprint else ""
+        typer.echo(f"[ok] recommendations: {descriptor.name} {descriptor.version}{model}")
+    except Exception as error:
+        failures += 1
+        typer.echo(f"[failed] recommendations: {error}")
     if not inspect(engine).has_table("users"):
         failures += 1
         typer.echo("[failed] schema is not initialized; run quirebase init-db")

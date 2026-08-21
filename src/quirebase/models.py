@@ -259,6 +259,30 @@ class ItemTag(Base):
     tag_id: Mapped[str] = mapped_column(ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True)
 
 
+class ItemTagRecommendation(Base):
+    __tablename__ = "item_tag_recommendations"
+    __table_args__ = (
+        CheckConstraint("generation_token >= 1", name="ck_item_tag_recommendations_token"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    item_id: Mapped[str] = mapped_column(
+        ForeignKey("items.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    input_fingerprint: Mapped[str] = mapped_column(String(64), index=True)
+    generation_token: Mapped[int] = mapped_column(Integer, default=1)
+    job_id: Mapped[str | None] = mapped_column(
+        ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    engine: Mapped[str] = mapped_column(String(32))
+    engine_version: Mapped[str] = mapped_column(String(64))
+    model_fingerprint: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    single_words: Mapped[str | None] = mapped_column(Text, nullable=True)
+    phrases: Mapped[str | None] = mapped_column(Text, nullable=True)
+    generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+
+
 class DiscussionMessage(Base):
     __tablename__ = "discussion_messages"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)

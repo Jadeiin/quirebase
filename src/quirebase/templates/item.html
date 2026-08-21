@@ -266,7 +266,17 @@
     <div class="item-two-column">
       <div>
         <section class="panel" style="margin-bottom: 1.5rem;">
-          <h2>{{ _('Add new tags') }}</h2>
+          <div class="section-heading tag-editor-heading">
+            <h2>{{ _('Add new tags') }}</h2>
+            {% if can_edit %}
+            <form class="tag-recommendation-action" method="post" action="/items/{{ item.id }}/tag-recommendations?csrf_token={{ csrf }}">
+              <button class="secondary-button compact-button" {% if tag_matrix.recommendation_state == 'pending' %}disabled{% endif %}>
+                <span aria-hidden="true">↻</span>
+                {% if tag_matrix.recommendation_state == 'pending' %}{{ _('Generating Tag recommendations…') }}{% elif tag_matrix.recommendation_state == 'failed' %}{{ _('Retry recommendations') }}{% else %}{{ _('Regenerate recommendations') }}{% endif %}
+              </button>
+            </form>
+            {% endif %}
+          </div>
           {% if can_edit %}
           <form class="metadata-form" method="post" action="/items/{{ item.id }}/tags/matrix?csrf_token={{ csrf }}">
             {% if tag_matrix %}
@@ -277,6 +287,34 @@
             <label>{{ _('New tags (one per line)') }}
               <textarea name="new_tags" rows="3" placeholder="{{ _('One tag per line') }}"></textarea>
             </label>
+            {% if tag_matrix.recommendation_state == 'pending' %}
+            <div class="empty-state span-2">{{ _('Generating Tag recommendations…') }}</div>
+            {% elif tag_matrix.recommendation_state == 'failed' %}
+            <div class="empty-state span-2">
+              <strong>{{ _('Tag recommendation failed.') }}</strong>
+              {% if tag_matrix.recommendation_error %}<small>{{ tag_matrix.recommendation_error }}</small>{% endif %}
+            </div>
+            {% elif tag_matrix.recommendation_state == 'ready' and not tag_matrix.suggested_names %}
+            <div class="empty-state span-2">{{ _('No English Tag candidates were found.') }}</div>
+            {% endif %}
+            {% if tag_matrix.recommendation_state == 'ready' and tag_matrix.suggested_names %}
+            <fieldset class="tag-suggestions span-2">
+              <legend>{{ _('Suggested new tags') }}</legend>
+              <small>{{ _('Only selected recommendations become Tags.') }}</small>
+              {% if tag_matrix.suggested_single_words %}<h3>{{ _('Single-word keywords') }}</h3>{% endif %}
+              <div class="tag-suggestion-list">
+                {% for name in tag_matrix.suggested_single_words %}
+                <label><input type="checkbox" name="suggested_tags" value="{{ name }}"><span>{{ name }}</span></label>
+                {% endfor %}
+              </div>
+              {% if tag_matrix.suggested_phrases %}<h3>{{ _('Compound phrases') }}</h3>{% endif %}
+              <div class="tag-suggestion-list">
+                {% for name in tag_matrix.suggested_phrases %}
+                <label><input type="checkbox" name="suggested_tags" value="{{ name }}"><span>{{ name }}</span></label>
+                {% endfor %}
+              </div>
+            </fieldset>
+            {% endif %}
             <div><button>{{ _('Add & Save') }}</button></div>
           </form>
           {% endif %}

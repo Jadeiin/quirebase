@@ -8,13 +8,22 @@ SQLite is intended for a single-host installation with one worker. PostgreSQL is
 
 For identifier lookup and Discovery (online scholarly search), set a monitored `QUIREBASE_METADATA_CONTACT_EMAIL`; NCBI and OpenAlex API keys are optional. See `METADATA_LOOKUP.md`. Restrictive egress firewalls should allow only the documented Provider hosts.
 
+Tag Recommendations use offline YAKE by default. To use the optional semantic engine, install
+`quirebase[keybert]`, set `QUIREBASE_RECOMMENDATION_ENGINE=keybert`, and point
+`QUIREBASE_KEYBERT_MODEL_PATH` at an administrator-provisioned local Model2Vec directory. Runtime
+model downloads and remote model identifiers are not supported. Record the model's source and
+license separately, and set `QUIREBASE_KEYBERT_MODEL_SHA256` to pin its directory-content checksum.
+
 Use a reverse proxy for TLS and request-size limits. Do not expose Uvicorn directly to the public internet. Preserve the application data directory independently from the installed wheel.
 
 ## Backups
 
 `quirebase backup backup.zip` creates a consistent SQLite snapshot or invokes `pg_dump` for PostgreSQL, adds immutable objects, and writes a checksum manifest. Verify it with `quirebase verify-backup backup.zip`. Test restoration periodically on a separate installation. `quirebase restore backup.zip --force` replaces the configured database and overlays backed-up objects; stop all web and worker processes first.
 
-`quirebase doctor` checks the schema, writable directories, PyMuPDF and every stored object's SHA-256. `quirebase reindex` rebuilds the Library Search index. The administrator page can retry failed jobs; `/metrics` exposes authenticated job and content counts.
+`quirebase doctor` checks the schema, writable directories, PyMuPDF, the configured Recommendation
+Engine and every stored object's SHA-256. `quirebase reindex` rebuilds the Library Search index. The
+administrator page can retry failed jobs and rebuild all Item Tag Recommendations after an engine
+or model change; `/metrics` exposes authenticated job and content counts.
 
 ## Building assets from source
 

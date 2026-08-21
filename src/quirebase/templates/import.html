@@ -32,11 +32,16 @@
 
   <section class="panel import-card" x-show="active === 'published'">
     <span class="module-number">03</span><h2>{{ _('Published PDF') }}</h2>
-    <p>{{ _('Upload a published paper. Its DOI is extracted from the PDF and used to retrieve verified metadata.') }}</p>
+    <p>{{ _('Upload published papers. Their DOIs are extracted from the PDFs and used to retrieve verified metadata before confirmation.') }}</p>
     <form method="post" action="/imports/pdf/published?csrf_token={{ csrf }}" enctype="multipart/form-data">
-      <label>PDF<input type="file" name="pdf" accept="application/pdf,.pdf" required></label>
-      <label>{{ _('DOI override (optional)') }}<input name="doi" maxlength="500" placeholder="{{ _('Only needed when automatic detection fails') }}"></label>
-      <button>{{ _('Import published PDF') }}</button>
+      <label>PDF
+        <input type="file" name="pdfs" accept="application/pdf,.pdf" multiple required @change="addPdfFiles">
+        <small>{{ _('Choose PDFs more than once to add them to the same batch, or select several at once with Cmd/Ctrl or Shift.') }}</small>
+      </label>
+      <ul class="pdf-selection" x-show="pdfFileNames.length" aria-live="polite">
+        <template x-for="fileName in pdfFileNames" :key="fileName"><li x-text="fileName"></li></template>
+      </ul>
+      <button>{{ _('Preview PDF import') }}</button>
     </form>
   </section>
 

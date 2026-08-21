@@ -62,6 +62,7 @@ EXPECTED_OPERATIONAL_ROUTES = {
     ("POST", "/admin/maintenance/backup"),
     ("POST", "/admin/maintenance/check-objects"),
     ("POST", "/admin/maintenance/reindex"),
+    ("POST", "/admin/maintenance/recommend-tags"),
     ("POST", "/admin/settings"),
     ("POST", "/admin/users/create"),
     ("POST", "/admin/users/{user_id}/password"),
@@ -69,13 +70,13 @@ EXPECTED_OPERATIONAL_ROUTES = {
     ("POST", "/admin/users/{user_id}/role"),
     ("POST", "/admin/users/{user_id}/status"),
     ("POST", "/bibliography/import/{batch_id}"),
+    ("POST", "/bibliography/import/{batch_id}/discard"),
     ("POST", "/bibliography/preview"),
     ("POST", "/citation-styles"),
     ("POST", "/citation-styles/{style_id}/delete"),
     ("POST", "/documents/{item_id}/annotation-exports"),
     ("POST", "/documents/{item_id}/annotations"),
     ("POST", "/imports/pdf/published"),
-    ("POST", "/imports/pdf/unpublished"),
     ("POST", "/items"),
     ("POST", "/items/{item_id}/attachments"),
     ("POST", "/items/{item_id}/discussion"),
@@ -87,6 +88,7 @@ EXPECTED_OPERATIONAL_ROUTES = {
     ("POST", "/items/{item_id}/projects/{project_id}/remove"),
     ("POST", "/items/{item_id}/rescan-doi"),
     ("POST", "/items/{item_id}/sync-metadata"),
+    ("POST", "/items/{item_id}/tag-recommendations"),
     ("POST", "/items/{item_id}/tags"),
     ("POST", "/items/{item_id}/tags/matrix"),
     ("POST", "/items/{item_id}/tags/{tag_id}/remove"),
@@ -100,6 +102,7 @@ EXPECTED_OPERATIONAL_ROUTES = {
     ("POST", "/projects/{project_id}/members/{member_id}/remove"),
     ("POST", "/tools/tags/{tag_id}"),
     ("POST", "/tools/tags/{tag_id}/delete"),
+    ("POST", "/tools/tags/merge"),
     ("GET", "/api/authors/suggest"),
 }
 
@@ -129,7 +132,7 @@ def test_operational_routes_contract():
                 continue
             operational_routes.add((method, route.path))
 
-    assert len(operational_routes) == 89, f"Expected 89 routes, found {len(operational_routes)}"
+    assert len(operational_routes) == 92, f"Expected 92 routes, found {len(operational_routes)}"
     assert operational_routes == EXPECTED_OPERATIONAL_ROUTES
 
 

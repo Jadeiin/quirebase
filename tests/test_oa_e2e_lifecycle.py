@@ -16,7 +16,7 @@ from quirebase.discovery.citations import (
 )
 from quirebase.discovery.imports import (
     commit_import_batch,
-    stage_metadata_batch,
+    stage_identifier_import_batch,
 )
 from quirebase.discovery.lookup import (
     Identifier,
@@ -146,7 +146,7 @@ def test_seam2_oa_corpus_batch_import_and_relational_mapping(db):
     def mock_handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=OA_CORPUS_OPENALEX_PAYLOAD)
 
-    batch, records, errors = stage_metadata_batch(
+    batch, records, errors = stage_identifier_import_batch(
         db,
         user,
         identifier="10.3390/ejihpe13110181",

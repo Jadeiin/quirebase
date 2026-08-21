@@ -11,18 +11,14 @@ from quirebase.discovery import (
     MetadataLookupError,
     SearchClause,
     commit_import_batch,
+    discard_import_batch,
     export_accessible_bibliography,
-    get_user_imported_identifiers,
-    record_search_audit,
+    get_accessible_item_identifiers,
+    record_discovery_search_audit,
     search_metadata,
+    stage_identifier_import_batch,
     stage_import_batch,
-    stage_metadata_batch,
-)
-from quirebase.discovery import (
-    import_published_pdf as import_published_pdf_op,
-)
-from quirebase.discovery import (
-    import_unpublished_pdf as import_unpublished_pdf_op,
+    stage_pdf_import_batch,
 )
 from quirebase.models import (
     LoginSession,
@@ -109,12 +105,12 @@ def online_search_page(
                 year_to=end_year,
                 settings=effective_settings,
             )
-            record_search_audit(db, user, provider, clauses, len(results.results))
+            record_discovery_search_audit(db, user, provider, clauses, len(results.results))
         except ValueError as caught:
             error = str(caught)
         except MetadataLookupError as caught:
             error = str(caught)
-    imported = get_user_imported_identifiers(db, user)
+    imported = get_accessible_item_identifiers(db, user)
     query_items = [
         (key, value) for key, value in request.query_params.multi_items() if key != "page"
     ]
@@ -148,41 +144,35 @@ def online_search_page(
 
 
 @router.post("/imports/pdf/published", dependencies=[Depends(require_csrf)])
-def import_published_pdf(
-    doi: str = Form(default=""),
-    pdf: UploadFile = File(),
+def preview_pdf_import(
+    request: Request,
+    pdfs: list[UploadFile] = File(),
     user: User = Depends(current_user),
+    login: LoginSession = Depends(current_login),
     db: Session = Depends(get_db),
 ):
-    item = import_published_pdf_op(db, user, pdf.file, pdf.filename or "", doi=doi)
-    return RedirectResponse(f"/items/{item.id}", status_code=303)
-
-
-@router.post("/imports/pdf/unpublished", dependencies=[Depends(require_csrf)])
-def import_unpublished_pdf(
-    title: str = Form(),
-    authors: str = Form(default=""),
-    abstract: str = Form(default=""),
-    keywords: str = Form(default=""),
-    pdf: UploadFile = File(),
-    user: User = Depends(current_user),
-    db: Session = Depends(get_db),
-):
-    item = import_unpublished_pdf_op(
+    batch, records, errors = stage_pdf_import_batch(
         db,
         user,
-        pdf.file,
-        pdf.filename or "",
-        title=title,
-        authors=authors,
-        abstract=abstract,
-        keywords=keywords,
+        [(pdf.file, pdf.filename or "") for pdf in pdfs],
+        settings=get_effective_settings_model(db),
     )
-    return RedirectResponse(f"/items/{item.id}", status_code=303)
+    return templates.TemplateResponse(
+        request,
+        "import_preview.html",
+        {
+            "user": user,
+            "csrf": login.csrf_token,
+            "batch": batch,
+            "records": records,
+            "errors": errors,
+            "active_page": "import",
+        },
+    )
 
 
 @router.post("/bibliography/preview", dependencies=[Depends(require_csrf)])
-def preview_import(
+def preview_bibliography_import(
     request: Request,
     bibliography: UploadFile = File(),
     file_format: str = Form(),
@@ -207,7 +197,7 @@ def preview_import(
 
 
 @router.post("/metadata/preview", dependencies=[Depends(require_csrf)])
-def preview_online_metadata(
+def preview_identifier_import(
     request: Request,
     identifier: str = Form(),
     provider: str = Form(default="auto"),
@@ -215,7 +205,7 @@ def preview_online_metadata(
     login: LoginSession = Depends(current_login),
     db: Session = Depends(get_db),
 ):
-    batch, records, errors = stage_metadata_batch(
+    batch, records, errors = stage_identifier_import_batch(
         db, user, identifier, provider, settings=get_effective_settings_model(db)
     )
     return templates.TemplateResponse(
@@ -233,7 +223,7 @@ def preview_online_metadata(
 
 
 @router.post("/bibliography/import/{batch_id}", dependencies=[Depends(require_csrf)])
-def commit_import(
+def commit_import_batch_route(
     batch_id: str,
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
@@ -242,8 +232,18 @@ def commit_import(
     return RedirectResponse("/", status_code=303)
 
 
+@router.post("/bibliography/import/{batch_id}/discard", dependencies=[Depends(require_csrf)])
+def discard_import_batch_route(
+    batch_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    discard_import_batch(db, user, batch_id)
+    return RedirectResponse("/bibliography/import", status_code=303)
+
+
 @router.get("/bibliography/export")
-def export_items(
+def export_accessible_bibliography_route(
     file_format: str,
     style: str = "apa",
     user: User = Depends(current_user),

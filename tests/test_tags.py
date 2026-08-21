@@ -1,45 +1,20 @@
 from __future__ import annotations
 
+import json
+from datetime import UTC, datetime
+
 import pytest
 from sqlalchemy import select
 
 from quirebase.core.errors import ResourceUnavailable
 from quirebase.library.tags import (
+    TagConflict,
     add_tag_to_item,
-    batch_add_tags_to_item,
     get_tag_matrix_for_item,
     merge_tags,
-    recommend_tags_for_item,
     set_item_tags,
 )
-from quirebase.models import Item, ItemTag, Tag, User
-
-
-def test_recommend_tags_for_item(db):
-    user = User(username="tag_rec_user", password_hash="hash")
-    db.add(user)
-    db.flush()
-
-    # Create library tags
-    tag_transformer = Tag(name="Transformer", created_by=user.id)
-    tag_quantum = Tag(name="Quantum", created_by=user.id)
-    tag_robotics = Tag(name="Robotics", created_by=user.id)
-    db.add_all([tag_transformer, tag_quantum, tag_robotics])
-    db.flush()
-
-    item = Item(
-        title="Attention is all you need for transformer architectures",
-        abstract="We propose a new model based entirely on attention mechanisms without recurrence for robotics applications.",
-        created_by=user.id,
-    )
-    db.add(item)
-    db.flush()
-
-    recommended = recommend_tags_for_item(db, user, item.id)
-    rec_names = {t.name for t in recommended}
-    assert "Transformer" in rec_names
-    assert "Robotics" in rec_names
-    assert "Quantum" not in rec_names
+from quirebase.models import Item, ItemTag, ItemTagRecommendation, Tag, User
 
 
 def test_get_tag_matrix_for_item(db):
@@ -56,10 +31,23 @@ def test_get_tag_matrix_for_item(db):
     item = Item(
         title="Compiler Optimization Algorithms",
         abstract="Efficient algorithms for compiler backend.",
+        keywords="Compiler; Graph Neural Networks; graph neural networks; New Optimizer",
         created_by=user.id,
     )
     db.add(item)
     db.flush()
+    db.add(
+        ItemTagRecommendation(
+            item_id=item.id,
+            input_fingerprint="a" * 64,
+            generation_token=1,
+            engine="yake",
+            engine_version="0.7.3",
+            single_words=json.dumps(["Algorithms", "Compiler"]),
+            phrases=json.dumps(["Graph Neural Networks", "New Optimizer"]),
+            generated_at=datetime.now(UTC),
+        )
+    )
     add_tag_to_item(db, user, item.id, "Algorithms")
     db.commit()
 
@@ -69,9 +57,10 @@ def test_get_tag_matrix_for_item(db):
     assert t2.id not in matrix["assigned_ids"]
     assert t1.id in matrix["recommended_ids"]
     assert t3.id in matrix["recommended_ids"]
+    assert matrix["suggested_names"] == ("Graph Neural Networks", "New Optimizer")
 
 
-def test_batch_add_and_set_item_tags(db):
+def test_set_item_tags(db):
     user = User(username="batch_tag_user", password_hash="hash")
     db.add(user)
     db.flush()
@@ -80,10 +69,7 @@ def test_batch_add_and_set_item_tags(db):
     db.add(item)
     db.flush()
 
-    created_tags = batch_add_tags_to_item(db, user, item.id, ["AI", "Deep Learning", "Vision"])
-    db.commit()
-
-    assert len(created_tags) == 3
+    set_item_tags(db, user, item.id, [], ["AI", "Deep Learning", "Vision"])
     current_tags = list(db.scalars(select(Tag.name)).all())
     assert "AI" in current_tags
     assert "Deep Learning" in current_tags
@@ -102,16 +88,13 @@ def test_batch_add_and_set_item_tags(db):
     assert tag_vision.id in assigned_tag_ids
 
 
-def test_batch_and_set_tags_normalize_names_and_skip_empty_values(db):
+def test_set_tags_normalizes_names_and_skips_empty_values(db):
     user = User(username="normalized_tag_user", password_hash="hash")
     db.add(user)
     db.flush()
     item = Item(title="Normalization", created_by=user.id)
     db.add(item)
     db.flush()
-
-    created = batch_add_tags_to_item(db, user, item.id, ["  Deep   Learning  ", "  "])
-    assert [tag.name for tag in created] == ["Deep Learning"]
 
     set_item_tags(db, user, item.id, [], ["  Machine   Learning ", "\t"])
     assigned_names = list(
@@ -122,50 +105,46 @@ def test_batch_and_set_tags_normalize_names_and_skip_empty_values(db):
     assert assigned_names == ["Machine Learning"]
 
 
-def test_merge_tags(db):
+def test_merge_tags_relinks_items_and_rejects_self_merge(db):
     admin = User(username="admin_merge", password_hash="hash", role="administrator")
     db.add(admin)
     db.flush()
-
-    item1 = Item(title="Item 1", created_by=admin.id)
-    item2 = Item(title="Item 2", created_by=admin.id)
-    tag_old = Tag(name="ML", created_by=admin.id)
-    tag_new = Tag(name="Machine Learning", created_by=admin.id)
-    db.add_all([item1, item2, tag_old, tag_new])
+    first = Item(title="First Item", created_by=admin.id)
+    second = Item(title="Second Item", created_by=admin.id)
+    source = Tag(name="ML", created_by=admin.id)
+    target = Tag(name="Machine Learning", created_by=admin.id)
+    db.add_all([first, second, source, target])
     db.flush()
-
-    add_tag_to_item(db, admin, item1.id, "ML")
-    add_tag_to_item(db, admin, item2.id, "ML")
-    add_tag_to_item(db, admin, item2.id, "Machine Learning")
+    db.add_all([
+        ItemTag(item_id=first.id, tag_id=source.id),
+        ItemTag(item_id=second.id, tag_id=source.id),
+        ItemTag(item_id=second.id, tag_id=target.id),
+    ])
     db.commit()
 
-    merged_tag = merge_tags(db, admin, source_tag_id=tag_old.id, target_tag_id=tag_new.id)
-    db.commit()
+    merged = merge_tags(db, admin, source.id, target.id)
 
-    assert merged_tag.id == tag_new.id
-    assert db.get(Tag, tag_old.id) is None
-    # Verify item1 now has Machine Learning
-    item1_tag_ids = list(
-        db.scalars(select(ItemTag.tag_id).where(ItemTag.item_id == item1.id)).all()
-    )
-    assert tag_new.id in item1_tag_ids
+    assert merged.id == target.id
+    assert db.get(Tag, source.id) is None
+    assert set(db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == target.id)).all()) == {
+        first.id,
+        second.id,
+    }
+    with pytest.raises(TagConflict, match="different"):
+        merge_tags(db, admin, target.id, target.id)
 
 
-def test_merge_tags_requires_ownership_of_source_tag(db):
+def test_merge_tags_requires_source_tag_ownership(db):
     source_owner = User(username="source_owner", password_hash="hash")
-    target_owner = User(username="target_owner", password_hash="hash")
-    db.add_all([source_owner, target_owner])
+    other_user = User(username="other_user", password_hash="hash")
+    db.add_all([source_owner, other_user])
     db.flush()
-    item = Item(title="Protected source tag", created_by=source_owner.id)
-    source = Tag(name="Source", created_by=source_owner.id)
-    target = Tag(name="Target", created_by=target_owner.id)
-    db.add_all([item, source, target])
-    db.flush()
-    db.add(ItemTag(item_id=item.id, tag_id=source.id))
+    source = Tag(name="Protected source", created_by=source_owner.id)
+    target = Tag(name="Shared target", created_by=other_user.id)
+    db.add_all([source, target])
     db.commit()
 
     with pytest.raises(ResourceUnavailable, match="not authorized"):
-        merge_tags(db, target_owner, source_tag_id=source.id, target_tag_id=target.id)
+        merge_tags(db, other_user, source.id, target.id)
 
     assert db.get(Tag, source.id) is not None
-    assert db.get(ItemTag, (item.id, source.id)) is not None

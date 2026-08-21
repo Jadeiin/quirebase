@@ -503,6 +503,17 @@
           </form>
         </div>
       </section>
+
+      <section class="panel tool-card">
+        <span>✦</span>
+        <div>
+          <h2>{{ _('Rebuild Tag Recommendations') }}</h2>
+          <p>{{ _('Queue fresh recommendations for every Item after an engine or local model change.') }}</p>
+          <form method="post" action="/admin/maintenance/recommend-tags?csrf_token={{ csrf }}" style="margin-top: .8rem;">
+            <button class="secondary-button compact-button">{{ _('Dispatch Recommendation Jobs') }}</button>
+          </form>
+        </div>
+      </section>
     </div>
 
     {% if system_jobs %}

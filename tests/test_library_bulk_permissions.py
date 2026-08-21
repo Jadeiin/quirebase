@@ -17,6 +17,7 @@ from quirebase.library import apply_bulk_item_action, download_selected_item_doc
 from quirebase.models import (
     AuditEvent,
     FileRevision,
+    ImportBatch,
     Item,
     PdfAnnotation,
     PdfAnnotationSegment,
@@ -93,6 +94,31 @@ def test_bulk_action_records_single_bulk_audit_event(db, tmp_path, monkeypatch):
     )
     assert event is not None
     assert json.loads(event.detail)["item_ids"] == [item.id]
+
+
+def test_bulk_delete_preserves_object_referenced_by_pending_pdf_import(db, tmp_path, monkeypatch):
+    _client, item, revision = authenticated_client(db, tmp_path, monkeypatch)
+    owner = db.get(User, item.created_by)
+    object_path = LocalObjectStore().path(revision.object_key)
+    db.add(
+        ImportBatch(
+            owner_id=owner.id,
+            file_format="pdf",
+            records=json.dumps([{"_pdf": {"object_key": revision.object_key}}]),
+            errors="[]",
+        )
+    )
+    db.commit()
+
+    apply_bulk_item_action(
+        db,
+        owner,
+        item_ids=[item.id],
+        action="delete_items",
+        confirm_delete="delete",
+    )
+
+    assert object_path.is_file()
 
 
 def test_bulk_download_pdfs_records_audit_event(db, tmp_path, monkeypatch):

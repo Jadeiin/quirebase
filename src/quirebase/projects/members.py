@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select
 
-from quirebase.access.projects import project_member, require_project_member
+from quirebase.access.projects import project_member
 from quirebase.audit import record_event
 from quirebase.core.errors import (
     DomainError,
@@ -20,19 +20,6 @@ if TYPE_CHECKING:
 
 class ProjectMemberConflict(DomainError):
     pass
-
-
-def list_project_members(
-    db: Session, user: User, project_id: str
-) -> list[tuple[User, ProjectRole]]:
-    require_project_member(db, user, project_id)
-    rows = db.execute(
-        select(User, ProjectMember.role)
-        .join(ProjectMember, ProjectMember.user_id == User.id)
-        .where(ProjectMember.project_id == project_id)
-        .order_by(User.username)
-    ).all()
-    return [(row[0], row[1]) for row in rows]
 
 
 def add_project_member(

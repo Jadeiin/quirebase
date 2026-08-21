@@ -12,7 +12,7 @@ from quirebase.discovery import (
     lookup_metadata,
     parse_identifier,
 )
-from quirebase.models import AuditEvent, ImportBatch, Item
+from quirebase.models import AuditEvent, ImportBatch, Item, ItemTagRecommendation, Job, JobState
 from quirebase.web.app import app
 
 
@@ -299,6 +299,13 @@ def test_online_preview_uses_existing_confirmed_import_flow(db, tmp_path, monkey
         assert committed.status_code == 303
         imported = db.scalar(select(Item).where(Item.title == "Looked-up paper"))
         assert imported.doi == "10.1/looked-up"
+        recommendation = db.scalar(
+            select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == imported.id)
+        )
+        assert recommendation is not None
+        job = db.get(Job, recommendation.job_id)
+        assert job is not None
+        assert job.state == JobState.pending
         assert db.scalar(select(AuditEvent).where(AuditEvent.action == "metadata.lookup"))
     finally:
         app.dependency_overrides.clear()

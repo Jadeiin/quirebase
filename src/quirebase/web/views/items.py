@@ -67,6 +67,7 @@ from quirebase.projects import (
 from quirebase.projects import (
     remove_item_from_project as remove_item_from_project_op,
 )
+from quirebase.recommendations import force_item_tag_recommendation
 from quirebase.web.deps import current_login, current_user, require_csrf
 from quirebase.web.templates import templates
 
@@ -434,12 +435,23 @@ def update_bibtex_key_route(
 def update_tag_matrix_route(
     item_id: str,
     tag_ids: list[str] = Form(default=[]),
+    suggested_tags: list[str] = Form(default=[]),
     new_tags: str = Form(default=""),
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    new_names = [line.strip() for line in new_tags.splitlines() if line.strip()]
+    new_names = [*suggested_tags, *(line.strip() for line in new_tags.splitlines() if line.strip())]
     set_item_tags(db, user, item_id, tag_ids, new_names=new_names)
+    return RedirectResponse(f"/items/{item_id}/organize", status_code=303)
+
+
+@router.post("/items/{item_id}/tag-recommendations", dependencies=[Depends(require_csrf)])
+def regenerate_tag_recommendations(
+    item_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    force_item_tag_recommendation(db, user, item_id)
     return RedirectResponse(f"/items/{item_id}/organize", status_code=303)
 
 
