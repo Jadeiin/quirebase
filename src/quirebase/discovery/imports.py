@@ -39,7 +39,7 @@ from quirebase.search import search_index
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    import httpx
+    import httpx2
     from sqlalchemy.orm import Session
 
 
@@ -96,7 +96,7 @@ def stage_identifier_import_batch(
     user: User,
     identifier: str,
     provider: str = "auto",
-    transport: httpx.BaseTransport | None = None,
+    transport: httpx2.BaseTransport | None = None,
     settings: Settings | None = None,
 ) -> tuple[ImportBatch, list[dict], list[dict]]:
     from quirebase.operations.settings import get_effective_settings_model

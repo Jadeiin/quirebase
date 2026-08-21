@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from unittest.mock import patch
 
-import httpx
+import httpx2
 from item_helpers import create_item_record as create_item
 from sqlalchemy import select
 from test_http import authenticated_client
@@ -100,13 +100,13 @@ OA_CORPUS_OPENALEX_PAYLOAD = {
 def test_seam1_oa_corpus_metadata_lookup_and_reconstruction():
     """Seam 1: External OpenAlex lookup parses inverted index, cleans HTML, and formats URLs/UIDs for OA paper."""
 
-    def mock_handler(_request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json=OA_CORPUS_OPENALEX_PAYLOAD)
+    def mock_handler(_request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(200, json=OA_CORPUS_OPENALEX_PAYLOAD)
 
     identifier, record = lookup_metadata(
         "10.3390/ejihpe13110181",
         "openalex",
-        transport=httpx.MockTransport(mock_handler),
+        transport=httpx2.MockTransport(mock_handler),
     )
 
     assert isinstance(identifier, Identifier)
@@ -143,15 +143,15 @@ def test_seam2_oa_corpus_batch_import_and_relational_mapping(db):
     db.add(user)
     db.flush()
 
-    def mock_handler(_request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json=OA_CORPUS_OPENALEX_PAYLOAD)
+    def mock_handler(_request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(200, json=OA_CORPUS_OPENALEX_PAYLOAD)
 
     batch, records, errors = stage_identifier_import_batch(
         db,
         user,
         identifier="10.3390/ejihpe13110181",
         provider="openalex",
-        transport=httpx.MockTransport(mock_handler),
+        transport=httpx2.MockTransport(mock_handler),
     )
     assert not errors
     assert len(records) == 1

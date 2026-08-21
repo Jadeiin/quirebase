@@ -1,6 +1,6 @@
 import json
 
-import httpx
+import httpx2
 import pytest
 from sqlalchemy import select
 from test_http import authenticated_client
@@ -16,12 +16,12 @@ from quirebase.models import AuditEvent, ImportBatch, Item, ItemTagRecommendatio
 from quirebase.web.app import app
 
 
-def response(request: httpx.Request) -> httpx.Response:
+def response(request: httpx2.Request) -> httpx2.Response:
     if request.url.host == "api.crossref.org":
         if "10.9999" in str(request.url):
-            return httpx.Response(404)
+            return httpx2.Response(404)
         assert "/10.1234%2Fsample" in str(request.url)
-        return httpx.Response(
+        return httpx2.Response(
             200,
             json={
                 "message": {
@@ -36,7 +36,7 @@ def response(request: httpx.Request) -> httpx.Response:
             },
         )
     if request.url.host == "eutils.ncbi.nlm.nih.gov":
-        return httpx.Response(
+        return httpx2.Response(
             200,
             json={
                 "result": {
@@ -51,7 +51,7 @@ def response(request: httpx.Request) -> httpx.Response:
             },
         )
     if request.url.host == "api.datacite.org":
-        return httpx.Response(
+        return httpx2.Response(
             200,
             json={
                 "data": {
@@ -68,7 +68,7 @@ def response(request: httpx.Request) -> httpx.Response:
         )
     if request.url.host == "api.openalex.org":
         assert request.url.path == "/works/W123"
-        return httpx.Response(
+        return httpx2.Response(
             200,
             json={
                 "id": "https://openalex.org/W123",
@@ -82,7 +82,7 @@ def response(request: httpx.Request) -> httpx.Response:
             },
         )
     if request.url.host == "openlibrary.org":
-        return httpx.Response(
+        return httpx2.Response(
             200,
             json={
                 "ISBN:9780131103627": {
@@ -95,7 +95,7 @@ def response(request: httpx.Request) -> httpx.Response:
         )
     if request.url.host == "api.adsabs.harvard.edu":
         assert "Bearer ads-token" in request.headers.get("Authorization", "")
-        return httpx.Response(
+        return httpx2.Response(
             200,
             json={
                 "response": {
@@ -113,7 +113,7 @@ def response(request: httpx.Request) -> httpx.Response:
             },
         )
     if request.url.host == "ieeexploreapi.ieee.org":
-        return httpx.Response(
+        return httpx2.Response(
             200,
             json={
                 "articles": [
@@ -129,7 +129,7 @@ def response(request: httpx.Request) -> httpx.Response:
             },
         )
     assert request.url.host == "export.arxiv.org"
-    return httpx.Response(
+    return httpx2.Response(
         200,
         text="""<?xml version="1.0"?>
         <feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">
@@ -171,7 +171,7 @@ def test_identifier_input_cannot_be_used_as_an_arbitrary_url():
 
 def test_pmc_is_search_only():
     with pytest.raises(ValueError, match="provider must be"):
-        lookup_metadata("PMC123", "pmc", transport=httpx.MockTransport(response))
+        lookup_metadata("PMC123", "pmc", transport=httpx2.MockTransport(response))
 
 
 @pytest.mark.parametrize(
@@ -183,7 +183,7 @@ def test_pmc_is_search_only():
 )
 def test_credentialed_lookup_errors_remain_provider_specific(value, provider, message):
     with pytest.raises(MetadataLookupError) as error:
-        lookup_metadata(value, provider, transport=httpx.MockTransport(response))
+        lookup_metadata(value, provider, transport=httpx2.MockTransport(response))
     assert str(error.value) == message
 
 
@@ -223,7 +223,7 @@ def test_provider_adapters_map_records(value, provider, title):
             nasa_ads_token="ads-token",
             ieee_api_key="ieee-key",
         ),
-        transport=httpx.MockTransport(response),
+        transport=httpx2.MockTransport(response),
     )
     assert parsed.provider == provider
     assert record.title == title
@@ -231,7 +231,7 @@ def test_provider_adapters_map_records(value, provider, title):
 
 
 def test_metadata_response_size_is_limited():
-    transport = httpx.MockTransport(lambda _request: httpx.Response(200, content=b"x" * 2048))
+    transport = httpx2.MockTransport(lambda _request: httpx2.Response(200, content=b"x" * 2048))
     with pytest.raises(MetadataLookupError, match="size limit"):
         lookup_metadata(
             "10.1234/sample",
@@ -242,11 +242,11 @@ def test_metadata_response_size_is_limited():
 
 
 def test_pubmed_lookup_passes_configured_identity_and_api_key():
-    captured = {}
+    captured: dict[str, str] = {}
 
-    def handler(request: httpx.Request) -> httpx.Response:
+    def handler(request: httpx2.Request) -> httpx2.Response:
         captured.update(request.url.params)
-        return httpx.Response(
+        return httpx2.Response(
             200,
             json={"result": {"42": {"title": "Configured PubMed", "authors": []}}},
         )
@@ -258,7 +258,7 @@ def test_pubmed_lookup_passes_configured_identity_and_api_key():
             metadata_contact_email="operator@example.org",
             ncbi_api_key="secret-key",
         ),
-        transport=httpx.MockTransport(handler),
+        transport=httpx2.MockTransport(handler),
     )
 
     assert record.title == "Configured PubMed"
@@ -363,13 +363,13 @@ def test_openalex_abstract_inverted_index_and_html_cleaning():
         "type": "preprint",
     }
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json=mock_payload)
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(200, json=mock_payload)
 
     _ident, record = lookup_metadata(
         "W4391019623",
         "openalex",
-        transport=httpx.MockTransport(handler),
+        transport=httpx2.MockTransport(handler),
     )
 
     assert record.title == "OmniDrones: An Efficient Platform"

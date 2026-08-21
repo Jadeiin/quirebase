@@ -20,6 +20,7 @@ Core PDF components:
 - Alpine.js CSP build 3.15.12 — MIT, bundled from the pinned `@alpinejs/csp` package for local UI interactions without enabling `unsafe-eval`.
 - `@zxcvbn-ts/core` 4.2.0, `@zxcvbn-ts/language-common` 4.1.3, and
   `@zxcvbn-ts/language-en` 4.1.1 — MIT, bundled into the local password-strength estimator.
+- httpx2 — BSD-3-Clause, HTTP transport client for outbound discovery metadata lookup and online search.
 
 The lockfiles are the authoritative version inventory. Produce a release SBOM from `uv.lock` and `bun.lock`, and include dependency license files from installed wheels and packages in every release artifact.
 

@@ -420,6 +420,17 @@ def test_discovery_provider_modules_do_not_depend_on_orm_or_web():
             assert not module.startswith(forbidden), f"{py_file} illegally imports {module}"
 
 
+def test_discovery_modules_do_not_import_secondary_or_legacy_http_stacks():
+    for py_file in get_python_files(SRC_ROOT / "discovery"):
+        for module in imported_modules(py_file):
+            assert not (module == "requests" or module.startswith("requests.")), (
+                f"{py_file} illegally imports requests"
+            )
+            assert not (module == "httpx" or module.startswith("httpx.")), (
+                f"{py_file} illegally imports legacy transport {module}; use httpx2 instead"
+            )
+
+
 def test_discovery_provider_registration_stays_private_and_local():
     forbidden_registries = {"PROVIDERS", "SEARCH_PROVIDERS", "LOOKUP_ADAPTERS", "SEARCH_ADAPTERS"}
     for filename in ("lookup.py", "search.py"):

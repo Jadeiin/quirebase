@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-import httpx
+import httpx2
 import pytest
 from test_http import authenticated_client
 
@@ -18,9 +18,9 @@ from quirebase.models import AuditEvent
 from quirebase.web.app import app
 
 
-def search_response(request: httpx.Request) -> httpx.Response:
+def search_response(request: httpx2.Request) -> httpx2.Response:
     if request.url.host == "api.crossref.org":
-        return httpx.Response(
+        return httpx2.Response(
             200,
             json={
                 "message": {
@@ -39,8 +39,8 @@ def search_response(request: httpx.Request) -> httpx.Response:
         )
     if request.url.host == "eutils.ncbi.nlm.nih.gov":
         if request.url.path.endswith("esearch.fcgi"):
-            return httpx.Response(200, json={"esearchresult": {"count": "1", "idlist": ["42"]}})
-        return httpx.Response(
+            return httpx2.Response(200, json={"esearchresult": {"count": "1", "idlist": ["42"]}})
+        return httpx2.Response(
             200,
             json={
                 "result": {
@@ -54,7 +54,7 @@ def search_response(request: httpx.Request) -> httpx.Response:
             },
         )
     if request.url.host == "export.arxiv.org":
-        return httpx.Response(
+        return httpx2.Response(
             200,
             text="""<feed xmlns="http://www.w3.org/2005/Atom"
               xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">
@@ -64,7 +64,7 @@ def search_response(request: httpx.Request) -> httpx.Response:
               <author><name>Preprint Author</name></author></entry></feed>""",
         )
     if request.url.host == "openlibrary.org":
-        return httpx.Response(
+        return httpx2.Response(
             200,
             json={
                 "numFound": 1,
@@ -82,13 +82,13 @@ def search_response(request: httpx.Request) -> httpx.Response:
     assert request.url.host == "api.openalex.org"
     assert request.url.params.get("api_key") == "test-key"
     if request.url.path == "/sources":
-        return httpx.Response(
+        return httpx2.Response(
             200,
             json={"results": [{"id": "https://openalex.org/S123"}]},
         )
     if request.url.params.get("filter", "").startswith("title.search:"):
         assert "raw_author_name.search:!Example" in request.url.params["filter"]
-    return httpx.Response(
+    return httpx2.Response(
         200,
         json={
             "meta": {"count": 1},
@@ -130,7 +130,7 @@ def test_search_adapters_normalize_results(provider, title):
         year_from=2020,
         year_to=2026,
         settings=Settings(openalex_api_key="test-key"),
-        transport=httpx.MockTransport(search_response),
+        transport=httpx2.MockTransport(search_response),
     )
     assert page.total == 1
     assert page.results[0].title == title
@@ -203,7 +203,7 @@ def test_openalex_resolves_publication_names_to_source_ids():
         "openalex",
         [SearchClause("publication", "and", "Journal")],
         settings=Settings(openalex_api_key="test-key"),
-        transport=httpx.MockTransport(search_response),
+        transport=httpx2.MockTransport(search_response),
     )
     assert page.results[0].title == "OpenAlex result"
 
@@ -211,10 +211,10 @@ def test_openalex_resolves_publication_names_to_source_ids():
 def test_openalex_supports_adjacent_or_on_same_field():
     seen_filter = None
 
-    def handler(request: httpx.Request) -> httpx.Response:
+    def handler(request: httpx2.Request) -> httpx2.Response:
         nonlocal seen_filter
         seen_filter = request.url.params.get("filter")
-        return httpx.Response(200, json={"meta": {"count": 0}, "results": []})
+        return httpx2.Response(200, json={"meta": {"count": 0}, "results": []})
 
     search_metadata(
         "openalex",
@@ -222,7 +222,7 @@ def test_openalex_supports_adjacent_or_on_same_field():
             SearchClause("title", "and", "quantum"),
             SearchClause("title", "or", "photonics"),
         ],
-        transport=httpx.MockTransport(handler),
+        transport=httpx2.MockTransport(handler),
     )
 
     assert seen_filter == "title.search:quantum|photonics"
@@ -241,18 +241,18 @@ def test_search_validation_and_pagination_are_bounded():
             year_to=2020,
         )
 
-    captured = {}
+    captured: dict[str, str] = {}
 
-    def handler(request: httpx.Request) -> httpx.Response:
+    def handler(request: httpx2.Request) -> httpx2.Response:
         captured.update(request.url.params)
-        return httpx.Response(200, json={"message": {"total-results": 0, "items": []}})
+        return httpx2.Response(200, json={"message": {"total-results": 0, "items": []}})
 
     page = search_metadata(
         "crossref",
         [SearchClause("any", "and", "term")],
         page=999,
         per_page=999,
-        transport=httpx.MockTransport(handler),
+        transport=httpx2.MockTransport(handler),
     )
     assert page.page == 100
     assert page.per_page == 25
@@ -261,11 +261,11 @@ def test_search_validation_and_pagination_are_bounded():
 
 
 def test_openlibrary_preserves_boolean_and_year_filters():
-    captured = {}
+    captured: dict[str, str] = {}
 
-    def handler(request: httpx.Request) -> httpx.Response:
+    def handler(request: httpx2.Request) -> httpx2.Response:
         captured.update(request.url.params)
-        return httpx.Response(200, json={"numFound": 0, "docs": []})
+        return httpx2.Response(200, json={"numFound": 0, "docs": []})
 
     search_metadata(
         "openlibrary",
@@ -275,7 +275,7 @@ def test_openlibrary_preserves_boolean_and_year_filters():
         ],
         year_from=2010,
         year_to=2020,
-        transport=httpx.MockTransport(handler),
+        transport=httpx2.MockTransport(handler),
     )
 
     assert captured["q"] == 'title:"distributed systems" OR author:"Tanenbaum"'
@@ -311,13 +311,15 @@ def test_search_page_preserves_sparse_condition_rows(db, tmp_path, monkeypatch):
         get_settings.cache_clear()
 
 
-def extra_search_response(request: httpx.Request) -> httpx.Response:
+def extra_search_response(request: httpx2.Request) -> httpx2.Response:
     if request.url.host == "eutils.ncbi.nlm.nih.gov":
         if request.url.path.endswith("esearch.fcgi"):
             assert request.url.params.get("db") == "pmc"
-            return httpx.Response(200, json={"esearchresult": {"count": "1", "idlist": ["PMC123"]}})
+            return httpx2.Response(
+                200, json={"esearchresult": {"count": "1", "idlist": ["PMC123"]}}
+            )
         assert request.url.params.get("db") == "pmc"
-        return httpx.Response(
+        return httpx2.Response(
             200,
             json={
                 "result": {
@@ -333,7 +335,7 @@ def extra_search_response(request: httpx.Request) -> httpx.Response:
         )
     if request.url.host == "api.adsabs.harvard.edu":
         assert request.headers["Authorization"] == "Bearer ads-token"
-        return httpx.Response(
+        return httpx2.Response(
             200,
             json={
                 "response": {
@@ -353,7 +355,7 @@ def extra_search_response(request: httpx.Request) -> httpx.Response:
         )
     assert request.url.host == "ieeexploreapi.ieee.org"
     assert request.url.params.get("apikey") == "ieee-key"
-    return httpx.Response(
+    return httpx2.Response(
         200,
         json={
             "total_records": 1,
@@ -383,7 +385,7 @@ def test_extra_search_adapters_normalize_results(provider, title, identifier_pro
         provider,
         [SearchClause("title", "and", "machine learning")],
         settings=Settings(nasa_ads_token="ads-token", ieee_api_key="ieee-key"),
-        transport=httpx.MockTransport(extra_search_response),
+        transport=httpx2.MockTransport(extra_search_response),
     )
     assert page.total == 1
     assert page.results[0].title == title
@@ -393,11 +395,13 @@ def test_extra_search_adapters_normalize_results(provider, title, identifier_pro
 def test_pmc_forwards_credentials_to_esearch_and_esummary():
     recorded_params = []
 
-    def pmc_credential_response(request: httpx.Request) -> httpx.Response:
+    def pmc_credential_response(request: httpx2.Request) -> httpx2.Response:
         recorded_params.append((request.url.path, dict(request.url.params)))
         if request.url.path.endswith("esearch.fcgi"):
-            return httpx.Response(200, json={"esearchresult": {"count": "1", "idlist": ["PMC999"]}})
-        return httpx.Response(
+            return httpx2.Response(
+                200, json={"esearchresult": {"count": "1", "idlist": ["PMC999"]}}
+            )
+        return httpx2.Response(
             200,
             json={
                 "result": {
@@ -416,7 +420,7 @@ def test_pmc_forwards_credentials_to_esearch_and_esummary():
         "pmc",
         [SearchClause("title", "and", "test")],
         settings=Settings(metadata_contact_email="pmc@test.org", ncbi_api_key="ncbi-secret-key"),
-        transport=httpx.MockTransport(pmc_credential_response),
+        transport=httpx2.MockTransport(pmc_credential_response),
     )
     assert len(recorded_params) == 2
     esearch_path, esearch_params = recorded_params[0]
@@ -434,7 +438,7 @@ def test_credentialed_sources_require_keys():
         search_metadata(
             "nasa",
             [SearchClause("title", "and", "term")],
-            transport=httpx.MockTransport(extra_search_response),
+            transport=httpx2.MockTransport(extra_search_response),
         )
     assert str(nasa_error.value) == "NASA ADS requires QUIREBASE_NASA_ADS_TOKEN"
 
@@ -442,15 +446,15 @@ def test_credentialed_sources_require_keys():
         search_metadata(
             "ieee",
             [SearchClause("title", "and", "term")],
-            transport=httpx.MockTransport(extra_search_response),
+            transport=httpx2.MockTransport(extra_search_response),
         )
     assert str(ieee_error.value) == "IEEE Xplore requires QUIREBASE_IEEE_API_KEY"
 
 
 def test_extra_search_fallback_identifiers_without_doi():
-    def fallback_response(request: httpx.Request) -> httpx.Response:
+    def fallback_response(request: httpx2.Request) -> httpx2.Response:
         if request.url.host == "api.adsabs.harvard.edu":
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "response": {
@@ -468,7 +472,7 @@ def test_extra_search_fallback_identifiers_without_doi():
                 },
             )
         if request.url.host == "ieeexploreapi.ieee.org":
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "total_records": 1,
@@ -489,7 +493,7 @@ def test_extra_search_fallback_identifiers_without_doi():
         "nasa",
         [SearchClause("title", "and", "machine learning")],
         settings=Settings(nasa_ads_token="ads-token"),
-        transport=httpx.MockTransport(fallback_response),
+        transport=httpx2.MockTransport(fallback_response),
     )
     assert nasa_page.results[0].identifier_provider == "bibcode"
     assert nasa_page.results[0].identifier == "2025ApJ...123..456A"
@@ -498,7 +502,7 @@ def test_extra_search_fallback_identifiers_without_doi():
         "ieee",
         [SearchClause("title", "and", "machine learning")],
         settings=Settings(ieee_api_key="ieee-key"),
-        transport=httpx.MockTransport(fallback_response),
+        transport=httpx2.MockTransport(fallback_response),
     )
     assert ieee_page.results[0].identifier_provider == "article_number"
     assert ieee_page.results[0].identifier == "9876543"
@@ -512,9 +516,9 @@ def test_fallback_identifiers_can_be_staged_for_import(db, monkeypatch):
     monkeypatch.setenv("QUIREBASE_IEEE_API_KEY", "ieee-key")
     get_settings.cache_clear()
 
-    def lookup_fallback_response(request: httpx.Request) -> httpx.Response:
+    def lookup_fallback_response(request: httpx2.Request) -> httpx2.Response:
         if request.url.host == "api.adsabs.harvard.edu":
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "response": {
@@ -531,7 +535,7 @@ def test_fallback_identifiers_can_be_staged_for_import(db, monkeypatch):
                 },
             )
         if request.url.host == "ieeexploreapi.ieee.org":
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "articles": [
@@ -556,7 +560,7 @@ def test_fallback_identifiers_can_be_staged_for_import(db, monkeypatch):
         user,
         "2025ApJ...123..456A",
         "bibcode",
-        transport=httpx.MockTransport(lookup_fallback_response),
+        transport=httpx2.MockTransport(lookup_fallback_response),
     )
     assert errors_nasa == []
     assert len(records_nasa) == 1
@@ -567,7 +571,7 @@ def test_fallback_identifiers_can_be_staged_for_import(db, monkeypatch):
         user,
         "9876543",
         "article_number",
-        transport=httpx.MockTransport(lookup_fallback_response),
+        transport=httpx2.MockTransport(lookup_fallback_response),
     )
     assert errors_ieee == []
     assert len(records_ieee) == 1

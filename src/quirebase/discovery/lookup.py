@@ -8,7 +8,7 @@ from typing import Any, Protocol, cast
 from urllib.parse import quote
 from xml.etree import ElementTree
 
-import httpx
+import httpx2
 
 from quirebase.core.config import Settings, get_settings
 
@@ -716,13 +716,13 @@ class MetadataClient:
     def __init__(
         self,
         settings: Settings | None = None,
-        transport: httpx.BaseTransport | None = None,
+        transport: httpx2.BaseTransport | None = None,
     ):
         self.settings = settings or get_settings()
         agent = "Quirebase/0.1 metadata lookup"
         if self.settings.metadata_contact_email:
             agent += f" (mailto:{self.settings.metadata_contact_email})"
-        self.client = httpx.Client(
+        self.client = httpx2.Client(
             timeout=self.settings.metadata_timeout_seconds,
             follow_redirects=False,
             transport=transport,
@@ -755,7 +755,7 @@ class MetadataClient:
                 return bytes(body)
         except MetadataLookupError:
             raise
-        except httpx.HTTPError as error:
+        except httpx2.HTTPError as error:
             raise MetadataLookupError("metadata provider request failed") from error
 
     def lookup(self, identifier: Identifier) -> MetadataRecord:
@@ -778,7 +778,7 @@ def lookup_metadata(
     value: str,
     provider: str = "auto",
     settings: Settings | None = None,
-    transport: httpx.BaseTransport | None = None,
+    transport: httpx2.BaseTransport | None = None,
 ) -> tuple[Identifier, MetadataRecord]:
     identifier = parse_identifier(value, provider)
     client = MetadataClient(settings=settings, transport=transport)

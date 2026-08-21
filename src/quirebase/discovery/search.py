@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol, cast
 from xml.etree import ElementTree
 
-import httpx
+import httpx2
 
 from quirebase.core.config import Settings, get_settings
 from quirebase.discovery.lookup import (
@@ -797,13 +797,13 @@ class OnlineSearchClient:
     def __init__(
         self,
         settings: Settings | None = None,
-        transport: httpx.BaseTransport | None = None,
+        transport: httpx2.BaseTransport | None = None,
     ):
         self.settings = settings or get_settings()
         agent = "Quirebase/0.1 online search"
         if self.settings.metadata_contact_email:
             agent += f" (mailto:{self.settings.metadata_contact_email})"
-        self.client = httpx.Client(
+        self.client = httpx2.Client(
             timeout=self.settings.metadata_timeout_seconds,
             follow_redirects=False,
             transport=transport,
@@ -836,7 +836,7 @@ class OnlineSearchClient:
                 return bytes(body)
         except MetadataLookupError:
             raise
-        except httpx.HTTPError as error:
+        except httpx2.HTTPError as error:
             raise MetadataLookupError("metadata search request failed") from error
 
 
@@ -850,7 +850,7 @@ def search_metadata(
     year_from: int | None = None,
     year_to: int | None = None,
     settings: Settings | None = None,
-    transport: httpx.BaseTransport | None = None,
+    transport: httpx2.BaseTransport | None = None,
 ) -> SearchPage:
     from quirebase.discovery.providers import search_provider
 
