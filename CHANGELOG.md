@@ -1,3 +1,12 @@
+## 0.1.2 (2026-08-21)
+
+### Feat
+
+- harden bibliography, citation and annotation export with timezone-aware asset pipeline
+- improve password feedback and export cleanup
+- wire three-tier document export with shared annotation visibility
+- overhaul item export and annotation workflows
+
 ## 0.1.1 (2026-08-17)
 
 ### Feat
