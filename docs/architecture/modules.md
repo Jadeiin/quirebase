@@ -106,8 +106,10 @@ still referenced by another pending Import Batch.
 
 All physical Document deletion crosses the Documents interface through
 `delete_unreferenced_objects`, which checks File Revisions, Attachments and pending PDF Import
-Batches after the caller's transaction commits. Library and Discovery never duplicate object
-reference rules before deleting content-addressed storage.
+Batches after the caller's transaction commits. In-flight PDF staging holds an object lease until
+its reference commits; cleanup coordinates on the same object key and treats active leases as
+references. Library and Discovery never duplicate object reference rules before deleting
+content-addressed storage.
 
 An internal helper imported across Modules is an architectural pressure point. Repeated use is
 a signal to move the concept to its owner or deepen the owning interface; it is not a reason to

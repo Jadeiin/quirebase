@@ -7,10 +7,12 @@ from datetime import UTC, datetime, timedelta
 from io import BytesIO
 
 import pymupdf
+from sqlalchemy.orm import Session
 from test_http import authenticated_client
 
 from quirebase.core.config import get_settings
 from quirebase.core.storage import LocalObjectStore
+from quirebase.documents.revisions import delete_unreferenced_objects, stage_pdf
 from quirebase.models import (
     ImportBatch,
     Item,
@@ -469,6 +471,60 @@ def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(db, tmp
         imported = db.query(Item).filter_by(doi="10.1000/shared-staged").one()
         assert LocalObjectStore().path(imported.revisions[0].object_key).is_file()
     finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+
+
+def test_cleanup_preserves_object_referenced_by_an_uncommitted_pdf_import_batch(
+    db, tmp_path, monkeypatch
+):
+    _client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+    pdf = published_pdf_bytes("10.1000/in-flight-staged")
+    discarded = stage_pdf(
+        BytesIO(pdf),
+        "discarded-copy.pdf",
+        100_000,
+    )
+    in_flight = stage_pdf(
+        BytesIO(pdf),
+        "in-flight.pdf",
+        100_000,
+    )
+    assert discarded.object_key == in_flight.object_key
+    object_path = LocalObjectStore().path(in_flight.object_key)
+    batch = ImportBatch(
+        owner_id=item.created_by,
+        file_format="pdf",
+        records=json.dumps([
+            {
+                "title": "In-flight staged PDF",
+                "_pdf": {
+                    "object_key": in_flight.object_key,
+                    "sha256": in_flight.sha256,
+                    "size": in_flight.size,
+                    "original_name": in_flight.original_name,
+                },
+            }
+        ]),
+        errors="[]",
+    )
+    db.add(batch)
+    db.flush()
+
+    try:
+        discarded.release()
+        with Session(db.bind) as cleanup_db:
+            assert delete_unreferenced_objects(cleanup_db, (discarded.object_key,)) == ()
+        assert object_path.is_file()
+
+        db.commit()
+        in_flight.release()
+        with Session(db.bind) as cleanup_db:
+            assert delete_unreferenced_objects(cleanup_db, (in_flight.object_key,)) == ()
+        assert object_path.is_file()
+    finally:
+        discarded.release()
+        in_flight.release()
         app.dependency_overrides.clear()
         get_settings.cache_clear()
 

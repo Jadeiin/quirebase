@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, BinaryIO
 
@@ -17,7 +18,7 @@ from quirebase.core.errors import (
     ResourceUnavailable,
     ValidationFailure,
 )
-from quirebase.core.storage import LocalObjectStore
+from quirebase.core.storage import LocalObjectStore, ObjectLease
 from quirebase.models import (
     Attachment,
     FileRevision,
@@ -39,18 +40,37 @@ class UnsupportedMediaType(DomainError):
     pass
 
 
-def stage_pdf(source: BinaryIO, filename: str, max_bytes: int) -> tuple[str, str, int, str]:
+@dataclass
+class StagedPdf:
+    object_key: str
+    sha256: str
+    size: int
+    original_name: str
+    _lease: ObjectLease = field(repr=False)
+
+    def revision_data(self) -> tuple[str, str, int, str]:
+        return self.object_key, self.sha256, self.size, self.original_name
+
+    def release(self) -> None:
+        self._lease.release()
+
+
+def stage_pdf(source: BinaryIO, filename: str, max_bytes: int) -> StagedPdf:
     if not filename or not filename.lower().endswith(".pdf"):
         raise UnsupportedMediaType("a PDF file is required")
     store = LocalObjectStore()
     try:
-        key, digest, size = store.put_pdf(source, max_bytes)
+        key, digest, size, lease = store.put_staged_pdf(source, max_bytes)
         validate_pdf_container(store.path(key))
     except ValueError as error:
+        if "lease" in locals():
+            lease.release()
         if "key" in locals():
-            store.path(key).unlink(missing_ok=True)
+            with store.cleanup_lock(key):
+                if not store.has_active_lease(key):
+                    store.delete(key)
         raise ValidationFailure(str(error)) from error
-    return key, digest, size, Path(filename).name
+    return StagedPdf(key, digest, size, Path(filename).name, lease)
 
 
 def attach_staged_pdf(
@@ -98,31 +118,36 @@ def _pdf_import_object_keys(records_json: str) -> set[str]:
     }
 
 
+def _object_is_referenced(db: Session, object_key: str) -> bool:
+    if db.scalar(select(FileRevision.object_key).where(FileRevision.object_key == object_key)):
+        return True
+    if db.scalar(select(Attachment.object_key).where(Attachment.object_key == object_key)):
+        return True
+    return any(
+        object_key in _pdf_import_object_keys(records)
+        for records in db.scalars(
+            select(ImportBatch.records).where(ImportBatch.file_format == "pdf")
+        )
+    )
+
+
 def delete_unreferenced_objects(db: Session, object_keys: Iterable[str]) -> tuple[str, ...]:
-    """Delete objects only when no committed or pending domain record references them."""
+    """Delete objects only when no committed, pending, or in-flight record references them."""
     keys = tuple(dict.fromkeys(key for key in object_keys if key))
     if not keys:
         return ()
-    with Session(db.bind) as check_db:
-        referenced = set(
-            check_db.scalars(
-                select(FileRevision.object_key).where(FileRevision.object_key.in_(keys))
-            ).all()
-        )
-        referenced.update(
-            check_db.scalars(
-                select(Attachment.object_key).where(Attachment.object_key.in_(keys))
-            ).all()
-        )
-        for records in check_db.scalars(
-            select(ImportBatch.records).where(ImportBatch.file_format == "pdf")
-        ):
-            referenced.update(_pdf_import_object_keys(records))
-    deleted = tuple(key for key in keys if key not in referenced)
     store = LocalObjectStore()
-    for object_key in deleted:
-        store.delete(object_key)
-    return deleted
+    actually_deleted: list[str] = []
+    for object_key in keys:
+        with store.cleanup_lock(object_key):
+            if store.has_active_lease(object_key):
+                continue
+            with Session(db.bind) as check_db:
+                if _object_is_referenced(check_db, object_key):
+                    continue
+            store.delete(object_key)
+            actually_deleted.append(object_key)
+    return tuple(actually_deleted)
 
 
 def discard_staged_object(db: Session, object_key: str) -> None:
@@ -144,13 +169,15 @@ def store_pdf_revision(
         max_bytes = get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes)
     staged = stage_pdf(source, filename, max_bytes)
     try:
-        revision = attach_staged_pdf(db, user, item, staged)
+        revision = attach_staged_pdf(db, user, item, staged.revision_data())
         db.commit()
-        return revision
     except Exception:
         db.rollback()
-        discard_staged_object(db, staged[0])
+        staged.release()
+        discard_staged_object(db, staged.object_key)
         raise
+    staged.release()
+    return revision
 
 
 def create_attachment(

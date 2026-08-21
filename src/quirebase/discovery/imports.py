@@ -31,7 +31,7 @@ from quirebase.discovery.lookup import (
     lookup_metadata,
 )
 from quirebase.documents import delete_unreferenced_objects
-from quirebase.documents.revisions import attach_staged_pdf, stage_pdf
+from quirebase.documents.revisions import StagedPdf, attach_staged_pdf, stage_pdf
 from quirebase.models import ImportBatch, Item, User
 from quirebase.pipeline.inspection import extract_doi
 from quirebase.search import search_index
@@ -159,16 +159,18 @@ def stage_pdf_import_batch(
     }
     batch_dois: set[str] = set()
     retained_keys: set[str] = set()
+    staged_pdfs: list[StagedPdf] = []
     records: list[dict] = []
     errors: list[dict] = []
 
     try:
         for row, (source, filename) in enumerate(uploads, start=1):
-            staged: tuple[str, str, int, str] | None = None
+            staged: StagedPdf | None = None
             diagnostic_code = "invalid_pdf"
             try:
                 staged = stage_pdf(source, filename, max_bytes)
-                detected_doi = extract_doi(LocalObjectStore().path(staged[0]))
+                staged_pdfs.append(staged)
+                detected_doi = extract_doi(LocalObjectStore().path(staged.object_key))
                 if not detected_doi:
                     diagnostic_code = "missing_doi"
                     raise ValidationFailure("no DOI was found in this PDF")
@@ -198,15 +200,15 @@ def stage_pdf_import_batch(
                 rec_dict = record.to_dict() if isinstance(record, MetadataRecord) else dict(record)
                 rec_dict.setdefault("doi", detected_doi)
                 rec_dict["_pdf"] = {
-                    "object_key": staged[0],
-                    "sha256": staged[1],
-                    "size": staged[2],
-                    "original_name": staged[3],
+                    "object_key": staged.object_key,
+                    "sha256": staged.sha256,
+                    "size": staged.size,
+                    "original_name": staged.original_name,
                     "detected_doi": detected_doi,
                 }
                 records.append(rec_dict)
                 batch_dois.add(normalized_doi)
-                retained_keys.add(staged[0])
+                retained_keys.add(staged.object_key)
             except DomainError as error:
                 errors.append({
                     "row": row,
@@ -214,8 +216,9 @@ def stage_pdf_import_batch(
                     "code": diagnostic_code,
                     "message": str(error),
                 })
-                if staged is not None and staged[0] not in retained_keys:
-                    delete_unreferenced_objects(db, (staged[0],))
+                if staged is not None and staged.object_key not in retained_keys:
+                    staged.release()
+                    delete_unreferenced_objects(db, (staged.object_key,))
 
         batch = ImportBatch(
             owner_id=user.id,
@@ -234,10 +237,14 @@ def stage_pdf_import_batch(
             detail={"candidates": len(records), "diagnostics": len(errors)},
         )
         db.commit()
+        for staged in staged_pdfs:
+            staged.release()
         return batch, records, errors
     except Exception:
         db.rollback()
-        delete_unreferenced_objects(db, retained_keys)
+        for staged in staged_pdfs:
+            staged.release()
+        delete_unreferenced_objects(db, {staged.object_key for staged in staged_pdfs})
         raise
 
 
