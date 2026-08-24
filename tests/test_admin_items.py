@@ -11,13 +11,13 @@ from test_library_ui import pdf_bytes
 from quirebase.core.crypto import hash_password
 from quirebase.core.errors import ResourceUnavailable
 from quirebase.core.storage import LocalObjectStore
-from quirebase.discovery import commit_import_batch
 from quirebase.documents.revisions import store_pdf_revision
 from quirebase.library import (
     admin_delete_item,
     get_storage_metrics,
     list_global_items,
 )
+from quirebase.library.imports import commit_import_batch
 from quirebase.models import AuditEvent, FileRevision, ImportBatch, Item, User
 
 

@@ -1,0 +1,236 @@
+from __future__ import annotations
+
+import json
+import re
+from typing import Any
+from urllib.parse import quote
+
+from inquiro.identifiers import DOI_PATTERN, normalize_doi, parse_openalex
+from inquiro.models import (
+    InvalidProviderRequest,
+    ProviderRecord,
+    ProviderSearchPage,
+    ProviderSearchRecord,
+    ProviderUnavailable,
+    SearchClause,
+)
+from inquiro.parsing import (
+    _clean_markup,
+    _collect_openalex_keyword_names,
+    _collect_urls,
+    _first,
+    normalize_reference_type,
+    reconstruct_openalex_abstract,
+)
+from inquiro.providers._contracts import ProviderContext, ProviderDefinition, RemoteNotFound
+
+
+class OpenAlexLookupAdapter:
+    def lookup(
+        self, client: ProviderContext, value: str, settings: Any, *, endpoint: str
+    ) -> ProviderRecord:
+        api_key = getattr(settings, "openalex_api_key", None)
+        params = {"api_key": api_key} if api_key else None
+        lookup_target = f"doi:{value}" if DOI_PATTERN.fullmatch(value) else value
+        try:
+            body = client._get(
+                f"{endpoint}/works/{quote(lookup_target, safe=':')}",
+                params,
+            )
+        except (RemoteNotFound, ProviderUnavailable):
+            if lookup_target.startswith("doi:"):
+                body = client._get(
+                    f"{endpoint}/works/https://doi.org/{quote(value, safe='')}",
+                    params,
+                )
+            else:
+                raise
+        try:
+            payload = json.loads(body)
+        except (json.JSONDecodeError, TypeError) as error:
+            raise ProviderUnavailable("OpenAlex returned invalid metadata") from error
+        openalex_id = (_first(payload.get("id")) or "").rsplit("/", 1)[-1]
+        doi = normalize_doi(_first(payload.get("doi")) or "") or None
+        source = (payload.get("primary_location") or {}).get("source") or {}
+        biblio = payload.get("biblio") or {}
+        pages = None
+        if biblio.get("first_page") and biblio.get("last_page"):
+            pages = f"{biblio.get('first_page')}-{biblio.get('last_page')}"
+        elif biblio.get("first_page"):
+            pages = str(biblio.get("first_page"))
+
+        urls = _collect_urls(
+            f"https://doi.org/{doi}" if doi else None,
+            _first((payload.get("primary_location") or {}).get("landing_page_url")),
+            _first((payload.get("open_access") or {}).get("oa_url")),
+        )
+
+        abstract = reconstruct_openalex_abstract(
+            payload.get("abstract_inverted_index")
+        ) or _clean_markup(_first(payload.get("abstract")))
+        kw_list = _collect_openalex_keyword_names(payload.get("topics"), payload.get("keywords"))
+        if not kw_list:
+            kw_list = _collect_openalex_keyword_names(payload.get("concepts"))
+        keywords_val = "; ".join(kw_list) if kw_list else None
+        title = _clean_markup(_first(payload.get("display_name") or payload.get("title"))) or ""
+
+        return ProviderRecord(
+            title=title,
+            abstract=abstract,
+            authors="; ".join(
+                author_name
+                for authorship in payload.get("authorships", [])
+                if (author_name := _first((authorship.get("author") or {}).get("display_name")))
+            )
+            or None,
+            keywords=keywords_val,
+            publication_date=_first(payload.get("publication_date")),
+            publication_title=_first(source.get("display_name")),
+            volume=_first(biblio.get("volume")),
+            issue=_first(biblio.get("issue")),
+            pages=pages,
+            publisher=_first(source.get("host_organization_name")),
+            doi=doi,
+            urls=urls,
+            identifiers=json.dumps({
+                key: val for key, val in {"openalex": openalex_id, "doi": doi}.items() if val
+            }),
+            reference_type=normalize_reference_type(_first(payload.get("type"))),
+        )
+
+
+class OpenAlexSearchAdapter:
+    def search(
+        self,
+        client: ProviderContext,
+        clauses: list[SearchClause],
+        *,
+        page: int,
+        per_page: int,
+        sort: str,
+        year_from: int | None,
+        year_to: int | None,
+        settings: Any,
+        endpoint: str,
+    ) -> ProviderSearchPage:
+        params: dict[str, Any] = {
+            "page": page,
+            "per_page": per_page,
+            "sort": "publication_date:desc" if sort == "published" else "relevance_score:desc",
+        }
+        api_key = getattr(settings, "openalex_api_key", None)
+        if api_key:
+            params["api_key"] = api_key
+        filter_fields = {
+            "title": "title.search",
+            "author": "raw_author_name.search",
+            "abstract": "abstract.search",
+            "any": "default.search",
+        }
+        groups: list[tuple[str, list[str], bool]] = []
+        for clause in clauses:
+            clean = re.sub(r'[,|!"\\]+', " ", clause.term).strip()
+            if clause.operator == "or":
+                if not groups or groups[-1][0] != clause.field or groups[-1][2]:
+                    raise InvalidProviderRequest(
+                        "OpenAlex only supports OR between adjacent conditions on the same field"
+                    )
+                groups[-1][1].append(clean)
+            else:
+                groups.append((clause.field, [clean], clause.operator == "not"))
+        filter_parts: list[str] = []
+        for field, values, negated in groups:
+            if field == "publication":
+                source_ids: list[str] = []
+                for value in values:
+                    source_ids.extend(self._resolve_source_ids(client, value, settings, endpoint))
+                source_ids = list(dict.fromkeys(source_ids))
+                if not source_ids:
+                    if negated:
+                        continue
+                    return ProviderSearchPage("openalex", [], 0, page, per_page)
+                filter_field = "primary_location.source.id"
+                filter_value = "|".join(source_ids)
+            else:
+                filter_field = filter_fields[field]
+                filter_value = "|".join(values)
+            filter_parts.append(f"{filter_field}:{'!' if negated else ''}{filter_value}")
+        if year_from:
+            filter_parts.append(f"from_publication_date:{year_from}-01-01")
+        if year_to:
+            filter_parts.append(f"to_publication_date:{year_to}-12-31")
+        if filter_parts:
+            params["filter"] = ",".join(filter_parts)
+        if sort == "relevance" and not any(".search:" in value for value in filter_parts):
+            params["sort"] = "cited_by_count:desc"
+        body = client._get(f"{endpoint}/works", params)
+        try:
+            payload = json.loads(body)
+        except (json.JSONDecodeError, TypeError) as error:
+            raise ProviderUnavailable("OpenAlex returned invalid search results") from error
+        meta = payload.get("meta", {})
+        total = int(meta.get("count", 0))
+        results = []
+        for work in payload.get("results", []):
+            openalex_id = (work.get("id") or "").rsplit("/", 1)[-1]
+            title = _clean_markup(work.get("display_name") or work.get("title"))
+            if not openalex_id or not title:
+                continue
+            doi = (
+                re.sub(
+                    r"^https?://(?:dx\.)?doi\.org/", "", work.get("doi") or "", flags=re.IGNORECASE
+                )
+                or None
+            )
+            authors = "; ".join(
+                author_name
+                for authorship in work.get("authorships", [])
+                if (author_name := _first((authorship.get("author") or {}).get("display_name")))
+            )
+            abstract = reconstruct_openalex_abstract(
+                work.get("abstract_inverted_index")
+            ) or _clean_markup(_first(work.get("abstract")))
+            source = (work.get("primary_location") or {}).get("source") or {}
+            results.append(
+                ProviderSearchRecord(
+                    provider="openalex",
+                    identifier_provider="openalex",
+                    identifier=openalex_id,
+                    title=title,
+                    authors=authors or None,
+                    publication_title=_first(source.get("display_name")),
+                    publication_date=work.get("publication_date"),
+                    doi=doi,
+                    abstract=abstract,
+                )
+            )
+        return ProviderSearchPage("openalex", results, total, page, per_page)
+
+    def _resolve_source_ids(
+        self, client: ProviderContext, name: str, settings: Any, endpoint: str
+    ) -> list[str]:
+        params: dict[str, Any] = {"search": name, "per-page": "10"}
+        api_key = getattr(settings, "openalex_api_key", None)
+        if api_key:
+            params["api_key"] = api_key
+        try:
+            body = client._get(f"{endpoint}/sources", params)
+            payload = json.loads(body)
+        except (json.JSONDecodeError, TypeError) as error:
+            raise ProviderUnavailable("OpenAlex returned invalid source results") from error
+        return [
+            source_id
+            for source in payload.get("results", [])
+            if (source_id := (_first(source.get("id")) or "").rsplit("/", 1)[-1])
+        ]
+
+
+OPENALEX_PROVIDER = ProviderDefinition(
+    name="openalex",
+    identifier_aliases=("openalex",),
+    identifier_parser=parse_openalex,
+    auto_detect_identifier=True,
+    search_adapter=OpenAlexSearchAdapter(),
+    lookup_adapter=OpenAlexLookupAdapter(),
+    endpoint="https://api.openalex.org",
+)

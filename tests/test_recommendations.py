@@ -5,25 +5,25 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 
 import pytest
+from rubrica import (
+    KeyBertRecommendationEngine,
+    RecommendationDocument,
+    RecommendationLimits,
+    YakeRecommendationEngine,
+    build_recommendation_prompt,
+)
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from quirebase.core.config import Settings
 from quirebase.library.item_metadata import ItemMetadata, create_item
-from quirebase.models import Item, ItemTagRecommendation, Job, JobState, User
-from quirebase.pipeline.jobs import run_job
-from quirebase.recommendations.engine import (
-    KeyBertRecommendationEngine,
-    RecommendationDocument,
-    RecommendationLimits,
-    YakeRecommendationEngine,
-)
-from quirebase.recommendations.persistence import (
+from quirebase.library.tag_recommendations import (
     force_item_tag_recommendation,
     handle_item_tag_recommendation,
     request_item_tag_recommendation,
 )
-from quirebase.recommendations.prompt import build_recommendation_prompt
+from quirebase.models import Item, ItemTagRecommendation, Job, JobState, User
+from quirebase.pipeline.jobs import run_job
 
 
 class FakeYakeExtractor:
@@ -155,7 +155,7 @@ def test_item_creation_enqueues_and_worker_persists_yake_results(db, monkeypatch
     db.add(user)
     db.commit()
     settings = Settings(_env_file=None, recommendation_engine="yake")
-    monkeypatch.setattr("quirebase.recommendations.persistence.get_settings", lambda: settings)
+    monkeypatch.setattr("quirebase.library.tag_recommendations.get_settings", lambda: settings)
 
     item_result = create_item(
         db,

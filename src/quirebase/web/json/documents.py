@@ -9,14 +9,14 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from starlette.background import BackgroundTask
 
 from quirebase.core.database import get_db
-from quirebase.discovery import (
-    ExportOptions,
-    get_item_citation_response,
-    get_item_citation_text_response,
-)
 from quirebase.documents import (
     export_revision_pdf,
     get_revision_file,
+)
+from quirebase.library import (
+    ExportOptions,
+    get_item_citation_response,
+    get_item_citation_text_response,
 )
 from quirebase.models import User
 from quirebase.web.deps import current_user

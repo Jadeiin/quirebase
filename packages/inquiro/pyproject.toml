@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "inquiro"
+version = "0.1.2"
+description = "Academic metadata discovery, multi-provider search, bibliography interchange and CSL citation engine"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "AGPL-3.0-only"
+dependencies = [
+  "httpx2>=2.12,<3",
+  "bibtexparser>=1.4,<2",
+  "rispy>=0.10,<1",
+]
+
+[project.optional-dependencies]
+citation = [
+  "citeproc-py>=0.10,<0.11",
+  "citeproc-py-styles>=0.1.6,<0.2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/inquiro"]

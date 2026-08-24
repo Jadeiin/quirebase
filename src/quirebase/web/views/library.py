@@ -7,13 +7,11 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response, Streamin
 
 from quirebase.access import editable_projects, visible_projects
 from quirebase.core.database import get_db
-from quirebase.discovery import (
-    ExportOptions,
-    export_selected_bibliography,
-)
 from quirebase.library import (
+    ExportOptions,
     apply_bulk_item_action,
     download_selected_item_documents,
+    export_selected_bibliography,
     search_library,
 )
 from quirebase.models import LoginSession, User

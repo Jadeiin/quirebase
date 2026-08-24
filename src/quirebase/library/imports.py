@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, BinaryIO
 
+from inquiro.bibliography import SUPPORTED_FORMATS, parse_bibliography
+
 from quirebase.access.items import require_accessible_items, visible_items_query
 from quirebase.audit import record_event
 from quirebase.core.config import Settings, get_settings
@@ -11,27 +13,19 @@ from quirebase.core.errors import (
     ResourceNotFound,
     ResourceUnavailable,
     SizeLimitExceeded,
+    UpstreamServiceError,
     ValidationFailure,
 )
 from quirebase.core.storage import LocalObjectStore
-from quirebase.discovery.activity import get_accessible_item_identifiers
-from quirebase.discovery.bibliography import (
-    SUPPORTED_FORMATS,
-    parse_bibliography,
+from quirebase.documents.revisions import (
+    StagedPdf,
+    attach_staged_pdf,
+    delete_unreferenced_objects,
+    stage_pdf,
 )
-from quirebase.discovery.citations import (
-    ExportOptions,
-    format_csl_export,
-    format_standard_export,
-)
-from quirebase.discovery.lookup import (
-    MetadataLookupError,
-    MetadataNotFoundError,
-    MetadataRecord,
-    lookup_metadata,
-)
-from quirebase.documents import delete_unreferenced_objects
-from quirebase.documents.revisions import StagedPdf, attach_staged_pdf, stage_pdf
+from quirebase.library.activity import get_accessible_item_identifiers
+from quirebase.library.citations import format_csl_export, format_standard_export
+from quirebase.library.providers import candidate_record_values, lookup_candidate
 from quirebase.models import ImportBatch, Item, User
 from quirebase.pipeline.inspection import extract_doi
 from quirebase.search import search_index
@@ -39,15 +33,11 @@ from quirebase.search import search_index
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    import httpx2
+    from inquiro.citations import ExportOptions
     from sqlalchemy.orm import Session
 
 
 class BatchConflict(DomainError):
-    pass
-
-
-class UpstreamServiceError(DomainError):
     pass
 
 
@@ -96,29 +86,16 @@ def stage_identifier_import_batch(
     user: User,
     identifier: str,
     provider: str = "auto",
-    transport: httpx2.BaseTransport | None = None,
     settings: Settings | None = None,
 ) -> tuple[ImportBatch, list[dict], list[dict]]:
     from quirebase.operations.settings import get_effective_settings_model
 
     effective_settings = settings or get_effective_settings_model(db)
-    try:
-        parsed, record = lookup_metadata(
-            identifier,
-            provider,
-            settings=effective_settings,
-            transport=transport,
-        )
-    except ValueError as error:
-        raise ValidationFailure(str(error)) from error
-    except MetadataNotFoundError as error:
-        raise ResourceNotFound(str(error)) from error
-    except MetadataLookupError as error:
-        raise UpstreamServiceError(str(error)) from error
-    rec_dict = record.to_dict() if isinstance(record, MetadataRecord) else record
+    record = lookup_candidate(identifier, provider, effective_settings)
+    rec_dict = candidate_record_values(record)
     batch = ImportBatch(
         owner_id=user.id,
-        file_format=f"metadata:{parsed.provider}",
+        file_format=f"metadata:{record.identifier.provider}",
         records=json.dumps([rec_dict], ensure_ascii=False),
         errors="[]",
     )
@@ -130,7 +107,7 @@ def stage_identifier_import_batch(
         "metadata.lookup",
         "import_batch",
         batch.id,
-        detail={"provider": parsed.provider},
+        detail={"provider": record.identifier.provider},
     )
     db.commit()
     return batch, [rec_dict], []
@@ -182,22 +159,18 @@ def stage_pdf_import_batch(
                     diagnostic_code = "duplicate_batch_doi"
                     raise BatchConflict("another PDF in this batch has the same DOI")
                 try:
-                    _identifier, record = lookup_metadata(
-                        detected_doi,
-                        "doi",
-                        settings=effective_settings,
-                    )
-                except ValueError as error:
+                    record = lookup_candidate(detected_doi, "doi", effective_settings)
+                except ValidationFailure:
                     diagnostic_code = "invalid_doi"
-                    raise ValidationFailure(str(error)) from error
-                except MetadataNotFoundError as error:
+                    raise
+                except ResourceNotFound:
                     diagnostic_code = "metadata_not_found"
-                    raise ResourceNotFound(str(error)) from error
-                except MetadataLookupError as error:
+                    raise
+                except UpstreamServiceError:
                     diagnostic_code = "metadata_lookup_failed"
-                    raise UpstreamServiceError(str(error)) from error
+                    raise
 
-                rec_dict = record.to_dict() if isinstance(record, MetadataRecord) else dict(record)
+                rec_dict = candidate_record_values(record)
                 rec_dict.setdefault("doi", detected_doi)
                 rec_dict["_pdf"] = {
                     "object_key": staged.object_key,
@@ -248,9 +221,7 @@ def stage_pdf_import_batch(
         raise
 
 
-def _create_item_from_record(db: Session, user: User, record: dict | MetadataRecord) -> Item:
-    # Imported lazily: library.identifiers imports this package, so a
-    # module-level import would deadlock during package initialization.
+def _create_item_from_record(db: Session, user: User, record: dict) -> Item:
     from quirebase.library import create_item_from_metadata_record
 
     return create_item_from_metadata_record(db, user, record)

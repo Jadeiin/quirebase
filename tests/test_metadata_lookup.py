@@ -1,19 +1,36 @@
-import json
-
 import httpx2
 import pytest
+from inquiro import (
+    CandidateNotFound,
+    CandidateRecord,
+    Identifier,
+    ProviderUnavailable,
+)
+from provider_helpers import provider_runtime
 from sqlalchemy import select
 from test_http import authenticated_client
 
 from quirebase.core.config import Settings, get_settings
-from quirebase.discovery import (
-    Identifier,
-    MetadataLookupError,
-    lookup_metadata,
-    parse_identifier,
-)
 from quirebase.models import AuditEvent, ImportBatch, Item, ItemTagRecommendation, Job, JobState
 from quirebase.web.app import app
+
+
+def lookup_metadata(value, provider="auto", settings=None, transport=None):
+    assert transport is not None
+    with provider_runtime(settings=settings, transport=transport) as runtime:
+        record = runtime.lookup(value, provider=provider)
+    return record.identifier, record
+
+
+def parse_identifier(value, provider="auto"):
+    settings = Settings(nasa_ads_token="ads-token", ieee_api_key="ieee-key")
+    identifier, _record = lookup_metadata(
+        value,
+        provider,
+        settings=settings,
+        transport=httpx2.MockTransport(response),
+    )
+    return identifier
 
 
 def response(request: httpx2.Request) -> httpx2.Response:
@@ -182,7 +199,7 @@ def test_pmc_is_search_only():
     ],
 )
 def test_credentialed_lookup_errors_remain_provider_specific(value, provider, message):
-    with pytest.raises(MetadataLookupError) as error:
+    with pytest.raises(ProviderUnavailable) as error:
         lookup_metadata(value, provider, transport=httpx2.MockTransport(response))
     assert str(error.value) == message
 
@@ -227,18 +244,79 @@ def test_provider_adapters_map_records(value, provider, title):
     )
     assert parsed.provider == provider
     assert record.title == title
-    assert json.loads(record.identifiers or "")
+    assert record.identifiers
+
+
+def test_crossref_lookup_preserves_rich_candidate_metadata():
+    def rich_crossref_response(_request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(
+            200,
+            json={
+                "message": {
+                    "title": ["Rich Crossref record"],
+                    "DOI": "10.1234/rich",
+                    "subject": ["Machine Learning", "<i>Research methods</i>"],
+                    "author": [
+                        {
+                            "family": "Doe",
+                            "given": "Jane",
+                            "affiliation": [
+                                {"name": "Example University"},
+                                {"name": "Example University"},
+                            ],
+                        },
+                        {"family": "Roe", "affiliation": [{"name": "Research Lab"}]},
+                    ],
+                    "URL": "https://api.crossref.org/works/10.1234/rich",
+                    "resource": {"primary": {"URL": "https://example.org/article"}},
+                    "link": [
+                        {"URL": "https://example.org/article.pdf"},
+                        {"URL": "https://example.org/supplement"},
+                    ],
+                }
+            },
+        )
+
+    _identifier, record = lookup_metadata(
+        "10.1234/rich",
+        "doi",
+        transport=httpx2.MockTransport(rich_crossref_response),
+    )
+
+    assert record.keywords == "Machine Learning; Research methods"
+    assert record.affiliation == "Example University; Research Lab"
+    assert record.urls is not None
+    assert record.urls.splitlines() == [
+        "https://doi.org/10.1234/rich",
+        "https://api.crossref.org/works/10.1234/rich",
+        "https://example.org/article",
+        "https://example.org/article.pdf",
+        "https://example.org/supplement",
+    ]
 
 
 def test_metadata_response_size_is_limited():
     transport = httpx2.MockTransport(lambda _request: httpx2.Response(200, content=b"x" * 2048))
-    with pytest.raises(MetadataLookupError, match="size limit"):
+    with pytest.raises(ProviderUnavailable, match="size limit"):
         lookup_metadata(
             "10.1234/sample",
             "doi",
             settings=Settings(metadata_max_response_bytes=1024),
             transport=transport,
         )
+
+
+def test_lookup_404_is_a_typed_candidate_failure():
+    transport = httpx2.MockTransport(lambda _request: httpx2.Response(404))
+    with pytest.raises(CandidateNotFound, match="not found"):
+        lookup_metadata("10.9999/missing", "doi", transport=transport)
+
+
+@pytest.mark.parametrize("status_code", [301, 429, 503])
+def test_lookup_transport_failures_share_one_error_contract(status_code):
+    transport = httpx2.MockTransport(lambda _request: httpx2.Response(status_code))
+    with pytest.raises(ProviderUnavailable):
+        lookup_metadata("10.9999/failure", "doi", transport=transport)
 
 
 def test_pubmed_lookup_passes_configured_identity_and_api_key():
@@ -269,20 +347,21 @@ def test_pubmed_lookup_passes_configured_identity_and_api_key():
 
 def test_online_preview_uses_existing_confirmed_import_flow(db, tmp_path, monkeypatch):
     client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
-    record = {
-        "title": "Looked-up paper",
-        "abstract": "Remote metadata",
-        "authors": "Doe, Jane",
-        "keywords": None,
-        "publication_date": "2026",
-        "publication_title": "Journal",
-        "doi": "10.1/looked-up",
-        "identifiers": json.dumps({"doi": "10.1/looked-up"}),
-        "reference_type": "journal-article",
-    }
+    record = CandidateRecord(
+        provider="crossref",
+        identifier=Identifier("doi", "10.1/looked-up"),
+        title="Looked-up paper",
+        abstract="Remote metadata",
+        authors="Doe, Jane",
+        publication_date="2026",
+        publication_title="Journal",
+        doi="10.1/looked-up",
+        identifiers=(Identifier("doi", "10.1/looked-up"),),
+        reference_type="journal-article",
+    )
     monkeypatch.setattr(
-        "quirebase.discovery.imports.lookup_metadata",
-        lambda _value, _provider, *args, **kwargs: (Identifier("doi", "10.1/looked-up"), record),
+        "quirebase.library.imports.lookup_candidate",
+        lambda _value, _provider, _settings: record,
     )
     try:
         preview = client.post(
@@ -312,10 +391,10 @@ def test_online_preview_uses_existing_confirmed_import_flow(db, tmp_path, monkey
         get_settings.cache_clear()
 
 
-def test_metadata_record_dto_attributes_and_mapping():
-    from quirebase.discovery.lookup import MetadataRecord
-
-    record = MetadataRecord(
+def test_candidate_record_is_an_immutable_normalized_value():
+    record = CandidateRecord(
+        provider="arxiv",
+        identifier=Identifier("arxiv", "1706.03762"),
         title="Attention Is All You Need",
         abstract="The dominant sequence transduction models...",
         authors="Vaswani, Ashish; Shazeer, Noam",
@@ -331,9 +410,8 @@ def test_metadata_record_dto_attributes_and_mapping():
     assert record.title == "Attention Is All You Need"
     assert record.volume == "30"
 
-    as_dict = record.to_dict()
-    assert as_dict["volume"] == "30"
-    assert as_dict["authors"] == "Vaswani, Ashish; Shazeer, Noam"
+    with pytest.raises(AttributeError):
+        record.title = "changed"
 
 
 def test_openalex_abstract_inverted_index_and_html_cleaning():

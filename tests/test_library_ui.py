@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from io import BytesIO
 
 import pymupdf
+from inquiro import CandidateRecord, Identifier
 from sqlalchemy.orm import Session
 from test_http import authenticated_client
 
@@ -25,6 +26,17 @@ from quirebase.models import (
     User,
 )
 from quirebase.web.app import app
+
+
+def provider_candidate(identifier: str, title: str, *, authors: str | None = None):
+    return CandidateRecord(
+        provider="crossref",
+        identifier=Identifier("doi", identifier),
+        title=title,
+        authors=authors,
+        doi=identifier,
+        identifiers=(Identifier("doi", identifier),),
+    )
 
 
 def pdf_bytes() -> bytes:
@@ -260,14 +272,11 @@ def test_pdf_import_batch_previews_before_creating_items(db, tmp_path, monkeypat
         assert "IEEE Xplore" in import_page.text
 
         monkeypatch.setattr(
-            "quirebase.discovery.imports.lookup_metadata",
-            lambda identifier, _provider, *args, **kwargs: (
-                object(),
-                {
-                    "title": f"Article {identifier.rsplit('/', 1)[-1]}",
-                    "doi": identifier,
-                    "authors": "P. Author",
-                },
+            "quirebase.library.imports.lookup_candidate",
+            lambda identifier, _provider, _settings: provider_candidate(
+                identifier,
+                f"Article {identifier.rsplit('/', 1)[-1]}",
+                authors="P. Author",
             ),
         )
         preview = client.post(
@@ -313,10 +322,9 @@ def test_pdf_import_batch_keeps_successes_and_reports_failed_files(db, tmp_path,
     client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
     objects_before = set(get_settings().object_dir.rglob("*.pdf"))
     monkeypatch.setattr(
-        "quirebase.discovery.imports.lookup_metadata",
-        lambda identifier, _provider, *args, **kwargs: (
-            object(),
-            {"title": "Importable article", "doi": identifier},
+        "quirebase.library.imports.lookup_candidate",
+        lambda identifier, _provider, _settings: provider_candidate(
+            identifier, "Importable article"
         ),
     )
     try:
@@ -384,10 +392,9 @@ def test_discard_pdf_import_batch_removes_staged_objects(db, tmp_path, monkeypat
     client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
     objects_before = set(get_settings().object_dir.rglob("*.pdf"))
     monkeypatch.setattr(
-        "quirebase.discovery.imports.lookup_metadata",
-        lambda identifier, _provider, *args, **kwargs: (
-            object(),
-            {"title": "Discarded candidate", "doi": identifier},
+        "quirebase.library.imports.lookup_candidate",
+        lambda identifier, _provider, _settings: provider_candidate(
+            identifier, "Discarded candidate"
         ),
     )
     try:
@@ -425,10 +432,9 @@ def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(db, tmp
     client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
     shared_pdf = published_pdf_bytes("10.1000/shared-staged")
     monkeypatch.setattr(
-        "quirebase.discovery.imports.lookup_metadata",
-        lambda identifier, _provider, *args, **kwargs: (
-            object(),
-            {"title": "Shared staged PDF", "doi": identifier},
+        "quirebase.library.imports.lookup_candidate",
+        lambda identifier, _provider, _settings: provider_candidate(
+            identifier, "Shared staged PDF"
         ),
     )
     try:
@@ -532,10 +538,9 @@ def test_cleanup_preserves_object_referenced_by_an_uncommitted_pdf_import_batch(
 def test_commit_pdf_import_batch_rechecks_doi_after_stale_preview(db, tmp_path, monkeypatch):
     client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
     monkeypatch.setattr(
-        "quirebase.discovery.imports.lookup_metadata",
-        lambda identifier, _provider, *args, **kwargs: (
-            object(),
-            {"title": "Stale DOI candidate", "doi": identifier},
+        "quirebase.library.imports.lookup_candidate",
+        lambda identifier, _provider, _settings: provider_candidate(
+            identifier, "Stale DOI candidate"
         ),
     )
     try:

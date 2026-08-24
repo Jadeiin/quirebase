@@ -1,28 +1,20 @@
 from __future__ import annotations
 
-import json
 from unittest.mock import patch
 
 import httpx2
-from item_helpers import create_item_record as create_item
-from sqlalchemy import select
-from test_http import authenticated_client
-
-from quirebase.core.config import get_settings
-from quirebase.discovery.citations import (
+from inquiro import CandidateRecord, Identifier
+from inquiro.citations import (
     builtin_style_xml,
     item_to_csl_json,
     render_bibliography,
 )
-from quirebase.discovery.imports import (
-    commit_import_batch,
-    stage_identifier_import_batch,
-)
-from quirebase.discovery.lookup import (
-    Identifier,
-    MetadataRecord,
-    lookup_metadata,
-)
+from item_helpers import create_item_record as create_item
+from provider_helpers import provider_runtime
+from sqlalchemy import select
+from test_http import authenticated_client
+
+from quirebase.core.config import get_settings
 from quirebase.library import (
     MetadataWorkspace,
     SummaryWorkspace,
@@ -30,6 +22,10 @@ from quirebase.library import (
     open_item_workspace,
 )
 from quirebase.library.identifiers import sync_metadata_from_upstream
+from quirebase.library.imports import (
+    commit_import_batch,
+    stage_identifier_import_batch,
+)
 from quirebase.models import (
     AuditEvent,
     Item,
@@ -103,16 +99,14 @@ def test_seam1_oa_corpus_metadata_lookup_and_reconstruction():
     def mock_handler(_request: httpx2.Request) -> httpx2.Response:
         return httpx2.Response(200, json=OA_CORPUS_OPENALEX_PAYLOAD)
 
-    identifier, record = lookup_metadata(
-        "10.3390/ejihpe13110181",
-        "openalex",
-        transport=httpx2.MockTransport(mock_handler),
-    )
+    with provider_runtime(transport=httpx2.MockTransport(mock_handler)) as runtime:
+        record = runtime.lookup("10.3390/ejihpe13110181", provider="openalex")
+    identifier = record.identifier
 
     assert isinstance(identifier, Identifier)
     assert identifier.provider == "openalex"
 
-    assert isinstance(record, MetadataRecord)
+    assert isinstance(record, CandidateRecord)
     # 1. HTML tags in title stripped
     assert (
         record.title
@@ -137,7 +131,7 @@ def test_seam1_oa_corpus_metadata_lookup_and_reconstruction():
     assert "https://www.mdpi.com/2254-9625/13/11/181/pdf?version=1699524259" in str(record.urls)
 
 
-def test_seam2_oa_corpus_batch_import_and_relational_mapping(db):
+def test_seam2_oa_corpus_batch_import_and_relational_mapping(db, monkeypatch):
     """Seam 2: Ingesting an OA record creates Item, Author links, Tags, and ItemIdentifiers."""
     user = User(username="oa_corpus_tester", password_hash="secret")
     db.add(user)
@@ -146,12 +140,19 @@ def test_seam2_oa_corpus_batch_import_and_relational_mapping(db):
     def mock_handler(_request: httpx2.Request) -> httpx2.Response:
         return httpx2.Response(200, json=OA_CORPUS_OPENALEX_PAYLOAD)
 
+    monkeypatch.setattr(
+        "quirebase.library.providers.provider_runtime",
+        lambda settings: provider_runtime(
+            settings=settings,
+            transport=httpx2.MockTransport(mock_handler),
+        ),
+    )
+
     batch, records, errors = stage_identifier_import_batch(
         db,
         user,
         identifier="10.3390/ejihpe13110181",
         provider="openalex",
-        transport=httpx2.MockTransport(mock_handler),
     )
     assert not errors
     assert len(records) == 1
@@ -211,7 +212,9 @@ def test_seam3_oa_corpus_upstream_sync_and_reconciliation(db):
     assert item.doi is None
     assert item.volume is None
 
-    mock_rec = MetadataRecord(
+    mock_rec = CandidateRecord(
+        provider="crossref",
+        identifier=Identifier("doi", "10.3390/ejihpe13110181"),
         title="Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives",
         abstract="The rapid advancement of artificial intelligence...",
         authors="Hasanein, Ahmed M.; Sobaih, Abu Elnasr E.",
@@ -225,13 +228,16 @@ def test_seam3_oa_corpus_upstream_sync_and_reconciliation(db):
         publisher="MDPI",
         doi="10.3390/ejihpe13110181",
         urls="https://doi.org/10.3390/ejihpe13110181\nhttps://www.mdpi.com/2254-9625/13/11/181/pdf",
-        identifiers=json.dumps({"openalex": "W4388656112", "doi": "10.3390/ejihpe13110181"}),
+        identifiers=(
+            Identifier("openalex", "W4388656112"),
+            Identifier("doi", "10.3390/ejihpe13110181"),
+        ),
         reference_type="journal-article",
     )
 
     with patch(
-        "quirebase.library.identifiers.lookup_metadata",
-        return_value=(Identifier("doi", "10.3390/ejihpe13110181"), mock_rec),
+        "quirebase.library.identifiers.lookup_candidate",
+        return_value=mock_rec,
     ):
         updated = sync_metadata_from_upstream(
             db,

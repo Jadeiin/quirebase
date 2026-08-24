@@ -4,11 +4,18 @@ import json
 from unittest.mock import patch
 
 import pytest
+from inquiro import (
+    CandidateNotFound,
+    CandidateRecord,
+    Identifier,
+    InvalidProviderRequest,
+    ProviderUnavailable,
+)
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from quirebase.core.errors import VersionConflict
-from quirebase.discovery.lookup import Identifier
+from quirebase.core.errors import ResourceNotFound, ValidationFailure, VersionConflict
+from quirebase.library import UpstreamServiceError
 from quirebase.library.identifiers import (
     generate_bibtex_key,
     get_item_identifiers,
@@ -17,6 +24,41 @@ from quirebase.library.identifiers import (
     sync_metadata_from_upstream,
 )
 from quirebase.models import AuditEvent, FileRevision, Item, User
+
+
+def candidate(identifier: Identifier, values: dict) -> CandidateRecord:
+    raw_identifiers = values.get("identifiers") or {}
+    if isinstance(raw_identifiers, str):
+        raw_identifiers = json.loads(raw_identifiers)
+    identifiers = tuple(
+        Identifier(str(provider), str(value)) for provider, value in raw_identifiers.items()
+    )
+    fields = {
+        name: values.get(name)
+        for name in (
+            "abstract",
+            "authors",
+            "keywords",
+            "publication_date",
+            "publication_title",
+            "journal_abbreviation",
+            "volume",
+            "issue",
+            "pages",
+            "publisher",
+            "affiliation",
+            "doi",
+            "urls",
+            "reference_type",
+        )
+    }
+    return CandidateRecord(
+        provider=identifier.provider,
+        identifier=identifier,
+        title=values["title"],
+        identifiers=identifiers,
+        **fields,
+    )
 
 
 def test_set_and_get_item_identifiers(db):
@@ -141,8 +183,10 @@ def test_sync_metadata_from_upstream(db):
     }
 
     with patch(
-        "quirebase.library.identifiers.lookup_metadata",
-        return_value=(Identifier("doi", "10.1002/j.1538-7305.1948.tb01338.x"), mock_record),
+        "quirebase.library.identifiers.lookup_candidate",
+        return_value=candidate(
+            Identifier("doi", "10.1002/j.1538-7305.1948.tb01338.x"), mock_record
+        ),
     ):
         updated_item = sync_metadata_from_upstream(
             db,
@@ -167,6 +211,53 @@ def test_sync_metadata_from_upstream(db):
     assert updated_item.author_links[0].author.last_name == "Shannon"
 
 
+@pytest.mark.parametrize(
+    ("package_error", "domain_error"),
+    [
+        (InvalidProviderRequest("identifier is malformed"), ValidationFailure),
+        (CandidateNotFound("metadata not found"), ResourceNotFound),
+        (ProviderUnavailable("provider unavailable"), UpstreamServiceError),
+    ],
+)
+def test_sync_metadata_translates_inquiro_errors_at_library_interface(
+    db, package_error, domain_error
+):
+    user = User(username=f"sync-error-{domain_error.__name__}", password_hash="hash")
+    db.add(user)
+    db.flush()
+    item = Item(title="Original title", created_by=user.id)
+    db.add(item)
+    db.commit()
+
+    failing_runtime = type(
+        "FailingRuntime",
+        (),
+        {
+            "__enter__": lambda self: self,
+            "__exit__": lambda self, *_args: None,
+            "lookup": lambda self, *_args, **_kwargs: (_ for _ in ()).throw(package_error),
+        },
+    )()
+    with (
+        patch("quirebase.library.providers.provider_runtime", return_value=failing_runtime),
+        pytest.raises(domain_error, match=str(package_error)),
+    ):
+        sync_metadata_from_upstream(
+            db,
+            user,
+            item.id,
+            item.version,
+            provider="doi",
+            uid_value="invalid",
+        )
+
+    db.expire_all()
+    saved = db.get(Item, item.id)
+    assert saved is not None
+    assert saved.title == "Original title"
+    assert saved.version == 1
+
+
 def test_sync_by_doi_does_not_store_doi_as_provider_identifier(db):
     user = User(username="canonical_doi_sync", password_hash="hash")
     db.add(user)
@@ -177,8 +268,8 @@ def test_sync_by_doi_does_not_store_doi_as_provider_identifier(db):
 
     record = {"title": "Updated", "doi": "10.1000/canonical"}
     with patch(
-        "quirebase.library.identifiers.lookup_metadata",
-        return_value=(Identifier("openalex", "10.1000/canonical"), record),
+        "quirebase.library.identifiers.lookup_candidate",
+        return_value=candidate(Identifier("openalex", "10.1000/canonical"), record),
     ):
         sync_metadata_from_upstream(
             db,
@@ -203,8 +294,8 @@ def test_non_doi_sync_preserves_existing_canonical_doi_when_upstream_omits_it(db
 
     record = {"title": "Updated", "identifiers": {"pmid": "12345678"}}
     with patch(
-        "quirebase.library.identifiers.lookup_metadata",
-        return_value=(Identifier("openalex", "W123"), record),
+        "quirebase.library.identifiers.lookup_candidate",
+        return_value=candidate(Identifier("openalex", "W123"), record),
     ):
         sync_metadata_from_upstream(
             db,
@@ -249,8 +340,8 @@ def test_sync_metadata_cleans_html_and_syncs_bibtex_type(db):
     }
 
     with patch(
-        "quirebase.library.identifiers.lookup_metadata",
-        return_value=(Identifier("doi", "10.1038/s41586-019-1666-5"), mock_record),
+        "quirebase.library.identifiers.lookup_candidate",
+        return_value=candidate(Identifier("doi", "10.1038/s41586-019-1666-5"), mock_record),
     ):
         updated = sync_metadata_from_upstream(
             db,
@@ -299,8 +390,8 @@ def test_sync_metadata_from_upstream_rejects_a_stale_version(db):
         Session(db.bind, expire_on_commit=False) as first,
         Session(db.bind, expire_on_commit=False) as second,
         patch(
-            "quirebase.library.identifiers.lookup_metadata",
-            return_value=(Identifier("doi", "10.1000/current"), record),
+            "quirebase.library.identifiers.lookup_candidate",
+            return_value=candidate(Identifier("doi", "10.1000/current"), record),
         ),
     ):
         first_owner = first.get(User, owner.id)
@@ -343,8 +434,8 @@ def test_sync_metadata_uses_normalized_upstream_identifier(db):
 
     record = {"title": "Updated"}
     with patch(
-        "quirebase.library.identifiers.lookup_metadata",
-        return_value=(Identifier("openalex", "W123"), record),
+        "quirebase.library.identifiers.lookup_candidate",
+        return_value=candidate(Identifier("openalex", "W123"), record),
     ):
         sync_metadata_from_upstream(
             db,

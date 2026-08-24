@@ -8,8 +8,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Stre
 
 from quirebase.core.config import get_settings
 from quirebase.core.database import get_db
-from quirebase.core.errors import ResourceNotFound, ValidationFailure
-from quirebase.discovery import MetadataLookupError, MetadataNotFoundError, UpstreamServiceError
+from quirebase.core.errors import ValidationFailure
 from quirebase.documents import (
     create_attachment as create_attachment_op,
 )
@@ -33,6 +32,7 @@ from quirebase.library import (
     SummaryWorkspace,
     WorkspaceSection,
     add_tag_to_item,
+    force_item_tag_recommendation,
     open_item_workspace,
     parse_author_list_string,
     regenerate_bibtex_key,
@@ -67,7 +67,6 @@ from quirebase.projects import (
 from quirebase.projects import (
     remove_item_from_project as remove_item_from_project_op,
 )
-from quirebase.recommendations import force_item_tag_recommendation
 from quirebase.web.deps import current_login, current_user, require_csrf
 from quirebase.web.templates import templates
 
@@ -386,22 +385,15 @@ def sync_metadata_route(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    try:
-        sync_metadata_from_upstream(
-            db,
-            user,
-            item_id,
-            version,
-            provider=provider,
-            uid_value=uid,
-            settings=get_effective_settings_model(db),
-        )
-    except ValueError as error:
-        raise ValidationFailure(str(error)) from error
-    except MetadataNotFoundError as error:
-        raise ResourceNotFound(str(error)) from error
-    except MetadataLookupError as error:
-        raise UpstreamServiceError(str(error)) from error
+    sync_metadata_from_upstream(
+        db,
+        user,
+        item_id,
+        version,
+        provider=provider,
+        uid_value=uid,
+        settings=get_effective_settings_model(db),
+    )
     return RedirectResponse(f"/items/{item_id}", status_code=303)
 
 

@@ -6,18 +6,16 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from quirebase.core.database import get_db
-from quirebase.discovery import (
+from quirebase.library import (
     create_custom_citation_style,
     delete_custom_citation_style,
+    find_duplicates,
+    list_accessible_tags_with_counts,
     list_custom_citation_styles,
+    merge_tags,
 )
 from quirebase.library import (
     delete_tag as delete_tag_op,
-)
-from quirebase.library import (
-    find_duplicates,
-    list_accessible_tags_with_counts,
-    merge_tags,
 )
 from quirebase.library import (
     rename_tag as rename_tag_op,

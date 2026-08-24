@@ -4,18 +4,49 @@ import json
 
 import httpx2
 import pytest
+from inquiro import (
+    CandidatePage,
+    CandidateRecord,
+    Identifier,
+    ProviderUnavailable,
+    SearchClause,
+    SearchQuery,
+)
+from provider_helpers import provider_runtime
 from test_http import authenticated_client
 
 from quirebase.core.config import Settings, get_settings
-from quirebase.discovery import (
-    MetadataLookupError,
-    SearchClause,
-    SearchPage,
-    SearchResult,
-    search_metadata,
-)
 from quirebase.models import AuditEvent
 from quirebase.web.app import app
+
+
+def search_metadata(
+    provider,
+    clauses,
+    *,
+    page=1,
+    per_page=10,
+    sort="relevance",
+    year_from=None,
+    year_to=None,
+    settings=None,
+    transport=None,
+):
+    transport = transport or httpx2.MockTransport(
+        lambda request: (_ for _ in ()).throw(AssertionError(str(request.url)))
+    )
+    with provider_runtime(settings=settings, transport=transport) as runtime:
+        return runtime.search(
+            SearchQuery(
+                provider=provider,
+                clauses=tuple(clauses),
+                page=page,
+                per_page=per_page,
+                sort=sort,
+                year_from=year_from,
+                year_to=year_to,
+            )
+        )
 
 
 def search_response(request: httpx2.Request) -> httpx2.Response:
@@ -139,18 +170,17 @@ def test_search_adapters_normalize_results(provider, title):
 
 def test_online_search_page_keeps_search_separate_from_import(db, tmp_path, monkeypatch):
     client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
-    result = SearchResult(
+    result = CandidateRecord(
         provider="openalex",
-        identifier_provider="openalex",
-        identifier="W99",
+        identifier=Identifier("openalex", "W99"),
         title="Candidate paper",
         authors="Researcher",
         publication_title="Journal",
         publication_date="2026",
     )
     monkeypatch.setattr(
-        "quirebase.web.views.discovery.search_metadata",
-        lambda *_args, **_kwargs: SearchPage("openalex", [result], 11, 1, 10),
+        "quirebase.library.discovery.search_candidates",
+        lambda *_args, **_kwargs: CandidatePage("openalex", (result,), 11, 1, 10),
     )
     try:
         empty = client.get("/online-search")
@@ -174,6 +204,33 @@ def test_online_search_page_keeps_search_separate_from_import(db, tmp_path, monk
         event = db.query(AuditEvent).filter_by(action="metadata.search").one()
         assert json.loads(event.detail)["fields"] == ["title"]
         assert item.title not in searched.text
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+
+
+@pytest.mark.parametrize(
+    ("year_from", "expected_message"),
+    [("not-a-year", "invalid literal"), ("999", "starting year is invalid")],
+)
+def test_online_search_page_renders_invalid_year_errors(
+    db, tmp_path, monkeypatch, year_from, expected_message
+):
+    client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+    try:
+        response = client.get(
+            "/online-search",
+            params={
+                "provider": "crossref",
+                "field": "title",
+                "operator": "and",
+                "term": "quantum",
+                "year_from": year_from,
+            },
+        )
+
+        assert response.status_code == 200
+        assert expected_message in response.text
     finally:
         app.dependency_overrides.clear()
         get_settings.cache_clear()
@@ -260,6 +317,18 @@ def test_search_validation_and_pagination_are_bounded():
     assert captured["rows"] == "25"
 
 
+def test_search_404_is_an_empty_page():
+    page = search_metadata(
+        "crossref",
+        [SearchClause("any", "and", "missing")],
+        transport=httpx2.MockTransport(lambda _request: httpx2.Response(404)),
+    )
+
+    assert page.provider == "crossref"
+    assert page.results == ()
+    assert page.total == 0
+
+
 def test_openlibrary_preserves_boolean_and_year_filters():
     captured: dict[str, str] = {}
 
@@ -285,8 +354,8 @@ def test_openlibrary_preserves_boolean_and_year_filters():
 def test_search_page_preserves_sparse_condition_rows(db, tmp_path, monkeypatch):
     client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
     monkeypatch.setattr(
-        "quirebase.web.views.discovery.search_metadata",
-        lambda *_args, **_kwargs: SearchPage("openalex", [], 0, 1, 10),
+        "quirebase.library.discovery.search_candidates",
+        lambda *_args, **_kwargs: CandidatePage("openalex", (), 0, 1, 10),
     )
     try:
         response = client.get(
@@ -389,7 +458,7 @@ def test_extra_search_adapters_normalize_results(provider, title, identifier_pro
     )
     assert page.total == 1
     assert page.results[0].title == title
-    assert page.results[0].identifier_provider == identifier_provider
+    assert page.results[0].identifier.provider == identifier_provider
 
 
 def test_pmc_forwards_credentials_to_esearch_and_esummary():
@@ -434,7 +503,7 @@ def test_pmc_forwards_credentials_to_esearch_and_esummary():
 
 
 def test_credentialed_sources_require_keys():
-    with pytest.raises(MetadataLookupError) as nasa_error:
+    with pytest.raises(ProviderUnavailable) as nasa_error:
         search_metadata(
             "nasa",
             [SearchClause("title", "and", "term")],
@@ -442,7 +511,7 @@ def test_credentialed_sources_require_keys():
         )
     assert str(nasa_error.value) == "NASA ADS requires QUIREBASE_NASA_ADS_TOKEN"
 
-    with pytest.raises(MetadataLookupError) as ieee_error:
+    with pytest.raises(ProviderUnavailable) as ieee_error:
         search_metadata(
             "ieee",
             [SearchClause("title", "and", "term")],
@@ -495,8 +564,7 @@ def test_extra_search_fallback_identifiers_without_doi():
         settings=Settings(nasa_ads_token="ads-token"),
         transport=httpx2.MockTransport(fallback_response),
     )
-    assert nasa_page.results[0].identifier_provider == "bibcode"
-    assert nasa_page.results[0].identifier == "2025ApJ...123..456A"
+    assert nasa_page.results[0].identifier == Identifier("bibcode", "2025ApJ...123..456A")
 
     ieee_page = search_metadata(
         "ieee",
@@ -504,12 +572,11 @@ def test_extra_search_fallback_identifiers_without_doi():
         settings=Settings(ieee_api_key="ieee-key"),
         transport=httpx2.MockTransport(fallback_response),
     )
-    assert ieee_page.results[0].identifier_provider == "article_number"
-    assert ieee_page.results[0].identifier == "9876543"
+    assert ieee_page.results[0].identifier == Identifier("article_number", "9876543")
 
 
 def test_fallback_identifiers_can_be_staged_for_import(db, monkeypatch):
-    from quirebase.discovery.imports import stage_identifier_import_batch
+    from quirebase.library.imports import stage_identifier_import_batch
     from quirebase.models import User
 
     monkeypatch.setenv("QUIREBASE_NASA_ADS_TOKEN", "ads-token")
@@ -551,6 +618,14 @@ def test_fallback_identifiers_can_be_staged_for_import(db, monkeypatch):
             )
         raise NotImplementedError(str(request.url))
 
+    monkeypatch.setattr(
+        "quirebase.library.providers.provider_runtime",
+        lambda settings: provider_runtime(
+            settings=settings,
+            transport=httpx2.MockTransport(lookup_fallback_response),
+        ),
+    )
+
     user = User(username="search_user", password_hash="unused")
     db.add(user)
     db.flush()
@@ -560,7 +635,6 @@ def test_fallback_identifiers_can_be_staged_for_import(db, monkeypatch):
         user,
         "2025ApJ...123..456A",
         "bibcode",
-        transport=httpx2.MockTransport(lookup_fallback_response),
     )
     assert errors_nasa == []
     assert len(records_nasa) == 1
@@ -571,7 +645,6 @@ def test_fallback_identifiers_can_be_staged_for_import(db, monkeypatch):
         user,
         "9876543",
         "article_number",
-        transport=httpx2.MockTransport(lookup_fallback_response),
     )
     assert errors_ieee == []
     assert len(records_ieee) == 1

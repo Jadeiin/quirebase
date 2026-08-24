@@ -13,6 +13,10 @@ class ResourceUnavailable(DomainError):
     """The caller must not learn whether the resource exists."""
 
 
+class UpstreamServiceError(DomainError):
+    pass
+
+
 class PermissionDenied(DomainError):
     pass
 

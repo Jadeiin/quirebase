@@ -7,6 +7,13 @@ resolution-markers = [
     "python_full_version < '3.14'",
 ]
 
+[manifest]
+members = [
+    "inquiro",
+    "quirebase",
+    "rubrica",
+]
+
 [[package]]
 name = "alembic"
 version = "1.19.1"
@@ -873,6 +880,32 @@ sdist = { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/72/34/14
 wheels = [
     { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/cb/b1/3846dd7f199d53cb17f49cba7e651e9ce294d8497c8c150530ed11865bb8/iniconfig-2.3.0-py3-none-any.whl", hash = "sha256:f631c04d2c48c52b84d0d0549c99ff3859c98df65b3101406327ecc7d53fbf12", size = 7484, upload-time = "2025-10-18T21:55:41.639Z" },
 ]
+
+[[package]]
+name = "inquiro"
+version = "0.1.2"
+source = { editable = "packages/inquiro" }
+dependencies = [
+    { name = "bibtexparser" },
+    { name = "httpx2" },
+    { name = "rispy" },
+]
+
+[package.optional-dependencies]
+citation = [
+    { name = "citeproc-py" },
+    { name = "citeproc-py-styles" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "bibtexparser", specifier = ">=1.4,<2" },
+    { name = "citeproc-py", marker = "extra == 'citation'", specifier = ">=0.10,<0.11" },
+    { name = "citeproc-py-styles", marker = "extra == 'citation'", specifier = ">=0.1.6,<0.2" },
+    { name = "httpx2", specifier = ">=2.12,<3" },
+    { name = "rispy", specifier = ">=0.10,<1" },
+]
+provides-extras = ["citation"]
 
 [[package]]
 name = "jellyfish"
@@ -1930,31 +1963,27 @@ dependencies = [
     { name = "alembic" },
     { name = "argon2-cffi" },
     { name = "babel" },
-    { name = "bibtexparser" },
     { name = "fastapi" },
     { name = "filelock" },
-    { name = "httpx2" },
+    { name = "inquiro" },
     { name = "jinja2" },
     { name = "pydantic-settings" },
     { name = "pymupdf" },
     { name = "python-multipart" },
-    { name = "rispy" },
+    { name = "rubrica" },
     { name = "sqlalchemy" },
     { name = "typer" },
     { name = "tzdata", marker = "sys_platform == 'win32'" },
     { name = "tzlocal" },
     { name = "uvicorn", extra = ["standard"] },
-    { name = "yake" },
 ]
 
 [package.optional-dependencies]
 citation = [
-    { name = "citeproc-py" },
-    { name = "citeproc-py-styles" },
+    { name = "inquiro", extra = ["citation"] },
 ]
 keybert = [
-    { name = "keybert" },
-    { name = "model2vec" },
+    { name = "rubrica", extra = ["keybert"] },
 ]
 postgres = [
     { name = "psycopg", extra = ["binary"] },
@@ -1977,26 +2006,22 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.16,<2" },
     { name = "argon2-cffi", specifier = ">=25,<26" },
     { name = "babel", specifier = ">=2.18.0" },
-    { name = "bibtexparser", specifier = ">=1.4,<2" },
-    { name = "citeproc-py", marker = "extra == 'citation'", specifier = ">=0.10,<0.11" },
-    { name = "citeproc-py-styles", marker = "extra == 'citation'", specifier = ">=0.1.6,<0.2" },
     { name = "fastapi", specifier = ">=0.116,<1" },
     { name = "filelock", specifier = ">=3.20,<4" },
-    { name = "httpx2", specifier = ">=2.12,<3" },
+    { name = "inquiro", editable = "packages/inquiro" },
+    { name = "inquiro", extras = ["citation"], marker = "extra == 'citation'", editable = "packages/inquiro" },
     { name = "jinja2", specifier = ">=3.1,<4" },
-    { name = "keybert", marker = "extra == 'keybert'", specifier = ">=0.9,<0.10" },
-    { name = "model2vec", marker = "extra == 'keybert'", specifier = ">=0.6,<1" },
     { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3.2,<4" },
     { name = "pydantic-settings", specifier = ">=2.10,<3" },
     { name = "pymupdf", specifier = ">=1.28,<1.29" },
     { name = "python-multipart", specifier = ">=0.0.20,<1" },
-    { name = "rispy", specifier = ">=0.10,<1" },
+    { name = "rubrica", editable = "packages/rubrica" },
+    { name = "rubrica", extras = ["keybert"], marker = "extra == 'keybert'", editable = "packages/rubrica" },
     { name = "sqlalchemy", specifier = ">=2.0,<3" },
     { name = "typer", specifier = ">=0.16,<1" },
     { name = "tzdata", marker = "sys_platform == 'win32'", specifier = ">=2025.2" },
     { name = "tzlocal", specifier = ">=5.3,<6" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.35,<1" },
-    { name = "yake", specifier = ">=0.7,<0.8" },
 ]
 provides-extras = ["postgres", "citation", "keybert"]
 
@@ -2121,6 +2146,28 @@ sdist = { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/21/80/79
 wheels = [
     { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/14/25/efdcd3dadf3f2aabbdb64d028db1dca1b1467a08d84b5117bffc3b1a599b/rispy-0.10.0-py3-none-any.whl", hash = "sha256:acc8b941ab5e7b65b5365e468af2e00f0cb031a9e5c5a6b06538d856151e61be", size = 15260, upload-time = "2025-05-23T17:00:37.796Z" },
 ]
+
+[[package]]
+name = "rubrica"
+version = "0.1.2"
+source = { editable = "packages/rubrica" }
+dependencies = [
+    { name = "yake" },
+]
+
+[package.optional-dependencies]
+keybert = [
+    { name = "keybert" },
+    { name = "model2vec" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "keybert", marker = "extra == 'keybert'", specifier = ">=0.9,<0.10" },
+    { name = "model2vec", marker = "extra == 'keybert'", specifier = ">=0.6,<1" },
+    { name = "yake", specifier = ">=0.7,<0.8" },
+]
+provides-extras = ["keybert"]
 
 [[package]]
 name = "ruff"

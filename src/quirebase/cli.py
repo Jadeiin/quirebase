@@ -11,10 +11,10 @@ from sqlalchemy import inspect, select, text
 from .core.config import get_settings
 from .core.crypto import hash_password
 from .core.database import SessionLocal, engine
+from .library.tag_recommendations import validate_engine_configuration
 from .models import User
 from .operations import check_objects, create_backup, restore_backup, verify_backup
 from .pipeline import run_forever
-from .recommendations.processing import validate_engine_configuration
 from .search import reindex_all
 
 app = typer.Typer(help="Quirebase administration")

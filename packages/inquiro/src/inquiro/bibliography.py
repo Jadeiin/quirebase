@@ -3,16 +3,13 @@ from __future__ import annotations
 import json
 import re
 from contextlib import suppress
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import bibtexparser
 import rispy
 from bibtexparser.bibdatabase import BibDatabase
 
-from quirebase.discovery.lookup import normalize_reference_type
-
-if TYPE_CHECKING:
-    from quirebase.models import Item
+from inquiro.parsing import normalize_reference_type
 
 SUPPORTED_FORMATS = {"bibtex", "ris", "endnote"}
 
@@ -132,7 +129,7 @@ def _protect_bibtex_case(value: str) -> str:
 
 
 def _bibtex_extra_fields(
-    item: Item, *, include_identifiers: bool, include_custom_fields: bool
+    item: Any, *, include_identifiers: bool, include_custom_fields: bool
 ) -> dict[str, str]:
     extras: dict[str, str] = {}
     reserved = {
@@ -153,17 +150,17 @@ def _bibtex_extra_fields(
     }
     if include_identifiers:
         identifiers: dict[str, Any] = {}
-        if item.identifiers:
+        if getattr(item, "identifiers", None):
             with suppress(json.JSONDecodeError):
                 parsed = json.loads(item.identifiers)
                 if isinstance(parsed, dict):
                     identifiers.update(parsed)
-        if item.doi:
+        if getattr(item, "doi", None):
             identifiers["doi"] = item.doi
         for key, value in identifiers.items():
             if value not in (None, ""):
                 _add_bibtex_extra(extras, reserved, key, str(value))
-    if include_custom_fields and item.custom_fields:
+    if include_custom_fields and getattr(item, "custom_fields", None):
         with suppress(json.JSONDecodeError):
             parsed = json.loads(item.custom_fields)
             if isinstance(parsed, dict):
@@ -328,7 +325,7 @@ def parse_bibliography(contents: str, file_format: str) -> tuple[list[dict], lis
     return records, errors
 
 
-def _export_endnote(items: list[Item], *, include_abstract: bool = True) -> str:
+def _export_endnote(items: list[Any], *, include_abstract: bool = True) -> str:
     lines: list[str] = []
     for item in items:
         reference_type = REFERENCE_TYPE_TO_ENDNOTE.get(
@@ -361,7 +358,7 @@ def _export_endnote(items: list[Item], *, include_abstract: bool = True) -> str:
 
 
 def export_bibliography(
-    items: list[Item],
+    items: list[Any],
     file_format: str,
     *,
     include_abstract: bool = True,

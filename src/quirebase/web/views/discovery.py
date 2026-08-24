@@ -7,15 +7,14 @@ from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from quirebase.core.database import get_db
-from quirebase.discovery import (
-    MetadataLookupError,
-    SearchClause,
+from quirebase.core.errors import DomainError
+from quirebase.library import (
+    DiscoveryClause,
     commit_import_batch,
     discard_import_batch,
     export_accessible_bibliography,
     get_accessible_item_identifiers,
-    record_discovery_search_audit,
-    search_metadata,
+    search_candidate_records,
     stage_identifier_import_batch,
     stage_import_batch,
     stage_pdf_import_batch,
@@ -69,7 +68,7 @@ def online_search_page(
     operators = request.query_params.getlist("operator")
     terms = request.query_params.getlist("term")
     clauses = [
-        SearchClause(field, operator, term.strip())
+        DiscoveryClause(field, operator, term.strip())
         for field, operator, term in zip(fields, operators, terms, strict=False)
         if term.strip()
     ]
@@ -95,9 +94,11 @@ def online_search_page(
                 raise ValueError("starting year is invalid")
             if end_year and not 1000 <= end_year <= 3000:
                 raise ValueError("ending year is invalid")
-            results = search_metadata(
+            results = search_candidate_records(
+                db,
+                user,
                 provider,
-                clauses,
+                tuple(clauses),
                 page=page,
                 per_page=10,
                 sort=sort,
@@ -105,10 +106,7 @@ def online_search_page(
                 year_to=end_year,
                 settings=effective_settings,
             )
-            record_discovery_search_audit(db, user, provider, clauses, len(results.results))
-        except ValueError as caught:
-            error = str(caught)
-        except MetadataLookupError as caught:
+        except (DomainError, ValueError) as caught:
             error = str(caught)
     imported = get_accessible_item_identifiers(db, user)
     query_items = [

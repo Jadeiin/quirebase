@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from quirebase.discovery import lookup_metadata
+from inquiro import ProviderRuntime
 
 SAMPLES = (
     ("doi", "10.1038/s41586-020-2649-2"),
@@ -12,14 +12,15 @@ SAMPLES = (
 )
 
 for provider, value in SAMPLES:
-    parsed, record = lookup_metadata(value, provider)
+    with ProviderRuntime() as runtime:
+        record = runtime.lookup(value, provider=provider)
     print(
         json.dumps(
             {
-                "provider": parsed.provider,
-                "identifier": parsed.value,
-                "title": record["title"],
-                "authors": record["authors"],
+                "provider": record.identifier.provider,
+                "identifier": record.identifier.value,
+                "title": record.title,
+                "authors": record.authors,
             },
             ensure_ascii=False,
         )

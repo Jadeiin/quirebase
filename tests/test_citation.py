@@ -1,16 +1,25 @@
 from __future__ import annotations
 
-from quirebase.discovery import (
+import pytest
+from inquiro.citations import (
+    CitationEngineUnavailable,
     ExportOptions,
     builtin_style_xml,
-    create_custom_citation_style,
     is_valid_csl,
     item_to_csl_json,
+    render_bibliography,
     render_citation,
+)
+
+from quirebase.core.errors import ValidationFailure
+from quirebase.library.citations import (
+    create_custom_citation_style,
+    format_csl_export,
+    get_item_citation_text_response,
     resolve_style_xml,
     select_builtin_citation_styles,
 )
-from quirebase.models import Item, User
+from quirebase.models import CitationStyle, Item, User
 
 _counter = 0
 
@@ -71,7 +80,7 @@ def test_builtin_style_catalog_is_searchable(db):
 
 
 def test_builtin_style_selection_reuses_one_catalog_snapshot(monkeypatch):
-    from quirebase.discovery import citations
+    from quirebase.library import citations
 
     catalog_calls = 0
     catalog = (
@@ -189,6 +198,15 @@ def test_render_citation_html(db):
     assert "An Example Paper" in rendered
 
 
+def test_render_bibliography_reports_unavailable_optional_engine(monkeypatch):
+    from inquiro import citations
+
+    monkeypatch.setattr(citations, "CiteProcJSON", None)
+
+    with pytest.raises(CitationEngineUnavailable, match="requires the 'citation' extra"):
+        render_bibliography([{"id": "item-1", "title": "Example"}], "<style/>")
+
+
 def test_is_valid_csl_rejects_garbage():
     assert is_valid_csl("<style/>") is False
     assert is_valid_csl("<style><not-csl/></style>") is False
@@ -221,6 +239,44 @@ def test_resolve_style_xml_scoped_to_owner(db):
     assert resolve_style_xml(db, user_a, "apa") == csl_xml
     assert resolve_style_xml(db, user_b, "apa") == csl_xml
     assert resolve_style_xml(db, None, "apa") == csl_xml
+
+
+def test_csl_export_translates_unavailable_engine_at_library_interface(db, monkeypatch):
+    from quirebase.library import citations
+
+    item = _item(db)
+    user = db.get(User, item.created_by)
+    assert user is not None
+    style = CitationStyle(name="Persisted Style", csl_xml="<style/>", created_by=user.id)
+    db.add(style)
+    db.flush()
+
+    def unavailable(*_args, **_kwargs):
+        raise CitationEngineUnavailable("CSL formatting requires the 'citation' extra")
+
+    monkeypatch.setattr(citations, "render_bibliography", unavailable)
+
+    with pytest.raises(ValidationFailure, match="requires the 'citation' extra"):
+        format_csl_export(db, user, [item], style_key=style.id)
+
+
+def test_citation_text_translates_unavailable_engine_at_library_interface(db, monkeypatch):
+    from quirebase.library import citations
+
+    item = _item(db)
+    user = db.get(User, item.created_by)
+    assert user is not None
+    style = CitationStyle(name="Persisted Style", csl_xml="<style/>", created_by=user.id)
+    db.add(style)
+    db.flush()
+
+    def unavailable(*_args, **_kwargs):
+        raise CitationEngineUnavailable("CSL formatting requires the 'citation' extra")
+
+    monkeypatch.setattr(citations, "render_citation", unavailable)
+
+    with pytest.raises(ValidationFailure, match="requires the 'citation' extra"):
+        get_item_citation_text_response(db, user, item.id, style_key=style.id)
 
 
 def test_citation_routes_enforce_custom_style_ownership(db, tmp_path, monkeypatch):

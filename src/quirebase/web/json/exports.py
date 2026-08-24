@@ -6,16 +6,16 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse, JSONResponse
 
 from quirebase.core.database import get_db
-from quirebase.discovery import (
-    list_custom_citation_styles,
-    select_builtin_citation_styles,
-)
 from quirebase.documents import (
     create_export_job,
     get_export_file_path,
     get_export_status,
 )
 from quirebase.documents.schemas import ExportCreate
+from quirebase.library import (
+    list_custom_citation_styles,
+    select_builtin_citation_styles,
+)
 from quirebase.models import User
 from quirebase.web.deps import current_user, require_csrf
 

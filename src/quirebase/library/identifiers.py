@@ -6,24 +6,20 @@ import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from inquiro.bibliography import REFERENCE_TYPE_TO_BIBTEX, extract_year
+from inquiro.identifiers import DOI_PATTERN, normalize_doi
+from inquiro.models import CandidateRecord
+from inquiro.parsing import _clean_markup, normalize_reference_type
 from sqlalchemy import delete, select, update
 
 from quirebase.access.items import require_editable_item
 from quirebase.audit import record_event
 from quirebase.core.errors import VersionConflict
-from quirebase.discovery.bibliography import REFERENCE_TYPE_TO_BIBTEX, extract_year
-from quirebase.discovery.lookup import (
-    DOI_PATTERN,
-    MetadataRecord,
-    _clean_markup,
-    lookup_metadata,
-    normalize_doi,
-    normalize_reference_type,
-)
 from quirebase.library.authors import parse_author_name, set_item_authors_from_string
+from quirebase.library.providers import candidate_record_values, lookup_candidate
+from quirebase.library.tag_recommendations import request_item_tag_recommendation
 from quirebase.models import FileRevision, Item, ItemIdentifier, User
 from quirebase.pipeline.inspection import first_doi_from_text
-from quirebase.recommendations import request_item_tag_recommendation
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
@@ -156,7 +152,7 @@ def apply_metadata_record(
     db: Session,
     user: User,
     item: Item,
-    record: MetadataRecord | dict,
+    record: CandidateRecord | dict,
     *,
     merge: bool = False,
     forced_identifiers: dict[str, str] | None = None,
@@ -167,7 +163,7 @@ def apply_metadata_record(
     are taken from the record; with merge=True (existing items) they are
     merged with the item's current values.
     """
-    rec = record.to_dict() if isinstance(record, MetadataRecord) else record
+    rec = candidate_record_values(record) if isinstance(record, CandidateRecord) else record
 
     scalar_fields = {
         "title": ("title", _clean_markup),
@@ -268,7 +264,7 @@ def apply_metadata_record(
 def create_item_from_metadata_record(
     db: Session,
     user: User,
-    record: MetadataRecord | dict,
+    record: CandidateRecord | dict,
 ) -> Item:
     """Create an imported Item and enqueue its initial Tag recommendation."""
     item = Item(title="Untitled", created_by=user.id)
@@ -292,7 +288,11 @@ def _sync_metadata_from_upstream(
     previous_generated_key = generate_bibtex_key(item)
     previous_key = item.bibtex_id
 
-    upstream_identifier, record = lookup_metadata(uid_value, provider=provider, settings=settings)
+    from quirebase.operations.settings import get_effective_settings_model
+
+    effective_settings = settings or get_effective_settings_model(db)
+    record = lookup_candidate(uid_value, provider, effective_settings)
+    upstream_identifier = record.identifier
     version = db.scalar(
         update(Item)
         .where(Item.id == item_id, Item.version == expected_version)

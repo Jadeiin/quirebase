@@ -27,7 +27,7 @@ jobs:
       - run: uv run pytest -q -m "not oa"
       - run: uv run quirebase init-db
       - run: uv run quirebase doctor
-      - run: uv build
+      - run: uv build --all-packages --no-sources
   postgres:
     runs-on: ubuntu-latest
     services:

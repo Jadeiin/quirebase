@@ -1,22 +1,23 @@
 from __future__ import annotations
 
 import ast
+import tomllib
 from pathlib import Path
 
 SRC_ROOT = Path(__file__).parent.parent / "src" / "quirebase"
+REPO_ROOT = Path(__file__).parent.parent
+STANDALONE_WORKSPACE_PACKAGES = ("inquiro", "rubrica")
 
 PACKAGE_ROLES = {
     "access": "domain-policy",
     "accounts": "business",
     "audit": "business",
     "core": "infrastructure",
-    "discovery": "business",
     "documents": "business",
     "library": "business",
     "operations": "business",
     "pipeline": "business",
     "projects": "business",
-    "recommendations": "business",
     "search": "outbound-adapter",
     "web": "inbound-adapter",
 }
@@ -26,48 +27,38 @@ ALLOWED_PACKAGE_DEPENDENCIES = {
     "accounts": {"audit", "core", "models"},
     "audit": {"core", "models"},
     "core": set(),
-    "discovery": {
-        "access",
-        "audit",
-        "core",
-        "documents",
-        "library",
-        "models",
-        "operations",
-        "pipeline",
-        "search",
-    },
     "documents": {"access", "audit", "core", "models", "operations", "pipeline"},
     "library": {
         "access",
         "audit",
         "core",
-        "discovery",
         "documents",
         "models",
+        "operations",
         "pipeline",
-        "recommendations",
         "search",
     },
     "operations": {"audit", "core", "models"},
-    "pipeline": {"audit", "core", "models", "operations", "recommendations", "search"},
+    "pipeline": {"audit", "core", "library", "models", "operations", "search"},
     "projects": {"access", "audit", "core", "models", "search"},
-    "recommendations": {"access", "core", "models"},
     "search": {"models"},
     "web": {
         "access",
         "accounts",
         "audit",
         "core",
-        "discovery",
         "documents",
         "library",
         "models",
         "operations",
         "pipeline",
         "projects",
-        "recommendations",
+        "search",
     },
+}
+
+ALLOWED_STANDALONE_DEPENDENCIES = {
+    "library": {"inquiro", "rubrica"},
 }
 
 BUSINESS_ROLES = {"business", "domain-policy"}
@@ -89,17 +80,17 @@ ORM_MODEL_OWNERS = {
     "Attachment": "documents",
     "AuditEvent": "audit",
     "Author": "library",
-    "CitationStyle": "discovery",
+    "CitationStyle": "library",
     "DiscussionMessage": "library",
     "FileRevision": "documents",
-    "ImportBatch": "discovery",
+    "ImportBatch": "library",
     "Invitation": "accounts",
     "Item": "library",
     "ItemAuthor": "library",
     "ItemIdentifier": "library",
     "ItemRead": "library",
     "ItemTag": "library",
-    "ItemTagRecommendation": "recommendations",
+    "ItemTagRecommendation": "library",
     "Job": "pipeline",
     "LoginSession": "accounts",
     "LoginThrottle": "accounts",
@@ -147,6 +138,34 @@ FORBIDDEN_FACADE_EXPORTS = {
         "SQLiteSearchIndex",
         "SearchIndex",
     },
+}
+
+LIBRARY_FACADE_OPERATIONS = {
+    "BatchConflict",
+    "UpstreamServiceError",
+    "commit_import_batch",
+    "create_custom_citation_style",
+    "delete_custom_citation_style",
+    "discard_import_batch",
+    "enqueue_all_item_tag_recommendations",
+    "export_accessible_bibliography",
+    "export_selected_bibliography",
+    "force_item_tag_recommendation",
+    "format_csl_export",
+    "format_standard_export",
+    "get_accessible_item_identifiers",
+    "get_item_citation_response",
+    "get_item_citation_text_response",
+    "handle_item_tag_recommendation",
+    "list_custom_citation_styles",
+    "record_discovery_search_audit",
+    "request_item_tag_recommendation",
+    "resolve_style_xml",
+    "search_candidate_records",
+    "select_builtin_citation_styles",
+    "stage_identifier_import_batch",
+    "stage_import_batch",
+    "stage_pdf_import_batch",
 }
 
 
@@ -286,6 +305,54 @@ def test_package_dependencies_match_the_documented_policy():
         )
 
 
+def test_standalone_dependency_policy_covers_every_application_edge():
+    for package_name in PACKAGE_ROLES:
+        actual: set[str] = set()
+        for py_file in get_python_files(SRC_ROOT / package_name):
+            for module in imported_modules(py_file):
+                root = module.split(".", 1)[0]
+                if root in STANDALONE_WORKSPACE_PACKAGES:
+                    actual.add(root)
+        allowed = ALLOWED_STANDALONE_DEPENDENCIES.get(package_name, set())
+        disallowed = actual - allowed
+        assert not disallowed, (
+            f"quirebase.{package_name} imports undocumented workspace packages "
+            f"{sorted(disallowed)}; update docs/architecture/modules.md and "
+            "ALLOWED_STANDALONE_DEPENDENCIES"
+        )
+
+
+def test_standalone_workspace_packages_are_classified():
+    packages_root = REPO_ROOT / "packages"
+    discovered = {
+        path.name
+        for path in packages_root.iterdir()
+        if path.is_dir() and (path / "pyproject.toml").is_file()
+    }
+    assert discovered == set(STANDALONE_WORKSPACE_PACKAGES), (
+        "Update STANDALONE_WORKSPACE_PACKAGES and docs/architecture/modules.md when adding or "
+        f"removing a workspace package: discovered={sorted(discovered)}, "
+        f"classified={sorted(STANDALONE_WORKSPACE_PACKAGES)}"
+    )
+
+
+def test_release_metadata_pins_workspace_packages_to_the_quirebase_version():
+    root_metadata = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    root_version = root_metadata["project"]["version"]
+    dependencies = set(root_metadata["project"]["dependencies"])
+    optional_dependencies = root_metadata["project"]["optional-dependencies"]
+
+    for package in STANDALONE_WORKSPACE_PACKAGES:
+        package_metadata = tomllib.loads(
+            (REPO_ROOT / "packages" / package / "pyproject.toml").read_text(encoding="utf-8")
+        )
+        assert package_metadata["project"]["version"] == root_version
+        assert f"{package}=={root_version}" in dependencies
+
+    assert optional_dependencies["citation"] == [f"inquiro[citation]=={root_version}"]
+    assert optional_dependencies["keybert"] == [f"rubrica[keybert]=={root_version}"]
+
+
 def test_session_detection_follows_type_and_variable_aliases():
     tree = ast.parse(
         """
@@ -412,16 +479,33 @@ def test_package_facades_do_not_export_internal_persistence_collaborators():
         assert not leaked, f"quirebase.{package} facade leaks internal symbols {sorted(leaked)}"
 
 
-def test_discovery_provider_modules_do_not_depend_on_orm_or_web():
-    forbidden = ("sqlalchemy", "quirebase.models", "quirebase.web", "quirebase.access")
-    for filename in ("lookup.py", "providers.py", "search.py"):
-        py_file = SRC_ROOT / "discovery" / filename
-        for module in imported_modules(py_file):
-            assert not module.startswith(forbidden), f"{py_file} illegally imports {module}"
+def test_library_facade_exposes_owned_import_citation_and_recommendation_operations():
+    missing = LIBRARY_FACADE_OPERATIONS - exported_names("library")
+    assert not missing, f"quirebase.library facade is missing owned operations {sorted(missing)}"
 
 
-def test_discovery_modules_do_not_import_secondary_or_legacy_http_stacks():
-    for py_file in get_python_files(SRC_ROOT / "discovery"):
+def test_external_callers_use_library_facade_for_owned_operations():
+    for package in ("pipeline", "web"):
+        for py_file in get_python_files(SRC_ROOT / package):
+            for module in imported_modules(py_file):
+                assert not module.startswith("quirebase.library."), (
+                    f"{py_file} bypasses the Library facade through {module}"
+                )
+
+
+def test_standalone_workspace_packages_do_not_depend_on_quirebase_or_orm():
+    for package in STANDALONE_WORKSPACE_PACKAGES:
+        package_files = get_python_files(REPO_ROOT / "packages" / package / "src" / package)
+        for py_file in package_files:
+            for module in imported_modules(py_file):
+                assert not module.startswith(("quirebase", "sqlalchemy")), (
+                    f"{py_file} illegally imports {module}"
+                )
+
+
+def test_inquiro_modules_do_not_import_secondary_or_legacy_http_stacks():
+    inquiro_files = get_python_files(REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro")
+    for py_file in inquiro_files:
         for module in imported_modules(py_file):
             assert not (module == "requests" or module.startswith("requests.")), (
                 f"{py_file} illegally imports requests"
@@ -431,24 +515,64 @@ def test_discovery_modules_do_not_import_secondary_or_legacy_http_stacks():
             )
 
 
-def test_discovery_provider_registration_stays_private_and_local():
-    forbidden_registries = {"PROVIDERS", "SEARCH_PROVIDERS", "LOOKUP_ADAPTERS", "SEARCH_ADAPTERS"}
-    for filename in ("lookup.py", "search.py"):
-        py_file = SRC_ROOT / "discovery" / filename
-        tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
-        assigned_names = {
-            target.id
-            for node in ast.walk(tree)
-            if isinstance(node, (ast.Assign, ast.AnnAssign))
-            for target in (node.targets if isinstance(node, ast.Assign) else [node.target])
-            if isinstance(target, ast.Name)
-        }
-        assert not assigned_names & forbidden_registries, (
-            f"{py_file} restores duplicated Provider registration knowledge"
-        )
+def test_inquiro_runtime_owns_one_private_provider_catalog():
+    inquiro_src = REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro"
+    assert not (inquiro_src / "lookup.py").exists()
+    assert not (inquiro_src / "search.py").exists()
+    assert not (inquiro_src / "providers" / "registry.py").exists()
+    assert "inquiro.providers._catalog" in imported_modules(inquiro_src / "runtime.py")
+    inquiro_facade = inquiro_src / "__init__.py"
+    assert "inquiro.providers" not in imported_modules(inquiro_facade)
 
-    discovery_facade = SRC_ROOT / "discovery" / "__init__.py"
-    assert "quirebase.discovery.providers" not in imported_modules(discovery_facade)
+
+def test_inquiro_providers_are_leaf_implementations():
+    provider_root = REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro" / "providers"
+    provider_files = [
+        py_file for py_file in provider_root.glob("*.py") if not py_file.name.startswith("_")
+    ]
+    provider_modules = {f"inquiro.providers.{py_file.stem}" for py_file in provider_files}
+    for py_file in provider_files:
+        dependencies = imported_modules(py_file)
+        peer_dependencies = dependencies & provider_modules
+        assert not peer_dependencies, (
+            f"{py_file} imports peer Providers {sorted(peer_dependencies)}"
+        )
+        assert "inquiro.runtime" not in dependencies
+        assert "inquiro.providers._catalog" not in dependencies
+
+
+def test_web_uses_library_provider_operations_only():
+    for py_file in get_python_files(SRC_ROOT / "web"):
+        dependencies = imported_modules(py_file)
+        assert not any(
+            module == "inquiro" or module.startswith("inquiro.") for module in dependencies
+        ), f"{py_file} bypasses the Library Interface and imports Inquiro"
+
+
+def test_inquiro_facade_is_the_narrow_provider_interface():
+    expected = {
+        "CandidateNotFound",
+        "CandidatePage",
+        "CandidateRecord",
+        "Identifier",
+        "InquiroError",
+        "InvalidProviderRequest",
+        "ProviderConfig",
+        "ProviderRuntime",
+        "ProviderUnavailable",
+        "SearchClause",
+        "SearchQuery",
+    }
+    facade = REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro" / "__init__.py"
+    tree = ast.parse(facade.read_text(encoding="utf-8"), filename=str(facade))
+    exported = next(
+        node.value
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == "__all__" for target in node.targets)
+    )
+    assert isinstance(exported, (ast.List, ast.Tuple))
+    assert {item.value for item in exported.elts if isinstance(item, ast.Constant)} == expected
 
 
 def test_search_adapters_do_not_depend_on_each_other():

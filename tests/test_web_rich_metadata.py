@@ -5,9 +5,10 @@ from datetime import UTC, datetime
 from unittest.mock import patch
 
 import pytest
+from inquiro import CandidateRecord, Identifier
 from test_http import authenticated_client
 
-from quirebase.discovery import Identifier, MetadataLookupError, MetadataNotFoundError
+from quirebase.core.errors import ResourceNotFound, UpstreamServiceError, ValidationFailure
 from quirebase.models import (
     Author,
     Item,
@@ -304,8 +305,12 @@ def test_web_sync_metadata_and_bibtex_key_update(db, tmp_path, monkeypatch):
     }
 
     with patch(
-        "quirebase.library.identifiers.lookup_metadata",
-        return_value=(Identifier("doi", "10.1038/s41586-019-1666-5"), mock_payload),
+        "quirebase.library.identifiers.lookup_candidate",
+        return_value=CandidateRecord(
+            provider="crossref",
+            identifier=Identifier("doi", "10.1038/s41586-019-1666-5"),
+            **mock_payload,
+        ),
     ):
         response = client.post(
             f"/items/{item.id}/sync-metadata",
@@ -331,10 +336,11 @@ def test_web_sync_metadata_uses_effective_runtime_provider_settings(db, tmp_path
     db.commit()
 
     with patch(
-        "quirebase.library.identifiers.lookup_metadata",
-        return_value=(
-            Identifier("bibcode", "2024ApJ...123A...1X"),
-            {"title": "Runtime-configured metadata"},
+        "quirebase.library.identifiers.lookup_candidate",
+        return_value=CandidateRecord(
+            provider="nasa",
+            identifier=Identifier("bibcode", "2024ApJ...123A...1X"),
+            title="Runtime-configured metadata",
         ),
     ) as lookup:
         response = client.post(
@@ -348,15 +354,15 @@ def test_web_sync_metadata_uses_effective_runtime_provider_settings(db, tmp_path
         )
 
     assert response.status_code == 303
-    assert lookup.call_args.kwargs["settings"].nasa_ads_token == "runtime-ads-token"
+    assert lookup.call_args.args[2].nasa_ads_token == "runtime-ads-token"
 
 
 @pytest.mark.parametrize(
     ("error", "status_code"),
     [
-        (ValueError("identifier is malformed"), 422),
-        (MetadataNotFoundError("metadata not found"), 404),
-        (MetadataLookupError("provider unavailable"), 502),
+        (ValidationFailure("identifier is malformed"), 422),
+        (ResourceNotFound("metadata not found"), 404),
+        (UpstreamServiceError("provider unavailable"), 502),
     ],
 )
 def test_web_sync_metadata_translates_expected_lookup_failures(
@@ -364,7 +370,7 @@ def test_web_sync_metadata_translates_expected_lookup_failures(
 ):
     client, item, _ = authenticated_client(db, tmp_path, monkeypatch)
 
-    with patch("quirebase.library.identifiers.lookup_metadata", side_effect=error):
+    with patch("quirebase.library.identifiers.lookup_candidate", side_effect=error):
         response = client.post(
             f"/items/{item.id}/sync-metadata?csrf_token=test-csrf",
             data={"version": item.version, "provider": "doi", "uid": "invalid"},

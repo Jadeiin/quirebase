@@ -28,11 +28,6 @@ from quirebase.models import (
 )
 from quirebase.operations.maintenance import check_objects, cleanup_exports
 from quirebase.pipeline.inspection import create_thumbnail, export_annotations, inspect_pdf
-from quirebase.recommendations import (
-    handle_item_tag_recommendation,
-    request_item_tag_recommendation,
-)
-from quirebase.recommendations.persistence import enqueue_all_item_tag_recommendations
 from quirebase.search import reindex_all, search_index
 
 if TYPE_CHECKING:
@@ -116,6 +111,8 @@ def handle_pdf_inspect(db: Session, job: Job, payload: dict[str, Any]) -> dict[s
         page_geometry=geometry_json,
         full_text=text,
     )
+    from quirebase.library import request_item_tag_recommendation
+
     request_item_tag_recommendation(db, revision.item_id, owner_id=job.owner_id)
     create_thumbnail(path, get_settings().object_dir / "thumbnails" / f"{revision.id}.png")
     search_index(db).index_item(db, revision.item_id)
@@ -198,7 +195,15 @@ def handle_system_backup(db: Session, job: Job, payload: dict[str, Any]) -> dict
 def handle_system_recommend_tags_all(
     db: Session, job: Job, payload: dict[str, Any]
 ) -> dict[str, Any]:
+    from quirebase.library import enqueue_all_item_tag_recommendations
+
     return {"enqueued_items": enqueue_all_item_tag_recommendations(db, owner_id=job.owner_id)}
+
+
+def handle_item_recommend_tags(db: Session, job: Job, payload: dict[str, Any]) -> dict[str, Any]:
+    from quirebase.library import handle_item_tag_recommendation
+
+    return handle_item_tag_recommendation(db, job, payload)
 
 
 JOB_HANDLERS.update({
@@ -208,7 +213,7 @@ JOB_HANDLERS.update({
     "system.check_objects": handle_system_check_objects,
     "system.backup": handle_system_backup,
     "system.recommend_tags_all": handle_system_recommend_tags_all,
-    "item.recommend_tags": handle_item_tag_recommendation,
+    "item.recommend_tags": handle_item_recommend_tags,
 })
 
 

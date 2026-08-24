@@ -2,8 +2,8 @@ import json
 
 import bibtexparser
 import rispy
+from inquiro.bibliography import export_bibliography, parse_bibliography
 
-from quirebase.discovery import export_bibliography, parse_bibliography
 from quirebase.models import Item, User
 
 

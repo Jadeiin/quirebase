@@ -8,20 +8,20 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from inquiro.parsing import normalize_reference_type
 from sqlalchemy import update
 
 from quirebase.access.items import require_editable_item
 from quirebase.audit import record_event
 from quirebase.core.errors import ValidationFailure, VersionConflict
-from quirebase.discovery.lookup import normalize_reference_type
 from quirebase.library.authors import set_item_authors
 from quirebase.library.identifiers import (
     clean_identifier_value,
     generate_bibtex_key,
     set_item_identifiers,
 )
+from quirebase.library.tag_recommendations import request_item_tag_recommendation
 from quirebase.models import Item
-from quirebase.recommendations import request_item_tag_recommendation
 from quirebase.search import search_index
 
 if TYPE_CHECKING:

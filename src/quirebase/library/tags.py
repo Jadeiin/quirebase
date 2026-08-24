@@ -11,8 +11,8 @@ from quirebase.core.errors import (
     ResourceUnavailable,
     ValidationFailure,
 )
+from quirebase.library.tag_recommendations import decoded_candidates, recommendation_state
 from quirebase.models import Item, ItemTag, ItemTagRecommendation, Job, Tag, User
-from quirebase.recommendations.persistence import decoded_candidates, recommendation_state
 from quirebase.search import search_index
 
 if TYPE_CHECKING:

@@ -4,6 +4,12 @@
 
 Python 3.12+ wheels are the common installation path on Windows, macOS and Linux. Install with `uv tool install` or in a virtual environment, then run `quirebase init-db`, `quirebase create-admin`, `quirebase serve`, and a separate `quirebase worker` process. PDF.js and UI assets are already included in release wheels.
 
+Quirebase, `inquiro` and `rubrica` are versioned together and published to the same Python package
+index. A release publishes the two standalone workspace packages before the matching Quirebase
+artifact; Quirebase pins both dependencies to its own version so a standard wheel installation
+cannot silently combine incompatible workspace releases. The release workflow verifies the full
+wheel set in an isolated environment before publishing.
+
 SQLite is intended for a single-host installation with one worker. PostgreSQL is recommended for teams and supports concurrent workers through `FOR UPDATE SKIP LOCKED`. Set `QUIREBASE_DATABASE_URL`, `QUIREBASE_DATA_DIR`, `QUIREBASE_ALLOWED_HOSTS`, and secure cookies behind HTTPS.
 
 For identifier lookup and Discovery (online scholarly search), set a monitored `QUIREBASE_METADATA_CONTACT_EMAIL`; NCBI and OpenAlex API keys are optional. See `METADATA_LOOKUP.md`. Restrictive egress firewalls should allow only the documented Provider hosts.

@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from quirebase.core.errors import UpstreamServiceError
+from quirebase.library.activity import (
+    get_accessible_item_identifiers,
+    record_discovery_search_audit,
+)
 from quirebase.library.administration import (
     admin_delete_item,
     delete_item,
@@ -15,11 +20,39 @@ from quirebase.library.bulk_items import (
     download_selected_item_documents,
 )
 from quirebase.library.catalog import find_duplicates, get_dashboard_data, search_library
+from quirebase.library.citations import (
+    ExportOptions,
+    create_custom_citation_style,
+    delete_custom_citation_style,
+    format_csl_export,
+    format_standard_export,
+    get_item_citation_response,
+    get_item_citation_text_response,
+    list_custom_citation_styles,
+    resolve_style_xml,
+    select_builtin_citation_styles,
+)
+from quirebase.library.discovery import (
+    CandidatePageView,
+    CandidateView,
+    DiscoveryClause,
+    search_candidate_records,
+)
 from quirebase.library.discussions import add_discussion_message, delete_discussion_message
 from quirebase.library.identifiers import (
     create_item_from_metadata_record,
     rescan_pdf_doi,
     sync_metadata_from_upstream,
+)
+from quirebase.library.imports import (
+    BatchConflict,
+    commit_import_batch,
+    discard_import_batch,
+    export_accessible_bibliography,
+    export_selected_bibliography,
+    stage_identifier_import_batch,
+    stage_import_batch,
+    stage_pdf_import_batch,
 )
 from quirebase.library.item_metadata import (
     Contributor,
@@ -48,6 +81,12 @@ from quirebase.library.item_workspace import (
     WorkspaceView,
     open_item_workspace,
 )
+from quirebase.library.tag_recommendations import (
+    enqueue_all_item_tag_recommendations,
+    force_item_tag_recommendation,
+    handle_item_tag_recommendation,
+    request_item_tag_recommendation,
+)
 from quirebase.library.tags import (
     TagConflict,
     add_tag_to_item,
@@ -62,9 +101,14 @@ from quirebase.library.tags import (
 __all__ = [
     "AnnotationView",
     "AnnotationsWorkspace",
+    "BatchConflict",
+    "CandidatePageView",
+    "CandidateView",
     "Contributor",
     "CustomField",
+    "DiscoveryClause",
     "DiscussionWorkspace",
+    "ExportOptions",
     "ExternalIdentifier",
     "FilesWorkspace",
     "ItemMetadata",
@@ -78,33 +122,57 @@ __all__ = [
     "TagConflict",
     "TagGroup",
     "TagMatrix",
+    "UpstreamServiceError",
     "WorkspaceSection",
     "WorkspaceView",
     "add_discussion_message",
     "add_tag_to_item",
     "admin_delete_item",
     "apply_bulk_item_action",
+    "commit_import_batch",
+    "create_custom_citation_style",
     "create_item",
     "create_item_from_metadata_record",
+    "delete_custom_citation_style",
     "delete_discussion_message",
     "delete_item",
     "delete_tag",
+    "discard_import_batch",
     "download_selected_item_documents",
+    "enqueue_all_item_tag_recommendations",
+    "export_accessible_bibliography",
+    "export_selected_bibliography",
     "find_duplicates",
+    "force_item_tag_recommendation",
+    "format_csl_export",
+    "format_standard_export",
+    "get_accessible_item_identifiers",
     "get_dashboard_data",
+    "get_item_citation_response",
+    "get_item_citation_text_response",
     "get_storage_metrics",
+    "handle_item_tag_recommendation",
     "list_accessible_tags_with_counts",
+    "list_custom_citation_styles",
     "list_global_items",
     "merge_tags",
     "open_item_workspace",
     "parse_author_list_string",
+    "record_discovery_search_audit",
     "regenerate_bibtex_key",
     "remove_tag_from_item",
     "rename_tag",
+    "request_item_tag_recommendation",
     "rescan_pdf_doi",
+    "resolve_style_xml",
     "revise_item_metadata",
     "search_authors_typeahead",
+    "search_candidate_records",
     "search_library",
+    "select_builtin_citation_styles",
     "set_item_tags",
+    "stage_identifier_import_batch",
+    "stage_import_batch",
+    "stage_pdf_import_batch",
     "sync_metadata_from_upstream",
 ]

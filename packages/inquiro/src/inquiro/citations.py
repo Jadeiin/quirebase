@@ -6,16 +6,10 @@ from contextlib import suppress
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from sqlalchemy import select
-
-from quirebase.access.items import require_readable_item
-from quirebase.core.errors import ResourceNotFound, ValidationFailure
-from quirebase.discovery.bibliography import SUPPORTED_FORMATS, export_bibliography, first_url
-from quirebase.discovery.lookup import normalize_reference_type
-from quirebase.library.authors import parse_author_list_string
-from quirebase.models import CitationStyle
+from inquiro.bibliography import first_url
+from inquiro.parsing import normalize_reference_type
 
 try:
     from citeproc import (
@@ -40,11 +34,6 @@ except ImportError:  # optional `citation` extra is not installed
     get_style_filepath = None
     get_style_name = None
 
-if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
-
-    from quirebase.models import Item, User
-
 
 @dataclass(frozen=True)
 class CitationStyleOption:
@@ -56,6 +45,10 @@ class CitationStyleOption:
 class CitationStyleSelection:
     matches: tuple[CitationStyleOption, ...]
     included: CitationStyleOption | None
+
+
+class CitationEngineUnavailable(RuntimeError):
+    """The optional CSL formatting engine is not installed."""
 
 
 @dataclass(frozen=True)
@@ -121,8 +114,6 @@ def select_builtin_citation_styles(
     return CitationStyleSelection(matches=styles, included=included)
 
 
-# Keyed on canonical types only; callers normalize first (see
-# normalize_reference_type), so the alias tables live in one place.
 REFERENCE_TYPE_TO_CSL: dict[str, str] = {
     "article": "article-journal",
     "book": "book",
@@ -173,6 +164,33 @@ def _date_parts(value: str | None) -> list[list[int]] | None:
     return [[year]]
 
 
+def parse_author_name(name_str: str) -> tuple[str, str | None]:
+    cleaned = " ".join(name_str.split())
+    if not cleaned:
+        raise ValueError("author name cannot be empty")
+    if "," in cleaned:
+        parts = cleaned.split(",", 1)
+        last = parts[0].strip()
+        first = parts[1].strip() or None
+        return last, first
+    parts = cleaned.split()
+    if len(parts) == 1:
+        return parts[0], None
+    return parts[-1], " ".join(parts[:-1])
+
+
+def parse_author_list_string(raw: str | None) -> list[dict[str, str | None]]:
+    if not raw or not raw.strip():
+        return []
+    authors: list[dict[str, str | None]] = []
+    for part in raw.split(";"):
+        cleaned = part.strip()
+        if cleaned:
+            last, first = parse_author_name(cleaned)
+            authors.append({"last_name": last, "first_name": first})
+    return authors
+
+
 def _parse_names(value: str | None) -> list[dict[str, str | None]]:
     return [
         {
@@ -189,43 +207,45 @@ def _parse_keywords(value: str | None) -> list[str]:
     return [keyword.strip() for keyword in value.split(";") if keyword.strip()]
 
 
-def item_to_csl_json(item: Item, options: ExportOptions | None = None) -> dict[str, Any]:
+def item_to_csl_json(item: Any, options: ExportOptions | None = None) -> dict[str, Any]:
     options = options or ExportOptions()
     csl_type = REFERENCE_TYPE_TO_CSL.get(
-        normalize_reference_type(item.reference_type) or "", "article"
+        normalize_reference_type(getattr(item, "reference_type", None)) or "", "article"
     )
     record: dict[str, Any] = {
-        "id": item.id,
+        "id": getattr(item, "id", "item-1"),
         "type": csl_type,
-        "title": item.title,
+        "title": getattr(item, "title", ""),
     }
     optional: dict[str, Any] = {
-        "abstract": item.abstract if options.include_abstract else None,
-        "DOI": item.doi,
+        "abstract": item.abstract
+        if options.include_abstract and hasattr(item, "abstract")
+        else None,
+        "DOI": getattr(item, "doi", None),
         "container-title": (
             item.journal_abbreviation
-            if options.abbreviate_journal and item.journal_abbreviation
-            else item.publication_title
+            if options.abbreviate_journal and getattr(item, "journal_abbreviation", None)
+            else getattr(item, "publication_title", None)
         ),
-        "container-title-short": item.journal_abbreviation,
-        "volume": item.volume,
-        "issue": item.issue,
-        "page": item.pages,
-        "publisher": item.publisher,
-        "publisher-place": item.place_published,
-        "URL": first_url(item.urls),
+        "container-title-short": getattr(item, "journal_abbreviation", None),
+        "volume": getattr(item, "volume", None),
+        "issue": getattr(item, "issue", None),
+        "page": getattr(item, "pages", None),
+        "publisher": getattr(item, "publisher", None),
+        "publisher-place": getattr(item, "place_published", None),
+        "URL": first_url(getattr(item, "urls", None)),
     }
     record.update({key: value for key, value in optional.items() if value})
-    author = _parse_names(item.authors)
+    author = _parse_names(getattr(item, "authors", None))
     if author:
         record["author"] = author
-    editor = _parse_names(item.editors)
+    editor = _parse_names(getattr(item, "editors", None))
     if editor:
         record["editor"] = editor
-    keyword = _parse_keywords(item.keywords)
+    keyword = _parse_keywords(getattr(item, "keywords", None))
     if keyword:
         record["keyword"] = keyword
-    issued = _date_parts(item.publication_date)
+    issued = _date_parts(getattr(item, "publication_date", None))
     if issued:
         record["issued"] = {"date-parts": issued}
     return record
@@ -233,7 +253,7 @@ def item_to_csl_json(item: Item, options: ExportOptions | None = None) -> dict[s
 
 def _load_style(xml_text: str) -> Any:
     if CitationStylesStyle is None:
-        raise ValidationFailure("CSL formatting requires the 'citation' extra")
+        raise CitationEngineUnavailable("CSL formatting requires the 'citation' extra")
     return CitationStylesStyle(io.BytesIO(xml_text.encode("utf-8")))
 
 
@@ -250,7 +270,7 @@ def render_bibliography(
         or CitationItem is None
         or formatter is None
     ):
-        raise ValidationFailure("CSL formatting requires the 'citation' extra")
+        raise CitationEngineUnavailable("CSL formatting requires the 'citation' extra")
     source = CiteProcJSON(csl_json)
     style = _load_style(style_xml)
     output = formatter.html if output_format == "html" else formatter.plain
@@ -265,7 +285,7 @@ def render_bibliography(
 
 
 def render_citation(
-    item: Item,
+    item: Any,
     style_xml: str,
     output_format: str = "text",
     options: ExportOptions | None = None,
@@ -297,110 +317,3 @@ def is_valid_csl(xml_text: str) -> bool:
     except Exception:
         return False
     return True
-
-
-def resolve_style_xml(db: Session, user: User | None, style_key: str) -> str | None:
-    builtin = builtin_style_xml(style_key)
-    if builtin:
-        return builtin
-    if user is None:
-        return None
-    style = db.get(CitationStyle, style_key)
-    if style is None or style.created_by != user.id:
-        return None
-    return style.csl_xml
-
-
-def list_custom_citation_styles(db: Session, user: User) -> list[CitationStyle]:
-    return list(
-        db.scalars(
-            select(CitationStyle)
-            .where(CitationStyle.created_by == user.id)
-            .order_by(CitationStyle.name)
-        ).all()
-    )
-
-
-def create_custom_citation_style(db: Session, user: User, name: str, csl: str) -> CitationStyle:
-    name = name.strip()
-    if not name:
-        raise ValidationFailure("style name is required")
-    if len(name) > 120:
-        name = name[:120]
-    if not is_valid_csl(csl):
-        raise ValidationFailure("the CSL text is not a valid citation style")
-    style = CitationStyle(name=name, csl_xml=csl, created_by=user.id)
-    db.add(style)
-    db.commit()
-    return style
-
-
-def delete_custom_citation_style(db: Session, user: User, style_id: str) -> None:
-    style = db.get(CitationStyle, style_id)
-    if style is None or style.created_by != user.id:
-        raise ResourceNotFound("citation style not found")
-    db.delete(style)
-    db.commit()
-
-
-def format_csl_export(
-    db: Session,
-    user: User,
-    items: list[Item],
-    style_key: str = "apa",
-    options: ExportOptions | None = None,
-) -> tuple[str, str, str]:
-    style_xml = resolve_style_xml(db, user, style_key)
-    if style_xml is None:
-        raise ValidationFailure("unknown citation style")
-    entries = render_bibliography(
-        [item_to_csl_json(item, options=options) for item in items], style_xml
-    )
-    return "\n\n".join(entries), "text/plain", "quirebase-citations.txt"
-
-
-def format_standard_export(
-    items: list[Item], file_format: str, options: ExportOptions | None = None
-) -> tuple[str, str, str]:
-    if file_format not in SUPPORTED_FORMATS:
-        raise ValidationFailure("format must be bibtex, ris, or endnote")
-    options = options or ExportOptions()
-    contents = export_bibliography(
-        items,
-        file_format,
-        include_abstract=options.include_abstract,
-        preserve_case=options.preserve_case,
-        abbreviate_journal=options.abbreviate_journal,
-        include_identifiers=options.include_identifiers,
-        include_custom_fields=options.include_custom_fields,
-    )
-    media_type = BIBLIOGRAPHY_MEDIA_TYPES[file_format]
-    extension = BIBLIOGRAPHY_EXTENSIONS[file_format]
-    filename = f"quirebase-export.{extension}"
-    return contents, media_type, filename
-
-
-def get_item_citation_response(
-    db: Session,
-    user: User,
-    item_id: str,
-    file_format: str,
-    style_key: str = "apa",
-    options: ExportOptions | None = None,
-) -> tuple[str, str, str]:
-    item = require_readable_item(db, user, item_id)
-    if file_format == "csl":
-        return format_csl_export(db, user, [item], style_key=style_key, options=options)
-    return format_standard_export([item], file_format, options=options)
-
-
-def get_item_citation_text_response(
-    db: Session, user: User, item_id: str, style_key: str = "apa", output: str = "text"
-) -> tuple[str, str]:
-    item = require_readable_item(db, user, item_id)
-    style_xml = resolve_style_xml(db, user, style_key)
-    if style_xml is None:
-        raise ValidationFailure("unknown citation style")
-    rendered = render_citation(item, style_xml, output_format=output)
-    media_type = "text/html" if output == "html" else "text/plain"
-    return rendered, media_type

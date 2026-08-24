@@ -9,7 +9,7 @@ from quirebase.audit import record_event
 from quirebase.core.config import get_settings
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
 from quirebase.core.storage import LocalObjectStore
-from quirebase.documents import delete_unreferenced_objects
+from quirebase.documents.revisions import delete_unreferenced_objects
 from quirebase.models import Attachment, FileRevision, Item, User
 from quirebase.search import search_index
 

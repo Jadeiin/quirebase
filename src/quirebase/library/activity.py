@@ -1,23 +1,29 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 from quirebase.access.items import visible_items_query
 from quirebase.audit import record_event
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from sqlalchemy.orm import Session
 
-    from quirebase.discovery.search import SearchClause
     from quirebase.models import User
+
+
+class SearchClauseView(Protocol):
+    @property
+    def field(self) -> str: ...
 
 
 def record_discovery_search_audit(
     db: Session,
     user: User,
     provider: str,
-    clauses: list[SearchClause],
+    clauses: Sequence[SearchClauseView],
     result_count: int,
 ) -> None:
     record_event(

@@ -16,11 +16,11 @@ from quirebase.core.errors import (
     PermissionDenied,
     ValidationFailure,
 )
-from quirebase.documents import (
+from quirebase.documents.bundles import (
     ItemDownloadBundle,
     assemble_document_bundle,
-    delete_unreferenced_objects,
 )
+from quirebase.documents.revisions import delete_unreferenced_objects
 from quirebase.library.tags import get_or_create_tag
 from quirebase.models import (
     Attachment,

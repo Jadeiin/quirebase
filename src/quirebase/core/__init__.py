@@ -7,6 +7,7 @@ from quirebase.core.errors import (
     PermissionDenied,
     ResourceNotFound,
     ResourceUnavailable,
+    UpstreamServiceError,
     ValidationFailure,
     VersionConflict,
 )
@@ -31,6 +32,7 @@ __all__ = [
     "ResourceUnavailable",
     "SessionLocal",
     "Settings",
+    "UpstreamServiceError",
     "ValidationFailure",
     "VersionConflict",
     "_",

@@ -12,28 +12,33 @@ license = "AGPL-3.0-only"
 dependencies = [
   "alembic>=1.16,<2",
   "argon2-cffi>=25,<26",
-  "bibtexparser>=1.4,<2",
   "fastapi>=0.116,<1",
-  "httpx2>=2.12,<3",
+  "inquiro==0.1.2",
   "jinja2>=3.1,<4",
   "pymupdf>=1.28,<1.29",
   "pydantic-settings>=2.10,<3",
   "python-multipart>=0.0.20,<1",
-  "rispy>=0.10,<1",
+  "rubrica==0.1.2",
   "sqlalchemy>=2.0,<3",
   "typer>=0.16,<1",
   "uvicorn[standard]>=0.35,<1",
   "babel>=2.18.0",
   "tzdata>=2025.2; sys_platform == 'win32'",
   "tzlocal>=5.3,<6",
-  "yake>=0.7,<0.8",
   "filelock>=3.20,<4",
 ]
 
 [project.optional-dependencies]
 postgres = ["psycopg[binary]>=3.2,<4"]
-citation = ["citeproc-py>=0.10,<0.11", "citeproc-py-styles>=0.1.6,<0.2"]
-keybert = ["keybert>=0.9,<0.10", "model2vec>=0.6,<1"]
+citation = ["inquiro[citation]==0.1.2"]
+keybert = ["rubrica[keybert]==0.1.2"]
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+inquiro = { workspace = true }
+rubrica = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -140,5 +145,8 @@ version_provider = "uv"
 update_changelog_on_bump = true
 major_version_zero = true
 version_files = [
+  "pyproject.toml",
+  "packages/inquiro/pyproject.toml",
+  "packages/rubrica/pyproject.toml",
   "src/quirebase/__init__.py",
 ]

@@ -14,10 +14,9 @@ from quirebase.core.errors import (
     ValidationFailure,
     VersionConflict,
 )
-from quirebase.discovery.imports import BatchConflict, UpstreamServiceError
 from quirebase.documents.annotations import DocumentNotReady
 from quirebase.documents.revisions import UnsupportedMediaType
-from quirebase.library.tags import TagConflict
+from quirebase.library import BatchConflict, TagConflict, UpstreamServiceError
 from quirebase.projects.members import ProjectMemberConflict
 
 
