@@ -336,6 +336,25 @@ def test_standalone_workspace_packages_are_classified():
     )
 
 
+def test_standalone_workspace_packages_own_their_test_surfaces():
+    root_metadata = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    expected_testpaths = {
+        "tests",
+        *(f"packages/{package}/tests" for package in STANDALONE_WORKSPACE_PACKAGES),
+    }
+    assert set(root_metadata["tool"]["pytest"]["ini_options"]["testpaths"]) == expected_testpaths
+
+    for package in STANDALONE_WORKSPACE_PACKAGES:
+        test_root = REPO_ROOT / "packages" / package / "tests"
+        package_tests = sorted(test_root.glob("test_*.py"))
+        assert package_tests, f"{package} has no package-owned tests under {test_root}"
+        for py_file in get_python_files(test_root):
+            for module in imported_modules(py_file):
+                assert not module.startswith("quirebase"), (
+                    f"{py_file} imports {module}; application integration tests belong in root tests/"
+                )
+
+
 def test_release_metadata_pins_workspace_packages_to_the_quirebase_version():
     root_metadata = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     root_version = root_metadata["project"]["version"]

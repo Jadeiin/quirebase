@@ -15,6 +15,9 @@ dependencies = [
   "rispy>=0.10,<1",
 ]
 
+[project.scripts]
+inquiro = "inquiro.cli:main"
+
 [project.optional-dependencies]
 citation = [
   "citeproc-py>=0.10,<0.11",

@@ -10,7 +10,12 @@ Set `QUIREBASE_METADATA_CONTACT_EMAIL` to a monitored operator address. `QUIREBA
 
 The implementation does not resolve arbitrary URLs or landing pages. It connects only to fixed HTTPS Provider endpoints; redirects are rejected. Queries are authenticated application actions, result pages are bounded, search terms are not written to audit events, and imports require preview confirmation.
 
-Run deterministic adapter tests with `uv run pytest -q tests/test_metadata_lookup.py tests/test_online_search.py`. The diagnostic script requires internet access and may fail when an upstream service is unavailable or rate-limits the deployment.
+Run deterministic Provider tests with
+`uv run pytest -q packages/inquiro/tests/test_provider_lookup.py packages/inquiro/tests/test_provider_search.py`.
+Run the Quirebase integration tests with
+`uv run pytest -q tests/test_metadata_lookup.py tests/test_online_search.py`. The diagnostic script
+requires internet access and may fail when an upstream service is unavailable or rate-limits the
+deployment.
 
 Official API documentation:
 

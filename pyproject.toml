@@ -68,7 +68,7 @@ artifacts = ["src/quirebase/static"]
 artifacts = ["src/quirebase/static"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "packages/inquiro/tests", "packages/rubrica/tests"]
 markers = ["oa: tests using the separately downloaded open-access PDF corpus"]
 
 [tool.ruff]
@@ -104,6 +104,7 @@ exclude = ["migrations"]
 [tool.ruff.lint.per-file-ignores]
 "scripts/**" = ["print"]
 "tests/**" = ["import-private-name", "assert"]
+"packages/*/tests/**" = ["import-private-name", "assert"]
 "src/quirebase/web/**" = ["typing-only-first-party-import"]
 
 [tool.ruff.format]

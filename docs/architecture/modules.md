@@ -51,6 +51,11 @@ Current standalone workspace packages are:
 - `rubrica`: keyword extraction, keyphrase ranking and Tag Recommendation computation; it
   isolates YAKE and optional local-model dependencies.
 
+Each standalone workspace package owns tests of its Interface and internal seams under
+`packages/<name>/tests`. Root `tests/` owns Quirebase behaviour, application-to-package integration
+and cross-workspace architecture and release contracts. The root pytest configuration discovers
+all of these test roots so the complete monorepo remains verifiable with one command.
+
 `cli.py` is an inbound adapter. `models.py` is a shared persistence mapping, not a business Module
 and not the owner of the concepts it maps. The prototype and decision in
 `docs/architecture/orm-ownership.md` retain the centralized mapping: splitting it across

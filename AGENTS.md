@@ -2,6 +2,12 @@
 
 ## Agent skills
 
+### Implementation policy
+
+Before implementing or refactoring, use the repository's rules for simplicity, incremental
+delivery, compatibility and dependency choices.
+See `docs/agents/implementation.md`.
+
 ### Issue tracker
 
 Issues are tracked in GitHub Issues (via `forge` CLI).
