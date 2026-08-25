@@ -12,7 +12,7 @@ wheel set in an isolated environment before publishing.
 
 SQLite is intended for a single-host installation with one worker. PostgreSQL is recommended for teams and supports concurrent workers through `FOR UPDATE SKIP LOCKED`. Set `QUIREBASE_DATABASE_URL`, `QUIREBASE_DATA_DIR`, `QUIREBASE_ALLOWED_HOSTS`, and secure cookies behind HTTPS.
 
-For identifier lookup and Discovery (online scholarly search), set a monitored `QUIREBASE_METADATA_CONTACT_EMAIL`; NCBI and OpenAlex API keys are optional. See `METADATA_LOOKUP.md`. Restrictive egress firewalls should allow only the documented Provider hosts.
+For identifier lookup and Discovery (online scholarly search), set a monitored `INQUIRO_CONTACT_EMAIL`; NCBI and OpenAlex API keys are optional. See `METADATA_LOOKUP.md`. Restrictive egress firewalls should allow only the documented Provider hosts.
 
 Tag Recommendations use offline YAKE by default. To use the optional semantic engine, install
 `quirebase[keybert]`, set `QUIREBASE_RECOMMENDATION_ENGINE=keybert`, and point

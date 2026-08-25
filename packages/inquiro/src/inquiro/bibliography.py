@@ -381,7 +381,7 @@ def export_bibliography(
                 )
             ).lower()
             entry = {
-                "ID": item.bibtex_id or f"quirebase-{number}",
+                "ID": item.bibtex_id or f"inquiro-{number}",
                 "ENTRYTYPE": entry_type,
                 "title": item.title,
             }

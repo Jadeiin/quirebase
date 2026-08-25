@@ -114,8 +114,8 @@ def test_fallback_identifiers_can_be_staged_for_import(db, monkeypatch):
     from quirebase.library.imports import stage_identifier_import_batch
     from quirebase.models import User
 
-    monkeypatch.setenv("QUIREBASE_NASA_ADS_TOKEN", "ads-token")
-    monkeypatch.setenv("QUIREBASE_IEEE_API_KEY", "ieee-key")
+    monkeypatch.setenv("INQUIRO_NASA_ADS_TOKEN", "ads-token")
+    monkeypatch.setenv("INQUIRO_IEEE_API_KEY", "ieee-key")
     get_settings.cache_clear()
 
     def lookup_fallback_response(request: httpx2.Request) -> httpx2.Response:

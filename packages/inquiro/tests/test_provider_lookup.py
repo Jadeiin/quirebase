@@ -182,16 +182,16 @@ def test_identifier_input_cannot_be_used_as_an_arbitrary_url():
         parse_identifier("https://127.0.0.1/admin", "auto")
 
 
-def test_pmc_is_search_only():
-    with pytest.raises(ValueError, match="provider must be"):
+def test_pmc_does_not_offer_metadata_lookup():
+    with pytest.raises(ValueError, match="unknown identifier provider: pmc"):
         lookup_metadata("PMC123", "pmc", transport=httpx2.MockTransport(response))
 
 
 @pytest.mark.parametrize(
     ("value", "provider", "message"),
     [
-        ("2025ApJ...123..456A", "bibcode", "NASA ADS requires QUIREBASE_NASA_ADS_TOKEN"),
-        ("1234567", "article_number", "IEEE Xplore requires QUIREBASE_IEEE_API_KEY"),
+        ("2025ApJ...123..456A", "bibcode", "NASA ADS requires INQUIRO_NASA_ADS_TOKEN"),
+        ("1234567", "article_number", "IEEE Xplore requires INQUIRO_IEEE_API_KEY"),
     ],
 )
 def test_credentialed_lookup_errors_remain_provider_specific(value, provider, message):
@@ -336,7 +336,7 @@ def test_pubmed_lookup_passes_configured_identity_and_api_key():
     )
 
     assert record.title == "Configured PubMed"
-    assert captured["tool"] == "quirebase"
+    assert captured["tool"] == "inquiro"
     assert captured["email"] == "operator@example.org"
     assert captured["api_key"] == "secret-key"
 

@@ -1,11 +1,21 @@
 from __future__ import annotations
 
+import hashlib
+import tempfile
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
+from urllib.parse import unquote, urljoin, urlsplit
 
 import httpx2
 
-from inquiro.models import ProviderConfig, ProviderUnavailable
+from inquiro.models import (
+    AcquiredDocument,
+    InvalidPdfResponse,
+    PdfAccessDenied,
+    PdfNotAvailable,
+    ProviderConfig,
+    ProviderUnavailable,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -23,6 +33,7 @@ class TransportResponse:
     status_code: int
     body: bytes = b""
     redirect: bool = False
+    headers: Mapping[str, str] = field(default_factory=dict)
 
     def iter_bytes(self):
         yield self.body
@@ -34,6 +45,7 @@ class TransportResponse:
 class ExchangeResponse(Protocol):
     status_code: int
     redirect: bool
+    headers: Mapping[str, str]
 
     def iter_bytes(self): ...
 
@@ -97,6 +109,7 @@ class _HttpExchangeResponse:
         self._response = response
         self.status_code = response.status_code
         self.redirect = response.is_redirect
+        self.headers: Mapping[str, str] = dict(response.headers)
 
     def iter_bytes(self):
         try:
@@ -137,6 +150,95 @@ class BoundedTransport:
             return bytes(body)
         finally:
             response.close()
+
+    def download_pdf(
+        self,
+        url: str,
+        *,
+        filename: str | None = None,
+        provider: str | None = None,
+    ) -> AcquiredDocument:
+        current_url = url
+        for _redirect in range(6):
+            response = self._exchange.send(
+                TransportRequest(current_url, headers={"Accept": "application/pdf"})
+            )
+            try:
+                if response.redirect or 300 <= response.status_code < 400:
+                    location = response.headers.get("location")
+                    if not location:
+                        raise ProviderUnavailable("PDF provider returned an invalid redirect")
+                    current_url = urljoin(current_url, location)
+                    parsed = urlsplit(current_url)
+                    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                        raise ProviderUnavailable("PDF provider returned an invalid redirect")
+                    continue
+                if response.status_code == 404:
+                    raise PdfNotAvailable("PDF was not found")
+                if response.status_code in {401, 403}:
+                    raise PdfAccessDenied("PDF access was denied")
+                if response.status_code == 429:
+                    raise ProviderUnavailable("PDF provider rate limit was reached")
+                if response.status_code >= 400:
+                    raise ProviderUnavailable("PDF provider request failed")
+                return self._read_pdf(
+                    response,
+                    current_url,
+                    filename=filename,
+                    provider=provider,
+                )
+            finally:
+                response.close()
+        raise ProviderUnavailable("PDF provider returned too many redirects")
+
+    def _read_pdf(
+        self,
+        response: ExchangeResponse,
+        url: str,
+        *,
+        filename: str | None,
+        provider: str | None,
+    ) -> AcquiredDocument:
+        # The returned AcquiredDocument takes ownership and closes this stream.
+        stream = tempfile.SpooledTemporaryFile(  # ruff: ignore[open-file-with-context-handler]
+            max_size=5_000_000,
+            mode="w+b",
+        )
+        digest = hashlib.sha256()
+        size = 0
+        try:
+            for chunk in response.iter_bytes():
+                size += len(chunk)
+                if size > self._config.max_document_bytes:
+                    raise InvalidPdfResponse("PDF exceeded the size limit")
+                stream.write(chunk)
+                digest.update(chunk)
+            stream.seek(0)
+            if b"%PDF-" not in stream.read(1024):
+                raise InvalidPdfResponse("PDF provider returned a non-PDF response")
+            stream.seek(0)
+        except Exception:
+            stream.close()
+            raise
+        return AcquiredDocument(
+            stream=stream,
+            filename=filename or self._pdf_filename(url),
+            media_type="application/pdf",
+            size_bytes=size,
+            sha256=digest.hexdigest(),
+            provider=provider,
+        )
+
+    @staticmethod
+    def _pdf_filename(url: str) -> str:
+        decoded = unquote(urlsplit(url).path.rsplit("/", 1)[-1]).replace("\\", "/")
+        basename = decoded.rsplit("/", 1)[-1]
+        filename = "".join(
+            character
+            for character in basename
+            if character.isprintable() and character not in '<>:"/\\|?*'
+        ).strip(" .")
+        return filename if filename.lower().endswith(".pdf") else "downloaded.pdf"
 
     def close(self) -> None:
         self._exchange.close()

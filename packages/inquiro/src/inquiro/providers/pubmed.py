@@ -25,7 +25,7 @@ class PubMedLookupAdapter:
     def lookup(
         self, client: ProviderContext, value: str, settings: Any, *, endpoint: str
     ) -> ProviderRecord:
-        params = {"db": "pubmed", "id": value, "retmode": "json", "tool": "quirebase"}
+        params = {"db": "pubmed", "id": value, "retmode": "json", "tool": "inquiro"}
         contact = settings.contact_email
         if contact:
             params["email"] = contact
@@ -107,7 +107,7 @@ class PubMedSearchAdapter:
             "retmax": str(per_page),
             "retmode": "json",
             "sort": "pub date" if sort == "published" else "relevance",
-            "tool": "quirebase",
+            "tool": "inquiro",
         }
         contact = settings.contact_email
         if contact:
@@ -128,7 +128,7 @@ class PubMedSearchAdapter:
             "db": "pubmed",
             "id": ",".join(ids),
             "retmode": "json",
-            "tool": "quirebase",
+            "tool": "inquiro",
         }
         if contact:
             summary_params["email"] = contact

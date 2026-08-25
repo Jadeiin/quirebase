@@ -5,7 +5,10 @@ from typing import Any
 
 from inquiro.identifiers import parse_article_number
 from inquiro.models import (
+    AcquiredDocument,
     CandidateNotFound,
+    PdfAccessDenied,
+    PdfNotAvailable,
     ProviderRecord,
     ProviderSearchPage,
     ProviderSearchRecord,
@@ -156,6 +159,51 @@ class IeeeSearchAdapter:
         )
 
 
+class IeeeDocumentAdapter:
+    def acquire(
+        self,
+        client: ProviderContext,
+        value: str,
+        settings: Any,
+        *,
+        endpoint: str,
+    ) -> AcquiredDocument:
+        body = client._get(
+            endpoint,
+            {
+                "apikey": settings.ieee_api_key,
+                "format": "json",
+                "article_number": value,
+            },
+        )
+        try:
+            payload = json.loads(body)
+            if not isinstance(payload, dict):
+                raise TypeError
+            articles = payload.get("articles", [])
+            if not isinstance(articles, list):
+                raise TypeError
+        except (json.JSONDecodeError, TypeError) as error:
+            raise ProviderUnavailable("IEEE Xplore returned invalid document metadata") from error
+        if not articles:
+            raise PdfNotAvailable("IEEE Xplore article was not found")
+        article = articles[0]
+        if not isinstance(article, dict):
+            raise ProviderUnavailable("IEEE Xplore returned invalid document metadata")
+        access_type = (_first(article.get("accessType")) or "").lower()
+        if access_type not in {"open access", "ephemera"}:
+            raise PdfAccessDenied("IEEE Xplore PDF is not openly accessible")
+        # IEEE's /fulltext API returns structured article text; pdf_url is the PDF resource.
+        pdf_url = _first(article.get("pdf_url"))
+        if not pdf_url:
+            raise PdfNotAvailable("IEEE Xplore did not provide a PDF link")
+        return client._download_pdf(
+            pdf_url,
+            filename=f"{value}.pdf",
+            provider="ieee",
+        )
+
+
 IEEE_PROVIDER = ProviderDefinition(
     name="ieee",
     display_name="IEEE Xplore",
@@ -163,7 +211,9 @@ IEEE_PROVIDER = ProviderDefinition(
     identifier_parser=parse_article_number,
     search_adapter=IeeeSearchAdapter(),
     lookup_adapter=IeeeLookupAdapter(),
+    document_adapter=IeeeDocumentAdapter(),
     endpoint="https://ieeexploreapi.ieee.org/api/v1/search/articles",
     credential_setting="ieee_api_key",
-    credential_environment="QUIREBASE_IEEE_API_KEY",
+    credential_environment="INQUIRO_IEEE_API_KEY",
+    credential_capabilities=frozenset({"lookup", "search", "document"}),
 )

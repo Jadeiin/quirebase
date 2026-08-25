@@ -7,6 +7,7 @@ from xml.etree import ElementTree
 
 from inquiro.identifiers import normalize_doi, parse_arxiv
 from inquiro.models import (
+    AcquiredDocument,
     CandidateNotFound,
     ProviderRecord,
     ProviderSearchPage,
@@ -163,6 +164,23 @@ class ArxivSearchAdapter:
         return ProviderSearchPage("arxiv", results, total, page, per_page)
 
 
+class ArxivDocumentAdapter:
+    def acquire(
+        self,
+        client: ProviderContext,
+        value: str,
+        settings: Any,
+        *,
+        endpoint: str,
+    ) -> AcquiredDocument:
+        filename = f"{value.replace('/', '_')}.pdf"
+        return client._download_pdf(
+            f"{endpoint}/{value}.pdf",
+            filename=filename,
+            provider="arxiv",
+        )
+
+
 ARXIV_PROVIDER = ProviderDefinition(
     name="arxiv",
     identifier_aliases=("arxiv",),
@@ -170,5 +188,7 @@ ARXIV_PROVIDER = ProviderDefinition(
     auto_detect_identifier=True,
     search_adapter=ArxivSearchAdapter(),
     lookup_adapter=ArxivLookupAdapter(),
+    document_adapter=ArxivDocumentAdapter(),
     endpoint="https://export.arxiv.org/api/query",
+    document_endpoint="https://arxiv.org/pdf",
 )

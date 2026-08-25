@@ -1,10 +1,15 @@
 from inquiro.models import (
+    AcquiredDocument,
     CandidateNotFound,
     CandidatePage,
     CandidateRecord,
+    DocumentRequest,
     Identifier,
     InquiroError,
+    InvalidPdfResponse,
     InvalidProviderRequest,
+    PdfAccessDenied,
+    PdfNotAvailable,
     ProviderConfig,
     ProviderUnavailable,
     SearchClause,
@@ -13,12 +18,17 @@ from inquiro.models import (
 from inquiro.runtime import ProviderRuntime
 
 __all__ = [
+    "AcquiredDocument",
     "CandidateNotFound",
     "CandidatePage",
     "CandidateRecord",
+    "DocumentRequest",
     "Identifier",
     "InquiroError",
+    "InvalidPdfResponse",
     "InvalidProviderRequest",
+    "PdfAccessDenied",
+    "PdfNotAvailable",
     "ProviderConfig",
     "ProviderRuntime",
     "ProviderUnavailable",

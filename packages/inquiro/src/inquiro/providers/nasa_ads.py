@@ -145,5 +145,5 @@ NASA_ADS_PROVIDER = ProviderDefinition(
     lookup_adapter=NasaAdsLookupAdapter(),
     endpoint="https://api.adsabs.harvard.edu/v1/search/query",
     credential_setting="nasa_ads_token",
-    credential_environment="QUIREBASE_NASA_ADS_TOKEN",
+    credential_environment="INQUIRO_NASA_ADS_TOKEN",
 )

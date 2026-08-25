@@ -78,9 +78,10 @@ the section-dependent dictionary.
 Issue: [#8 Localize Discovery Provider implementations behind contracts](https://github.com/Jadeiin/quirebase/issues/8)
 
 ADR 0005 supersedes the original function-based sketch. Inquiro now exposes one deep
-`ProviderRuntime` with `lookup` and `search`; the runtime owns the fixed catalog, shared identifier
-knowledge, dispatch, credentials and bounded transport. Quirebase Discovery crosses the Library
-Interface, so Web has no package-specific dependency or error knowledge.
+`ProviderRuntime` with `lookup`, `search` and `acquire_document`; the runtime owns the fixed
+catalog, shared identifier knowledge, document-source classification, dispatch, credentials and
+bounded transport. Quirebase Discovery crosses the Library Interface, so Web has no
+package-specific dependency or error knowledge.
 
 Done means adding a Provider changes one leaf Implementation, the private catalog and contract
 examples; peer Provider imports and duplicated transport policy are rejected by architecture

@@ -357,6 +357,8 @@ label { display: grid; gap: .3rem; color: #46514c; font-size: .82rem; font-weigh
 .file-actions { display: flex; gap: .8rem; }
 .file-actions a { font-weight: 700; }
 .upload-form { grid-template-columns: 1fr auto; align-items: end; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.remote-pdf-upload > button { grid-column: 2; grid-row: 1; }
+.remote-pdf-status { grid-column: 1; display: grid; gap: .2rem; }
 .item-two-column { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: start; }
 .chip-list { display: flex; flex-wrap: wrap; gap: .45rem; min-height: 3rem; margin: 1rem 0; }
 .chip-list > span { display: inline-flex; gap: .25rem; align-items: center; height: fit-content; padding: .35rem .45rem .35rem .65rem; border-radius: 999px; color: var(--accent-strong); font-weight: 700; background: var(--accent-soft); }
@@ -570,6 +572,7 @@ label { display: grid; gap: .3rem; color: #46514c; font-size: .82rem; font-weigh
   .file-list article { grid-template-columns: 2.7rem minmax(0, 1fr); }
   .file-actions { grid-column: 2; }
   .upload-form { grid-template-columns: 1fr; }
+  .remote-pdf-upload > button, .remote-pdf-status { grid-column: auto; grid-row: auto; }
   .annotation-meta { display: grid; gap: .1rem; }
   .project-create-panel, .project-create-panel form, .project-card-grid, .tool-grid, .admin-grid, .admin-stats, .tag-merge-form { grid-template-columns: 1fr; }
   .security-callout { align-items: stretch; flex-direction: column; }

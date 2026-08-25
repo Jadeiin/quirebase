@@ -30,7 +30,12 @@ def mock_exchange(transport: httpx2.MockTransport) -> MockExchange:
             )
         )
         assert isinstance(response, httpx2.Response)
-        return TransportResponse(response.status_code, response.content, response.is_redirect)
+        return TransportResponse(
+            response.status_code,
+            response.content,
+            response.is_redirect,
+            dict(response.headers),
+        )
 
     return MockExchange(send)
 

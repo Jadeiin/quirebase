@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import IO, Self
 
 
 class InquiroError(Exception):
@@ -19,15 +20,53 @@ class ProviderUnavailable(InquiroError):
     """An upstream provider could not satisfy a valid request."""
 
 
+class PdfNotAvailable(InquiroError):
+    """No PDF is available for a valid source."""
+
+
+class PdfAccessDenied(InquiroError):
+    """A PDF exists, but the configured credentials cannot access it."""
+
+
+class InvalidPdfResponse(InquiroError):
+    """The upstream response is not a usable PDF."""
+
+
 @dataclass(frozen=True)
 class ProviderConfig:
     timeout_seconds: float = 10.0
     max_response_bytes: int = 10_000_000
+    max_document_bytes: int = 100_000_000
     contact_email: str | None = None
     openalex_api_key: str | None = None
     ncbi_api_key: str | None = None
     nasa_ads_token: str | None = None
     ieee_api_key: str | None = None
+
+
+@dataclass(frozen=True)
+class DocumentRequest:
+    source: str
+    provider: str = "auto"
+
+
+@dataclass
+class AcquiredDocument:
+    stream: IO[bytes]
+    filename: str
+    media_type: str
+    size_bytes: int
+    sha256: str
+    provider: str | None = None
+
+    def close(self) -> None:
+        self.stream.close()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self.close()
 
 
 @dataclass(frozen=True)

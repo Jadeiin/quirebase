@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol
 
 from inquiro.models import (
+    AcquiredDocument,
     Identifier,
     ProviderConfig,
     ProviderRecord,
@@ -20,6 +21,7 @@ if TYPE_CHECKING:
 __all__ = ["RemoteNotFound"]
 
 type IdentifierParser = Callable[[str, str], Identifier | None]
+type ProviderCapability = Literal["lookup", "search", "document"]
 
 
 class LookupImplementation(Protocol):
@@ -49,6 +51,17 @@ class SearchImplementation(Protocol):
     ) -> ProviderSearchPage: ...
 
 
+class DocumentImplementation(Protocol):
+    def acquire(
+        self,
+        client: ProviderContext,
+        value: str,
+        settings: ProviderConfig,
+        *,
+        endpoint: str,
+    ) -> AcquiredDocument: ...
+
+
 @dataclass(frozen=True)
 class ProviderDefinition:
     name: str
@@ -58,12 +71,23 @@ class ProviderDefinition:
     auto_detect_identifier: bool = False
     search_adapter: SearchImplementation | None = None
     lookup_adapter: LookupImplementation | None = None
+    document_adapter: DocumentImplementation | None = None
     endpoint: str = ""
+    document_endpoint: str = ""
     credential_setting: str | None = None
     credential_environment: str | None = None
+    credential_capabilities: frozenset[ProviderCapability] = frozenset({"lookup", "search"})
 
-    def require_credentials(self, config: ProviderConfig) -> None:
-        if self.credential_setting and not getattr(config, self.credential_setting):
+    def require_credentials(
+        self,
+        config: ProviderConfig,
+        capability: ProviderCapability,
+    ) -> None:
+        if (
+            capability in self.credential_capabilities
+            and self.credential_setting
+            and not getattr(config, self.credential_setting)
+        ):
             raise ProviderUnavailable(
                 f"{self.display_name or self.name} requires "
                 f"{self.credential_environment or self.credential_setting}"
@@ -81,3 +105,12 @@ class ProviderContext:
         headers: Mapping[str, str] | None = None,
     ) -> bytes:
         return self._transport.get(url, params, headers)
+
+    def _download_pdf(
+        self,
+        url: str,
+        *,
+        filename: str | None = None,
+        provider: str | None = None,
+    ) -> AcquiredDocument:
+        return self._transport.download_pdf(url, filename=filename, provider=provider)

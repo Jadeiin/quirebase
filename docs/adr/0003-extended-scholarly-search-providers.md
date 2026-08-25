@@ -7,7 +7,7 @@ Following ADR 0001's requirement that deferred external integrations be bounded,
 ## Bounded Architecture & Security Invariants
 
 1. **Fixed HTTPS Endpoints**: Connections are restricted strictly to official Provider endpoints (`https://eutils.ncbi.nlm.nih.gov`, `https://api.adsabs.harvard.edu`, `https://ieeexploreapi.ieee.org`). Redirects remain forbidden.
-2. **Credential Gating**: NASA ADS requires `QUIREBASE_NASA_ADS_TOKEN` (Bearer token); IEEE Xplore requires `QUIREBASE_IEEE_API_KEY` (query parameter); PMC accepts optional `QUIREBASE_NCBI_API_KEY` and contact email for rate-limit tiering. Discovery searches against credentialed sources fail cleanly with descriptive configuration errors when keys are absent.
+2. **Credential Gating**: NASA ADS requires `INQUIRO_NASA_ADS_TOKEN` (Bearer token); IEEE Xplore requires `INQUIRO_IEEE_API_KEY` (query parameter); PMC accepts optional `INQUIRO_NCBI_API_KEY` and contact email for rate-limit tiering. Discovery searches against credentialed sources fail cleanly with descriptive configuration errors when keys are absent.
 3. **Identifier Scoping**: NASA ADS uses `bibcode` and IEEE Xplore uses `article_number`. Both require explicit provider specification on metadata lookup to avoid ambiguous collisions in automatic identifier detection.
 4. **Discovery Query Sanitization**: All provider queries are mapped from structured `SearchClause` filters with dialect-appropriate boolean operators and field prefixes.
 5. **No Direct Import**: Discovery results are candidate summaries only. Selecting a result triggers identifier resolution and enters the mandatory preview-before-commit flow.

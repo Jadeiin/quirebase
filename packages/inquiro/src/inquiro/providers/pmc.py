@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
+from urllib.parse import urlsplit
+from xml.etree import ElementTree
 
+from inquiro.identifiers import parse_pmcid
 from inquiro.models import (
+    AcquiredDocument,
+    PdfNotAvailable,
     ProviderSearchPage,
     ProviderSearchRecord,
     ProviderUnavailable,
@@ -14,7 +20,7 @@ from inquiro.parsing import (
     _clean_markup,
     _first,
 )
-from inquiro.providers._contracts import ProviderContext, ProviderDefinition
+from inquiro.providers._contracts import ProviderContext, ProviderDefinition, RemoteNotFound
 
 
 class PmcSearchAdapter:
@@ -50,7 +56,7 @@ class PmcSearchAdapter:
             "retstart": str((page - 1) * per_page),
             "retmax": str(per_page),
             "sort": "pub date" if sort == "published" else "relevance",
-            "tool": "quirebase",
+            "tool": "inquiro",
         }
         contact = settings.contact_email
         if contact:
@@ -69,7 +75,7 @@ class PmcSearchAdapter:
                 "db": "pmc",
                 "id": ",".join(identifiers),
                 "retmode": "json",
-                "tool": "quirebase",
+                "tool": "inquiro",
             }
             if contact:
                 summary_params["email"] = contact
@@ -118,8 +124,67 @@ class PmcSearchAdapter:
         )
 
 
+class PmcDocumentAdapter:
+    def acquire(
+        self,
+        client: ProviderContext,
+        value: str,
+        settings: Any,
+        *,
+        endpoint: str,
+    ) -> AcquiredDocument:
+        listing = client._get(
+            endpoint,
+            {
+                "list-type": "2",
+                "prefix": f"{value}.",
+                "delimiter": "/",
+                "max-keys": "100",
+            },
+        )
+        try:
+            root = ElementTree.fromstring(listing)
+        except ElementTree.ParseError as error:
+            raise ProviderUnavailable("PMC returned an invalid article-version listing") from error
+        versions = [
+            (int(match.group(1)), prefix)
+            for element in root.iter()
+            if element.tag.rsplit("}", 1)[-1] == "Prefix"
+            and (prefix := (element.text or "").strip())
+            and (match := re.fullmatch(rf"{re.escape(value)}\.(\d+)/", prefix))
+        ]
+        if not versions:
+            raise PdfNotAvailable("PMC article dataset was not found")
+        _version, prefix = max(versions)
+        version_key = prefix.removesuffix("/")
+        try:
+            metadata = json.loads(client._get(f"{endpoint}/metadata/{version_key}.json"))
+            if not isinstance(metadata, dict):
+                raise TypeError
+        except RemoteNotFound as error:
+            raise PdfNotAvailable("PMC article metadata was not found") from error
+        except (json.JSONDecodeError, TypeError) as error:
+            raise ProviderUnavailable("PMC returned invalid article metadata") from error
+        pdf_url = _first(metadata.get("pdf_url"))
+        if not pdf_url:
+            raise PdfNotAvailable("PMC article version does not include a PDF")
+        parsed = urlsplit(pdf_url)
+        if parsed.scheme != "s3" or parsed.netloc != "pmc-oa-opendata":
+            raise ProviderUnavailable("PMC returned an invalid PDF location")
+        return client._download_pdf(
+            f"https://{parsed.netloc}.s3.amazonaws.com{parsed.path}",
+            filename=f"{version_key}.pdf",
+            provider="pmc",
+        )
+
+
 PMC_PROVIDER = ProviderDefinition(
     name="pmc",
+    identifier_aliases=("pmc", "pmcid"),
+    identifier_parser=parse_pmcid,
+    auto_detect_identifier=True,
     search_adapter=PmcSearchAdapter(),
+    document_adapter=PmcDocumentAdapter(),
     endpoint="https://eutils.ncbi.nlm.nih.gov/entrez/eutils",
+    document_endpoint="https://pmc-oa-opendata.s3.amazonaws.com",
 )

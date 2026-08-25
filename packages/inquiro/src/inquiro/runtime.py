@@ -2,15 +2,19 @@ from __future__ import annotations
 
 import json
 from typing import Self
+from urllib.parse import urlsplit
 
 from inquiro.identifiers import parse_identifier
 from inquiro.models import (
+    AcquiredDocument,
     CandidateNotFound,
     CandidatePage,
     CandidateRecord,
+    DocumentRequest,
     Identifier,
     InquiroError,
     InvalidProviderRequest,
+    PdfNotAvailable,
     ProviderConfig,
     ProviderRecord,
     ProviderUnavailable,
@@ -25,7 +29,7 @@ SEARCH_OPERATORS = frozenset({"and", "or", "not"})
 
 
 class ProviderRuntime:
-    """Deep Interface for scholarly-provider lookup and search."""
+    """Deep Interface for scholarly metadata and document acquisition."""
 
     def __init__(self, config: ProviderConfig = ProviderConfig()) -> None:
         self._validate_config(config)
@@ -52,6 +56,49 @@ class ProviderRuntime:
             raise InvalidProviderRequest("provider timeout must be positive")
         if config.max_response_bytes <= 0:
             raise InvalidProviderRequest("provider response limit must be positive")
+        if config.max_document_bytes <= 0:
+            raise InvalidProviderRequest("provider document limit must be positive")
+
+    def acquire_document(self, request: DocumentRequest) -> AcquiredDocument:
+        self._require_open()
+        source = request.source.strip()
+        parsed_url = urlsplit(source)
+        if "://" in source:
+            if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
+                raise InvalidProviderRequest("PDF URL must use HTTP or HTTPS")
+            try:
+                identifier = parse_identifier(
+                    source,
+                    request.provider,
+                    registrations=self._providers,
+                )
+            except InvalidProviderRequest:
+                if request.provider != "auto":
+                    raise
+                return self._transport.download_pdf(source)
+        else:
+            identifier = parse_identifier(
+                source,
+                request.provider,
+                registrations=self._providers,
+            )
+        definition = self._identifier_provider(identifier.provider)
+        if definition is None or definition.document_adapter is None:
+            raise PdfNotAvailable("provider does not offer PDF acquisition")
+        definition.require_credentials(self._config, "document")
+        try:
+            return definition.document_adapter.acquire(
+                self._context,
+                identifier.value,
+                self._config,
+                endpoint=definition.document_endpoint or definition.endpoint,
+            )
+        except RemoteNotFound as error:
+            raise PdfNotAvailable("PDF source was not found") from error
+        except InquiroError:
+            raise
+        except (TypeError, ValueError) as error:
+            raise ProviderUnavailable("PDF provider returned invalid document metadata") from error
 
     def lookup(self, value: str, *, provider: str = "auto") -> CandidateRecord:
         self._require_open()
@@ -59,7 +106,7 @@ class ProviderRuntime:
         definition = self._identifier_provider(identifier.provider)
         if definition is None or definition.lookup_adapter is None:
             raise InvalidProviderRequest(f"unknown identifier provider: {identifier.provider}")
-        definition.require_credentials(self._config)
+        definition.require_credentials(self._config, "lookup")
         try:
             record = definition.lookup_adapter.lookup(
                 self._context,
@@ -98,7 +145,7 @@ class ProviderRuntime:
             raise InvalidProviderRequest("starting year must not be after ending year")
         page = max(1, min(query.page, 100))
         per_page = max(1, min(query.per_page, 25))
-        definition.require_credentials(self._config)
+        definition.require_credentials(self._config, "search")
         try:
             result = definition.search_adapter.search(
                 self._context,

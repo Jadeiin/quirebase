@@ -570,12 +570,17 @@ def test_web_uses_library_provider_operations_only():
 
 def test_inquiro_facade_is_the_narrow_provider_interface():
     expected = {
+        "AcquiredDocument",
         "CandidateNotFound",
         "CandidatePage",
         "CandidateRecord",
+        "DocumentRequest",
         "Identifier",
         "InquiroError",
+        "InvalidPdfResponse",
         "InvalidProviderRequest",
+        "PdfAccessDenied",
+        "PdfNotAvailable",
         "ProviderConfig",
         "ProviderRuntime",
         "ProviderUnavailable",
@@ -592,6 +597,22 @@ def test_inquiro_facade_is_the_narrow_provider_interface():
     )
     assert isinstance(exported, (ast.List, ast.Tuple))
     assert {item.value for item in exported.elts if isinstance(item, ast.Constant)} == expected
+
+
+def test_inquiro_architecture_documents_the_public_runtime_operations():
+    for document in (
+        REPO_ROOT / "docs" / "architecture" / "modules.md",
+        REPO_ROOT / "docs" / "adr" / "0005-deep-standalone-provider-runtime.md",
+    ):
+        contents = document.read_text(encoding="utf-8")
+        for operation in ("`lookup`", "`search`", "`acquire_document`"):
+            assert operation in contents, f"{document} omits {operation}"
+
+
+def test_inquiro_sources_do_not_embed_quirebase_identity():
+    package = REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro"
+    for source in package.rglob("*.py"):
+        assert "quirebase" not in source.read_text(encoding="utf-8").casefold()
 
 
 def test_search_adapters_do_not_depend_on_each_other():

@@ -6,7 +6,7 @@ Online Search is a Discovery workflow separate from Import. It accepts fielded c
 
 DOIs are queried first through Crossref and fall back to DataCite when Crossref has no record. PMID uses NCBI PubMed ESummary, arXiv uses its Atom API, ISBN uses Open Library, and OpenAlex IDs use the Works API. Explicit lookups also support NASA ADS (`bibcode`) and IEEE Xplore (`article_number`). Discovery supports OpenAlex, Crossref, PubMed, PMC, arXiv, Open Library, NASA ADS, and IEEE Xplore. Provider metadata can be incomplete and should be reviewed before confirmation.
 
-Set `QUIREBASE_METADATA_CONTACT_EMAIL` to a monitored operator address. `QUIREBASE_NCBI_API_KEY` and `QUIREBASE_OPENALEX_API_KEY` are optional; `QUIREBASE_NASA_ADS_TOKEN` and `QUIREBASE_IEEE_API_KEY` are required to query NASA ADS and IEEE Xplore respectively. Timeouts and maximum response size are controlled with `QUIREBASE_METADATA_TIMEOUT_SECONDS` and `QUIREBASE_METADATA_MAX_RESPONSE_BYTES`.
+Set `INQUIRO_CONTACT_EMAIL` to a monitored operator address. `INQUIRO_NCBI_API_KEY` and `INQUIRO_OPENALEX_API_KEY` are optional; `INQUIRO_NASA_ADS_TOKEN` and `INQUIRO_IEEE_API_KEY` are required to query NASA ADS and IEEE Xplore respectively. Timeouts and maximum response size are controlled with `INQUIRO_TIMEOUT_SECONDS` and `INQUIRO_MAX_RESPONSE_BYTES`.
 
 The implementation does not resolve arbitrary URLs or landing pages. It connects only to fixed HTTPS Provider endpoints; redirects are rejected. Queries are authenticated application actions, result pages are bounded, search terms are not written to audit events, and imports require preview confirmation.
 

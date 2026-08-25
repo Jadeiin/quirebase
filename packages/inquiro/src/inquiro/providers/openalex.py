@@ -3,11 +3,13 @@ from __future__ import annotations
 import json
 import re
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from inquiro.identifiers import DOI_PATTERN, normalize_doi, parse_openalex
 from inquiro.models import (
+    AcquiredDocument,
     InvalidProviderRequest,
+    PdfNotAvailable,
     ProviderRecord,
     ProviderSearchPage,
     ProviderSearchRecord,
@@ -225,6 +227,47 @@ class OpenAlexSearchAdapter:
         ]
 
 
+class OpenAlexDocumentAdapter:
+    def acquire(
+        self,
+        client: ProviderContext,
+        value: str,
+        settings: Any,
+        *,
+        endpoint: str,
+    ) -> AcquiredDocument:
+        api_key = settings.openalex_api_key
+        work_id = value
+        if DOI_PATTERN.fullmatch(value):
+            params = {"api_key": api_key, "select": "id,has_content"}
+            try:
+                body = client._get(
+                    f"https://api.openalex.org/works/{quote(f'doi:{value}', safe=':')}",
+                    params,
+                )
+            except RemoteNotFound as error:
+                raise PdfNotAvailable("OpenAlex work was not found") from error
+            try:
+                payload = json.loads(body)
+                if not isinstance(payload, dict):
+                    raise TypeError
+                has_content = payload.get("has_content") or {}
+                if not isinstance(has_content, dict):
+                    raise TypeError
+                work_id = (_first(payload.get("id")) or "").rsplit("/", 1)[-1]
+            except (json.JSONDecodeError, TypeError) as error:
+                raise ProviderUnavailable("OpenAlex returned invalid document metadata") from error
+            if not work_id or not has_content.get("pdf"):
+                raise PdfNotAvailable("OpenAlex does not have a PDF for this work")
+
+        download_url = f"{endpoint}/{work_id}.pdf?{urlencode({'api_key': api_key})}"
+        return client._download_pdf(
+            download_url,
+            filename=f"{work_id}.pdf",
+            provider="openalex",
+        )
+
+
 OPENALEX_PROVIDER = ProviderDefinition(
     name="openalex",
     identifier_aliases=("openalex",),
@@ -232,5 +275,10 @@ OPENALEX_PROVIDER = ProviderDefinition(
     auto_detect_identifier=True,
     search_adapter=OpenAlexSearchAdapter(),
     lookup_adapter=OpenAlexLookupAdapter(),
+    document_adapter=OpenAlexDocumentAdapter(),
     endpoint="https://api.openalex.org",
+    document_endpoint="https://content.openalex.org/works",
+    credential_setting="openalex_api_key",
+    credential_environment="INQUIRO_OPENALEX_API_KEY",
+    credential_capabilities=frozenset({"document"}),
 )

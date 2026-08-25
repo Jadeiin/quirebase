@@ -402,7 +402,7 @@ def test_credentialed_sources_require_keys():
             [SearchClause("title", "and", "term")],
             transport=httpx2.MockTransport(extra_search_response),
         )
-    assert str(nasa_error.value) == "NASA ADS requires QUIREBASE_NASA_ADS_TOKEN"
+    assert str(nasa_error.value) == "NASA ADS requires INQUIRO_NASA_ADS_TOKEN"
 
     with pytest.raises(ProviderUnavailable) as ieee_error:
         search_metadata(
@@ -410,7 +410,7 @@ def test_credentialed_sources_require_keys():
             [SearchClause("title", "and", "term")],
             transport=httpx2.MockTransport(extra_search_response),
         )
-    assert str(ieee_error.value) == "IEEE Xplore requires QUIREBASE_IEEE_API_KEY"
+    assert str(ieee_error.value) == "IEEE Xplore requires INQUIRO_IEEE_API_KEY"
 
 
 def test_extra_search_fallback_identifiers_without_doi():

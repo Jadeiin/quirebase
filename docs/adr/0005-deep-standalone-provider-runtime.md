@@ -8,30 +8,36 @@ offers reusable scholarly lookup and Search behaviour outside the application. Q
 Inquiro and Rubrica are released to the same package index at one version so the application wheel
 can resolve its exact workspace-package dependencies independently.
 
-Inquiro exposes one synchronous `ProviderRuntime` with `lookup` and `search` operations. The
-runtime owns the fixed Provider catalog and order, shared identifier parsing, capability dispatch,
-typed credentials, validation, error normalization and transport lifecycle. Its normalized
-Candidate Record and page values are immutable. Inquiro does not expose clients, registries,
-Provider protocols, dynamic plugin discovery, parsing helpers or HTTP-library types through its
-package facade.
+Inquiro exposes one synchronous `ProviderRuntime` with `lookup`, `search` and
+`acquire_document` operations. The runtime owns the fixed Provider catalog and order, shared
+identifier parsing, document-source classification, capability dispatch, typed credentials,
+validation, error normalization and transport lifecycle. Its normalized Candidate Record and page
+values are immutable; document acquisition returns a context-managed stream with immutable receipt
+metadata. Inquiro does not expose clients, registries, Provider protocols, dynamic plugin
+discovery, parsing helpers or HTTP-library types through its package facade.
 
 Provider files are leaf Implementations. Shared DOI, ISBN, PMID, arXiv, OpenAlex, bibcode and
 article-number parsing belongs to the `identifiers` Module; a Provider must not import a peer
 Provider or depend back on the runtime or catalog. A single bounded transport Implementation owns
-timeouts, headers, redirect refusal, response-size limits, rate-limit handling and HTTP failure
-classification. Production HTTP and test Mock exchanges are Adapters at the same internal seam.
-The runtime preserves the semantic difference between lookup 404 (Candidate not found) and Search
-404 (empty page).
+timeouts, headers, redirect policy, response-size limits, rate-limit handling and HTTP failure
+classification. Metadata requests reject redirects; PDF requests follow a bounded redirect chain,
+stream into managed temporary storage and validate their size and PDF header. Production HTTP and
+test Mock exchanges are Adapters at the same internal seam. The runtime preserves the semantic
+difference between lookup 404 (Candidate not found), Search 404 (empty page) and document 404 (PDF
+not available).
 
-Quirebase Library owns runtime construction and closure for each business operation. It maps
-Inquiro values explicitly to Library write or read models and translates Inquiro errors to typed
-domain errors. Discovery execution and its Audit Event therefore cross the Library Interface;
-the Web Adapter never imports Inquiro.
+Quirebase Library owns runtime construction and closure for each integrated business operation. It
+maps Inquiro values explicitly to Library write or read models and translates Inquiro errors to
+typed domain errors. Discovery execution and its Audit Event therefore cross the Library
+Interface. Document acquisition remains a standalone package capability until a Library operation
+adopts it; the Web Adapter never imports Inquiro directly.
 
 ## Considered options
 
 - Separate lookup and Search clients were rejected because they duplicated outbound safety,
   credentials and lifecycle policy and created cyclic imports through the Provider registry.
+- A separate document-acquisition client was rejected for the same reason. The managed document
+  result keeps stream ownership explicit without exposing the transport or Provider adapters.
 - A public Provider registration/plugin Interface was rejected because the allowlist is fixed and
   there is no second real extension consumer. Publishing that seam now would widen the Interface
   with registration and Provider-specific knowledge.
@@ -48,5 +54,6 @@ the Web Adapter never imports Inquiro.
 - Adding a Provider changes the private catalog and its contract tests, not ordinary callers.
 - Inquiro retains its bibliography and citation Modules, but callers import those explicit Module
   Interfaces rather than widening the Provider facade.
-- Architecture tests enforce the leaf-Provider rule, the narrow facade, Library-only application
-  dependency and absence of the former lookup/search clients and registry.
+- Architecture tests enforce the leaf-Provider rule, the documented runtime operations, the narrow
+  facade, Library-only application dependency and absence of the former lookup/search clients and
+  registry.

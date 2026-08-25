@@ -6,7 +6,9 @@ from urllib.parse import quote
 
 from inquiro.identifiers import parse_doi
 from inquiro.models import (
+    AcquiredDocument,
     CandidateNotFound,
+    PdfNotAvailable,
     ProviderRecord,
     ProviderSearchPage,
     ProviderSearchRecord,
@@ -200,6 +202,47 @@ class CrossrefSearchAdapter:
         return ProviderSearchPage("crossref", results, total, page, per_page)
 
 
+class CrossrefDocumentAdapter:
+    def acquire(
+        self,
+        client: ProviderContext,
+        value: str,
+        settings: Any,
+        *,
+        endpoint: str,
+    ) -> AcquiredDocument:
+        params = {"mailto": settings.contact_email} if settings.contact_email else None
+        body = client._get(f"{endpoint}/{quote(value, safe='')}", params)
+        try:
+            payload = json.loads(body)
+            if not isinstance(payload, dict):
+                raise TypeError
+            message = payload.get("message") or {}
+            if not isinstance(message, dict):
+                raise TypeError
+            links = message.get("link", [])
+            if not isinstance(links, list):
+                raise TypeError
+        except (json.JSONDecodeError, TypeError) as error:
+            raise ProviderUnavailable("Crossref returned invalid document metadata") from error
+        pdf_url = next(
+            (
+                _first(link.get("URL"))
+                for link in links
+                if isinstance(link, dict)
+                and (
+                    _first(link.get("content-type")) == "application/pdf"
+                    or ".pdf" in (_first(link.get("URL")) or "").lower()
+                )
+                and _first(link.get("URL"))
+            ),
+            None,
+        )
+        if not pdf_url:
+            raise PdfNotAvailable("Crossref does not provide a PDF link for this DOI")
+        return client._download_pdf(pdf_url, provider="crossref")
+
+
 CROSSREF_PROVIDER = ProviderDefinition(
     name="crossref",
     identifier_aliases=("doi", "crossref"),
@@ -207,5 +250,6 @@ CROSSREF_PROVIDER = ProviderDefinition(
     auto_detect_identifier=True,
     search_adapter=CrossrefSearchAdapter(),
     lookup_adapter=CrossrefLookupAdapter(),
+    document_adapter=CrossrefDocumentAdapter(),
     endpoint="https://api.crossref.org/works",
 )

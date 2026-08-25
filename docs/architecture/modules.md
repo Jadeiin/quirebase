@@ -132,28 +132,33 @@ a typed read model containing the Project, the caller's membership, members and 
 Membership authorization and the related queries remain coordinated behind that operation; only
 the Web adapter maps the typed view to template context.
 
-`inquiro` presents one synchronous `ProviderRuntime` as its reusable Provider Interface. Its two
-operations, `lookup` and `search`, return immutable Candidate Record values through a narrow
-package facade. The runtime owns the fixed Provider catalog and ordering, identifier parsing,
-capability dispatch, typed credentials, input and result validation, error normalization and
-transport lifecycle. Callers do not select Provider Implementations or inspect registrations.
+`inquiro` presents one synchronous `ProviderRuntime` as its reusable Provider Interface. Its
+`lookup` and `search` operations return immutable Candidate Record values, while
+`acquire_document` returns a managed `AcquiredDocument` stream and immutable receipt metadata.
+The runtime owns the fixed Provider catalog and ordering, identifier parsing, document-source
+classification, capability dispatch, typed credentials, input and result validation, error
+normalization and transport lifecycle. Callers do not select Provider Implementations or inspect
+registrations.
 
 Identifier parsing shared by Crossref, DataCite and other Providers belongs to Inquiro's
 `identifiers` Module. Each Provider is a leaf Implementation: it may depend on neutral value
 types, shared parsing and the private Provider contract, but never on a peer Provider, the runtime
-or catalog. One bounded transport Implementation applies timeout, redirect, response-size,
-rate-limit and HTTP-error rules before dispatching through the production HTTP Adapter or test
-Mock Adapter. Lookup maps an upstream 404 to Candidate-not-found; Search maps it to an empty page.
+or catalog. One bounded transport Implementation applies timeout, response-size, rate-limit and
+HTTP-error rules before dispatching through the production HTTP Adapter or test Mock Adapter.
+Metadata requests reject redirects; PDF acquisition follows a bounded redirect chain, streams into
+a managed temporary file, enforces the document-size limit and validates the PDF header. Lookup
+maps an upstream 404 to Candidate-not-found; Search maps it to an empty page.
 
 Provider discovery and dynamic registration are not part of the Interface. The fixed catalog is
 private because Quirebase's Provider allowlist, automatic-detection order and credential policy
 are product and security invariants. A public extension seam may be extracted only after a second
 real ecosystem consumer demonstrates one.
 
-Quirebase owns the business behaviour around Inquiro results. Library constructs and closes the
-runtime within each operation, explicitly maps Candidate Records to its write/read models,
-translates package failures to typed domain errors and owns Discovery auditing. Web calls the
-Library Interface and never imports Inquiro.
+Quirebase owns the business behaviour around Inquiro results. For lookup and Search, Library
+constructs and closes the runtime within each operation, explicitly maps Candidate Records to its
+write/read models, translates package failures to typed domain errors and owns Discovery auditing.
+Document acquisition is currently a standalone Inquiro capability; any Quirebase workflow that
+adopts it must cross the Library Interface rather than importing Inquiro from Web.
 
 Batch PDF Import crosses the Library Interface through `stage_pdf_import_batch` and
 `commit_import_batch`. Staging validates at most 50 PDFs, extracts and de-duplicates DOI values,

@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
 DOI_PATTERN = re.compile(r"10\.\d{4,9}/\S+", re.IGNORECASE)
 PMID_PATTERN = re.compile(r"\d{1,10}")
+PMCID_PATTERN = re.compile(r"PMC\d+", re.IGNORECASE)
 ISBN_PATTERN = re.compile(r"(?:97[89])?\d{9}[\dX]", re.IGNORECASE)
 ARXIV_PATTERN = re.compile(
     r"(?:[a-z-]+(?:\.[A-Z]{2})?/\d{7}|\d{4}\.\d{4,5})(?:v\d+)?", re.IGNORECASE
@@ -35,6 +36,13 @@ def parse_doi(candidate: str, alias: str) -> Identifier | None:
 def parse_pmid(candidate: str, _alias: str) -> Identifier | None:
     value = re.sub(r"^pmid:\s*", "", candidate, flags=re.IGNORECASE)
     return Identifier("pmid", value) if PMID_PATTERN.fullmatch(value) else None
+
+
+def parse_pmcid(candidate: str, alias: str) -> Identifier | None:
+    value = re.sub(r"^pmcid?:\s*", "", candidate, flags=re.IGNORECASE)
+    if value.isdigit() and alias in {"pmc", "pmcid"}:
+        value = f"PMC{value}"
+    return Identifier("pmc", value.upper()) if PMCID_PATTERN.fullmatch(value) else None
 
 
 def parse_arxiv(candidate: str, _alias: str) -> Identifier | None:
@@ -105,5 +113,5 @@ def parse_identifier(
     if provider != "auto":
         raise InvalidProviderRequest(f"identifier is not a valid {provider}")
     raise InvalidProviderRequest(
-        "identifier is not a recognized DOI, PMID, arXiv ID, ISBN or OpenAlex ID"
+        "identifier is not a recognized DOI, PMID, PMCID, arXiv ID, ISBN or OpenAlex ID"
     )

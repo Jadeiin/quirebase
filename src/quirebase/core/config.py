@@ -8,7 +8,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="QUIREBASE_", env_file=".env")
+    model_config = SettingsConfigDict(
+        env_prefix="QUIREBASE_",
+        env_file=".env",
+        populate_by_name=True,
+    )
 
     database_url: str = "sqlite:///./quirebase.db"
     data_dir: Path = Path("./quirebase-data")
@@ -20,13 +24,31 @@ class Settings(BaseSettings):
     export_ttl_hours: int = 24
     worker_poll_seconds: float = Field(default=1.0, ge=0.1)
     allowed_hosts: str = "localhost,127.0.0.1,testserver"
-    metadata_timeout_seconds: float = Field(default=10.0, ge=1.0, le=30.0)
-    metadata_max_response_bytes: int = Field(default=2 * 1024 * 1024, ge=1024)
-    metadata_contact_email: str | None = None
-    ncbi_api_key: str | None = None
-    openalex_api_key: str | None = None
-    nasa_ads_token: str | None = None
-    ieee_api_key: str | None = None
+    metadata_timeout_seconds: float = Field(
+        default=10.0,
+        ge=1.0,
+        le=30.0,
+        validation_alias="INQUIRO_TIMEOUT_SECONDS",
+    )
+    metadata_max_response_bytes: int = Field(
+        default=2 * 1024 * 1024,
+        ge=1024,
+        validation_alias="INQUIRO_MAX_RESPONSE_BYTES",
+    )
+    metadata_contact_email: str | None = Field(
+        default=None,
+        validation_alias="INQUIRO_CONTACT_EMAIL",
+    )
+    ncbi_api_key: str | None = Field(default=None, validation_alias="INQUIRO_NCBI_API_KEY")
+    openalex_api_key: str | None = Field(
+        default=None,
+        validation_alias="INQUIRO_OPENALEX_API_KEY",
+    )
+    nasa_ads_token: str | None = Field(
+        default=None,
+        validation_alias="INQUIRO_NASA_ADS_TOKEN",
+    )
+    ieee_api_key: str | None = Field(default=None, validation_alias="INQUIRO_IEEE_API_KEY")
     recommendation_engine: str = "yake"
     recommendation_max_chars: int = Field(default=200_000, ge=1_000, le=2_000_000)
     keybert_model_path: Path | None = None

@@ -82,6 +82,7 @@ def test_enhanced_workspaces_keep_native_form_fallbacks():
 def test_remote_pdf_is_downloaded_in_the_browser_and_reuses_the_upload_route():
     source = read("src/quirebase/assets/app.js")
     item = read("src/quirebase/templates/item.html")
+    styles = read("src/quirebase/assets/styles.css")
 
     assert 'Alpine.data("remotePdfUpload"' in source
     assert "const download = await fetch(this.url);" in source
@@ -90,6 +91,8 @@ def test_remote_pdf_is_downloaded_in_the_browser_and_reuses_the_upload_route():
     assert 'x-data="remotePdfUpload"' in item
     assert '@submit.prevent="downloadAndUpload"' in item
     assert 'action="/items/{{ item.id }}/pdf?csrf_token={{ csrf }}"' in item
+    assert 'class="upload-form remote-pdf-upload"' in item
+    assert ".remote-pdf-upload > button { grid-column: 2; grid-row: 1; }" in styles
 
 
 def test_tag_suggestions_and_merge_keep_native_form_contracts():
