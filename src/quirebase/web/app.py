@@ -37,7 +37,8 @@ def create_app() -> FastAPI:
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data:; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'"
+            "img-src 'self' data:; connect-src 'self' https: http:; worker-src 'self' blob:; "
+            "object-src 'none'; frame-ancestors 'none'"
         )
         return response
 

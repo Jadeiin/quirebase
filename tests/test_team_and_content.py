@@ -38,6 +38,17 @@ def test_tags_discussion_and_search(db, tmp_path, monkeypatch):
         get_settings.cache_clear()
 
 
+def test_csp_allows_browser_pdf_downloads_from_external_http_sources(db, tmp_path, monkeypatch):
+    client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+    try:
+        response = client.get(f"/items/{item.id}/files")
+
+        assert "connect-src 'self' https: http:" in response.headers["content-security-policy"]
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+
+
 def test_durable_login_throttle(db):
     identity = "a" * 64
     for _ in range(5):

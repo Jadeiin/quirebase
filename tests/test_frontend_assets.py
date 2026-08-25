@@ -79,6 +79,19 @@ def test_enhanced_workspaces_keep_native_form_fallbacks():
     assert 'method="post" action="/metadata/preview' in online_search
 
 
+def test_remote_pdf_is_downloaded_in_the_browser_and_reuses_the_upload_route():
+    source = read("src/quirebase/assets/app.js")
+    item = read("src/quirebase/templates/item.html")
+
+    assert 'Alpine.data("remotePdfUpload"' in source
+    assert "const download = await fetch(this.url);" in source
+    assert 'form.append("pdf", new File(' in source
+    assert 'fetch(this.$root.action, { method: "POST", body: form })' in source
+    assert 'x-data="remotePdfUpload"' in item
+    assert '@submit.prevent="downloadAndUpload"' in item
+    assert 'action="/items/{{ item.id }}/pdf?csrf_token={{ csrf }}"' in item
+
+
 def test_tag_suggestions_and_merge_keep_native_form_contracts():
     source = read("src/quirebase/assets/app.js")
     item = read("src/quirebase/templates/item.html")
@@ -113,6 +126,18 @@ def test_export_preference_resets_and_style_search_do_not_cross_sections():
     assert "fetchCitationStyles(this.styleQuery, 100, this.style)" in source
     assert "fetchCitationStyles(this.query, 50, this.style)" in source
     assert "this.style = this.citationStyles[0]" not in source
+
+
+def test_item_export_loads_citation_styles_only_when_the_menu_is_used():
+    source = read("src/quirebase/assets/app.js")
+    item = read("src/quirebase/templates/item.html")
+    item_export = source.split('Alpine.data("itemExport"', 1)[1]
+    init = item_export.split("saveExportPreferences()", 1)[0]
+
+    assert '@toggle="loadStyles()"' in item
+    assert "this.searchStyles();" not in init
+    assert 'if (!this.$root.open || this.format !== "csl") return;' in item_export
+    assert "if (this.stylesLoaded || this.stylesLoading) return;" in item_export
 
 
 def test_export_preferences_recover_when_saved_citation_style_is_unavailable():

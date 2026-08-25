@@ -421,6 +421,41 @@ Alpine.data("importWorkspace", () => ({
   },
 }));
 
+function remotePdfFilename(url) {
+  const name = decodeURIComponent(new URL(url).pathname.split("/").pop() || "");
+  return name.toLowerCase().endsWith(".pdf") ? name : "downloaded.pdf";
+}
+
+Alpine.data("remotePdfUpload", () => ({
+  url: "",
+  inferred: false,
+  downloading: false,
+  error: "",
+  init() {
+    const externalUrls = JSON.parse(this.$root.dataset.externalUrls || "[]");
+    this.url = externalUrls.find((url) => url.toLowerCase().includes(".pdf")) || "";
+    this.inferred = Boolean(this.url);
+  },
+  async downloadAndUpload() {
+    this.downloading = true;
+    this.error = "";
+    try {
+      const download = await fetch(this.url);
+      if (!download.ok) throw new Error("PDF download failed");
+      const blob = await download.blob();
+      const form = new FormData();
+      form.append("pdf", new File([blob], remotePdfFilename(this.url), { type: blob.type }));
+      const upload = await fetch(this.$root.action, { method: "POST", body: form });
+      if (!upload.ok) throw new Error("PDF upload failed");
+      window.location.reload();
+    } catch {
+      this.error = this.$root.dataset.errorMessage;
+    } finally {
+      this.downloading = false;
+    }
+  },
+}));
+
 Alpine.data("toolsWorkspace", () => ({
   active: "duplicates",
   init() {
@@ -561,6 +596,9 @@ Alpine.data("itemExport", () => ({
   includeCustomFields: false,
   copied: false,
   copyError: false,
+  stylesLoaded: false,
+  stylesLoading: false,
+  styleRequestId: 0,
   storageKey: "",
   init() {
     this.storageKey = this.$root.dataset.exportPreferencesKey || "";
@@ -577,7 +615,7 @@ Alpine.data("itemExport", () => ({
     ["format", "style", ...citationBooleanPreferences].forEach((field) => {
       this.$watch(field, () => this.saveExportPreferences());
     });
-    this.searchStyles();
+    this.$watch("format", () => this.loadStyles());
   },
   saveExportPreferences() {
     storeExportPreferences(this.storageKey, "citation", {
@@ -601,11 +639,25 @@ Alpine.data("itemExport", () => ({
     this.includeIdentifiers = preferences.includeIdentifiers;
     this.includeCustomFields = preferences.includeCustomFields;
   },
+  async loadStyles() {
+    if (!this.$root.open || this.format !== "csl") return;
+    if (this.stylesLoaded || this.stylesLoading) return;
+    await this.searchStyles();
+  },
   async searchStyles() {
+    const requestId = ++this.styleRequestId;
+    this.stylesLoading = true;
     try {
-      this.styles = await fetchCitationStyles(this.query, 50, this.style);
+      const styles = await fetchCitationStyles(this.query, 50, this.style);
+      if (requestId !== this.styleRequestId) return;
+      this.styles = styles;
+      this.stylesLoaded = true;
     } catch {
+      if (requestId !== this.styleRequestId) return;
       this.styles = [];
+      this.stylesLoaded = false;
+    } finally {
+      if (requestId === this.styleRequestId) this.stylesLoading = false;
     }
   },
   params() {

@@ -99,6 +99,10 @@ def test_inaccessible_item_never_records_reading(db):
 def test_item_workspace_separates_page_responsibilities(db, tmp_path, monkeypatch):
     client, item, revision = authenticated_client(db, tmp_path, monkeypatch)
     try:
+        item.urls = (
+            "https://publisher.example/article\n"
+            "https://publisher.example/files/reading-copy.PDF?download=1"
+        )
         tag = Tag(name="User priority", created_by=item.created_by)
         db.add(tag)
         db.flush()
@@ -135,6 +139,8 @@ def test_item_workspace_separates_page_responsibilities(db, tmp_path, monkeypatc
         assert "PDF 版本与附件" in files.text
         assert revision.original_name in files.text
         assert f'action="/items/{item.id}/pdf' in files.text
+        assert 'x-data="remotePdfUpload"' in files.text
+        assert "https://publisher.example/files/reading-copy.PDF?download=1" in files.text
 
         organize = client.get(f"/items/{item.id}/organize")
         assert organize.status_code == 200
