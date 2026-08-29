@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, override
 
 from fastapi.templating import Jinja2Templates
+from inquiro.richtext import convert_rich_text
 
 from quirebase.core.i18n import (
     DEFAULT_LOCALE,
@@ -25,6 +26,14 @@ if TYPE_CHECKING:
     from fastapi import Request
 
 PACKAGE_DIR = Path(__file__).resolve().parent.parent
+
+
+def _rich_text_html(value: str | None) -> str:
+    return convert_rich_text(value, source="html", target="web")
+
+
+def _rich_text_plain(value: str | None) -> str:
+    return convert_rich_text(value, source="html", target="text")
 
 
 def resolve_request_locale(request: Request) -> str:
@@ -101,4 +110,6 @@ templates.env.filters.update(
     format_datetime=format_datetime,
     format_date=format_date,
     format_number=format_number,
+    rich_text=_rich_text_html,
+    rich_text_plain=_rich_text_plain,
 )

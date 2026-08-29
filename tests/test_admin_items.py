@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import sqlite3
 
 import pytest
 from item_helpers import create_item_record as create_item
@@ -64,9 +65,37 @@ def test_list_global_items_across_users(db):
     assert item2.id in ids
 
     # Test search filter
-    items, total = list_global_items(db, admin, search="Quantum")
+    items, total = list_global_items(db, admin, search="Quant")
     assert total == 1
     assert items[0].id == item1.id
+
+
+def test_list_global_items_searches_plaintext_across_title_markup(db):
+    admin = create_test_admin(db, "admin-rich-title-search")
+    member = create_test_member(db, "member-rich-title-search")
+    item = create_item(db, member, title="<i>Alpha</i> Beta", authors="Example")
+
+    items, total = list_global_items(db, admin, search="Alpha Beta")
+
+    assert total == 1
+    assert items[0].id == item.id
+
+
+def test_list_global_items_search_does_not_expand_every_fts_match_into_parameters(db):
+    admin = create_test_admin(db, "admin-large-search")
+    member = create_test_member(db, "member-large-search")
+    for number in range(20):
+        create_item(db, member, title=f"Common indexed title {number}", authors="Example")
+
+    connection = db.connection().connection.driver_connection
+    previous_limit = connection.setlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, 16)
+    try:
+        items, total = list_global_items(db, admin, search="Common", page_size=5)
+    finally:
+        connection.setlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, previous_limit)
+
+    assert total == 20
+    assert len(items) == 5
 
 
 def test_non_admin_cannot_list_global_items(db):

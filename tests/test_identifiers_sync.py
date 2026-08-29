@@ -353,7 +353,10 @@ def test_sync_metadata_cleans_html_and_syncs_bibtex_type(db):
         )
         db.commit()
 
-    assert updated.title == "Quantum Supremacy using a Programmable Superconducting Processor"
+    assert (
+        updated.title
+        == "<i>Quantum</i> Supremacy using a <b>Programmable</b> Superconducting Processor"
+    )
     assert (
         updated.abstract
         == "The promise of quantum computers is that certain computational tasks might be executed exponentially faster..."

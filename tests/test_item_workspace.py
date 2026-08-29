@@ -117,8 +117,8 @@ def test_item_workspace_separates_page_responsibilities(db, tmp_path, monkeypatc
         assert 'aria-current="page"><span>⌂</span>' in summary.text
         assert "摘要与关键信息" in summary.text
         assert 'x-data="itemDownload"' in summary.text
-        assert "x-show=\"format === 'bibtex'\"" in summary.text
-        assert "x-show=\"format === 'bibtex' || format === 'csl'\"" in summary.text
+        assert 'option value="bibtex"' in summary.text
+        assert 'href="/account/settings#export-preferences"' in summary.text
         assert 'class="panel publication-snapshot"' in summary.text
         assert 'class="panel reading-files-panel"' in summary.text
         assert 'class="panel discovery-panel"' in summary.text

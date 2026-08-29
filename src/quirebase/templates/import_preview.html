@@ -24,7 +24,7 @@
   </form>
   <ol>
     {% for record in records %}
-      <li><strong>{{ record.title or _('(missing title)') }}</strong> — {{ record.authors or '' }}{% if record._pdf %}<small> · {{ record._pdf.original_name }} · {{ record._pdf.detected_doi }}</small>{% endif %}</li>
+      <li><strong>{% if record.title %}{{ record.title|rich_text|safe }}{% else %}{{ _('(missing title)') }}{% endif %}</strong> — {{ record.authors or '' }}{% if record._pdf %}<small> · {{ record._pdf.original_name }} · {{ record._pdf.detected_doi }}</small>{% endif %}</li>
     {% endfor %}
   </ol>
 </section>

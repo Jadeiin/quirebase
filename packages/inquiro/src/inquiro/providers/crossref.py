@@ -4,6 +4,13 @@ import json
 from typing import Any
 from urllib.parse import quote
 
+from inquiro.canonical import (
+    clean_markup,
+    clean_rich_markup,
+    collect_urls,
+    first_text,
+    normalize_reference_type,
+)
 from inquiro.identifiers import parse_doi
 from inquiro.models import (
     AcquiredDocument,
@@ -15,14 +22,10 @@ from inquiro.models import (
     ProviderUnavailable,
     SearchClause,
 )
-from inquiro.parsing import (
-    _clean_markup,
-    _collect_urls,
-    _date_parts,
-    _first,
-    normalize_reference_type,
-)
 from inquiro.providers._contracts import ProviderContext, ProviderDefinition
+from inquiro.providers._payload import (
+    date_parts,
+)
 
 
 class CrossrefLookupAdapter:
@@ -43,15 +46,15 @@ class CrossrefLookupAdapter:
             ", ".join(
                 part
                 for part in (
-                    _clean_markup(_first(author.get("family"))),
-                    _clean_markup(_first(author.get("given"))),
+                    clean_markup(first_text(author.get("family"))),
+                    clean_markup(first_text(author.get("given"))),
                 )
                 if part
             )
             for author in message.get("author", [])
             if isinstance(author, dict)
         )
-        canonical_doi = _first(message.get("DOI")) or value
+        canonical_doi = first_text(message.get("DOI")) or value
 
         affiliations: list[str] = []
         for author in message.get("author", []):
@@ -60,18 +63,18 @@ class CrossrefLookupAdapter:
             for affiliation in author.get("affiliation", []):
                 if not isinstance(affiliation, dict):
                     continue
-                name = _clean_markup(_first(affiliation.get("name")))
+                name = clean_markup(first_text(affiliation.get("name")))
                 if name and name not in affiliations:
                     affiliations.append(name)
 
         resource = message.get("resource") or {}
         primary_resource = resource.get("primary") or {}
-        urls = _collect_urls(
+        urls = collect_urls(
             f"https://doi.org/{canonical_doi}",
-            _first(message.get("URL")),
-            _first(primary_resource.get("URL")),
+            first_text(message.get("URL")),
+            first_text(primary_resource.get("URL")),
             *(
-                _first(link.get("URL"))
+                first_text(link.get("URL"))
                 for link in message.get("link", [])
                 if isinstance(link, dict)
             ),
@@ -79,22 +82,22 @@ class CrossrefLookupAdapter:
         keywords = "; ".join(
             keyword
             for subject in message.get("subject", [])
-            if (keyword := _clean_markup(_first(subject)))
+            if (keyword := clean_markup(first_text(subject)))
         )
         return ProviderRecord(
-            title=_clean_markup(_first(message.get("title"))) or "",
-            abstract=_clean_markup(_first(message.get("abstract"))),
+            title=clean_rich_markup(first_text(message.get("title"))) or "",
+            abstract=clean_rich_markup(first_text(message.get("abstract"))),
             authors=authors or None,
             keywords=keywords or None,
-            publication_date=_date_parts(message),
-            publication_title=_clean_markup(_first(message.get("container-title"))),
-            journal_abbreviation=_clean_markup(_first(message.get("short-container-title"))),
-            volume=_clean_markup(_first(message.get("volume"))),
-            issue=_clean_markup(
-                _first(message.get("issue") or (message.get("journal-issue") or {}).get("issue"))
+            publication_date=date_parts(message),
+            publication_title=clean_markup(first_text(message.get("container-title"))),
+            journal_abbreviation=clean_markup(first_text(message.get("short-container-title"))),
+            volume=clean_markup(first_text(message.get("volume"))),
+            issue=clean_markup(
+                first_text(message.get("issue") or (message.get("journal-issue") or {}).get("issue"))
             ),
-            pages=_clean_markup(_first(message.get("page"))),
-            publisher=_clean_markup(_first(message.get("publisher"))),
+            pages=clean_markup(first_text(message.get("page"))),
+            publisher=clean_markup(first_text(message.get("publisher"))),
             affiliation="; ".join(affiliations) or None,
             doi=canonical_doi,
             urls=urls,
@@ -171,15 +174,15 @@ class CrossrefSearchAdapter:
         total = int(message.get("total-results", 0))
         results: list[ProviderSearchRecord] = []
         for item in message.get("items", []):
-            doi = _first(item.get("DOI"))
+            doi = first_text(item.get("DOI"))
             if not doi:
                 continue
             authors = "; ".join(
                 ", ".join(
                     part
                     for part in (
-                        _clean_markup(_first(author.get("family"))),
-                        _clean_markup(_first(author.get("given"))),
+                        clean_markup(first_text(author.get("family"))),
+                        clean_markup(first_text(author.get("given"))),
                     )
                     if part
                 )
@@ -191,12 +194,12 @@ class CrossrefSearchAdapter:
                     provider="crossref",
                     identifier_provider="doi",
                     identifier=doi,
-                    title=_clean_markup(_first(item.get("title"))) or "",
+                    title=clean_rich_markup(first_text(item.get("title"))) or "",
                     authors=authors or None,
-                    publication_title=_clean_markup(_first(item.get("container-title"))),
-                    publication_date=_date_parts(item),
+                    publication_title=clean_markup(first_text(item.get("container-title"))),
+                    publication_date=date_parts(item),
                     doi=doi,
-                    abstract=_clean_markup(_first(item.get("abstract"))),
+                    abstract=clean_rich_markup(first_text(item.get("abstract"))),
                 )
             )
         return ProviderSearchPage("crossref", results, total, page, per_page)
@@ -227,14 +230,14 @@ class CrossrefDocumentAdapter:
             raise ProviderUnavailable("Crossref returned invalid document metadata") from error
         pdf_url = next(
             (
-                _first(link.get("URL"))
+                first_text(link.get("URL"))
                 for link in links
                 if isinstance(link, dict)
                 and (
-                    _first(link.get("content-type")) == "application/pdf"
-                    or ".pdf" in (_first(link.get("URL")) or "").lower()
+                    first_text(link.get("content-type")) == "application/pdf"
+                    or ".pdf" in (first_text(link.get("URL")) or "").lower()
                 )
-                and _first(link.get("URL"))
+                and first_text(link.get("URL"))
             ),
             None,
         )

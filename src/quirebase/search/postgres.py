@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import text
+from sqlalchemy import String, false, select, text
 
 from quirebase.models import Item
 from quirebase.search.content import search_text_for_item
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
+    from sqlalchemy.sql.selectable import SelectBase
 
 
 class PostgreSQLSearchIndex:
@@ -65,4 +66,20 @@ class PostgreSQLSearchIndex:
                 ),
                 {"query": query, "limit": limit},
             ).all()
+        )
+
+    def matching_item_ids(self, db: Session, query: str) -> SelectBase:
+        """Return an unbounded full-text match as a database-side ID query."""
+        self.ensure_schema(db)
+        if not query.strip():
+            return select(Item.id).where(false())
+        return (
+            text(
+                """
+                SELECT item_id FROM item_search
+                WHERE document @@ websearch_to_tsquery('simple', :query)
+                """
+            )
+            .bindparams(query=query)
+            .columns(item_id=String)
         )

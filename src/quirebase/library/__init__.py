@@ -21,7 +21,8 @@ from quirebase.library.bulk_items import (
 )
 from quirebase.library.catalog import find_duplicates, get_dashboard_data, search_library
 from quirebase.library.citations import (
-    ExportOptions,
+    DEFAULT_CITATION_KEY_FORMULA,
+    BibliographyExportOptions,
     create_custom_citation_style,
     delete_custom_citation_style,
     format_csl_export,
@@ -29,6 +30,7 @@ from quirebase.library.citations import (
     get_item_citation_response,
     get_item_citation_text_response,
     list_custom_citation_styles,
+    preview_citation_key,
     resolve_style_xml,
     select_builtin_citation_styles,
 )
@@ -99,16 +101,17 @@ from quirebase.library.tags import (
 )
 
 __all__ = [
+    "DEFAULT_CITATION_KEY_FORMULA",
     "AnnotationView",
     "AnnotationsWorkspace",
     "BatchConflict",
+    "BibliographyExportOptions",
     "CandidatePageView",
     "CandidateView",
     "Contributor",
     "CustomField",
     "DiscoveryClause",
     "DiscussionWorkspace",
-    "ExportOptions",
     "ExternalIdentifier",
     "FilesWorkspace",
     "ItemMetadata",
@@ -158,6 +161,7 @@ __all__ = [
     "merge_tags",
     "open_item_workspace",
     "parse_author_list_string",
+    "preview_citation_key",
     "record_discovery_search_audit",
     "regenerate_bibtex_key",
     "remove_tag_from_item",

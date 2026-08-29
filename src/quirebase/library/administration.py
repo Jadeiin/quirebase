@@ -32,13 +32,16 @@ def list_global_items(
     count_query = select(func.count(Item.id))
     filters = []
     if search.strip():
-        term = f"%{search.strip()}%"
+        search_value = search.strip()
+        term = f"%{search_value}%"
+        matching_ids = search_index(db).matching_item_ids(db, search_value)
         filters.append(
             or_(
+                Item.id.in_(matching_ids),
                 Item.title.ilike(term),
                 Item.authors.ilike(term),
                 Item.doi.ilike(term),
-                Item.id == search.strip(),
+                Item.id == search_value,
             )
         )
     if owner_id:

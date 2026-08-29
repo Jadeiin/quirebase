@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: quirebase VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-25 14:59+0800\n"
+"POT-Creation-Date: 2026-08-28 18:41+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -18,7 +18,8 @@ msgstr ""
 "Generated-By: Babel 2.18.0\n"
 
 #: src/quirebase/templates/_item_metadata_form.html:3
-#: src/quirebase/templates/item.html:239
+#: src/quirebase/templates/account_settings.html:154
+#: src/quirebase/templates/item.html:232
 #: src/quirebase/templates/online_search.html:9
 msgid "Title"
 msgstr ""
@@ -136,7 +137,7 @@ msgid "Issue"
 msgstr ""
 
 #: src/quirebase/templates/_item_metadata_form.html:66
-#: src/quirebase/templates/item.html:88
+#: src/quirebase/templates/item.html:81
 msgid "Pages"
 msgstr ""
 
@@ -145,7 +146,7 @@ msgid "Affiliation / Institution"
 msgstr ""
 
 #: src/quirebase/templates/_item_metadata_form.html:68
-#: src/quirebase/templates/item.html:89
+#: src/quirebase/templates/item.html:82
 msgid "Publisher"
 msgstr ""
 
@@ -154,7 +155,7 @@ msgid "Place published"
 msgstr ""
 
 #: src/quirebase/templates/_item_metadata_form.html:70
-#: src/quirebase/templates/item.html:246
+#: src/quirebase/templates/item.html:239
 msgid "DOI"
 msgstr ""
 
@@ -171,7 +172,7 @@ msgid "URLs (one per line)"
 msgstr ""
 
 #: src/quirebase/templates/_item_metadata_form.html:74
-#: src/quirebase/templates/item.html:121
+#: src/quirebase/templates/item.html:114
 msgid "Keywords"
 msgstr ""
 
@@ -180,7 +181,7 @@ msgid "Separate keywords with semicolons"
 msgstr ""
 
 #: src/quirebase/templates/_item_metadata_form.html:75
-#: src/quirebase/templates/item.html:71
+#: src/quirebase/templates/item.html:64
 #: src/quirebase/templates/online_search.html:9
 msgid "Abstract"
 msgstr ""
@@ -345,7 +346,6 @@ msgid "Export preferences"
 msgstr ""
 
 #: src/quirebase/templates/account_settings.html:112
-#: src/quirebase/templates/item.html:31 src/quirebase/templates/item.html:48
 msgid "Reset to defaults"
 msgstr ""
 
@@ -356,108 +356,209 @@ msgid ""
 msgstr ""
 
 #: src/quirebase/templates/account_settings.html:118
+msgid "General citation options"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:120
 msgid "Default citation format"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:128
+#: src/quirebase/templates/account_settings.html:131
+msgid "Include abstract"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:136
+msgid "CSL citation options"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:138
 msgid "Default CSL style"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:129
-#: src/quirebase/templates/item.html:39 src/quirebase/templates/library.html:39
+#: src/quirebase/templates/account_settings.html:139
 #: src/quirebase/templates/tools.html:134
 msgid "Search citation styles"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:140
-#: src/quirebase/templates/item.html:40 src/quirebase/templates/library.html:43
-msgid "Include abstract"
+#: src/quirebase/templates/account_settings.html:149
+msgid "Bibliography file options"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:144
-#: src/quirebase/templates/item.html:41 src/quirebase/templates/library.html:44
-msgid "Preserve bibitem case"
+#: src/quirebase/templates/account_settings.html:150
+msgid "Journal title"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:148
-#: src/quirebase/templates/item.html:42 src/quirebase/templates/library.html:45
-msgid "Use abbreviated journal"
+#: src/quirebase/templates/account_settings.html:150
+msgid "Full title"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:150
+msgid "Prefer abbreviation"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:150
+msgid "Abbreviation only"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:151
+msgid "DOI policy"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:151
+#: src/quirebase/templates/account_settings.html:152
+msgid "Include"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:151
+#: src/quirebase/templates/account_settings.html:152
+msgid "Omit"
 msgstr ""
 
 #: src/quirebase/templates/account_settings.html:152
-#: src/quirebase/templates/item.html:43 src/quirebase/templates/library.html:46
+msgid "URL policy"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:152
+msgid "Omit when DOI exists"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:153
+msgid "Excluded fields"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:154
+msgid "Output sorting"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:154
+msgid "Library order"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:154
+#: src/quirebase/templates/item.html:138
+msgid "Citation key"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:154
+#: src/quirebase/templates/library.html:17
+#: src/quirebase/templates/online_search.html:9
+msgid "Author"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:154
+#: src/quirebase/templates/library.html:16
+#: src/quirebase/templates/library.html:61
+msgid "Year"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:158
+msgid "BibTeX and BibLaTeX options"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:159
+msgid "BibTeX/BibLaTeX encoding"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:162
+msgid "Preserve bibitem case"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:166
 msgid "Include additional identifiers"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:156
-#: src/quirebase/templates/item.html:44 src/quirebase/templates/library.html:47
+#: src/quirebase/templates/account_settings.html:170
 msgid "Include custom fields"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:160
+#: src/quirebase/templates/account_settings.html:175
+msgid "Citation Key options"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:176
+msgid "Citation Key formula"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:177
+msgid "Use ASCII characters only"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:178
+msgid "Preview Citation Key"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:179
+msgid "Invalid Citation Key formula"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:183
+msgid "Document download options"
+msgstr ""
+
+#: src/quirebase/templates/account_settings.html:186
 msgid "Include annotations in PDF downloads"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:164
+#: src/quirebase/templates/account_settings.html:190
 msgid "Include supplements in PDF downloads"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:169
+#: src/quirebase/templates/account_settings.html:195
 msgid "Preferences are automatically saved to your browser."
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:170
+#: src/quirebase/templates/account_settings.html:196
 #: src/quirebase/templates/pdf.html:8
 msgid "Saved"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:178
+#: src/quirebase/templates/account_settings.html:204
 msgid "Security"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:179
+#: src/quirebase/templates/account_settings.html:205
 #: src/quirebase/templates/index.html:48
 #: src/quirebase/templates/sessions.html:4
 msgid "Login devices"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:182
+#: src/quirebase/templates/account_settings.html:208
 #: src/quirebase/templates/sessions.html:5
 msgid "Sign out every device, including this one?"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:183
+#: src/quirebase/templates/account_settings.html:209
 msgid "Sign out all"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:193
+#: src/quirebase/templates/account_settings.html:219
 #: src/quirebase/templates/index.html:51
 #: src/quirebase/templates/sessions.html:6
 msgid "This device"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:193
+#: src/quirebase/templates/account_settings.html:219
 #: src/quirebase/templates/index.html:51
 #: src/quirebase/templates/sessions.html:6
 msgid "Signed-in device"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:194
+#: src/quirebase/templates/account_settings.html:220
 #: src/quirebase/templates/sessions.html:6
 msgid "Session"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:199
+#: src/quirebase/templates/account_settings.html:225
 #: src/quirebase/templates/sessions.html:6
 msgid "current"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:202
+#: src/quirebase/templates/account_settings.html:228
 #: src/quirebase/templates/sessions.html:6
 msgid "Revoke"
 msgstr ""
 
-#: src/quirebase/templates/account_settings.html:208
+#: src/quirebase/templates/account_settings.html:234
 #: src/quirebase/templates/index.html:52
 #: src/quirebase/templates/sessions.html:6
 msgid "No active sessions."
@@ -486,7 +587,7 @@ msgstr ""
 msgid "Administration navigation"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:21 src/quirebase/templates/item.html:58
+#: src/quirebase/templates/admin.html:21 src/quirebase/templates/item.html:51
 msgid "Overview"
 msgstr ""
 
@@ -579,7 +680,7 @@ msgstr ""
 msgid "files"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:91 src/quirebase/templates/item.html:262
+#: src/quirebase/templates/admin.html:91 src/quirebase/templates/item.html:255
 msgid "Attachments"
 msgstr ""
 
@@ -761,7 +862,7 @@ msgstr ""
 
 #: src/quirebase/templates/admin.html:288 src/quirebase/templates/index.html:22
 #: src/quirebase/templates/index.html:31 src/quirebase/templates/item.html:10
-#: src/quirebase/templates/library.html:59
+#: src/quirebase/templates/library.html:65
 #: src/quirebase/templates/online_search.html:17
 #: src/quirebase/templates/project.html:6 src/quirebase/templates/tools.html:44
 msgid "No authors"
@@ -777,7 +878,7 @@ msgid ""
 " files?"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:293 src/quirebase/templates/item.html:397
+#: src/quirebase/templates/admin.html:293 src/quirebase/templates/item.html:390
 #: src/quirebase/templates/pdf.html:65 src/quirebase/templates/tools.html:105
 #: src/quirebase/templates/tools.html:147
 msgid "Delete"
@@ -870,8 +971,8 @@ msgid "Attempts"
 msgstr ""
 
 #: src/quirebase/templates/admin.html:400
-#: src/quirebase/templates/admin.html:539 src/quirebase/templates/item.html:30
-#: src/quirebase/templates/item.html:255 src/quirebase/templates/item.html:263
+#: src/quirebase/templates/admin.html:539 src/quirebase/templates/item.html:28
+#: src/quirebase/templates/item.html:248 src/quirebase/templates/item.html:256
 msgid "Download"
 msgstr ""
 
@@ -1047,7 +1148,7 @@ msgid "Online search"
 msgstr ""
 
 #: src/quirebase/templates/base.html:29 src/quirebase/templates/index.html:37
-#: src/quirebase/templates/item.html:336 src/quirebase/templates/project.html:4
+#: src/quirebase/templates/item.html:329 src/quirebase/templates/project.html:4
 #: src/quirebase/templates/projects.html:2
 #: src/quirebase/templates/projects.html:4
 msgid "Projects"
@@ -1129,7 +1230,7 @@ msgid ""
 "another reference manager."
 msgstr ""
 
-#: src/quirebase/templates/import.html:27 src/quirebase/templates/item.html:38
+#: src/quirebase/templates/import.html:27 src/quirebase/templates/item.html:36
 msgid "Format"
 msgstr ""
 
@@ -1359,7 +1460,7 @@ msgstr ""
 msgid "Note"
 msgstr ""
 
-#: src/quirebase/templates/item.html:6 src/quirebase/templates/library.html:55
+#: src/quirebase/templates/item.html:6 src/quirebase/templates/library.html:61
 msgid "Paper"
 msgstr ""
 
@@ -1367,7 +1468,7 @@ msgstr ""
 msgid "Read PDF"
 msgstr ""
 
-#: src/quirebase/templates/item.html:16 src/quirebase/templates/item.html:258
+#: src/quirebase/templates/item.html:16 src/quirebase/templates/item.html:251
 #: src/quirebase/templates/pdf.html:43
 msgid "Download PDF"
 msgstr ""
@@ -1384,537 +1485,533 @@ msgstr ""
 msgid "Select PDF versions"
 msgstr ""
 
-#: src/quirebase/templates/item.html:27 src/quirebase/templates/library.html:48
-#: src/quirebase/templates/pdf.html:48
-msgid "Include annotations"
+#: src/quirebase/templates/item.html:27
+msgid ""
+"Uses your saved PDF annotation and supplement settings. Stored files "
+"remain unchanged."
 msgstr ""
 
-#: src/quirebase/templates/item.html:28 src/quirebase/templates/library.html:49
-msgid "Include supplements"
+#: src/quirebase/templates/item.html:29 src/quirebase/templates/item.html:41
+#: src/quirebase/templates/library.html:55
+msgid "Export settings"
 msgstr ""
 
-#: src/quirebase/templates/item.html:29
-msgid "Stored files remain unchanged."
-msgstr ""
-
-#: src/quirebase/templates/item.html:36
+#: src/quirebase/templates/item.html:34
 msgid "Export"
 msgstr ""
 
-#: src/quirebase/templates/item.html:39
-msgid "CSL style"
+#: src/quirebase/templates/item.html:37
+msgid ""
+"Uses the CSL, field, encoding, and sorting defaults from your export "
+"settings."
 msgstr ""
 
-#: src/quirebase/templates/item.html:45
+#: src/quirebase/templates/item.html:38
 msgid "Download file"
 msgstr ""
 
-#: src/quirebase/templates/item.html:45
+#: src/quirebase/templates/item.html:38
 msgid "Copy to clipboard"
 msgstr ""
 
-#: src/quirebase/templates/item.html:46
+#: src/quirebase/templates/item.html:39
 msgid "Copied"
 msgstr ""
 
-#: src/quirebase/templates/item.html:47
+#: src/quirebase/templates/item.html:40
 msgid "Copy failed"
 msgstr ""
 
-#: src/quirebase/templates/item.html:51
+#: src/quirebase/templates/item.html:44
 msgid "More"
 msgstr ""
 
-#: src/quirebase/templates/item.html:51
+#: src/quirebase/templates/item.html:44
 msgid ""
 "Delete this item permanently? Associated files, annotations, and project "
 "memberships will also be removed."
 msgstr ""
 
-#: src/quirebase/templates/item.html:51
+#: src/quirebase/templates/item.html:44
 msgid "Delete item"
 msgstr ""
 
-#: src/quirebase/templates/item.html:57
+#: src/quirebase/templates/item.html:50
 msgid "Paper workspace"
 msgstr ""
 
-#: src/quirebase/templates/item.html:58
+#: src/quirebase/templates/item.html:51
 msgid "Abstract and key details"
 msgstr ""
 
-#: src/quirebase/templates/item.html:59
+#: src/quirebase/templates/item.html:52
 msgid "Metadata"
 msgstr ""
 
-#: src/quirebase/templates/item.html:59
+#: src/quirebase/templates/item.html:52
 msgid "Bibliographic fields"
 msgstr ""
 
-#: src/quirebase/templates/item.html:60
+#: src/quirebase/templates/item.html:53
 msgid "Files"
 msgstr ""
 
-#: src/quirebase/templates/item.html:60 src/quirebase/templates/item.html:252
+#: src/quirebase/templates/item.html:53 src/quirebase/templates/item.html:245
 msgid "PDF versions and attachments"
 msgstr ""
 
-#: src/quirebase/templates/item.html:61 src/quirebase/templates/item.html:121
+#: src/quirebase/templates/item.html:54 src/quirebase/templates/item.html:114
 msgid "Organize"
 msgstr ""
 
-#: src/quirebase/templates/item.html:61 src/quirebase/templates/item.html:268
+#: src/quirebase/templates/item.html:54 src/quirebase/templates/item.html:261
 msgid "Tags and projects"
 msgstr ""
 
-#: src/quirebase/templates/item.html:62 src/quirebase/templates/item.html:392
+#: src/quirebase/templates/item.html:55 src/quirebase/templates/item.html:385
 msgid "Notes and annotations"
 msgstr ""
 
-#: src/quirebase/templates/item.html:62
+#: src/quirebase/templates/item.html:55
 msgid "Reading notes"
 msgstr ""
 
-#: src/quirebase/templates/item.html:63 src/quirebase/templates/item.html:396
+#: src/quirebase/templates/item.html:56 src/quirebase/templates/item.html:389
 msgid "Discussion"
 msgstr ""
 
-#: src/quirebase/templates/item.html:63
+#: src/quirebase/templates/item.html:56
 msgid "Team conversation"
 msgstr ""
 
-#: src/quirebase/templates/item.html:71
+#: src/quirebase/templates/item.html:64
 msgid "Paper overview"
 msgstr ""
 
-#: src/quirebase/templates/item.html:71
+#: src/quirebase/templates/item.html:64
 msgid "Edit metadata"
 msgstr ""
 
-#: src/quirebase/templates/item.html:76
+#: src/quirebase/templates/item.html:69
 msgid "Show less"
 msgstr ""
 
-#: src/quirebase/templates/item.html:76
+#: src/quirebase/templates/item.html:69
 msgid "Show more"
 msgstr ""
 
-#: src/quirebase/templates/item.html:78
+#: src/quirebase/templates/item.html:71
 msgid "No abstract available."
 msgstr ""
 
-#: src/quirebase/templates/item.html:83
+#: src/quirebase/templates/item.html:76
 msgid "Publication details"
 msgstr ""
 
-#: src/quirebase/templates/item.html:83
+#: src/quirebase/templates/item.html:76
 msgid "View all metadata"
 msgstr ""
 
-#: src/quirebase/templates/item.html:85 src/quirebase/templates/item.html:242
+#: src/quirebase/templates/item.html:78 src/quirebase/templates/item.html:235
 #: src/quirebase/templates/online_search.html:9
 msgid "Publication"
 msgstr ""
 
-#: src/quirebase/templates/item.html:86 src/quirebase/templates/item.html:243
+#: src/quirebase/templates/item.html:79 src/quirebase/templates/item.html:236
 msgid "Date"
 msgstr ""
 
-#: src/quirebase/templates/item.html:87
+#: src/quirebase/templates/item.html:80
 msgid "Volume / Issue"
 msgstr ""
 
-#: src/quirebase/templates/item.html:90 src/quirebase/templates/item.html:245
+#: src/quirebase/templates/item.html:83 src/quirebase/templates/item.html:238
 msgid "Affiliation"
 msgstr ""
 
-#: src/quirebase/templates/item.html:95
+#: src/quirebase/templates/item.html:88
 msgid "Reading and files"
 msgstr ""
 
-#: src/quirebase/templates/item.html:95
+#: src/quirebase/templates/item.html:88
 msgid "Manage files"
 msgstr ""
 
-#: src/quirebase/templates/item.html:99 src/quirebase/templates/item.html:255
+#: src/quirebase/templates/item.html:92 src/quirebase/templates/item.html:248
 #: src/quirebase/templates/pdf.html:18
 #, python-brace-format
 msgid "{count} pages"
 msgstr ""
 
-#: src/quirebase/templates/item.html:100 src/quirebase/templates/item.html:255
+#: src/quirebase/templates/item.html:93 src/quirebase/templates/item.html:248
 msgid "Read"
 msgstr ""
 
-#: src/quirebase/templates/item.html:103 src/quirebase/templates/item.html:255
+#: src/quirebase/templates/item.html:96 src/quirebase/templates/item.html:248
 msgid "No PDF uploaded."
 msgstr ""
 
-#: src/quirebase/templates/item.html:106
+#: src/quirebase/templates/item.html:99
 msgid "PDF versions"
 msgstr ""
 
-#: src/quirebase/templates/item.html:107
+#: src/quirebase/templates/item.html:100
 msgid "Supplements"
 msgstr ""
 
-#: src/quirebase/templates/item.html:108
+#: src/quirebase/templates/item.html:101
 msgid "Annotations"
 msgstr ""
 
-#: src/quirebase/templates/item.html:109
+#: src/quirebase/templates/item.html:102
 msgid "Messages"
 msgstr ""
 
-#: src/quirebase/templates/item.html:115
+#: src/quirebase/templates/item.html:108
 msgid "User-curated"
 msgstr ""
 
-#: src/quirebase/templates/item.html:115
+#: src/quirebase/templates/item.html:108
 msgid "Tags"
 msgstr ""
 
-#: src/quirebase/templates/item.html:115 src/quirebase/templates/tools.html:15
+#: src/quirebase/templates/item.html:108 src/quirebase/templates/tools.html:15
 #: src/quirebase/templates/tools.html:67
 msgid "Manage tags"
 msgstr ""
 
-#: src/quirebase/templates/item.html:117
+#: src/quirebase/templates/item.html:110
 msgid "No tags assigned yet."
 msgstr ""
 
-#: src/quirebase/templates/item.html:124
+#: src/quirebase/templates/item.html:117
 msgid "No keywords."
 msgstr ""
 
-#: src/quirebase/templates/item.html:128
+#: src/quirebase/templates/item.html:121
 msgid "External links"
 msgstr ""
 
-#: src/quirebase/templates/item.html:132
+#: src/quirebase/templates/item.html:125
 #, python-brace-format
 msgid "External source {number}"
 msgstr ""
 
-#: src/quirebase/templates/item.html:133
+#: src/quirebase/templates/item.html:126
 msgid "No external links."
 msgstr ""
 
-#: src/quirebase/templates/item.html:141
+#: src/quirebase/templates/item.html:134
 msgid "Record identity"
 msgstr ""
 
-#: src/quirebase/templates/item.html:142
+#: src/quirebase/templates/item.html:135
 msgid "Key details"
 msgstr ""
 
-#: src/quirebase/templates/item.html:144
-#: src/quirebase/templates/library.html:55
+#: src/quirebase/templates/item.html:137
+#: src/quirebase/templates/library.html:61
 msgid "Type"
 msgstr ""
 
-#: src/quirebase/templates/item.html:145
-msgid "Citation key"
-msgstr ""
-
-#: src/quirebase/templates/item.html:150
+#: src/quirebase/templates/item.html:143
 msgid "Update citation key"
 msgstr ""
 
-#: src/quirebase/templates/item.html:156
+#: src/quirebase/templates/item.html:149
 msgid "Metadata sources"
 msgstr ""
 
-#: src/quirebase/templates/item.html:156
+#: src/quirebase/templates/item.html:149
 msgid "Upstream sync"
 msgstr ""
 
-#: src/quirebase/templates/item.html:169
+#: src/quirebase/templates/item.html:162
 msgid "Select upstream provider"
 msgstr ""
 
-#: src/quirebase/templates/item.html:170
+#: src/quirebase/templates/item.html:163
 msgid "Auto"
 msgstr ""
 
-#: src/quirebase/templates/item.html:175 src/quirebase/templates/item.html:208
+#: src/quirebase/templates/item.html:168 src/quirebase/templates/item.html:201
 msgid "Autoupdate"
 msgstr ""
 
-#: src/quirebase/templates/item.html:184
+#: src/quirebase/templates/item.html:177
 msgid "Missing DOI?"
 msgstr ""
 
-#: src/quirebase/templates/item.html:188
+#: src/quirebase/templates/item.html:181
 msgid "Rescan PDF"
 msgstr ""
 
-#: src/quirebase/templates/item.html:218
+#: src/quirebase/templates/item.html:211
 msgid "Record history"
 msgstr ""
 
-#: src/quirebase/templates/item.html:219
+#: src/quirebase/templates/item.html:212
 msgid "Ownership and changes"
 msgstr ""
 
-#: src/quirebase/templates/item.html:221
+#: src/quirebase/templates/item.html:214
 msgid "Added by"
 msgstr ""
 
-#: src/quirebase/templates/item.html:222
+#: src/quirebase/templates/item.html:215
 msgid "Last modified by"
 msgstr ""
 
-#: src/quirebase/templates/item.html:229
+#: src/quirebase/templates/item.html:222
 msgid "Paper record"
 msgstr ""
 
-#: src/quirebase/templates/item.html:229
+#: src/quirebase/templates/item.html:222
 msgid "Bibliographic metadata"
 msgstr ""
 
-#: src/quirebase/templates/item.html:229
+#: src/quirebase/templates/item.html:222
 msgid ""
 "Review and maintain the fields used for search, citation export, and "
 "organization."
 msgstr ""
 
-#: src/quirebase/templates/item.html:235
+#: src/quirebase/templates/item.html:228
 msgid "Save metadata"
 msgstr ""
 
-#: src/quirebase/templates/item.html:240
+#: src/quirebase/templates/item.html:233
 msgid "Authors"
 msgstr ""
 
-#: src/quirebase/templates/item.html:241
+#: src/quirebase/templates/item.html:234
 msgid "Editors"
 msgstr ""
 
-#: src/quirebase/templates/item.html:244
+#: src/quirebase/templates/item.html:237
 msgid "Volume / Pages"
 msgstr ""
 
-#: src/quirebase/templates/item.html:252
+#: src/quirebase/templates/item.html:245
 msgid "Document storage"
 msgstr ""
 
-#: src/quirebase/templates/item.html:252
+#: src/quirebase/templates/item.html:245
 msgid ""
 "Keep the reading copy and supplementary files together without mixing "
 "them with metadata."
 msgstr ""
 
-#: src/quirebase/templates/item.html:254
+#: src/quirebase/templates/item.html:247
 msgid "PDF revisions"
 msgstr ""
 
-#: src/quirebase/templates/item.html:254 src/quirebase/templates/item.html:262
+#: src/quirebase/templates/item.html:247 src/quirebase/templates/item.html:255
 #, python-brace-format
 msgid "{count} file(s)"
 msgstr ""
 
-#: src/quirebase/templates/item.html:255 src/quirebase/templates/item.html:263
+#: src/quirebase/templates/item.html:248 src/quirebase/templates/item.html:256
 #, python-brace-format
 msgid "{bytes} bytes"
 msgstr ""
 
-#: src/quirebase/templates/item.html:257
+#: src/quirebase/templates/item.html:250
 msgid "Add a PDF"
 msgstr ""
 
-#: src/quirebase/templates/item.html:257 src/quirebase/templates/item.html:264
+#: src/quirebase/templates/item.html:250 src/quirebase/templates/item.html:257
 msgid "Upload"
 msgstr ""
 
-#: src/quirebase/templates/item.html:258
+#: src/quirebase/templates/item.html:251
 msgid "Unable to download and upload this PDF."
 msgstr ""
 
-#: src/quirebase/templates/item.html:258
+#: src/quirebase/templates/item.html:251
 msgid "Add a PDF from URL"
 msgstr ""
 
-#: src/quirebase/templates/item.html:258
+#: src/quirebase/templates/item.html:251
 msgid "Inferred from this item’s external links."
 msgstr ""
 
-#: src/quirebase/templates/item.html:263
+#: src/quirebase/templates/item.html:256
 msgid "No attachments."
 msgstr ""
 
-#: src/quirebase/templates/item.html:264
+#: src/quirebase/templates/item.html:257
 msgid "Add attachment"
 msgstr ""
 
-#: src/quirebase/templates/item.html:268
+#: src/quirebase/templates/item.html:261
 msgid "Library organization"
 msgstr ""
 
-#: src/quirebase/templates/item.html:268
+#: src/quirebase/templates/item.html:261
 msgid "Use tags for flexible classification and projects for shared collections."
 msgstr ""
 
-#: src/quirebase/templates/item.html:273
+#: src/quirebase/templates/item.html:266
 msgid "Add new tags"
 msgstr ""
 
-#: src/quirebase/templates/item.html:278 src/quirebase/templates/item.html:294
+#: src/quirebase/templates/item.html:271 src/quirebase/templates/item.html:287
 msgid "Generating Tag recommendations…"
 msgstr ""
 
-#: src/quirebase/templates/item.html:278
+#: src/quirebase/templates/item.html:271
 msgid "Retry recommendations"
 msgstr ""
 
-#: src/quirebase/templates/item.html:278
+#: src/quirebase/templates/item.html:271
 msgid "Regenerate recommendations"
 msgstr ""
 
-#: src/quirebase/templates/item.html:290
+#: src/quirebase/templates/item.html:283
 msgid "New tags (one per line)"
 msgstr ""
 
-#: src/quirebase/templates/item.html:291
+#: src/quirebase/templates/item.html:284
 msgid "One tag per line"
 msgstr ""
 
-#: src/quirebase/templates/item.html:297
+#: src/quirebase/templates/item.html:290
 msgid "Tag recommendation failed."
 msgstr ""
 
-#: src/quirebase/templates/item.html:301
+#: src/quirebase/templates/item.html:294
 msgid "No English Tag candidates were found."
 msgstr ""
 
-#: src/quirebase/templates/item.html:305
+#: src/quirebase/templates/item.html:298
 msgid "Suggested new tags"
 msgstr ""
 
-#: src/quirebase/templates/item.html:306
+#: src/quirebase/templates/item.html:299
 msgid "Only selected recommendations become Tags."
 msgstr ""
 
-#: src/quirebase/templates/item.html:307
+#: src/quirebase/templates/item.html:300
 msgid "Single-word keywords"
 msgstr ""
 
-#: src/quirebase/templates/item.html:313
+#: src/quirebase/templates/item.html:306
 msgid "Compound phrases"
 msgstr ""
 
-#: src/quirebase/templates/item.html:321
+#: src/quirebase/templates/item.html:314
 msgid "Add & Save"
 msgstr ""
 
-#: src/quirebase/templates/item.html:327
+#: src/quirebase/templates/item.html:320
 msgid "Current tags"
 msgstr ""
 
-#: src/quirebase/templates/item.html:330
+#: src/quirebase/templates/item.html:323
 #, python-brace-format
 msgid "Remove {name}"
 msgstr ""
 
-#: src/quirebase/templates/item.html:331
+#: src/quirebase/templates/item.html:324
 msgid "No tags attached yet."
 msgstr ""
 
-#: src/quirebase/templates/item.html:340 src/quirebase/templates/project.html:7
+#: src/quirebase/templates/item.html:333 src/quirebase/templates/project.html:7
 msgid "Remove"
 msgstr ""
 
-#: src/quirebase/templates/item.html:342
+#: src/quirebase/templates/item.html:335
 msgid "Not in this project"
 msgstr ""
 
-#: src/quirebase/templates/item.html:342
+#: src/quirebase/templates/item.html:335
 msgid "Add"
 msgstr ""
 
-#: src/quirebase/templates/item.html:344
+#: src/quirebase/templates/item.html:337
 msgid "No projects."
 msgstr ""
 
-#: src/quirebase/templates/item.html:352
+#: src/quirebase/templates/item.html:345
 msgid "Tag picker matrix"
 msgstr ""
 
-#: src/quirebase/templates/item.html:353
+#: src/quirebase/templates/item.html:346
 msgid "Pick from library tags"
 msgstr ""
 
-#: src/quirebase/templates/item.html:356 src/quirebase/templates/tools.html:74
+#: src/quirebase/templates/item.html:349 src/quirebase/templates/tools.html:74
 msgid "Filter tags (e.g. machine learning)..."
 msgstr ""
 
-#: src/quirebase/templates/item.html:373
+#: src/quirebase/templates/item.html:366
 msgid "Recommended"
 msgstr ""
 
-#: src/quirebase/templates/item.html:382
+#: src/quirebase/templates/item.html:375
 msgid "Save tag selection"
 msgstr ""
 
-#: src/quirebase/templates/item.html:386
+#: src/quirebase/templates/item.html:379
 msgid "No library tags available yet."
 msgstr ""
 
-#: src/quirebase/templates/item.html:392
+#: src/quirebase/templates/item.html:385
 msgid "Reading workspace"
 msgstr ""
 
-#: src/quirebase/templates/item.html:392
+#: src/quirebase/templates/item.html:385
 msgid ""
 "Highlights, underlines and margin notes are created in the PDF reader and"
 " collected here for review."
 msgstr ""
 
-#: src/quirebase/templates/item.html:392
+#: src/quirebase/templates/item.html:385
 msgid "Open annotation tools"
 msgstr ""
 
-#: src/quirebase/templates/item.html:393
+#: src/quirebase/templates/item.html:386
 msgid "All annotations"
 msgstr ""
 
-#: src/quirebase/templates/item.html:393
+#: src/quirebase/templates/item.html:386
 #, python-brace-format
 msgid "{count} annotation(s)"
 msgstr ""
 
-#: src/quirebase/templates/item.html:393
+#: src/quirebase/templates/item.html:386
 #: src/quirebase/templates/online_search.html:16
 #: src/quirebase/templates/pdf.html:15
 #, python-brace-format
 msgid "Page {page}"
 msgstr ""
 
-#: src/quirebase/templates/item.html:393
+#: src/quirebase/templates/item.html:386
 msgid "Open"
 msgstr ""
 
-#: src/quirebase/templates/item.html:393
+#: src/quirebase/templates/item.html:386
 msgid "No annotations yet. Open a PDF to highlight, underline or add a note."
 msgstr ""
 
-#: src/quirebase/templates/item.html:396
+#: src/quirebase/templates/item.html:389
 msgid "Collaboration"
 msgstr ""
 
-#: src/quirebase/templates/item.html:396
+#: src/quirebase/templates/item.html:389
 msgid "Keep paper-specific questions and decisions with the research record."
 msgstr ""
 
-#: src/quirebase/templates/item.html:397
+#: src/quirebase/templates/item.html:390
 msgid "No discussion yet."
 msgstr ""
 
-#: src/quirebase/templates/item.html:397
+#: src/quirebase/templates/item.html:390
 msgid "Add to the discussion"
 msgstr ""
 
-#: src/quirebase/templates/item.html:397
+#: src/quirebase/templates/item.html:390
 msgid "Post"
 msgstr ""
 
@@ -1960,17 +2057,7 @@ msgid "All projects"
 msgstr ""
 
 #: src/quirebase/templates/library.html:16
-#: src/quirebase/templates/library.html:55
-msgid "Year"
-msgstr ""
-
-#: src/quirebase/templates/library.html:16
 msgid "All years"
-msgstr ""
-
-#: src/quirebase/templates/library.html:17
-#: src/quirebase/templates/online_search.html:9
-msgid "Author"
 msgstr ""
 
 #: src/quirebase/templates/library.html:17
@@ -2002,76 +2089,84 @@ msgid "Export BibTeX"
 msgstr ""
 
 #: src/quirebase/templates/library.html:32
-msgid "Export RIS"
+msgid "Export BibLaTeX"
 msgstr ""
 
 #: src/quirebase/templates/library.html:33
-msgid "Export EndNote"
+msgid "Export RIS"
 msgstr ""
 
 #: src/quirebase/templates/library.html:34
-msgid "Export citation (CSL)"
+msgid "Export EndNote"
 msgstr ""
 
 #: src/quirebase/templates/library.html:35
-msgid "Download PDFs"
+msgid "Export citation (CSL)"
 msgstr ""
 
 #: src/quirebase/templates/library.html:36
+msgid "Download PDFs"
+msgstr ""
+
+#: src/quirebase/templates/library.html:37
 msgid "Delete papers"
 msgstr ""
 
-#: src/quirebase/templates/library.html:42
+#: src/quirebase/templates/library.html:54
 msgid "Tag name"
 msgstr ""
 
-#: src/quirebase/templates/library.html:50
+#: src/quirebase/templates/library.html:55
+msgid "Using saved export settings"
+msgstr ""
+
+#: src/quirebase/templates/library.html:56
 msgid "Choose project"
 msgstr ""
 
-#: src/quirebase/templates/library.html:51
+#: src/quirebase/templates/library.html:57
 msgid "Confirm permanent deletion"
 msgstr ""
 
-#: src/quirebase/templates/library.html:52
+#: src/quirebase/templates/library.html:58
 msgid "Apply"
 msgstr ""
 
-#: src/quirebase/templates/library.html:55
+#: src/quirebase/templates/library.html:61
 msgid "Select all papers"
 msgstr ""
 
-#: src/quirebase/templates/library.html:55
+#: src/quirebase/templates/library.html:61
 msgid "Updated"
 msgstr ""
 
-#: src/quirebase/templates/library.html:58
+#: src/quirebase/templates/library.html:64
 #, python-brace-format
 msgid "Select {title}"
 msgstr ""
 
-#: src/quirebase/templates/library.html:64
+#: src/quirebase/templates/library.html:70
 msgid "No papers match these filters."
 msgstr ""
 
-#: src/quirebase/templates/library.html:68
+#: src/quirebase/templates/library.html:74
 #: src/quirebase/templates/tools.html:114
 msgid "Library pages"
 msgstr ""
 
-#: src/quirebase/templates/library.html:69
+#: src/quirebase/templates/library.html:75
 #: src/quirebase/templates/online_search.html:18
 #: src/quirebase/templates/tools.html:115
 msgid "Previous"
 msgstr ""
 
-#: src/quirebase/templates/library.html:70
+#: src/quirebase/templates/library.html:76
 #: src/quirebase/templates/online_search.html:18
 #, python-brace-format
 msgid "Page {page} of {pages}"
 msgstr ""
 
-#: src/quirebase/templates/library.html:71
+#: src/quirebase/templates/library.html:77
 #: src/quirebase/templates/online_search.html:18
 #: src/quirebase/templates/tools.html:117
 msgid "Next page"
@@ -2268,6 +2363,10 @@ msgstr ""
 
 #: src/quirebase/templates/pdf.html:47
 msgid "Current PDF"
+msgstr ""
+
+#: src/quirebase/templates/pdf.html:48
+msgid "Include annotations"
 msgstr ""
 
 #: src/quirebase/templates/pdf.html:49
@@ -2550,3 +2649,4 @@ msgstr ""
 #: src/quirebase/templates/tools.html:161
 msgid "CSL XML"
 msgstr ""
+

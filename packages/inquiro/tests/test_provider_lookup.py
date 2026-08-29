@@ -400,7 +400,7 @@ def test_openalex_abstract_inverted_index_and_html_cleaning():
         transport=httpx2.MockTransport(handler),
     )
 
-    assert record.title == "OmniDrones: An Efficient Platform"
+    assert record.title == "<i>OmniDrones:</i> An Efficient Platform"
     assert record.abstract == "In this work, we introduce OmniDrones."
     assert record.authors == "Guanqi He; Jordan Key"
     assert record.keywords == "Robotics"

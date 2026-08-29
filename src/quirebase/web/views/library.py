@@ -8,7 +8,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response, Streamin
 from quirebase.access import editable_projects, visible_projects
 from quirebase.core.database import get_db
 from quirebase.library import (
-    ExportOptions,
+    DEFAULT_CITATION_KEY_FORMULA,
+    BibliographyExportOptions,
     apply_bulk_item_action,
     download_selected_item_documents,
     export_selected_bibliography,
@@ -89,49 +90,57 @@ def library_bulk_action(
     style: str = Form(default="apa"),
     include_abstract: bool = Form(default=True),
     preserve_case: bool = Form(default=False),
-    abbreviate_journal: bool = Form(default=False),
     include_identifiers: bool = Form(default=False),
     include_custom_fields: bool = Form(default=False),
+    encoding: str = Form(default="unicode"),
+    journal_mode: str = Form(default="full"),
+    doi_policy: str = Form(default="include"),
+    url_policy: str = Form(default="include"),
+    excluded_fields: str = Form(default=""),
+    sort_by: str = Form(default="input"),
+    citation_key_formula: str = Form(default=""),
+    citation_key_force_ascii: bool = Form(default=False),
     include_annotations: bool = Form(default=False),
     include_supplements: bool = Form(default=False),
     timezone: str = Form(default=""),
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    if action == "export_csl":
-        contents, media_type, filename = export_selected_bibliography(
-            db,
-            user,
-            item_ids,
-            "csl",
-            style_key=style,
-            options=ExportOptions(
-                include_abstract=include_abstract,
-                preserve_case=preserve_case,
-                abbreviate_journal=abbreviate_journal,
-                include_identifiers=include_identifiers,
-                include_custom_fields=include_custom_fields,
+    if action == "export_csl" or action.startswith("export_"):
+        options = BibliographyExportOptions(
+            include_abstract=include_abstract,
+            preserve_case=preserve_case,
+            include_identifiers=include_identifiers,
+            include_custom_fields=include_custom_fields,
+            encoding=encoding,
+            journal_mode=journal_mode,
+            doi_policy=doi_policy,
+            url_policy=url_policy,
+            excluded_fields=tuple(
+                part.strip() for part in excluded_fields.split(",") if part.strip()
             ),
+            sort_by=sort_by,
+            citation_key_formula=citation_key_formula.strip()
+            or DEFAULT_CITATION_KEY_FORMULA,
+            citation_key_force_ascii=citation_key_force_ascii,
         )
-        return Response(
-            contents,
-            media_type=f"{media_type}; charset=utf-8",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-        )
-    if action.startswith("export_"):
-        contents, media_type, filename = export_selected_bibliography(
-            db,
-            user,
-            item_ids,
-            action.removeprefix("export_"),
-            options=ExportOptions(
-                include_abstract=include_abstract,
-                preserve_case=preserve_case,
-                abbreviate_journal=abbreviate_journal,
-                include_identifiers=include_identifiers,
-                include_custom_fields=include_custom_fields,
-            ),
-        )
+        if action == "export_csl":
+            contents, media_type, filename = export_selected_bibliography(
+                db,
+                user,
+                item_ids,
+                "csl",
+                style_key=style,
+                options=options,
+            )
+        else:
+            contents, media_type, filename = export_selected_bibliography(
+                db,
+                user,
+                item_ids,
+                action.removeprefix("export_"),
+                options=options,
+            )
         return Response(
             contents,
             media_type=f"{media_type}; charset=utf-8",

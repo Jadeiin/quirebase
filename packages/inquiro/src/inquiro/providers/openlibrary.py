@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from inquiro.canonical import (
+    first_text,
+)
 from inquiro.identifiers import parse_isbn
 from inquiro.models import (
     CandidateNotFound,
@@ -12,11 +15,10 @@ from inquiro.models import (
     ProviderUnavailable,
     SearchClause,
 )
-from inquiro.parsing import (
-    _boolean_query,
-    _first,
-)
 from inquiro.providers._contracts import ProviderContext, ProviderDefinition
+from inquiro.providers._payload import (
+    boolean_query,
+)
 
 
 class OpenLibraryLookupAdapter:
@@ -37,15 +39,15 @@ class OpenLibraryLookupAdapter:
         if not record:
             raise CandidateNotFound("Open Library record was not found")
         return ProviderRecord(
-            title=_first(record.get("title")) or "",
+            title=first_text(record.get("title")) or "",
             abstract=None,
             authors="; ".join(
                 author["name"] for author in record.get("authors", []) if author.get("name")
             )
             or None,
             keywords=None,
-            publication_date=_first(record.get("publish_date")),
-            publication_title=_first([
+            publication_date=first_text(record.get("publish_date")),
+            publication_title=first_text([
                 publisher.get("name") for publisher in record.get("publishers", [])
             ]),
             doi=None,
@@ -73,7 +75,7 @@ class OpenLibrarySearchAdapter:
             "limit": str(per_page),
             "offset": str((page - 1) * per_page),
             "fields": "key,title,author_name,publisher,first_publish_year,isbn",
-            "q": _boolean_query(
+            "q": boolean_query(
                 clauses,
                 {
                     "any": "",
@@ -107,7 +109,7 @@ class OpenLibrarySearchAdapter:
                     identifier=isbns[0],
                     title=doc.get("title"),
                     authors="; ".join(doc.get("author_name", [])) or None,
-                    publication_title=_first(doc.get("publisher")),
+                    publication_title=first_text(doc.get("publisher")),
                     publication_date=str(doc.get("first_publish_year") or "") or None,
                 )
             )

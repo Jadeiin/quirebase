@@ -4,9 +4,10 @@ from unittest.mock import patch
 
 import httpx2
 from inquiro import CandidateRecord, Identifier
-from inquiro.citations import (
+from inquiro.bibliography import (
     builtin_style_xml,
-    item_to_csl_json,
+    record_from_item,
+    record_to_csl_json,
     render_bibliography,
 )
 from item_helpers import create_item_record as create_item
@@ -107,10 +108,10 @@ def test_seam1_oa_corpus_metadata_lookup_and_reconstruction():
     assert identifier.provider == "openalex"
 
     assert isinstance(record, CandidateRecord)
-    # 1. HTML tags in title stripped
+    # 1. Supported inline markup in the title is sanitized and retained.
     assert (
         record.title
-        == "Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives"
+        == "Drivers and Consequences of <i>ChatGPT</i> Use in Higher Education: Key Stakeholder Perspectives"
     )
     # 2. Inverted index reconstructed
     assert (
@@ -163,7 +164,7 @@ def test_seam2_oa_corpus_batch_import_and_relational_mapping(db, monkeypatch):
     item = db.scalar(
         select(Item).where(
             Item.title
-            == "Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives"
+            == "Drivers and Consequences of <i>ChatGPT</i> Use in Higher Education: Key Stakeholder Perspectives"
         )
     )
     assert item is not None
@@ -296,7 +297,7 @@ def test_seam4_oa_corpus_citation_generation_and_csl_export(db):
     db.add(item)
     db.commit()
 
-    csl_json = item_to_csl_json(item)
+    csl_json = record_to_csl_json(record_from_item(item))
     assert (
         csl_json["title"]
         == "Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives"

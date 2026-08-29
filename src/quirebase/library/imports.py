@@ -3,7 +3,11 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, BinaryIO
 
-from inquiro.bibliography import SUPPORTED_FORMATS, parse_bibliography
+from inquiro.bibliography import (
+    SUPPORTED_FORMATS,
+    BibliographyRecord,
+    parse_bibliography_records,
+)
 
 from quirebase.access.items import require_accessible_items, visible_items_query
 from quirebase.audit import record_event
@@ -33,7 +37,7 @@ from quirebase.search import search_index
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from inquiro.citations import ExportOptions
+    from inquiro.bibliography import BibliographyExportOptions
     from sqlalchemy.orm import Session
 
 
@@ -58,18 +62,48 @@ def _pdf_object_keys(records_json: str) -> set[str]:
     }
 
 
+def _record_to_item_payload(record: BibliographyRecord) -> dict[str, str | None]:
+    """Serialize a parsed record into the Item-column dictionary stored on Import Batches."""
+    return {
+        "title": record.title or None,
+        "abstract": record.abstract,
+        "authors": "; ".join(person.storage_name() for person in record.authors) or None,
+        "editors": "; ".join(person.storage_name() for person in record.editors) or None,
+        "keywords": "; ".join(record.keywords) or None,
+        "publication_date": record.publication_date,
+        "publication_title": record.publication_title or record.book_title,
+        "volume": record.volume,
+        "issue": record.issue,
+        "pages": record.pages,
+        "publisher": record.publisher,
+        "place_published": record.location,
+        "doi": record.doi,
+        "reference_type": record.reference_type,
+        "bibtex_id": record.citation_key,
+        "bibtex_type": record.bibtex_type,
+        "urls": "\n".join(record.urls) or None,
+        "identifiers": json.dumps(dict(record.identifiers), ensure_ascii=False)
+        if record.identifiers
+        else None,
+        "custom_fields": json.dumps(dict(record.custom_fields), ensure_ascii=False)
+        if record.custom_fields
+        else None,
+    }
+
+
 def stage_import_batch(
     db: Session, user: User, file_bytes: bytes, file_format: str
 ) -> tuple[ImportBatch, list[dict], list[dict]]:
     if file_format not in SUPPORTED_FORMATS:
-        raise ValidationFailure("format must be bibtex, ris, or endnote")
+        raise ValidationFailure("format must be bibtex, biblatex, ris, or endnote")
     if len(file_bytes) > 5 * 1024 * 1024:
         raise SizeLimitExceeded("bibliography files are limited to 5 MiB")
     try:
         contents = file_bytes.decode("utf-8-sig")
     except UnicodeDecodeError as error:
         raise ValidationFailure("bibliography must be UTF-8") from error
-    records, errors = parse_bibliography(contents, file_format)
+    typed_records, errors = parse_bibliography_records(contents, file_format)
+    records = [_record_to_item_payload(record) for record in typed_records]
     batch = ImportBatch(
         owner_id=user.id,
         file_format=file_format,
@@ -298,7 +332,7 @@ def export_accessible_bibliography(
     user: User,
     file_format: str,
     style_key: str = "apa",
-    options: ExportOptions | None = None,
+    options: BibliographyExportOptions | None = None,
 ) -> tuple[str, str, str]:
     items = list(db.scalars(visible_items_query(user).order_by(Item.updated_at.desc())).all())
     if file_format == "csl":
@@ -312,7 +346,7 @@ def export_selected_bibliography(
     item_ids: list[str],
     file_format: str,
     style_key: str = "apa",
-    options: ExportOptions | None = None,
+    options: BibliographyExportOptions | None = None,
 ) -> tuple[str, str, str]:
     items = require_accessible_items(db, user, item_ids)
     if file_format == "csl":

@@ -10,6 +10,7 @@ from io import BytesIO
 from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 
+from inquiro.richtext import convert_rich_text
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -36,7 +37,10 @@ def _archive_name(value: str, fallback: str) -> str:
 
 
 def _item_archive_prefix(item: Item) -> str:
-    return _archive_name(item.bibtex_id or item.title, item.id[:8])
+    return _archive_name(
+        item.bibtex_id or convert_rich_text(item.title, source="html", target="text"),
+        item.id[:8],
+    )
 
 
 def _own_annotations(db: Session, user: User, revision_id: str) -> list[PdfAnnotation]:
@@ -252,7 +256,11 @@ def assemble_document_bundle(
                 include_supplements=include_supplements,
                 timezone=timezone,
             )
-            item_manifest.append({"item_id": item.id, "title": item.title, "folder": root})
+            item_manifest.append({
+                "item_id": item.id,
+                "title": convert_rich_text(item.title, source="html", target="text"),
+                "folder": root,
+            })
         bundle.writestr(
             "manifest.json",
             json.dumps({"items": item_manifest}, ensure_ascii=False, indent=2),

@@ -8,9 +8,16 @@ const exportPreferenceDefaults = {
     style: "apa",
     includeAbstract: true,
     preserveCase: false,
-    abbreviateJournal: false,
     includeIdentifiers: false,
     includeCustomFields: false,
+    encoding: "unicode",
+    journalMode: "full",
+    doiPolicy: "include",
+    urlPolicy: "include",
+    excludedFields: "",
+    sortBy: "input",
+    citationKeyFormula: "auth.capitalize + year + shorttitle(1).capitalize",
+    citationKeyForceAscii: true,
   },
   document: {
     includeAnnotations: false,
@@ -18,13 +25,13 @@ const exportPreferenceDefaults = {
   },
 };
 
-const validExportFormats = new Set(["csl", "bibtex", "ris", "endnote"]);
+const validExportFormats = new Set(["csl", "bibtex", "biblatex", "ris", "endnote"]);
 const citationBooleanPreferences = [
   "includeAbstract",
   "preserveCase",
-  "abbreviateJournal",
   "includeIdentifiers",
   "includeCustomFields",
+  "citationKeyForceAscii",
 ];
 const documentBooleanPreferences = ["includeAnnotations", "includeSupplements"];
 
@@ -45,6 +52,29 @@ function readExportPreferences(key) {
     }
     citationBooleanPreferences.forEach((field) => {
       if (typeof parsed.citation?.[field] === "boolean") {
+        preferences.citation[field] = parsed.citation[field];
+      }
+    });
+    const citationEnumPreferences = {
+      encoding: new Set(["unicode", "latex"]),
+      journalMode: new Set(["full", "abbreviated", "prefer_abbreviated"]),
+      doiPolicy: new Set(["include", "omit"]),
+      urlPolicy: new Set(["include", "omit", "omit_when_doi"]),
+      sortBy: new Set(["input", "citation_key", "author", "year", "title"]),
+    };
+    Object.entries(citationEnumPreferences).forEach(([field, allowed]) => {
+      if (allowed.has(parsed.citation?.[field])) {
+        preferences.citation[field] = parsed.citation[field];
+      }
+    });
+    if (
+      !citationEnumPreferences.journalMode.has(parsed.citation?.journalMode)
+      && parsed.citation?.abbreviateJournal === true
+    ) {
+      preferences.citation.journalMode = "prefer_abbreviated";
+    }
+    ["excludedFields", "citationKeyFormula"].forEach((field) => {
+      if (typeof parsed.citation?.[field] === "string" && parsed.citation[field].length <= 1000) {
         preferences.citation[field] = parsed.citation[field];
       }
     });
@@ -196,9 +226,20 @@ Alpine.data("userSettings", () => ({
   styles: [],
   includeAbstract: true,
   preserveCase: false,
-  abbreviateJournal: false,
   includeIdentifiers: false,
   includeCustomFields: false,
+  encoding: "unicode",
+  journalMode: "full",
+  doiPolicy: "include",
+  urlPolicy: "include",
+  excludedFields: "",
+  sortBy: "input",
+  citationKeyFormula: exportPreferenceDefaults.citation.citationKeyFormula,
+  lastValidCitationKeyFormula: exportPreferenceDefaults.citation.citationKeyFormula,
+  citationKeyForceAscii: true,
+  citationKeyPreview: "",
+  citationKeyPreviewError: false,
+  citationKeyPreviewRequest: 0,
   includeAnnotations: false,
   includeSupplements: false,
   savedToast: false,
@@ -211,18 +252,39 @@ Alpine.data("userSettings", () => ({
     this.style = prefs.citation.style;
     this.includeAbstract = prefs.citation.includeAbstract;
     this.preserveCase = prefs.citation.preserveCase;
-    this.abbreviateJournal = prefs.citation.abbreviateJournal;
     this.includeIdentifiers = prefs.citation.includeIdentifiers;
     this.includeCustomFields = prefs.citation.includeCustomFields;
+    this.encoding = prefs.citation.encoding;
+    this.journalMode = prefs.citation.journalMode;
+    this.doiPolicy = prefs.citation.doiPolicy;
+    this.urlPolicy = prefs.citation.urlPolicy;
+    this.excludedFields = prefs.citation.excludedFields;
+    this.sortBy = prefs.citation.sortBy;
+    this.citationKeyFormula = prefs.citation.citationKeyFormula;
+    this.lastValidCitationKeyFormula = prefs.citation.citationKeyFormula;
+    this.citationKeyForceAscii = prefs.citation.citationKeyForceAscii;
     this.includeAnnotations = prefs.document.includeAnnotations;
     this.includeSupplements = prefs.document.includeSupplements;
     this.loadStyles();
-    ["format", "style", ...citationBooleanPreferences].forEach((field) => {
+    [
+      "format",
+      "style",
+      "encoding",
+      "journalMode",
+      "doiPolicy",
+      "urlPolicy",
+      "excludedFields",
+      "sortBy",
+      ...citationBooleanPreferences,
+    ].forEach((field) => {
       this.$watch(field, () => this.save());
     });
     documentBooleanPreferences.forEach((field) => {
       this.$watch(field, () => this.save());
     });
+    this.$watch("citationKeyFormula", () => this.previewCitationKey(true));
+    this.$watch("citationKeyForceAscii", () => this.previewCitationKey());
+    this.previewCitationKey();
   },
   toggleCollapse() {
     this.sidebarCollapsed = !this.sidebarCollapsed;
@@ -245,9 +307,16 @@ Alpine.data("userSettings", () => ({
       style: this.style,
       includeAbstract: this.includeAbstract,
       preserveCase: this.preserveCase,
-      abbreviateJournal: this.abbreviateJournal,
       includeIdentifiers: this.includeIdentifiers,
       includeCustomFields: this.includeCustomFields,
+      encoding: this.encoding,
+      journalMode: this.journalMode,
+      doiPolicy: this.doiPolicy,
+      urlPolicy: this.urlPolicy,
+      excludedFields: this.excludedFields,
+      sortBy: this.sortBy,
+      citationKeyFormula: this.lastValidCitationKeyFormula,
+      citationKeyForceAscii: this.citationKeyForceAscii,
     });
     storeExportPreferences(this.storageKey, "document", {
       includeAnnotations: this.includeAnnotations,
@@ -264,9 +333,17 @@ Alpine.data("userSettings", () => ({
     this.style = exportPreferenceDefaults.citation.style;
     this.includeAbstract = exportPreferenceDefaults.citation.includeAbstract;
     this.preserveCase = exportPreferenceDefaults.citation.preserveCase;
-    this.abbreviateJournal = exportPreferenceDefaults.citation.abbreviateJournal;
     this.includeIdentifiers = exportPreferenceDefaults.citation.includeIdentifiers;
     this.includeCustomFields = exportPreferenceDefaults.citation.includeCustomFields;
+    this.encoding = exportPreferenceDefaults.citation.encoding;
+    this.journalMode = exportPreferenceDefaults.citation.journalMode;
+    this.doiPolicy = exportPreferenceDefaults.citation.doiPolicy;
+    this.urlPolicy = exportPreferenceDefaults.citation.urlPolicy;
+    this.excludedFields = exportPreferenceDefaults.citation.excludedFields;
+    this.sortBy = exportPreferenceDefaults.citation.sortBy;
+    this.citationKeyFormula = exportPreferenceDefaults.citation.citationKeyFormula;
+    this.lastValidCitationKeyFormula = exportPreferenceDefaults.citation.citationKeyFormula;
+    this.citationKeyForceAscii = exportPreferenceDefaults.citation.citationKeyForceAscii;
     this.includeAnnotations = exportPreferenceDefaults.document.includeAnnotations;
     this.includeSupplements = exportPreferenceDefaults.document.includeSupplements;
     this.savedToast = true;
@@ -299,18 +376,45 @@ Alpine.data("userSettings", () => ({
       this.styles = [];
     }
   },
+  async previewCitationKey(saveWhenValid = false) {
+    const request = ++this.citationKeyPreviewRequest;
+    const formula = this.citationKeyFormula;
+    this.citationKeyPreviewError = false;
+    const params = new URLSearchParams({
+      formula,
+      force_ascii: String(this.citationKeyForceAscii),
+    });
+    try {
+      const response = await fetch(`/api/citation-key-preview?${params.toString()}`);
+      if (!response.ok) throw new Error("invalid formula");
+      const data = await response.json();
+      if (request !== this.citationKeyPreviewRequest) return;
+      this.citationKeyPreview = data.key || "";
+      this.lastValidCitationKeyFormula = formula;
+      if (saveWhenValid) this.save();
+    } catch {
+      if (request !== this.citationKeyPreviewRequest) return;
+      this.citationKeyPreview = "";
+      this.citationKeyPreviewError = true;
+    }
+  },
 }));
 
 Alpine.data("libraryWorkspace", () => ({
   action: "",
   style: "apa",
-  styleQuery: "",
-  citationStyles: [],
   includeAbstract: true,
   preserveCase: false,
-  abbreviateJournal: false,
   includeIdentifiers: false,
   includeCustomFields: false,
+  encoding: "unicode",
+  journalMode: "full",
+  doiPolicy: "include",
+  urlPolicy: "include",
+  excludedFields: "",
+  sortBy: "input",
+  citationKeyFormula: exportPreferenceDefaults.citation.citationKeyFormula,
+  citationKeyForceAscii: exportPreferenceDefaults.citation.citationKeyForceAscii,
   includeAnnotations: false,
   includeSupplements: false,
   storageKey: "",
@@ -322,63 +426,21 @@ Alpine.data("libraryWorkspace", () => ({
     this.style = preferences.style;
     this.includeAbstract = preferences.includeAbstract;
     this.preserveCase = preferences.preserveCase;
-    this.abbreviateJournal = preferences.abbreviateJournal;
     this.includeIdentifiers = preferences.includeIdentifiers;
     this.includeCustomFields = preferences.includeCustomFields;
+    this.encoding = preferences.encoding;
+    this.journalMode = preferences.journalMode;
+    this.doiPolicy = preferences.doiPolicy;
+    this.urlPolicy = preferences.urlPolicy;
+    this.excludedFields = preferences.excludedFields;
+    this.sortBy = preferences.sortBy;
+    this.citationKeyFormula = preferences.citationKeyFormula;
+    this.citationKeyForceAscii = preferences.citationKeyForceAscii;
     const documentPreferences = readExportPreferences(this.storageKey).document;
-    this.includeAnnotations = documentPreferences.includeAnnotations;
-    this.includeSupplements = documentPreferences.includeSupplements;
-    this.$watch("action", (action) => {
-      if (action.startsWith("export_")) this.saveExportPreferences(action.replace("export_", ""));
-    });
-    ["style", ...citationBooleanPreferences].forEach((field) => {
-      this.$watch(field, () => this.saveExportPreferences());
-    });
-    documentBooleanPreferences.forEach((field) => {
-      this.$watch(field, () => this.saveDocumentPreferences());
-    });
-    this.searchCitationStyles();
-  },
-  saveExportPreferences(format = null) {
-    storeExportPreferences(this.storageKey, "citation", {
-      format: format || readExportPreferences(this.storageKey).citation.format,
-      style: this.style,
-      includeAbstract: this.includeAbstract,
-      preserveCase: this.preserveCase,
-      abbreviateJournal: this.abbreviateJournal,
-      includeIdentifiers: this.includeIdentifiers,
-      includeCustomFields: this.includeCustomFields,
-    });
-  },
-  saveDocumentPreferences() {
-    storeExportPreferences(this.storageKey, "document", {
-      includeAnnotations: this.includeAnnotations,
-      includeSupplements: this.includeSupplements,
-    });
-  },
-  resetDefaults() {
-    resetExportPreferences(this.storageKey, ["citation", "document"]);
-    const preferences = exportPreferenceDefaults.citation;
-    this.style = preferences.style;
-    this.includeAbstract = preferences.includeAbstract;
-    this.preserveCase = preferences.preserveCase;
-    this.abbreviateJournal = preferences.abbreviateJournal;
-    this.includeIdentifiers = preferences.includeIdentifiers;
-    this.includeCustomFields = preferences.includeCustomFields;
-    const documentPreferences = exportPreferenceDefaults.document;
     this.includeAnnotations = documentPreferences.includeAnnotations;
     this.includeSupplements = documentPreferences.includeSupplements;
   },
   browserTimezone,
-  async searchCitationStyles() {
-    try {
-      const styles = await fetchCitationStyles(this.styleQuery, 100, this.style);
-      this.style = resolveCitationStyle(styles, this.style);
-      this.citationStyles = styles;
-    } catch {
-      this.citationStyles = [];
-    }
-  },
   get allSelected() {
     const checkboxes = this.$root.querySelectorAll('input[name="item_ids"]');
     return checkboxes.length > 0 && this.selected.length === checkboxes.length;
@@ -553,22 +615,6 @@ Alpine.data("itemDownload", () => ({
     const preferences = readExportPreferences(this.storageKey).document;
     this.includeAnnotations = preferences.includeAnnotations;
     this.includeSupplements = preferences.includeSupplements;
-    documentBooleanPreferences.forEach((field) => {
-      this.$watch(field, () => this.saveExportPreferences());
-    });
-  },
-  saveExportPreferences() {
-    storeExportPreferences(this.storageKey, "document", {
-      includeAnnotations: this.includeAnnotations,
-      includeSupplements: this.includeSupplements,
-    });
-  },
-  resetDefaults() {
-    resetExportPreferences(this.storageKey, "document");
-    const preferences = exportPreferenceDefaults.document;
-    this.includeAnnotations = preferences.includeAnnotations;
-    this.includeSupplements = preferences.includeSupplements;
-    this.selectedRevisions = [];
   },
   browserTimezone,
   download() {
@@ -591,9 +637,16 @@ Alpine.data("itemExport", () => ({
   styles: [],
   includeAbstract: true,
   preserveCase: false,
-  abbreviateJournal: false,
   includeIdentifiers: false,
   includeCustomFields: false,
+  encoding: "unicode",
+  journalMode: "full",
+  doiPolicy: "include",
+  urlPolicy: "include",
+  excludedFields: "",
+  sortBy: "input",
+  citationKeyFormula: exportPreferenceDefaults.citation.citationKeyFormula,
+  citationKeyForceAscii: exportPreferenceDefaults.citation.citationKeyForceAscii,
   copied: false,
   copyError: false,
   stylesLoaded: false,
@@ -607,37 +660,19 @@ Alpine.data("itemExport", () => ({
     this.style = preferences.style;
     this.includeAbstract = preferences.includeAbstract;
     this.preserveCase = preferences.preserveCase;
-    this.abbreviateJournal = preferences.abbreviateJournal;
     this.includeIdentifiers = preferences.includeIdentifiers;
     this.includeCustomFields = preferences.includeCustomFields;
+    this.encoding = preferences.encoding;
+    this.journalMode = preferences.journalMode;
+    this.doiPolicy = preferences.doiPolicy;
+    this.urlPolicy = preferences.urlPolicy;
+    this.excludedFields = preferences.excludedFields;
+    this.sortBy = preferences.sortBy;
+    this.citationKeyFormula = preferences.citationKeyFormula;
+    this.citationKeyForceAscii = preferences.citationKeyForceAscii;
     const first = this.$root.querySelector("select[name=style]")?.value;
     this.style = preferences.style || first || "apa";
-    ["format", "style", ...citationBooleanPreferences].forEach((field) => {
-      this.$watch(field, () => this.saveExportPreferences());
-    });
     this.$watch("format", () => this.loadStyles());
-  },
-  saveExportPreferences() {
-    storeExportPreferences(this.storageKey, "citation", {
-      format: this.format,
-      style: this.style,
-      includeAbstract: this.includeAbstract,
-      preserveCase: this.preserveCase,
-      abbreviateJournal: this.abbreviateJournal,
-      includeIdentifiers: this.includeIdentifiers,
-      includeCustomFields: this.includeCustomFields,
-    });
-  },
-  resetDefaults() {
-    resetExportPreferences(this.storageKey, "citation");
-    const preferences = exportPreferenceDefaults.citation;
-    this.format = preferences.format;
-    this.style = preferences.style;
-    this.includeAbstract = preferences.includeAbstract;
-    this.preserveCase = preferences.preserveCase;
-    this.abbreviateJournal = preferences.abbreviateJournal;
-    this.includeIdentifiers = preferences.includeIdentifiers;
-    this.includeCustomFields = preferences.includeCustomFields;
   },
   async loadStyles() {
     if (!this.$root.open || this.format !== "csl") return;
@@ -650,6 +685,7 @@ Alpine.data("itemExport", () => ({
     try {
       const styles = await fetchCitationStyles(this.query, 50, this.style);
       if (requestId !== this.styleRequestId) return;
+      this.style = resolveCitationStyle(styles, this.style);
       this.styles = styles;
       this.stylesLoaded = true;
     } catch {
@@ -666,9 +702,16 @@ Alpine.data("itemExport", () => ({
       style: this.style,
       include_abstract: String(this.includeAbstract),
       preserve_case: String(this.preserveCase),
-      abbreviate_journal: String(this.abbreviateJournal),
       include_identifiers: String(this.includeIdentifiers),
       include_custom_fields: String(this.includeCustomFields),
+      encoding: this.encoding,
+      journal_mode: this.journalMode,
+      doi_policy: this.doiPolicy,
+      url_policy: this.urlPolicy,
+      excluded_fields: this.excludedFields,
+      sort_by: this.sortBy,
+      citation_key_formula: this.citationKeyFormula,
+      citation_key_force_ascii: String(this.citationKeyForceAscii),
     });
     return params.toString();
   },

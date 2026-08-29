@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from inquiro.bibliography import Contributor as BibliographyContributor
 from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import selectinload
 
@@ -29,14 +30,20 @@ def parse_author_name(name_str: str) -> tuple[str, str | None]:
 
 
 def parse_author_list_string(raw: str | None) -> list[dict[str, str | None]]:
+    """Parse cached names while preserving single-field/literal contributors."""
+
     if not raw or not raw.strip():
         return []
     authors: list[dict[str, str | None]] = []
     for part in raw.split(";"):
         cleaned = part.strip()
-        if cleaned:
-            last, first = parse_author_name(cleaned)
-            authors.append({"last_name": last, "first_name": first})
+        if not cleaned:
+            continue
+        contributor = BibliographyContributor.parse(cleaned)
+        authors.append({
+            "last_name": contributor.family_name,
+            "first_name": contributor.given_name,
+        })
     return authors
 
 
@@ -91,10 +98,12 @@ def set_item_authors(
         )
         db.add(link)
         links.append(link)
-        if first:
-            formatted_names.append(f"{last}, {first}")
-        else:
-            formatted_names.append(last)
+        formatted_names.append(
+            BibliographyContributor(
+                family_name=last,
+                given_name=first,
+            ).display_name()
+        )
 
     joined_str = "; ".join(formatted_names) or None
     if role == "author":

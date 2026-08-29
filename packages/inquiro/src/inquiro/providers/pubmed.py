@@ -3,6 +3,11 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from inquiro.canonical import (
+    clean_rich_markup,
+    collect_urls,
+    first_text,
+)
 from inquiro.identifiers import parse_pmid
 from inquiro.models import (
     CandidateNotFound,
@@ -12,13 +17,10 @@ from inquiro.models import (
     ProviderUnavailable,
     SearchClause,
 )
-from inquiro.parsing import (
-    _boolean_query,
-    _clean_markup,
-    _collect_urls,
-    _first,
-)
 from inquiro.providers._contracts import ProviderContext, ProviderDefinition
+from inquiro.providers._payload import (
+    boolean_query,
+)
 
 
 class PubMedLookupAdapter:
@@ -49,24 +51,24 @@ class PubMedLookupAdapter:
             None,
         )
         identifiers: dict[str, str] = {"pmid": value}
-        urls = _collect_urls(
+        urls = collect_urls(
             f"https://pubmed.ncbi.nlm.nih.gov/{value}/",
             f"https://doi.org/{doi}" if doi else None,
         )
         if doi:
             identifiers["doi"] = doi
         return ProviderRecord(
-            title=_clean_markup(item.get("title")) or "",
+            title=clean_rich_markup(item.get("title")) or "",
             abstract=None,
             authors=authors or None,
             keywords=None,
             publication_date=item.get("pubdate"),
-            publication_title=_first(item.get("fulljournalname") or item.get("source")),
-            journal_abbreviation=_first(item.get("source")),
-            volume=_first(item.get("volume")),
-            issue=_first(item.get("issue")),
-            pages=_first(item.get("pages")),
-            publisher=_first(item.get("publishername")),
+            publication_title=first_text(item.get("fulljournalname") or item.get("source")),
+            journal_abbreviation=first_text(item.get("source")),
+            volume=first_text(item.get("volume")),
+            issue=first_text(item.get("issue")),
+            pages=first_text(item.get("pages")),
+            publisher=first_text(item.get("publishername")),
             doi=doi,
             urls=urls,
             identifiers=json.dumps(identifiers),
@@ -88,7 +90,7 @@ class PubMedSearchAdapter:
         settings: Any,
         endpoint: str,
     ) -> ProviderSearchPage:
-        query = _boolean_query(
+        query = boolean_query(
             clauses,
             {
                 "any": "[All Fields]",
@@ -142,7 +144,7 @@ class PubMedSearchAdapter:
         results = []
         for pmid in ids:
             item = summary_data.get(pmid, {})
-            title = _clean_markup(item.get("title"))
+            title = clean_rich_markup(item.get("title"))
             if not title:
                 continue
             authors = "; ".join(

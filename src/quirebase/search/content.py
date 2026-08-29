@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from inquiro.richtext import convert_rich_text
 from sqlalchemy import select
 
 from quirebase.models import FileRevision, Item, ItemTag, Project, ProjectItem, Tag
@@ -28,8 +29,8 @@ def search_text_for_item(db: Session, item: Item) -> str:
     return "\n".join(
         value
         for value in (
-            item.title,
-            item.abstract,
+            convert_rich_text(item.title, source="html", target="text"),
+            convert_rich_text(item.abstract, source="html", target="text"),
             item.authors,
             item.editors,
             item.keywords,

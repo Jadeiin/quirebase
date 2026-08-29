@@ -19,7 +19,7 @@
     <div class="section-heading"><div><p class="eyebrow">{{ _('Latest additions') }}</p><h2>{{ _('New papers') }}</h2></div><a href="/library">{{ _('View library') }}</a></div>
     <div class="paper-list">
       {% for item in new_items %}
-      <a href="/items/{{ item.id }}" class="paper-row"><span><strong>{{ item.title }}</strong><small>{{ item.authors or _('No authors') }}</small></span><time>{{ item.publication_date or _('Undated') }}</time></a>
+      <a href="/items/{{ item.id }}" class="paper-row"><span><strong>{{ item.title|rich_text|safe }}</strong><small>{{ item.authors or _('No authors') }}</small></span><time>{{ item.publication_date or _('Undated') }}</time></a>
       {% else %}<div class="empty-state">{{ _('No papers yet. Import a DOI, bibliography, or PDF to begin.') }}</div>{% endfor %}
     </div>
   </section>
@@ -28,7 +28,7 @@
     <div class="section-heading"><div><p class="eyebrow">{{ _('Continue where you left off') }}</p><h2>{{ _('Recently read') }}</h2></div></div>
     <div class="paper-list compact">
       {% for item, read_at in recent_items %}
-      <a href="/items/{{ item.id }}" class="paper-row"><span><strong>{{ item.title }}</strong><small>{{ item.authors or _('No authors') }}</small></span></a>
+      <a href="/items/{{ item.id }}" class="paper-row"><span><strong>{{ item.title|rich_text|safe }}</strong><small>{{ item.authors or _('No authors') }}</small></span></a>
       {% else %}<div class="empty-state">{{ _('Papers you open will appear here.') }}</div>{% endfor %}
     </div>
   </section>

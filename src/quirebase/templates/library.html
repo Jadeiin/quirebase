@@ -29,24 +29,30 @@
       <option value="add_project">{{ _('Add to project') }}</option>
       <option value="add_tag">{{ _('Add tag') }}</option>
       <option value="export_bibtex">{{ _('Export BibTeX') }}</option>
+      <option value="export_biblatex">{{ _('Export BibLaTeX') }}</option>
       <option value="export_ris">{{ _('Export RIS') }}</option>
       <option value="export_endnote">{{ _('Export EndNote') }}</option>
       <option value="export_csl">{{ _('Export citation (CSL)') }}</option>
       <option value="download_pdfs">{{ _('Download PDFs') }}</option>
       <option value="delete_items">{{ _('Delete papers') }}</option>
     </select>
-    <div class="bulk-csl-style" x-show="action === 'export_csl'">
-      <input type="search" x-model="styleQuery" @input.debounce.250ms="searchCitationStyles()" placeholder="{{ _('Search citation styles') }}">
-      <select name="style" x-model="style"><template x-for="citationStyle in citationStyles" :key="citationStyle.key"><option :value="citationStyle.key" x-text="citationStyle.name"></option></template></select>
-    </div>
+    <input type="hidden" name="style" :value="style">
+    <input type="hidden" name="include_abstract" :value="String(includeAbstract)">
+    <input type="hidden" name="preserve_case" :value="String(preserveCase)">
+    <input type="hidden" name="include_identifiers" :value="String(includeIdentifiers)">
+    <input type="hidden" name="include_custom_fields" :value="String(includeCustomFields)">
+    <input type="hidden" name="encoding" :value="encoding">
+    <input type="hidden" name="journal_mode" :value="journalMode">
+    <input type="hidden" name="doi_policy" :value="doiPolicy">
+    <input type="hidden" name="url_policy" :value="urlPolicy">
+    <input type="hidden" name="excluded_fields" :value="excludedFields">
+    <input type="hidden" name="sort_by" :value="sortBy">
+    <input type="hidden" name="citation_key_formula" :value="citationKeyFormula">
+    <input type="hidden" name="citation_key_force_ascii" :value="String(citationKeyForceAscii)">
+    <input type="hidden" name="include_annotations" :value="String(includeAnnotations)">
+    <input type="hidden" name="include_supplements" :value="String(includeSupplements)">
     <input class="bulk-tag-name" name="tag_name" x-show="action === 'add_tag'" :required="action === 'add_tag'" placeholder="{{ _('Tag name') }}">
-    <label class="bulk-export-option" x-show="action.startsWith('export_')"><input type="hidden" name="include_abstract" value="false" :disabled="includeAbstract"><input type="checkbox" name="include_abstract" value="true" x-model="includeAbstract" checked>{{ _('Include abstract') }}</label>
-    <label class="bulk-export-option" x-show="action === 'export_bibtex'"><input type="checkbox" name="preserve_case" value="true" x-model="preserveCase">{{ _('Preserve bibitem case') }}</label>
-    <label class="bulk-export-option" x-show="action === 'export_bibtex' || action === 'export_csl'"><input type="checkbox" name="abbreviate_journal" value="true" x-model="abbreviateJournal">{{ _('Use abbreviated journal') }}</label>
-    <label class="bulk-export-option" x-show="action === 'export_bibtex'"><input type="checkbox" name="include_identifiers" value="true" x-model="includeIdentifiers">{{ _('Include additional identifiers') }}</label>
-    <label class="bulk-export-option" x-show="action === 'export_bibtex'"><input type="checkbox" name="include_custom_fields" value="true" x-model="includeCustomFields">{{ _('Include custom fields') }}</label>
-    <label class="bulk-export-option" x-show="action === 'download_pdfs'"><input type="checkbox" name="include_annotations" value="true" x-model="includeAnnotations">{{ _('Include annotations') }}</label>
-    <label class="bulk-export-option" x-show="action === 'download_pdfs'"><input type="checkbox" name="include_supplements" value="true" x-model="includeSupplements">{{ _('Include supplements') }}</label>
+    <span class="bulk-export-option" x-show="action.startsWith('export_') || action === 'download_pdfs'">{{ _('Using saved export settings') }} · <a href="/account/settings#export-preferences">{{ _('Export settings') }}</a></span>
     <select name="project_id" x-show="action === 'add_project'"><option value="">{{ _('Choose project') }}</option>{% for option in editable_projects %}<option value="{{ option.id }}">{{ option.name }}</option>{% endfor %}</select>
     <label class="bulk-confirm" x-show="action === 'delete_items'"><input type="checkbox" name="confirm_delete" value="delete" :required="action === 'delete_items'">{{ _('Confirm permanent deletion') }}</label>
     <button :disabled="selected.length === 0">{{ _('Apply') }}</button>
@@ -55,8 +61,8 @@
     <div class="paper-table-head" role="row"><span><input type="checkbox" @change="toggleAll" :checked="allSelected" aria-label="{{ _('Select all papers') }}"></span><span>{{ _('Paper') }}</span><span>{{ _('Year') }}</span><span>{{ _('Type') }}</span><span>{{ _('Updated') }}</span></div>
     {% for item in items %}
     <div class="paper-table-row" role="row">
-      <span><input type="checkbox" name="item_ids" value="{{ item.id }}" x-model="selected" aria-label="{{ _('Select {title}', title=item.title) }}"></span>
-      <a href="/items/{{ item.id }}"><strong>{{ item.title }}</strong><small>{{ item.authors or _('No authors') }}{% if item.publication_title %} · {{ item.publication_title }}{% endif %}</small><span class="keyword-line">{{ item.keywords or '' }}</span></a>
+      <span><input type="checkbox" name="item_ids" value="{{ item.id }}" x-model="selected" aria-label="{{ _('Select {title}', title=item.title|rich_text_plain) }}"></span>
+      <a href="/items/{{ item.id }}"><strong>{{ item.title|rich_text|safe }}</strong><small>{{ item.authors or _('No authors') }}{% if item.publication_title %} · {{ item.publication_title }}{% endif %}</small><span class="keyword-line">{{ item.keywords or '' }}</span></a>
       <span>{{ (item.publication_date or '—')[:4] }}</span>
       <span>{{ _(item.reference_type or 'Paper') }}</span>
       <time>{{ item.updated_at.date() }}</time>

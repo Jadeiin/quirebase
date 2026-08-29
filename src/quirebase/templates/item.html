@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}{{ item.title }} · Quirebase{% endblock %}
+{% block title %}{{ item.title|rich_text_plain }} · Quirebase{% endblock %}
 {% block content %}
 {% set annotation_kind_labels = {'highlight': _('Highlight'), 'underline': _('Underline'), 'note': _('Note')} %}
 <header class="item-header">
   <p class="item-breadcrumb"><a href="/library">{{ _('Library') }}</a> / {{ _('Paper') }}</p>
   <div class="item-title-row">
     <div>
-      <h1>{{ item.title }}</h1>
+      <h1>{{ item.title|rich_text|safe }}</h1>
       <p class="item-byline">{{ item.authors or _('No authors') }}{% if item.publication_title %} · {{ item.publication_title }}{% endif %}{% if item.publication_date %} · {{ item.publication_date }}{% endif %}</p>
     </div>
     <div class="item-header-actions">
@@ -19,33 +19,26 @@
           {% if revisions|length > 1 %}
           <label><strong>{{ _('Select PDF versions') }}</strong></label>
           <div class="revision-select-group">
-            {% for rev in revisions %}
+          {% for rev in revisions %}
             <label class="revision-select-label"><input type="checkbox" value="{{ rev.id }}" x-model="selectedRevisions"><span>{{ rev.original_name }} <small>({{ _(rev.processing_state) }})</small></span></label>
             {% endfor %}
           </div>
           {% endif %}
-          <label class="export-check"><input type="checkbox" x-model="includeAnnotations">{{ _('Include annotations') }}</label>
-          <label class="export-check"><input type="checkbox" x-model="includeSupplements">{{ _('Include supplements') }}</label>
-          <p class="option-panel-note">{{ _('Stored files remain unchanged.') }}</p>
+          <p class="option-panel-note">{{ _('Uses your saved PDF annotation and supplement settings. Stored files remain unchanged.') }}</p>
           <div class="export-actions"><button type="button" @click="download()">{{ _('Download') }}</button></div>
-          <div class="option-panel-footer"><button type="button" class="reset-preferences-btn" @click="resetDefaults()">{{ _('Reset to defaults') }}</button></div>
+          <div class="option-panel-footer"><a href="/account/settings#export-preferences">{{ _('Export settings') }}</a></div>
         </div>
       </details>
       {% endif %}
       <details class="export-menu" x-data="itemExport" @toggle="loadStyles()" data-item-id="{{ item.id }}" data-export-preferences-key="quirebase:export-preferences:v1:account:{{ user.id }}">
         <summary>{{ _('Export') }}</summary>
         <div class="citation-panel export-options">
-          <label>{{ _('Format') }}<select x-model="format"><option value="csl">CSL citation</option><option value="bibtex">BibTeX</option><option value="ris">RIS</option><option value="endnote">EndNote</option></select></label>
-          <label x-show="format === 'csl'">{{ _('CSL style') }}<input type="search" x-model="query" @input.debounce.250ms="searchStyles()" placeholder="{{ _('Search citation styles') }}"><select name="style" x-model="style"><template x-for="option in styles" :key="option.key"><option :value="option.key" x-text="option.name"></option></template></select></label>
-          <label class="export-check"><input type="checkbox" x-model="includeAbstract">{{ _('Include abstract') }}</label>
-          <label class="export-check" x-show="format === 'bibtex'"><input type="checkbox" x-model="preserveCase">{{ _('Preserve bibitem case') }}</label>
-          <label class="export-check" x-show="format === 'bibtex' || format === 'csl'"><input type="checkbox" x-model="abbreviateJournal">{{ _('Use abbreviated journal') }}</label>
-          <label class="export-check" x-show="format === 'bibtex'"><input type="checkbox" x-model="includeIdentifiers">{{ _('Include additional identifiers') }}</label>
-          <label class="export-check" x-show="format === 'bibtex'"><input type="checkbox" x-model="includeCustomFields">{{ _('Include custom fields') }}</label>
+          <label>{{ _('Format') }}<select x-model="format"><option value="csl">CSL citation</option><option value="bibtex">BibTeX</option><option value="biblatex">BibLaTeX</option><option value="ris">RIS</option><option value="endnote">EndNote</option></select></label>
+          <p class="option-panel-note">{{ _('Uses the CSL, field, encoding, and sorting defaults from your export settings.') }}</p>
           <div class="export-actions"><button type="button" @click="download()">{{ _('Download file') }}</button><button type="button" class="secondary-button" @click="copy()">{{ _('Copy to clipboard') }}</button></div>
           <small x-show="copied" x-cloak>{{ _('Copied') }}</small>
           <small x-show="copyError" x-cloak>{{ _('Copy failed') }}</small>
-          <div class="option-panel-footer"><button type="button" class="reset-preferences-btn" @click="resetDefaults()">{{ _('Reset to defaults') }}</button></div>
+          <div class="option-panel-footer"><a href="/account/settings#export-preferences">{{ _('Export settings') }}</a></div>
         </div>
       </details>
       {% if can_delete %}<details class="export-menu"><summary class="danger-summary">{{ _('More') }}</summary><div><form method="post" action="/items/{{ item.id }}/delete?csrf_token={{ csrf }}" onsubmit="return confirm('{{ _('Delete this item permanently? Associated files, annotations, and project memberships will also be removed.') }}')"><input type="hidden" name="confirm" value="delete"><button type="submit" class="text-danger">{{ _('Delete item') }}</button></form></div></details>{% endif %}
@@ -71,7 +64,7 @@
           <div class="section-heading"><div><p class="eyebrow">{{ _('Paper overview') }}</p><h2>{{ _('Abstract') }}</h2></div>{% if can_edit %}<a href="/items/{{ item.id }}/metadata">{{ _('Edit metadata') }}</a>{% endif %}</div>
           {% if item.abstract %}
           <div class="abstract-wrapper" :class="{ 'abstract-clamped': !expanded }">
-            <p class="long-copy">{{ item.abstract }}</p>
+            <p class="long-copy">{{ item.abstract|rich_text|safe }}</p>
           </div>
           <button type="button" class="abstract-toggle-btn secondary-button compact-button" @click="expanded = !expanded" x-text="expanded ? '{{ _('Show less') }}' : '{{ _('Show more') }}'"></button>
           {% else %}
@@ -236,7 +229,7 @@
       {% include "_item_metadata_form.html" %}
       {% else %}
       <dl class="metadata-list metadata-list-wide">
-        <div><dt>{{ _('Title') }}</dt><dd>{{ item.title }}</dd></div>
+        <div><dt>{{ _('Title') }}</dt><dd>{{ item.title|rich_text|safe }}</dd></div>
         <div><dt>{{ _('Authors') }}</dt><dd>{{ item.authors or '—' }}</dd></div>
         <div><dt>{{ _('Editors') }}</dt><dd>{{ item.editors or '—' }}</dd></div>
         <div><dt>{{ _('Publication') }}</dt><dd>{{ item.publication_title or '—' }}</dd></div>

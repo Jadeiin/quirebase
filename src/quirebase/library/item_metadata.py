@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from inquiro.parsing import normalize_reference_type
+from inquiro.canonical import normalize_reference_type
 from sqlalchemy import update
 
 from quirebase.access.items import require_editable_item

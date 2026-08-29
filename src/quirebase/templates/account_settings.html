@@ -103,7 +103,7 @@
   </div>
 
   <div style="display: grid; gap: 1.5rem;" x-data="userSettings" data-export-preferences-key="quirebase:export-preferences:v1:account:{{ user.id }}">
-    <section class="panel">
+    <section class="panel" id="export-preferences">
       <div class="section-heading">
         <div>
           <p class="eyebrow">{{ _('Defaults') }}</p>
@@ -113,48 +113,74 @@
       </div>
       <p class="text-muted" style="font-size: .85rem; margin-bottom: 1rem;">{{ _('Configure your default options for citation and document exports across the library and paper workspaces.') }}</p>
 
-      <div style="display: grid; gap: 1rem;">
-        <label>
-          {{ _('Default citation format') }}
-          <select x-model="format">
-            <option value="csl">CSL citation</option>
-            <option value="bibtex">BibTeX</option>
-            <option value="ris">RIS</option>
-            <option value="endnote">EndNote</option>
-          </select>
-        </label>
-
-        <label x-show="format === 'csl'">
-          {{ _('Default CSL style') }}
-          <input type="search" x-model="query" @input.debounce.250ms="searchStyles()" placeholder="{{ _('Search citation styles') }}">
-          <select name="style" x-model="style" style="margin-top: .4rem;">
-            <template x-for="option in styles" :key="option.key">
-              <option :value="option.key" x-text="option.name"></option>
-            </template>
-          </select>
-        </label>
-
-        <div style="display: grid; gap: .5rem; margin-top: .5rem;">
+      <div class="export-preference-groups">
+        <div class="export-preference-group">
+          <h3>{{ _('General citation options') }}</h3>
+          <label>
+            {{ _('Default citation format') }}
+            <select x-model="format">
+              <option value="csl">CSL citation</option>
+              <option value="bibtex">BibTeX</option>
+              <option value="biblatex">BibLaTeX</option>
+              <option value="ris">RIS</option>
+              <option value="endnote">EndNote</option>
+            </select>
+          </label>
           <label class="export-check">
             <input type="checkbox" x-model="includeAbstract">
             {{ _('Include abstract') }}
           </label>
-          <label class="export-check" x-show="format === 'bibtex'">
+        </div>
+
+        <div class="export-preference-group" x-show="format === 'csl'">
+          <h3>{{ _('CSL citation options') }}</h3>
+          <label>
+            {{ _('Default CSL style') }}
+            <input type="search" x-model="query" @input.debounce.250ms="searchStyles()" placeholder="{{ _('Search citation styles') }}">
+            <select name="style" x-model="style" style="margin-top: .4rem;">
+              <template x-for="option in styles" :key="option.key">
+                <option :value="option.key" x-text="option.name"></option>
+              </template>
+            </select>
+          </label>
+        </div>
+
+        <div class="export-preference-group" x-show="format !== 'csl'">
+          <h3>{{ _('Bibliography file options') }}</h3>
+          <label>{{ _('Journal title') }}<select x-model="journalMode"><option value="full">{{ _('Full title') }}</option><option value="prefer_abbreviated">{{ _('Prefer abbreviation') }}</option><option value="abbreviated">{{ _('Abbreviation only') }}</option></select></label>
+          <label>{{ _('DOI policy') }}<select x-model="doiPolicy"><option value="include">{{ _('Include') }}</option><option value="omit">{{ _('Omit') }}</option></select></label>
+          <label>{{ _('URL policy') }}<select x-model="urlPolicy"><option value="include">{{ _('Include') }}</option><option value="omit">{{ _('Omit') }}</option><option value="omit_when_doi">{{ _('Omit when DOI exists') }}</option></select></label>
+          <label>{{ _('Excluded fields') }}<input x-model="excludedFields" maxlength="1000" placeholder="abstract, keywords"></label>
+          <label>{{ _('Output sorting') }}<select x-model="sortBy"><option value="input">{{ _('Library order') }}</option><option value="citation_key">{{ _('Citation key') }}</option><option value="author">{{ _('Author') }}</option><option value="year">{{ _('Year') }}</option><option value="title">{{ _('Title') }}</option></select></label>
+        </div>
+
+        <div class="export-preference-group" x-show="format === 'bibtex' || format === 'biblatex'">
+          <h3>{{ _('BibTeX and BibLaTeX options') }}</h3>
+          <label>{{ _('BibTeX/BibLaTeX encoding') }}<select x-model="encoding"><option value="unicode">Unicode</option><option value="latex">LaTeX</option></select></label>
+          <label class="export-check">
             <input type="checkbox" x-model="preserveCase">
             {{ _('Preserve bibitem case') }}
           </label>
-          <label class="export-check" x-show="format === 'bibtex' || format === 'csl'">
-            <input type="checkbox" x-model="abbreviateJournal">
-            {{ _('Use abbreviated journal') }}
-          </label>
-          <label class="export-check" x-show="format === 'bibtex'">
+          <label class="export-check">
             <input type="checkbox" x-model="includeIdentifiers">
             {{ _('Include additional identifiers') }}
           </label>
-          <label class="export-check" x-show="format === 'bibtex'">
+          <label class="export-check">
             <input type="checkbox" x-model="includeCustomFields">
             {{ _('Include custom fields') }}
           </label>
+        </div>
+
+        <div class="export-preference-group">
+          <h3>{{ _('Citation Key options') }}</h3>
+          <label>{{ _('Citation Key formula') }}<input x-model="citationKeyFormula" maxlength="1000" spellcheck="false"></label>
+          <label class="export-check"><input type="checkbox" x-model="citationKeyForceAscii">{{ _('Use ASCII characters only') }}</label>
+          <label>{{ _('Preview Citation Key') }}<output class="citation-key-preview" x-text="citationKeyPreview || '—'"></output></label>
+          <small class="text-danger" x-show="citationKeyPreviewError" x-cloak>{{ _('Invalid Citation Key formula') }}</small>
+        </div>
+
+        <div class="export-preference-group">
+          <h3>{{ _('Document download options') }}</h3>
           <label class="export-check">
             <input type="checkbox" x-model="includeAnnotations">
             {{ _('Include annotations in PDF downloads') }}

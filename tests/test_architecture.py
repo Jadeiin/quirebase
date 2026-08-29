@@ -58,7 +58,10 @@ ALLOWED_PACKAGE_DEPENDENCIES = {
 }
 
 ALLOWED_STANDALONE_DEPENDENCIES = {
+    "documents": {"inquiro"},
     "library": {"inquiro", "rubrica"},
+    "search": {"inquiro"},
+    "web": {"inquiro"},
 }
 
 BUSINESS_ROLES = {"business", "domain-policy"}
@@ -322,6 +325,20 @@ def test_standalone_dependency_policy_covers_every_application_edge():
         )
 
 
+def test_non_library_inquiro_edges_are_restricted_to_rich_text():
+    for package_name in ("documents", "search", "web"):
+        imports = {
+            module
+            for py_file in get_python_files(SRC_ROOT / package_name)
+            for module in imported_modules(py_file)
+            if module == "inquiro" or module.startswith("inquiro.")
+        }
+        assert imports <= {"inquiro.richtext"}, (
+            f"quirebase.{package_name} may use only the neutral Inquiro Rich Text Interface; "
+            f"found {sorted(imports)}"
+        )
+
+
 def test_standalone_workspace_packages_are_classified():
     packages_root = REPO_ROOT / "packages"
     discovered = {
@@ -560,11 +577,66 @@ def test_inquiro_providers_are_leaf_implementations():
         assert "inquiro.providers._catalog" not in dependencies
 
 
+def test_bibliography_package_facade_is_the_only_import_surface():
+    inquiro_src = REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro"
+    internal_modules = {
+        f"inquiro.bibliography.{name}"
+        for name in (
+            "records",
+            "options",
+            "keys",
+            "formats",
+            "styles",
+            "engine",
+            "item_dicts",
+        )
+    }
+    outside = [
+        py_file
+        for py_file in get_python_files(REPO_ROOT / "src") + get_python_files(
+            REPO_ROOT / "tests"
+        ) + get_python_files(REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro")
+        if not py_file.is_relative_to(inquiro_src / "bibliography")
+    ]
+    for py_file in outside:
+        deep_imports = imported_modules(py_file) & internal_modules
+        assert not deep_imports, (
+            f"{py_file} bypasses the inquiro.bibliography facade: {sorted(deep_imports)}"
+        )
+
+
+def test_bibliography_package_layers_stay_acyclic():
+    layer_order = {
+        "records": 0,
+        "options": 0,
+        "canonical": 0,
+        "keys": 1,
+        "formats": 2,
+        "styles": 2,
+        "item_dicts": 2,
+        "engine": 3,
+    }
+    package_root = (
+        REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro" / "bibliography"
+    )
+    for py_file in package_root.glob("*.py"):
+        if py_file.name == "__init__.py":
+            continue
+        layer = layer_order[py_file.stem]
+        for module in imported_modules(py_file):
+            if module.startswith("inquiro.bibliography.") and module != "inquiro.bibliography":
+                inner = module.removeprefix("inquiro.bibliography.")
+                assert layer_order.get(inner, layer) <= layer, (
+                    f"{py_file.name} (layer {layer}) imports higher layer {module}"
+                )
+
+
 def test_web_uses_library_provider_operations_only():
     for py_file in get_python_files(SRC_ROOT / "web"):
         dependencies = imported_modules(py_file)
         assert not any(
-            module == "inquiro" or module.startswith("inquiro.") for module in dependencies
+            (module == "inquiro" or module.startswith("inquiro.")) and module != "inquiro.richtext"
+            for module in dependencies
         ), f"{py_file} bypasses the Library Interface and imports Inquiro"
 
 

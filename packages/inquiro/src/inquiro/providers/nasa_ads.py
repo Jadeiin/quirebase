@@ -3,6 +3,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from inquiro.canonical import (
+    clean_rich_markup,
+    first_text,
+)
 from inquiro.identifiers import parse_bibcode
 from inquiro.models import (
     CandidateNotFound,
@@ -12,12 +16,10 @@ from inquiro.models import (
     ProviderUnavailable,
     SearchClause,
 )
-from inquiro.parsing import (
-    _boolean_query,
-    _clean_markup,
-    _first,
-)
 from inquiro.providers._contracts import ProviderContext, ProviderDefinition
+from inquiro.providers._payload import (
+    boolean_query,
+)
 
 
 class NasaAdsLookupAdapter:
@@ -40,21 +42,21 @@ class NasaAdsLookupAdapter:
         if not docs:
             raise CandidateNotFound("NASA ADS record was not found")
         doc = docs[0]
-        title = _clean_markup(_first(doc.get("title")))
+        title = clean_rich_markup(first_text(doc.get("title")))
         if not title:
             raise CandidateNotFound("NASA ADS record was not found")
-        doi = _first(doc.get("doi"))
-        bibcode = _first(doc.get("bibcode")) or value
+        doi = first_text(doc.get("doi"))
+        bibcode = first_text(doc.get("bibcode")) or value
         identifiers = {"bibcode": bibcode}
         if doi:
             identifiers["doi"] = doi
         return ProviderRecord(
             title=title,
-            abstract=_clean_markup(_first(doc.get("abstract"))),
+            abstract=clean_rich_markup(first_text(doc.get("abstract"))),
             authors="; ".join(doc.get("author", [])) or None,
             keywords=None,
-            publication_date=_first(doc.get("pubdate")),
-            publication_title=_first(doc.get("pub")),
+            publication_date=first_text(doc.get("pubdate")),
+            publication_title=first_text(doc.get("pub")),
             doi=doi,
             urls=f"https://ui.adsabs.harvard.edu/abs/{value}/abstract",
             identifiers=json.dumps(identifiers),
@@ -77,7 +79,7 @@ class NasaAdsSearchAdapter:
         endpoint: str,
     ) -> ProviderSearchPage:
         token = getattr(settings, "nasa_ads_token", None) or ""
-        query = _boolean_query(
+        query = boolean_query(
             clauses,
             {
                 "any": "",
@@ -112,9 +114,9 @@ class NasaAdsSearchAdapter:
         response = payload.get("response", {})
         results = []
         for document in response.get("docs", []):
-            title = _first(document.get("title"))
-            bibcode = _first(document.get("bibcode"))
-            doi = _first(document.get("doi"))
+            title = first_text(document.get("title"))
+            bibcode = first_text(document.get("bibcode"))
+            doi = first_text(document.get("doi"))
             if not title or not (doi or bibcode):
                 continue
             identifier = doi or bibcode
@@ -126,9 +128,9 @@ class NasaAdsSearchAdapter:
                     identifier=identifier,
                     title=title,
                     authors="; ".join(document.get("author", [])) or None,
-                    publication_title=_first(document.get("pub")),
-                    publication_date=_first(document.get("pubdate")),
-                    abstract=_first(document.get("abstract")),
+                    publication_title=first_text(document.get("pub")),
+                    publication_date=first_text(document.get("pubdate")),
+                    abstract=first_text(document.get("abstract")),
                 )
             )
         return ProviderSearchPage(

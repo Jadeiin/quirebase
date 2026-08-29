@@ -123,8 +123,6 @@ exclude = ["migrations/"]
 
 [[tool.mypy.overrides]]
 module = [
-  "bibtexparser",
-  "bibtexparser.*",
   "citeproc",
   "citeproc.*",
   "citeproc_styles",

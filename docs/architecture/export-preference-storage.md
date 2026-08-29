@@ -8,7 +8,7 @@
 ## 当前前端约束
 
 `src/quirebase/assets/app.js` 使用 Alpine CSP build，并通过组件 `init()` 和 `$watch()`
-组织状态；`package.json` 未安装 Alpine Persist plugin。Item 和 Library 模板现在通过
+组织状态；`package.json` 未安装 Alpine Persist plugin。设置页、Item 和 Library 模板通过
 `data-export-preferences-key` 向组件提供基于稳定 User ID 的非秘密 account scope；用户名
 可能变化，因此不作为持久化键。
 
@@ -58,9 +58,16 @@ quirebase:export-preferences:v1:account:<opaque-account-scope>
     "style": "apa",
     "includeAbstract": true,
     "preserveCase": false,
-    "abbreviateJournal": false,
     "includeIdentifiers": false,
-    "includeCustomFields": false
+    "includeCustomFields": false,
+    "encoding": "unicode",
+    "journalMode": "full",
+    "doiPolicy": "include",
+    "urlPolicy": "include",
+    "excludedFields": "",
+    "sortBy": "input",
+    "citationKeyFormula": "auth.capitalize + year + shorttitle(1).capitalize",
+    "citationKeyForceAscii": true
   },
   "document": {
     "includeAnnotations": false,
@@ -73,9 +80,30 @@ quirebase:export-preferences:v1:account:<opaque-account-scope>
 checkbox 字段必须是真正的 boolean。忽略未知字段，缺失字段用当前产品默认值补齐。不要
 在偏好中存 Item ID、查询内容、导出内容、注释内容或凭据。
 
-当前实现由 `libraryWorkspace`、`itemExport` 和 `itemDownload` 共用原生存储适配器，并按
-上述 schema 保存 citation 与 document 两组偏好。它是 best-effort 的当前浏览器缓存；
-任何读取、解析或写入失败都会继续使用页面默认值。
+当前实现只有账户设置页的 `userSettings` 组件写入或重置上述 schema；
+`libraryWorkspace`、`itemExport` 和 `itemDownload` 只读取并通过隐藏字段或查询参数提交。
+现场格式选择只影响本次操作，不写回。新增可选字段继续使用 v1：旧值缺失时补默认值，
+不执行迁移也不删除旧值。它是 best-effort 的当前浏览器缓存；任何读取、解析或写入失败
+都会继续使用页面和服务端默认值。
+
+`citationKeyFormula` 属于 Citation Key 组，随 BibTeX/BibLaTeX 导出以
+`citation_key_formula` / `citation_key_force_ascii` 提交（批量导出走表单隐藏字段，
+条目导出走查询参数）。公式只对没有存储 `bibtex_id` 的条目生效；已有键的条目保持原键，
+重复键仍由导出时的 `a`、`b` 后缀消歧。公式语法错误在账户设置页通过
+`/api/citation-key-preview` 即时预览反馈；只有验证成功的公式才写入浏览器缓存。导出入口
+仍把公式参数视为不可信输入并执行独立语法验证，以 `ValidationFailure` 拒绝无效公式，
+但不会重新计算已有的 `bibtex_id`。
+
+设置页按能力分组并只显示当前默认格式实际支持的字段：`style` 只属于 CSL；`encoding`、
+`preserveCase`、`includeIdentifiers` 和 `includeCustomFields` 只属于 BibTeX/BibLaTeX；
+`journalMode`、DOI/URL policy、字段排除和排序属于 BibTeX、BibLaTeX、RIS 与 EndNote。
+Citation Key 与文档下载各自独立成组，不伪装成某个现场格式选项。切换默认格式只改变可见
+分组，不清除其他格式已经保存的设置。
+
+早期 v1 数据可能包含 boolean `abbreviateJournal`。它保留为读取兼容别名：仅当数据中没有
+合法的 `journalMode` 且该值为 `true` 时，读取为 `prefer_abbreviated`。新 UI 只写入
+`journalMode`；HTTP Interface 同样只接受 `journal_mode`，旧 boolean 参数不再存在。重置
+设置可以删除该旧字段，除此之外普通保存会保留它，符合 v1 不主动删除旧值的承诺。
 
 ## 初始化、写入与异常处理
 
@@ -100,6 +128,9 @@ checkbox 字段必须是真正的 boolean。忽略未知字段，缺失字段用
 偏好必须始终有可靠默认值，不能成为业务数据或导出正确性的唯一来源。
 
 ## 迁移与回滚
+
+当前导出选项扩展仅增加具有明确默认值的字段，因此继续使用 v1，不运行迁移。以下流程只
+适用于未来真正不兼容的 schema 变更。
 
 每个不兼容变更增加 key 和 payload 的版本，例如 `v1` 到 `v2`。初始化时先读当前版本；
 没有当前版本时，按明确的旧版本列表查找并运行纯函数迁移：

@@ -284,7 +284,7 @@
         {% for item in items %}
         <article style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem; align-items: center;">
           <div>
-            <a href="/items/{{ item.id }}" style="font-weight: 700; color: inherit; text-decoration: none;">{{ item.title }}</a>
+            <a href="/items/{{ item.id }}" style="font-weight: 700; color: inherit; text-decoration: none;">{{ item.title|rich_text|safe }}</a>
             <small>{{ item.authors or _('No authors') }}{% if item.doi %} · DOI: {{ item.doi }}{% endif %} · {{ item.created_at.strftime('%Y-%m-%d') }}</small>
           </div>
           <div style="display: flex; gap: .5rem; align-items: center;">

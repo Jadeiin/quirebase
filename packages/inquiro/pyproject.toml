@@ -10,8 +10,10 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = "AGPL-3.0-only"
 dependencies = [
+  "bibtexparser>=2.0.0b9,<3",
   "httpx2>=2.12,<3",
-  "bibtexparser>=1.4,<2",
+  "latex2mathml>=3.81,<4",
+  "pylatexenc>=2.11,<3",
   "rispy>=0.10,<1",
 ]
 

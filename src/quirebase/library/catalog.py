@@ -4,6 +4,7 @@ import re
 from difflib import SequenceMatcher
 from typing import TYPE_CHECKING, Any
 
+from inquiro.richtext import convert_rich_text
 from sqlalchemy import func, or_, select
 
 from quirebase.access.items import visible_items_query
@@ -145,11 +146,19 @@ def find_duplicates(db: Session, user: User, mode: str) -> list[list[Item]]:
             if all(item.id != item_id for item in group):
                 group.append(item_map[item_id])
     elif mode == "title":
-        normalize = lambda title: re.sub(r"[^\w]+", " ", title.casefold()).strip()
+        normalize = lambda title: re.sub(
+            r"[^\w]+",
+            " ",
+            convert_rich_text(title, source="html", target="text").casefold(),
+        ).strip()
         for item in items:
             buckets.setdefault(normalize(item.title), []).append(item)
     elif mode == "similar":
-        normalize = lambda title: re.sub(r"[^\w]+", " ", title.casefold()).strip()
+        normalize = lambda title: re.sub(
+            r"[^\w]+",
+            " ",
+            convert_rich_text(title, source="html", target="text").casefold(),
+        ).strip()
         remaining = items.copy()
         while remaining:
             anchor = remaining.pop(0)

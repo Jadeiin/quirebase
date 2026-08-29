@@ -123,6 +123,85 @@ def test_search_maps_all_options_to_one_runtime_query(capsys):
 
 
 @pytest.mark.parametrize(
+    ("file_format", "expected"),
+    [
+        ("bibtex", "@article{Doe2025Api"),
+        ("biblatex", "@article{Doe2025Api"),
+        ("ris", "TY  - JOUR"),
+        ("endnote", "%0 Journal Article"),
+    ],
+)
+def test_lookup_exports_each_bibliography_format(
+    file_format: str,
+    expected: str,
+    capsys,
+):
+    candidate = CandidateRecord(
+        provider="crossref",
+        identifier=Identifier("doi", "10.1000/example"),
+        title="An API Example",
+        abstract="Export me",
+        authors="Doe, Jane; de la Cruz, Juan",
+        publication_date="2025-04-03",
+        publication_title="Testing Quarterly",
+        doi="10.1000/example",
+        urls="https://example.test/article",
+        identifiers=(
+            Identifier("doi", "10.1000/example"),
+            Identifier("openalex", "W123"),
+        ),
+        reference_type="article",
+    )
+
+    args = _parser().parse_args([
+        "lookup",
+        "10.1000/example",
+        "--format",
+        file_format,
+        "--include-identifiers",
+    ])
+    _run(args, lambda config: FakeRuntime(config, candidate))
+
+    output = capsys.readouterr().out
+    assert expected in output
+    assert "Testing Quarterly" in output
+    assert "10.1000/example" in output
+    if file_format in {"bibtex", "biblatex"}:
+        assert "openalex = {W123}" in output
+
+
+def test_search_export_disambiguates_duplicate_generated_keys(capsys):
+    candidates = tuple(
+        CandidateRecord(
+            provider="crossref",
+            identifier=Identifier("doi", f"10.1000/{number}"),
+            title="The Same Work",
+            authors="Doe, Jane",
+            publication_date="2025",
+            reference_type="article",
+        )
+        for number in range(2)
+    )
+    page = CandidatePage("crossref", candidates, 2, 1, 10)
+    args = _parser().parse_args([
+        "search",
+        "crossref",
+        "same work",
+        "--format",
+        "bibtex",
+        "--omit-abstract",
+        "--preserve-case",
+    ])
+
+    _run(args, lambda config: FakeRuntime(config, page))
+
+    output = capsys.readouterr().out
+    assert "@article{Doe2025Same," in output
+    assert "@article{Doe2025Samea," in output
+    assert "title = {{T}he {S}ame {W}ork}" in output
+
+
+@pytest.mark.parametrize(
     ("error", "exit_code"),
     [(CandidateNotFound("no result"), 3)],
 )

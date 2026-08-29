@@ -6,7 +6,14 @@ Core PDF components:
 
 - Mozilla PDF.js 6.2.108 — Apache-2.0. The vendored browser files are generated from the pinned `pdfjs-dist` package.
 - PyMuPDF — AGPL-3.0-only or commercial license. Quirebase uses it under AGPL-3.0-only.
-- bibtexparser — LGPL-3.0-or-later, used for BibTeX parsing and serialization.
+- bibtexparser 2.x beta — MIT, used for BibTeX/BibLaTeX parsing, native
+  serialization, `@string` macros and structured name splitting. The lockfile
+  records the resolved beta while Inquiro fixes the middleware stacks explicitly.
+- pylatexenc 2.11 — MIT, used directly by Inquiro's rich-text layer for
+  Unicode/LaTeX text conversion. Quirebase preserves Unicode code points such as
+  CJK characters when no LaTeX mapping exists.
+- latex2mathml 3.81.x — MIT, used only by Inquiro's Web projection to render
+  bounded inline LaTeX formulae as allowlisted MathML.
 - RISpy — MIT, used for RIS parsing and serialization.
 - YAKE 0.7.x — used as the default local keyword extractor. Its package metadata says LGPL-3.0,
   while the upstream distribution's actual LICENSE is AGPL-3.0-or-later; Quirebase records and

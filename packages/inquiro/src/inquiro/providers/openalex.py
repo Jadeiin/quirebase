@@ -5,6 +5,12 @@ import re
 from typing import Any
 from urllib.parse import quote, urlencode
 
+from inquiro.canonical import (
+    clean_rich_markup,
+    collect_urls,
+    first_text,
+    normalize_reference_type,
+)
 from inquiro.identifiers import DOI_PATTERN, normalize_doi, parse_openalex
 from inquiro.models import (
     AcquiredDocument,
@@ -16,15 +22,11 @@ from inquiro.models import (
     ProviderUnavailable,
     SearchClause,
 )
-from inquiro.parsing import (
-    _clean_markup,
-    _collect_openalex_keyword_names,
-    _collect_urls,
-    _first,
-    normalize_reference_type,
+from inquiro.providers._contracts import ProviderContext, ProviderDefinition, RemoteNotFound
+from inquiro.providers._payload import (
+    collect_openalex_keyword_names,
     reconstruct_openalex_abstract,
 )
-from inquiro.providers._contracts import ProviderContext, ProviderDefinition, RemoteNotFound
 
 
 class OpenAlexLookupAdapter:
@@ -51,8 +53,8 @@ class OpenAlexLookupAdapter:
             payload = json.loads(body)
         except (json.JSONDecodeError, TypeError) as error:
             raise ProviderUnavailable("OpenAlex returned invalid metadata") from error
-        openalex_id = (_first(payload.get("id")) or "").rsplit("/", 1)[-1]
-        doi = normalize_doi(_first(payload.get("doi")) or "") or None
+        openalex_id = (first_text(payload.get("id")) or "").rsplit("/", 1)[-1]
+        doi = normalize_doi(first_text(payload.get("doi")) or "") or None
         source = (payload.get("primary_location") or {}).get("source") or {}
         biblio = payload.get("biblio") or {}
         pages = None
@@ -61,20 +63,22 @@ class OpenAlexLookupAdapter:
         elif biblio.get("first_page"):
             pages = str(biblio.get("first_page"))
 
-        urls = _collect_urls(
+        urls = collect_urls(
             f"https://doi.org/{doi}" if doi else None,
-            _first((payload.get("primary_location") or {}).get("landing_page_url")),
-            _first((payload.get("open_access") or {}).get("oa_url")),
+            first_text((payload.get("primary_location") or {}).get("landing_page_url")),
+            first_text((payload.get("open_access") or {}).get("oa_url")),
         )
 
         abstract = reconstruct_openalex_abstract(
             payload.get("abstract_inverted_index")
-        ) or _clean_markup(_first(payload.get("abstract")))
-        kw_list = _collect_openalex_keyword_names(payload.get("topics"), payload.get("keywords"))
+        ) or clean_rich_markup(first_text(payload.get("abstract")))
+        kw_list = collect_openalex_keyword_names(payload.get("topics"), payload.get("keywords"))
         if not kw_list:
-            kw_list = _collect_openalex_keyword_names(payload.get("concepts"))
+            kw_list = collect_openalex_keyword_names(payload.get("concepts"))
         keywords_val = "; ".join(kw_list) if kw_list else None
-        title = _clean_markup(_first(payload.get("display_name") or payload.get("title"))) or ""
+        title = (
+            clean_rich_markup(first_text(payload.get("display_name") or payload.get("title"))) or ""
+        )
 
         return ProviderRecord(
             title=title,
@@ -82,22 +86,22 @@ class OpenAlexLookupAdapter:
             authors="; ".join(
                 author_name
                 for authorship in payload.get("authorships", [])
-                if (author_name := _first((authorship.get("author") or {}).get("display_name")))
+                if (author_name := first_text((authorship.get("author") or {}).get("display_name")))
             )
             or None,
             keywords=keywords_val,
-            publication_date=_first(payload.get("publication_date")),
-            publication_title=_first(source.get("display_name")),
-            volume=_first(biblio.get("volume")),
-            issue=_first(biblio.get("issue")),
+            publication_date=first_text(payload.get("publication_date")),
+            publication_title=first_text(source.get("display_name")),
+            volume=first_text(biblio.get("volume")),
+            issue=first_text(biblio.get("issue")),
             pages=pages,
-            publisher=_first(source.get("host_organization_name")),
+            publisher=first_text(source.get("host_organization_name")),
             doi=doi,
             urls=urls,
             identifiers=json.dumps({
                 key: val for key, val in {"openalex": openalex_id, "doi": doi}.items() if val
             }),
-            reference_type=normalize_reference_type(_first(payload.get("type"))),
+            reference_type=normalize_reference_type(first_text(payload.get("type"))),
         )
 
 
@@ -175,7 +179,7 @@ class OpenAlexSearchAdapter:
         results = []
         for work in payload.get("results", []):
             openalex_id = (work.get("id") or "").rsplit("/", 1)[-1]
-            title = _clean_markup(work.get("display_name") or work.get("title"))
+            title = clean_rich_markup(work.get("display_name") or work.get("title"))
             if not openalex_id or not title:
                 continue
             doi = (
@@ -187,11 +191,11 @@ class OpenAlexSearchAdapter:
             authors = "; ".join(
                 author_name
                 for authorship in work.get("authorships", [])
-                if (author_name := _first((authorship.get("author") or {}).get("display_name")))
+                if (author_name := first_text((authorship.get("author") or {}).get("display_name")))
             )
             abstract = reconstruct_openalex_abstract(
                 work.get("abstract_inverted_index")
-            ) or _clean_markup(_first(work.get("abstract")))
+            ) or clean_rich_markup(first_text(work.get("abstract")))
             source = (work.get("primary_location") or {}).get("source") or {}
             results.append(
                 ProviderSearchRecord(
@@ -200,7 +204,7 @@ class OpenAlexSearchAdapter:
                     identifier=openalex_id,
                     title=title,
                     authors=authors or None,
-                    publication_title=_first(source.get("display_name")),
+                    publication_title=first_text(source.get("display_name")),
                     publication_date=work.get("publication_date"),
                     doi=doi,
                     abstract=abstract,
@@ -223,7 +227,7 @@ class OpenAlexSearchAdapter:
         return [
             source_id
             for source in payload.get("results", [])
-            if (source_id := (_first(source.get("id")) or "").rsplit("/", 1)[-1])
+            if (source_id := (first_text(source.get("id")) or "").rsplit("/", 1)[-1])
         ]
 
 
@@ -254,7 +258,7 @@ class OpenAlexDocumentAdapter:
                 has_content = payload.get("has_content") or {}
                 if not isinstance(has_content, dict):
                     raise TypeError
-                work_id = (_first(payload.get("id")) or "").rsplit("/", 1)[-1]
+                work_id = (first_text(payload.get("id")) or "").rsplit("/", 1)[-1]
             except (json.JSONDecodeError, TypeError) as error:
                 raise ProviderUnavailable("OpenAlex returned invalid document metadata") from error
             if not work_id or not has_content.get("pdf"):

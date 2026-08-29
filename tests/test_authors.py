@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from inquiro.bibliography import Contributor as BibliographyContributor
+from inquiro.bibliography import parse_bibliography_records
+
 from quirebase.library.authors import (
     find_or_create_author,
     get_item_authors,
@@ -8,6 +11,7 @@ from quirebase.library.authors import (
     set_item_authors,
     set_item_authors_from_string,
 )
+from quirebase.library.citations import format_standard_export
 from quirebase.models import Item, User
 
 
@@ -60,6 +64,63 @@ def test_set_item_authors_from_string(db):
 
     assert item.authors == "Turing, Alan"
     assert [link.author.last_name for link in get_item_authors(db, item.id)] == ["Turing"]
+
+
+def test_set_item_authors_from_string_preserves_parser_compatible_names(db):
+    user = User(username="structured-author-user", password_hash="hash")
+    db.add(user)
+    db.flush()
+    item = Item(
+        title="Structured contributors",
+        authors="{World Health Organization}; de la Cruz, Jr., Juan",
+        created_by=user.id,
+    )
+    db.add(item)
+    db.flush()
+
+    set_item_authors_from_string(db, user, item)
+
+    assert item.authors == "World Health Organization; de la Cruz Jr., Juan"
+    contributors = get_item_authors(db, item.id)
+    assert [(link.author.last_name, link.author.first_name) for link in contributors] == [
+        ("World Health Organization", None),
+        ("de la Cruz Jr.", "Juan"),
+    ]
+
+
+def test_set_item_authors_projects_suffix_names_into_first_last_identity(db):
+    user = User(username="structured-identity-user", password_hash="hash")
+    db.add(user)
+    db.flush()
+    item = Item(title="Simplified contributor identities", created_by=user.id)
+    db.add(item)
+    db.flush()
+
+    set_item_authors(
+        db,
+        user,
+        item.id,
+        [
+            {"last_name": "Smith", "first_name": "John"},
+            {"last_name": "Example Institute"},
+        ],
+    )
+    db.flush()
+
+    links = get_item_authors(db, item.id)
+    assert [(link.author.last_name, link.author.first_name) for link in links] == [
+        ("Smith", "John"),
+        ("Example Institute", None),
+    ]
+    assert item.authors == "Smith, John; Example Institute"
+
+    contents, _media_type, _filename = format_standard_export([item], "bibtex")
+    records, errors = parse_bibliography_records(contents, "bibtex")
+    assert errors == []
+    assert records[0].authors == (
+        BibliographyContributor("Smith", "John"),
+        BibliographyContributor("Example Institute"),
+    )
 
 
 def test_search_authors_typeahead(db):

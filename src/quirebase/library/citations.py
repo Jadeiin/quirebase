@@ -1,21 +1,34 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import json
+from contextlib import suppress
+from typing import TYPE_CHECKING, Any
 
-from inquiro.bibliography import SUPPORTED_FORMATS, export_bibliography
-from inquiro.citations import (
+from inquiro.bibliography import (
     BIBLIOGRAPHY_EXTENSIONS,
     BIBLIOGRAPHY_MEDIA_TYPES,
+    DEFAULT_CITATION_KEY_FORMULA,
+    SUPPORTED_FORMATS,
+    BibliographyExportOptions,
+    BibliographyRecord,
     CitationEngineUnavailable,
+    CitationKeyFormulaError,
     CitationStyleOption,
     CitationStyleSelection,
-    ExportOptions,
-    _builtin_style_catalog,
+    InvalidExportOptions,
     builtin_style_xml,
+    export_bibliography_records,
     is_valid_csl,
-    item_to_csl_json,
+    record_to_csl_json,
     render_bibliography,
     render_citation,
+    select_builtin_citation_styles,
+)
+from inquiro.bibliography import (
+    Contributor as BibliographyContributor,
+)
+from inquiro.bibliography import (
+    preview_citation_key as preview_formula,
 )
 from sqlalchemy import select
 
@@ -29,31 +42,13 @@ if TYPE_CHECKING:
     from quirebase.models import Item, User
 
 
-def select_builtin_citation_styles(
-    query: str = "", limit: int = 50, include: str = ""
-) -> CitationStyleSelection:
-    catalog = _builtin_style_catalog()
-    normalized_query = query.strip().casefold()
-    matches = (
-        option
-        for option in catalog
-        if not normalized_query
-        or normalized_query in option.key.casefold()
-        or normalized_query in option.name.casefold()
-    )
-    styles = tuple(list(matches)[: max(1, min(limit, 200))])
-    normalized_include = include.strip().casefold()
-    included = next(
-        (
-            option
-            for option in catalog
-            if normalized_include and option.key.casefold() == normalized_include
-        ),
-        None,
-    )
-    if included is not None and any(option.key == included.key for option in styles):
-        included = None
-    return CitationStyleSelection(matches=styles, included=included)
+def preview_citation_key(formula: str, *, force_ascii: bool = False) -> str:
+    if len(formula) > 1000:
+        raise ValidationFailure("citation key formula is too long")
+    try:
+        return preview_formula(formula, force_ascii=force_ascii)
+    except CitationKeyFormulaError as error:
+        raise ValidationFailure(str(error)) from error
 
 
 def resolve_style_xml(db: Session, user: User | None, style_key: str) -> str | None:
@@ -105,14 +100,20 @@ def format_csl_export(
     user: User,
     items: list[Item],
     style_key: str = "apa",
-    options: ExportOptions | None = None,
+    options: BibliographyExportOptions | None = None,
 ) -> tuple[str, str, str]:
     style_xml = resolve_style_xml(db, user, style_key)
     if style_xml is None:
         raise ValidationFailure("unknown citation style")
     try:
         entries = render_bibliography(
-            [item_to_csl_json(item, options=options) for item in items], style_xml
+            [
+                record_to_csl_json(
+                    _item_to_bibliography_record(item), options, item_id=str(item.id)
+                )
+                for item in items
+            ],
+            style_xml,
         )
     except CitationEngineUnavailable as error:
         raise ValidationFailure(str(error)) from error
@@ -120,24 +121,89 @@ def format_csl_export(
 
 
 def format_standard_export(
-    items: list[Item], file_format: str, options: ExportOptions | None = None
+    items: list[Item], file_format: str, options: BibliographyExportOptions | None = None
 ) -> tuple[str, str, str]:
     if file_format not in SUPPORTED_FORMATS:
-        raise ValidationFailure("format must be bibtex, ris, or endnote")
-    options = options or ExportOptions()
-    contents = export_bibliography(
-        items,
-        file_format,
-        include_abstract=options.include_abstract,
-        preserve_case=options.preserve_case,
-        abbreviate_journal=options.abbreviate_journal,
-        include_identifiers=options.include_identifiers,
-        include_custom_fields=options.include_custom_fields,
-    )
+        raise ValidationFailure("format must be bibtex, biblatex, ris, or endnote")
+    try:
+        contents = export_bibliography_records(
+            [_item_to_bibliography_record(item) for item in items],
+            file_format,
+            options=options,
+        )
+    except (InvalidExportOptions, CitationKeyFormulaError, ValueError) as error:
+        raise ValidationFailure(str(error)) from error
     media_type = BIBLIOGRAPHY_MEDIA_TYPES[file_format]
     extension = BIBLIOGRAPHY_EXTENSIONS[file_format]
     filename = f"quirebase-export.{extension}"
     return contents, media_type, filename
+
+
+def _json_fields(value: str | None) -> tuple[tuple[str, str], ...]:
+    parsed: Any = None
+    with suppress(json.JSONDecodeError, TypeError):
+        parsed = json.loads(value or "{}")
+    if not isinstance(parsed, dict):
+        return ()
+    return tuple(
+        (
+            str(key),
+            json.dumps(field_value, ensure_ascii=False)
+            if isinstance(field_value, (dict, list))
+            else str(field_value),
+        )
+        for key, field_value in parsed.items()
+        if field_value not in (None, "")
+    )
+
+
+def _contributors(value: str | None) -> tuple[BibliographyContributor, ...]:
+    return tuple(
+        BibliographyContributor.parse(part.strip())
+        for part in (value or "").split(";")
+        if part.strip()
+    )
+
+
+def _item_contributors(item: Item, role: str) -> tuple[BibliographyContributor, ...]:
+    linked = tuple(
+        BibliographyContributor(
+            family_name=link.author.last_name,
+            given_name=link.author.first_name,
+        )
+        for link in item.author_links
+        if link.role == role
+    )
+    if linked:
+        return linked
+    cached = item.authors if role == "author" else item.editors
+    return _contributors(cached)
+
+
+def _item_to_bibliography_record(item: Item) -> BibliographyRecord:
+    """Map the Library-owned Item explicitly onto Inquiro's neutral Interface."""
+    return BibliographyRecord(
+        citation_key=item.bibtex_id,
+        reference_type=item.reference_type or "article",
+        bibtex_type=item.bibtex_type,
+        title=item.title,
+        authors=_item_contributors(item, "author"),
+        editors=_item_contributors(item, "editor"),
+        abstract=item.abstract,
+        keywords=tuple(part.strip() for part in (item.keywords or "").split(";") if part.strip()),
+        publication_date=item.publication_date,
+        publication_title=item.publication_title,
+        journal_abbreviation=item.journal_abbreviation,
+        volume=item.volume,
+        issue=item.issue,
+        pages=item.pages,
+        publisher=item.publisher,
+        location=item.place_published,
+        doi=item.doi,
+        urls=tuple(part.strip() for part in (item.urls or "").splitlines() if part.strip()),
+        identifiers=_json_fields(item.identifiers),
+        custom_fields=_json_fields(item.custom_fields),
+    )
 
 
 def get_item_citation_response(
@@ -146,7 +212,7 @@ def get_item_citation_response(
     item_id: str,
     file_format: str,
     style_key: str = "apa",
-    options: ExportOptions | None = None,
+    options: BibliographyExportOptions | None = None,
 ) -> tuple[str, str, str]:
     item = require_readable_item(db, user, item_id)
     if file_format == "csl":
@@ -162,7 +228,9 @@ def get_item_citation_text_response(
     if style_xml is None:
         raise ValidationFailure("unknown citation style")
     try:
-        rendered = render_citation(item, style_xml, output_format=output)
+        rendered = render_citation(
+            _item_to_bibliography_record(item), style_xml, output_format=output
+        )
     except CitationEngineUnavailable as error:
         raise ValidationFailure(str(error)) from error
     media_type = "text/html" if output == "html" else "text/plain"
@@ -172,9 +240,10 @@ def get_item_citation_text_response(
 __all__ = [
     "BIBLIOGRAPHY_EXTENSIONS",
     "BIBLIOGRAPHY_MEDIA_TYPES",
+    "DEFAULT_CITATION_KEY_FORMULA",
+    "BibliographyExportOptions",
     "CitationStyleOption",
     "CitationStyleSelection",
-    "ExportOptions",
     "create_custom_citation_style",
     "delete_custom_citation_style",
     "format_csl_export",
@@ -182,6 +251,7 @@ __all__ = [
     "get_item_citation_response",
     "get_item_citation_text_response",
     "list_custom_citation_styles",
+    "preview_citation_key",
     "resolve_style_xml",
     "select_builtin_citation_styles",
 ]

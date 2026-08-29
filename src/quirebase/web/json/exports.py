@@ -14,6 +14,7 @@ from quirebase.documents import (
 from quirebase.documents.schemas import ExportCreate
 from quirebase.library import (
     list_custom_citation_styles,
+    preview_citation_key,
     select_builtin_citation_styles,
 )
 from quirebase.models import User
@@ -23,6 +24,15 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
 router = APIRouter()
+
+
+@router.get("/api/citation-key-preview")
+def citation_key_preview(
+    formula: str,
+    force_ascii: bool = False,
+    _user: User = Depends(current_user),
+):
+    return {"key": preview_citation_key(formula, force_ascii=force_ascii)}
 
 
 @router.get("/api/citation-styles")

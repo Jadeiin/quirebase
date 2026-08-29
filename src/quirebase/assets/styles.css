@@ -249,6 +249,12 @@ label { display: grid; gap: .3rem; color: #46514c; font-size: .82rem; font-weigh
 .option-panel-heading { display: grid; gap: .15rem; padding-bottom: .7rem; border-bottom: 1px solid var(--line); }
 .option-panel-heading small, .option-panel-note { color: var(--muted); font-size: .76rem; }
 .option-panel-note { margin: 0; padding: .65rem .7rem; border-radius: .45rem; background: var(--surface-soft); }
+.export-preference-groups { display: grid; gap: 1rem; }
+.export-preference-group { display: grid; gap: .7rem; margin: 0; padding: 1rem; border: 1px solid var(--line); border-radius: .6rem; background: var(--surface-soft); }
+.export-preference-group h3 { margin: 0; color: var(--ink); font-size: .95rem; }
+.export-preference-group label { display: grid; gap: .3rem; color: #46514c; font-size: .84rem; font-weight: 700; }
+.export-preference-group .export-check { display: flex; }
+.citation-key-preview { display: block; min-height: 2.35rem; padding: .55rem .7rem; border: 1px solid var(--line); border-radius: .4rem; color: var(--ink); font: 600 .86rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--surface); overflow-wrap: anywhere; }
 .export-check { display: flex; grid-template-columns: auto 1fr; align-items: center; gap: .45rem; }
 .export-check input { width: auto; }
 .export-actions { display: flex; gap: .5rem; justify-content: flex-end; }

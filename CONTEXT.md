@@ -18,7 +18,10 @@ transferable.
 _Avoid_: Creator when discussing authorization
 
 **Contributor**:
-A person credited in an Item's bibliographic metadata, with a role such as author or editor.
+A person or organization credited in an Item's bibliographic metadata, with a role such
+as author or editor. Quirebase's persistent identity is deliberately two-part: first name
+and last name; a missing first name represents a single-field/literal name such as an
+organization.
 _Avoid_: Creator, User
 
 **Project**:
@@ -136,7 +139,7 @@ An immutable record of a security-sensitive or data-changing action.
 
 - A User is the Item Owner of zero or more Items, owns zero or more Login Sessions, and has one
   System Role.
-- An Item has zero or more Contributors in an ordered bibliographic role.
+- An Item has zero or more Contributors in an ordered bibliographic role. A Contributor may have a split first/last name or a single-field literal name.
 - An Invitation provisions one new User with an assigned System Role.
 - An Item has zero or more File Revisions, Attachments, Tags, and Discussion Messages.
 - An Item has at most one current Item Tag Recommendation generation.

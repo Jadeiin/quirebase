@@ -29,11 +29,15 @@
   三个契约测试文件的 `MockTransport` 注入）与 httpx2 API 同构，迁移成本为
   机械替换。迁移后出站单栈不变式（ADR 0001）落在 `httpx2` 上，并重新打开
   `habanero` 评估。
-- **维持直接依赖**：`bibtexparser` / `rispy` / `citeproc-py` / `pymupdf`，不经 `papis`
-  中转；不引入 `arxiv` PyPI 包替代现有 Atom 解析。
+- **已被后续导出决策修订**：bibliography interchange 的解析直接依赖最终落回
+  `bibtexparser`（v2 beta，显式中间件栈、结构化姓名拆分、原生 writer + `@string`
+  宏解析），TeX 编解码由 Inquiro 自有的 richtext 层基于 `pylatexenc` 直接承担，
+  Web 数学公式投影由 `latex2mathml` 承担，`pybtex` / `latexcodec` 整体退场；
+  `rispy` / `citeproc-py` / `pymupdf` 仍维持直接依赖，不经 `papis` 中转；
+  不引入 `arxiv` PyPI 包替代现有 Atom 解析。
 - **`habanero` 缓议但不再是拒绝**：其传输栈障碍随 httpx2 迁移消除；剩余障碍是
-  `bibtexparser` 大版本分叉与其仅覆盖参数构造（不覆盖 JSON → `MetadataRecord`
-  领域映射）的低净收益。触发条件重定义见阶段 5。
+  它仅覆盖参数构造（不覆盖 JSON → `MetadataRecord` 领域映射）的低净收益，并且
+  `habanero[bibtex]` 会额外引入当前不需要的第二套 BibTeX 引擎。触发条件重定义见阶段 5。
 
 ## 决策原则
 
@@ -195,9 +199,8 @@ Provider API 变更 = 单文件 diff。删除测试通过：删掉某个 Provide
 - 缓议理由（调研报告 4.2 基础上更新）：
   - 传输栈障碍已随阶段 0a 消除：`habanero` 2.9.2 依赖 `httpx2`，
     与迁移后的 Quirebase 出站栈一致。
-  - 剩余障碍一：`habanero[bibtex]` 要求 `bibtexparser>=2.0.0b7`，
-    Quirebase 为 `>=1.4,<2`。缓解：不启用其 bibtex extra，
-    仅用 Crossref 客户端能力，隔离该分叉。
+  - 剩余障碍一：`habanero[bibtex]` 会额外引入当前不需要的第二套 BibTeX 依赖。
+    缓解：不启用其 bibtex extra，仅用 Crossref 客户端能力。
   - 剩余障碍二（设计视角）：`habanero` 吸收的是参数构造与分页——这部分已被
     `MetadataClient` / `OnlineSearchClient` 集中并约束；真正的复杂度
     （JSON → `MetadataRecord` 映射）仍需自持。净代码删减有限，
@@ -214,15 +217,17 @@ Provider API 变更 = 单文件 diff。删除测试通过：删掉某个 Provide
   2. Crossref API dialect 变更导致手写参数构造的维护成本持续上升；且
   3. 试点以替换搜索路径开始，`MockTransport` 契约用例不变，响应解析仍归
      Quirebase 的 `MetadataRecord` 映射。
-  `bibtexparser` 大版本分叉已因不启用 bibtex extra 而不再是阻塞项。
+  第二 BibTeX 引擎已因不启用 bibtex extra 而不再是阻塞项。
 
 ### 明确不做
 
 - 不引入 `papis` 本体（调研报告 4.1）。
 - 不引入 PyPI `arxiv` 包：现有 Atom 解析已覆盖 `arxiv:doi` / `journal_ref` / 分类，
   替换是行为换依赖，得不偿失。
-- 不引入 `beautifulsoup4` / `lxml`：HTML 清理现状 `re` + `html.unescape` 足够。
-- 不将 `bibtexparser` / `rispy` / `citeproc-py` 经任何中间层间接依赖。
+- 不引入 `beautifulsoup4` / `lxml`：Inquiro 用标准库 `HTMLParser` 解析仅含 `i`、`b`、
+  `sup`、`sub` 的行内白名单，复杂度尚不足以证明通用 DOM 依赖的必要性。
+- 不将 `bibtexparser` / `pylatexenc` / `latex2mathml` / `rispy` / `citeproc-py`
+  经任何中间层间接依赖。
 - 不为 OpenAlex 引入 `pyalex` 一类客户端（同样绕过受控出站缝，理由同 `habanero`
   缓议；httpx2 迁移不改变这一条——问题在绕缝，不在传输库名）。
 

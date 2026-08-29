@@ -4,14 +4,14 @@ import json
 from typing import Any
 from urllib.parse import quote
 
-from inquiro.identifiers import parse_doi
-from inquiro.models import CandidateNotFound, ProviderRecord, ProviderUnavailable
-from inquiro.parsing import (
-    _clean_markup,
-    _collect_urls,
-    _first,
+from inquiro.canonical import (
+    clean_rich_markup,
+    collect_urls,
+    first_text,
     normalize_reference_type,
 )
+from inquiro.identifiers import parse_doi
+from inquiro.models import CandidateNotFound, ProviderRecord, ProviderUnavailable
 from inquiro.providers._contracts import ProviderContext, ProviderDefinition
 
 
@@ -32,16 +32,16 @@ class DataCiteLookupAdapter:
         )
         abstract = next(
             (
-                _clean_markup(item.get("description"))
+                clean_rich_markup(item.get("description"))
                 for item in attributes.get("descriptions", [])
                 if item.get("descriptionType") == "Abstract"
             ),
             None,
         )
-        canonical_doi = _first(attributes.get("doi")) or value
+        canonical_doi = first_text(attributes.get("doi")) or value
         resource_type = attributes.get("types", {})
-        publisher = _first(attributes.get("publisher"))
-        urls = _collect_urls(f"https://doi.org/{canonical_doi}", _first(attributes.get("url")))
+        publisher = first_text(attributes.get("publisher"))
+        urls = collect_urls(f"https://doi.org/{canonical_doi}", first_text(attributes.get("url")))
         keywords = (
             "; ".join(
                 item.get("subject")
@@ -51,14 +51,14 @@ class DataCiteLookupAdapter:
             or None
         )
         return ProviderRecord(
-            title=_clean_markup(
-                _first([item.get("title") for item in attributes.get("titles", [])])
+            title=clean_rich_markup(
+                first_text([item.get("title") for item in attributes.get("titles", [])])
             )
             or "",
             abstract=abstract,
             authors=authors or None,
             keywords=keywords,
-            publication_date=_first(
+            publication_date=first_text(
                 attributes.get("published") or attributes.get("publicationYear")
             ),
             publication_title=publisher,

@@ -3,6 +3,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from inquiro.canonical import (
+    clean_rich_markup,
+    first_text,
+)
 from inquiro.identifiers import parse_article_number
 from inquiro.models import (
     AcquiredDocument,
@@ -14,10 +18,6 @@ from inquiro.models import (
     ProviderSearchRecord,
     ProviderUnavailable,
     SearchClause,
-)
-from inquiro.parsing import (
-    _clean_markup,
-    _first,
 )
 from inquiro.providers._contracts import ProviderContext, ProviderDefinition
 
@@ -64,11 +64,11 @@ class IeeeLookupAdapter:
         if not articles:
             raise CandidateNotFound("IEEE Xplore article was not found")
         article = articles[0]
-        title = _clean_markup(_first(article.get("title")))
+        title = clean_rich_markup(first_text(article.get("title")))
         if not title:
             raise CandidateNotFound("IEEE Xplore article was not found")
-        doi = _first(article.get("doi"))
-        article_number = _first(article.get("article_number")) or value
+        doi = first_text(article.get("doi"))
+        article_number = first_text(article.get("article_number")) or value
         identifiers = {"article_number": article_number}
         if doi:
             identifiers["doi"] = doi
@@ -79,11 +79,11 @@ class IeeeLookupAdapter:
         )
         return ProviderRecord(
             title=title,
-            abstract=_clean_markup(_first(article.get("abstract"))),
+            abstract=clean_rich_markup(first_text(article.get("abstract"))),
             authors=authors or None,
             keywords=None,
-            publication_date=_first(article.get("publication_year")),
-            publication_title=_first(article.get("publication_title")),
+            publication_date=first_text(article.get("publication_year")),
+            publication_title=first_text(article.get("publication_title")),
             doi=doi,
             urls=f"https://ieeexplore.ieee.org/document/{value}",
             identifiers=json.dumps(identifiers),
@@ -129,11 +129,11 @@ class IeeeSearchAdapter:
             raise ProviderUnavailable("IEEE Xplore returned invalid search results") from error
         results = []
         for article in payload.get("articles", []):
-            title = _first(article.get("title"))
+            title = first_text(article.get("title"))
             if not title:
                 continue
-            doi = _first(article.get("doi"))
-            article_number = _first(article.get("article_number"))
+            doi = first_text(article.get("doi"))
+            article_number = first_text(article.get("article_number"))
             identifier = doi or article_number
             if identifier is None:
                 continue
@@ -149,9 +149,9 @@ class IeeeSearchAdapter:
                         if author.get("full_name")
                     )
                     or None,
-                    publication_title=_first(article.get("publication_title")),
-                    publication_date=_first(article.get("publication_year")),
-                    abstract=_first(article.get("abstract")),
+                    publication_title=first_text(article.get("publication_title")),
+                    publication_date=first_text(article.get("publication_year")),
+                    abstract=first_text(article.get("abstract")),
                 )
             )
         return ProviderSearchPage(
@@ -190,11 +190,11 @@ class IeeeDocumentAdapter:
         article = articles[0]
         if not isinstance(article, dict):
             raise ProviderUnavailable("IEEE Xplore returned invalid document metadata")
-        access_type = (_first(article.get("accessType")) or "").lower()
+        access_type = (first_text(article.get("accessType")) or "").lower()
         if access_type not in {"open access", "ephemera"}:
             raise PdfAccessDenied("IEEE Xplore PDF is not openly accessible")
         # IEEE's /fulltext API returns structured article text; pdf_url is the PDF resource.
-        pdf_url = _first(article.get("pdf_url"))
+        pdf_url = first_text(article.get("pdf_url"))
         if not pdf_url:
             raise PdfNotAvailable("IEEE Xplore did not provide a PDF link")
         return client._download_pdf(

@@ -6,6 +6,10 @@ from typing import Any
 from urllib.parse import urlsplit
 from xml.etree import ElementTree
 
+from inquiro.canonical import (
+    clean_rich_markup,
+    first_text,
+)
 from inquiro.identifiers import parse_pmcid
 from inquiro.models import (
     AcquiredDocument,
@@ -15,12 +19,10 @@ from inquiro.models import (
     ProviderUnavailable,
     SearchClause,
 )
-from inquiro.parsing import (
-    _boolean_query,
-    _clean_markup,
-    _first,
-)
 from inquiro.providers._contracts import ProviderContext, ProviderDefinition, RemoteNotFound
+from inquiro.providers._payload import (
+    boolean_query,
+)
 
 
 class PmcSearchAdapter:
@@ -37,7 +39,7 @@ class PmcSearchAdapter:
         settings: Any,
         endpoint: str,
     ) -> ProviderSearchPage:
-        query = _boolean_query(
+        query = boolean_query(
             clauses,
             {
                 "any": "[All Fields]",
@@ -89,7 +91,7 @@ class PmcSearchAdapter:
         results = []
         for identifier in identifiers:
             record = payload.get(identifier, {})
-            title = _clean_markup(record.get("title"))
+            title = clean_rich_markup(record.get("title"))
             if not title:
                 continue
             doi = None
@@ -115,8 +117,8 @@ class PmcSearchAdapter:
                         author["name"] for author in record.get("authors", []) if author.get("name")
                     )
                     or None,
-                    publication_title=_first(record.get("fulljournalname") or record.get("source")),
-                    publication_date=_first(record.get("pubdate")),
+                    publication_title=first_text(record.get("fulljournalname") or record.get("source")),
+                    publication_date=first_text(record.get("pubdate")),
                 )
             )
         return ProviderSearchPage(
@@ -165,7 +167,7 @@ class PmcDocumentAdapter:
             raise PdfNotAvailable("PMC article metadata was not found") from error
         except (json.JSONDecodeError, TypeError) as error:
             raise ProviderUnavailable("PMC returned invalid article metadata") from error
-        pdf_url = _first(metadata.get("pdf_url"))
+        pdf_url = first_text(metadata.get("pdf_url"))
         if not pdf_url:
             raise PdfNotAvailable("PMC article version does not include a PDF")
         parsed = urlsplit(pdf_url)

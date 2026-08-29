@@ -122,11 +122,45 @@ def test_export_preferences_use_validated_per_user_browser_storage():
     assert "account:{{ user.id }}" in item
 
 
-def test_export_preference_resets_and_style_search_do_not_cross_sections():
+def test_library_bulk_exports_hydrate_every_standard_export_preference():
     source = read("src/quirebase/assets/app.js")
-    assert 'resetExportPreferences(this.storageKey, "document")' in source
-    assert 'resetExportPreferences(this.storageKey, "citation")' in source
-    assert "fetchCitationStyles(this.styleQuery, 100, this.style)" in source
+    workspace = source.split('Alpine.data("libraryWorkspace"', 1)[1].split(
+        'Alpine.data("importWorkspace"', 1
+    )[0]
+
+    for field in (
+        "encoding",
+        "journalMode",
+        "doiPolicy",
+        "urlPolicy",
+        "excludedFields",
+        "sortBy",
+    ):
+        assert f"{field}:" in workspace
+        assert f"this.{field} = preferences.{field};" in workspace
+
+
+def test_only_account_settings_mutate_saved_export_preferences():
+    source = read("src/quirebase/assets/app.js")
+    user_settings = source.split('Alpine.data("userSettings"', 1)[1].split(
+        'Alpine.data("libraryWorkspace"', 1
+    )[0]
+    assert 'resetExportPreferences(this.storageKey, ["citation", "document"])' in user_settings
+    assert "storeExportPreferences" in user_settings
+
+    for component, following in (
+        ("libraryWorkspace", "importWorkspace"),
+        ("itemDownload", "itemExport"),
+        ("itemExport", "citationStyleCatalog"),
+    ):
+        workspace = source.split(f'Alpine.data("{component}"', 1)[1].split(
+            f'Alpine.data("{following}"', 1
+        )[0]
+        assert "storeExportPreferences" not in workspace
+        assert "resetExportPreferences" not in workspace
+        if component == "libraryWorkspace":
+            assert 'this.$watch("action"' not in workspace
+
     assert "fetchCitationStyles(this.query, 50, this.style)" in source
     assert "this.style = this.citationStyles[0]" not in source
 
@@ -135,12 +169,73 @@ def test_item_export_loads_citation_styles_only_when_the_menu_is_used():
     source = read("src/quirebase/assets/app.js")
     item = read("src/quirebase/templates/item.html")
     item_export = source.split('Alpine.data("itemExport"', 1)[1]
-    init = item_export.split("saveExportPreferences()", 1)[0]
+    init = item_export.split("async loadStyles()", 1)[0]
 
     assert '@toggle="loadStyles()"' in item
     assert "this.searchStyles();" not in init
     assert 'if (!this.$root.open || this.format !== "csl") return;' in item_export
     assert "if (this.stylesLoaded || this.stylesLoading) return;" in item_export
+
+
+def test_account_and_item_export_wire_standard_bibliography_preferences():
+    source = read("src/quirebase/assets/app.js")
+    settings = read("src/quirebase/templates/account_settings.html")
+    item = read("src/quirebase/templates/item.html")
+    user_settings = source.split('Alpine.data("userSettings"', 1)[1].split(
+        'Alpine.data("libraryWorkspace"', 1
+    )[0]
+    item_export = source.split('Alpine.data("itemExport"', 1)[1].split(
+        'Alpine.data("citationStyleCatalog"', 1
+    )[0]
+
+    assert settings.count('<option value="biblatex">BibLaTeX</option>') == 1
+    assert '<option value="biblatex">BibLaTeX</option>' in item
+    for field, parameter in (
+        ("encoding", "encoding"),
+        ("journalMode", "journal_mode"),
+        ("doiPolicy", "doi_policy"),
+        ("urlPolicy", "url_policy"),
+        ("excludedFields", "excluded_fields"),
+        ("sortBy", "sort_by"),
+        ("citationKeyFormula", "citation_key_formula"),
+        ("citationKeyForceAscii", "citation_key_force_ascii"),
+    ):
+        assert f'x-model="{field}"' in settings
+        assert f"this.{field} = prefs.citation.{field};" in user_settings
+        if field == "citationKeyFormula":
+            assert "citationKeyFormula: this.lastValidCitationKeyFormula" in user_settings
+        else:
+            assert f"{field}: this.{field}" in user_settings
+        assert f"this.{field} = preferences.{field};" in item_export
+        assert f"{parameter}: String(this.{field})" in item_export or (
+            f"{parameter}: this.{field}" in item_export
+        )
+
+
+def test_citation_key_formula_flows_into_every_export_surface():
+    source = read("src/quirebase/assets/app.js")
+    library = read("src/quirebase/templates/library.html")
+    workspace = source.split('Alpine.data("libraryWorkspace"', 1)[1].split(
+        'Alpine.data("importWorkspace"', 1
+    )[0]
+
+    assert 'name="citation_key_formula" :value="citationKeyFormula"' in library
+    assert 'name="citation_key_force_ascii" :value="String(citationKeyForceAscii)"' in library
+    assert "this.citationKeyFormula = preferences.citationKeyFormula;" in workspace
+    assert "this.citationKeyForceAscii = preferences.citationKeyForceAscii;" in workspace
+    assert "citation_key_force_ascii: String(this.citationKeyForceAscii)" in source
+
+
+def test_account_settings_preview_citation_key_over_dedicated_endpoint():
+    source = read("src/quirebase/assets/app.js")
+    settings = read("src/quirebase/templates/account_settings.html")
+
+    assert "/api/citation-key-preview" in source
+    assert 'this.$watch("citationKeyFormula", () => this.previewCitationKey(true));' in source
+    assert 'this.$watch("citationKeyForceAscii", () => this.previewCitationKey());' in source
+    assert "this.lastValidCitationKeyFormula = formula;" in source
+    assert settings.count('x-model="citationKeyFormula"') == 1
+    assert 'x-text="citationKeyPreview' in settings
 
 
 def test_export_preferences_recover_when_saved_citation_style_is_unavailable():

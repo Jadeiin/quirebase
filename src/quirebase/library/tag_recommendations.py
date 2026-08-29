@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
+from inquiro.richtext import convert_rich_text
 from rubrica import (
     RecommendationDocument,
     RecommendationLimits,
@@ -164,8 +165,8 @@ def _item_text(db: Session, item: Item, settings: Settings) -> str:
         .limit(1)
     )
     return clean_recommendation_text(
-        item.title,
-        item.abstract,
+        convert_rich_text(item.title, source="html", target="text"),
+        convert_rich_text(item.abstract, source="html", target="text"),
         full_text,
         settings.recommendation_max_chars,
     )

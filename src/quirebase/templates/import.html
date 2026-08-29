@@ -24,7 +24,7 @@
     <span class="module-number">02</span><h2>{{ _('Bibliography file') }}</h2>
     <p>{{ _('Preview and import records exported by EndNote, Zotero, Mendeley, or another reference manager.') }}</p>
     <form method="post" action="/bibliography/preview?csrf_token={{ csrf }}" enctype="multipart/form-data">
-      <label>{{ _('Format') }}<select name="file_format"><option value="bibtex">BibTeX (.bib)</option><option value="ris">RIS / EndNote (.ris, .enw)</option></select></label>
+      <label>{{ _('Format') }}<select name="file_format"><option value="bibtex">BibTeX (.bib)</option><option value="biblatex">BibLaTeX (.bib)</option><option value="ris">RIS / EndNote (.ris, .enw)</option></select></label>
       <label>{{ _('File') }}<input type="file" name="bibliography" accept=".bib,.ris,.enw,text/plain" required></label>
       <button>{{ _('Preview records') }}</button>
     </form>

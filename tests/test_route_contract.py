@@ -42,6 +42,7 @@ EXPECTED_OPERATIONAL_ROUTES = {
     ("GET", "/items/{item_id}/pdf/{revision_id}"),
     ("GET", "/items/{item_id}/{section}"),
     ("GET", "/api/citation-styles"),
+    ("GET", "/api/citation-key-preview"),
     ("GET", "/library"),
     ("GET", "/login"),
     ("GET", "/metrics"),
@@ -132,7 +133,7 @@ def test_operational_routes_contract():
                 continue
             operational_routes.add((method, route.path))
 
-    assert len(operational_routes) == 92, f"Expected 92 routes, found {len(operational_routes)}"
+    assert len(operational_routes) == 93, f"Expected 93 routes, found {len(operational_routes)}"
     assert operational_routes == EXPECTED_OPERATIONAL_ROUTES
 
 

@@ -4,9 +4,19 @@ import argparse
 import json
 import os
 import sys
-from dataclasses import asdict
+import unicodedata
+from dataclasses import asdict, replace
 from typing import TYPE_CHECKING, Protocol, Self, TextIO
 
+from inquiro.bibliography import (
+    DEFAULT_CITATION_KEY_FORMULA,
+    BibliographyExportOptions,
+    BibliographyRecord,
+    Contributor,
+    evaluate_citation_key_formula,
+    export_bibliography_records,
+    suffixed_citation_key,
+)
 from inquiro.models import (
     CandidateNotFound,
     CandidatePage,
@@ -44,10 +54,44 @@ class RuntimeFactory(Protocol):
     def __call__(self, config: ProviderConfig) -> Runtime: ...
 
 
+OUTPUT_FORMATS = ("json", "bibtex", "biblatex", "ris", "endnote")
+
+
+def _add_output_options(command: argparse.ArgumentParser) -> None:
+    command.add_argument(
+        "--format",
+        choices=OUTPUT_FORMATS,
+        default="json",
+        dest="output_format",
+        help="Output format (default: json).",
+    )
+    command.add_argument(
+        "--encoding",
+        choices=("unicode", "latex"),
+        default="unicode",
+        help="BibTeX/BibLaTeX text encoding (default: unicode).",
+    )
+    command.add_argument(
+        "--preserve-case",
+        action="store_true",
+        help="Protect uppercase title text in BibTeX/BibLaTeX output.",
+    )
+    command.add_argument(
+        "--omit-abstract",
+        action="store_true",
+        help="Omit abstracts from bibliography output.",
+    )
+    command.add_argument(
+        "--include-identifiers",
+        action="store_true",
+        help="Include identifiers in addition to DOI.",
+    )
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="inquiro",
-        description="Look up and discover scholarly Candidate Records.",
+        description="Look up, discover, and export scholarly Candidate Records.",
     )
     parser.add_argument(
         "--timeout",
@@ -72,6 +116,7 @@ def _parser() -> argparse.ArgumentParser:
         default="auto",
         help="Identifier provider or auto detection (default: auto).",
     )
+    _add_output_options(lookup)
 
     search = commands.add_parser("search", help="Search one scholarly metadata provider.")
     search.add_argument("provider", help="Search provider, such as crossref or openalex.")
@@ -101,6 +146,7 @@ def _parser() -> argparse.ArgumentParser:
     search.add_argument("--sort", default="relevance")
     search.add_argument("--year-from", type=int)
     search.add_argument("--year-to", type=int)
+    _add_output_options(search)
     return parser
 
 
@@ -136,6 +182,84 @@ def _write_json(value: object, *, stream: TextIO | None = None) -> None:
     stream.write("\n")
 
 
+def _candidate_contributors(value: str | None) -> tuple[Contributor, ...]:
+    return tuple(
+        Contributor.parse(part.strip()) for part in (value or "").split(";") if part.strip()
+    )
+
+
+def _candidate_record(candidate: CandidateRecord) -> BibliographyRecord:
+    identifiers = tuple(
+        (identifier.provider, identifier.value)
+        for identifier in candidate.identifiers
+        if identifier.provider.casefold() != "doi"
+    )
+    record = BibliographyRecord(
+        citation_key=None,
+        reference_type=candidate.reference_type or "article",
+        title=candidate.title,
+        authors=_candidate_contributors(candidate.authors),
+        abstract=candidate.abstract,
+        keywords=tuple(
+            keyword.strip() for keyword in (candidate.keywords or "").split(";") if keyword.strip()
+        ),
+        publication_date=candidate.publication_date,
+        publication_title=candidate.publication_title,
+        journal_abbreviation=candidate.journal_abbreviation,
+        volume=candidate.volume,
+        issue=candidate.issue,
+        pages=candidate.pages,
+        publisher=candidate.publisher,
+        doi=candidate.doi,
+        urls=tuple(url.strip() for url in (candidate.urls or "").splitlines() if url.strip()),
+        identifiers=identifiers,
+    )
+    return replace(
+        record,
+        citation_key=evaluate_citation_key_formula(
+            DEFAULT_CITATION_KEY_FORMULA,
+            record,
+            force_ascii=True,
+        ),
+    )
+
+
+def _bibliography_records(candidates: Sequence[CandidateRecord]) -> list[BibliographyRecord]:
+    records: list[BibliographyRecord] = []
+    used: set[str] = set()
+    for candidate in candidates:
+        record = _candidate_record(candidate)
+        base = record.citation_key or "UnknownXXXXWork"
+        key = base
+        position = 1
+        while unicodedata.normalize("NFKC", key).casefold() in used:
+            key = suffixed_citation_key(base, position)
+            position += 1
+        used.add(unicodedata.normalize("NFKC", key).casefold())
+        records.append(replace(record, citation_key=key))
+    return records
+
+
+def _write_result(result: CandidateRecord | CandidatePage, args: argparse.Namespace) -> None:
+    if args.output_format == "json":
+        _write_json(asdict(result))
+        return
+    candidates = (result,) if isinstance(result, CandidateRecord) else result.results
+    options = BibliographyExportOptions(
+        include_abstract=not args.omit_abstract,
+        preserve_case=args.preserve_case,
+        encoding=args.encoding,
+        include_identifiers=args.include_identifiers,
+    )
+    sys.stdout.write(
+        export_bibliography_records(
+            _bibliography_records(candidates),
+            args.output_format,
+            options=options,
+        )
+    )
+
+
 def _run(args: argparse.Namespace, runtime_factory: RuntimeFactory) -> None:
     with runtime_factory(_provider_config(args)) as runtime:
         result: CandidateRecord | CandidatePage
@@ -143,7 +267,7 @@ def _run(args: argparse.Namespace, runtime_factory: RuntimeFactory) -> None:
             result = runtime.lookup(args.identifier, provider=args.provider)
         else:
             result = runtime.search(_search_query(args))
-    _write_json(asdict(result))
+    _write_result(result, args)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

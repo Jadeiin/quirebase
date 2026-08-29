@@ -40,7 +40,7 @@
         <div>
           {% for item in group %}
           <a href="/items/{{ item.id }}">
-            <strong>{{ item.title }}</strong>
+            <strong>{{ item.title|rich_text|safe }}</strong>
             <small>{{ item.authors or _('No authors') }}{% if item.doi %} · {{ item.doi }}{% endif %}</small>
           </a>
           {% endfor %}

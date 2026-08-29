@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import pytest
-from inquiro.citations import (
+from inquiro.bibliography import (
+    BibliographyExportOptions,
     CitationEngineUnavailable,
-    ExportOptions,
     builtin_style_xml,
-    item_to_csl_json,
+    record_from_item,
+    record_to_csl_json,
     render_citation,
 )
 
@@ -13,7 +14,9 @@ from quirebase.core.errors import ValidationFailure
 from quirebase.library.citations import (
     create_custom_citation_style,
     format_csl_export,
+    format_standard_export,
     get_item_citation_text_response,
+    preview_citation_key,
     resolve_style_xml,
     select_builtin_citation_styles,
 )
@@ -47,7 +50,7 @@ def _item(db, **overrides) -> Item:
 
 
 def test_item_to_csl_json_maps_core_fields(db):
-    record = item_to_csl_json(_item(db))
+    record = record_to_csl_json(record_from_item(_item(db)))
 
     assert record["type"] == "article-journal"
     assert record["title"] == "An Example Paper"
@@ -60,13 +63,70 @@ def test_item_to_csl_json_maps_core_fields(db):
     assert record["keyword"] == ["search", "testing"]
 
 
+def test_item_to_csl_json_projects_canonical_rich_text_to_plaintext(db):
+    record = record_to_csl_json(
+        record_from_item(
+            _item(
+                db,
+                title="Using <i>AI</i> &amp; ML",
+                abstract="A <b>formatted</b> result with H<sub>2</sub>O.",
+            )
+        )
+    )
+
+    assert record["title"] == "Using AI & ML"
+    assert record["abstract"] == "A formatted result with H2O."
+
+
 def test_export_options_control_abstract_and_journal_abbreviation(db):
     item = _item(db, journal_abbreviation="TQ")
-    options = ExportOptions(include_abstract=False, abbreviate_journal=True)
-    record = item_to_csl_json(item, options=options)
+    options = BibliographyExportOptions(
+        include_abstract=False, journal_mode="prefer_abbreviated"
+    )
+    record = record_to_csl_json(record_from_item(item), options)
 
     assert "abstract" not in record
     assert record["container-title"] == "TQ"
+
+
+def test_citation_key_preview_shows_key_and_disambiguation_suffix():
+    assert preview_citation_key(
+        "auth.capitalize + year + shorttitle(1).capitalize", force_ascii=True
+    ) == "LovelaceXXXXSketch  LovelaceXXXXSketcha"
+    assert preview_citation_key("auth.lower + year") == "lovelaceXXXX  lovelaceXXXXa"
+
+
+def test_citation_key_preview_rejects_invalid_formulas():
+    with pytest.raises(ValidationFailure):
+        preview_citation_key("auth + unknown")
+
+    with pytest.raises(ValidationFailure):
+        preview_citation_key("x" * 1001)
+
+
+def test_standard_export_applies_citation_key_formula_to_keyless_items(db):
+    item = _item(db, title="An Example Paper")
+    item.bibtex_id = None
+
+    contents, _media_type, _filename = format_standard_export(
+        [item],
+        "bibtex",
+        options=BibliographyExportOptions(
+            citation_key_formula="auth.lower + year",
+            citation_key_force_ascii=True,
+        ),
+    )
+
+    assert "@article{doe2025," in contents
+
+
+def test_standard_export_rejects_invalid_citation_key_formula(db):
+    with pytest.raises(ValidationFailure):
+        format_standard_export(
+            [_item(db)],
+            "bibtex",
+            options=BibliographyExportOptions(citation_key_formula="auth + unknown"),
+        )
 
 
 def test_builtin_style_catalog_is_searchable(db):
@@ -78,6 +138,8 @@ def test_builtin_style_catalog_is_searchable(db):
 
 
 def test_builtin_style_selection_reuses_one_catalog_snapshot(monkeypatch):
+    from inquiro.bibliography import styles
+
     from quirebase.library import citations
 
     catalog_calls = 0
@@ -91,7 +153,8 @@ def test_builtin_style_selection_reuses_one_catalog_snapshot(monkeypatch):
         catalog_calls += 1
         return catalog
 
-    monkeypatch.setattr(citations, "_builtin_style_catalog", load_catalog)
+    styles.builtin_style_catalog.cache_clear()
+    monkeypatch.setattr(styles, "builtin_style_catalog", load_catalog)
 
     selection = citations.select_builtin_citation_styles("matching", limit=1, include="saved")
 
@@ -114,7 +177,7 @@ def test_citation_copy_endpoint_accepts_export_options(db, tmp_path, monkeypatch
                 "file_format": "bibtex",
                 "include_abstract": "false",
                 "preserve_case": "true",
-                "abbreviate_journal": "true",
+                "journal_mode": "prefer_abbreviated",
             },
         )
         assert response.status_code == 200
@@ -168,14 +231,22 @@ def test_citation_style_search_includes_requested_saved_style(db, tmp_path, monk
 
 
 def test_item_to_csl_json_maps_reference_types(db):
-    assert item_to_csl_json(_item(db, reference_type="book"))["type"] == "book"
-    assert item_to_csl_json(_item(db, reference_type="preprint"))["type"] == "article"
-    assert item_to_csl_json(_item(db, reference_type="thesis"))["type"] == "thesis"
-    assert item_to_csl_json(_item(db, reference_type="unknown-type"))["type"] == "article"
+    assert record_to_csl_json(record_from_item(_item(db, reference_type="book")))["type"] == "book"
+    assert (
+        record_to_csl_json(record_from_item(_item(db, reference_type="preprint")))["type"]
+        == "article"
+    )
+    assert (
+        record_to_csl_json(record_from_item(_item(db, reference_type="thesis")))["type"] == "thesis"
+    )
+    assert (
+        record_to_csl_json(record_from_item(_item(db, reference_type="unknown-type")))["type"]
+        == "article"
+    )
 
 
 def test_author_names_without_commas_use_last_token_as_family(db):
-    record = item_to_csl_json(_item(db, authors="Ada Lovelace"))
+    record = record_to_csl_json(record_from_item(_item(db, authors="Ada Lovelace")))
     assert record["author"] == [{"family": "Lovelace", "given": "Ada"}]
 
 
@@ -184,7 +255,7 @@ def test_builtin_styles_render(db):
     for style_key in ("apa", "ieee", "modern-language-association"):
         xml = builtin_style_xml(style_key)
         assert xml is not None, style_key
-        rendered = render_citation(item, xml)
+        rendered = render_citation(record_from_item(item), xml)
         assert "An Example Paper" in rendered
 
 
@@ -192,7 +263,7 @@ def test_render_citation_html(db):
     item = _item(db)
     apa_xml = builtin_style_xml("apa")
     assert apa_xml is not None
-    rendered = render_citation(item, apa_xml, output_format="html")
+    rendered = render_citation(record_from_item(item), apa_xml, output_format="html")
     assert "An Example Paper" in rendered
 
 

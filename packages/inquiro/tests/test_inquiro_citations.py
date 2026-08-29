@@ -1,16 +1,15 @@
 import pytest
-from inquiro.citations import (
+from inquiro.bibliography import (
     CitationEngineUnavailable,
     builtin_style_xml,
+    engine,
     is_valid_csl,
     render_bibliography,
 )
 
 
 def test_render_bibliography_reports_unavailable_optional_engine(monkeypatch):
-    from inquiro import citations
-
-    monkeypatch.setattr(citations, "CiteProcJSON", None)
+    monkeypatch.setattr(engine, "CiteProcJSON", None)
 
     with pytest.raises(CitationEngineUnavailable, match="requires the 'citation' extra"):
         render_bibliography([{"id": "item-1", "title": "Example"}], "<style/>")

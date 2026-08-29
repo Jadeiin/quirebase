@@ -7,9 +7,9 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from inquiro.bibliography import REFERENCE_TYPE_TO_BIBTEX, extract_year
+from inquiro.canonical import clean_markup, clean_rich_markup, normalize_reference_type
 from inquiro.identifiers import DOI_PATTERN, normalize_doi
 from inquiro.models import CandidateRecord
-from inquiro.parsing import _clean_markup, normalize_reference_type
 from sqlalchemy import delete, select, update
 
 from quirebase.access.items import require_editable_item
@@ -166,17 +166,17 @@ def apply_metadata_record(
     rec = candidate_record_values(record) if isinstance(record, CandidateRecord) else record
 
     scalar_fields = {
-        "title": ("title", _clean_markup),
-        "abstract": ("abstract", _clean_markup),
+        "title": ("title", clean_rich_markup),
+        "abstract": ("abstract", clean_rich_markup),
         "publication_date": ("publication_date", lambda value: str(value).strip()),
-        "publication_title": ("publication_title", _clean_markup),
-        "journal_abbreviation": ("journal_abbreviation", _clean_markup),
+        "publication_title": ("publication_title", clean_markup),
+        "journal_abbreviation": ("journal_abbreviation", clean_markup),
         "volume": ("volume", lambda value: str(value).strip()),
         "issue": ("issue", lambda value: str(value).strip()),
         "pages": ("pages", lambda value: str(value).strip()),
-        "publisher": ("publisher", _clean_markup),
-        "affiliation": ("affiliation", _clean_markup),
-        "place_published": ("place_published", _clean_markup),
+        "publisher": ("publisher", clean_markup),
+        "affiliation": ("affiliation", clean_markup),
+        "place_published": ("place_published", clean_markup),
     }
     for field, (record_field, transform) in scalar_fields.items():
         value = rec.get(record_field)

@@ -5,6 +5,10 @@ import re
 from typing import Any
 from xml.etree import ElementTree
 
+from inquiro.canonical import (
+    collect_urls,
+    first_text,
+)
 from inquiro.identifiers import normalize_doi, parse_arxiv
 from inquiro.models import (
     AcquiredDocument,
@@ -15,12 +19,10 @@ from inquiro.models import (
     ProviderUnavailable,
     SearchClause,
 )
-from inquiro.parsing import (
-    _boolean_query,
-    _collect_urls,
-    _first,
-)
 from inquiro.providers._contracts import ProviderContext, ProviderDefinition
+from inquiro.providers._payload import (
+    boolean_query,
+)
 
 
 class ArxivLookupAdapter:
@@ -50,7 +52,7 @@ class ArxivLookupAdapter:
         if not doi and doi_link is not None:
             doi = normalize_doi(doi_link.attrib.get("href", "")) or None
         identifiers: dict[str, str] = {"arxiv": value}
-        urls = _collect_urls(
+        urls = collect_urls(
             f"https://arxiv.org/abs/{value}",
             f"https://arxiv.org/pdf/{value}.pdf",
             f"https://doi.org/{doi}" if doi else None,
@@ -59,7 +61,7 @@ class ArxivLookupAdapter:
             identifiers["doi"] = doi
         published = entry.findtext("atom:published", default="", namespaces=namespace)
         return ProviderRecord(
-            title=_first(entry.findtext("atom:title", default="", namespaces=namespace)) or "",
+            title=first_text(entry.findtext("atom:title", default="", namespaces=namespace)) or "",
             abstract=summary.strip() or None,
             authors="; ".join(
                 author.findtext("atom:name", default="", namespaces=namespace).strip()
@@ -74,7 +76,7 @@ class ArxivLookupAdapter:
             )
             or None,
             publication_date=published[:10] if published else None,
-            publication_title=_first(
+            publication_title=first_text(
                 entry.findtext("arxiv:journal_ref", default="", namespaces=namespace)
             ),
             doi=doi,
@@ -98,7 +100,7 @@ class ArxivSearchAdapter:
         settings: Any,
         endpoint: str,
     ) -> ProviderSearchPage:
-        query = _boolean_query(
+        query = boolean_query(
             clauses,
             {
                 "any": "all:",
@@ -134,7 +136,7 @@ class ArxivSearchAdapter:
         )
         results = []
         for entry in root.findall("atom:entry", namespace):
-            title = _first(entry.findtext("atom:title", default="", namespaces=namespace))
+            title = first_text(entry.findtext("atom:title", default="", namespaces=namespace))
             if not title:
                 continue
             entry_id = entry.findtext("atom:id", default="", namespaces=namespace)

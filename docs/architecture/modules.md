@@ -91,6 +91,29 @@ error at that seam. Callers therefore do not need to know whether citation forma
 an optional dependency, and unexpected Implementation failures are not misclassified as input
 errors.
 
+`inquiro.bibliography` is a package facade: the only supported import surface for neutral
+records, bibliography interchange, Citation Key generation, Citation Style catalog access and CSL
+rendering. Its internal modules (`records`, `options`, `keys`, `formats`, `styles`, `engine`) are private
+implementation seams with a test-enforced layer order (records/options → keys →
+formats/styles → engine); nothing inside the package may import a higher layer, and nothing
+outside may bypass the facade. One options class (`BibliographyExportOptions`) carries every
+export preference; validation is concentrated in `export_bibliography_records`. Shared payload
+cleaning and reference-type normalization live in `inquiro.canonical`; Provider-specific payload
+helpers stay private inside `inquiro.providers`. The Item-column dictionary encoding stored on
+Import Batches belongs to the Library Module; Inquiro exchanges typed records only.
+
+Scholarly inline Rich Text crosses the Inquiro Interface through one restricted conversion
+operation. Its canonical application representation is sanitized HTML containing only `i`, `b`,
+`sup` and `sub`, without attributes. The private Implementation maps the equivalent supported
+LaTeX commands (`emph`, `mkbibemph`, `textit`, `textbf`, `textsuperscript` and `textsubscript`) to
+Inquiro-owned nodes and renders canonical HTML, LaTeX or plaintext. Library stores canonical HTML
+for Item titles and abstracts; Citation Key generation, Search, recommendations, archive names and
+non-rich export formats explicitly request plaintext. Inline `$...$` formulae remain verbatim in
+the canonical representation and bibliography round-trips. Only the Web output Adapter projects
+them through `latex2mathml` into MathML, then rebuilds the result through a strict element and
+attribute allowlist before marking it safe for template rendering. `pylatexenc`, `latex2mathml`
+and bibliography implementation types do not cross the Interface.
+
 Item metadata mutation crosses the Library interface through `create_item`,
 `revise_item_metadata` and `regenerate_bibtex_key`. Creation and revision share one flat,
 typed `ItemMetadata` value; Contributor, identifier and custom-field values are parsed before
@@ -206,7 +229,14 @@ Dependencies on standalone workspace packages are also explicit:
 
 | Source | May depend on | Ownership reason |
 | --- | --- | --- |
+| `documents` | `inquiro` | Render canonical scholarly Rich Text as plaintext for archive filenames and manifests |
 | `library` | `inquiro`, `rubrica` | Adapt reusable metadata, bibliography, citation and recommendation computation to Library business operations and typed domain errors |
+| `search` | `inquiro` | Project canonical scholarly Rich Text into the plaintext derived search representation |
+| `web` | `inquiro` | Sanitize and render canonical scholarly Rich Text at the HTML output Adapter |
+
+The `documents`, `search` and `web` edges are restricted to `inquiro.richtext`; they do not permit
+those Modules to call Provider, bibliography or citation operations. Those business workflows
+still cross Library.
 
 Standalone workspace packages never depend back on Quirebase. Audit Event construction and
 administrative queries cross only the `quirebase.audit` Interface.
