@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import Depends, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
 
 from quirebase.core.config import get_settings
@@ -67,13 +67,13 @@ from quirebase.projects import (
 from quirebase.projects import (
     remove_item_from_project as remove_item_from_project_op,
 )
-from quirebase.web.deps import current_login, current_user, require_csrf
+from quirebase.web.deps import current_login, current_user, protected_router
 from quirebase.web.templates import templates
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
-router = APIRouter()
+router = protected_router()
 
 
 def _structured_people(
@@ -291,7 +291,7 @@ def render_item_workspace(
     )
 
 
-@router.post("/items", dependencies=[Depends(require_csrf)])
+@router.post("/items")
 def create_item(
     metadata: ItemMetadata = Depends(_item_metadata_from_form),
     user: User = Depends(current_user),
@@ -351,7 +351,7 @@ def item_section_page(
     return render_item_workspace(request, item_id, section, user, login_session, db)
 
 
-@router.post("/items/{item_id}/edit", dependencies=[Depends(require_csrf)])
+@router.post("/items/{item_id}/edit")
 def edit_item(
     item_id: str,
     version: int = Form(),
@@ -363,7 +363,7 @@ def edit_item(
     return RedirectResponse(f"/items/{result.item_id}/metadata", status_code=303)
 
 
-@router.post("/items/{item_id}/delete", dependencies=[Depends(require_csrf)])
+@router.post("/items/{item_id}/delete")
 def delete_item_route(
     item_id: str,
     confirm: str = Form(default=""),
@@ -376,7 +376,7 @@ def delete_item_route(
     return RedirectResponse("/library", status_code=303)
 
 
-@router.post("/items/{item_id}/sync-metadata", dependencies=[Depends(require_csrf)])
+@router.post("/items/{item_id}/sync-metadata")
 def sync_metadata_route(
     item_id: str,
     version: int = Form(),
@@ -397,7 +397,7 @@ def sync_metadata_route(
     return RedirectResponse(f"/items/{item_id}", status_code=303)
 
 
-@router.post("/items/{item_id}/rescan-doi", dependencies=[Depends(require_csrf)])
+@router.post("/items/{item_id}/rescan-doi")
 def rescan_doi_route(
     item_id: str,
     user: User = Depends(current_user),
@@ -407,7 +407,7 @@ def rescan_doi_route(
     return RedirectResponse(f"/items/{item_id}", status_code=303)
 
 
-@router.post("/items/{item_id}/update-bibtex-key", dependencies=[Depends(require_csrf)])
+@router.post("/items/{item_id}/update-bibtex-key")
 def update_bibtex_key_route(
     item_id: str,
     version: int = Form(),
@@ -423,7 +423,7 @@ def update_bibtex_key_route(
     return RedirectResponse(f"/items/{item_id}", status_code=303)
 
 
-@router.post("/items/{item_id}/tags/matrix", dependencies=[Depends(require_csrf)])
+@router.post("/items/{item_id}/tags/matrix")
 def update_tag_matrix_route(
     item_id: str,
     tag_ids: list[str] = Form(default=[]),
@@ -437,7 +437,7 @@ def update_tag_matrix_route(
     return RedirectResponse(f"/items/{item_id}/organize", status_code=303)
 
 
-@router.post("/items/{item_id}/tag-recommendations", dependencies=[Depends(require_csrf)])
+@router.post("/items/{item_id}/tag-recommendations")
 def regenerate_tag_recommendations(
     item_id: str,
     user: User = Depends(current_user),
@@ -456,7 +456,7 @@ def suggest_authors(
     return search_authors_typeahead(db, query=q)
 
 
-@router.post("/items/{item_id}/attachments", dependencies=[Depends(require_csrf)])
+@router.post("/items/{item_id}/attachments")
 def upload_attachment(
     item_id: str,
     attachment: UploadFile = File(),
@@ -491,7 +491,7 @@ def download_attachment(
     )
 
 
-@router.post("/items/{item_id}/tags", dependencies=[Depends(require_csrf)])
+@router.post("/items/{item_id}/tags")
 def add_tag(
     item_id: str,
     name: str = Form(),
@@ -502,7 +502,7 @@ def add_tag(
     return RedirectResponse(f"/items/{item_id}/organize", status_code=303)
 
 
-@router.post("/items/{item_id}/tags/{tag_id}/remove", dependencies=[Depends(require_csrf)])
+@router.post("/items/{item_id}/tags/{tag_id}/remove")
 def remove_tag(
     item_id: str,
     tag_id: str,
@@ -513,7 +513,7 @@ def remove_tag(
     return RedirectResponse(f"/items/{item_id}/organize", status_code=303)
 
 
-@router.post("/items/{item_id}/discussion", dependencies=[Depends(require_csrf)])
+@router.post("/items/{item_id}/discussion")
 def add_discussion_message(
     item_id: str,
     body: str = Form(),
@@ -524,9 +524,7 @@ def add_discussion_message(
     return RedirectResponse(f"/items/{item_id}/discussion", status_code=303)
 
 
-@router.post(
-    "/items/{item_id}/discussion/{message_id}/delete", dependencies=[Depends(require_csrf)]
-)
+@router.post("/items/{item_id}/discussion/{message_id}/delete")
 def delete_discussion_message(
     item_id: str,
     message_id: str,
@@ -537,7 +535,7 @@ def delete_discussion_message(
     return RedirectResponse(f"/items/{item_id}/discussion", status_code=303)
 
 
-@router.post("/items/{item_id}/projects/{project_id}", dependencies=[Depends(require_csrf)])
+@router.post("/items/{item_id}/projects/{project_id}")
 def add_item_to_project(
     item_id: str,
     project_id: str,
@@ -548,7 +546,7 @@ def add_item_to_project(
     return RedirectResponse(f"/items/{item_id}/organize", status_code=303)
 
 
-@router.post("/items/{item_id}/projects/{project_id}/remove", dependencies=[Depends(require_csrf)])
+@router.post("/items/{item_id}/projects/{project_id}/remove")
 def remove_item_from_project(
     item_id: str,
     project_id: str,
@@ -559,7 +557,7 @@ def remove_item_from_project(
     return RedirectResponse(f"/items/{item_id}/organize", status_code=303)
 
 
-@router.post("/items/{item_id}/pdf", dependencies=[Depends(require_csrf)])
+@router.post("/items/{item_id}/pdf")
 def upload_pdf(
     item_id: str,
     pdf: UploadFile = File(),

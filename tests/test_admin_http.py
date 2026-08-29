@@ -109,8 +109,9 @@ def test_admin_create_user_endpoint(db, tmp_path, monkeypatch):
     client, _admin, login = admin_client(db, tmp_path, monkeypatch)
 
     res = client.post(
-        f"/admin/users/create?csrf_token={login.csrf_token}",
+        "/admin/users/create",
         data={
+            "csrf_token": login.csrf_token,
             "username": "http_created_user",
             "password": "strong_password_123",
             "role": "member",
@@ -129,8 +130,9 @@ def test_admin_settings_endpoint(db, tmp_path, monkeypatch):
     client, _admin, login = admin_client(db, tmp_path, monkeypatch)
 
     res = client.post(
-        f"/admin/settings?csrf_token={login.csrf_token}",
+        "/admin/settings",
         data={
+            "csrf_token": login.csrf_token,
             "metadata_contact_email": "http_admin@institution.edu",
             "ncbi_api_key": "ncbi_key_xyz",
             "openalex_api_key": "",
@@ -156,7 +158,8 @@ def test_admin_maintenance_triggers(db, tmp_path, monkeypatch):
 
     # Reindex trigger
     res = client.post(
-        f"/admin/maintenance/reindex?csrf_token={login.csrf_token}",
+        "/admin/maintenance/reindex",
+        data={"csrf_token": login.csrf_token},
         follow_redirects=False,
     )
     assert res.status_code == 303
@@ -167,7 +170,8 @@ def test_admin_maintenance_triggers(db, tmp_path, monkeypatch):
 
     # Check objects trigger
     res = client.post(
-        f"/admin/maintenance/check-objects?csrf_token={login.csrf_token}",
+        "/admin/maintenance/check-objects",
+        data={"csrf_token": login.csrf_token},
         follow_redirects=False,
     )
     assert res.status_code == 303
@@ -178,7 +182,8 @@ def test_admin_maintenance_triggers(db, tmp_path, monkeypatch):
 
     # Backup trigger
     res = client.post(
-        f"/admin/maintenance/backup?csrf_token={login.csrf_token}",
+        "/admin/maintenance/backup",
+        data={"csrf_token": login.csrf_token},
         follow_redirects=False,
     )
     assert res.status_code == 303

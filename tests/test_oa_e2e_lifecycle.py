@@ -354,8 +354,9 @@ def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(db, tmp_path, monke
 
         # 2. Submit edit form modifying title and adding second author
         edit_resp = client.post(
-            f"/items/{item.id}/edit?csrf_token=test-csrf",
+            f"/items/{item.id}/edit",
             data={
+                "csrf_token": "test-csrf",
                 "version": str(item.version),
                 "title": "Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives",
                 "author_last_name[]": ["Hasanein", "Sobaih"],

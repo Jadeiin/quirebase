@@ -27,15 +27,17 @@ def test_online_preview_uses_existing_confirmed_import_flow(db, tmp_path, monkey
     )
     try:
         preview = client.post(
-            "/metadata/preview?csrf_token=test-csrf",
-            data={"identifier": "10.1/looked-up", "provider": "auto"},
+            "/metadata/preview",
+            data={"csrf_token": "test-csrf", "identifier": "10.1/looked-up", "provider": "auto"},
         )
         assert preview.status_code == 200
         assert "Looked-up paper" in preview.text
         assert db.scalar(select(Item).where(Item.title == "Looked-up paper")) is None
         batch = db.scalar(select(ImportBatch).where(ImportBatch.file_format == "metadata:doi"))
         committed = client.post(
-            f"/bibliography/import/{batch.id}?csrf_token=test-csrf", follow_redirects=False
+            f"/bibliography/import/{batch.id}",
+            follow_redirects=False,
+            data={"csrf_token": "test-csrf"},
         )
         assert committed.status_code == 303
         imported = db.scalar(select(Item).where(Item.title == "Looked-up paper"))

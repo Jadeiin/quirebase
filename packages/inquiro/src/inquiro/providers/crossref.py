@@ -94,7 +94,9 @@ class CrossrefLookupAdapter:
             journal_abbreviation=clean_markup(first_text(message.get("short-container-title"))),
             volume=clean_markup(first_text(message.get("volume"))),
             issue=clean_markup(
-                first_text(message.get("issue") or (message.get("journal-issue") or {}).get("issue"))
+                first_text(
+                    message.get("issue") or (message.get("journal-issue") or {}).get("issue")
+                )
             ),
             pages=clean_markup(first_text(message.get("page"))),
             publisher=clean_markup(first_text(message.get("publisher"))),

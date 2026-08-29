@@ -63,6 +63,9 @@ class I18nTemplates(Jinja2Templates):
     ):
         ctx: dict[str, Any] = context.copy() if context else {}
         loc = resolve_request_locale(request)
+        csrf_token = getattr(request.state, "csrf_token", None)
+        if csrf_token is not None:
+            ctx.setdefault("csrf", csrf_token)
         ctx.setdefault("locale", bcp47_tag(loc))
         ctx.setdefault("active_locale", loc)
         ctx.setdefault("_", lambda msg, **k: gettext(msg, locale=loc, **k))

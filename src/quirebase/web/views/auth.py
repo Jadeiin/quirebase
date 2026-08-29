@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from quirebase.accounts.authentication import (
@@ -34,21 +34,30 @@ from quirebase.core.errors import ValidationFailure
 from quirebase.core.i18n import normalize_locale
 from quirebase.models import LoginSession, User
 from quirebase.operations.settings import get_effective_setting
-from quirebase.web.deps import current_login, current_user, login_identity, require_csrf
+from quirebase.web.deps import (
+    current_login,
+    current_user,
+    login_identity,
+    protected_router,
+)
+from quirebase.web.deps import (
+    public_router as make_public_router,
+)
 from quirebase.web.templates import templates
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
-router = APIRouter()
+public_router = make_public_router()
+router = protected_router()
 
 
-@router.get("/login", response_class=HTMLResponse)
+@public_router.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
     return templates.TemplateResponse(request, "login.html", {})
 
 
-@router.post("/login")
+@public_router.post("/login")
 def login(
     request: Request,
     username: str = Form(),
@@ -78,7 +87,7 @@ def login(
     return response
 
 
-@router.get("/accept-invitation/{token}", response_class=HTMLResponse)
+@public_router.get("/accept-invitation/{token}", response_class=HTMLResponse)
 def accept_invitation_page(request: Request, token: str, db: Session = Depends(get_db)):
     invitation = get_valid_invitation(db, token)
     return templates.TemplateResponse(
@@ -88,7 +97,7 @@ def accept_invitation_page(request: Request, token: str, db: Session = Depends(g
     )
 
 
-@router.post("/accept-invitation/{token}")
+@public_router.post("/accept-invitation/{token}")
 def accept_invitation(token: str, password: str = Form(), db: Session = Depends(get_db)):
     accept_invitation_op(db, token, password)
     return RedirectResponse("/login", status_code=303)
@@ -117,7 +126,7 @@ def account_settings_page(
     )
 
 
-@router.post("/account/settings/locale", dependencies=[Depends(require_csrf)])
+@router.post("/account/settings/locale")
 def update_locale(
     locale: str = Form(),
     user: User = Depends(current_user),
@@ -135,7 +144,7 @@ def update_locale(
     return response
 
 
-@router.post("/account/settings/password", dependencies=[Depends(require_csrf)])
+@router.post("/account/settings/password")
 def update_password(
     request: Request,
     current_password: str = Form(),
@@ -214,7 +223,7 @@ def sessions_page(
     )
 
 
-@router.post("/account/sessions/{session_id}/revoke", dependencies=[Depends(require_csrf)])
+@router.post("/account/sessions/{session_id}/revoke")
 def revoke_session(
     request: Request,
     session_id: str,
@@ -227,7 +236,7 @@ def revoke_session(
     return RedirectResponse(target, status_code=303)
 
 
-@router.post("/account/sessions/revoke-all", dependencies=[Depends(require_csrf)])
+@router.post("/account/sessions/revoke-all")
 def revoke_all_sessions(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
@@ -238,7 +247,7 @@ def revoke_all_sessions(
     return response
 
 
-@router.post("/logout", dependencies=[Depends(require_csrf)])
+@router.post("/logout")
 def logout(
     user: User = Depends(current_user),
     login_session: LoginSession = Depends(current_login),

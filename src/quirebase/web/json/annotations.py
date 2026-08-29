@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import Depends, Response
 from fastapi.responses import JSONResponse
 
 from quirebase.core.database import get_db
@@ -14,12 +14,12 @@ from quirebase.documents import (
 )
 from quirebase.documents.schemas import AnnotationCreate, AnnotationUpdate
 from quirebase.models import User
-from quirebase.web.deps import current_user, require_csrf
+from quirebase.web.deps import current_user, protected_router
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
-router = APIRouter()
+router = protected_router()
 
 
 @router.get("/documents/{item_id}/annotations")
@@ -34,7 +34,7 @@ def list_annotations(
     return {"annotations": annotations}
 
 
-@router.post("/documents/{item_id}/annotations", dependencies=[Depends(require_csrf)])
+@router.post("/documents/{item_id}/annotations")
 def create_annotation(
     item_id: str,
     data: AnnotationCreate,
@@ -45,9 +45,7 @@ def create_annotation(
     return JSONResponse(result, status_code=201)
 
 
-@router.patch(
-    "/documents/{item_id}/annotations/{annotation_id}", dependencies=[Depends(require_csrf)]
-)
+@router.patch("/documents/{item_id}/annotations/{annotation_id}")
 def update_annotation(
     item_id: str,
     annotation_id: str,
@@ -58,9 +56,7 @@ def update_annotation(
     return update_document_annotation(db, user, item_id, annotation_id, data)
 
 
-@router.delete(
-    "/documents/{item_id}/annotations/{annotation_id}", dependencies=[Depends(require_csrf)]
-)
+@router.delete("/documents/{item_id}/annotations/{annotation_id}")
 def delete_annotation(
     item_id: str,
     annotation_id: str,

@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from starlette.background import BackgroundTask
 
@@ -20,12 +20,12 @@ from quirebase.library import (
     get_item_citation_text_response,
 )
 from quirebase.models import User
-from quirebase.web.deps import current_user
+from quirebase.web.deps import current_user, protected_router
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
-router = APIRouter()
+router = protected_router()
 
 RANGE_PATTERN = re.compile(r"bytes=(\d*)-(\d*)$")
 
@@ -112,8 +112,7 @@ def export_item_bibliography(
                 part.strip() for part in excluded_fields.split(",") if part.strip()
             ),
             sort_by=sort_by,
-            citation_key_formula=citation_key_formula.strip()
-            or DEFAULT_CITATION_KEY_FORMULA,
+            citation_key_formula=citation_key_formula.strip() or DEFAULT_CITATION_KEY_FORMULA,
             citation_key_force_ascii=citation_key_force_ascii,
         ),
     )
@@ -163,8 +162,7 @@ def copy_citation(
                 part.strip() for part in excluded_fields.split(",") if part.strip()
             ),
             sort_by=sort_by,
-            citation_key_formula=citation_key_formula.strip()
-            or DEFAULT_CITATION_KEY_FORMULA,
+            citation_key_formula=citation_key_formula.strip() or DEFAULT_CITATION_KEY_FORMULA,
             citation_key_force_ascii=citation_key_force_ascii,
         ),
     )

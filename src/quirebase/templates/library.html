@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_forms.html" import csrf_field %}
 {% block title %}{{ _('Paper library') }} · Quirebase{% endblock %}
 {% block content %}
 <div class="page-heading"><div><p class="eyebrow">{{ _('{count} papers available', count=total) }}</p><h1>{{ _('Paper library') }}</h1></div><a class="button-link" href="/bibliography/import">{{ _('Import papers') }}</a></div>
@@ -20,7 +21,7 @@
   </form>
 </section>
 
-  <form method="post" action="/library/bulk?csrf_token={{ csrf }}" class="library-form">
+  <form method="post" action="/library/bulk" class="library-form">{{ csrf_field(csrf) }}
     <div class="bulk-bar">
       <input type="hidden" name="timezone" :value="browserTimezone()">
       <strong><span x-text="selectionLabel">{{ _('{count} paper(s) selected', count=0) }}</span></strong>

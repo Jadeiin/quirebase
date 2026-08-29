@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, Depends
+from fastapi import Depends
 from fastapi.responses import FileResponse, JSONResponse
 
 from quirebase.core.database import get_db
@@ -18,12 +18,12 @@ from quirebase.library import (
     select_builtin_citation_styles,
 )
 from quirebase.models import User
-from quirebase.web.deps import current_user, require_csrf
+from quirebase.web.deps import current_user, protected_router
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
-router = APIRouter()
+router = protected_router()
 
 
 @router.get("/api/citation-key-preview")
@@ -80,7 +80,7 @@ def citation_styles(
     }
 
 
-@router.post("/documents/{item_id}/annotation-exports", dependencies=[Depends(require_csrf)])
+@router.post("/documents/{item_id}/annotation-exports")
 def create_export(
     item_id: str,
     data: ExportCreate,

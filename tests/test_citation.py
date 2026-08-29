@@ -80,9 +80,7 @@ def test_item_to_csl_json_projects_canonical_rich_text_to_plaintext(db):
 
 def test_export_options_control_abstract_and_journal_abbreviation(db):
     item = _item(db, journal_abbreviation="TQ")
-    options = BibliographyExportOptions(
-        include_abstract=False, journal_mode="prefer_abbreviated"
-    )
+    options = BibliographyExportOptions(include_abstract=False, journal_mode="prefer_abbreviated")
     record = record_to_csl_json(record_from_item(item), options)
 
     assert "abstract" not in record
@@ -90,9 +88,10 @@ def test_export_options_control_abstract_and_journal_abbreviation(db):
 
 
 def test_citation_key_preview_shows_key_and_disambiguation_suffix():
-    assert preview_citation_key(
-        "auth.capitalize + year + shorttitle(1).capitalize", force_ascii=True
-    ) == "LovelaceXXXXSketch  LovelaceXXXXSketcha"
+    assert (
+        preview_citation_key("auth.capitalize + year + shorttitle(1).capitalize", force_ascii=True)
+        == "LovelaceXXXXSketch  LovelaceXXXXSketcha"
+    )
     assert preview_citation_key("auth.lower + year") == "lovelaceXXXX  lovelaceXXXXa"
 
 

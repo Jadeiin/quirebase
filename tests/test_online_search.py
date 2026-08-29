@@ -44,7 +44,8 @@ def test_online_search_page_keeps_search_separate_from_import(db, tmp_path, monk
         )
         assert searched.status_code == 200
         assert "Candidate paper" in searched.text
-        assert 'action="/metadata/preview?csrf_token=test-csrf"' in searched.text
+        assert 'action="/metadata/preview"' in searched.text
+        assert 'name="csrf_token" value="test-csrf"' in searched.text
         assert 'name="identifier" value="W99"' in searched.text
         event = db.query(AuditEvent).filter_by(action="metadata.search").one()
         assert json.loads(event.detail)["fields"] == ["title"]

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_forms.html" import csrf_field %}
 {% block title %}{{ _('Tools') }} · Quirebase{% endblock %}
 {% block content %}
 <div class="page-heading">
@@ -75,7 +76,7 @@
     </div>
 
     {% if manageable_tags and tags|length > 1 %}
-    <form class="tag-merge-form" x-data="tagMerge" method="post" action="/tools/tags/merge?csrf_token={{ csrf }}" onsubmit="return confirm('{{ _('Merge the source Tag into the target Tag? The source Tag will be deleted.') }}')">
+    <form class="tag-merge-form" x-data="tagMerge" method="post" action="/tools/tags/merge" onsubmit="return confirm('{{ _('Merge the source Tag into the target Tag? The source Tag will be deleted.') }}')">{{ csrf_field(csrf) }}
       <label>{{ _('Source Tag') }}
         <select name="source_tag_id" required @change="ensureDifferentTags">{% for tag in manageable_tags %}<option value="{{ tag.id }}">{{ tag.name }}</option>{% endfor %}</select>
       </label>
@@ -89,7 +90,7 @@
     <div class="tag-management-list">
       {% for tag, count in tags %}
       <article x-show="isTagVisible('{{ tag.id }}')">
-        <form method="post" action="/tools/tags/{{ tag.id }}?csrf_token={{ csrf }}">
+        <form method="post" action="/tools/tags/{{ tag.id }}">{{ csrf_field(csrf) }}
           <input name="name" value="{{ tag.name }}" {% if tag.created_by != user.id and user.role != 'administrator' %}disabled{% endif %}>
           {% if count > 0 %}
           <a href="/library?tag={{ tag.id }}" class="tag-paper-count tag-paper-link" title="{{ tag.name }}">{{ _('{count} paper(s)', count=count) }}</a>
@@ -101,7 +102,7 @@
           {% endif %}
         </form>
         {% if tag.created_by == user.id or user.role == 'administrator' %}
-        <form method="post" action="/tools/tags/{{ tag.id }}/delete?csrf_token={{ csrf }}" onsubmit="return confirm('{{ _('Delete this tag from every paper?') }}')">
+        <form method="post" action="/tools/tags/{{ tag.id }}/delete" onsubmit="return confirm('{{ _('Delete this tag from every paper?') }}')">{{ csrf_field(csrf) }}
           <button class="text-danger">{{ _('Delete') }}</button>
         </form>
         {% endif %}
@@ -143,7 +144,7 @@
           {% for style in custom_styles %}
           <article class="custom-style-item">
             <span>{{ style.name }}</span>
-            <form method="post" action="/citation-styles/{{ style.id }}/delete?csrf_token={{ csrf }}">
+            <form method="post" action="/citation-styles/{{ style.id }}/delete">{{ csrf_field(csrf) }}
               <button class="text-danger compact-button">{{ _('Delete') }}</button>
             </form>
           </article>
@@ -154,7 +155,7 @@
 
       <div class="citation-style-create-card panel">
         <h3>{{ _('Add style') }}</h3>
-        <form method="post" action="/citation-styles?csrf_token={{ csrf }}" class="citation-style-form">
+        <form method="post" action="/citation-styles" class="citation-style-form">{{ csrf_field(csrf) }}
           <label>{{ _('Style name') }}
             <input name="name" maxlength="120" placeholder="e.g. Nature Custom" required>
           </label>

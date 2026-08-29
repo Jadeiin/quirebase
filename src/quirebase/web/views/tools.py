@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from quirebase.core.database import get_db
@@ -21,13 +21,13 @@ from quirebase.library import (
     rename_tag as rename_tag_op,
 )
 from quirebase.models import LoginSession, User
-from quirebase.web.deps import current_login, current_user, require_csrf
+from quirebase.web.deps import current_login, current_user, protected_router
 from quirebase.web.templates import templates
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
-router = APIRouter()
+router = protected_router()
 
 
 @router.get("/tools", response_class=HTMLResponse)
@@ -70,7 +70,7 @@ def tools_page(
     )
 
 
-@router.post("/citation-styles", dependencies=[Depends(require_csrf)])
+@router.post("/citation-styles")
 def create_citation_style(
     name: str = Form(),
     csl: str = Form(),
@@ -81,7 +81,7 @@ def create_citation_style(
     return RedirectResponse("/tools?tab=citation-styles#citation-styles", status_code=303)
 
 
-@router.post("/citation-styles/{style_id}/delete", dependencies=[Depends(require_csrf)])
+@router.post("/citation-styles/{style_id}/delete")
 def delete_citation_style(
     style_id: str,
     user: User = Depends(current_user),
@@ -91,7 +91,7 @@ def delete_citation_style(
     return RedirectResponse("/tools?tab=citation-styles#citation-styles", status_code=303)
 
 
-@router.post("/tools/tags/merge", dependencies=[Depends(require_csrf)])
+@router.post("/tools/tags/merge")
 def merge_tag_route(
     source_tag_id: str = Form(),
     target_tag_id: str = Form(),
@@ -102,7 +102,7 @@ def merge_tag_route(
     return RedirectResponse("/tools?tab=tags#tags", status_code=303)
 
 
-@router.post("/tools/tags/{tag_id}", dependencies=[Depends(require_csrf)])
+@router.post("/tools/tags/{tag_id}")
 def rename_tag(
     tag_id: str,
     name: str = Form(),
@@ -113,7 +113,7 @@ def rename_tag(
     return RedirectResponse("/tools?tab=tags#tags", status_code=303)
 
 
-@router.post("/tools/tags/{tag_id}/delete", dependencies=[Depends(require_csrf)])
+@router.post("/tools/tags/{tag_id}/delete")
 def delete_tag(
     tag_id: str,
     user: User = Depends(current_user),

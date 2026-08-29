@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from quirebase.core.database import get_db
@@ -20,16 +20,16 @@ from quirebase.projects import (
 from quirebase.projects import (
     remove_project_member as remove_project_member_op,
 )
-from quirebase.web.deps import current_login, current_user, require_csrf
+from quirebase.web.deps import current_login, current_user, protected_router
 from quirebase.web.templates import templates
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
-router = APIRouter()
+router = protected_router()
 
 
-@router.post("/projects", dependencies=[Depends(require_csrf)])
+@router.post("/projects")
 def create_project(
     name: str = Form(),
     user: User = Depends(current_user),
@@ -83,7 +83,7 @@ def project_page(
     )
 
 
-@router.post("/projects/{project_id}/members", dependencies=[Depends(require_csrf)])
+@router.post("/projects/{project_id}/members")
 def add_project_member(
     project_id: str,
     username: str = Form(),
@@ -95,9 +95,7 @@ def add_project_member(
     return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
 
-@router.post(
-    "/projects/{project_id}/members/{member_id}/remove", dependencies=[Depends(require_csrf)]
-)
+@router.post("/projects/{project_id}/members/{member_id}/remove")
 def remove_project_member(
     project_id: str,
     member_id: str,

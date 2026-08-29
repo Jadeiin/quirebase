@@ -55,8 +55,9 @@ def test_web_new_item_exposes_and_saves_complete_metadata(db, tmp_path, monkeypa
         assert f'name="{field}"' in page.text
 
     response = client.post(
-        "/items?csrf_token=test-csrf",
+        "/items",
         data={
+            "csrf_token": "test-csrf",
             "title": "Complete manual record",
             "abstract": "All editable metadata is accepted during creation.",
             "reference_type": "article",
@@ -104,8 +105,8 @@ def test_web_edit_rich_metadata_and_structured_authors(db, tmp_path, monkeypatch
 
     response = client.post(
         f"/items/{item.id}/edit",
-        params={"csrf_token": csrf},
         data={
+            "csrf_token": csrf,
             "version": item.version,
             "title": "Attention Is All You Need",
             "abstract": "The dominant sequence transduction models are based on complex recurrent networks.",
@@ -195,8 +196,8 @@ def test_web_tag_matrix_batch_and_selection(db, tmp_path, monkeypatch):
     # Submit matrix form with selected tag1 and newly added tags
     response = client.post(
         f"/items/{item.id}/tags/matrix",
-        params={"csrf_token": csrf},
         data={
+            "csrf_token": csrf,
             "tag_ids": [tag1.id],
             "suggested_tags": ["Natural Language Processing", "New Research Direction"],
             "new_tags": "Deep Learning",
@@ -261,7 +262,7 @@ def test_web_tag_recommendation_pending_failed_and_retry_states(db, tmp_path, mo
 
     retry = client.post(
         f"/items/{item.id}/tag-recommendations",
-        params={"csrf_token": "test-csrf"},
+        data={"csrf_token": "test-csrf"},
         follow_redirects=False,
     )
     assert retry.status_code == 303
@@ -282,8 +283,7 @@ def test_web_sync_metadata_and_bibtex_key_update(db, tmp_path, monkeypatch):
     # Test update citation key
     response = client.post(
         f"/items/{item.id}/update-bibtex-key",
-        params={"csrf_token": csrf},
-        data={"version": item.version},
+        data={"csrf_token": csrf, "version": item.version},
         follow_redirects=True,
     )
     assert response.status_code == 200
@@ -314,11 +314,11 @@ def test_web_sync_metadata_and_bibtex_key_update(db, tmp_path, monkeypatch):
     ):
         response = client.post(
             f"/items/{item.id}/sync-metadata",
-            params={"csrf_token": csrf},
             data={
                 "version": item.version,
                 "provider": "doi",
                 "uid": "10.1038/s41586-019-1666-5",
+                "csrf_token": "test-csrf",
             },
             follow_redirects=True,
         )
@@ -344,8 +344,9 @@ def test_web_sync_metadata_uses_effective_runtime_provider_settings(db, tmp_path
         ),
     ) as lookup:
         response = client.post(
-            f"/items/{item.id}/sync-metadata?csrf_token=test-csrf",
+            f"/items/{item.id}/sync-metadata",
             data={
+                "csrf_token": "test-csrf",
                 "version": item.version,
                 "provider": "bibcode",
                 "uid": "2024ApJ...123A...1X",
@@ -372,8 +373,13 @@ def test_web_sync_metadata_translates_expected_lookup_failures(
 
     with patch("quirebase.library.identifiers.lookup_candidate", side_effect=error):
         response = client.post(
-            f"/items/{item.id}/sync-metadata?csrf_token=test-csrf",
-            data={"version": item.version, "provider": "doi", "uid": "invalid"},
+            f"/items/{item.id}/sync-metadata",
+            data={
+                "csrf_token": "test-csrf",
+                "version": item.version,
+                "provider": "doi",
+                "uid": "invalid",
+            },
             follow_redirects=False,
         )
 
@@ -408,8 +414,9 @@ def test_web_edit_synchronizes_identifier_rows(db, tmp_path, monkeypatch):
     db.commit()
 
     response = client.post(
-        f"/items/{item.id}/edit?csrf_token=test-csrf",
+        f"/items/{item.id}/edit",
         data={
+            "csrf_token": "test-csrf",
             "version": item.version,
             "title": item.title,
             "doi": "https://doi.org/10.1000/new",
@@ -439,8 +446,9 @@ def test_web_edit_can_clear_all_structured_editors(db, tmp_path, monkeypatch):
     db.commit()
 
     response = client.post(
-        f"/items/{item.id}/edit?csrf_token=test-csrf",
+        f"/items/{item.id}/edit",
         data={
+            "csrf_token": "test-csrf",
             "version": item.version,
             "title": item.title,
             "structured_editors_present": "true",

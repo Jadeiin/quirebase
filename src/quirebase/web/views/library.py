@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
 
 from quirebase.access import editable_projects, visible_projects
@@ -16,13 +16,13 @@ from quirebase.library import (
     search_library,
 )
 from quirebase.models import LoginSession, User
-from quirebase.web.deps import current_login, current_user, require_csrf
+from quirebase.web.deps import current_login, current_user, protected_router
 from quirebase.web.templates import templates
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
-router = APIRouter()
+router = protected_router()
 
 
 @router.get("/library", response_class=HTMLResponse)
@@ -80,7 +80,7 @@ def library(
     )
 
 
-@router.post("/library/bulk", dependencies=[Depends(require_csrf)])
+@router.post("/library/bulk")
 def library_bulk_action(
     action: str = Form(),
     item_ids: list[str] = Form(default=[]),
@@ -120,8 +120,7 @@ def library_bulk_action(
                 part.strip() for part in excluded_fields.split(",") if part.strip()
             ),
             sort_by=sort_by,
-            citation_key_formula=citation_key_formula.strip()
-            or DEFAULT_CITATION_KEY_FORMULA,
+            citation_key_formula=citation_key_formula.strip() or DEFAULT_CITATION_KEY_FORMULA,
             citation_key_force_ascii=citation_key_force_ascii,
         )
         if action == "export_csl":

@@ -2,7 +2,7 @@
 {% block title %}{{ item.title|rich_text_plain }} · Quirebase{% endblock %}
 {% block head %}<link rel="stylesheet" href="{{ url_for('static', path='/vendor/pdf_viewer.css') }}">{% endblock %}
 {% block content %}
-<div id="pdf-app" x-data="pdfToolbar" data-item-id="{{ item.id }}" data-revision-id="{{ revision.id }}" data-csrf="{{ csrf }}" data-i18n="{{ {
+<div id="pdf-app" x-data="pdfToolbar" data-item-id="{{ item.id }}" data-revision-id="{{ revision.id }}" data-i18n="{{ {
   'selectTextFirst': _('Select text first.'),
   'saving': _('Saving…'),
   'saved': _('Saved'),

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_forms.html" import csrf_field %}
 {% block title %}{{ _('Import preview') }} · Quirebase{% endblock %}
 {% block content %}
 <section class="panel">
@@ -15,11 +16,11 @@
     {% if batch.file_format != 'pdf' %}<p>{{ _('Fix the source file and {try_again}. No records were imported.', try_again='<a href="/bibliography/import">' ~ _('try again') ~ '</a>')|safe }}</p>{% endif %}
   {% endif %}
   {% if records and (not errors or batch.file_format == 'pdf') %}
-    <form method="post" action="/bibliography/import/{{ batch.id }}?csrf_token={{ csrf }}">
+    <form method="post" action="/bibliography/import/{{ batch.id }}">{{ csrf_field(csrf) }}
       <button>{{ _('Import all records') }}</button>
     </form>
   {% endif %}
-  <form method="post" action="/bibliography/import/{{ batch.id }}/discard?csrf_token={{ csrf }}">
+  <form method="post" action="/bibliography/import/{{ batch.id }}/discard">{{ csrf_field(csrf) }}
     <button class="secondary-button">{{ _('Discard import batch') }}</button>
   </form>
   <ol>

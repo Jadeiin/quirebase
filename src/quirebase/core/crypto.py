@@ -32,3 +32,7 @@ def generate_token(nbytes: int = 32) -> str:
 
 def compare_digest(a: str, b: str) -> bool:
     return secrets.compare_digest(a, b)
+
+
+def compare_digest_bytes(a: bytes, b: bytes) -> bool:
+    return secrets.compare_digest(a, b)

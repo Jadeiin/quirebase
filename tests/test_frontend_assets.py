@@ -87,10 +87,10 @@ def test_remote_pdf_is_downloaded_in_the_browser_and_reuses_the_upload_route():
     assert 'Alpine.data("remotePdfUpload"' in source
     assert "const download = await fetch(this.url);" in source
     assert 'form.append("pdf", new File(' in source
-    assert 'fetch(this.$root.action, { method: "POST", body: form })' in source
+    assert 'csrfFetch(this.$root.action, { method: "POST", body: form })' in source
     assert 'x-data="remotePdfUpload"' in item
     assert '@submit.prevent="downloadAndUpload"' in item
-    assert 'action="/items/{{ item.id }}/pdf?csrf_token={{ csrf }}"' in item
+    assert 'action="/items/{{ item.id }}/pdf"' in item
     assert 'class="upload-form remote-pdf-upload"' in item
     assert ".remote-pdf-upload > button { grid-column: 2; grid-row: 1; }" in styles
 

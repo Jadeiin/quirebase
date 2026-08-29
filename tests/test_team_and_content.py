@@ -12,7 +12,7 @@ def test_tags_discussion_and_search(db, tmp_path, monkeypatch):
     client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
     try:
         tagged = client.post(
-            f"/items/{item.id}/tags?csrf_token=test-csrf", data={"name": "Quantum Optics"}
+            f"/items/{item.id}/tags", data={"csrf_token": "test-csrf", "name": "Quantum Optics"}
         )
         assert tagged.status_code == 200
         assert db.query(Tag).count() == 1
@@ -20,13 +20,14 @@ def test_tags_discussion_and_search(db, tmp_path, monkeypatch):
         assert item.title in client.get("/?q=optics").text
 
         posted = client.post(
-            f"/items/{item.id}/discussion?csrf_token=test-csrf", data={"body": "Looks useful"}
+            f"/items/{item.id}/discussion", data={"csrf_token": "test-csrf", "body": "Looks useful"}
         )
         assert posted.status_code == 200
         assert db.query(DiscussionMessage).one().body == "Looks useful"
 
         uploaded = client.post(
-            f"/items/{item.id}/attachments?csrf_token=test-csrf",
+            f"/items/{item.id}/attachments",
+            data={"csrf_token": "test-csrf"},
             files={"attachment": ("notes.txt", b"supplement", "text/plain")},
         )
         assert uploaded.status_code == 200

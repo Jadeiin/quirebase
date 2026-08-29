@@ -18,13 +18,14 @@ def check_health() -> dict[str, str]:
 def get_system_metrics(db: Session, user: User) -> str:
     if user.role != "administrator":
         raise ResourceUnavailable("administrator role required")
-    lines = []
-    for state, count in db.execute(
-        select(Job.state, func.count()).group_by(Job.state).order_by(Job.state)
-    ):
-        lines.append(f'quirebase_jobs{{state="{state}"}} {count}')
-    lines.append(f"quirebase_items {db.scalar(select(func.count()).select_from(Item)) or 0}")
-    lines.append(
-        f"quirebase_file_revisions {db.scalar(select(func.count()).select_from(FileRevision)) or 0}"
-    )
+    lines = [
+        f'quirebase_jobs{{state="{state}"}} {count}'
+        for state, count in db.execute(
+            select(Job.state, func.count()).group_by(Job.state).order_by(Job.state)
+        )
+    ]
+    lines.extend([
+        f"quirebase_items {db.scalar(select(func.count()).select_from(Item)) or 0}",
+        f"quirebase_file_revisions {db.scalar(select(func.count()).select_from(FileRevision)) or 0}",
+    ])
     return "\n".join(lines) + "\n"

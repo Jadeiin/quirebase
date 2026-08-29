@@ -246,7 +246,8 @@ def test_item_citation_export_and_project_removal(db, tmp_path, monkeypatch):
         assert "Paper-annotated-pdfs.zip" in annotated_download.headers["content-disposition"]
 
         removed = client.post(
-            f"/items/{item.id}/projects/{project.id}/remove?csrf_token=test-csrf",
+            f"/items/{item.id}/projects/{project.id}/remove",
+            data={"csrf_token": "test-csrf"},
             follow_redirects=False,
         )
         assert removed.status_code == 303

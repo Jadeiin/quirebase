@@ -63,9 +63,8 @@ def state_records(db):
 
 
 def assert_rejected(db, statement: str, parameters: dict[str, str]) -> None:
-    with pytest.raises(IntegrityError):
+    with pytest.raises(IntegrityError), db.begin_nested():
         db.execute(text(statement), parameters)
-        db.commit()
     db.rollback()
 
 

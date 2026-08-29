@@ -161,8 +161,13 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
         assert "Library paper 02" not in project_filter.text
 
         tagged = client.post(
-            "/library/bulk?csrf_token=test-csrf",
-            data={"action": "add_tag", "tag_name": "Priority", "item_ids": selected[0].id},
+            "/library/bulk",
+            data={
+                "csrf_token": "test-csrf",
+                "action": "add_tag",
+                "tag_name": "Priority",
+                "item_ids": selected[0].id,
+            },
             follow_redirects=False,
         )
         assert tagged.status_code == 303
@@ -170,8 +175,9 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
         assert db.get(ItemTag, (selected[0].id, priority.id)) is not None
 
         assigned = client.post(
-            "/library/bulk?csrf_token=test-csrf",
+            "/library/bulk",
             data={
+                "csrf_token": "test-csrf",
                 "action": "add_project",
                 "project_id": second_project.id,
                 "item_ids": [selected[0].id, selected[1].id],
@@ -183,8 +189,9 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
         assert db.get(ProjectItem, (second_project.id, selected[1].id)) is not None
 
         exported = client.post(
-            "/library/bulk?csrf_token=test-csrf",
+            "/library/bulk",
             data={
+                "csrf_token": "test-csrf",
                 "action": "export_endnote",
                 "item_ids": [selected[0].id, selected[1].id],
             },
@@ -195,8 +202,9 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
         assert "This abstract should be optional." in exported.text
 
         native_checkbox_export = client.post(
-            "/library/bulk?csrf_token=test-csrf",
+            "/library/bulk",
             data={
+                "csrf_token": "test-csrf",
                 "action": "export_endnote",
                 "item_ids": selected[0].id,
                 "include_abstract": ["false", "true"],
@@ -206,8 +214,9 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
         assert "This abstract should be optional." in native_checkbox_export.text
 
         exported_without_abstract = client.post(
-            "/library/bulk?csrf_token=test-csrf",
+            "/library/bulk",
             data={
+                "csrf_token": "test-csrf",
                 "action": "export_endnote",
                 "item_ids": selected[0].id,
                 "include_abstract": "false",
@@ -217,8 +226,8 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
         assert "This abstract should be optional." not in exported_without_abstract.text
 
         pdf_archive = client.post(
-            "/library/bulk?csrf_token=test-csrf",
-            data={"action": "download_pdfs", "item_ids": original.id},
+            "/library/bulk",
+            data={"csrf_token": "test-csrf", "action": "download_pdfs", "item_ids": original.id},
         )
         assert pdf_archive.status_code == 200
         assert pdf_archive.headers["content-type"] == "application/zip"
@@ -231,8 +240,9 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
             ]
 
         annotated_pdf_archive = client.post(
-            "/library/bulk?csrf_token=test-csrf",
+            "/library/bulk",
             data={
+                "csrf_token": "test-csrf",
                 "action": "download_pdfs",
                 "item_ids": original.id,
                 "include_annotations": "true",
@@ -245,8 +255,9 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
         )
 
         deleted = client.post(
-            "/library/bulk?csrf_token=test-csrf",
+            "/library/bulk",
             data={
+                "csrf_token": "test-csrf",
                 "action": "delete_items",
                 "item_ids": selected[1].id,
                 "confirm_delete": "delete",
@@ -280,7 +291,8 @@ def test_pdf_import_batch_previews_before_creating_items(db, tmp_path, monkeypat
             ),
         )
         preview = client.post(
-            "/imports/pdf/published?csrf_token=test-csrf",
+            "/imports/pdf/published",
+            data={"csrf_token": "test-csrf"},
             files=[
                 (
                     "pdfs",
@@ -305,7 +317,9 @@ def test_pdf_import_batch_previews_before_creating_items(db, tmp_path, monkeypat
         assert f"/bibliography/import/{batch.id}" in preview.text
 
         committed = client.post(
-            f"/bibliography/import/{batch.id}?csrf_token=test-csrf", follow_redirects=False
+            f"/bibliography/import/{batch.id}",
+            data={"csrf_token": "test-csrf"},
+            follow_redirects=False,
         )
         assert committed.status_code == 303
         first = db.query(Item).filter_by(doi="10.1000/first").one()
@@ -329,7 +343,8 @@ def test_pdf_import_batch_keeps_successes_and_reports_failed_files(db, tmp_path,
     )
     try:
         preview = client.post(
-            "/imports/pdf/published?csrf_token=test-csrf",
+            "/imports/pdf/published",
+            data={"csrf_token": "test-csrf"},
             files=[
                 (
                     "pdfs",
@@ -347,7 +362,9 @@ def test_pdf_import_batch_keeps_successes_and_reports_failed_files(db, tmp_path,
         assert len(set(get_settings().object_dir.rglob("*.pdf")) - objects_before) == 1
 
         committed = client.post(
-            f"/bibliography/import/{batch.id}?csrf_token=test-csrf", follow_redirects=False
+            f"/bibliography/import/{batch.id}",
+            data={"csrf_token": "test-csrf"},
+            follow_redirects=False,
         )
         assert committed.status_code == 303
         article = db.query(Item).filter_by(doi="10.1000/valid").one()
@@ -364,7 +381,8 @@ def test_pdf_import_batch_rejects_an_accessible_duplicate_doi(db, tmp_path, monk
     objects_before = set(get_settings().object_dir.rglob("*.pdf"))
     try:
         preview = client.post(
-            "/imports/pdf/published?csrf_token=test-csrf",
+            "/imports/pdf/published",
+            data={"csrf_token": "test-csrf"},
             files=[
                 (
                     "pdfs",
@@ -399,7 +417,8 @@ def test_discard_pdf_import_batch_removes_staged_objects(db, tmp_path, monkeypat
     )
     try:
         preview = client.post(
-            "/imports/pdf/published?csrf_token=test-csrf",
+            "/imports/pdf/published",
+            data={"csrf_token": "test-csrf"},
             files=[
                 (
                     "pdfs",
@@ -416,7 +435,8 @@ def test_discard_pdf_import_batch_removes_staged_objects(db, tmp_path, monkeypat
         assert len(set(get_settings().object_dir.rglob("*.pdf")) - objects_before) == 1
 
         discarded = client.post(
-            f"/bibliography/import/{batch.id}/discard?csrf_token=test-csrf",
+            f"/bibliography/import/{batch.id}/discard",
+            data={"csrf_token": "test-csrf"},
             follow_redirects=False,
         )
         assert discarded.status_code == 303
@@ -440,7 +460,8 @@ def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(db, tmp
     try:
         for filename in ("first-copy.pdf", "second-copy.pdf"):
             preview = client.post(
-                "/imports/pdf/published?csrf_token=test-csrf",
+                "/imports/pdf/published",
+                data={"csrf_token": "test-csrf"},
                 files=[
                     (
                         "pdfs",
@@ -463,14 +484,16 @@ def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(db, tmp
         assert object_path.is_file()
 
         discarded = client.post(
-            f"/bibliography/import/{batches[0].id}/discard?csrf_token=test-csrf",
+            f"/bibliography/import/{batches[0].id}/discard",
+            data={"csrf_token": "test-csrf"},
             follow_redirects=False,
         )
         assert discarded.status_code == 303
         assert object_path.is_file()
 
         committed = client.post(
-            f"/bibliography/import/{batches[1].id}?csrf_token=test-csrf",
+            f"/bibliography/import/{batches[1].id}",
+            data={"csrf_token": "test-csrf"},
             follow_redirects=False,
         )
         assert committed.status_code == 303
@@ -546,7 +569,8 @@ def test_commit_pdf_import_batch_rechecks_doi_after_stale_preview(db, tmp_path, 
     try:
         for filename in ("first-preview.pdf", "stale-preview.pdf"):
             preview = client.post(
-                "/imports/pdf/published?csrf_token=test-csrf",
+                "/imports/pdf/published",
+                data={"csrf_token": "test-csrf"},
                 files=[
                     (
                         "pdfs",
@@ -563,13 +587,15 @@ def test_commit_pdf_import_batch_rechecks_doi_after_stale_preview(db, tmp_path, 
         batches = db.query(ImportBatch).filter_by(file_format="pdf").all()
         assert len(batches) == 2
         first = client.post(
-            f"/bibliography/import/{batches[0].id}?csrf_token=test-csrf",
+            f"/bibliography/import/{batches[0].id}",
+            data={"csrf_token": "test-csrf"},
             follow_redirects=False,
         )
         assert first.status_code == 303
 
         stale = client.post(
-            f"/bibliography/import/{batches[1].id}?csrf_token=test-csrf",
+            f"/bibliography/import/{batches[1].id}",
+            data={"csrf_token": "test-csrf"},
             follow_redirects=False,
         )
         assert stale.status_code == 409

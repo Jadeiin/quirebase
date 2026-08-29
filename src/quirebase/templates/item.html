@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_forms.html" import csrf_field %}
 {% block title %}{{ item.title|rich_text_plain }} · Quirebase{% endblock %}
 {% block content %}
 {% set annotation_kind_labels = {'highlight': _('Highlight'), 'underline': _('Underline'), 'note': _('Note')} %}
@@ -41,7 +42,7 @@
           <div class="option-panel-footer"><a href="/account/settings#export-preferences">{{ _('Export settings') }}</a></div>
         </div>
       </details>
-      {% if can_delete %}<details class="export-menu"><summary class="danger-summary">{{ _('More') }}</summary><div><form method="post" action="/items/{{ item.id }}/delete?csrf_token={{ csrf }}" onsubmit="return confirm('{{ _('Delete this item permanently? Associated files, annotations, and project memberships will also be removed.') }}')"><input type="hidden" name="confirm" value="delete"><button type="submit" class="text-danger">{{ _('Delete item') }}</button></form></div></details>{% endif %}
+      {% if can_delete %}<details class="export-menu"><summary class="danger-summary">{{ _('More') }}</summary><div><form method="post" action="/items/{{ item.id }}/delete" onsubmit="return confirm('{{ _('Delete this item permanently? Associated files, annotations, and project memberships will also be removed.') }}')">{{ csrf_field(csrf) }}<input type="hidden" name="confirm" value="delete"><button type="submit" class="text-danger">{{ _('Delete item') }}</button></form></div></details>{% endif %}
     </div>
   </div>
 </header>
@@ -138,7 +139,7 @@
             <div><dt>{{ _('Citation key') }}</dt><dd><code>{{ item.bibtex_id or '—' }}</code></dd></div>
           </dl>
           {% if can_edit %}
-          <form class="identity-action" method="post" action="/items/{{ item.id }}/update-bibtex-key?csrf_token={{ csrf }}">
+          <form class="identity-action" method="post" action="/items/{{ item.id }}/update-bibtex-key">{{ csrf_field(csrf) }}
             <input type="hidden" name="version" value="{{ item.version }}">
             <button class="secondary-button compact-action-btn" type="submit">{{ _('Update citation key') }}</button>
           </form>
@@ -156,7 +157,7 @@
               </div>
               {% if can_edit %}
               <div class="identifier-actions">
-                <form method="post" action="/items/{{ item.id }}/sync-metadata?csrf_token={{ csrf }}" class="inline-sync-form">
+                <form method="post" action="/items/{{ item.id }}/sync-metadata" class="inline-sync-form">{{ csrf_field(csrf) }}
                   <input type="hidden" name="version" value="{{ item.version }}">
                   <input type="hidden" name="uid" value="{{ item.doi }}">
                   <select name="provider" class="provider-select" title="{{ _('Select upstream provider') }}">
@@ -177,7 +178,7 @@
                 <span class="text-muted">{{ _('Missing DOI?') }}</span>
               </div>
               <div class="identifier-actions">
-                <form method="post" action="/items/{{ item.id }}/rescan-doi?csrf_token={{ csrf }}">
+                <form method="post" action="/items/{{ item.id }}/rescan-doi">{{ csrf_field(csrf) }}
                   <button class="secondary-button compact-action-btn" type="submit">{{ _('Rescan PDF') }}</button>
                 </form>
               </div>
@@ -194,7 +195,7 @@
               </div>
               {% if can_edit %}
               <div class="identifier-actions">
-                <form method="post" action="/items/{{ item.id }}/sync-metadata?csrf_token={{ csrf }}">
+                <form method="post" action="/items/{{ item.id }}/sync-metadata">{{ csrf_field(csrf) }}
                   <input type="hidden" name="version" value="{{ item.version }}">
                   <input type="hidden" name="provider" value="{{ ident.provider }}">
                   <input type="hidden" name="uid" value="{{ ident.value }}">
@@ -247,14 +248,14 @@
       <div class="section-heading"><h2>{{ _('PDF revisions') }}</h2><span>{{ _('{count} file(s)', count=revisions|length) }}</span></div>
       <div class="file-list">{% for revision in revisions %}<article><span class="file-icon">PDF</span><div><strong>{{ revision.original_name }}</strong><small>{{ _(revision.processing_state) }}{% if revision.page_count %} · {{ _('{count} pages', count=revision.page_count) }}{% endif %} · {{ _('{bytes} bytes', bytes=revision.size) }}</small></div><div class="file-actions"><a href="/items/{{ item.id }}/pdf/{{ revision.id }}">{{ _('Read') }}</a><a href="/documents/{{ item.id }}/revisions/{{ revision.id }}/content" download>{{ _('Download') }}</a></div></article>{% else %}<div class="empty-state">{{ _('No PDF uploaded.') }}</div>{% endfor %}</div>
       {% if can_edit %}
-      <form class="upload-form" method="post" enctype="multipart/form-data" action="/items/{{ item.id }}/pdf?csrf_token={{ csrf }}"><label>{{ _('Add a PDF') }}<input type="file" name="pdf" accept="application/pdf,.pdf" required></label><button>{{ _('Upload') }}</button></form>
-      <form class="upload-form remote-pdf-upload" method="post" enctype="multipart/form-data" action="/items/{{ item.id }}/pdf?csrf_token={{ csrf }}" x-data="remotePdfUpload" @submit.prevent="downloadAndUpload" data-external-urls='{{ (item.urls.splitlines() if item.urls else [])|tojson }}' data-error-message="{{ _('Unable to download and upload this PDF.') }}"><label>{{ _('Add a PDF from URL') }}<input type="url" x-model="url" @input="inferred = false" placeholder="https://example.org/article.pdf" required></label><div class="remote-pdf-status"><small x-show="inferred">{{ _('Inferred from this item’s external links.') }}</small><small class="text-danger" x-show="error" x-text="error"></small></div><button :disabled="downloading">{{ _('Download PDF') }}</button></form>
+      <form class="upload-form" method="post" enctype="multipart/form-data" action="/items/{{ item.id }}/pdf">{{ csrf_field(csrf) }}<label>{{ _('Add a PDF') }}<input type="file" name="pdf" accept="application/pdf,.pdf" required></label><button>{{ _('Upload') }}</button></form>
+      <form class="upload-form remote-pdf-upload" method="post" enctype="multipart/form-data" action="/items/{{ item.id }}/pdf" x-data="remotePdfUpload" @submit.prevent="downloadAndUpload" data-external-urls='{{ (item.urls.splitlines() if item.urls else [])|tojson }}' data-error-message="{{ _('Unable to download and upload this PDF.') }}">{{ csrf_field(csrf) }}<label>{{ _('Add a PDF from URL') }}<input type="url" x-model="url" @input="inferred = false" placeholder="https://example.org/article.pdf" required></label><div class="remote-pdf-status"><small x-show="inferred">{{ _('Inferred from this item’s external links.') }}</small><small class="text-danger" x-show="error" x-text="error"></small></div><button :disabled="downloading">{{ _('Download PDF') }}</button></form>
       {% endif %}
     </section>
     <section class="panel">
       <div class="section-heading"><h2>{{ _('Attachments') }}</h2><span>{{ _('{count} file(s)', count=attachments|length) }}</span></div>
       <div class="file-list">{% for attachment in attachments %}<article><span class="file-icon">FILE</span><div><strong>{{ attachment.original_name }}</strong><small>{{ attachment.mime_type }} · {{ _('{bytes} bytes', bytes=attachment.size) }}</small></div><div class="file-actions"><a href="/items/{{ item.id }}/attachments/{{ attachment.id }}">{{ _('Download') }}</a></div></article>{% else %}<div class="empty-state">{{ _('No attachments.') }}</div>{% endfor %}</div>
-      {% if can_edit %}<form class="upload-form" method="post" enctype="multipart/form-data" action="/items/{{ item.id }}/attachments?csrf_token={{ csrf }}"><label>{{ _('Add attachment') }}<input type="file" name="attachment" required></label><button>{{ _('Upload') }}</button></form>{% endif %}
+      {% if can_edit %}<form class="upload-form" method="post" enctype="multipart/form-data" action="/items/{{ item.id }}/attachments">{{ csrf_field(csrf) }}<label>{{ _('Add attachment') }}<input type="file" name="attachment" required></label><button>{{ _('Upload') }}</button></form>{% endif %}
     </section>
 
     {% elif item_section == 'organize' %}
@@ -265,7 +266,7 @@
           <div class="section-heading tag-editor-heading">
             <h2>{{ _('Add new tags') }}</h2>
             {% if can_edit %}
-            <form class="tag-recommendation-action" method="post" action="/items/{{ item.id }}/tag-recommendations?csrf_token={{ csrf }}">
+            <form class="tag-recommendation-action" method="post" action="/items/{{ item.id }}/tag-recommendations">{{ csrf_field(csrf) }}
               <button class="secondary-button compact-button" {% if tag_matrix.recommendation_state == 'pending' %}disabled{% endif %}>
                 <span aria-hidden="true">↻</span>
                 {% if tag_matrix.recommendation_state == 'pending' %}{{ _('Generating Tag recommendations…') }}{% elif tag_matrix.recommendation_state == 'failed' %}{{ _('Retry recommendations') }}{% else %}{{ _('Regenerate recommendations') }}{% endif %}
@@ -274,7 +275,7 @@
             {% endif %}
           </div>
           {% if can_edit %}
-          <form class="metadata-form" method="post" action="/items/{{ item.id }}/tags/matrix?csrf_token={{ csrf }}">
+          <form class="metadata-form" method="post" action="/items/{{ item.id }}/tags/matrix">{{ csrf_field(csrf) }}
             {% if tag_matrix %}
             {% for tid in tag_matrix.assigned_ids %}
             <input type="hidden" name="tag_ids" value="{{ tid }}">
@@ -320,7 +321,7 @@
           <h2>{{ _('Current tags') }}</h2>
           <div class="chip-list">
             {% for tag in tags %}
-            <span>{{ tag.name }}{% if can_edit %}<form class="inline" method="post" action="/items/{{ item.id }}/tags/{{ tag.id }}/remove?csrf_token={{ csrf }}"><button aria-label="{{ _('Remove {name}', name=tag.name) }}">×</button></form>{% endif %}</span>
+            <span>{{ tag.name }}{% if can_edit %}<form class="inline" method="post" action="/items/{{ item.id }}/tags/{{ tag.id }}/remove">{{ csrf_field(csrf) }}<button aria-label="{{ _('Remove {name}', name=tag.name) }}">×</button></form>{% endif %}</span>
             {% else %}<p>{{ _('No tags attached yet.') }}</p>{% endfor %}
           </div>
         </section>
@@ -330,9 +331,9 @@
           <div class="project-memberships">
             {% for project, role in memberships %}
             {% if project.id in assigned %}
-            <article><div><strong>{{ project.name }}</strong><small>{{ _(role) }}</small></div>{% if role in ('owner', 'editor') %}<form method="post" action="/items/{{ item.id }}/projects/{{ project.id }}/remove?csrf_token={{ csrf }}"><button class="secondary-button compact-button">{{ _('Remove') }}</button></form>{% endif %}</article>
+            <article><div><strong>{{ project.name }}</strong><small>{{ _(role) }}</small></div>{% if role in ('owner', 'editor') %}<form method="post" action="/items/{{ item.id }}/projects/{{ project.id }}/remove">{{ csrf_field(csrf) }}<button class="secondary-button compact-button">{{ _('Remove') }}</button></form>{% endif %}</article>
             {% elif role in ('owner', 'editor') %}
-            <article><div><strong>{{ project.name }}</strong><small>{{ _('Not in this project') }}</small></div><form method="post" action="/items/{{ item.id }}/projects/{{ project.id }}?csrf_token={{ csrf }}"><button class="secondary-button compact-button">{{ _('Add') }}</button></form></article>
+            <article><div><strong>{{ project.name }}</strong><small>{{ _('Not in this project') }}</small></div><form method="post" action="/items/{{ item.id }}/projects/{{ project.id }}">{{ csrf_field(csrf) }}<button class="secondary-button compact-button">{{ _('Add') }}</button></form></article>
             {% endif %}
             {% else %}<p>{{ _('No projects.') }}</p>{% endfor %}
           </div>
@@ -350,7 +351,7 @@
         </div>
 
         {% if tag_matrix and tag_matrix.groups %}
-        <form method="post" action="/items/{{ item.id }}/tags/matrix?csrf_token={{ csrf }}">
+        <form method="post" action="/items/{{ item.id }}/tags/matrix">{{ csrf_field(csrf) }}
           <div class="tag-matrix-scroll">
             {% for group in tag_matrix.groups %}
             <div class="tag-letter-row" x-show="groupMatches({{ group.names|tojson }})">
@@ -387,7 +388,7 @@
 
     {% elif item_section == 'discussion' %}
     <section class="panel page-section-heading"><p class="eyebrow">{{ _('Collaboration') }}</p><h2>{{ _('Discussion') }}</h2><p>{{ _('Keep paper-specific questions and decisions with the research record.') }}</p></section>
-    <section class="panel discussion-thread">{% for message in messages %}<article><div class="message-avatar">{{ message.author.username[:1]|upper }}</div><div><header><strong>{{ message.author.username }}</strong><time>{{ message.created_at.strftime('%Y-%m-%d %H:%M') }}</time></header><p>{{ message.body }}</p>{% if message.author_id == user.id or user.role == 'administrator' %}<form class="inline" method="post" action="/items/{{ item.id }}/discussion/{{ message.id }}/delete?csrf_token={{ csrf }}"><button class="text-danger">{{ _('Delete') }}</button></form>{% endif %}</div></article>{% else %}<div class="empty-state">{{ _('No discussion yet.') }}</div>{% endfor %}<form class="message-composer" method="post" action="/items/{{ item.id }}/discussion?csrf_token={{ csrf }}"><label>{{ _('Add to the discussion') }}<textarea name="body" maxlength="20000" rows="5" required></textarea></label><div><button>{{ _('Post') }}</button></div></form></section>
+    <section class="panel discussion-thread">{% for message in messages %}<article><div class="message-avatar">{{ message.author.username[:1]|upper }}</div><div><header><strong>{{ message.author.username }}</strong><time>{{ message.created_at.strftime('%Y-%m-%d %H:%M') }}</time></header><p>{{ message.body }}</p>{% if message.author_id == user.id or user.role == 'administrator' %}<form class="inline" method="post" action="/items/{{ item.id }}/discussion/{{ message.id }}/delete">{{ csrf_field(csrf) }}<button class="text-danger">{{ _('Delete') }}</button></form>{% endif %}</div></article>{% else %}<div class="empty-state">{{ _('No discussion yet.') }}</div>{% endfor %}<form class="message-composer" method="post" action="/items/{{ item.id }}/discussion">{{ csrf_field(csrf) }}<label>{{ _('Add to the discussion') }}<textarea name="body" maxlength="20000" rows="5" required></textarea></label><div><button>{{ _('Post') }}</button></div></form></section>
     {% endif %}
   </div>
 </div>

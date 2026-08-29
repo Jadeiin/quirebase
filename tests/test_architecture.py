@@ -593,9 +593,9 @@ def test_bibliography_package_facade_is_the_only_import_surface():
     }
     outside = [
         py_file
-        for py_file in get_python_files(REPO_ROOT / "src") + get_python_files(
-            REPO_ROOT / "tests"
-        ) + get_python_files(REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro")
+        for py_file in get_python_files(REPO_ROOT / "src")
+        + get_python_files(REPO_ROOT / "tests")
+        + get_python_files(REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro")
         if not py_file.is_relative_to(inquiro_src / "bibliography")
     ]
     for py_file in outside:
@@ -616,9 +616,7 @@ def test_bibliography_package_layers_stay_acyclic():
         "item_dicts": 2,
         "engine": 3,
     }
-    package_root = (
-        REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro" / "bibliography"
-    )
+    package_root = REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro" / "bibliography"
     for py_file in package_root.glob("*.py"):
         if py_file.name == "__init__.py":
             continue

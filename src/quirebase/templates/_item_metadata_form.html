@@ -1,4 +1,5 @@
-<form class="metadata-form" method="post" action="{{ form_action }}?csrf_token={{ csrf }}">
+{% from "_forms.html" import csrf_field %}
+<form class="metadata-form" method="post" action="{{ form_action }}">{{ csrf_field(csrf) }}
   {% if form_version is defined and form_version is not none %}<input type="hidden" name="version" value="{{ form_version }}">{% endif %}
   <label class="span-2">{{ _('Title') }} <input name="title" value="{{ form_item.title or '' }}" required></label>
 

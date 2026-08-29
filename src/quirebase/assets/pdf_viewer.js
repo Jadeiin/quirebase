@@ -1,5 +1,6 @@
 import * as pdfjsLib from "pdfjs-dist";
 import { EventBus, PDFLinkService, PDFFindController, PDFViewer } from "pdfjs-dist/web/pdf_viewer.mjs";
+import { csrfFetch } from "./csrf.js";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = "/static/vendor/pdf.worker.mjs";
 
@@ -11,7 +12,6 @@ const message = (key, values = {}) => Object.entries(values).reduce(
 );
 const itemId = root.dataset.itemId;
 const revisionId = root.dataset.revisionId;
-const csrf = root.dataset.csrf;
 const status = document.querySelector("#pdf-status");
 const container = document.querySelector("#viewerContainer");
 const pageNumber = document.querySelector("#pdf-page-number");
@@ -43,8 +43,10 @@ const projectPicker = document.querySelector("#annotation-project");
 const visibility = () => projectPicker.value ? { scope: "project", project_id: projectPicker.value } : { scope: "private", project_id: null };
 
 const api = async (url, options = {}) => {
-  options.headers = { "Content-Type": "application/json", "X-CSRF-Token": csrf, ...(options.headers || {}) };
-  const response = await fetch(url, options);
+  const response = await csrfFetch(url, {
+    ...options,
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+  });
   if (!response.ok) throw new Error((await response.text()) || `HTTP ${response.status}`);
   return response.status === 204 ? null : response.json();
 };

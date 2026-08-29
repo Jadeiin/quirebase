@@ -77,7 +77,7 @@ def test_revoke_all_sessions_requires_csrf_and_invalidates_every_session(db, tmp
         )
 
         response = client.post(
-            "/account/sessions/revoke-all?csrf_token=test-csrf", follow_redirects=False
+            "/account/sessions/revoke-all", follow_redirects=False, data={"csrf_token": "test-csrf"}
         )
         assert response.status_code == 303
         assert response.headers["location"] == "/login"
@@ -167,8 +167,9 @@ def test_account_settings_and_password_update(db, tmp_path, monkeypatch):
 
     # Password mismatch returns 422
     mismatch = client.post(
-        "/account/settings/password?csrf_token=test-csrf",
+        "/account/settings/password",
         data={
+            "csrf_token": "test-csrf",
             "current_password": "correct-password",
             "new_password": "new-secret-password-1",
             "confirm_password": "different-password",
@@ -179,8 +180,9 @@ def test_account_settings_and_password_update(db, tmp_path, monkeypatch):
 
     # Wrong current password returns 422
     wrong = client.post(
-        "/account/settings/password?csrf_token=test-csrf",
+        "/account/settings/password",
         data={
+            "csrf_token": "test-csrf",
             "current_password": "wrong-current-password",
             "new_password": "new-secret-password-1",
             "confirm_password": "new-secret-password-1",
@@ -191,8 +193,9 @@ def test_account_settings_and_password_update(db, tmp_path, monkeypatch):
 
     # Successful update
     success = client.post(
-        "/account/settings/password?csrf_token=test-csrf",
+        "/account/settings/password",
         data={
+            "csrf_token": "test-csrf",
             "current_password": "correct-password",
             "new_password": "new-secret-password-1",
             "confirm_password": "new-secret-password-1",
@@ -207,8 +210,8 @@ def test_account_settings_and_password_update(db, tmp_path, monkeypatch):
 
     # Switch locale to zh_CN
     loc_resp = client.post(
-        "/account/settings/locale?csrf_token=test-csrf",
-        data={"locale": "zh_CN"},
+        "/account/settings/locale",
+        data={"csrf_token": "test-csrf", "locale": "zh_CN"},
         follow_redirects=False,
     )
     assert loc_resp.status_code == 303

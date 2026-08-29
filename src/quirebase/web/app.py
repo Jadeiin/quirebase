@@ -12,12 +12,14 @@ from quirebase.web.json.annotations import router as json_annotations_router
 from quirebase.web.json.documents import router as json_documents_router
 from quirebase.web.json.exports import router as json_exports_router
 from quirebase.web.views.admin import router as views_admin_router
+from quirebase.web.views.auth import public_router as views_auth_public_router
 from quirebase.web.views.auth import router as views_auth_router
 from quirebase.web.views.dashboard import router as views_dashboard_router
 from quirebase.web.views.discovery import router as views_discovery_router
 from quirebase.web.views.items import router as views_items_router
 from quirebase.web.views.library import router as views_library_router
 from quirebase.web.views.projects import router as views_projects_router
+from quirebase.web.views.system import public_router as views_system_public_router
 from quirebase.web.views.system import router as views_system_router
 from quirebase.web.views.tools import router as views_tools_router
 
@@ -44,7 +46,9 @@ def create_app() -> FastAPI:
 
     register_error_handlers(app)
 
-    # Views
+    # Views (public_router holds the pre-authentication endpoints exempt from CSRF)
+    app.include_router(views_system_public_router)
+    app.include_router(views_auth_public_router)
     app.include_router(views_system_router)
     app.include_router(views_auth_router)
     app.include_router(views_admin_router)

@@ -160,15 +160,15 @@ def test_http_behavioral_contract(db, tmp_path, monkeypatch):
     db.commit()
 
     edit_resp = client.post(
-        f"/items/{other_item.id}/edit?csrf_token=test-csrf",
-        data={"version": 1, "title": "New Title"},
+        f"/items/{other_item.id}/edit",
+        data={"csrf_token": "test-csrf", "version": 1, "title": "New Title"},
     )
     assert edit_resp.status_code == 404
 
     # 3. Version conflict returns 409 with detail {"version": ...}
     conflict_resp = client.post(
-        f"/items/{item.id}/edit?csrf_token=test-csrf",
-        data={"version": 999, "title": "Conflict Title"},
+        f"/items/{item.id}/edit",
+        data={"csrf_token": "test-csrf", "version": 999, "title": "Conflict Title"},
     )
     assert conflict_resp.status_code == 409
     assert "version" in str(conflict_resp.json())
@@ -178,8 +178,8 @@ def test_oversized_bibliography_upload_returns_payload_too_large(db, tmp_path, m
     client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
     try:
         response = client.post(
-            "/bibliography/preview?csrf_token=test-csrf",
-            data={"file_format": "bibtex"},
+            "/bibliography/preview",
+            data={"csrf_token": "test-csrf", "file_format": "bibtex"},
             files={
                 "bibliography": (
                     "oversized.bib",
@@ -204,10 +204,12 @@ def test_tag_rename_conceals_missing_and_foreign_tags(db, tmp_path, monkeypatch)
     db.add(foreign_tag)
     db.commit()
     try:
-        missing = client.post("/tools/tags/missing?csrf_token=test-csrf", data={"name": "Renamed"})
+        missing = client.post(
+            "/tools/tags/missing", data={"csrf_token": "test-csrf", "name": "Renamed"}
+        )
         foreign = client.post(
-            f"/tools/tags/{foreign_tag.id}?csrf_token=test-csrf",
-            data={"name": "Renamed"},
+            f"/tools/tags/{foreign_tag.id}",
+            data={"csrf_token": "test-csrf", "name": "Renamed"},
         )
 
         assert foreign.status_code == 404
@@ -225,8 +227,10 @@ def test_tag_delete_conceals_missing_and_foreign_tags(db, tmp_path, monkeypatch)
     db.add(foreign_tag)
     db.commit()
     try:
-        missing = client.post("/tools/tags/missing/delete?csrf_token=test-csrf")
-        foreign = client.post(f"/tools/tags/{foreign_tag.id}/delete?csrf_token=test-csrf")
+        missing = client.post("/tools/tags/missing/delete", data={"csrf_token": "test-csrf"})
+        foreign = client.post(
+            f"/tools/tags/{foreign_tag.id}/delete", data={"csrf_token": "test-csrf"}
+        )
 
         assert foreign.status_code == 404
         assert foreign.content == missing.content
@@ -245,9 +249,12 @@ def test_discussion_delete_conceals_missing_and_foreign_messages(db, tmp_path, m
     db.add(foreign_message)
     db.commit()
     try:
-        missing = client.post(f"/items/{item.id}/discussion/missing/delete?csrf_token=test-csrf")
+        missing = client.post(
+            f"/items/{item.id}/discussion/missing/delete", data={"csrf_token": "test-csrf"}
+        )
         foreign = client.post(
-            f"/items/{item.id}/discussion/{foreign_message.id}/delete?csrf_token=test-csrf"
+            f"/items/{item.id}/discussion/{foreign_message.id}/delete",
+            data={"csrf_token": "test-csrf"},
         )
 
         assert foreign.status_code == 404
@@ -260,8 +267,8 @@ def test_invitation_creation_is_hidden_from_non_administrators(db, tmp_path, mon
     client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
     try:
         response = client.post(
-            "/admin/invitations?csrf_token=test-csrf",
-            data={"username": "invitee", "role": "member"},
+            "/admin/invitations",
+            data={"csrf_token": "test-csrf", "username": "invitee", "role": "member"},
         )
 
         assert response.status_code == 404
@@ -279,7 +286,8 @@ def test_discussion_author_can_delete_own_message(db, tmp_path, monkeypatch):
     db.commit()
     try:
         response = client.post(
-            f"/items/{item.id}/discussion/{own_message.id}/delete?csrf_token=test-csrf",
+            f"/items/{item.id}/discussion/{own_message.id}/delete",
+            data={"csrf_token": "test-csrf"},
             follow_redirects=False,
         )
 
@@ -296,8 +304,8 @@ def test_administrator_can_create_invitation(db, tmp_path, monkeypatch):
     db.commit()
     try:
         response = client.post(
-            "/admin/invitations?csrf_token=test-csrf",
-            data={"username": "new-member", "role": "member"},
+            "/admin/invitations",
+            data={"csrf_token": "test-csrf", "username": "new-member", "role": "member"},
         )
 
         assert response.status_code == 200

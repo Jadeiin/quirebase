@@ -1,4 +1,5 @@
 import Alpine from "@alpinejs/csp";
+import { csrfFetch } from "./csrf.js";
 
 const matchesTag = (name, query) => !query || Boolean(name && name.toLowerCase().includes(query));
 
@@ -507,7 +508,7 @@ Alpine.data("remotePdfUpload", () => ({
       const blob = await download.blob();
       const form = new FormData();
       form.append("pdf", new File([blob], remotePdfFilename(this.url), { type: blob.type }));
-      const upload = await fetch(this.$root.action, { method: "POST", body: form });
+      const upload = await csrfFetch(this.$root.action, { method: "POST", body: form });
       if (!upload.ok) throw new Error("PDF upload failed");
       window.location.reload();
     } catch {

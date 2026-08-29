@@ -103,8 +103,16 @@ def test_bibtex_export_can_protect_text_field_capitalization(db):
         created_by=user.id,
     )
 
-    ordinary = export_bibliography_records([record_from_item(i) for i in [item]], "bibtex", options=BibliographyExportOptions(preserve_case=False))
-    protected = export_bibliography_records([record_from_item(i) for i in [item]], "bibtex", options=BibliographyExportOptions(preserve_case=True))
+    ordinary = export_bibliography_records(
+        [record_from_item(i) for i in [item]],
+        "bibtex",
+        options=BibliographyExportOptions(preserve_case=False),
+    )
+    protected = export_bibliography_records(
+        [record_from_item(i) for i in [item]],
+        "bibtex",
+        options=BibliographyExportOptions(preserve_case=True),
+    )
 
     assert "title = {An API for GraphQL and eBPF}" in ordinary
     assert "title = {{A}n {API} for {G}raph{QL} and e{BPF}}" in protected
@@ -138,7 +146,11 @@ def test_bibtex_case_protection_does_not_add_repeated_outer_braces(db):
     db.flush()
     item = Item(title="{Already Protected}", created_by=user.id)
 
-    protected = export_bibliography_records([record_from_item(i) for i in [item]], "bibtex", options=BibliographyExportOptions(preserve_case=True))
+    protected = export_bibliography_records(
+        [record_from_item(i) for i in [item]],
+        "bibtex",
+        options=BibliographyExportOptions(preserve_case=True),
+    )
 
     assert "title = {{Already Protected}}" in protected
 
@@ -149,7 +161,11 @@ def test_bibtex_case_protection_leaves_latex_commands_intact(db):
     db.flush()
     item = Item(title=r"Using \LaTeX with {CUDA}", created_by=user.id)
 
-    protected = export_bibliography_records([record_from_item(i) for i in [item]], "bibtex", options=BibliographyExportOptions(preserve_case=True))
+    protected = export_bibliography_records(
+        [record_from_item(i) for i in [item]],
+        "bibtex",
+        options=BibliographyExportOptions(preserve_case=True),
+    )
 
     assert r"title = {{U}sing \LaTeX with {CUDA}}" in protected
 

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_forms.html" import csrf_field %}
 {% block title %}{{ _('Administration') }} · Quirebase{% endblock %}
 {% block content %}
 <header class="item-header">
@@ -167,7 +168,7 @@
             <h2>{{ _('Add user directly') }}</h2>
           </div>
         </div>
-        <form method="post" action="/admin/users/create?csrf_token={{ csrf }}">
+        <form method="post" action="/admin/users/create">{{ csrf_field(csrf) }}
           <label>{{ _('Username') }}<input name="username" maxlength="120" required autocomplete="off"></label>
           <label>{{ _('Password') }}<input type="password" name="password" minlength="12" required autocomplete="new-password"></label>
           <label>{{ _('Role') }}
@@ -187,7 +188,7 @@
             <h2>{{ _('Invite a user') }}</h2>
           </div>
         </div>
-        <form method="post" action="/admin/invitations?csrf_token={{ csrf }}">
+        <form method="post" action="/admin/invitations">{{ csrf_field(csrf) }}
           <label>{{ _('Username') }}<input name="username" maxlength="120" required></label>
           <label>{{ _('Role') }}
             <select name="role">
@@ -218,24 +219,24 @@
           <div style="display: flex; gap: .4rem; align-items: center;">
             <details class="export-menu">
               <summary style="font-size: .8rem; padding: .25rem .5rem;">{{ _('Reset password') }}</summary>
-              <form method="post" action="/admin/users/{{ account.id }}/password?csrf_token={{ csrf }}" style="padding: .5rem; gap: .4rem;">
+              <form method="post" action="/admin/users/{{ account.id }}/password" style="padding: .5rem; gap: .4rem;">{{ csrf_field(csrf) }}
                 <input type="password" name="password" minlength="12" placeholder="{{ _('New password') }}" required style="font-size: .8rem;">
                 <button class="compact-button" style="font-size: .75rem;">{{ _('Update') }}</button>
               </form>
             </details>
-            <form method="post" action="/admin/users/{{ account.id }}/status?csrf_token={{ csrf }}">
+            <form method="post" action="/admin/users/{{ account.id }}/status">{{ csrf_field(csrf) }}
               <input type="hidden" name="active" value="{{ 'false' if account.active else 'true' }}">
               <button class="secondary-button compact-button" {% if account.id == user.id %}disabled{% endif %}>
                 {{ _('Disable') if account.active else _('Enable') }}
               </button>
             </form>
-            <form method="post" action="/admin/users/{{ account.id }}/role?csrf_token={{ csrf }}">
+            <form method="post" action="/admin/users/{{ account.id }}/role">{{ csrf_field(csrf) }}
               <input type="hidden" name="role" value="{{ 'member' if account.role == 'administrator' else 'administrator' }}">
               <button class="secondary-button compact-button" {% if account.id == user.id and account.role == 'administrator' %}disabled{% endif %}>
                 {{ _('Make Member') if account.role == 'administrator' else _('Make Admin') }}
               </button>
             </form>
-            <form method="post" action="/admin/users/{{ account.id }}/revoke-sessions?csrf_token={{ csrf }}" onsubmit="return confirm('{{ _('Revoke all login sessions for this user?') }}')">
+            <form method="post" action="/admin/users/{{ account.id }}/revoke-sessions" onsubmit="return confirm('{{ _('Revoke all login sessions for this user?') }}')">{{ csrf_field(csrf) }}
               <button class="secondary-button compact-button text-danger">{{ _('Revoke sessions') }}</button>
             </form>
           </div>
@@ -289,7 +290,7 @@
           </div>
           <div style="display: flex; gap: .5rem; align-items: center;">
             <a class="button-link secondary-button compact-button" href="/items/{{ item.id }}">{{ _('View') }}</a>
-            <form method="post" action="/admin/items/{{ item.id }}/delete?csrf_token={{ csrf }}" onsubmit="return confirm('{{ _('Permanently delete this item, all its revisions, annotations, and storage files?') }}')">
+            <form method="post" action="/admin/items/{{ item.id }}/delete" onsubmit="return confirm('{{ _('Permanently delete this item, all its revisions, annotations, and storage files?') }}')">{{ csrf_field(csrf) }}
               <button class="secondary-button compact-button text-danger">{{ _('Delete') }}</button>
             </form>
           </div>
@@ -372,7 +373,7 @@
         </label>
       </form>
       {% if failed_jobs %}
-      <form method="post" action="/admin/jobs/retry-all?csrf_token={{ csrf }}" style="margin: 0;">
+      <form method="post" action="/admin/jobs/retry-all" style="margin: 0;">{{ csrf_field(csrf) }}
         <button class="compact-button">{{ _('Retry all failed jobs ({count})', count=failed_jobs|length) }}</button>
       </form>
       {% endif %}
@@ -400,7 +401,7 @@
             <a class="button-link secondary-button compact-button" href="/admin/maintenance/backups/{{ job.id }}/download">{{ _('Download') }}</a>
             {% endif %}
             {% if job.state == 'failed' %}
-            <form method="post" action="/admin/jobs/{{ job.id }}/retry?csrf_token={{ csrf }}">
+            <form method="post" action="/admin/jobs/{{ job.id }}/retry">{{ csrf_field(csrf) }}
               <button class="secondary-button compact-button">{{ _('Retry') }}</button>
             </form>
             {% endif %}
@@ -416,7 +417,7 @@
     {# 6. Runtime Settings Tab                                          #}
     {# ================================================================= #}
     {% elif admin_tab == 'settings' %}
-    <form method="post" action="/admin/settings?csrf_token={{ csrf }}" class="admin-grid">
+    <form method="post" action="/admin/settings" class="admin-grid">{{ csrf_field(csrf) }}
       <section class="panel">
         <div class="section-heading">
           <div>
@@ -476,7 +477,7 @@
         <div>
           <h2>{{ _('Full-Text Search Re-index') }}</h2>
           <p>{{ _('Rebuild SQLite FTS5 / PostgreSQL tsvector full-text index across all items and extracted PDF text.') }}</p>
-          <form method="post" action="/admin/maintenance/reindex?csrf_token={{ csrf }}" style="margin-top: .8rem;">
+          <form method="post" action="/admin/maintenance/reindex" style="margin-top: .8rem;">{{ csrf_field(csrf) }}
             <button class="secondary-button compact-button">{{ _('Dispatch Re-index Job') }}</button>
           </form>
         </div>
@@ -487,7 +488,7 @@
         <div>
           <h2>{{ _('Object Store Integrity Check') }}</h2>
           <p>{{ _('Verify existence and SHA-256 checksums of all PDF files and attachments against the database.') }}</p>
-          <form method="post" action="/admin/maintenance/check-objects?csrf_token={{ csrf }}" style="margin-top: .8rem;">
+          <form method="post" action="/admin/maintenance/check-objects" style="margin-top: .8rem;">{{ csrf_field(csrf) }}
             <button class="secondary-button compact-button">{{ _('Dispatch Check Job') }}</button>
           </form>
         </div>
@@ -498,7 +499,7 @@
         <div>
           <h2>{{ _('Download Full Backup') }}</h2>
           <p>{{ _('Generate a complete ZIP archive containing database dump, manifest, and all storage objects.') }}</p>
-          <form method="post" action="/admin/maintenance/backup?csrf_token={{ csrf }}" style="margin-top: .8rem;">
+          <form method="post" action="/admin/maintenance/backup" style="margin-top: .8rem;">{{ csrf_field(csrf) }}
             <button class="secondary-button compact-button">{{ _('Dispatch Backup Job') }}</button>
           </form>
         </div>
@@ -509,7 +510,7 @@
         <div>
           <h2>{{ _('Rebuild Tag Recommendations') }}</h2>
           <p>{{ _('Queue fresh recommendations for every Item after an engine or local model change.') }}</p>
-          <form method="post" action="/admin/maintenance/recommend-tags?csrf_token={{ csrf }}" style="margin-top: .8rem;">
+          <form method="post" action="/admin/maintenance/recommend-tags" style="margin-top: .8rem;">{{ csrf_field(csrf) }}
             <button class="secondary-button compact-button">{{ _('Dispatch Recommendation Jobs') }}</button>
           </form>
         </div>

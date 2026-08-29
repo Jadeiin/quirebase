@@ -11,8 +11,8 @@ def test_projects_have_a_dedicated_workspace(db, tmp_path, monkeypatch):
     client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
     try:
         created = client.post(
-            "/projects?csrf_token=test-csrf",
-            data={"name": "Review queue"},
+            "/projects",
+            data={"csrf_token": "test-csrf", "name": "Review queue"},
             follow_redirects=False,
         )
         project = db.query(Project).filter_by(name="Review queue").one()
@@ -69,8 +69,12 @@ def test_tools_detect_duplicates_and_manage_owned_tags(db, tmp_path, monkeypatch
         tools_tags = client.get("/tools?tab=tags")
         assert 'action="/tools/tags/merge' in tools_tags.text
         merged = client.post(
-            "/tools/tags/merge?csrf_token=test-csrf",
-            data={"source_tag_id": tag.id, "target_tag_id": target_tag.id},
+            "/tools/tags/merge",
+            data={
+                "csrf_token": "test-csrf",
+                "source_tag_id": tag.id,
+                "target_tag_id": target_tag.id,
+            },
             follow_redirects=False,
         )
         assert merged.status_code == 303
@@ -78,8 +82,8 @@ def test_tools_detect_duplicates_and_manage_owned_tags(db, tmp_path, monkeypatch
         assert db.get(ItemTag, (item.id, target_tag.id)) is not None
 
         renamed = client.post(
-            f"/tools/tags/{target_tag.id}?csrf_token=test-csrf",
-            data={"name": "Reviewed"},
+            f"/tools/tags/{target_tag.id}",
+            data={"csrf_token": "test-csrf", "name": "Reviewed"},
             follow_redirects=False,
         )
         assert renamed.status_code == 303
@@ -88,7 +92,8 @@ def test_tools_detect_duplicates_and_manage_owned_tags(db, tmp_path, monkeypatch
         assert target_tag.name == "Reviewed"
 
         removed = client.post(
-            f"/tools/tags/{target_tag.id}/delete?csrf_token=test-csrf",
+            f"/tools/tags/{target_tag.id}/delete",
+            data={"csrf_token": "test-csrf"},
             follow_redirects=False,
         )
         assert removed.status_code == 303

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_forms.html" import csrf_field %}
 {% block title %}{{ _('Import') }} · Quirebase{% endblock %}
 {% block content %}
 <div class="page-heading"><div><p class="eyebrow">{{ _('Bring research into your library') }}</p><h1>{{ _('Import papers') }}</h1></div></div>
@@ -13,7 +14,7 @@
   <section class="panel import-card featured" x-show="active === 'doi'">
     <span class="module-number">01</span><h2>{{ _('Import by identifier') }}</h2>
     <p>{{ _('Retrieve metadata from DOI, PubMed, arXiv, OpenAlex, or Open Library and review it before saving.') }}</p>
-    <form method="post" action="/metadata/preview?csrf_token={{ csrf }}">
+    <form method="post" action="/metadata/preview">{{ csrf_field(csrf) }}
       <label>{{ _('Data source') }}<select name="provider"><option value="auto">{{ _('Detect automatically') }}</option><option value="doi">DOI · Crossref / DataCite</option><option value="pmid">PubMed PMID</option><option value="arxiv">arXiv</option><option value="openalex">OpenAlex</option><option value="isbn">ISBN · Open Library</option></select></label>
       <label>{{ _('Identifier') }}<input name="identifier" maxlength="500" placeholder="DOI · PMID · arXiv · OpenAlex · ISBN" required></label>
       <button>{{ _('Look up metadata') }}</button>
@@ -23,7 +24,7 @@
   <section class="panel import-card" x-show="active === 'bibliography'">
     <span class="module-number">02</span><h2>{{ _('Bibliography file') }}</h2>
     <p>{{ _('Preview and import records exported by EndNote, Zotero, Mendeley, or another reference manager.') }}</p>
-    <form method="post" action="/bibliography/preview?csrf_token={{ csrf }}" enctype="multipart/form-data">
+    <form method="post" action="/bibliography/preview" enctype="multipart/form-data">{{ csrf_field(csrf) }}
       <label>{{ _('Format') }}<select name="file_format"><option value="bibtex">BibTeX (.bib)</option><option value="biblatex">BibLaTeX (.bib)</option><option value="ris">RIS / EndNote (.ris, .enw)</option></select></label>
       <label>{{ _('File') }}<input type="file" name="bibliography" accept=".bib,.ris,.enw,text/plain" required></label>
       <button>{{ _('Preview records') }}</button>
@@ -33,7 +34,7 @@
   <section class="panel import-card" x-show="active === 'published'">
     <span class="module-number">03</span><h2>{{ _('Published PDF') }}</h2>
     <p>{{ _('Upload published papers. Their DOIs are extracted from the PDFs and used to retrieve verified metadata before confirmation.') }}</p>
-    <form method="post" action="/imports/pdf/published?csrf_token={{ csrf }}" enctype="multipart/form-data">
+    <form method="post" action="/imports/pdf/published" enctype="multipart/form-data">{{ csrf_field(csrf) }}
       <label>PDF
         <input type="file" name="pdfs" accept="application/pdf,.pdf" multiple required @change="addPdfFiles">
         <small>{{ _('Choose PDFs more than once to add them to the same batch, or select several at once with Cmd/Ctrl or Shift.') }}</small>

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_forms.html" import csrf_field %}
 {% block title %}{{ _('Dashboard') }} · Quirebase{% endblock %}
 {% block content %}
 <div class="page-heading">
@@ -35,7 +36,7 @@
 
   <section class="panel dashboard-module" id="projects">
     <div class="section-heading"><div><p class="eyebrow">{{ _('Collaborative collections') }}</p><h2>{{ _('Projects') }}</h2></div></div>
-    <form method="post" action="/projects?csrf_token={{ csrf }}" class="compact-form">
+    <form method="post" action="/projects" class="compact-form">{{ csrf_field(csrf) }}
       <input name="name" placeholder="{{ _('New project name') }}" required><button>{{ _('Create') }}</button>
     </form>
     <div class="simple-list">

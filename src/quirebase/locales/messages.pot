@@ -2649,4 +2649,3 @@ msgstr ""
 #: src/quirebase/templates/tools.html:161
 msgid "CSL XML"
 msgstr ""
-

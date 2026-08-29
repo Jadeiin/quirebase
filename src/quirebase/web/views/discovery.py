@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from quirebase.core.database import get_db
@@ -24,13 +24,13 @@ from quirebase.models import (
     User,
 )
 from quirebase.operations.settings import get_effective_settings_model
-from quirebase.web.deps import current_login, current_user, require_csrf
+from quirebase.web.deps import current_login, current_user, protected_router
 from quirebase.web.templates import templates
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
-router = APIRouter()
+router = protected_router()
 
 
 @router.get("/bibliography/import", response_class=HTMLResponse)
@@ -141,7 +141,7 @@ def online_search_page(
     )
 
 
-@router.post("/imports/pdf/published", dependencies=[Depends(require_csrf)])
+@router.post("/imports/pdf/published")
 def preview_pdf_import(
     request: Request,
     pdfs: list[UploadFile] = File(),
@@ -169,7 +169,7 @@ def preview_pdf_import(
     )
 
 
-@router.post("/bibliography/preview", dependencies=[Depends(require_csrf)])
+@router.post("/bibliography/preview")
 def preview_bibliography_import(
     request: Request,
     bibliography: UploadFile = File(),
@@ -194,7 +194,7 @@ def preview_bibliography_import(
     )
 
 
-@router.post("/metadata/preview", dependencies=[Depends(require_csrf)])
+@router.post("/metadata/preview")
 def preview_identifier_import(
     request: Request,
     identifier: str = Form(),
@@ -220,7 +220,7 @@ def preview_identifier_import(
     )
 
 
-@router.post("/bibliography/import/{batch_id}", dependencies=[Depends(require_csrf)])
+@router.post("/bibliography/import/{batch_id}")
 def commit_import_batch_route(
     batch_id: str,
     user: User = Depends(current_user),
@@ -230,7 +230,7 @@ def commit_import_batch_route(
     return RedirectResponse("/", status_code=303)
 
 
-@router.post("/bibliography/import/{batch_id}/discard", dependencies=[Depends(require_csrf)])
+@router.post("/bibliography/import/{batch_id}/discard")
 def discard_import_batch_route(
     batch_id: str,
     user: User = Depends(current_user),

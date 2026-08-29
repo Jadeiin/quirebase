@@ -3,19 +3,19 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from quirebase.core.database import get_db
 from quirebase.library import get_dashboard_data
 from quirebase.models import LoginSession, User
-from quirebase.web.deps import current_login, current_user
+from quirebase.web.deps import current_login, current_user, protected_router
 from quirebase.web.templates import templates
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
-router = APIRouter()
+router = protected_router()
 
 
 @router.get("/", response_class=HTMLResponse)

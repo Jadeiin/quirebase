@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% from "_forms.html" import csrf_field %}{% if csrf %}<meta name="csrf-token" content="{{ csrf }}">{% endif %}
   <title>{% block title %}Quirebase{% endblock %}</title>
   <script src="{{ url_for('static', path='/sidebar-init.js') }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
@@ -47,7 +48,7 @@
           <span>{{ _('Account settings') }}</span>
         </a>
         {% if csrf %}
-        <form method="post" action="/logout?csrf_token={{ csrf }}" class="dropup-form">
+        <form method="post" action="/logout" class="dropup-form">{{ csrf_field(csrf) }}
           <button type="submit" class="dropup-item text-danger">
             <span>⏻</span>
             <span>{{ _('Sign out') }}</span>

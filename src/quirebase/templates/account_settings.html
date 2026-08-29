@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_forms.html" import csrf_field %}
 {% block title %}{{ _('Account settings') }} · Quirebase{% endblock %}
 {% block content %}
 {% set status_messages = {
@@ -44,7 +45,7 @@
         <h2>{{ _('Interface & Language') }}</h2>
       </div>
       <div style="display: grid; gap: 1rem; margin-top: .5rem;">
-        <form method="post" action="/account/settings/locale?csrf_token={{ csrf }}">
+        <form method="post" action="/account/settings/locale">{{ csrf_field(csrf) }}
           <label>
             {{ _('Display language') }}
             <div style="display: flex; gap: .5rem; margin-top: .25rem;">
@@ -69,7 +70,7 @@
       <div class="section-heading">
         <h2>{{ _('Change password') }}</h2>
       </div>
-      <form method="post" action="/account/settings/password?csrf_token={{ csrf }}" x-data="passwordStrength" style="margin-top: 1rem;">
+      <form method="post" action="/account/settings/password" x-data="passwordStrength" style="margin-top: 1rem;">{{ csrf_field(csrf) }}
         <label>
           {{ _('Current password') }}
           <input type="password" name="current_password" required autocomplete="current-password">
@@ -205,7 +206,7 @@
           <h2>{{ _('Login devices') }}</h2>
         </div>
         {% if sessions|length > 1 %}
-        <form method="post" action="/account/sessions/revoke-all?csrf_token={{ csrf }}" onsubmit="return confirm('{{ _('Sign out every device, including this one?') }}')">
+        <form method="post" action="/account/sessions/revoke-all" onsubmit="return confirm('{{ _('Sign out every device, including this one?') }}')">{{ csrf_field(csrf) }}
           <button class="danger-button compact-button">{{ _('Sign out all') }}</button>
         </form>
         {% endif %}
@@ -224,7 +225,7 @@
             {% if s.id == login.id %}
             <span class="role-badge">{{ _('current') }}</span>
             {% else %}
-            <form method="post" action="/account/sessions/{{ s.id }}/revoke?csrf_token={{ csrf }}">
+            <form method="post" action="/account/sessions/{{ s.id }}/revoke">{{ csrf_field(csrf) }}
               <button class="secondary-button compact-action-btn" type="submit">{{ _('Revoke') }}</button>
             </form>
             {% endif %}

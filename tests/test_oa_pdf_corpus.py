@@ -68,7 +68,8 @@ def test_real_oa_pdf_web_worker_search_annotation_export(paper, db, tmp_path, mo
     try:
         with source.open("rb") as stream:
             uploaded = client.post(
-                f"/items/{item.id}/pdf?csrf_token=test-csrf",
+                f"/items/{item.id}/pdf",
+                data={"csrf_token": "test-csrf"},
                 files={"pdf": (source.name, stream, "application/pdf")},
                 follow_redirects=False,
             )

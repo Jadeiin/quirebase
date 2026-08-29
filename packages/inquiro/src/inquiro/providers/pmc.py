@@ -117,7 +117,9 @@ class PmcSearchAdapter:
                         author["name"] for author in record.get("authors", []) if author.get("name")
                     )
                     or None,
-                    publication_title=first_text(record.get("fulljournalname") or record.get("source")),
+                    publication_title=first_text(
+                        record.get("fulljournalname") or record.get("source")
+                    ),
                     publication_date=first_text(record.get("pubdate")),
                 )
             )

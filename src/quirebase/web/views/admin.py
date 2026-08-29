@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi import Depends, Form, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 from quirebase.accounts import (
@@ -40,13 +40,13 @@ from quirebase.pipeline import (
     list_jobs_admin,
     retry_all_failed_jobs,
 )
-from quirebase.web.deps import current_login, current_user, require_admin, require_csrf
+from quirebase.web.deps import current_login, current_user, protected_router, require_admin
 from quirebase.web.templates import templates
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
-router = APIRouter(dependencies=[Depends(require_admin)])
+router = protected_router(dependencies=[Depends(require_admin)])
 
 
 # =========================================================================
@@ -130,7 +130,7 @@ def admin_users_page(
     )
 
 
-@router.post("/admin/users/create", dependencies=[Depends(require_csrf)])
+@router.post("/admin/users/create")
 def admin_create_user(
     username: str = Form(),
     password: str = Form(),
@@ -142,7 +142,7 @@ def admin_create_user(
     return RedirectResponse("/admin/users", status_code=303)
 
 
-@router.post("/admin/users/{user_id}/status", dependencies=[Depends(require_csrf)])
+@router.post("/admin/users/{user_id}/status")
 def admin_toggle_user_status(
     user_id: str,
     active: bool = Form(),
@@ -153,7 +153,7 @@ def admin_toggle_user_status(
     return RedirectResponse("/admin/users", status_code=303)
 
 
-@router.post("/admin/users/{user_id}/role", dependencies=[Depends(require_csrf)])
+@router.post("/admin/users/{user_id}/role")
 def admin_change_user_role(
     user_id: str,
     role: str = Form(),
@@ -164,7 +164,7 @@ def admin_change_user_role(
     return RedirectResponse("/admin/users", status_code=303)
 
 
-@router.post("/admin/users/{user_id}/password", dependencies=[Depends(require_csrf)])
+@router.post("/admin/users/{user_id}/password")
 def admin_reset_user_password(
     user_id: str,
     password: str = Form(),
@@ -175,7 +175,7 @@ def admin_reset_user_password(
     return RedirectResponse("/admin/users", status_code=303)
 
 
-@router.post("/admin/users/{user_id}/revoke-sessions", dependencies=[Depends(require_csrf)])
+@router.post("/admin/users/{user_id}/revoke-sessions")
 def admin_revoke_user_sessions(
     user_id: str,
     user: User = Depends(current_user),
@@ -185,9 +185,7 @@ def admin_revoke_user_sessions(
     return RedirectResponse("/admin/users", status_code=303)
 
 
-@router.post(
-    "/admin/invitations", dependencies=[Depends(require_csrf)], response_class=HTMLResponse
-)
+@router.post("/admin/invitations", response_class=HTMLResponse)
 def create_invitation(
     request: Request,
     username: str = Form(),
@@ -254,7 +252,7 @@ def admin_items_page(
     )
 
 
-@router.post("/admin/items/{item_id}/delete", dependencies=[Depends(require_csrf)])
+@router.post("/admin/items/{item_id}/delete")
 def admin_delete_item_endpoint(
     item_id: str,
     user: User = Depends(current_user),
@@ -342,7 +340,7 @@ def admin_jobs_page(
     )
 
 
-@router.post("/admin/jobs/{job_id}/retry", dependencies=[Depends(require_csrf)])
+@router.post("/admin/jobs/{job_id}/retry")
 def retry_job_endpoint(
     job_id: str,
     user: User = Depends(current_user),
@@ -352,7 +350,7 @@ def retry_job_endpoint(
     return RedirectResponse("/admin/jobs", status_code=303)
 
 
-@router.post("/admin/jobs/retry-all", dependencies=[Depends(require_csrf)])
+@router.post("/admin/jobs/retry-all")
 def retry_all_jobs_endpoint(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
@@ -388,7 +386,7 @@ def admin_settings_page(
     )
 
 
-@router.post("/admin/settings", dependencies=[Depends(require_csrf)])
+@router.post("/admin/settings")
 def admin_update_settings_endpoint(
     metadata_contact_email: str = Form(default=""),
     ncbi_api_key: str = Form(default=""),
@@ -446,7 +444,7 @@ def admin_maintenance_page(
     )
 
 
-@router.post("/admin/maintenance/reindex", dependencies=[Depends(require_csrf)])
+@router.post("/admin/maintenance/reindex")
 def trigger_reindex_job(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
@@ -455,7 +453,7 @@ def trigger_reindex_job(
     return RedirectResponse("/admin/jobs", status_code=303)
 
 
-@router.post("/admin/maintenance/check-objects", dependencies=[Depends(require_csrf)])
+@router.post("/admin/maintenance/check-objects")
 def trigger_check_objects_job(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
@@ -464,7 +462,7 @@ def trigger_check_objects_job(
     return RedirectResponse("/admin/jobs", status_code=303)
 
 
-@router.post("/admin/maintenance/backup", dependencies=[Depends(require_csrf)])
+@router.post("/admin/maintenance/backup")
 def trigger_backup_job(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
@@ -473,7 +471,7 @@ def trigger_backup_job(
     return RedirectResponse("/admin/jobs", status_code=303)
 
 
-@router.post("/admin/maintenance/recommend-tags", dependencies=[Depends(require_csrf)])
+@router.post("/admin/maintenance/recommend-tags")
 def trigger_recommend_tags_job(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),

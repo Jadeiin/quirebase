@@ -272,8 +272,9 @@ def test_item_edit_detects_conflicts_and_updates_search(db, tmp_path, monkeypatc
     client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
     try:
         updated = client.post(
-            f"/items/{item.id}/edit?csrf_token=test-csrf",
+            f"/items/{item.id}/edit",
             data={
+                "csrf_token": "test-csrf",
                 "version": 1,
                 "title": "Revised Paper",
                 "abstract": "Quantum transport",
@@ -290,8 +291,8 @@ def test_item_edit_detects_conflicts_and_updates_search(db, tmp_path, monkeypatc
         assert "Revised Paper" in results.text
 
         stale = client.post(
-            f"/items/{item.id}/edit?csrf_token=test-csrf",
-            data={"version": 1, "title": "Lost update"},
+            f"/items/{item.id}/edit",
+            data={"csrf_token": "test-csrf", "version": 1, "title": "Lost update"},
         )
         assert stale.status_code == 409
         db.refresh(item)

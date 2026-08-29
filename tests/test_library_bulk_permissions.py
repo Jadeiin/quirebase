@@ -252,8 +252,8 @@ def test_bulk_export_rejects_inaccessible_items(db, tmp_path, monkeypatch):
     db.commit()
 
     response = client.post(
-        "/library/bulk?csrf_token=test-csrf",
-        data={"action": "export_bibtex", "item_ids": private_item.id},
+        "/library/bulk",
+        data={"csrf_token": "test-csrf", "action": "export_bibtex", "item_ids": private_item.id},
     )
 
     assert response.status_code == 422
