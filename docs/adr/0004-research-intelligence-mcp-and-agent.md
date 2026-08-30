@@ -117,6 +117,3 @@ graph LR
 - Protocol and transport behaviour follows the official `mcp` SDK rather than a Quirebase JSON-RPC implementation.
 - API Tokens expire, can be revoked, and immediately lose access when their User is deactivated.
 - Tool availability is server-wide; User- and object-level authorization remains authoritative.
-
-The protocol, transport and authorization findings are recorded in
-[`docs/research/2026-08-30-mcp-server-integration.md`](../research/2026-08-30-mcp-server-integration.md).
