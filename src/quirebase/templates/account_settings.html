@@ -7,6 +7,10 @@
   'password must contain at least 12 characters': _('password must contain at least 12 characters'),
   'New passwords do not match': _('New passwords do not match'),
   'Password updated successfully': _('Password updated successfully'),
+  'API Token name is required': _('API Token name is required'),
+  'API Token name must contain at most 120 characters': _('API Token name must contain at most 120 characters'),
+  'API Token lifetime must be 1-365 days': _('API Token lifetime must be 1-365 days'),
+  'API Token created': _('API Token created'),
 } %}
 <div class="page-heading">
   <div>
@@ -28,7 +32,7 @@
 {% endif %}
 
 <div class="item-two-column" style="gap: 1.5rem; align-items: start;">
-  <div style="display: grid; gap: 1.5rem;">
+  <div style="display: grid; gap: 1.5rem; min-width: 0;">
     <section class="panel">
       <div class="section-heading">
         <h2>{{ _('User profile') }}</h2>
@@ -49,7 +53,7 @@
           <label>
             {{ _('Display language') }}
             <div style="display: flex; gap: .5rem; margin-top: .25rem;">
-              <select name="locale" style="flex: 1 1 auto;">
+              <select name="locale" style="flex: 1 1 auto; min-width: 0;">
                 <option value="zh_CN" {% if active_locale == 'zh_CN' %}selected{% endif %}>简体中文 (Simplified Chinese)</option>
                 <option value="en_US" {% if active_locale == 'en_US' or not active_locale %}selected{% endif %}>English (US)</option>
               </select>
@@ -101,9 +105,89 @@
         </div>
       </form>
     </section>
+
+    <section class="panel" id="api-tokens">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">{{ _('Developer access') }}</p>
+          <h2>{{ _('MCP and API Tokens') }}</h2>
+        </div>
+      </div>
+      <p class="text-muted" style="font-size: .85rem; margin-bottom: 1rem;">{{ _('Create a time-limited token for an MCP or HTTP API client. Each token has the same Quirebase permissions as your account and can be revoked at any time.') }}</p>
+
+      {% if api_token %}
+      <div role="status" style="padding: .85rem; margin-bottom: 1rem; border: 1px solid #93c5ae; border-radius: .45rem; background: #eef7f2;">
+        <strong>{{ _('Copy this token now') }}</strong>
+        <p class="text-muted" style="font-size: .82rem; margin: .3rem 0 .6rem;">{{ _('For security, the plaintext token will not be shown again.') }}</p>
+        <code style="display: block; max-width: 100%; overflow-wrap: anywhere; word-break: break-all; user-select: all; padding: .65rem; background: var(--surface); border: 1px solid var(--line); border-radius: .35rem;">{{ api_token }}</code>
+      </div>
+      {% endif %}
+
+      <form method="post" action="/account/api-tokens" style="display: grid; gap: .75rem; margin-bottom: 1.25rem;">{{ csrf_field(csrf) }}
+        <label>
+          {{ _('Token name') }}
+          <input name="name" maxlength="120" required placeholder="{{ _('Research client') }}" autocomplete="off">
+        </label>
+        <label>
+          {{ _('Expires after') }}
+          <select name="days">
+            <option value="7">{{ _('7 days') }}</option>
+            <option value="30" selected>{{ _('30 days') }}</option>
+            <option value="90">{{ _('90 days') }}</option>
+            <option value="365">{{ _('365 days') }}</option>
+          </select>
+        </label>
+        <div class="form-actions"><button type="submit">{{ _('Create API Token') }}</button></div>
+      </form>
+
+      <div style="display: grid; gap: .75rem; margin-bottom: 1.25rem;">
+        {% for token in api_tokens %}
+        <article style="display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .65rem .85rem; border: 1px solid var(--line); border-radius: .45rem; background: var(--surface-soft); min-width: 0;">
+          <div style="display: grid; min-width: 0; overflow: hidden;">
+            <strong style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ token.name }}</strong>
+            <small class="text-muted" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ _(token.status) }} · {{ _('Expires') }} {{ token.expires_at.strftime('%Y-%m-%d') }} · {{ token.token_id[:8] }}</small>
+          </div>
+          {% if token.status == 'active' %}
+          <form method="post" action="/account/api-tokens/{{ token.token_id }}/revoke" onsubmit="return confirm('{{ _('Revoke this API Token?') }}')" style="flex-shrink: 0;">{{ csrf_field(csrf) }}
+            <button class="danger-button compact-button" type="submit">{{ _('Revoke') }}</button>
+          </form>
+          {% endif %}
+        </article>
+        {% else %}
+        <div class="empty-state">{{ _('No API Tokens yet.') }}</div>
+        {% endfor %}
+      </div>
+
+      <div style="padding-top: 1rem; border-top: 1px solid var(--line); margin-bottom: 1.25rem;">
+        <h3>{{ _('Connect an HTTP API client') }}</h3>
+        <p class="text-muted" style="font-size: .85rem;">{{ _('Use JSON under the versioned API endpoint and send the token in the Authorization header. Browser Login Sessions are not API credentials.') }}</p>
+        <dl class="metadata-list compact-metadata-list" style="margin: .75rem 0;">
+          <div><dt>{{ _('Base endpoint') }}</dt><dd><code style="overflow-wrap: anywhere; word-break: break-all;">{{ api_endpoint }}</code></dd></div>
+          <div><dt>{{ _('OpenAPI') }}</dt><dd><a href="/docs"><code>{{ request.base_url }}docs</code></a></dd></div>
+          <div><dt>{{ _('Header') }}</dt><dd><code style="overflow-wrap: anywhere; word-break: break-all;">Authorization: Bearer YOUR_API_TOKEN</code></dd></div>
+        </dl>
+      </div>
+
+      <div style="padding-top: 1rem; border-top: 1px solid var(--line);">
+        <h3>{{ _('Connect an MCP client') }}</h3>
+        <p class="text-muted" style="font-size: .85rem;">{{ _('Use Streamable HTTP and send the token in the Authorization header. Never put a token in the URL.') }}</p>
+        <dl class="metadata-list compact-metadata-list" style="margin: .75rem 0;">
+          <div><dt>{{ _('Endpoint') }}</dt><dd><code style="overflow-wrap: anywhere; word-break: break-all;">{{ mcp_endpoint }}</code></dd></div>
+          <div><dt>{{ _('Header') }}</dt><dd><code style="overflow-wrap: anywhere; word-break: break-all;">Authorization: Bearer YOUR_API_TOKEN</code></dd></div>
+        </dl>
+        <pre style="max-width: 100%; overflow-x: auto; padding: .75rem; border: 1px solid var(--line); border-radius: .45rem; background: var(--surface-soft); font-size: .82rem;"><code>{
+  "mcpServers": {
+    "quirebase": {
+      "url": "{{ mcp_endpoint }}",
+      "headers": {"Authorization": "Bearer YOUR_API_TOKEN"}
+    }
+  }
+}</code></pre>
+      </div>
+    </section>
   </div>
 
-  <div style="display: grid; gap: 1.5rem;" x-data="userSettings" data-export-preferences-key="quirebase:export-preferences:v1:account:{{ user.id }}">
+  <div style="display: grid; gap: 1.5rem; min-width: 0;" x-data="userSettings" data-export-preferences-key="quirebase:export-preferences:v1:account:{{ user.id }}">
     <section class="panel" id="export-preferences">
       <div class="section-heading">
         <div>

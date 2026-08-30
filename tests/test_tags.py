@@ -12,9 +12,27 @@ from quirebase.library.tags import (
     add_tag_to_item,
     get_tag_matrix_for_item,
     merge_tags,
+    remove_tag_from_item,
     set_item_tags,
 )
-from quirebase.models import Item, ItemTag, ItemTagRecommendation, Tag, User
+from quirebase.models import AuditEvent, Item, ItemTag, ItemTagRecommendation, Tag, User
+
+
+def test_remove_tag_from_item_records_the_business_change(db):
+    user = User(username="tag-remover", password_hash="hash")
+    db.add(user)
+    db.flush()
+    item = Item(title="Tagged Item", created_by=user.id)
+    db.add(item)
+    db.flush()
+    assignment = add_tag_to_item(db, user, item.id, "Temporary")
+    tag_id = assignment.tag_id
+
+    remove_tag_from_item(db, user, item.id, tag_id)
+
+    assert db.get(ItemTag, (item.id, tag_id)) is None
+    event = db.query(AuditEvent).filter_by(action="tag.remove", target_id=item.id).one()
+    assert json.loads(event.detail) == {"tag_id": tag_id}
 
 
 def test_get_tag_matrix_for_item(db):

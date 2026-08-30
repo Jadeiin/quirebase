@@ -15,8 +15,10 @@ PACKAGE_ROLES = {
     "core": "infrastructure",
     "documents": "business",
     "library": "business",
+    "mcp": "inbound-adapter",
     "operations": "business",
     "pipeline": "business",
+    "programmatic": "application-interface",
     "projects": "business",
     "search": "outbound-adapter",
     "web": "inbound-adapter",
@@ -38,8 +40,18 @@ ALLOWED_PACKAGE_DEPENDENCIES = {
         "pipeline",
         "search",
     },
+    "mcp": {
+        "accounts",
+        "audit",
+        "core",
+        "documents",
+        "library",
+        "programmatic",
+        "projects",
+    },
     "operations": {"audit", "core", "models"},
     "pipeline": {"audit", "core", "library", "models", "operations", "search"},
+    "programmatic": {"documents", "library"},
     "projects": {"access", "audit", "core", "models", "search"},
     "search": {"models"},
     "web": {
@@ -49,9 +61,11 @@ ALLOWED_PACKAGE_DEPENDENCIES = {
         "core",
         "documents",
         "library",
+        "mcp",
         "models",
         "operations",
         "pipeline",
+        "programmatic",
         "projects",
         "search",
     },
@@ -80,6 +94,7 @@ SESSION_METHODS = {
 }
 
 ORM_MODEL_OWNERS = {
+    "ApiToken": "accounts",
     "Attachment": "documents",
     "AuditEvent": "audit",
     "Author": "library",
@@ -415,23 +430,28 @@ def test_business_modules_do_not_import_transport_frameworks_or_vendor_ai_sdks()
                 )
 
 
-def test_web_layer_does_not_own_transactions_persistence_or_audit():
-    for py_file in get_python_files(SRC_ROOT / "web"):
-        tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
-        types = session_type_names(tree)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Name) and node.id == "AuditEvent":
-                raise AssertionError(f"{py_file} directly references AuditEvent in the Web layer")
-            if isinstance(node, ast.Name) and node.id in {"LocalObjectStore", "SearchIndex"}:
-                raise AssertionError(f"{py_file} directly references {node.id} in the Web layer")
-            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                continue
-            for call in forbidden_session_calls(node, types):
-                assert isinstance(call.func, ast.Attribute)
-                raise AssertionError(
-                    f"{py_file}:{call.lineno} directly invokes SQLAlchemy Session."
-                    f"{call.func.attr}() in the Web layer"
-                )
+def test_inbound_adapters_do_not_own_transactions_persistence_or_audit():
+    for adapter in ("mcp", "web"):
+        for py_file in get_python_files(SRC_ROOT / adapter):
+            tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+            types = session_type_names(tree)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Name) and node.id == "AuditEvent":
+                    raise AssertionError(
+                        f"{py_file} directly references AuditEvent in an inbound adapter"
+                    )
+                if isinstance(node, ast.Name) and node.id in {"LocalObjectStore", "SearchIndex"}:
+                    raise AssertionError(
+                        f"{py_file} directly references {node.id} in an inbound adapter"
+                    )
+                if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                for call in forbidden_session_calls(node, types):
+                    assert isinstance(call.func, ast.Attribute)
+                    raise AssertionError(
+                        f"{py_file}:{call.lineno} directly invokes SQLAlchemy Session."
+                        f"{call.func.attr}() in an inbound adapter"
+                    )
 
 
 def test_only_audit_module_constructs_audit_events():
@@ -521,7 +541,7 @@ def test_library_facade_exposes_owned_import_citation_and_recommendation_operati
 
 
 def test_external_callers_use_library_facade_for_owned_operations():
-    for package in ("pipeline", "web"):
+    for package in ("mcp", "pipeline", "web"):
         for py_file in get_python_files(SRC_ROOT / package):
             for module in imported_modules(py_file):
                 assert not module.startswith("quirebase.library."), (

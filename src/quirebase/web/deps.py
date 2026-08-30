@@ -70,7 +70,7 @@ def protected_router(**kwargs: Any) -> APIRouter:
     contract.
     """
     extra_dependencies = list(kwargs.pop("dependencies", []))
-    return APIRouter(dependencies=[Depends(require_csrf), *extra_dependencies], **kwargs)
+    return APIRouter(dependencies=[*extra_dependencies, Depends(require_csrf)], **kwargs)
 
 
 def public_router(**kwargs: Any) -> APIRouter:

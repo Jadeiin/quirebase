@@ -119,7 +119,9 @@ main { width: min(1560px, 100%); margin: 0 auto; padding: 2rem clamp(1.25rem, 3.
 .public-main { max-width: 1100px; }
 .page-heading { display: flex; align-items: end; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; }
 .eyebrow { margin-bottom: .25rem; color: var(--accent); font-size: .72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
-.panel { padding: 1.25rem; border: 1px solid var(--line); border-radius: .85rem; background: var(--surface); box-shadow: var(--shadow); }
+.panel { padding: 1.25rem; border: 1px solid var(--line); border-radius: .85rem; background: var(--surface); box-shadow: var(--shadow); min-width: 0; }
+pre { max-width: 100%; overflow-x: auto; margin: 0; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
 .narrow { max-width: 28rem; margin: 10vh auto; }
 .button-link, button { display: inline-flex; align-items: center; justify-content: center; min-height: 2.55rem; padding: .58rem .9rem; border: 1px solid var(--accent); border-radius: .5rem; color: white; font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; background: var(--accent); }
 button:hover, .button-link:hover { background: var(--accent-strong); }
@@ -366,6 +368,7 @@ label { display: grid; gap: .3rem; color: #46514c; font-size: .82rem; font-weigh
 .remote-pdf-upload > button { grid-column: 2; grid-row: 1; }
 .remote-pdf-status { grid-column: 1; display: grid; gap: .2rem; }
 .item-two-column { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: start; }
+.item-two-column > * { min-width: 0; }
 .chip-list { display: flex; flex-wrap: wrap; gap: .45rem; min-height: 3rem; margin: 1rem 0; }
 .chip-list > span { display: inline-flex; gap: .25rem; align-items: center; height: fit-content; padding: .35rem .45rem .35rem .65rem; border-radius: 999px; color: var(--accent-strong); font-weight: 700; background: var(--accent-soft); }
 .chip-list button { width: 1.35rem; min-height: 1.35rem; padding: 0; border: 0; color: var(--accent); background: transparent; }
@@ -509,6 +512,7 @@ label { display: grid; gap: .3rem; color: #46514c; font-size: .82rem; font-weigh
   .project-card-grid, .tool-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .search-source-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .project-workspace { grid-template-columns: 1fr; }
+  .item-summary-grid, .item-two-column, .metadata-form { grid-template-columns: 1fr; }
   .session-list article { grid-template-columns: .7rem 1fr auto; }
   .session-list dl { grid-column: 2 / -1; }
 }

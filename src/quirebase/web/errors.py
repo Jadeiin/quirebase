@@ -20,6 +20,13 @@ from quirebase.library import BatchConflict, TagConflict, UpstreamServiceError
 from quirebase.projects.members import ProjectMemberConflict
 
 
+def _expects_json(request: Request) -> bool:
+    return request.url.path.startswith((
+        "/api/",
+        "/documents/",
+    )) or "application/json" in request.headers.get("accept", "")
+
+
 def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(LoginThrottled)
     def handle_login_throttled(request: Request, exc: LoginThrottled):
@@ -57,25 +64,19 @@ def register_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(ResourceNotFound)
     def handle_not_found(request: Request, exc: ResourceNotFound):
-        if request.url.path.startswith("/documents/") or "application/json" in request.headers.get(
-            "accept", ""
-        ):
+        if _expects_json(request):
             return JSONResponse(status_code=404, content={"detail": str(exc) or "not found"})
         raise HTTPException(status_code=404, detail=str(exc) or "not found")
 
     @app.exception_handler(ResourceUnavailable)
     def handle_unavailable(request: Request, exc: ResourceUnavailable):
-        if request.url.path.startswith("/documents/") or "application/json" in request.headers.get(
-            "accept", ""
-        ):
+        if _expects_json(request):
             return JSONResponse(status_code=404, content={"detail": "not found"})
         raise HTTPException(status_code=404, detail="not found")
 
     @app.exception_handler(PermissionDenied)
     def handle_permission_denied(request: Request, exc: PermissionDenied):
-        if request.url.path.startswith("/documents/") or "application/json" in request.headers.get(
-            "accept", ""
-        ):
+        if _expects_json(request):
             return JSONResponse(
                 status_code=403, content={"detail": str(exc) or "permission denied"}
             )
@@ -83,9 +84,7 @@ def register_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(ValidationFailure)
     def handle_validation_failure(request: Request, exc: ValidationFailure):
-        if request.url.path.startswith("/documents/") or "application/json" in request.headers.get(
-            "accept", ""
-        ):
+        if _expects_json(request):
             return JSONResponse(
                 status_code=422, content={"detail": str(exc) or "validation failure"}
             )
@@ -93,9 +92,7 @@ def register_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(SizeLimitExceeded)
     def handle_size_limit_exceeded(request: Request, exc: SizeLimitExceeded):
-        if request.url.path.startswith("/documents/") or "application/json" in request.headers.get(
-            "accept", ""
-        ):
+        if _expects_json(request):
             return JSONResponse(
                 status_code=413, content={"detail": str(exc) or "content too large"}
             )
@@ -103,9 +100,7 @@ def register_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(VersionConflict)
     def handle_version_conflict(request: Request, exc: VersionConflict):
-        if request.url.path.startswith("/documents/") or "application/json" in request.headers.get(
-            "accept", ""
-        ):
+        if _expects_json(request):
             return JSONResponse(
                 status_code=409,
                 content={"detail": {"version": exc.current_version}},

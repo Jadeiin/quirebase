@@ -97,6 +97,18 @@ class LoginSession(Base):
     user: Mapped[User] = relationship()
 
 
+class ApiToken(Base):
+    __tablename__ = "api_tokens"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    name: Mapped[str] = mapped_column(String(120))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    user: Mapped[User] = relationship()
+
+
 class LoginThrottle(Base):
     __tablename__ = "login_throttles"
     identity_hash: Mapped[str] = mapped_column(String(64), primary_key=True)

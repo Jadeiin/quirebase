@@ -16,6 +16,7 @@ from quirebase.accounts.throttling import (
 from quirebase.audit import record_event
 from quirebase.core.crypto import hash_password, token_hash, verify_password
 from quirebase.core.errors import DomainError, ResourceNotFound, ValidationFailure
+from quirebase.core.timezones import as_utc
 from quirebase.models import Invitation, LoginSession, User
 
 if TYPE_CHECKING:
@@ -28,6 +29,14 @@ class AuthenticationFailure(DomainError):
 
 class InvalidCredentials(AuthenticationFailure):
     pass
+
+
+def resolve_api_token_user(db: Session, subject: str) -> User:
+    """Resolve a verified API Token subject to an active local User."""
+    user = db.get(User, subject)
+    if user is None or not user.active:
+        raise AuthenticationFailure("access token subject is not an active user")
+    return user
 
 
 def authenticate_user(
@@ -89,7 +98,7 @@ def accept_invitation(db: Session, token: str, password: str) -> User:
     if (
         invitation is None
         or invitation.accepted_at is not None
-        or invitation.expires_at.replace(tzinfo=UTC) <= datetime.now(UTC)
+        or as_utc(invitation.expires_at) <= datetime.now(UTC)
     ):
         raise ResourceNotFound("invitation not found or expired")
     if db.scalar(select(User).where(User.username == invitation.username)):

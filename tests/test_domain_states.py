@@ -11,6 +11,7 @@ from quirebase.documents.schemas import AnnotationCreate, SegmentInput
 from quirebase.models import (
     AnnotationKind,
     AnnotationScope,
+    AuditEvent,
     FileRevision,
     FileRevisionProcessingState,
     Item,
@@ -130,6 +131,10 @@ def test_project_membership_preserves_an_owner_and_returns_domain_roles(db):
         (member.user.username, member.role)
         for member in open_project_workspace(db, owner, project.id).members
     ] == [(owner.username, ProjectRole.owner)]
+    event = (
+        db.query(AuditEvent).filter_by(action="project.member.remove", target_id=project.id).one()
+    )
+    assert json.loads(event.detail) == {"user_id": teammate.id}
 
 
 def assert_closed_state_constraints(db) -> None:

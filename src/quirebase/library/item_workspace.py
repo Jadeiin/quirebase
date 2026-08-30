@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 from quirebase.access.items import can_delete_item, can_edit_item, require_readable_item
 from quirebase.core.errors import ResourceNotFound
 from quirebase.library.authors import get_item_authors
+from quirebase.library.item_metadata import ItemMetadata, metadata_from_item
 from quirebase.library.tags import get_tag_matrix_for_item
 from quirebase.models import (
     AnnotationScope,
@@ -77,6 +78,7 @@ class SummaryWorkspace(WorkspaceView):
 class MetadataWorkspace(WorkspaceView):
     authors: tuple[ItemAuthor, ...]
     editors: tuple[ItemAuthor, ...]
+    metadata: ItemMetadata
 
 
 @dataclass(frozen=True)
@@ -236,13 +238,19 @@ def _revisions(
 
 
 def _open_metadata(db: Session, user: User, item: Item) -> MetadataWorkspace:
+    authors = tuple(get_item_authors(db, item.id, role="author"))
+    editors = tuple(get_item_authors(db, item.id, role="editor"))
+    identifiers = tuple(
+        db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item.id)).all()
+    )
     return MetadataWorkspace(
         item=item,
         can_edit=can_edit_item(db, user, item.id),
         can_delete=can_delete_item(db, user, item),
         revisions=_revisions(db, item.id),
-        authors=tuple(get_item_authors(db, item.id, role="author")),
-        editors=tuple(get_item_authors(db, item.id, role="editor")),
+        authors=authors,
+        editors=editors,
+        metadata=metadata_from_item(item, authors, editors, identifiers),
     )
 
 

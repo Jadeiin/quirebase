@@ -12,6 +12,17 @@ from quirebase.accounts.administration import (
     revoke_user_sessions,
     update_user_status,
 )
+from quirebase.accounts.api_tokens import (
+    API_TOKEN_PREFIX,
+    MAX_API_TOKEN_DAYS,
+    ApiTokenGrant,
+    ApiTokenSummary,
+    VerifiedApiToken,
+    create_api_token,
+    list_api_tokens,
+    revoke_api_token,
+    verify_api_token,
+)
 from quirebase.accounts.authentication import (
     AuthenticationFailure,
     InvalidCredentials,
@@ -19,6 +30,7 @@ from quirebase.accounts.authentication import (
     authenticate_user,
     change_own_password,
     logout,
+    resolve_api_token_user,
 )
 from quirebase.accounts.invitations import (
     InvitationConflict,
@@ -40,21 +52,28 @@ from quirebase.accounts.throttling import (
 )
 
 __all__ = [
+    "API_TOKEN_PREFIX",
+    "MAX_API_TOKEN_DAYS",
+    "ApiTokenGrant",
+    "ApiTokenSummary",
     "AuthenticationFailure",
     "InvalidCredentials",
     "InvitationConflict",
     "LoginThrottled",
+    "VerifiedApiToken",
     "accept_invitation",
     "authenticate_user",
     "change_own_password",
     "change_user_role",
     "check_login_throttle",
     "clear_login_failures",
+    "create_api_token",
     "create_invitation",
     "create_login_session",
     "create_user_admin",
     "get_login_session_by_token",
     "get_valid_invitation",
+    "list_api_tokens",
     "list_failed_jobs",
     "list_invitations",
     "list_user_sessions",
@@ -63,9 +82,12 @@ __all__ = [
     "logout",
     "record_login_failure",
     "reset_user_password",
+    "resolve_api_token_user",
     "retry_job",
     "revoke_all_sessions",
+    "revoke_api_token",
     "revoke_session",
     "revoke_user_sessions",
     "update_user_status",
+    "verify_api_token",
 ]

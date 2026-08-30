@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -7,6 +8,9 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from quirebase.core.config import get_settings
+from quirebase.core.database import SessionLocal
+from quirebase.mcp import SessionFactory, create_mcp_http_mount
+from quirebase.web.api.routes import router as api_router
 from quirebase.web.errors import register_error_handlers
 from quirebase.web.json.annotations import router as json_annotations_router
 from quirebase.web.json.documents import router as json_documents_router
@@ -26,9 +30,22 @@ from quirebase.web.views.tools import router as views_tools_router
 PACKAGE_DIR = Path(__file__).resolve().parent.parent
 
 
-def create_app() -> FastAPI:
-    app = FastAPI(title="Quirebase", version="0.1.0")
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=get_settings().allowed_host_list)
+def create_app(*, mcp_session_factory: SessionFactory = SessionLocal) -> FastAPI:
+    settings = get_settings()
+    mcp_http = create_mcp_http_mount(
+        mcp_session_factory,
+        allowed_hosts=settings.allowed_host_list,
+        settings=settings,
+    )
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        async with mcp_http.server.session_manager.run():
+            yield
+
+    app = FastAPI(title="Quirebase", version="0.1.0", lifespan=lifespan)
+    app.state.mcp_server = mcp_http.server
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_host_list)
     app.mount("/static", StaticFiles(directory=PACKAGE_DIR / "static"), name="static")
 
     @app.middleware("http")
@@ -60,9 +77,12 @@ def create_app() -> FastAPI:
     app.include_router(views_tools_router)
 
     # JSON / Binary APIs
+    app.include_router(api_router)
     app.include_router(json_documents_router)
     app.include_router(json_annotations_router)
     app.include_router(json_exports_router)
+
+    app.mount("/mcp", mcp_http.app, name="mcp")
 
     return app
 

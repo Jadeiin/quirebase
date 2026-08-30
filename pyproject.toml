@@ -26,6 +26,7 @@ dependencies = [
   "tzdata>=2025.2; sys_platform == 'win32'",
   "tzlocal>=5.3,<6",
   "filelock>=3.20,<4",
+  "mcp>=2.1,<3",
 ]
 
 [project.optional-dependencies]

@@ -10,9 +10,9 @@ Planned deepening work is ordered in `docs/architecture/deep-module-roadmap.md`.
 
 | Package | Role | Owns |
 | --- | --- | --- |
-| `accounts` | Business Module | User authentication, Invitations, Login Sessions and login throttling |
+| `accounts` | Business Module | User authentication, Invitations, Login Sessions, API Tokens and login throttling |
 | `access` | Domain-policy Module | Authorization decisions over Items, Projects, Documents and Annotations |
-| `audit` | Business Module | Audit Event construction, detail serialization and administrative queries |
+| `audit` | Business Module | Audit Event construction, programmatic invocation provenance, detail serialization and administrative queries |
 | `library` | Business Module | Items, Authors, Identifiers, Tags, Item Tag Recommendations, Discussion Messages, Import Batches and Citation Styles |
 | `projects` | Business Module | Projects, Project membership and Item assignment |
 | `documents` | Business Module | File Revisions, Attachments, Annotations and annotation exports |
@@ -20,6 +20,8 @@ Planned deepening work is ordered in `docs/architecture/deep-module-roadmap.md`.
 | `operations` | Business Module | Runtime settings, health, backup and maintenance operations |
 | `search` | Outbound adapter Module | The Library Search port plus SQLite and PostgreSQL adapters |
 | `web` | Inbound adapter Module | HTTP parsing, authentication dependencies and response formatting |
+| `mcp` | Inbound adapter Module | MCP tool registration, API Token adaptation and protocol conversion |
+| `programmatic` | Application Interface Module | Shared response contracts and pure projections used by the HTTP API and MCP adapters |
 | `core` | Infrastructure Module | Configuration, database setup, storage, cryptography, i18n and base errors |
 
 ## Standalone workspace packages
@@ -122,6 +124,10 @@ synchronization, Audit Event recording and commit order remain in the Library im
 These operations return an immutable Item identity and version, not a mutable ORM aggregate.
 Their implementation lives in `library.item_metadata`; that internal Module owns writes to one
 Item's bibliographic record, not unrelated Item operations.
+`ItemMetadata` is a transport-neutral business command and may be used directly by inbound
+Adapters that can derive their wire schema from dataclasses; they must not maintain mirrored input
+models. Response contracts shared by both programmatic Adapters live in `programmatic`; HTML-only
+or protocol-only projections remain owned by their Adapter.
 
 Operations over a user-selected set of Items live in `library.bulk_items`. This Module owns the
 bulk-operation transaction, all-selected authorization rule, audit event and post-commit file
@@ -222,7 +228,9 @@ directions are:
 | `pipeline` | `audit`, `core`, `library`, `models`, `operations`, `search` | Durable execution, audit recording, maintenance and index updates; dispatch of Library-owned Tag Recommendation jobs |
 | `operations` | `audit`, `core`, `models` | Infrastructure access, operational persistence and audit recording |
 | `search` | `models` | Build and query the derived search representation |
-| `web` | Business Modules, `access`, `core`, `models` | Invoke use cases and format their returned ORM-backed views during the current persistence phase |
+| `web` | Business Modules, `access`, `core`, `mcp`, `models`, `programmatic` | Invoke use cases, expose the Bearer-authenticated HTTP API with API Token provenance, format views and compose the MCP HTTP mount into the application |
+| `mcp` | `accounts`, `audit`, `core`, `documents`, `library`, `programmatic`, `projects` | Resolve a verified token subject, bind invocation provenance for business Audit Events, manage request persistence lifetime, invoke ordinary User use cases and format protocol results without owning their authorization or transactions |
+| `programmatic` | `documents`, `library` | Define shared programmatic response contracts and pure projections without owning authentication, transactions or business authorization |
 | `core` | Nothing above infrastructure | Infrastructure must not know business concepts |
 
 Dependencies on standalone workspace packages are also explicit:

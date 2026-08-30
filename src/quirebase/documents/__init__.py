@@ -27,10 +27,14 @@ from quirebase.documents.revisions import (
     get_revision_file,
     store_pdf_revision,
 )
+from quirebase.documents.schemas import AnnotationCreate, AnnotationUpdate, SegmentInput
 
 __all__ = [
+    "AnnotationCreate",
+    "AnnotationUpdate",
     "DocumentNotReady",
     "ItemDownloadBundle",
+    "SegmentInput",
     "UnsupportedMediaType",
     "assemble_document_bundle",
     "create_attachment",

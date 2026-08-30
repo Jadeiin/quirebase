@@ -25,9 +25,11 @@ from quirebase.models import Item
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from sqlalchemy.orm import Session
 
-    from quirebase.models import User
+    from quirebase.models import ItemAuthor, ItemIdentifier, User
 
 type JsonValue = str | int | float | bool | tuple[JsonValue, ...] | Mapping[str, JsonValue] | None
 
@@ -80,6 +82,73 @@ class ItemMetadata:
 class ItemWriteResult:
     item_id: str
     version: int
+
+
+def _stored_json_value(value: object) -> JsonValue:
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+    if isinstance(value, list | tuple):
+        return tuple(_stored_json_value(entry) for entry in value)
+    if isinstance(value, Mapping) and all(isinstance(key, str) for key in value):
+        return {str(key): _stored_json_value(entry) for key, entry in value.items()}
+    raise ValidationFailure("stored custom fields contain an unsupported value")
+
+
+def metadata_from_item(
+    item: Item,
+    authors: Sequence[ItemAuthor],
+    editors: Sequence[ItemAuthor],
+    identifiers: Sequence[ItemIdentifier],
+) -> ItemMetadata:
+    """Project persisted Item metadata into the same shape accepted by replacement writes."""
+    custom_fields: tuple[CustomField, ...] = ()
+    if item.custom_fields:
+        try:
+            parsed_custom_fields = json.loads(item.custom_fields)
+        except (json.JSONDecodeError, TypeError) as error:
+            raise ValidationFailure("stored custom fields are invalid JSON") from error
+        if not isinstance(parsed_custom_fields, dict):
+            raise ValidationFailure("stored custom fields must be a JSON object")
+        custom_fields = tuple(
+            CustomField(str(name), _stored_json_value(value))
+            for name, value in parsed_custom_fields.items()
+        )
+
+    def contributors(links: Sequence[ItemAuthor]) -> tuple[Contributor, ...]:
+        return tuple(
+            Contributor(
+                last_name=link.author.last_name,
+                first_name=link.author.first_name,
+                is_corresponding=link.is_corresponding,
+            )
+            for link in links
+        )
+
+    return ItemMetadata(
+        title=item.title,
+        abstract=item.abstract,
+        keywords=tuple(
+            value.strip() for value in (item.keywords or "").split(";") if value.strip()
+        ),
+        publication_date=item.publication_date,
+        publication_title=item.publication_title,
+        reference_type=item.reference_type,
+        volume=item.volume,
+        issue=item.issue,
+        pages=item.pages,
+        affiliation=item.affiliation,
+        publisher=item.publisher,
+        place_published=item.place_published,
+        journal_abbreviation=item.journal_abbreviation,
+        bibtex_key=item.bibtex_id,
+        bibtex_type=item.bibtex_type,
+        urls=tuple(value.strip() for value in (item.urls or "").splitlines() if value.strip()),
+        authors=contributors(authors),
+        editors=contributors(editors),
+        doi=item.doi,
+        identifiers=tuple(ExternalIdentifier(row.provider, row.value) for row in identifiers),
+        custom_fields=custom_fields,
+    )
 
 
 def _optional_text(value: str | None) -> str | None:

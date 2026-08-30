@@ -124,6 +124,11 @@ _Avoid_: Invite Code, Signup Token
 **Login Session**:
 A revocable authenticated device session belonging to one User.
 
+**API Token**:
+A revocable, time-limited programmatic credential belonging to one User and carrying that User's
+current authority.
+_Avoid_: Login Session, OAuth Access Token, API Key
+
 **Job**:
 A durable background task classified by a Job Kind. A Job moves from pending to running and
 then to succeeded or failed; a failed attempt may return to pending while retries remain.
@@ -137,8 +142,8 @@ An immutable record of a security-sensitive or data-changing action.
 
 ## Relationships
 
-- A User is the Item Owner of zero or more Items, owns zero or more Login Sessions, and has one
-  System Role.
+- A User is the Item Owner of zero or more Items, owns zero or more Login Sessions and API Tokens,
+  and has one System Role.
 - An Item has zero or more Contributors in an ordered bibliographic role. A Contributor may have a split first/last name or a single-field literal name.
 - An Invitation provisions one new User with an assigned System Role.
 - An Item has zero or more File Revisions, Attachments, Tags, and Discussion Messages.

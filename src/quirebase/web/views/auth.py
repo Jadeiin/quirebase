@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from fastapi import Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from quirebase.accounts import create_api_token, list_api_tokens, revoke_api_token
 from quirebase.accounts.authentication import (
     InvalidCredentials,
     authenticate_user,
@@ -50,6 +51,61 @@ if TYPE_CHECKING:
 
 public_router = make_public_router()
 router = protected_router()
+
+
+def _account_settings_context(
+    request: Request,
+    user: User,
+    login_session: LoginSession,
+    db: Session,
+    *,
+    api_token: str | None = None,
+    error: str | None = None,
+    success: str | None = None,
+):
+    return {
+        "user": user,
+        "login": login_session,
+        "sessions": list_user_sessions(db, user.id),
+        "api_tokens": list_api_tokens(db, user),
+        "api_token": api_token,
+        "api_endpoint": f"{str(request.base_url).rstrip('/')}/api/v1/",
+        "mcp_endpoint": str(request.url_for("mcp", path="/")),
+        "csrf": login_session.csrf_token,
+        "active_page": "settings",
+        "error": error,
+        "success": success,
+    }
+
+
+def _account_settings_response(
+    request: Request,
+    user: User,
+    login_session: LoginSession,
+    db: Session,
+    *,
+    api_token: str | None = None,
+    error: str | None = None,
+    success: str | None = None,
+    status_code: int = 200,
+):
+    response = templates.TemplateResponse(
+        request,
+        "account_settings.html",
+        _account_settings_context(
+            request,
+            user,
+            login_session,
+            db,
+            api_token=api_token,
+            error=error,
+            success=success,
+        ),
+        status_code=status_code,
+    )
+    if api_token is not None:
+        response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @public_router.get("/login", response_class=HTMLResponse)
@@ -110,20 +166,48 @@ def account_settings_page(
     login_session: LoginSession = Depends(current_login),
     db: Session = Depends(get_db),
 ):
-    sessions = list_user_sessions(db, user.id)
-    return templates.TemplateResponse(
+    return _account_settings_response(request, user, login_session, db)
+
+
+@router.post("/account/api-tokens")
+def create_own_api_token(
+    request: Request,
+    name: str = Form(),
+    days: int = Form(),
+    user: User = Depends(current_user),
+    login_session: LoginSession = Depends(current_login),
+    db: Session = Depends(get_db),
+):
+    try:
+        grant = create_api_token(db, user, name, expires_in_days=days)
+    except ValidationFailure as error:
+        return _account_settings_response(
+            request,
+            user,
+            login_session,
+            db,
+            error=str(error),
+            status_code=422,
+        )
+    return _account_settings_response(
         request,
-        "account_settings.html",
-        {
-            "user": user,
-            "login": login_session,
-            "sessions": sessions,
-            "csrf": login_session.csrf_token,
-            "active_page": "settings",
-            "error": None,
-            "success": None,
-        },
+        user,
+        login_session,
+        db,
+        api_token=grant.raw_token,
+        success="API Token created",
+        status_code=201,
     )
+
+
+@router.post("/account/api-tokens/{token_id}/revoke")
+def revoke_own_api_token(
+    token_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    revoke_api_token(db, user, token_id)
+    return RedirectResponse("/account/settings#api-tokens", status_code=303)
 
 
 @router.post("/account/settings/locale")
@@ -154,51 +238,32 @@ def update_password(
     login_session: LoginSession = Depends(current_login),
     db: Session = Depends(get_db),
 ):
-    sessions = list_user_sessions(db, user.id)
     if new_password != confirm_password:
-        return templates.TemplateResponse(
+        return _account_settings_response(
             request,
-            "account_settings.html",
-            {
-                "user": user,
-                "login": login_session,
-                "sessions": sessions,
-                "csrf": login_session.csrf_token,
-                "active_page": "settings",
-                "error": "New passwords do not match",
-                "success": None,
-            },
+            user,
+            login_session,
+            db,
+            error="New passwords do not match",
             status_code=422,
         )
     try:
         change_own_password_op(db, user, current_password, new_password)
     except (InvalidCredentials, ValidationFailure) as err:
-        return templates.TemplateResponse(
+        return _account_settings_response(
             request,
-            "account_settings.html",
-            {
-                "user": user,
-                "login": login_session,
-                "sessions": sessions,
-                "csrf": login_session.csrf_token,
-                "active_page": "settings",
-                "error": str(err),
-                "success": None,
-            },
+            user,
+            login_session,
+            db,
+            error=str(err),
             status_code=422,
         )
-    return templates.TemplateResponse(
+    return _account_settings_response(
         request,
-        "account_settings.html",
-        {
-            "user": user,
-            "login": login_session,
-            "sessions": sessions,
-            "csrf": login_session.csrf_token,
-            "active_page": "settings",
-            "error": None,
-            "success": "Password updated successfully",
-        },
+        user,
+        login_session,
+        db,
+        success="Password updated successfully",
     )
 
 

@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from quirebase.core.errors import DomainError
+from quirebase.core.timezones import as_utc
 from quirebase.models import LoginThrottle
 
 if TYPE_CHECKING:
@@ -25,7 +26,7 @@ def check_login_throttle(db: Session, identity: str) -> None:
     row = db.get(LoginThrottle, identity)
     if row is None:
         return
-    started = row.window_started_at.replace(tzinfo=UTC)
+    started = as_utc(row.window_started_at)
     if started + THROTTLE_WINDOW <= datetime.now(UTC):
         db.delete(row)
         db.commit()

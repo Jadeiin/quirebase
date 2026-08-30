@@ -76,4 +76,12 @@ def remove_project_member(
     if target.role == ProjectRole.owner and (owner_count or 0) <= 1:
         raise ProjectMemberConflict("a project must retain an owner")
     db.delete(target)
+    record_event(
+        db,
+        user.id,
+        "project.member.remove",
+        "project",
+        project_id,
+        detail={"user_id": member_id},
+    )
     db.commit()

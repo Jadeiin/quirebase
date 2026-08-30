@@ -39,6 +39,25 @@ For PostgreSQL install the `postgres` extra and set, for example:
 QUIREBASE_DATABASE_URL=postgresql+psycopg://quirebase:password@localhost/quirebase uv run quirebase serve
 ```
 
+## Programmatic access
+
+Quirebase exposes authenticated library, project, document-metadata, annotation, tag, discussion,
+Discovery and citation capabilities through a versioned JSON HTTP API at `/api/v1/` and MCP
+Streamable HTTP at `/mcp/`. Both surfaces share response contracts and the same ordinary User
+authorization rules; interactive OpenAPI documentation is available at `/docs`. They include reads and
+ordinary User mutations; it deliberately excludes administrator operations, file bytes and the
+currently unstructured PDF full text. A signed-in User can create and revoke their own time-limited
+API Tokens under **Account settings → MCP and API Tokens**; that page also shows the deployment's
+HTTP API and MCP endpoints plus an MCP client configuration example. Operators may alternatively use the CLI:
+
+```sh
+uv run quirebase create-api-token USERNAME --name "Research client" --days 30
+```
+
+The plaintext token is shown once. It has the User's current Quirebase permissions and no separate
+tool scopes. Do not place it in a URL; send `Authorization: Bearer qb_api_...`. Inspect or revoke
+tokens with `list-api-tokens USERNAME` and `revoke-api-token USERNAME TOKEN_ID`.
+
 ## PDF architecture
 
 - PDF.js is bundled locally and renders the document, text and annotation layers in the browser.

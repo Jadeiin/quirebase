@@ -9,6 +9,7 @@ from pathlib import Path
 from sqlalchemy import create_engine, inspect
 
 EXPECTED_TABLES = {
+    "api_tokens",
     "attachments",
     "audit_events",
     "authors",

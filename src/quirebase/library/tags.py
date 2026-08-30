@@ -63,6 +63,14 @@ def remove_tag_from_item(db: Session, user: User, item_id: str, tag_id: str) -> 
         db.delete(assignment)
         db.flush()
         search_index(db).index_item(db, item_id)
+        record_event(
+            db,
+            user.id,
+            "tag.remove",
+            "item",
+            item_id,
+            detail={"tag_id": tag_id},
+        )
         db.commit()
 
 

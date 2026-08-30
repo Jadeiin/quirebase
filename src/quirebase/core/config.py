@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     export_ttl_hours: int = 24
     worker_poll_seconds: float = Field(default=1.0, ge=0.1)
     allowed_hosts: str = "localhost,127.0.0.1,testserver"
+    mcp_allowed_origins: str = ""
     metadata_timeout_seconds: float = Field(
         default=10.0,
         ge=1.0,
@@ -57,6 +58,10 @@ class Settings(BaseSettings):
     @property
     def allowed_host_list(self) -> list[str]:
         return [host.strip() for host in self.allowed_hosts.split(",") if host.strip()]
+
+    @property
+    def mcp_allowed_origin_list(self) -> list[str]:
+        return [origin.strip() for origin in self.mcp_allowed_origins.split(",") if origin.strip()]
 
     @property
     def object_dir(self) -> Path:

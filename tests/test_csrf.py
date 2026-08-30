@@ -1,9 +1,9 @@
 """Security regression tests for the session-bound CSRF contract.
 
 The route policy lives in ``quirebase.web.deps``: every cookie-authenticated
-unsafe (POST/PUT/PATCH/DELETE) endpoint is covered by the shared
-``require_csrf`` dependency through ``protected_router``, and pre-authentication
-mutations are enumerated here as explicit public routes.
+unsafe (POST/PUT/PATCH/DELETE) endpoint is covered by either the shared
+``require_csrf`` dependency through ``protected_router`` or the Bearer-only
+``current_api_user`` dependency. Pre-authentication mutations are enumerated here.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ def dependency_names(route) -> set[str]:
 
     def walk(dep) -> None:
         if callable(dep.call):
-            names.add(dep.call.__name__)
+            names.add(getattr(dep.call, "__name__", type(dep.call).__name__))
         for sub in dep.dependencies:
             walk(sub)
 
@@ -55,7 +55,8 @@ def test_every_unsafe_route_is_covered_by_the_csrf_policy():
             continue
         if not any(method in ("POST", "PUT", "PATCH", "DELETE") for method in methods):
             continue
-        if "require_csrf" not in dependency_names(route):
+        dependencies = dependency_names(route)
+        if not dependencies.intersection({"require_csrf", "current_api_user"}):
             uncovered_public.add((min(methods), route.path))
     assert uncovered_public == PUBLIC_UNSAFE_ROUTES
 

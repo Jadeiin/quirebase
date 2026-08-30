@@ -8,6 +8,7 @@ from sqlalchemy import delete, func, select
 from quirebase.audit import record_event
 from quirebase.core.crypto import generate_token, token_hash
 from quirebase.core.errors import ResourceNotFound
+from quirebase.core.timezones import as_utc
 from quirebase.models import LoginSession, User
 
 if TYPE_CHECKING:
@@ -33,11 +34,7 @@ def get_login_session_by_token(db: Session, raw_token: str) -> LoginSession | No
     if not raw_token:
         return None
     login = db.scalar(select(LoginSession).where(LoginSession.token_hash == token_hash(raw_token)))
-    if (
-        login is None
-        or login.expires_at.replace(tzinfo=UTC) <= datetime.now(UTC)
-        or not login.user.active
-    ):
+    if login is None or as_utc(login.expires_at) <= datetime.now(UTC) or not login.user.active:
         return None
     return login
 

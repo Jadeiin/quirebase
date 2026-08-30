@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import func, or_, select
 
+from quirebase.audit.invocations import current_programmatic_invocation
 from quirebase.core.errors import ResourceUnavailable
 from quirebase.models import AuditEvent
 
@@ -22,6 +23,14 @@ def record_event(
     target_id: str | None = None,
     detail: dict[str, Any] | str | None = None,
 ) -> AuditEvent:
+    invocation = current_programmatic_invocation()
+    if invocation is not None:
+        if isinstance(detail, dict):
+            detail = {**detail, "invocation": invocation.detail()}
+        elif isinstance(detail, str):
+            detail = {"message": detail, "invocation": invocation.detail()}
+        else:
+            detail = {"invocation": invocation.detail()}
     detail_text: str | None = None
     if isinstance(detail, dict):
         detail_text = json.dumps(detail, ensure_ascii=False)

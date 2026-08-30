@@ -8,6 +8,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import inspect, select, text
 
+from .accounts import create_api_token, list_api_tokens, revoke_api_token
 from .core.config import get_settings
 from .core.crypto import hash_password
 from .core.database import SessionLocal, engine
@@ -56,6 +57,49 @@ def create_admin(
         db.add(User(username=username, password_hash=hash_password(password), role="administrator"))
         db.commit()
     typer.echo(f"Administrator {username!r} created.")
+
+
+def _active_user(db, username: str) -> User:
+    user = db.scalar(select(User).where(User.username == username, User.active.is_(True)))
+    if user is None:
+        raise typer.BadParameter("active user not found")
+    return user
+
+
+@app.command("create-api-token")
+def create_api_token_command(
+    username: str = typer.Argument(...),
+    name: str = typer.Option("MCP", help="Human-readable token name"),
+    days: int = typer.Option(30, min=1, max=365, help="Token lifetime in days"),
+):
+    with SessionLocal() as db:
+        user = _active_user(db, username)
+        grant = create_api_token(db, user, name, expires_in_days=days)
+    typer.echo(f"Token ID: {grant.token_id}")
+    typer.echo(f"Expires: {grant.expires_at.isoformat()}")
+    typer.echo(f"API Token (shown once): {grant.raw_token}")
+
+
+@app.command("list-api-tokens")
+def list_api_tokens_command(username: str = typer.Argument(...)):
+    with SessionLocal() as db:
+        user = _active_user(db, username)
+        tokens = list_api_tokens(db, user)
+    for token in tokens:
+        typer.echo(
+            f"{token.token_id}\t{token.status}\t{token.expires_at.isoformat()}\t{token.name}"
+        )
+
+
+@app.command("revoke-api-token")
+def revoke_api_token_command(
+    username: str = typer.Argument(...),
+    token_id: str = typer.Argument(...),
+):
+    with SessionLocal() as db:
+        user = _active_user(db, username)
+        revoke_api_token(db, user, token_id)
+    typer.echo(f"Revoked API Token {token_id}.")
 
 
 @app.command("doctor")

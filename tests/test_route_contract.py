@@ -12,6 +12,11 @@ def get_app():
 
 
 EXPECTED_OPERATIONAL_ROUTES = {
+    ("DELETE", "/api/v1/items/{item_id}/annotations/{annotation_id}"),
+    ("DELETE", "/api/v1/items/{item_id}/discussions/{message_id}"),
+    ("DELETE", "/api/v1/items/{item_id}/tags/{tag_id}"),
+    ("DELETE", "/api/v1/projects/{project_id}/items/{item_id}"),
+    ("DELETE", "/api/v1/projects/{project_id}/members/{user_id}"),
     ("DELETE", "/documents/{item_id}/annotations/{annotation_id}"),
     ("GET", "/"),
     ("GET", "/accept-invitation/{token}"),
@@ -43,6 +48,15 @@ EXPECTED_OPERATIONAL_ROUTES = {
     ("GET", "/items/{item_id}/{section}"),
     ("GET", "/api/citation-styles"),
     ("GET", "/api/citation-key-preview"),
+    ("GET", "/api/v1/items"),
+    ("GET", "/api/v1/items/{item_id}"),
+    ("GET", "/api/v1/items/{item_id}/annotations"),
+    ("GET", "/api/v1/items/{item_id}/citation"),
+    ("GET", "/api/v1/items/{item_id}/discussions"),
+    ("GET", "/api/v1/items/{item_id}/documents"),
+    ("GET", "/api/v1/projects"),
+    ("GET", "/api/v1/projects/{project_id}"),
+    ("GET", "/api/v1/tags"),
     ("GET", "/library"),
     ("GET", "/login"),
     ("GET", "/metrics"),
@@ -51,11 +65,20 @@ EXPECTED_OPERATIONAL_ROUTES = {
     ("GET", "/projects/{project_id}"),
     ("GET", "/tools"),
     ("PATCH", "/documents/{item_id}/annotations/{annotation_id}"),
+    ("PATCH", "/api/v1/items/{item_id}/annotations/{annotation_id}"),
     ("POST", "/accept-invitation/{token}"),
+    ("POST", "/account/api-tokens"),
+    ("POST", "/account/api-tokens/{token_id}/revoke"),
     ("POST", "/account/sessions/revoke-all"),
     ("POST", "/account/sessions/{session_id}/revoke"),
     ("POST", "/account/settings/locale"),
     ("POST", "/account/settings/password"),
+    ("POST", "/api/v1/discovery/search"),
+    ("POST", "/api/v1/items"),
+    ("POST", "/api/v1/items/{item_id}/annotations"),
+    ("POST", "/api/v1/items/{item_id}/discussions"),
+    ("POST", "/api/v1/items/{item_id}/tags"),
+    ("POST", "/api/v1/projects"),
     ("POST", "/admin/invitations"),
     ("POST", "/admin/items/{item_id}/delete"),
     ("POST", "/admin/jobs/retry-all"),
@@ -105,6 +128,10 @@ EXPECTED_OPERATIONAL_ROUTES = {
     ("POST", "/tools/tags/{tag_id}/delete"),
     ("POST", "/tools/tags/merge"),
     ("GET", "/api/authors/suggest"),
+    ("PUT", "/api/v1/items/{item_id}"),
+    ("PUT", "/api/v1/items/{item_id}/tags"),
+    ("PUT", "/api/v1/projects/{project_id}/items/{item_id}"),
+    ("PUT", "/api/v1/projects/{project_id}/members"),
 }
 
 
@@ -133,7 +160,7 @@ def test_operational_routes_contract():
                 continue
             operational_routes.add((method, route.path))
 
-    assert len(operational_routes) == 93, f"Expected 93 routes, found {len(operational_routes)}"
+    assert len(operational_routes) == 120, f"Expected 120 routes, found {len(operational_routes)}"
     assert operational_routes == EXPECTED_OPERATIONAL_ROUTES
 
 
@@ -269,6 +296,20 @@ def test_invitation_creation_is_hidden_from_non_administrators(db, tmp_path, mon
         response = client.post(
             "/admin/invitations",
             data={"csrf_token": "test-csrf", "username": "invitee", "role": "member"},
+        )
+
+        assert response.status_code == 404
+        assert response.json() == {"detail": "not found"}
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_admin_mutation_is_hidden_before_csrf_validation(db, tmp_path, monkeypatch):
+    client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+    try:
+        response = client.post(
+            "/admin/invitations",
+            data={"username": "invitee", "role": "member"},
         )
 
         assert response.status_code == 404
