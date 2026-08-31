@@ -17,6 +17,34 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
+#: src/quirebase/templates/item.html:135
+msgid "Item thumbnail"
+msgstr ""
+
+#: src/quirebase/templates/item.html:253
+msgid "Delete this PDF revision? Its annotations and thumbnail will also be removed."
+msgstr ""
+
+#: src/quirebase/templates/item.html:262
+msgid "Graphical Abstract"
+msgstr ""
+
+#: src/quirebase/templates/item.html:262
+msgid "Delete this attachment?"
+msgstr ""
+
+#: src/quirebase/templates/item.html:263
+msgid "Use as Graphical Abstract"
+msgstr ""
+
+#: src/quirebase/templates/item.html:264
+msgid "Unable to download and upload this attachment."
+msgstr ""
+
+#: src/quirebase/templates/item.html:264
+msgid "Add attachment from URL"
+msgstr ""
+
 #: src/quirebase/templates/_item_metadata_form.html:4
 #: src/quirebase/templates/account_settings.html:239
 #: src/quirebase/templates/item.html:233

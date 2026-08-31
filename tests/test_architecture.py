@@ -148,8 +148,10 @@ FORBIDDEN_FACADE_EXPORTS = {
         "claim_job",
         "get_job_handler",
         "job_payload",
+        "propagate_file_revision_change",
         "register_job_handler",
         "run_once",
+        "synchronize_item_search",
     },
     "search": {
         "PostgreSQLSearchIndex",

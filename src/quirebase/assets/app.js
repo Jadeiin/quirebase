@@ -519,6 +519,40 @@ Alpine.data("remotePdfUpload", () => ({
   },
 }));
 
+function remoteAttachmentFilename(url) {
+  const name = decodeURIComponent(new URL(url).pathname.split("/").pop() || "");
+  return name || "downloaded-attachment";
+}
+
+Alpine.data("remoteAttachmentUpload", () => ({
+  url: "",
+  graphicalAbstract: false,
+  downloading: false,
+  error: "",
+  async downloadAndUpload() {
+    this.downloading = true;
+    this.error = "";
+    try {
+      const download = await fetch(this.url);
+      if (!download.ok) throw new Error("Attachment download failed");
+      const blob = await download.blob();
+      const form = new FormData();
+      form.append(
+        "attachment",
+        new File([blob], remoteAttachmentFilename(this.url), { type: blob.type }),
+      );
+      if (this.graphicalAbstract) form.append("graphical_abstract", "true");
+      const upload = await csrfFetch(this.$root.action, { method: "POST", body: form });
+      if (!upload.ok) throw new Error("Attachment upload failed");
+      window.location.reload();
+    } catch {
+      this.error = this.$root.dataset.errorMessage;
+    } finally {
+      this.downloading = false;
+    }
+  },
+}));
+
 Alpine.data("toolsWorkspace", () => ({
   active: "duplicates",
   init() {

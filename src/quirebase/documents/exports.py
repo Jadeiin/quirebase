@@ -4,11 +4,13 @@ import json
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from sqlalchemy import select
+
 from quirebase.access.documents import require_revision
 from quirebase.access.projects import project_member
 from quirebase.core.config import get_settings
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
-from quirebase.models import Job, JobState, ProjectItem, User
+from quirebase.models import FileRevision, Job, JobState, ProjectItem, User
 from quirebase.pipeline.inspection import job_payload
 
 if TYPE_CHECKING:
@@ -23,6 +25,12 @@ def create_export_job(db: Session, user: User, item_id: str, data: ExportCreate)
     revision = require_revision(db, user, data.revision_id)
     if revision.item_id != item_id:
         raise ResourceNotFound("revision not found for item")
+    locked_revision = db.scalar(
+        select(FileRevision).where(FileRevision.id == revision.id).with_for_update()
+    )
+    if locked_revision is None:
+        raise ResourceNotFound("revision not found for item")
+    revision = locked_revision
     if data.project_id and (
         project_member(db, user, data.project_id) is None
         or db.get(ProjectItem, (data.project_id, item_id)) is None

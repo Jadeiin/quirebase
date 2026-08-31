@@ -25,6 +25,7 @@ from quirebase.models import (
 )
 from quirebase.operations.settings import get_effective_settings_model
 from quirebase.web.deps import current_login, current_user, protected_router
+from quirebase.web.responses import content_disposition
 from quirebase.web.templates import templates
 
 if TYPE_CHECKING:
@@ -253,5 +254,5 @@ def export_accessible_bibliography_route(
     return Response(
         contents,
         media_type=f"{media_type}; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": content_disposition(filename)},
     )

@@ -131,6 +131,11 @@
       </div>
 
       <aside class="item-facts">
+        {% if item_thumbnail %}
+        <a class="panel revision-thumbnail" href="{% if item_thumbnail.source_kind == 'pdf_thumbnail' %}/items/{{ item.id }}/pdf/{{ item_thumbnail.source_id }}{% else %}/items/{{ item.id }}/files{% endif %}" aria-label="{{ _('Item thumbnail') }}">
+          <img src="/documents/{{ item.id }}/thumbnail" alt="{{ _('Item thumbnail') }}" loading="lazy">
+        </a>
+        {% endif %}
         <section class="panel record-identity-panel">
           <p class="eyebrow">{{ _('Record identity') }}</p>
           <h2>{{ _('Key details') }}</h2>
@@ -246,7 +251,7 @@
     <section class="panel page-section-heading"><p class="eyebrow">{{ _('Document storage') }}</p><h2>{{ _('PDF versions and attachments') }}</h2><p>{{ _('Keep the reading copy and supplementary files together without mixing them with metadata.') }}</p></section>
     <section class="panel">
       <div class="section-heading"><h2>{{ _('PDF revisions') }}</h2><span>{{ _('{count} file(s)', count=revisions|length) }}</span></div>
-      <div class="file-list">{% for revision in revisions %}<article><span class="file-icon">PDF</span><div><strong>{{ revision.original_name }}</strong><small>{{ _(revision.processing_state) }}{% if revision.page_count %} · {{ _('{count} pages', count=revision.page_count) }}{% endif %} · {{ _('{bytes} bytes', bytes=revision.size) }}</small></div><div class="file-actions"><a href="/items/{{ item.id }}/pdf/{{ revision.id }}">{{ _('Read') }}</a><a href="/documents/{{ item.id }}/revisions/{{ revision.id }}/content" download>{{ _('Download') }}</a></div></article>{% else %}<div class="empty-state">{{ _('No PDF uploaded.') }}</div>{% endfor %}</div>
+      <div class="file-list">{% for revision in revisions %}<article><span class="file-icon">PDF</span><div><strong>{{ revision.original_name }}</strong><small>{{ _(revision.processing_state) }}{% if revision.page_count %} · {{ _('{count} pages', count=revision.page_count) }}{% endif %} · {{ _('{bytes} bytes', bytes=revision.size) }}</small></div><div class="file-actions"><a href="/items/{{ item.id }}/pdf/{{ revision.id }}">{{ _('Read') }}</a><a href="/documents/{{ item.id }}/revisions/{{ revision.id }}/content" download>{{ _('Download') }}</a>{% if can_edit %}<form method="post" action="/items/{{ item.id }}/pdf/{{ revision.id }}/delete" onsubmit="return confirm('{{ _('Delete this PDF revision? Its annotations and thumbnail will also be removed.') }}')">{{ csrf_field(csrf) }}<button class="text-danger">{{ _('Delete') }}</button></form>{% endif %}</div></article>{% else %}<div class="empty-state">{{ _('No PDF uploaded.') }}</div>{% endfor %}</div>
       {% if can_edit %}
       <form class="upload-form" method="post" enctype="multipart/form-data" action="/items/{{ item.id }}/pdf">{{ csrf_field(csrf) }}<label>{{ _('Add a PDF') }}<input type="file" name="pdf" accept="application/pdf,.pdf" required></label><button>{{ _('Upload') }}</button></form>
       <form class="upload-form remote-pdf-upload" method="post" enctype="multipart/form-data" action="/items/{{ item.id }}/pdf" x-data="remotePdfUpload" @submit.prevent="downloadAndUpload" data-external-urls='{{ (item.urls.splitlines() if item.urls else [])|tojson }}' data-error-message="{{ _('Unable to download and upload this PDF.') }}">{{ csrf_field(csrf) }}<label>{{ _('Add a PDF from URL') }}<input type="url" x-model="url" @input="inferred = false" placeholder="https://example.org/article.pdf" required></label><div class="remote-pdf-status"><small x-show="inferred">{{ _('Inferred from this item’s external links.') }}</small><small class="text-danger" x-show="error" x-text="error"></small></div><button :disabled="downloading">{{ _('Download PDF') }}</button></form>
@@ -254,8 +259,19 @@
     </section>
     <section class="panel">
       <div class="section-heading"><h2>{{ _('Attachments') }}</h2><span>{{ _('{count} file(s)', count=attachments|length) }}</span></div>
-      <div class="file-list">{% for attachment in attachments %}<article><span class="file-icon">FILE</span><div><strong>{{ attachment.original_name }}</strong><small>{{ attachment.mime_type }} · {{ _('{bytes} bytes', bytes=attachment.size) }}</small></div><div class="file-actions"><a href="/items/{{ item.id }}/attachments/{{ attachment.id }}">{{ _('Download') }}</a></div></article>{% else %}<div class="empty-state">{{ _('No attachments.') }}</div>{% endfor %}</div>
-      {% if can_edit %}<form class="upload-form" method="post" enctype="multipart/form-data" action="/items/{{ item.id }}/attachments">{{ csrf_field(csrf) }}<label>{{ _('Add attachment') }}<input type="file" name="attachment" required></label><button>{{ _('Upload') }}</button></form>{% endif %}
+      <div class="file-list">{% for attachment in attachments %}<article><span class="file-icon">{% if attachment.role == 'graphical_abstract' %}GA{% else %}FILE{% endif %}</span><div><strong>{{ attachment.original_name }}</strong><small>{% if attachment.role == 'graphical_abstract' %}{{ _('Graphical Abstract') }} · {% endif %}{{ attachment.mime_type }} · {{ _('{bytes} bytes', bytes=attachment.size) }}</small></div><div class="file-actions"><a href="/items/{{ item.id }}/attachments/{{ attachment.id }}">{{ _('Download') }}</a>{% if can_edit %}<form method="post" action="/items/{{ item.id }}/attachments/{{ attachment.id }}/delete" onsubmit="return confirm('{{ _('Delete this attachment?') }}')">{{ csrf_field(csrf) }}<button class="text-danger">{{ _('Delete') }}</button></form>{% endif %}</div></article>{% else %}<div class="empty-state">{{ _('No attachments.') }}</div>{% endfor %}</div>
+      {% if can_edit %}
+      <form class="upload-form attachment-upload-form" method="post" enctype="multipart/form-data" action="/items/{{ item.id }}/attachments">
+        {{ csrf_field(csrf) }}
+        <div class="upload-field"><label>{{ _('Add attachment') }}<input type="file" name="attachment" required></label></div>
+        <div class="upload-actions"><label class="export-check"><input type="checkbox" name="graphical_abstract" value="true"> {{ _('Use as Graphical Abstract') }}</label><button>{{ _('Upload') }}</button></div>
+      </form>
+      <form class="upload-form attachment-upload-form" method="post" enctype="multipart/form-data" action="/items/{{ item.id }}/attachments" x-data="remoteAttachmentUpload" @submit.prevent="downloadAndUpload" data-error-message="{{ _('Unable to download and upload this attachment.') }}">
+        {{ csrf_field(csrf) }}
+        <div class="upload-field"><label>{{ _('Add attachment from URL') }}<input type="url" x-model="url" placeholder="https://example.org/supplement.zip" required></label><div class="remote-pdf-status"><small class="text-danger" x-show="error" x-text="error"></small></div></div>
+        <div class="upload-actions"><label class="export-check"><input type="checkbox" name="graphical_abstract" value="true" x-model="graphicalAbstract"> {{ _('Use as Graphical Abstract') }}</label><button :disabled="downloading">{{ _('Upload') }}</button></div>
+      </form>
+      {% endif %}
     </section>
 
     {% elif item_section == 'organize' %}

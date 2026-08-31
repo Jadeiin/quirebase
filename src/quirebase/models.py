@@ -65,6 +65,10 @@ class FileRevisionProcessingState(StrEnum):
     ready = "ready"
 
 
+class AttachmentRole(StrEnum):
+    graphical_abstract = "graphical_abstract"
+
+
 def enum_type(enum_class: type[StrEnum], name: str) -> SqlEnum:
     return SqlEnum(
         enum_class,
@@ -335,6 +339,13 @@ class FileRevision(Base):
 
 class Attachment(Base):
     __tablename__ = "attachments"
+    __table_args__ = (
+        CheckConstraint(
+            "role IS NULL OR role = 'graphical_abstract'",
+            name="ck_attachments_role",
+        ),
+        UniqueConstraint("item_id", "role", name="uq_attachments_item_role"),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     item_id: Mapped[str] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
     object_key: Mapped[str] = mapped_column(String(200), index=True)
@@ -342,6 +353,9 @@ class Attachment(Base):
     size: Mapped[int] = mapped_column(Integer)
     mime_type: Mapped[str] = mapped_column(String(100), default="application/octet-stream")
     original_name: Mapped[str] = mapped_column(String(255))
+    role: Mapped[AttachmentRole | None] = mapped_column(
+        enum_type(AttachmentRole, "attachment_role"), nullable=True
+    )
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 

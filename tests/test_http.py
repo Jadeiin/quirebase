@@ -6,6 +6,7 @@ from io import BytesIO
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from quirebase.core.config import get_settings
@@ -14,17 +15,21 @@ from quirebase.core.database import get_db
 from quirebase.core.errors import VersionConflict
 from quirebase.core.storage import LocalObjectStore
 from quirebase.documents.bundles import export_revision_pdf
-from quirebase.library import ItemMetadata, revise_item_metadata
+from quirebase.library import ItemMetadata, request_item_tag_recommendation, revise_item_metadata
 from quirebase.models import (
+    Attachment,
     AuditEvent,
     FileRevision,
     Item,
+    ItemTagRecommendation,
+    Job,
     LoginSession,
     Project,
     ProjectItem,
     ProjectMember,
     User,
 )
+from quirebase.search import search_index
 from quirebase.web.app import app
 
 
@@ -120,15 +125,25 @@ def test_pdf_range_and_annotation_api(db, tmp_path, monkeypatch):
 
         revision.original_name = "论文.pdf"
         db.commit()
+        unicode_content = client.get(
+            f"/documents/{item.id}/revisions/{revision.id}/content"
+        )
+        unicode_range = client.get(
+            f"/documents/{item.id}/revisions/{revision.id}/content",
+            headers={"Range": "bytes=0-4"},
+        )
         unicode_download = client.get(
             f"/documents/{item.id}/revisions/{revision.id}/export",
             params={"include_annotations": False},
         )
+        assert unicode_content.status_code == 200
+        assert unicode_range.status_code == 206
         assert unicode_download.status_code == 200
-        assert (
-            "filename*=utf-8''%E8%AE%BA%E6%96%87.pdf"
-            in unicode_download.headers["content-disposition"]
-        )
+        for response in (unicode_content, unicode_range, unicode_download):
+            assert (
+                "filename*=utf-8''%E8%AE%BA%E6%96%87.pdf"
+                in response.headers["content-disposition"]
+            )
         revision.original_name = "paper.pdf"
         db.commit()
 
@@ -263,6 +278,303 @@ def test_pdf_range_and_annotation_api(db, tmp_path, monkeypatch):
             .filter_by(action="annotation.delete", target_id=annotation["id"])
             .one()
         )
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+
+
+def test_item_overview_uses_the_ready_revision_thumbnail(db, tmp_path, monkeypatch):
+    client, item, revision = authenticated_client(db, tmp_path, monkeypatch)
+    thumbnail = get_settings().object_dir / "thumbnails" / f"{revision.id}.png"
+    thumbnail.parent.mkdir(parents=True, exist_ok=True)
+    thumbnail.write_bytes(b"\x89PNG\r\n\x1a\nthumbnail")
+    thumbnail_url = f"/documents/{item.id}/thumbnail"
+
+    try:
+        overview = client.get(f"/items/{item.id}")
+        response = client.get(thumbnail_url)
+
+        assert f'src="{thumbnail_url}"' in overview.text
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "image/png"
+        assert response.content == thumbnail.read_bytes()
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+
+
+def test_item_overview_omits_a_missing_thumbnail(db, tmp_path, monkeypatch):
+    client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+    thumbnail_url = f"/documents/{item.id}/thumbnail"
+
+    try:
+        overview = client.get(f"/items/{item.id}")
+
+        assert thumbnail_url not in overview.text
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+
+
+def test_deleting_latest_pdf_revision_removes_its_files_and_falls_back_thumbnail(
+    db, tmp_path, monkeypatch
+):
+    client, item, old_revision = authenticated_client(db, tmp_path, monkeypatch)
+    store = LocalObjectStore()
+    old_thumbnail = get_settings().object_dir / "thumbnails" / f"{old_revision.id}.png"
+    old_thumbnail.parent.mkdir(parents=True, exist_ok=True)
+    old_thumbnail.write_bytes(b"old-thumbnail")
+    old_revision.full_text = "fallbacksearchtoken"
+    key, digest, size = store.put_pdf(BytesIO(b"%PDF-1.4\nnewer"), maximum=100)
+    new_revision = FileRevision(
+        item_id=item.id,
+        object_key=key,
+        sha256=digest,
+        size=size,
+        original_name="newer.pdf",
+        page_count=1,
+        page_geometry="[[0,0,300,400]]",
+        processing_state="ready",
+        full_text="deletedsearchtoken",
+        created_by=item.created_by,
+        created_at=old_revision.created_at + timedelta(seconds=1),
+    )
+    db.add(new_revision)
+    db.commit()
+    new_object = store.path(key)
+    new_thumbnail = get_settings().object_dir / "thumbnails" / f"{new_revision.id}.png"
+    new_thumbnail.write_bytes(b"new-thumbnail")
+    thumbnail_url = f"/documents/{item.id}/thumbnail"
+    index = search_index(db)
+    index.index_item(db, item.id)
+    recommendation = request_item_tag_recommendation(
+        db, item.id, owner_id=item.created_by
+    )
+    previous_fingerprint = recommendation.input_fingerprint
+    previous_generation = recommendation.generation_token
+    db.commit()
+
+    try:
+        assert client.get(thumbnail_url).content == b"new-thumbnail"
+        assert index.search(db, "deletedsearchtoken") == [item.id]
+
+        deleted = client.post(
+            f"/items/{item.id}/pdf/{new_revision.id}/delete",
+            data={"csrf_token": "test-csrf"},
+            follow_redirects=False,
+        )
+
+        assert deleted.status_code == 303
+        assert deleted.headers["location"] == f"/items/{item.id}/files"
+        assert db.get(FileRevision, new_revision.id) is None
+        assert not new_object.exists()
+        assert not new_thumbnail.exists()
+        assert client.get(thumbnail_url).content == b"old-thumbnail"
+        assert index.search(db, "deletedsearchtoken") == []
+        assert index.search(db, "fallbacksearchtoken") == [item.id]
+        refreshed = db.scalar(
+            select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == item.id)
+        )
+        assert refreshed is not None
+        assert refreshed.input_fingerprint != previous_fingerprint
+        assert refreshed.generation_token == previous_generation + 1
+        assert refreshed.generated_at is None
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+
+
+def test_pdf_revision_cannot_be_deleted_while_inspection_is_running(
+    db, tmp_path, monkeypatch
+):
+    client, item, revision = authenticated_client(db, tmp_path, monkeypatch)
+    thumbnail = get_settings().object_dir / "thumbnails" / f"{revision.id}.png"
+    thumbnail.parent.mkdir(parents=True, exist_ok=True)
+    thumbnail.write_bytes(b"thumbnail")
+    object_path = LocalObjectStore().path(revision.object_key)
+    job = Job(
+        kind="pdf.inspect",
+        payload=json.dumps({"revision_id": revision.id}),
+        idempotency_key=f"pdf.inspect:{revision.id}",
+        owner_id=item.created_by,
+        state="running",
+        attempts=1,
+    )
+    db.add(job)
+    db.commit()
+
+    try:
+        deleted = client.post(
+            f"/items/{item.id}/pdf/{revision.id}/delete",
+            data={"csrf_token": "test-csrf"},
+            follow_redirects=False,
+        )
+
+        assert deleted.status_code == 409
+        assert db.get(FileRevision, revision.id) is not None
+        assert db.get(Job, job.id) is not None
+        assert object_path.exists()
+        assert thumbnail.exists()
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+
+
+def test_deleting_pdf_revision_cancels_pending_annotation_exports(db, tmp_path, monkeypatch):
+    client, item, revision = authenticated_client(db, tmp_path, monkeypatch)
+    job = Job(
+        kind="pdf.export_annotations",
+        payload=json.dumps({"revision_id": revision.id}),
+        idempotency_key=f"pdf.export:test:{revision.id}:none:pending",
+        owner_id=item.created_by,
+        state="pending",
+    )
+    db.add(job)
+    db.commit()
+
+    try:
+        deleted = client.post(
+            f"/items/{item.id}/pdf/{revision.id}/delete",
+            data={"csrf_token": "test-csrf"},
+            follow_redirects=False,
+        )
+
+        assert deleted.status_code == 303
+        assert db.get(FileRevision, revision.id) is None
+        assert db.get(Job, job.id) is None
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+
+
+def test_pdf_revision_cannot_be_deleted_while_annotation_export_is_running(
+    db, tmp_path, monkeypatch
+):
+    client, item, revision = authenticated_client(db, tmp_path, monkeypatch)
+    object_path = LocalObjectStore().path(revision.object_key)
+    job = Job(
+        kind="pdf.export_annotations",
+        payload=json.dumps({"revision_id": revision.id}),
+        idempotency_key=f"pdf.export:test:{revision.id}:none:running",
+        owner_id=item.created_by,
+        state="running",
+        attempts=1,
+    )
+    db.add(job)
+    db.commit()
+
+    try:
+        deleted = client.post(
+            f"/items/{item.id}/pdf/{revision.id}/delete",
+            data={"csrf_token": "test-csrf"},
+            follow_redirects=False,
+        )
+
+        assert deleted.status_code == 409
+        assert db.get(FileRevision, revision.id) is not None
+        assert db.get(Job, job.id) is not None
+        assert object_path.exists()
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+
+
+def test_graphical_abstract_attachment_overrides_the_pdf_thumbnail(db, tmp_path, monkeypatch):
+    client, item, revision = authenticated_client(db, tmp_path, monkeypatch)
+    pdf_thumbnail = get_settings().object_dir / "thumbnails" / f"{revision.id}.png"
+    pdf_thumbnail.parent.mkdir(parents=True, exist_ok=True)
+    pdf_thumbnail.write_bytes(b"pdf-thumbnail")
+
+    try:
+        uploaded = client.post(
+            f"/items/{item.id}/attachments",
+            data={"csrf_token": "test-csrf", "graphical_abstract": "true"},
+            files={"attachment": ("abstract.png", b"\x89PNG\r\n\x1a\ngraphical", "image/png")},
+            follow_redirects=False,
+        )
+        attachment = db.query(Attachment).filter_by(item_id=item.id).one()
+
+        assert uploaded.status_code == 303
+        assert attachment.role == "graphical_abstract"
+        assert client.get(f"/documents/{item.id}/thumbnail").content.endswith(b"graphical")
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+
+
+def test_graphical_abstract_rejects_content_that_is_not_an_image(db, tmp_path, monkeypatch):
+    client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+
+    try:
+        uploaded = client.post(
+            f"/items/{item.id}/attachments",
+            data={"csrf_token": "test-csrf", "graphical_abstract": "true"},
+            files={"attachment": ("abstract.png", b"not really a png", "image/png")},
+            follow_redirects=False,
+        )
+
+        assert uploaded.status_code == 422
+        assert db.query(Attachment).filter_by(item_id=item.id).count() == 0
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+
+
+def test_regular_attachment_accepts_non_image_content(db, tmp_path, monkeypatch):
+    client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+
+    try:
+        uploaded = client.post(
+            f"/items/{item.id}/attachments",
+            data={"csrf_token": "test-csrf"},
+            files={"attachment": ("dataset.csv", b"column\nvalue\n", "text/csv")},
+            follow_redirects=False,
+        )
+        attachment = db.query(Attachment).filter_by(item_id=item.id).one()
+
+        assert uploaded.status_code == 303
+        assert attachment.mime_type == "text/csv"
+        assert attachment.role is None
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+
+
+def test_replacing_and_deleting_graphical_abstract_preserves_attachment_and_falls_back(
+    db, tmp_path, monkeypatch
+):
+    client, item, revision = authenticated_client(db, tmp_path, monkeypatch)
+    pdf_thumbnail = get_settings().object_dir / "thumbnails" / f"{revision.id}.png"
+    pdf_thumbnail.parent.mkdir(parents=True, exist_ok=True)
+    pdf_thumbnail.write_bytes(b"pdf-thumbnail")
+
+    try:
+        for name, content in (("first.png", b"first-image"), ("second.png", b"second-image")):
+            response = client.post(
+                f"/items/{item.id}/attachments",
+                data={"csrf_token": "test-csrf", "graphical_abstract": "true"},
+                files={"attachment": (name, b"\x89PNG\r\n\x1a\n" + content, "image/png")},
+                follow_redirects=False,
+            )
+            assert response.status_code == 303
+
+        first, second = db.query(Attachment).filter_by(item_id=item.id).order_by(Attachment.created_at)
+        second_object = LocalObjectStore().path(second.object_key)
+        assert first.role is None
+        assert second.role == "graphical_abstract"
+        assert client.get(f"/documents/{item.id}/thumbnail").content.endswith(b"second-image")
+
+        deleted = client.post(
+            f"/items/{item.id}/attachments/{second.id}/delete",
+            data={"csrf_token": "test-csrf"},
+            follow_redirects=False,
+        )
+
+        assert deleted.status_code == 303
+        assert db.get(Attachment, first.id) is not None
+        assert db.get(Attachment, second.id) is None
+        assert not second_object.exists()
+        assert client.get(f"/documents/{item.id}/thumbnail").content == b"pdf-thumbnail"
     finally:
         app.dependency_overrides.clear()
         get_settings.cache_clear()

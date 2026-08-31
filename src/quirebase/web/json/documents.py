@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from fastapi import Depends, HTTPException, Request
@@ -11,7 +10,9 @@ from starlette.background import BackgroundTask
 from quirebase.core.database import get_db
 from quirebase.documents import (
     export_revision_pdf,
+    get_item_thumbnail,
     get_revision_file,
+    get_revision_thumbnail,
 )
 from quirebase.library import (
     DEFAULT_CITATION_KEY_FORMULA,
@@ -21,8 +22,11 @@ from quirebase.library import (
 )
 from quirebase.models import User
 from quirebase.web.deps import current_user, protected_router
+from quirebase.web.responses import content_disposition
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from sqlalchemy.orm import Session
 
 router = protected_router()
@@ -35,7 +39,7 @@ def ranged_file(request: Request, path: Path, etag: str, filename: str):
     headers = {
         "Accept-Ranges": "bytes",
         "ETag": f'"{etag}"',
-        "Content-Disposition": f'inline; filename="{Path(filename).name}"',
+        "Content-Disposition": content_disposition(filename, "inline"),
     }
     value = request.headers.get("range")
     if not value:
@@ -119,7 +123,7 @@ def export_item_bibliography(
     return Response(
         contents,
         media_type=f"{media_type}; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": content_disposition(filename)},
     )
 
 
@@ -193,6 +197,27 @@ def pdf_content(
 ):
     path, original_name, sha256 = get_revision_file(db, user, item_id, revision_id)
     return ranged_file(request, path, sha256, original_name)
+
+
+@router.get("/documents/{item_id}/revisions/{revision_id}/thumbnail")
+def pdf_thumbnail(
+    item_id: str,
+    revision_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    path = get_revision_thumbnail(db, user, item_id, revision_id)
+    return FileResponse(path, media_type="image/png")
+
+
+@router.get("/documents/{item_id}/thumbnail")
+def item_thumbnail(
+    item_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    thumbnail = get_item_thumbnail(db, user, item_id)
+    return FileResponse(thumbnail.path, media_type=thumbnail.media_type)
 
 
 @router.get("/documents/{item_id}/revisions/{revision_id}/export")

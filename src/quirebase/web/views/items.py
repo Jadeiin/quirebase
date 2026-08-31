@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 from typing import TYPE_CHECKING, Any
 
@@ -8,13 +9,16 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Stre
 
 from quirebase.core.config import get_settings
 from quirebase.core.database import get_db
-from quirebase.core.errors import ValidationFailure
+from quirebase.core.errors import ResourceNotFound, ValidationFailure
 from quirebase.documents import (
     create_attachment as create_attachment_op,
 )
 from quirebase.documents import (
     create_item_document_bundle,
+    delete_attachment,
+    delete_file_revision,
     get_attachment_file,
+    get_item_thumbnail,
     get_pdf_viewer_data,
     store_pdf_revision,
 )
@@ -56,6 +60,7 @@ from quirebase.library import (
     delete_item as delete_item_op,
 )
 from quirebase.models import (
+    AttachmentRole,
     ItemAuthor,
     LoginSession,
     User,
@@ -68,6 +73,7 @@ from quirebase.projects import (
     remove_item_from_project as remove_item_from_project_op,
 )
 from quirebase.web.deps import current_login, current_user, protected_router
+from quirebase.web.responses import content_disposition
 from quirebase.web.templates import templates
 
 if TYPE_CHECKING:
@@ -242,6 +248,9 @@ def render_item_workspace(
     }
     match view:
         case SummaryWorkspace():
+            item_thumbnail = None
+            with contextlib.suppress(ResourceNotFound):
+                item_thumbnail = get_item_thumbnail(db, user, item_id)
             context.update(
                 revision_count=view.revision_count,
                 attachment_count=view.attachment_count,
@@ -251,6 +260,7 @@ def render_item_workspace(
                 item_owner=view.item_owner,
                 updater=view.updater,
                 identifier_links=view.identifiers,
+                item_thumbnail=item_thumbnail,
             )
         case MetadataWorkspace():
             context.update(
@@ -335,7 +345,7 @@ def download_item_route(
     return StreamingResponse(
         bundle.content,
         media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{bundle.filename}"'},
+        headers={"Content-Disposition": content_disposition(bundle.filename)},
     )
 
 
@@ -460,6 +470,7 @@ def suggest_authors(
 def upload_attachment(
     item_id: str,
     attachment: UploadFile = File(),
+    graphical_abstract: bool = Form(False),
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
@@ -471,6 +482,7 @@ def upload_attachment(
         attachment.filename or "",
         attachment.content_type or "application/octet-stream",
         get_effective_setting(db, "max_attachment_bytes", get_settings().max_attachment_bytes),
+        role=AttachmentRole.graphical_abstract if graphical_abstract else None,
     )
     return RedirectResponse(f"/items/{item_id}/files", status_code=303)
 
@@ -489,6 +501,17 @@ def download_attachment(
         filename=original_name,
         content_disposition_type="attachment",
     )
+
+
+@router.post("/items/{item_id}/attachments/{attachment_id}/delete")
+def delete_item_attachment(
+    item_id: str,
+    attachment_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    delete_attachment(db, user, item_id, attachment_id)
+    return RedirectResponse(f"/items/{item_id}/files", status_code=303)
 
 
 @router.post("/items/{item_id}/tags")
@@ -572,6 +595,17 @@ def upload_pdf(
         pdf.filename or "",
         get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes),
     )
+    return RedirectResponse(f"/items/{item_id}/files", status_code=303)
+
+
+@router.post("/items/{item_id}/pdf/{revision_id}/delete")
+def delete_pdf_revision(
+    item_id: str,
+    revision_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    delete_file_revision(db, user, item_id, revision_id)
     return RedirectResponse(f"/items/{item_id}/files", status_code=303)
 
 

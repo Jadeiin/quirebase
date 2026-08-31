@@ -27,8 +27,9 @@ from quirebase.models import (
     User,
 )
 from quirebase.operations.maintenance import check_objects, cleanup_exports
+from quirebase.pipeline.derived_state import propagate_file_revision_change
 from quirebase.pipeline.inspection import create_thumbnail, export_annotations, inspect_pdf
-from quirebase.search import reindex_all, search_index
+from quirebase.search import reindex_all
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -111,11 +112,8 @@ def handle_pdf_inspect(db: Session, job: Job, payload: dict[str, Any]) -> dict[s
         page_geometry=geometry_json,
         full_text=text,
     )
-    from quirebase.library import request_item_tag_recommendation
-
-    request_item_tag_recommendation(db, revision.item_id, owner_id=job.owner_id)
     create_thumbnail(path, get_settings().object_dir / "thumbnails" / f"{revision.id}.png")
-    search_index(db).index_item(db, revision.item_id)
+    propagate_file_revision_change(db, revision.item_id, owner_id=job.owner_id)
     return {"page_count": pages}
 
 

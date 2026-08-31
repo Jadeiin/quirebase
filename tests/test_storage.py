@@ -1,9 +1,12 @@
 from io import BytesIO
 
 import pytest
+from sqlalchemy.orm import Session
 
 from quirebase.core.config import Settings
 from quirebase.core.storage import LocalObjectStore
+from quirebase.documents.revisions import create_attachment, delete_unreferenced_objects
+from quirebase.models import Item, User
 
 
 def test_content_addressed_pdf_storage_is_idempotent(tmp_path):
@@ -22,3 +25,57 @@ def test_storage_rejects_non_pdf_and_oversize(tmp_path):
         store.put_pdf(BytesIO(b"hello"), 100)
     with pytest.raises(ValueError, match="size limit"):
         store.put_pdf(BytesIO(b"%PDF-" + b"x" * 20), 10)
+
+
+def test_staged_object_cleanup_does_not_leave_per_object_directories(tmp_path):
+    store = LocalObjectStore(Settings(data_dir=tmp_path))
+    key, _digest, _size, lease = store.put_staged_pdf(
+        BytesIO(b"%PDF-1.4\nminimal"),
+        100,
+    )
+
+    lease.release()
+    store.delete(key)
+
+    assert not store.path(key).parent.exists()
+    assert not list(store.settings.object_dir.rglob("leases"))
+    assert len([path for path in store.settings.object_dir.rglob("*") if path.is_dir()]) <= 1
+
+
+def test_database_fixture_isolates_the_default_object_store(db, tmp_path):
+    store = LocalObjectStore()
+
+    assert store.settings.data_dir == tmp_path / "data"
+
+
+def test_attachment_upload_lease_prevents_concurrent_cleanup(db, monkeypatch):
+    user = User(username="attachment-uploader", password_hash="unused")
+    db.add(user)
+    db.flush()
+    item = Item(title="Attachment lease", created_by=user.id)
+    db.add(item)
+    db.commit()
+    original_commit = db.commit
+    store = LocalObjectStore()
+
+    def commit_while_cleanup_runs():
+        object_path = next(store.settings.object_dir.glob("*/*/*.bin"))
+        object_key = str(object_path.relative_to(store.settings.object_dir))
+        with Session(db.bind) as concurrent_db:
+            deleted = delete_unreferenced_objects(concurrent_db, (object_key,))
+        assert deleted == ()
+        assert object_path.exists()
+        original_commit()
+
+    monkeypatch.setattr(db, "commit", commit_while_cleanup_runs)
+
+    attachment = create_attachment(
+        db,
+        user,
+        item.id,
+        BytesIO(b"same bytes as a concurrently deleted attachment"),
+        "supplement.txt",
+        "text/plain",
+    )
+
+    assert store.path(attachment.object_key).exists()

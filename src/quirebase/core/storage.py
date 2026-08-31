@@ -44,12 +44,21 @@ class LocalObjectStore:
         return candidate
 
     def delete(self, object_key: str) -> None:
-        self.path(object_key).unlink(missing_ok=True)
+        path = self.path(object_key)
+        path.unlink(missing_ok=True)
+        root = self.settings.object_dir.resolve()
+        for directory in (path.parent, path.parent.parent):
+            if directory == root:
+                break
+            try:
+                directory.rmdir()
+            except OSError:
+                break
 
     def cleanup_lock(self, object_key: str) -> FileLock:
         lock_root = self._lock_root(object_key)
         lock_root.mkdir(parents=True, exist_ok=True)
-        return FileLock(lock_root / "cleanup.lock")
+        return FileLock(lock_root / f"{self._lock_name(object_key)[:2]}.cleanup.lock")
 
     def has_active_lease(self, object_key: str) -> bool:
         """Return whether a writer has not yet committed its object reference.
@@ -57,11 +66,11 @@ class LocalObjectStore:
         The caller must hold ``cleanup_lock(object_key)`` so a new lease cannot
         appear between this check and physical deletion.
         """
-        lease_root = self._lock_root(object_key) / "leases"
-        if not lease_root.is_dir():
+        lock_root = self._lock_root(object_key)
+        if not lock_root.is_dir():
             return False
         active = False
-        for marker in lease_root.glob("*.lock"):
+        for marker in lock_root.glob(f"{self._lock_name(object_key)}.*.lease.lock"):
             probe = FileLock(marker)
             try:
                 probe.acquire(blocking=False)
@@ -105,6 +114,22 @@ class LocalObjectStore:
         key, sha256, size, temporary = self._stage(source, maximum)
         return self._finish(temporary, key + ".bin", sha256, size)
 
+    def put_staged_attachment(
+        self, source: BinaryIO, maximum: int
+    ) -> tuple[str, str, int, ObjectLease]:
+        key, sha256, size, temporary = self._stage(source, maximum)
+        object_key = key + ".bin"
+        try:
+            with self.cleanup_lock(object_key):
+                lease = self._acquire_lease(object_key)
+                key, sha256, size = self._finish(temporary, object_key, sha256, size)
+        except Exception:
+            temporary.unlink(missing_ok=True)
+            if "lease" in locals():
+                lease.release()
+            raise
+        return key, sha256, size, lease
+
     def _stage(self, source: BinaryIO, maximum: int) -> tuple[str, str, int, Path]:
         self.settings.object_dir.mkdir(parents=True, exist_ok=True)
         digest = hashlib.sha256()
@@ -134,13 +159,16 @@ class LocalObjectStore:
 
     def _lock_root(self, object_key: str) -> Path:
         self.path(object_key)
-        lock_name = hashlib.sha256(object_key.encode()).hexdigest()
-        return self.settings.object_dir / ".locks" / lock_name[:2] / lock_name
+        return self.settings.object_dir / ".locks"
+
+    @staticmethod
+    def _lock_name(object_key: str) -> str:
+        return hashlib.sha256(object_key.encode()).hexdigest()
 
     def _acquire_lease(self, object_key: str) -> ObjectLease:
-        lease_root = self._lock_root(object_key) / "leases"
-        lease_root.mkdir(parents=True, exist_ok=True)
-        marker = lease_root / f"{uuid4().hex}.lock"
+        lock_root = self._lock_root(object_key)
+        lock_root.mkdir(parents=True, exist_ok=True)
+        marker = lock_root / f"{self._lock_name(object_key)}.{uuid4().hex}.lease.lock"
         lock = FileLock(marker)
         lock.acquire()
         return ObjectLease(marker, lock)

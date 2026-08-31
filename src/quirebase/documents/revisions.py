@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -9,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from quirebase.access.documents import require_attachment, require_revision
-from quirebase.access.items import can_edit_item, require_editable_item
+from quirebase.access.items import can_edit_item, require_editable_item, require_readable_item
 from quirebase.audit import record_event
 from quirebase.core.config import get_settings
 from quirebase.core.errors import (
@@ -17,19 +18,23 @@ from quirebase.core.errors import (
     ResourceNotFound,
     ResourceUnavailable,
     ValidationFailure,
+    VersionConflict,
 )
 from quirebase.core.storage import LocalObjectStore, ObjectLease
 from quirebase.models import (
     Attachment,
+    AttachmentRole,
     FileRevision,
     ImportBatch,
     Item,
     Job,
+    JobState,
     Project,
     ProjectItem,
     ProjectMember,
     User,
 )
+from quirebase.pipeline.derived_state import propagate_file_revision_change
 from quirebase.pipeline.inspection import job_payload, validate_pdf_container
 
 if TYPE_CHECKING:
@@ -38,6 +43,14 @@ if TYPE_CHECKING:
 
 class UnsupportedMediaType(DomainError):
     pass
+
+
+GRAPHICAL_ABSTRACT_MEDIA_TYPES = {
+    "image/gif",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+}
 
 
 @dataclass
@@ -53,6 +66,14 @@ class StagedPdf:
 
     def release(self) -> None:
         self._lease.release()
+
+
+@dataclass(frozen=True)
+class ItemThumbnail:
+    path: Path
+    media_type: str
+    source_kind: str
+    source_id: str
 
 
 def stage_pdf(source: BinaryIO, filename: str, max_bytes: int) -> StagedPdf:
@@ -180,6 +201,17 @@ def store_pdf_revision(
     return revision
 
 
+def _is_image_container(path: Path, content_type: str) -> bool:
+    with path.open("rb") as source:
+        header = source.read(12)
+    return {
+        "image/gif": header.startswith((b"GIF87a", b"GIF89a")),
+        "image/jpeg": header.startswith(b"\xff\xd8\xff"),
+        "image/png": header.startswith(b"\x89PNG\r\n\x1a\n"),
+        "image/webp": header.startswith(b"RIFF") and header[8:12] == b"WEBP",
+    }.get(content_type, False)
+
+
 def create_attachment(
     db: Session,
     user: User,
@@ -188,6 +220,7 @@ def create_attachment(
     filename: str,
     content_type: str = "application/octet-stream",
     max_bytes: int | None = None,
+    role: AttachmentRole | None = None,
 ) -> Attachment:
     from quirebase.operations.settings import get_effective_setting
 
@@ -197,11 +230,32 @@ def create_attachment(
         max_bytes = get_effective_setting(
             db, "max_attachment_bytes", get_settings().max_attachment_bytes
         )
+    if role == AttachmentRole.graphical_abstract and content_type not in (
+        GRAPHICAL_ABSTRACT_MEDIA_TYPES
+    ):
+        raise ValidationFailure("graphical abstract must be a PNG, JPEG, WebP, or GIF image")
+    store = LocalObjectStore()
     try:
-        key, digest, size = LocalObjectStore().put_attachment(source, max_bytes)
+        key, digest, size, lease = store.put_staged_attachment(source, max_bytes)
     except ValueError as error:
         raise ValidationFailure(str(error)) from error
+    if role == AttachmentRole.graphical_abstract and not _is_image_container(
+        store.path(key), content_type
+    ):
+        lease.release()
+        discard_staged_object(db, key)
+        raise ValidationFailure("graphical abstract content does not match its image type")
     try:
+        if role is not None:
+            current = db.scalar(
+                select(Attachment).where(
+                    Attachment.item_id == item_id,
+                    Attachment.role == role,
+                )
+            )
+            if current is not None:
+                current.role = None
+                db.flush()
         record = Attachment(
             item_id=item_id,
             object_key=key,
@@ -209,17 +263,20 @@ def create_attachment(
             size=size,
             mime_type=content_type[:100],
             original_name=Path(filename).name[:255],
+            role=role,
             created_by=user.id,
         )
         db.add(record)
         db.flush()
         record_event(db, user.id, "attachment.upload", "attachment", record.id)
         db.commit()
-        return record
     except Exception:
         db.rollback()
+        lease.release()
         discard_staged_object(db, key)
         raise
+    lease.release()
+    return record
 
 
 def get_attachment_file(
@@ -244,6 +301,122 @@ def get_revision_file(
         revision.original_name,
         revision.sha256,
     )
+
+
+def get_revision_thumbnail(
+    db: Session, user: User, item_id: str, revision_id: str
+) -> Path:
+    revision = require_revision(db, user, revision_id)
+    if revision.item_id != item_id:
+        raise ResourceNotFound("revision not found for item")
+    path = get_settings().object_dir / "thumbnails" / f"{revision.id}.png"
+    if not path.is_file():
+        raise ResourceNotFound("revision thumbnail not found")
+    return path
+
+
+def get_item_thumbnail(db: Session, user: User, item_id: str) -> ItemThumbnail:
+    require_readable_item(db, user, item_id)
+    graphical_abstract = db.scalar(
+        select(Attachment).where(
+            Attachment.item_id == item_id,
+            Attachment.role == AttachmentRole.graphical_abstract,
+        )
+    )
+    if graphical_abstract is not None:
+        path = LocalObjectStore().path(graphical_abstract.object_key)
+        if path.is_file():
+            return ItemThumbnail(
+                path=path,
+                media_type=graphical_abstract.mime_type,
+                source_kind="graphical_abstract",
+                source_id=graphical_abstract.id,
+            )
+    revisions = db.scalars(
+        select(FileRevision)
+        .where(
+            FileRevision.item_id == item_id,
+            FileRevision.processing_state == "ready",
+        )
+        .order_by(FileRevision.created_at.desc())
+    ).all()
+    for revision in revisions:
+        path = get_settings().object_dir / "thumbnails" / f"{revision.id}.png"
+        if path.is_file():
+            return ItemThumbnail(
+                path=path,
+                media_type="image/png",
+                source_kind="pdf_thumbnail",
+                source_id=revision.id,
+            )
+    raise ResourceNotFound("item thumbnail not found")
+
+
+def _job_targets_revision(job: Job, revision_id: str) -> bool:
+    try:
+        payload = json.loads(job.payload)
+    except (json.JSONDecodeError, TypeError):
+        return False
+    return isinstance(payload, dict) and payload.get("revision_id") == revision_id
+
+
+def delete_file_revision(
+    db: Session, user: User, item_id: str, revision_id: str
+) -> None:
+    require_editable_item(db, user, item_id)
+    revision = db.scalar(
+        select(FileRevision).where(FileRevision.id == revision_id).with_for_update()
+    )
+    if revision is None or revision.item_id != item_id:
+        raise ResourceNotFound("file revision not found")
+    inspection_job = db.scalar(
+        select(Job)
+        .where(
+            Job.kind == "pdf.inspect",
+            Job.idempotency_key == f"pdf.inspect:{revision_id}",
+        )
+        .with_for_update()
+    )
+    export_jobs = tuple(
+        job
+        for job in db.scalars(
+            select(Job)
+            .where(
+                Job.kind == "pdf.export_annotations",
+                Job.state.in_([JobState.pending, JobState.running, JobState.failed]),
+            )
+            .with_for_update()
+        ).all()
+        if _job_targets_revision(job, revision_id)
+    )
+    revision_jobs = tuple(job for job in (inspection_job, *export_jobs) if job is not None)
+    if any(job.state == JobState.running for job in revision_jobs):
+        raise VersionConflict(message="PDF background work is still running; retry deletion shortly")
+    object_key = revision.object_key
+    thumbnail = get_settings().object_dir / "thumbnails" / f"{revision.id}.png"
+    for job in revision_jobs:
+        if job.state in {JobState.pending, JobState.failed}:
+            db.delete(job)
+    db.delete(revision)
+    db.flush()
+    propagate_file_revision_change(db, item_id, owner_id=user.id)
+    record_event(db, user.id, "pdf.delete", "file_revision", revision.id)
+    db.commit()
+    with contextlib.suppress(OSError):
+        thumbnail.unlink(missing_ok=True)
+    delete_unreferenced_objects(db, (object_key,))
+
+
+def delete_attachment(db: Session, user: User, item_id: str, attachment_id: str) -> None:
+    require_editable_item(db, user, item_id)
+    attachment = db.get(Attachment, attachment_id)
+    if attachment is None or attachment.item_id != item_id:
+        raise ResourceNotFound("attachment not found")
+    object_key = attachment.object_key
+    db.delete(attachment)
+    record_event(db, user.id, "attachment.delete", "attachment", attachment.id)
+    db.commit()
+    delete_unreferenced_objects(db, (object_key,))
 
 
 def get_pdf_viewer_data(db: Session, user: User, item_id: str, revision_id: str) -> dict[str, Any]:

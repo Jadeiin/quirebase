@@ -1944,6 +1944,10 @@ msgstr "添加 PDF"
 msgid "Upload"
 msgstr "上传"
 
+#: src/quirebase/templates/item.html:253
+msgid "Delete this PDF revision? Its annotations and thumbnail will also be removed."
+msgstr "删除此 PDF 版本？其批注和缩略图也会一并删除。"
+
 #: src/quirebase/templates/item.html:252
 msgid "Unable to download and upload this PDF."
 msgstr "无法下载并上传此 PDF。"
@@ -1960,9 +1964,33 @@ msgstr "已从此条目的外部链接中自动推断。"
 msgid "No attachments."
 msgstr "没有附件。"
 
+#: src/quirebase/templates/item.html:262
+msgid "Graphical Abstract"
+msgstr "图文摘要"
+
+#: src/quirebase/templates/item.html:262
+msgid "Delete this attachment?"
+msgstr "删除此附件？"
+
 #: src/quirebase/templates/item.html:258
 msgid "Add attachment"
 msgstr "添加附件"
+
+#: src/quirebase/templates/item.html:263
+msgid "Use as Graphical Abstract"
+msgstr "设为图文摘要"
+
+#: src/quirebase/templates/item.html:264
+msgid "Unable to download and upload this attachment."
+msgstr "无法下载并上传此附件。"
+
+#: src/quirebase/templates/item.html:264
+msgid "Add attachment from URL"
+msgstr "通过 URL 添加附件"
+
+#: src/quirebase/templates/item.html:135
+msgid "Item thumbnail"
+msgstr "条目缩略图"
 
 #: src/quirebase/templates/item.html:262
 msgid "Library organization"

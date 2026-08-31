@@ -201,8 +201,13 @@ All physical Document deletion crosses the Documents interface through
 `delete_unreferenced_objects`, which checks File Revisions, Attachments and pending PDF Import
 Batches after the caller's transaction commits. In-flight PDF staging holds an object lease until
 its reference commits; cleanup coordinates on the same object key and treats active leases as
-references. Library never duplicates object reference rules before deleting
-content-addressed storage.
+references. Attachment uploads use the same lease boundary. File Revision deletion coordinates
+with its inspection and annotation-export Jobs. The `delete_file_revision` Documents use case
+hides derived-state ordering: after removing the revision, its Implementation uses Pipeline's
+internal derived-state seam to refresh Library Search and request the Library-owned Item Tag
+Recommendation generation in the deletion transaction. Pipeline does not publish synchronization
+helpers through its package facade. Library never duplicates object reference rules before
+deleting content-addressed storage.
 
 An internal helper imported across Modules is an architectural pressure point. Repeated use is
 a signal to move the concept to its owner or deepen the owning interface; it is not a reason to

@@ -245,6 +245,13 @@ def test_item_citation_export_and_project_removal(db, tmp_path, monkeypatch):
         annotated_download = client.get(f"/items/{item.id}/download?include_annotations=true")
         assert "Paper-annotated-pdfs.zip" in annotated_download.headers["content-disposition"]
 
+        item.title = "中文论文"
+        item.bibtex_id = None
+        db.commit()
+        unicode_download = client.get(f"/items/{item.id}/download")
+        assert unicode_download.status_code == 200
+        assert "filename*=utf-8''" in unicode_download.headers["content-disposition"]
+
         removed = client.post(
             f"/items/{item.id}/projects/{project.id}/remove",
             data={"csrf_token": "test-csrf"},

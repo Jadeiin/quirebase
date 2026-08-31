@@ -17,6 +17,7 @@ from quirebase.library import (
 )
 from quirebase.models import LoginSession, User
 from quirebase.web.deps import current_login, current_user, protected_router
+from quirebase.web.responses import content_disposition
 from quirebase.web.templates import templates
 
 if TYPE_CHECKING:
@@ -143,7 +144,7 @@ def library_bulk_action(
         return Response(
             contents,
             media_type=f"{media_type}; charset=utf-8",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            headers={"Content-Disposition": content_disposition(filename)},
         )
     if action == "download_pdfs":
         archive = download_selected_item_documents(
@@ -157,7 +158,7 @@ def library_bulk_action(
         return StreamingResponse(
             archive.content,
             media_type="application/zip",
-            headers={"Content-Disposition": f'attachment; filename="{archive.filename}"'},
+            headers={"Content-Disposition": content_disposition(archive.filename)},
         )
 
     apply_bulk_item_action(

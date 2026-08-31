@@ -40,6 +40,8 @@ EXPECTED_OPERATIONAL_ROUTES = {
     ("GET", "/documents/{item_id}/citation-copy"),
     ("GET", "/documents/{item_id}/revisions/{revision_id}/content"),
     ("GET", "/documents/{item_id}/revisions/{revision_id}/export"),
+    ("GET", "/documents/{item_id}/revisions/{revision_id}/thumbnail"),
+    ("GET", "/documents/{item_id}/thumbnail"),
     ("GET", "/healthz"),
     ("GET", "/items/{item_id}"),
     ("GET", "/items/{item_id}/attachments/{attachment_id}"),
@@ -103,11 +105,13 @@ EXPECTED_OPERATIONAL_ROUTES = {
     ("POST", "/imports/pdf/published"),
     ("POST", "/items"),
     ("POST", "/items/{item_id}/attachments"),
+    ("POST", "/items/{item_id}/attachments/{attachment_id}/delete"),
     ("POST", "/items/{item_id}/discussion"),
     ("POST", "/items/{item_id}/discussion/{message_id}/delete"),
     ("POST", "/items/{item_id}/edit"),
     ("POST", "/items/{item_id}/delete"),
     ("POST", "/items/{item_id}/pdf"),
+    ("POST", "/items/{item_id}/pdf/{revision_id}/delete"),
     ("POST", "/items/{item_id}/projects/{project_id}"),
     ("POST", "/items/{item_id}/projects/{project_id}/remove"),
     ("POST", "/items/{item_id}/rescan-doi"),
@@ -160,7 +164,7 @@ def test_operational_routes_contract():
                 continue
             operational_routes.add((method, route.path))
 
-    assert len(operational_routes) == 120, f"Expected 120 routes, found {len(operational_routes)}"
+    assert len(operational_routes) == 124, f"Expected 124 routes, found {len(operational_routes)}"
     assert operational_routes == EXPECTED_OPERATIONAL_ROUTES
 
 

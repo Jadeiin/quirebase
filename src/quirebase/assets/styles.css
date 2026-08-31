@@ -278,6 +278,8 @@ label { display: grid; gap: .3rem; color: #46514c; font-size: .82rem; font-weigh
 .item-summary-main { display: grid; gap: 1.25rem; min-width: 0; }
 .item-facts { display: grid; gap: 1rem; min-width: 0; }
 .item-summary-main > :first-child, .item-facts > :first-child { margin-top: 0; }
+.revision-thumbnail { display: block; padding: .65rem; overflow: hidden; background: var(--surface-soft); }
+.revision-thumbnail img { display: block; width: 100%; max-height: 340px; border-radius: .45rem; object-fit: contain; background: #fff; }
 
 .item-abstract { padding: 1.4rem 1.6rem; background: linear-gradient(145deg, var(--surface) 75%, var(--accent-soft)); border-radius: .85rem; }
 .item-abstract .section-heading { margin-bottom: .9rem; }
@@ -367,6 +369,9 @@ label { display: grid; gap: .3rem; color: #46514c; font-size: .82rem; font-weigh
 .upload-form { grid-template-columns: 1fr auto; align-items: end; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
 .remote-pdf-upload > button { grid-column: 2; grid-row: 1; }
 .remote-pdf-status { grid-column: 1; display: grid; gap: .2rem; }
+.upload-field { display: grid; gap: .2rem; min-width: 0; }
+.upload-actions { display: flex; align-items: center; justify-content: flex-end; gap: 1rem; }
+.upload-actions button { flex: none; }
 .item-two-column { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: start; }
 .item-two-column > * { min-width: 0; }
 .chip-list { display: flex; flex-wrap: wrap; gap: .45rem; min-height: 3rem; margin: 1rem 0; }
@@ -583,6 +588,7 @@ label { display: grid; gap: .3rem; color: #46514c; font-size: .82rem; font-weigh
   .file-actions { grid-column: 2; }
   .upload-form { grid-template-columns: 1fr; }
   .remote-pdf-upload > button, .remote-pdf-status { grid-column: auto; grid-row: auto; }
+  .attachment-upload-form .upload-actions { justify-content: space-between; }
   .annotation-meta { display: grid; gap: .1rem; }
   .project-create-panel, .project-create-panel form, .project-card-grid, .tool-grid, .admin-grid, .admin-stats, .tag-merge-form { grid-template-columns: 1fr; }
   .security-callout { align-items: stretch; flex-direction: column; }

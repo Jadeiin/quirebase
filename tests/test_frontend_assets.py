@@ -95,6 +95,27 @@ def test_remote_pdf_is_downloaded_in_the_browser_and_reuses_the_upload_route():
     assert ".remote-pdf-upload > button { grid-column: 2; grid-row: 1; }" in styles
 
 
+def test_remote_attachment_can_optionally_be_used_as_graphical_abstract():
+    source = read("src/quirebase/assets/app.js")
+    item = read("src/quirebase/templates/item.html")
+    styles = read("src/quirebase/assets/styles.css")
+
+    assert 'Alpine.data("remoteAttachmentUpload"' in source
+    assert "if (this.graphicalAbstract)" in source
+    assert 'form.append("graphical_abstract", "true")' in source
+    assert '"attachment",\n        new File([blob]' in source
+    assert 'x-data="remoteAttachmentUpload"' in item
+    assert 'action="/items/{{ item.id }}/attachments"' in item
+    assert item.count('name="graphical_abstract" value="true"') == 2
+    assert item.count('class="upload-actions"') == 2
+    assert "Add attachment from URL" in item
+    assert "Add Graphical Abstract from URL" not in item
+    assert (
+        ".upload-actions { display: flex; align-items: center; justify-content: flex-end;"
+        in styles
+    )
+
+
 def test_tag_suggestions_and_merge_keep_native_form_contracts():
     source = read("src/quirebase/assets/app.js")
     item = read("src/quirebase/templates/item.html")

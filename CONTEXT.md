@@ -40,7 +40,20 @@ _Avoid_: Attachment, Item version
 
 **Attachment**:
 A supplementary file associated with an Item that is not its primary PDF.
+An Attachment may carry a distinguished role such as Graphical Abstract.
 _Avoid_: File Revision
+
+**Graphical Abstract**:
+The single Attachment currently designated as an Item's author- or curator-supplied representative
+image. Replacing the designation does not turn the previous image into a File Revision.
+
+**PDF Thumbnail**:
+A derived first-page image belonging to exactly one File Revision. It has the same lifetime as that
+File Revision and is not independently curated.
+
+**Item Thumbnail**:
+The representative image resolved for display. The current Graphical Abstract is authoritative;
+otherwise the newest ready File Revision with an available PDF Thumbnail is used.
 
 **Annotation**:
 A user-authored highlight, underline or note anchored to a File Revision and scoped either
@@ -146,7 +159,10 @@ An immutable record of a security-sensitive or data-changing action.
   and has one System Role.
 - An Item has zero or more Contributors in an ordered bibliographic role. A Contributor may have a split first/last name or a single-field literal name.
 - An Invitation provisions one new User with an assigned System Role.
-- An Item has zero or more File Revisions, Attachments, Tags, and Discussion Messages.
+- An Item has zero or more File Revisions, Attachments, Tags, and Discussion Messages, and at most
+  one Attachment designated as its current Graphical Abstract.
+- Deleting a File Revision deletes its PDF Thumbnail. Item Thumbnail resolution then falls back to
+  the next eligible File Revision unless a Graphical Abstract is designated.
 - An Item has at most one current Item Tag Recommendation generation.
 - An Item may belong to multiple Projects.
 - A Project has members with an assigned Project Role (owner, editor, or viewer).
