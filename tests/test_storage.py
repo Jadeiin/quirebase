@@ -1,12 +1,16 @@
+import contextlib
+from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
+from threading import Barrier, BrokenBarrierError
 
 import pytest
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.orm import Session, sessionmaker
 
 from quirebase.core.config import Settings
 from quirebase.core.storage import LocalObjectStore
 from quirebase.documents.revisions import create_attachment, delete_unreferenced_objects
-from quirebase.models import Item, User
+from quirebase.models import Attachment, AttachmentRole, Item, User
 
 
 def test_content_addressed_pdf_storage_is_idempotent(tmp_path):
@@ -79,3 +83,54 @@ def test_attachment_upload_lease_prevents_concurrent_cleanup(db, monkeypatch):
     )
 
     assert store.path(attachment.object_key).exists()
+
+
+def test_concurrent_graphical_abstract_uploads_are_serialized(db):
+    user = User(username="concurrent-attachment-uploader", password_hash="unused")
+    db.add(user)
+    db.flush()
+    item = Item(title="Concurrent graphical abstract", created_by=user.id)
+    db.add(item)
+    db.commit()
+
+    current_role_reads = Barrier(2)
+
+    class SynchronizedRoleReadSession(Session):
+        def scalar(self, statement, *args, **kwargs):
+            if (
+                getattr(statement, "is_select", False)
+                and Attachment.__table__ in statement.get_final_froms()
+            ):
+                with contextlib.suppress(BrokenBarrierError):
+                    current_role_reads.wait(timeout=0.25)
+            return super().scalar(statement, *args, **kwargs)
+
+    factory = sessionmaker(
+        db.bind,
+        class_=SynchronizedRoleReadSession,
+        expire_on_commit=False,
+    )
+
+    def upload(index: int) -> str:
+        with factory() as worker_db:
+            worker_user = worker_db.get(User, user.id)
+            assert worker_user is not None
+            attachment = create_attachment(
+                worker_db,
+                worker_user,
+                item.id,
+                BytesIO(b"\x89PNG\r\n\x1a\n" + bytes([index])),
+                f"abstract-{index}.png",
+                "image/png",
+                role=AttachmentRole.graphical_abstract,
+            )
+            return attachment.id
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        attachment_ids = tuple(executor.map(upload, range(2)))
+
+    attachments = db.scalars(
+        select(Attachment).where(Attachment.id.in_(attachment_ids))
+    ).all()
+    assert len(attachments) == 2
+    assert sum(record.role == AttachmentRole.graphical_abstract for record in attachments) == 1

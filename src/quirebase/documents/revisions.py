@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, BinaryIO
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from quirebase.access.documents import require_attachment, require_revision
@@ -212,6 +212,20 @@ def _is_image_container(path: Path, content_type: str) -> bool:
     }.get(content_type, False)
 
 
+def _lock_item_for_attachment_role_replacement(db: Session, item_id: str) -> None:
+    if db.get_bind().dialect.name == "sqlite":
+        locked_item_id = db.scalar(
+            update(Item)
+            .where(Item.id == item_id)
+            .values(updated_at=Item.updated_at)
+            .returning(Item.id)
+        )
+    else:
+        locked_item_id = db.scalar(select(Item.id).where(Item.id == item_id).with_for_update())
+    if locked_item_id is None:
+        raise ResourceUnavailable("item not accessible")
+
+
 def create_attachment(
     db: Session,
     user: User,
@@ -247,6 +261,7 @@ def create_attachment(
         raise ValidationFailure("graphical abstract content does not match its image type")
     try:
         if role is not None:
+            _lock_item_for_attachment_role_replacement(db, item_id)
             current = db.scalar(
                 select(Attachment).where(
                     Attachment.item_id == item_id,
