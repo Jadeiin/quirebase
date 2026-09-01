@@ -38,8 +38,14 @@ async def test_tags_discussion_and_search(async_db, async_session_factory, tmp_p
             files={"attachment": ("notes.txt", b"supplement", "text/plain")},
         )
         assert uploaded.status_code == 200
+        assert uploaded.url.path == f"/items/{item.id}/files"
+        workflow_id = uploaded.url.params["workflow"]
+        assert workflow_id.startswith("upload-attachment:")
+        assert "workflow-modal-backdrop" in uploaded.text
+        status = await client.get(f"/api/workflows/{workflow_id}")
+        assert status.json()["state"] == "pending"
         page = await client.get(f"/items/{item.id}/files")
-        assert "notes.txt" in page.text
+        assert "notes.txt" not in page.text
         assert page.headers["x-content-type-options"] == "nosniff"
     finally:
         await client.aclose()
@@ -57,6 +63,25 @@ async def test_csp_allows_browser_pdf_downloads_from_external_http_sources(
         response = await client.get(f"/items/{item.id}/files")
 
         assert "connect-src 'self' https: http:" in response.headers["content-security-policy"]
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_tools_no_longer_exposes_pdf_duplicate_detection(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    client, _item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    try:
+        tools = await client.get("/tools")
+        removed_mode = await client.get("/tools?tab=duplicates&mode=pdf")
+
+        assert "Identical PDF" not in tools.text
+        assert "mode=pdf" not in tools.text
+        assert removed_mode.status_code == 404
     finally:
         await client.aclose()
         get_settings.cache_clear()

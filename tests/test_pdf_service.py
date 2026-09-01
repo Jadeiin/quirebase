@@ -3,14 +3,14 @@ from zoneinfo import ZoneInfo
 
 import pymupdf
 
-from quirebase.models import PdfAnnotation, PdfAnnotationSegment
-from quirebase.pipeline.inspection import (
+from quirebase.documents.pdf import (
     create_thumbnail,
     export_annotations,
     extract_doi,
     inspect_pdf,
     validate_pdf_container,
 )
+from quirebase.models import PdfAnnotation, PdfAnnotationSegment
 
 
 def test_extracts_doi_from_early_pdf_text(tmp_path):

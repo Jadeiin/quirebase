@@ -11,7 +11,6 @@ from quirebase.access.items import visible_items_query
 from quirebase.access.projects import visible_projects
 from quirebase.core.errors import ValidationFailure
 from quirebase.models import (
-    FileRevision,
     Item,
     ItemRead,
     ItemTag,
@@ -133,7 +132,7 @@ async def get_dashboard_data(db: AsyncSession, user: User) -> dict[str, Any]:
 
 
 async def find_duplicates(db: AsyncSession, user: User, mode: str) -> list[list[Item]]:
-    if mode not in ("", "doi", "pdf", "title", "similar"):
+    if mode not in ("", "doi", "title", "similar"):
         raise ValidationFailure(f"unknown duplicate mode: {mode}")
     if not mode:
         return []
@@ -148,19 +147,6 @@ async def find_duplicates(db: AsyncSession, user: User, mode: str) -> list[list[
             key = (item.doi or "").strip().lower()
             if key:
                 buckets.setdefault(key, []).append(item)
-    elif mode == "pdf":
-        revisions = (
-            await db.execute(
-                select(FileRevision.item_id, FileRevision.sha256).where(
-                    FileRevision.item_id.in_([item.id for item in items])
-                )
-            )
-        ).all()
-        item_map = {item.id: item for item in items}
-        for item_id, digest in revisions:
-            group = buckets.setdefault(digest, [])
-            if all(item.id != item_id for item in group):
-                group.append(item_map[item_id])
     elif mode == "title":
         normalize = lambda title: re.sub(
             r"[^\w]+",

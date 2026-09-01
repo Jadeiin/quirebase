@@ -6,12 +6,11 @@ import sqlite3
 import pytest
 from item_helpers import create_item_record as create_item
 from sqlalchemy import select
-from storage_helpers import local_object_path
+from storage_helpers import local_object_path, store_ready_pdf_revision
 from test_library_ui import pdf_bytes
 
 from quirebase.core.crypto import hash_password
 from quirebase.core.errors import ResourceUnavailable
-from quirebase.documents.revisions import store_pdf_revision
 from quirebase.library import (
     admin_delete_item,
     get_storage_metrics,
@@ -120,7 +119,7 @@ async def test_storage_metrics_calculation(async_db, tmp_path, monkeypatch):
 
     item = await create_item(db, member, title="Storage Test Paper", authors="Charlie")
     data = pdf_bytes()
-    await store_pdf_revision(db, member, item.id, data, "sample.pdf")
+    await store_ready_pdf_revision(db, member, item.id, data, "sample.pdf")
 
     metrics = await get_storage_metrics(db, admin)
     assert metrics["items_count"] >= 1
@@ -137,7 +136,7 @@ async def test_admin_delete_item_cascades_and_cleans_storage(async_db, tmp_path,
 
     item = await create_item(db, member, title="Item to be Admin Deleted", authors="Dave")
     data = pdf_bytes()
-    revision = await store_pdf_revision(db, member, item.id, data, "delete_target.pdf")
+    revision = await store_ready_pdf_revision(db, member, item.id, data, "delete_target.pdf")
     item_id, revision_id, admin_id = item.id, revision.id, admin.id
     object_path = local_object_path(revision.object_key)
     assert object_path.is_file()
@@ -171,10 +170,10 @@ async def test_admin_delete_item_preserves_shared_objects(async_db, tmp_path, mo
     item1 = await create_item(db, member, title="Shared Item 1")
     item2 = await create_item(db, member, title="Shared Item 2")
     data = pdf_bytes()
-    rev1 = await store_pdf_revision(db, member, item1.id, data, "same.pdf")
-    rev2 = await store_pdf_revision(db, member, item2.id, data, "same.pdf")
+    rev1 = await store_ready_pdf_revision(db, member, item1.id, data, "same.pdf")
+    rev2 = await store_ready_pdf_revision(db, member, item2.id, data, "same.pdf")
     item1_id, item2_id = item1.id, item2.id
-    assert rev1.object_key == rev2.object_key
+    assert rev1.object_key != rev2.object_key
 
     object_path = local_object_path(rev1.object_key)
     assert object_path.is_file()
@@ -184,12 +183,14 @@ async def test_admin_delete_item_preserves_shared_objects(async_db, tmp_path, mo
     assert await db.get(Item, item1_id) is None
     assert await db.get(Item, item2_id) is not None
 
-    # Object file MUST be preserved because item2 still references it!
-    assert object_path.is_file()
+    # Each logical upload owns its object, so deleting item1 removes only its object.
+    assert not object_path.exists()
+    second_path = local_object_path(rev2.object_key)
+    assert second_path.is_file()
 
     # Deleting item2 now removes the file
     await admin_delete_item(db, admin, item2_id)
-    assert not object_path.exists()
+    assert not second_path.exists()
 
 
 @pytest.mark.anyio
@@ -200,7 +201,7 @@ async def test_admin_delete_item_preserves_object_referenced_by_pending_pdf_impo
     admin = await create_test_admin(db, "admin_pending_import")
     member = await create_test_member(db, "member_pending_import")
     item = await create_item(db, member, title="Committed copy")
-    revision = await store_pdf_revision(db, member, item.id, pdf_bytes(), "shared.pdf")
+    revision = await store_ready_pdf_revision(db, member, item.id, pdf_bytes(), "shared.pdf")
     object_path = local_object_path(revision.object_key)
     batch = ImportBatch(
         owner_id=member.id,
@@ -210,7 +211,6 @@ async def test_admin_delete_item_preserves_object_referenced_by_pending_pdf_impo
                 "title": "Pending copy",
                 "_pdf": {
                     "object_key": revision.object_key,
-                    "sha256": revision.sha256,
                     "size": revision.size,
                     "original_name": "pending-copy.pdf",
                 },

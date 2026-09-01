@@ -15,14 +15,13 @@ Planned deepening work is ordered in `docs/architecture/deep-module-roadmap.md`.
 | `audit` | Business Module | Audit Event construction, programmatic invocation provenance, detail serialization and administrative queries |
 | `library` | Business Module | Items, Authors, Identifiers, Tags, Item Tag Recommendations, Discussion Messages, Import Batches and Citation Styles |
 | `projects` | Business Module | Projects, Project membership and Item assignment |
-| `documents` | Business Module | File Revisions, Attachments, Annotations and annotation exports |
-| `pipeline` | Business Module | Jobs, leases, retries and PDF inspection handlers |
-| `operations` | Business Module | Runtime settings, health, backup and maintenance operations |
+| `documents` | Business Module | File Revisions, Attachments, Annotations, uploads, PDF inspection, thumbnails and annotation-export workflows |
+| `operations` | Business Module | Runtime settings, health, backup, reconciliation and maintenance workflows |
 | `search` | Outbound adapter Module | The Library Search port plus SQLite and PostgreSQL adapters |
 | `web` | Inbound adapter Module | HTTP parsing, authentication dependencies and response formatting |
 | `mcp` | Inbound adapter Module | MCP tool registration, API Token adaptation and protocol conversion |
 | `programmatic` | Application Interface Module | Shared response contracts and pure projections used by the HTTP API and MCP adapters |
-| `core` | Infrastructure Module | Configuration, database setup, storage, cryptography, i18n and base errors |
+| `core` | Infrastructure Module | Configuration, database setup, UUID object storage, DBOS Adapter, cryptography, i18n and base errors |
 
 ## Standalone workspace packages
 
@@ -83,7 +82,7 @@ that facade rather than importing Library implementation submodules; Library's o
 may use its internal seams directly.
 
 Concrete Search adapters and the Search port remain internal to the outbound adapter Module;
-callers select the configured implementation through `search_index`. Mutable Job registries,
+callers select the configured implementation through `search_index`. DBOS registrations,
 low-level document staging, ORM synchronization helpers and operational file utilities likewise
 stay in their owning implementation modules rather than package facades.
 
@@ -149,12 +148,12 @@ maintenance crosses the Library interface through rename, delete and `merge_tags
 Item associations, refreshes Library Search and deletes the source Tag atomically.
 
 Item Tag Recommendation generation crosses the Library Interface through generation-request and
-Job-handler operations. Library owns assembly and cleaning of title, abstract and latest ready
-File Revision text, generation fingerprints, persisted recommendation state and stale-Job guards.
+workflow operations. Library owns assembly and cleaning of title, abstract and latest ready
+File Revision text, generation fingerprints, persisted recommendation state and stale-workflow guards.
 Its Implementation calls the reusable `rubrica` Interface for recommendation computation. Model
 files for KeyBERT are local administrator-provided inputs; the Adapter never accepts a remote model
-identifier. Library metadata writes enqueue generation without committing independently, and
-Pipeline invokes the Library-owned durable Job handler.
+identifier. Library metadata writes enqueue generation transactionally through Core's DBOS
+Adapter, and the Library-owned workflow invokes the Library operation.
 
 Opening a Project crosses the Projects interface through `open_project_workspace`, which returns
 a typed read model containing the Project, the caller's membership, members and assigned Items.
@@ -204,20 +203,14 @@ obstore types and backend configuration do not cross that seam. Components that 
 the returned obstore-backed byte stream directly to `StreamingResponse`; streaming ZIP assembly
 uses one unbuffered async-generator bridge and selects `ZIP_AUTO` from each member's known size.
 
-All physical Document deletion crosses the Documents interface through
-`delete_unreferenced_objects`, which checks File Revisions, Attachments and pending PDF Import
-Batches after the caller's transaction commits. In-flight PDF staging holds an object lease until
-its reference commits only on the local backend; cleanup coordinates on the same object key and
-treats active local leases as references. S3 deliberately uses immutable content-addressed keys
-with atomic overwrite so concurrent identical uploads retain multipart support. Local leases are
-a transitional single-host mechanism, not an S3 locking protocol. Attachment uploads use the same
-staging boundary. File Revision deletion coordinates
-with its inspection and annotation-export Jobs. The `delete_file_revision` Documents use case
-hides derived-state ordering: after removing the revision, its Implementation uses Pipeline's
-internal derived-state seam to refresh Library Search and request the Library-owned Item Tag
-Recommendation generation in the deletion transaction. Pipeline does not publish synchronization
-helpers through its package facade. Library never duplicates object reference rules before
-deleting content-addressed storage.
+All physical Document deletion crosses the Documents interface. Every logical upload owns one
+preallocated UUID object, so rollback and terminal workflow cleanup can delete that key without a
+reservation or local lock. The workflow-first upload interface creates a DBOS execution, streams
+the object, and sends a durable completion message; retryable Documents steps validate and derive
+content before a short idempotent database commit. File Revision changes enqueue the
+Library-owned `FileRevisionChanged` workflow rather than creating a reverse dependency. Operations
+reconciliation only deletes old managed UUID objects after excluding database references and
+active workflow ownership twice. Unknown keys and doctor probes are never managed.
 
 An internal helper imported across Modules is an architectural pressure point. Repeated use is
 a signal to move the concept to its owner or deepen the owning interface; it is not a reason to
@@ -237,11 +230,10 @@ directions are:
 | `access` | `core`, `models` | Evaluate policies using persisted identities and domain errors |
 | `accounts` | `audit`, `core`, `models` | Authentication persistence and Audit Event recording |
 | `audit` | `core`, `models` | Authorization errors and Audit Event persistence |
-| `library` | `access`, `audit`, `core`, `documents`, `models`, `operations`, `pipeline`, `search` | Authorization, persistence and auditing; selected-Item document assembly; runtime Provider/import settings; durable PDF inspection and Tag Recommendation work; search-index synchronization |
+| `library` | `access`, `audit`, `core`, `documents`, `models`, `operations`, `search` | Authorization, persistence and auditing; selected-Item document assembly; runtime Provider/import settings; Library-owned workflows and search-index synchronization |
 | `projects` | `access`, `audit`, `core`, `models`, `search` | Authorization, Project persistence, audit recording and Item index synchronization |
-| `documents` | `access`, `audit`, `core`, `models`, `operations`, `pipeline` | Authorization, file persistence, auditing, runtime settings and durable export/inspection jobs |
-| `pipeline` | `audit`, `core`, `library`, `models`, `operations`, `search` | Durable execution, audit recording, maintenance and index updates; dispatch of Library-owned Tag Recommendation jobs |
-| `operations` | `audit`, `core`, `models` | Infrastructure access, operational persistence and audit recording |
+| `documents` | `access`, `audit`, `core`, `models`, `operations` | Authorization, owned-object persistence, auditing, runtime settings and Documents workflows |
+| `operations` | `audit`, `core`, `library`, `models`, `search` | Infrastructure access, operational persistence, maintenance workflows, global rebuild coordination and audit recording |
 | `search` | `models` | Build and query the derived search representation |
 | `web` | Business Modules, `access`, `core`, `mcp`, `models`, `programmatic` | Invoke use cases, expose the Bearer-authenticated HTTP API with API Token provenance, format views and compose the MCP HTTP mount into the application |
 | `mcp` | `accounts`, `audit`, `core`, `documents`, `library`, `programmatic`, `projects` | Resolve a verified token subject, bind invocation provenance for business Audit Events, manage request persistence lifetime, invoke ordinary User use cases and format protocol results without owning their authorization or transactions |

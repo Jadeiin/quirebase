@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
@@ -17,8 +18,6 @@ from quirebase.models import (
     ItemIdentifier,
     ItemTag,
     ItemTagRecommendation,
-    Job,
-    JobState,
     SystemSetting,
     Tag,
 )
@@ -250,26 +249,25 @@ async def test_web_tag_matrix_batch_and_selection(
 
 @pytest.mark.anyio
 async def test_web_tag_recommendation_pending_failed_and_retry_states(
-    async_db, async_session_factory, tmp_path, monkeypatch
+    async_db, async_session_factory, tmp_path, monkeypatch, fake_durable_operations
 ):
     db = async_db
     client, item, _ = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
     item_id = item.id
-    job = Job(
-        kind="item.recommend_tags",
-        payload="{}",
-        idempotency_key=f"recommendation-ui:{item.id}",
-        owner_id=item.created_by,
+    workflow_id = f"recommendation-ui:{item.id}"
+    await fake_durable_operations.enqueue(
+        "library.recommend_tags",
+        queue_name="library",
+        workflow_id=workflow_id,
+        attributes={"owner_id": item.created_by},
     )
-    db.add(job)
-    await db.flush()
     recommendation = ItemTagRecommendation(
         item_id=item.id,
         input_fingerprint="c" * 64,
         generation_token=1,
-        job_id=job.id,
+        workflow_id=workflow_id,
         engine="yake",
         engine_version="0.7.3",
         single_words=json.dumps(["stale-candidate"]),
@@ -285,9 +283,10 @@ async def test_web_tag_recommendation_pending_failed_and_retry_states(
         'class="metadata-form"'
     )
 
-    job.state = JobState.failed
-    job.error = "RuntimeError: extraction failed"
-    await db.commit()
+    current = fake_durable_operations.workflows[workflow_id]
+    fake_durable_operations.workflows[workflow_id] = replace(
+        current, state="failed", raw_status="ERROR", error="RuntimeError: extraction failed"
+    )
     failed = await client.get(f"/items/{item_id}/organize")
     assert "标签推荐生成失败" in failed.text
     assert "extraction failed" in failed.text

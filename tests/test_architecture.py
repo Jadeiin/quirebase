@@ -17,7 +17,6 @@ PACKAGE_ROLES = {
     "library": "business",
     "mcp": "inbound-adapter",
     "operations": "business",
-    "pipeline": "business",
     "programmatic": "application-interface",
     "projects": "business",
     "search": "outbound-adapter",
@@ -29,7 +28,7 @@ ALLOWED_PACKAGE_DEPENDENCIES = {
     "accounts": {"audit", "core", "models"},
     "audit": {"core", "models"},
     "core": set(),
-    "documents": {"access", "audit", "core", "models", "operations", "pipeline"},
+    "documents": {"access", "audit", "core", "models", "operations"},
     "library": {
         "access",
         "audit",
@@ -37,7 +36,6 @@ ALLOWED_PACKAGE_DEPENDENCIES = {
         "documents",
         "models",
         "operations",
-        "pipeline",
         "search",
     },
     "mcp": {
@@ -49,8 +47,7 @@ ALLOWED_PACKAGE_DEPENDENCIES = {
         "programmatic",
         "projects",
     },
-    "operations": {"audit", "core", "models"},
-    "pipeline": {"audit", "core", "library", "models", "operations", "search"},
+    "operations": {"audit", "core", "library", "models", "search"},
     "programmatic": {"documents", "library"},
     "projects": {"access", "audit", "core", "models", "search"},
     "search": {"models"},
@@ -64,7 +61,6 @@ ALLOWED_PACKAGE_DEPENDENCIES = {
         "mcp",
         "models",
         "operations",
-        "pipeline",
         "programmatic",
         "projects",
         "search",
@@ -109,7 +105,6 @@ ORM_MODEL_OWNERS = {
     "ItemRead": "library",
     "ItemTag": "library",
     "ItemTagRecommendation": "library",
-    "Job": "pipeline",
     "LoginSession": "accounts",
     "LoginThrottle": "accounts",
     "PdfAnnotation": "documents",
@@ -141,17 +136,6 @@ FORBIDDEN_FACADE_EXPORTS = {
         "get_runtime_setting",
         "sha256_file",
         "sqlite_path",
-    },
-    "pipeline": {
-        "JOB_HANDLERS",
-        "JobHandler",
-        "claim_job",
-        "get_job_handler",
-        "job_payload",
-        "propagate_file_revision_change",
-        "register_job_handler",
-        "run_once",
-        "synchronize_item_search",
     },
     "search": {
         "PostgreSQLSearchIndex",
@@ -673,7 +657,7 @@ def test_library_facade_exposes_owned_import_citation_and_recommendation_operati
 
 
 def test_external_callers_use_library_facade_for_owned_operations():
-    for package in ("mcp", "pipeline", "web"):
+    for package in ("mcp", "web"):
         for py_file in get_python_files(SRC_ROOT / package):
             for module in imported_modules(py_file):
                 assert not module.startswith("quirebase.library."), (

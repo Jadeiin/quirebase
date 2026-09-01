@@ -645,9 +645,11 @@ async def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(
         assert len(batches) == 2
         first_pdf = json.loads(batches[0].records)[0]["_pdf"]
         second_pdf = json.loads(batches[1].records)[0]["_pdf"]
-        assert first_pdf["object_key"] == second_pdf["object_key"]
-        object_path = local_object_path(first_pdf["object_key"])
-        assert object_path.is_file()
+        assert first_pdf["object_key"] != second_pdf["object_key"]
+        first_path = local_object_path(first_pdf["object_key"])
+        second_path = local_object_path(second_pdf["object_key"])
+        assert first_path.is_file()
+        assert second_path.is_file()
 
         discarded = await client.post(
             f"/bibliography/import/{batches[0].id}/discard",
@@ -655,7 +657,8 @@ async def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(
             follow_redirects=False,
         )
         assert discarded.status_code == 303
-        assert object_path.is_file()
+        assert not first_path.exists()
+        assert second_path.is_file()
 
         committed = await client.post(
             f"/bibliography/import/{batches[1].id}",
@@ -696,7 +699,8 @@ async def test_cleanup_preserves_object_referenced_by_an_uncommitted_pdf_import_
         "in-flight.pdf",
         100_000,
     )
-    assert discarded.object_key == in_flight.object_key
+    assert discarded.object_key != in_flight.object_key
+    discarded_path = local_object_path(discarded.object_key)
     object_path = local_object_path(in_flight.object_key)
     batch = ImportBatch(
         owner_id=item.created_by,
@@ -706,7 +710,6 @@ async def test_cleanup_preserves_object_referenced_by_an_uncommitted_pdf_import_
                 "title": "In-flight staged PDF",
                 "_pdf": {
                     "object_key": in_flight.object_key,
-                    "sha256": in_flight.sha256,
                     "size": in_flight.size,
                     "original_name": in_flight.original_name,
                 },
@@ -720,7 +723,10 @@ async def test_cleanup_preserves_object_referenced_by_an_uncommitted_pdf_import_
     try:
         await discarded.release()
         async with async_session_factory() as cleanup_db:
-            assert await delete_unreferenced_objects(cleanup_db, (discarded.object_key,)) == ()
+            assert await delete_unreferenced_objects(cleanup_db, (discarded.object_key,)) == (
+                discarded.object_key,
+            )
+        assert not discarded_path.exists()
         assert object_path.is_file()
 
         await db.commit()

@@ -510,7 +510,7 @@ Alpine.data("remotePdfUpload", () => ({
       form.append("pdf", new File([blob], remotePdfFilename(this.url), { type: blob.type }));
       const upload = await csrfFetch(this.$root.action, { method: "POST", body: form });
       if (!upload.ok) throw new Error("PDF upload failed");
-      window.location.reload();
+      window.location.assign(upload.url);
     } catch {
       this.error = this.$root.dataset.errorMessage;
     } finally {
@@ -544,11 +544,43 @@ Alpine.data("remoteAttachmentUpload", () => ({
       if (this.graphicalAbstract) form.append("graphical_abstract", "true");
       const upload = await csrfFetch(this.$root.action, { method: "POST", body: form });
       if (!upload.ok) throw new Error("Attachment upload failed");
-      window.location.reload();
+      window.location.assign(upload.url);
     } catch {
       this.error = this.$root.dataset.errorMessage;
     } finally {
       this.downloading = false;
+    }
+  },
+}));
+
+Alpine.data("workflowProgress", () => ({
+  state: "pending",
+  error: "",
+  timer: null,
+  async init() {
+    await this.refresh();
+  },
+  async refresh() {
+    if (this.timer) window.clearTimeout(this.timer);
+    this.error = "";
+    try {
+      const response = await fetch(this.$root.dataset.statusUrl, {
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) throw new Error(this.$root.dataset.statusError);
+      const workflow = await response.json();
+      this.state = workflow.state;
+      this.error = workflow.error || "";
+      if (workflow.state === "succeeded") {
+        window.location.replace(this.$root.dataset.successUrl);
+        return;
+      }
+      if (workflow.state === "pending" || workflow.state === "running") {
+        this.timer = window.setTimeout(() => this.refresh(), 750);
+      }
+    } catch (error) {
+      this.state = "failed";
+      this.error = error.message || this.$root.dataset.statusError;
     }
   },
 }));

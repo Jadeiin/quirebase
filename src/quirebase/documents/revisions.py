@@ -3,9 +3,10 @@ from __future__ import annotations
 import asyncio
 import json
 from contextlib import suppress
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from uuid import UUID, uuid4
 
 from sqlalchemy import select, update
 
@@ -18,15 +19,30 @@ from quirebase.core.errors import (
     ResourceNotFound,
     ResourceUnavailable,
     ValidationFailure,
-    VersionConflict,
 )
 from quirebase.core.storage import (
     ObjectMetadata,
     ObjectResponse,
     ObjectSource,
     ObjectStore,
-    StagedObject,
+    ObjectSuffix,
+    StoredObject,
     get_object_store,
+    object_key,
+)
+from quirebase.core.workflows import (
+    DOCUMENTS_QUEUE,
+    LIBRARY_QUEUE,
+    UPLOAD_COMPLETE_TOPIC,
+    UPLOAD_QUEUE,
+    durable_operations,
+)
+from quirebase.documents.pdf import validate_pdf_container
+from quirebase.documents.workflows import (
+    ATTACHMENT_UPLOAD_WORKFLOW,
+    FILE_REVISION_CHANGED_WORKFLOW,
+    IMPORTED_REVISION_INSPECTION_WORKFLOW,
+    REVISION_UPLOAD_WORKFLOW,
 )
 from quirebase.models import (
     Attachment,
@@ -34,15 +50,11 @@ from quirebase.models import (
     FileRevision,
     ImportBatch,
     Item,
-    Job,
-    JobState,
     Project,
     ProjectItem,
     ProjectMember,
     User,
 )
-from quirebase.pipeline.derived_state import propagate_file_revision_change
-from quirebase.pipeline.inspection import job_payload, validate_pdf_container
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -65,16 +77,21 @@ GRAPHICAL_ABSTRACT_MEDIA_TYPES = {
 @dataclass
 class StagedPdf:
     object_key: str
-    sha256: str
     size: int
     original_name: str
-    _staged: StagedObject = field(repr=False)
 
-    def revision_data(self) -> tuple[str, str, int, str]:
-        return self.object_key, self.sha256, self.size, self.original_name
+    def revision_data(self) -> tuple[str, int, str]:
+        return self.object_key, self.size, self.original_name
 
     async def release(self) -> None:
-        await self._staged.release()
+        """Compatibility no-op: owned UUID objects do not require leases."""
+
+
+@dataclass(frozen=True)
+class UploadWorkflow:
+    workflow_id: str
+    object_id: UUID
+    object_key: str
 
 
 @dataclass(frozen=True)
@@ -98,9 +115,10 @@ async def stage_pdf(
         raise UnsupportedMediaType("a PDF file is required")
     store = get_object_store()
     try:
-        staged = await store.put_cas(
+        staged = await store.put_object(
+            uuid4(),
+            ObjectSuffix.PDF,
             source,
-            suffix=".pdf",
             max_bytes=max_bytes,
             required_prefix=b"%PDF-",
         )
@@ -108,10 +126,8 @@ async def stage_pdf(
         raise ValidationFailure(str(error)) from error
     staged_pdf = StagedPdf(
         staged.key,
-        staged.sha256,
         staged.size,
         Path(filename).name,
-        staged,
     )
     validation = asyncio.create_task(_validate_staged_pdf(store, staged.key))
     try:
@@ -154,8 +170,7 @@ async def _release_staged_pdf(db: AsyncSession, staged: StagedPdf) -> None:
     await discard_staged_object(db, staged.object_key)
 
 
-async def _release_staged_attachment(db: AsyncSession, staged: StagedObject) -> None:
-    await staged.release()
+async def _release_staged_attachment(db: AsyncSession, staged: StoredObject) -> None:
     await discard_staged_object(db, staged.key)
 
 
@@ -164,7 +179,7 @@ async def _rollback_and_release_pdf(db: AsyncSession, staged: StagedPdf) -> None
     await _release_staged_pdf(db, staged)
 
 
-async def _rollback_and_release_attachment(db: AsyncSession, staged: StagedObject) -> None:
+async def _rollback_and_release_attachment(db: AsyncSession, staged: StoredObject) -> None:
     await db.rollback()
     await _release_staged_attachment(db, staged)
 
@@ -173,26 +188,39 @@ async def attach_staged_pdf(
     db: AsyncSession,
     user: User,
     item: Item,
-    staged: tuple[str, str, int, str],
+    staged: tuple[str, int, str],
 ) -> FileRevision:
-    key, digest, size, original_name = staged
+    key, size, original_name = staged
     revision = FileRevision(
         item_id=item.id,
         object_key=key,
-        sha256=digest,
         size=size,
         original_name=original_name,
         created_by=user.id,
     )
     db.add(revision)
     await db.flush()
-    db.add(
-        Job(
-            kind="pdf.inspect",
-            payload=job_payload(revision_id=revision.id),
-            idempotency_key=f"pdf.inspect:{revision.id}",
-            owner_id=user.id,
-        )
+    thumbnail_object_id = uuid4()
+    thumbnail_key = object_key(thumbnail_object_id, ObjectSuffix.PNG)
+    await durable_operations().enqueue_in_transaction(
+        db,
+        IMPORTED_REVISION_INSPECTION_WORKFLOW,
+        revision.id,
+        user.id,
+        key,
+        str(thumbnail_object_id),
+        queue_name=DOCUMENTS_QUEUE,
+        workflow_id=f"inspect-imported-revision:{revision.id}",
+        partition_key=revision.id,
+        attributes={
+            "capability": "documents",
+            "operation": "inspect_imported_revision",
+            "owner_id": user.id,
+            "item_id": item.id,
+            "revision_id": revision.id,
+            "object_key": key,
+            "object_keys": [key, thumbnail_key],
+        },
     )
     record_event(db, user.id, "pdf.upload", "file_revision", revision.id)
     return revision
@@ -238,11 +266,11 @@ async def delete_unreferenced_objects(
         return ()
     store = get_object_store()
     actually_deleted: list[str] = []
-    for object_key in keys:
-        if await _object_is_referenced(db, object_key):
+    for key in keys:
+        if await _object_is_referenced(db, key):
             continue
-        if await store.delete(object_key):
-            actually_deleted.append(object_key)
+        if await store.delete(key):
+            actually_deleted.append(key)
     return tuple(actually_deleted)
 
 
@@ -257,26 +285,68 @@ async def store_pdf_revision(
     source: ObjectSource,
     filename: str,
     max_bytes: int | None = None,
-) -> FileRevision:
+) -> UploadWorkflow:
     from quirebase.operations.settings import get_effective_setting
 
-    item = await require_editable_item(db, user, item_id)
+    await require_editable_item(db, user, item_id)
+    if not filename or not filename.lower().endswith(".pdf"):
+        raise UnsupportedMediaType("a PDF file is required")
     if max_bytes is None:
         max_bytes = await get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes)
-    staged = await stage_pdf(db, source, filename, max_bytes)
+    revision_id = uuid4()
+    thumbnail_object_id = uuid4()
+    revision_key = object_key(revision_id, ObjectSuffix.PDF)
+    thumbnail_key = object_key(thumbnail_object_id, ObjectSuffix.PNG)
+    workflow_id = f"upload-revision:{revision_id}"
+    await durable_operations().enqueue(
+        REVISION_UPLOAD_WORKFLOW,
+        item_id,
+        user.id,
+        str(revision_id),
+        str(revision_id),
+        str(thumbnail_object_id),
+        Path(filename).name,
+        queue_name=UPLOAD_QUEUE,
+        workflow_id=workflow_id,
+        attributes={
+            "capability": "documents",
+            "operation": "upload_revision",
+            "owner_id": user.id,
+            "item_id": item_id,
+            "revision_id": str(revision_id),
+            "object_key": revision_key,
+            "object_keys": [revision_key, thumbnail_key],
+        },
+    )
     try:
-        revision = await attach_staged_pdf(db, user, item, staged.revision_data())
-        await db.commit()
-    except asyncio.CancelledError:
-        _consume_current_cancellation()
-        cleanup_task = asyncio.create_task(_rollback_and_release_pdf(db, staged))
-        await _finish_task_despite_cancellation(cleanup_task)
+        stored = await get_object_store().put_object(
+            revision_id,
+            ObjectSuffix.PDF,
+            source,
+            max_bytes=max_bytes,
+            required_prefix=b"%PDF-",
+        )
+        await durable_operations().send(
+            workflow_id,
+            {"status": "complete", "key": stored.key, "size": stored.size},
+            topic=UPLOAD_COMPLETE_TOPIC,
+            idempotency_key=f"upload-complete:{revision_id}",
+        )
+    except BaseException as error:
+        await durable_operations().send(
+            workflow_id,
+            {"status": "failed", "error": type(error).__name__},
+            topic=UPLOAD_COMPLETE_TOPIC,
+            idempotency_key=f"upload-failed:{revision_id}",
+        )
+        if isinstance(error, ValueError):
+            raise ValidationFailure(str(error)) from error
         raise
-    except Exception:
-        await _rollback_and_release_pdf(db, staged)
-        raise
-    await staged.release()
-    return revision
+    return UploadWorkflow(
+        workflow_id,
+        revision_id,
+        revision_key,
+    )
 
 
 def _is_image_header(header: bytes, content_type: str) -> bool:
@@ -313,7 +383,7 @@ async def create_attachment(
     content_type: str = "application/octet-stream",
     max_bytes: int | None = None,
     role: AttachmentRole | None = None,
-) -> Attachment:
+) -> UploadWorkflow:
     from quirebase.operations.settings import get_effective_setting
 
     if not await can_edit_item(db, user, item_id) or not filename:
@@ -326,65 +396,55 @@ async def create_attachment(
         GRAPHICAL_ABSTRACT_MEDIA_TYPES
     ):
         raise ValidationFailure("graphical abstract must be a PNG, JPEG, WebP, or GIF image")
-    store = get_object_store()
+    attachment_id = uuid4()
+    attachment_key = object_key(attachment_id, ObjectSuffix.BINARY)
+    workflow_id = f"upload-attachment:{attachment_id}"
+    await durable_operations().enqueue(
+        ATTACHMENT_UPLOAD_WORKFLOW,
+        item_id,
+        user.id,
+        str(attachment_id),
+        str(attachment_id),
+        Path(filename).name,
+        content_type,
+        role.value if role else None,
+        queue_name=UPLOAD_QUEUE,
+        workflow_id=workflow_id,
+        attributes={
+            "capability": "documents",
+            "operation": "upload_attachment",
+            "owner_id": user.id,
+            "item_id": item_id,
+            "attachment_id": str(attachment_id),
+            "object_key": attachment_key,
+            "object_keys": [attachment_key],
+        },
+    )
     try:
-        staged = await store.put_cas(source, suffix=".bin", max_bytes=max_bytes)
-    except ValueError as error:
-        raise ValidationFailure(str(error)) from error
-    key, digest, size = staged.key, staged.sha256, staged.size
-    try:
-        if role == AttachmentRole.graphical_abstract:
-            if size:
-                response = await store.get_range(key, 0, min(12, size))
-                header = b"".join([bytes(chunk) async for chunk in response.body])
-            else:
-                header = b""
-            if not _is_image_header(header, content_type):
-                raise ValidationFailure("graphical abstract content does not match its image type")
-    except asyncio.CancelledError:
-        _consume_current_cancellation()
-        cleanup_task = asyncio.create_task(_release_staged_attachment(db, staged))
-        await _finish_task_despite_cancellation(cleanup_task)
-        raise
-    except Exception:
-        await _release_staged_attachment(db, staged)
-        raise
-    try:
-        if role is not None:
-            await _lock_item_for_attachment_role_replacement(db, item_id)
-            current = await db.scalar(
-                select(Attachment).where(
-                    Attachment.item_id == item_id,
-                    Attachment.role == role,
-                )
-            )
-            if current is not None:
-                current.role = None
-                await db.flush()
-        record = Attachment(
-            item_id=item_id,
-            object_key=key,
-            sha256=digest,
-            size=size,
-            mime_type=content_type[:100],
-            original_name=Path(filename).name[:255],
-            role=role,
-            created_by=user.id,
+        stored = await get_object_store().put_object(
+            attachment_id, ObjectSuffix.BINARY, source, max_bytes=max_bytes
         )
-        db.add(record)
-        await db.flush()
-        record_event(db, user.id, "attachment.upload", "attachment", record.id)
-        await db.commit()
-    except asyncio.CancelledError:
-        _consume_current_cancellation()
-        cleanup_task = asyncio.create_task(_rollback_and_release_attachment(db, staged))
-        await _finish_task_despite_cancellation(cleanup_task)
+        await durable_operations().send(
+            workflow_id,
+            {"status": "complete", "key": stored.key, "size": stored.size},
+            topic=UPLOAD_COMPLETE_TOPIC,
+            idempotency_key=f"upload-complete:{attachment_id}",
+        )
+    except BaseException as error:
+        await durable_operations().send(
+            workflow_id,
+            {"status": "failed", "error": type(error).__name__},
+            topic=UPLOAD_COMPLETE_TOPIC,
+            idempotency_key=f"upload-failed:{attachment_id}",
+        )
+        if isinstance(error, ValueError):
+            raise ValidationFailure(str(error)) from error
         raise
-    except Exception:
-        await _rollback_and_release_attachment(db, staged)
-        raise
-    await staged.release()
-    return record
+    return UploadWorkflow(
+        workflow_id,
+        attachment_id,
+        attachment_key,
+    )
 
 
 async def get_attachment_file(
@@ -415,7 +475,7 @@ async def get_revision_file(
         if byte_range is not None
         else await store.get(revision.object_key)
     )
-    return response, revision.original_name, revision.sha256
+    return response, revision.original_name, revision.mime_type or "application/pdf"
 
 
 async def head_revision_file(
@@ -427,7 +487,7 @@ async def head_revision_file(
     return (
         await get_object_store().head(revision.object_key),
         revision.original_name,
-        revision.sha256,
+        revision.mime_type or "application/pdf",
     )
 
 
@@ -437,7 +497,9 @@ async def get_revision_thumbnail(
     revision = await require_revision(db, user, revision_id)
     if revision.item_id != item_id:
         raise ResourceNotFound("revision not found for item")
-    key = f"thumbnails/{revision.id}.png"
+    key = revision.thumbnail_object_key
+    if key is None:
+        raise ResourceNotFound("revision thumbnail not found")
     if not await get_object_store().exists(key):
         raise ResourceNotFound("revision thumbnail not found")
     return await get_object_store().get(key)
@@ -471,7 +533,9 @@ async def get_item_thumbnail(db: AsyncSession, user: User, item_id: str) -> Item
         )
     ).all()
     for revision in revisions:
-        key = f"thumbnails/{revision.id}.png"
+        key = revision.thumbnail_object_key
+        if key is None:
+            continue
         store = get_object_store()
         if await store.exists(key):
             return ItemThumbnail(
@@ -483,14 +547,6 @@ async def get_item_thumbnail(db: AsyncSession, user: User, item_id: str) -> Item
     raise ResourceNotFound("item thumbnail not found")
 
 
-def _job_targets_revision(job: Job, revision_id: str) -> bool:
-    try:
-        payload = json.loads(job.payload)
-    except (json.JSONDecodeError, TypeError):
-        return False
-    return isinstance(payload, dict) and payload.get("revision_id") == revision_id
-
-
 async def delete_file_revision(
     db: AsyncSession, user: User, item_id: str, revision_id: str
 ) -> None:
@@ -500,44 +556,24 @@ async def delete_file_revision(
     )
     if revision is None or revision.item_id != item_id:
         raise ResourceNotFound("file revision not found")
-    inspection_job = await db.scalar(
-        select(Job)
-        .where(
-            Job.kind == "pdf.inspect",
-            Job.idempotency_key == f"pdf.inspect:{revision_id}",
-        )
-        .with_for_update()
-    )
-    export_jobs = tuple(
-        job
-        for job in (
-            await db.scalars(
-                select(Job)
-                .where(
-                    Job.kind == "pdf.export_annotations",
-                    Job.state.in_([JobState.pending, JobState.running, JobState.failed]),
-                )
-                .with_for_update()
-            )
-        ).all()
-        if _job_targets_revision(job, revision_id)
-    )
-    revision_jobs = tuple(job for job in (inspection_job, *export_jobs) if job is not None)
-    if any(job.state == JobState.running for job in revision_jobs):
-        raise VersionConflict(
-            message="PDF background work is still running; retry deletion shortly"
-        )
     object_key = revision.object_key
-    thumbnail_key = f"thumbnails/{revision.id}.png"
-    for job in revision_jobs:
-        if job.state in {JobState.pending, JobState.failed}:
-            await db.delete(job)
+    thumbnail_key = revision.thumbnail_object_key
     await db.delete(revision)
     await db.flush()
-    await propagate_file_revision_change(db, item_id, owner_id=user.id)
+    event_workflow_id = f"file-revision-deleted:{revision_id}"
+    await durable_operations().enqueue_in_transaction(
+        db,
+        FILE_REVISION_CHANGED_WORKFLOW,
+        item_id,
+        user.id,
+        queue_name=LIBRARY_QUEUE,
+        workflow_id=event_workflow_id,
+        attributes={"capability": "library", "item_id": item_id},
+    )
     record_event(db, user.id, "pdf.delete", "file_revision", revision.id)
     await db.commit()
-    await get_object_store().delete(thumbnail_key)
+    if thumbnail_key:
+        await get_object_store().delete(thumbnail_key)
     await delete_unreferenced_objects(db, (object_key,))
 
 

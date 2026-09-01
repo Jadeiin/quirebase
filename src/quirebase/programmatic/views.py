@@ -79,7 +79,6 @@ class FileView(BaseModel):
     original_name: str
     mime_type: str
     size: int
-    sha256: str
     created_at: str
     page_count: int | None = None
     processing_state: str | None = None

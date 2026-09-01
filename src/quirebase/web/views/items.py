@@ -475,7 +475,7 @@ async def upload_attachment(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await create_attachment_op(
+    workflow = await create_attachment_op(
         db,
         user,
         item_id,
@@ -487,7 +487,9 @@ async def upload_attachment(
         ),
         role=AttachmentRole.graphical_abstract if graphical_abstract else None,
     )
-    return RedirectResponse(f"/items/{item_id}/files", status_code=303)
+    return RedirectResponse(
+        f"/items/{item_id}/files?workflow={workflow.workflow_id}", status_code=303
+    )
 
 
 @router.get("/items/{item_id}/attachments/{attachment_id}")
@@ -591,7 +593,7 @@ async def upload_pdf(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await store_pdf_revision(
+    workflow = await store_pdf_revision(
         db,
         user,
         item_id,
@@ -599,7 +601,9 @@ async def upload_pdf(
         pdf.filename or "",
         await get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes),
     )
-    return RedirectResponse(f"/items/{item_id}/files", status_code=303)
+    return RedirectResponse(
+        f"/items/{item_id}/files?workflow={workflow.workflow_id}", status_code=303
+    )
 
 
 @router.post("/items/{item_id}/pdf/{revision_id}/delete")

@@ -11,8 +11,9 @@ from quirebase.core.errors import (
     ResourceUnavailable,
     ValidationFailure,
 )
+from quirebase.core.workflows import durable_operations
 from quirebase.library.tag_recommendations import decoded_candidates, recommendation_state
-from quirebase.models import Item, ItemTag, ItemTagRecommendation, Job, Tag, User
+from quirebase.models import Item, ItemTag, ItemTagRecommendation, Tag, User
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
@@ -143,9 +144,9 @@ async def get_tag_matrix_for_item(db: AsyncSession, user: User, item_id: str) ->
     )
     suggested_phrases = tuple(name for name in phrases if name.casefold() not in existing_names)
     state = await recommendation_state(db, recommendation)
-    job = (
-        await db.get(Job, recommendation.job_id)
-        if recommendation and recommendation.job_id
+    workflow = (
+        await durable_operations().get(recommendation.workflow_id)
+        if recommendation and recommendation.workflow_id
         else None
     )
 
@@ -175,7 +176,7 @@ async def get_tag_matrix_for_item(db: AsyncSession, user: User, item_id: str) ->
         "suggested_single_words": suggested_single_words,
         "suggested_phrases": suggested_phrases,
         "recommendation_state": state,
-        "recommendation_error": job.error if state == "failed" and job else None,
+        "recommendation_error": workflow.error if state == "failed" and workflow else None,
     }
 
 

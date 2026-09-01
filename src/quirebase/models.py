@@ -42,13 +42,6 @@ class ProjectRole(StrEnum):
     viewer = "viewer"
 
 
-class JobState(StrEnum):
-    pending = "pending"
-    running = "running"
-    succeeded = "succeeded"
-    failed = "failed"
-
-
 class AnnotationKind(StrEnum):
     highlight = "highlight"
     underline = "underline"
@@ -286,9 +279,7 @@ class ItemTagRecommendation(Base):
     )
     input_fingerprint: Mapped[str] = mapped_column(String(64), index=True)
     generation_token: Mapped[int] = mapped_column(Integer, default=1)
-    job_id: Mapped[str | None] = mapped_column(
-        ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True, index=True
-    )
+    workflow_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     engine: Mapped[str] = mapped_column(String(32))
     engine_version: Mapped[str] = mapped_column(String(64))
     model_fingerprint: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -321,7 +312,7 @@ class FileRevision(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     item_id: Mapped[str] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
     object_key: Mapped[str] = mapped_column(String(200), index=True)
-    sha256: Mapped[str] = mapped_column(String(64), index=True)
+    thumbnail_object_key: Mapped[str | None] = mapped_column(String(200), nullable=True, index=True)
     size: Mapped[int] = mapped_column(Integer)
     mime_type: Mapped[str] = mapped_column(String(100), default="application/pdf")
     original_name: Mapped[str] = mapped_column(String(255))
@@ -349,7 +340,6 @@ class Attachment(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     item_id: Mapped[str] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
     object_key: Mapped[str] = mapped_column(String(200), index=True)
-    sha256: Mapped[str] = mapped_column(String(64), index=True)
     size: Mapped[int] = mapped_column(Integer)
     mime_type: Mapped[str] = mapped_column(String(100), default="application/octet-stream")
     original_name: Mapped[str] = mapped_column(String(255))
@@ -419,30 +409,6 @@ class PdfAnnotationSegment(Base):
     anchor_x: Mapped[float | None] = mapped_column(Float)
     anchor_y: Mapped[float | None] = mapped_column(Float)
     annotation: Mapped[PdfAnnotation] = relationship(back_populates="segments")
-
-
-class Job(Base):
-    __tablename__ = "jobs"
-    __table_args__ = (
-        CheckConstraint("length(kind) BETWEEN 1 AND 40", name="ck_jobs_kind_shape"),
-        CheckConstraint(
-            "state IN ('pending', 'running', 'succeeded', 'failed')", name="ck_jobs_state"
-        ),
-    )
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    kind: Mapped[str] = mapped_column(String(40), index=True)
-    state: Mapped[JobState] = mapped_column(
-        enum_type(JobState, "job_state"), default=JobState.pending, index=True
-    )
-    payload: Mapped[str] = mapped_column(Text)
-    result: Mapped[str | None] = mapped_column(Text)
-    error: Mapped[str | None] = mapped_column(Text)
-    attempts: Mapped[int] = mapped_column(Integer, default=0)
-    idempotency_key: Mapped[str] = mapped_column(String(200), unique=True)
-    owner_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
-    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
 
 
 class ImportBatch(Base):

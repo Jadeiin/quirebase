@@ -83,9 +83,8 @@ _Avoid_: Staged Item, Provisional Work
 **Import Batch**:
 A staged collection of Candidate Records and diagnostics from a bibliography file, Identifier
 Lookup or uploaded PDFs awaiting confirmation into the Library. A PDF Candidate Record retains
-its staged file until confirmation creates the Item and associated File Revision, or until the
-Import Batch is discarded. Content-addressed staged files shared by multiple pending Import
-Batches remain stored until the final referencing batch is confirmed or discarded.
+its independently owned UUID object until confirmation creates the Item and associated File
+Revision, or until the Import Batch is discarded.
 _Avoid_: Staged Import, Import Queue
 
 **Import**:
@@ -142,14 +141,6 @@ A revocable, time-limited programmatic credential belonging to one User and carr
 current authority.
 _Avoid_: Login Session, OAuth Access Token, API Key
 
-**Job**:
-A durable background task classified by a Job Kind. A Job moves from pending to running and
-then to succeeded or failed; a failed attempt may return to pending while retries remain.
-
-**Job Kind**:
-A name classifying the work performed by a Job. Job Kinds are extensible and are not a closed
-enumeration.
-
 **Audit Event**:
 An immutable record of a security-sensitive or data-changing action.
 
@@ -173,7 +164,6 @@ An immutable record of a security-sensitive or data-changing action.
 - Citation Styles format Items during export or citation generation.
 - An Item may have zero or more Upstream Identifiers; DOI is represented by the
   Item's canonical DOI field and is not duplicated as an Upstream Identifier.
-- A Job has one kind and may be owned by one User.
 - An Audit Event may reference an actor and a target.
 
 ## Example dialogue

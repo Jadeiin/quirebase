@@ -21,7 +21,6 @@
   <div x-show="active === 'duplicates'">
     <section class="tool-grid">
       <a class="panel tool-card" href="/tools?tab=duplicates&mode=doi"><span>DOI</span><div><h2>{{ _('Matching DOI') }}</h2><p>{{ _('Highest-confidence metadata duplicate check.') }}</p></div></a>
-      <a class="panel tool-card" href="/tools?tab=duplicates&mode=pdf"><span>PDF</span><div><h2>{{ _('Identical PDF') }}</h2><p>{{ _('Compare exact file hashes without reading content.') }}</p></div></a>
       <a class="panel tool-card" href="/tools?tab=duplicates&mode=title"><span>＝</span><div><h2>{{ _('Matching title') }}</h2><p>{{ _('Find titles equal after punctuation and case normalization.') }}</p></div></a>
       <a class="panel tool-card" href="/tools?tab=duplicates&mode=similar"><span>≈</span><div><h2>{{ _('Similar title') }}</h2><p>{{ _('Broader check that may include false positives.') }}</p></div></a>
     </section>

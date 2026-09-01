@@ -25,13 +25,12 @@ from sqlalchemy import select, update
 
 from quirebase.access.items import require_editable_item
 from quirebase.core.config import Settings, get_settings
+from quirebase.core.workflows import LIBRARY_QUEUE, durable_operations
 from quirebase.models import (
     FileRevision,
     FileRevisionProcessingState,
     Item,
     ItemTagRecommendation,
-    Job,
-    JobState,
     User,
 )
 
@@ -173,8 +172,8 @@ async def _item_text(db: AsyncSession, item: Item, settings: Settings) -> str:
     )
 
 
-async def _linked_job(db: AsyncSession, record: ItemTagRecommendation) -> Job | None:
-    return await db.get(Job, record.job_id) if record.job_id else None
+async def _linked_workflow(record: ItemTagRecommendation):
+    return await durable_operations().get(record.workflow_id) if record.workflow_id else None
 
 
 async def request_item_tag_recommendation(
@@ -214,10 +213,10 @@ async def request_item_tag_recommendation(
         select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == item_id)
     )
     if record is not None and record.input_fingerprint == fingerprint and not force:
-        job = await _linked_job(db, record)
+        workflow = await _linked_workflow(record)
         if record.generated_at is not None or (
-            job is not None
-            and job.state in {JobState.pending, JobState.running, JobState.succeeded}
+            workflow is not None
+            and workflow.state in {"pending", "running", "succeeded"}
         ):
             return record
 
@@ -241,15 +240,20 @@ async def request_item_tag_recommendation(
         record.single_words = None
         record.phrases = None
         record.generated_at = None
-    job = Job(
-        kind="item.recommend_tags",
-        payload=json.dumps({"item_id": item_id, "generation_token": token}),
-        idempotency_key=f"item.recommend_tags:{item_id}:{token}:{fingerprint}",
-        owner_id=owner_id,
-    )
-    db.add(job)
+    workflow_id = f"item-recommend-tags:{item_id}:{token}:{fingerprint}"
     await db.flush()
-    record.job_id = job.id
+    await durable_operations().enqueue_in_transaction(
+        db,
+        "library.recommend_tags",
+        item_id,
+        token,
+        workflow_id,
+        owner_id,
+        queue_name=LIBRARY_QUEUE,
+        workflow_id=workflow_id,
+        attributes={"capability": "library", "owner_id": owner_id, "item_id": item_id},
+    )
+    record.workflow_id = workflow_id
     await db.flush()
     return record
 
@@ -287,18 +291,19 @@ def _engine(settings: Settings):
 
 async def handle_item_tag_recommendation(
     db: AsyncSession,
-    job: Job,
-    payload: dict[str, Any],
+    item_id: str,
+    generation_token: int,
+    workflow_id: str,
+    owner_id: str | None,
     *,
     settings: Settings | None = None,
 ) -> dict[str, Any]:
     effective = settings or get_settings()
-    item_id = str(payload["item_id"])
-    token = int(payload["generation_token"])
+    token = generation_token
     record = await db.scalar(
         select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == item_id)
     )
-    if record is None or record.generation_token != token or record.job_id != job.id:
+    if record is None or record.generation_token != token or record.workflow_id != workflow_id:
         return {"stale": True}
     item = await db.get(Item, item_id)
     if item is None:
@@ -308,7 +313,7 @@ async def handle_item_tag_recommendation(
     fingerprint = input_fingerprint(text, descriptor, max_chars=effective.recommendation_max_chars)
     if fingerprint != record.input_fingerprint:
         await request_item_tag_recommendation(
-            db, item_id, owner_id=job.owner_id, settings=effective
+            db, item_id, owner_id=owner_id, settings=effective
         )
         return {"stale": True, "replacement_enqueued": True}
     result = (
@@ -320,7 +325,7 @@ async def handle_item_tag_recommendation(
         )
     )[0]
     await db.refresh(record)
-    if record.generation_token != token or record.job_id != job.id:
+    if record.generation_token != token or record.workflow_id != workflow_id:
         return {"stale": True}
     record.single_words = json.dumps(result.single_words, ensure_ascii=False)
     record.phrases = json.dumps(result.phrases, ensure_ascii=False)
@@ -336,10 +341,10 @@ async def recommendation_state(db: AsyncSession, record: ItemTagRecommendation |
         return "empty"
     if record.generated_at is not None:
         return "ready"
-    job = await _linked_job(db, record)
-    if job is None:
+    workflow = await _linked_workflow(record)
+    if workflow is None:
         return "failed"
-    if job.state == JobState.failed:
+    if workflow.state in {"failed", "cancelled"}:
         return "failed"
     return "pending"
 

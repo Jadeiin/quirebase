@@ -235,12 +235,11 @@ async def test_item_download_bundle_contains_all_pdf_versions_with_manifest(
     )
     owner = await db.get(User, item.created_by)
     assert owner is not None
-    key, digest, size = await put_pdf_object(b"%PDF-1.4\nsecond-pdf", 100)
+    key, size = await put_pdf_object(b"%PDF-1.4\nsecond-pdf", 100)
     db.add(
         FileRevision(
             item_id=item.id,
             object_key=key,
-            sha256=digest,
             size=size,
             original_name="published.pdf",
             processing_state="ready",
@@ -275,9 +274,8 @@ async def test_item_download_embeds_annotations_in_pdf_without_a_sidecar(
     with pymupdf.open() as document:
         document.new_page(width=300, height=400)
         source = document.tobytes()
-    key, digest, size = await put_pdf_object(source, 100_000)
+    key, size = await put_pdf_object(source, 100_000)
     revision.object_key = key
-    revision.sha256 = digest
     revision.size = size
     annotation = PdfAnnotation(
         file_revision_id=revision.id,

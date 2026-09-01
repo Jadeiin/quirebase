@@ -15,11 +15,11 @@ from sqlalchemy import delete, select, update
 from quirebase.access.items import require_editable_item
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceUnavailable, VersionConflict
+from quirebase.documents.pdf import first_doi_from_text
 from quirebase.library.authors import parse_author_name, set_item_authors_from_string
 from quirebase.library.providers import candidate_record_values, lookup_candidate
 from quirebase.library.tag_recommendations import request_item_tag_recommendation
 from quirebase.models import FileRevision, Item, ItemIdentifier, User
-from quirebase.pipeline.inspection import first_doi_from_text
 from quirebase.search import search_index
 
 if TYPE_CHECKING:

@@ -13,7 +13,6 @@ async def add_item(db, user, *, title, abstract=None, full_text=None):
             FileRevision(
                 item_id=item.id,
                 object_key=f"objects/{item.id}",
-                sha256=item.id.replace("-", "").ljust(64, "0")[:64],
                 size=1,
                 original_name="paper.pdf",
                 full_text=full_text,

@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import hashlib
 import json
+import logging
 import shutil
 import sqlite3
 import tempfile
@@ -16,11 +17,15 @@ from sqlalchemy import select
 
 from quirebase.core.config import get_settings
 from quirebase.core.database import is_sqlite_database_url
-from quirebase.core.storage import get_object_store
-from quirebase.models import Attachment, FileRevision, JobState, User
+from quirebase.core.storage import get_object_store, is_managed_object_key
+from quirebase.core.workflows import durable_operations, list_all_workflows
+from quirebase.models import Attachment, FileRevision, ImportBatch, User
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
+MAINTENANCE_INTERVAL_SECONDS = 60 * 60
 
 
 def sha256_file(path: Path) -> str:
@@ -232,8 +237,15 @@ async def cleanup_exports(db: AsyncSession | None = None) -> int:
     cutoff = datetime.now(UTC) - timedelta(hours=ttl_hours)
     removed = await asyncio.to_thread(_cleanup_exports, directory, cutoff)
     store = get_object_store()
-    async for item in store.iter_prefix("artifacts/annotation-exports/"):
-        if item.last_modified < cutoff and await store.delete(item.key):
+    workflows = await list_all_workflows(status="succeeded")
+    for workflow in workflows:
+        if (workflow.attributes or {}).get("operation") != "annotation_export":
+            continue
+        output = workflow.output
+        key = output.get("object_key") if isinstance(output, dict) else None
+        if not isinstance(key, str) or not await store.exists(key):
+            continue
+        if (await store.head(key)).last_modified < cutoff and await store.delete(key):
             removed += 1
     return removed
 
@@ -250,6 +262,25 @@ def _cleanup_exports(directory: Path, cutoff: datetime) -> int:
     return removed
 
 
+async def run_maintenance_cycle() -> None:
+    """Apply TTL cleanup and reconcile old managed-object orphans."""
+    from quirebase.core.database import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as db:
+        await cleanup_exports(db)
+        await reconcile_objects(db)
+
+
+async def run_periodic_maintenance() -> None:
+    """Run Operations-owned maintenance for the lifetime of a worker."""
+    while True:
+        try:
+            await run_maintenance_cycle()
+        except Exception:
+            logger.exception("periodic maintenance failed")
+        await asyncio.sleep(MAINTENANCE_INTERVAL_SECONDS)
+
+
 async def check_objects(db: AsyncSession) -> list[str]:
     store = get_object_store()
     revisions = list((await db.scalars(select(FileRevision))).all())
@@ -258,43 +289,105 @@ async def check_objects(db: AsyncSession) -> list[str]:
     for revision in revisions:
         if not await store.exists(revision.object_key):
             errors.append(f"{revision.id}: missing object")
-        elif await _object_sha256(store, revision.object_key) != revision.sha256:
-            errors.append(f"{revision.id}: checksum mismatch")
+        elif (await store.head(revision.object_key)).size != revision.size:
+            errors.append(f"{revision.id}: size mismatch")
     for attachment in attachments:
         if not await store.exists(attachment.object_key):
             errors.append(f"{attachment.id}: missing attachment")
-        elif await _object_sha256(store, attachment.object_key) != attachment.sha256:
-            errors.append(f"{attachment.id}: attachment checksum mismatch")
+        elif (await store.head(attachment.object_key)).size != attachment.size:
+            errors.append(f"{attachment.id}: attachment size mismatch")
     return errors
 
 
-async def _object_sha256(store, key: str) -> str:
-    digest = hashlib.sha256()
-    response = await store.get(key)
-    async for chunk in response.body:
-        digest.update(chunk)
-    return digest.hexdigest()
+def _import_object_keys(records_json: str) -> set[str]:
+    try:
+        rows = json.loads(records_json)
+    except (json.JSONDecodeError, TypeError):
+        return set()
+    if not isinstance(rows, list):
+        return set()
+    return {
+        key
+        for row in rows
+        if isinstance(row, dict)
+        and isinstance((pdf := row.get("_pdf")), dict)
+        and isinstance((key := pdf.get("object_key")), str)
+    }
 
 
-async def get_backup_artifact(db: AsyncSession, admin: User, job_id: str) -> tuple[Path, str]:
+async def _referenced_object_keys(db: AsyncSession) -> set[str]:
+    keys = set((await db.scalars(select(FileRevision.object_key))).all())
+    keys.update(
+        key for key in (await db.scalars(select(FileRevision.thumbnail_object_key))).all() if key
+    )
+    keys.update((await db.scalars(select(Attachment.object_key))).all())
+    for records in (await db.scalars(select(ImportBatch.records))).all():
+        keys.update(_import_object_keys(records))
+    return keys
+
+
+def _workflow_owned_object_keys(attributes: dict[str, Any] | None) -> set[str]:
+    if not attributes:
+        return set()
+    raw_keys = attributes.get("object_keys")
+    keys = (
+        {key for key in raw_keys if isinstance(key, str)}
+        if isinstance(raw_keys, (list, tuple))
+        else set()
+    )
+    if isinstance((key := attributes.get("object_key")), str):
+        keys.add(key)
+    return keys
+
+
+async def reconcile_objects(
+    db: AsyncSession, *, retention_hours: int | None = None
+) -> tuple[str, ...]:
+    """Delete only old, managed UUID objects that remain unreferenced on recheck."""
+    effective_hours = retention_hours or get_settings().object_orphan_retention_hours
+    cutoff = datetime.now(UTC) - timedelta(hours=effective_hours)
+    referenced = await _referenced_object_keys(db)
+    active = await list_all_workflows()
+    active_keys = set().union(
+        *(
+            _workflow_owned_object_keys(workflow.attributes)
+            for workflow in active
+            if workflow.state in {"pending", "running"}
+        )
+    )
+    deleted: list[str] = []
+    store = get_object_store()
+    for first in range(256):
+        async for item in store.iter_prefix(f"{first:02x}/"):
+            if (
+                not is_managed_object_key(item.key)
+                or item.last_modified >= cutoff
+                or item.key in referenced
+                or item.key in active_keys
+            ):
+                continue
+            if item.key in await _referenced_object_keys(db):
+                continue
+            if await store.delete(item.key):
+                deleted.append(item.key)
+    return tuple(deleted)
+
+
+async def get_backup_artifact(db: AsyncSession, admin: User, workflow_id: str) -> tuple[Path, str]:
     from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
-    from quirebase.models import Job
 
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")
-    job = await db.get(Job, job_id)
+    del db
+    workflow = await durable_operations().get(workflow_id)
     if (
-        job is None
-        or job.kind != "system.backup"
-        or job.state != JobState.succeeded
-        or not job.result
+        workflow is None
+        or workflow.name != "operations.backup"
+        or workflow.state != "succeeded"
+        or not isinstance(workflow.output, dict)
     ):
         raise ResourceNotFound("backup artifact not found or not ready")
-    try:
-        data = json.loads(job.result)
-        filename = data.get("filename")
-    except Exception as error:
-        raise ResourceUnavailable("corrupt backup job result") from error
+    filename = workflow.output.get("filename")
 
     if not filename:
         raise ResourceNotFound("backup filename missing")
@@ -303,4 +396,4 @@ async def get_backup_artifact(db: AsyncSession, admin: User, job_id: str) -> tup
     if not await asyncio.to_thread(backup_file.is_file):
         raise ResourceNotFound("backup artifact expired or deleted")
 
-    return backup_file, f"quirebase_backup_{job.id[:8]}.zip"
+    return backup_file, f"quirebase_backup_{workflow.id[-8:]}.zip"

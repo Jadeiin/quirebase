@@ -28,7 +28,9 @@ class Settings(BaseSettings):
     max_pdf_bytes: int = 250 * 1024 * 1024
     max_attachment_bytes: int = 250 * 1024 * 1024
     export_ttl_hours: int = 24
-    worker_poll_seconds: float = Field(default=1.0, ge=0.1)
+    object_orphan_retention_hours: int = Field(default=24, ge=1, le=8760)
+    workflow_upload_timeout_seconds: int = Field(default=600, ge=1, le=3600)
+    workflow_executor_id: str = "quirebase-worker"
     allowed_hosts: str = "localhost,127.0.0.1,testserver"
     mcp_allowed_origins: str = ""
     metadata_timeout_seconds: float = Field(

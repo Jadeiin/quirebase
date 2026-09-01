@@ -229,7 +229,6 @@ async def test_http_api_document_and_annotation_views_match_programmatic_contrac
     revision = FileRevision(
         item_id=item_id,
         object_key="objects/api.pdf",
-        sha256="a" * 64,
         size=100,
         mime_type="application/pdf",
         original_name="api.pdf",

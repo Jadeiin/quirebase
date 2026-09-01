@@ -13,8 +13,7 @@ from quirebase.library.tag_recommendations import (
     handle_item_tag_recommendation,
     request_item_tag_recommendation,
 )
-from quirebase.models import Item, ItemTagRecommendation, Job, JobState, User
-from quirebase.pipeline.jobs import run_job
+from quirebase.models import Item, ItemTagRecommendation, User
 
 
 @pytest.mark.anyio
@@ -34,13 +33,13 @@ async def test_request_is_idempotent_and_item_keywords_do_not_change_fingerprint
     settings = Settings(_env_file=None, recommendation_engine="yake")
 
     first = await request_item_tag_recommendation(db, item.id, owner_id=user.id, settings=settings)
-    first_job_id = first.job_id
+    first_workflow_id = first.workflow_id
     item.keywords = "entirely different upstream keywords"
     second = await request_item_tag_recommendation(db, item.id, owner_id=user.id, settings=settings)
 
     assert second.id == first.id
     assert second.generation_token == 1
-    assert second.job_id == first_job_id
+    assert second.workflow_id == first_workflow_id
 
 
 @pytest.mark.anyio
@@ -67,16 +66,14 @@ async def test_item_creation_enqueues_and_worker_persists_yake_results(async_db,
         select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == item_result.item_id)
     )
     assert record is not None
-    job = await db.get(Job, record.job_id)
-    assert job is not None
-    job.state = JobState.running
-    job.attempts = 1
-
-    await run_job(db, job)
+    assert record.workflow_id is not None
+    await handle_item_tag_recommendation(
+        db, item_result.item_id, record.generation_token, record.workflow_id, user.id,
+        settings=settings,
+    )
+    await db.commit()
 
     await db.refresh(record)
-    await db.refresh(job)
-    assert job.state == JobState.succeeded
     assert record.generated_at is not None
     assert len(json.loads(record.single_words or "[]")) <= 10
     assert len(json.loads(record.phrases or "[]")) <= 10
@@ -93,16 +90,17 @@ async def test_stale_job_cannot_overwrite_new_generation(async_db):
     await db.flush()
     settings = Settings(_env_file=None, recommendation_engine="yake")
     first = await request_item_tag_recommendation(db, item.id, owner_id=user.id, settings=settings)
-    first_job = await db.get(Job, first.job_id)
-    assert first_job is not None
+    assert first.workflow_id is not None
     await request_item_tag_recommendation(
         db, item.id, owner_id=user.id, force=True, settings=settings
     )
 
     result = await handle_item_tag_recommendation(
         db,
-        first_job,
-        {"item_id": item.id, "generation_token": 1},
+        item.id,
+        1,
+        first.workflow_id,
+        user.id,
         settings=settings,
     )
 
@@ -145,13 +143,13 @@ async def test_concurrent_force_requests_receive_distinct_generation_tokens(
                 item_id,
                 settings=settings,
             )
-            assert record.job_id is not None
-            return record.generation_token, record.job_id
+            assert record.workflow_id is not None
+            return record.generation_token, record.workflow_id
 
     results = await asyncio.gather(force_request(), force_request())
 
     assert {token for token, _job_id in results} == {2, 3}
-    assert len({job_id for _token, job_id in results}) == 2
+    assert len({workflow_id for _token, workflow_id in results}) == 2
     await db.refresh(item)
     assert item.updated_at.replace(tzinfo=original_updated_at.tzinfo) == original_updated_at
 
@@ -171,14 +169,14 @@ async def test_missing_keybert_configuration_fails_explicitly(async_db):
         keybert_model_path=None,
     )
     record = await request_item_tag_recommendation(db, item.id, owner_id=user.id, settings=settings)
-    job = await db.get(Job, record.job_id)
-    assert job is not None
-    job.state = JobState.running
+    assert record.workflow_id is not None
 
     with pytest.raises(RuntimeError, match="KEYBERT_MODEL_PATH"):
         await handle_item_tag_recommendation(
             db,
-            job,
-            {"item_id": item.id, "generation_token": record.generation_token},
+            item.id,
+            record.generation_token,
+            record.workflow_id,
+            user.id,
             settings=settings,
         )

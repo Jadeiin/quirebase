@@ -32,6 +32,8 @@ CONSTRAINTS = {
 
 def constraint_names(table_name: str) -> set[str]:
     inspector = sa.inspect(op.get_bind())
+    if not inspector.has_table(table_name):
+        return set()
     return {
         constraint["name"]
         for constraint in inspector.get_check_constraints(table_name)
@@ -41,6 +43,8 @@ def constraint_names(table_name: str) -> set[str]:
 
 def upgrade() -> None:
     for table_name, constraints in CONSTRAINTS.items():
+        if not sa.inspect(op.get_bind()).has_table(table_name):
+            continue
         existing = constraint_names(table_name)
         missing = {
             name: condition for name, condition in constraints.items() if name not in existing
@@ -54,6 +58,8 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     for table_name, constraints in reversed(CONSTRAINTS.items()):
+        if not sa.inspect(op.get_bind()).has_table(table_name):
+            continue
         existing = constraint_names(table_name)
         removable = [name for name in constraints if name in existing]
         if not removable:

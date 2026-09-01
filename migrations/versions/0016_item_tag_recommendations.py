@@ -29,7 +29,11 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.CheckConstraint("generation_token >= 1", name="ck_item_tag_recommendations_token"),
         sa.ForeignKeyConstraint(["item_id"], ["items.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["job_id"], ["jobs.id"], ondelete="SET NULL"),
+        *(
+            [sa.ForeignKeyConstraint(["job_id"], ["jobs.id"], ondelete="SET NULL")]
+            if sa.inspect(op.get_bind()).has_table("jobs")
+            else []
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("item_id"),
     )

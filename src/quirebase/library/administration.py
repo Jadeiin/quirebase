@@ -85,7 +85,10 @@ async def get_storage_metrics(db: AsyncSession, admin: User) -> dict[str, Any]:
             attachments_bytes += (await store.head(attachment.object_key)).size
         else:
             missing_attachments += 1
-    thumbnails = [item async for item in store.iter_prefix("thumbnails/")]
+    thumbnail_keys = tuple(
+        revision.thumbnail_object_key for revision in revisions if revision.thumbnail_object_key
+    )
+    thumbnails = [await store.head(key) for key in thumbnail_keys if await store.exists(key)]
     thumbnails_count = len(thumbnails)
     thumbnails_bytes = sum(item.size for item in thumbnails)
 
@@ -126,12 +129,15 @@ async def _delete_item(
         (await db.scalars(select(Attachment.object_key).where(Attachment.item_id == item.id))).all()
     )
 
-    # Clean thumbnail if present
-    store = get_object_store()
-    for rev_id in (
-        await db.scalars(select(FileRevision.id).where(FileRevision.item_id == item.id))
-    ).all():
-        await store.delete(f"thumbnails/{rev_id}.png")
+    thumbnail_keys = tuple(
+        key
+        for key in (
+            await db.scalars(
+                select(FileRevision.thumbnail_object_key).where(FileRevision.item_id == item.id)
+            )
+        ).all()
+        if key
+    )
 
     # Remove from search index
     await search_index(db).remove_item(db, item.id)
@@ -153,6 +159,9 @@ async def _delete_item(
         detail={"title": title},
     )
     await db.commit()
+    store = get_object_store()
+    for key in thumbnail_keys:
+        await store.delete(key)
 
     # Clean object store files after a successful commit and a centralized reference check.
     if cleanup_keys:

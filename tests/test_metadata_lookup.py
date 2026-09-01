@@ -6,7 +6,7 @@ from sqlalchemy import select
 from test_http import authenticated_async_client
 
 from quirebase.core.config import get_settings
-from quirebase.models import AuditEvent, ImportBatch, Item, ItemTagRecommendation, Job, JobState
+from quirebase.models import AuditEvent, ImportBatch, Item, ItemTagRecommendation
 
 
 @pytest.mark.anyio
@@ -58,9 +58,7 @@ async def test_online_preview_uses_existing_confirmed_import_flow(
             select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == imported.id)
         )
         assert recommendation is not None
-        job = await db.get(Job, recommendation.job_id)
-        assert job is not None
-        assert job.state == JobState.pending
+        assert recommendation.workflow_id is not None
         assert await db.scalar(select(AuditEvent).where(AuditEvent.action == "metadata.lookup"))
     finally:
         await client.aclose()

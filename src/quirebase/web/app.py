@@ -26,6 +26,7 @@ from quirebase.web.views.projects import router as views_projects_router
 from quirebase.web.views.system import public_router as views_system_public_router
 from quirebase.web.views.system import router as views_system_router
 from quirebase.web.views.tools import router as views_tools_router
+from quirebase.web.views.workflows import router as views_workflows_router
 
 PACKAGE_DIR = Path(__file__).resolve().parent.parent
 
@@ -79,6 +80,7 @@ def create_app(*, mcp_session_factory: SessionFactory = AsyncSessionLocal) -> Fa
     app.include_router(views_items_router)
     app.include_router(views_discovery_router)
     app.include_router(views_tools_router)
+    app.include_router(views_workflows_router)
 
     # JSON / Binary APIs
     app.include_router(api_router)

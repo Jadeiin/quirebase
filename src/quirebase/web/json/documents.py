@@ -32,11 +32,20 @@ router = protected_router()
 RANGE_PATTERN = re.compile(r"bytes=(\d*)-(\d*)$")
 
 
-async def ranged_object(request: Request, metadata, etag: str, filename: str, object_get):
+def _etag_header(metadata) -> str:
+    value = metadata.etag or metadata.key
+    if (value.startswith('"') and value.endswith('"')) or (
+        value.startswith('W/"') and value.endswith('"')
+    ):
+        return value
+    return f'"{value}"'
+
+
+async def ranged_object(request: Request, metadata, filename: str, object_get):
     size = metadata.size
     headers = {
         "Accept-Ranges": "bytes",
-        "ETag": f'"{etag}"',
+        "ETag": _etag_header(metadata),
         "Content-Disposition": content_disposition(filename, "inline"),
     }
     value = request.headers.get("range")
@@ -185,7 +194,7 @@ async def pdf_content(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    metadata, original_name, sha256 = await head_revision_file(db, user, item_id, revision_id)
+    metadata, original_name, _media_type = await head_revision_file(db, user, item_id, revision_id)
 
     async def object_get(byte_range: tuple[int, int] | None):
         response, _name, _sha = await get_revision_file(
@@ -193,7 +202,7 @@ async def pdf_content(
         )
         return response
 
-    return await ranged_object(request, metadata, sha256, original_name, object_get)
+    return await ranged_object(request, metadata, original_name, object_get)
 
 
 @router.get("/documents/{item_id}/revisions/{revision_id}/thumbnail")

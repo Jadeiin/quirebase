@@ -6,7 +6,6 @@ import pytest
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
-from quirebase.core.errors import ValidationFailure
 from quirebase.documents.schemas import AnnotationCreate, SegmentInput
 from quirebase.models import (
     AnnotationKind,
@@ -15,15 +14,12 @@ from quirebase.models import (
     FileRevision,
     FileRevisionProcessingState,
     Item,
-    Job,
-    JobState,
     PdfAnnotation,
     Project,
     ProjectMember,
     ProjectRole,
     User,
 )
-from quirebase.pipeline.jobs import enqueue_job
 from quirebase.projects.members import (
     ProjectMemberConflict,
     add_project_member,
@@ -44,7 +40,6 @@ async def state_records(db):
     revision = FileRevision(
         item_id=item.id,
         object_key="state.pdf",
-        sha256="0" * 64,
         size=1,
         original_name="state.pdf",
         created_by=user.id,
@@ -57,10 +52,9 @@ async def state_records(db):
         kind=AnnotationKind.note,
         scope=AnnotationScope.private,
     )
-    job = Job(kind="pdf.inspect", payload="{}", idempotency_key="state:1")
-    db.add_all([annotation, job])
+    db.add(annotation)
     await db.commit()
-    return member, revision, annotation, job, project
+    return member, revision, annotation, project
 
 
 async def assert_rejected(db, statement: str, parameters: dict[str, str]) -> None:
@@ -72,27 +66,25 @@ async def assert_rejected(db, statement: str, parameters: dict[str, str]) -> Non
 @pytest.mark.anyio
 async def test_closed_domain_states_are_loaded_as_domain_types(async_db):
     db = async_db
-    member, revision, annotation, job, _project = await state_records(db)
-    keys = (member.project_id, member.user_id, revision.id, annotation.id, job.id)
+    member, revision, annotation, _project = await state_records(db)
+    keys = (member.project_id, member.user_id, revision.id, annotation.id)
 
     db.expunge_all()
 
     loaded_member = await db.get(ProjectMember, keys[:2])
     loaded_revision = await db.get(FileRevision, keys[2])
     loaded_annotation = await db.get(PdfAnnotation, keys[3])
-    loaded_job = await db.get(Job, keys[4])
     assert loaded_member is not None and loaded_member.role is ProjectRole.owner
     assert loaded_revision is not None
     assert loaded_revision.processing_state is FileRevisionProcessingState.pending
     assert loaded_annotation is not None and loaded_annotation.kind is AnnotationKind.note
     assert loaded_annotation.scope is AnnotationScope.private
-    assert loaded_job is not None and loaded_job.state is JobState.pending
 
 
 @pytest.mark.anyio
 async def test_underline_is_an_allowed_annotation_kind(async_db):
     db = async_db
-    _member, _revision, annotation, _job, _project = await state_records(db)
+    _member, _revision, annotation, _project = await state_records(db)
     annotation_id = annotation.id
 
     await db.execute(
@@ -155,11 +147,10 @@ async def test_project_membership_preserves_an_owner_and_returns_domain_roles(as
 
 
 async def assert_closed_state_constraints(db) -> None:
-    member, revision, annotation, job, project = await state_records(db)
+    member, revision, annotation, project = await state_records(db)
     member_key = {"project_id": member.project_id, "user_id": member.user_id}
     revision_id = revision.id
     annotation_id = annotation.id
-    job_id = job.id
     project_id = project.id
 
     await assert_rejected(
@@ -192,28 +183,8 @@ async def assert_closed_state_constraints(db) -> None:
         "UPDATE pdf_annotations SET scope = 'private', project_id = :project_id WHERE id = :id",
         {"project_id": project_id, "id": annotation_id},
     )
-    await assert_rejected(
-        db,
-        "UPDATE jobs SET kind = '' WHERE id = :id",
-        {"id": job_id},
-    )
-    await assert_rejected(
-        db,
-        "UPDATE jobs SET state = :value WHERE id = :id",
-        {"value": "cancelled", "id": job_id},
-    )
 
 
 @pytest.mark.anyio
 async def test_database_rejects_invalid_closed_states_and_scope_combinations(async_db):
     await assert_closed_state_constraints(async_db)
-
-
-@pytest.mark.anyio
-async def test_enqueue_job_accepts_extensible_kinds_but_rejects_invalid_shape(async_db):
-    db = async_db
-    job = await enqueue_job(db, "custom.not_registered", json.loads("{}"))
-    assert job.kind == "custom.not_registered"
-
-    with pytest.raises(ValidationFailure, match="1 to 40"):
-        await enqueue_job(db, " ", {})

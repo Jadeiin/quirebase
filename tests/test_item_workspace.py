@@ -309,7 +309,6 @@ async def test_item_summary_reports_exact_activity_counts(
             Attachment(
                 item_id=item.id,
                 object_key="attachments/supplement.txt",
-                sha256="a" * 64,
                 size=12,
                 mime_type="text/plain",
                 original_name="supplement.txt",

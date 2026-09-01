@@ -154,7 +154,6 @@ async def test_rescan_pdf_doi(async_db):
     revision = FileRevision(
         item_id=item.id,
         object_key="rev-1",
-        sha256="abc",
         size=1024,
         original_name="paper.pdf",
         full_text="Published in Nature. doi: 10.1038/s41586-020-2649-2. All rights reserved.",

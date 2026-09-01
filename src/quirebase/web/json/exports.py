@@ -87,22 +87,25 @@ async def create_export(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    job = await create_export_job(db, user, item_id, data)
-    return JSONResponse({"id": job.id, "state": job.state}, status_code=202)
+    workflow_id = await create_export_job(db, user, item_id, data)
+    return JSONResponse(
+        {"id": workflow_id, "state": "pending", "status_url": f"/annotation-exports/{workflow_id}"},
+        status_code=202,
+    )
 
 
-@router.get("/annotation-exports/{job_id}")
+@router.get("/annotation-exports/{workflow_id}")
 async def export_status(
-    job_id: str, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)
+    workflow_id: str, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)
 ):
-    return await get_export_status(db, user, job_id)
+    return await get_export_status(db, user, workflow_id)
 
 
-@router.get("/annotation-exports/{job_id}/content")
+@router.get("/annotation-exports/{workflow_id}/content")
 async def export_content(
-    job_id: str, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)
+    workflow_id: str, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)
 ):
-    response = await get_export_file(db, user, job_id)
+    response = await get_export_file(db, user, workflow_id)
     return StreamingResponse(
         response.body,
         media_type="application/pdf",

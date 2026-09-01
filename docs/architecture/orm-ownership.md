@@ -28,7 +28,6 @@ The architecture suite keeps this list complete when mappings are added or remov
 | Library | `Item`, `Author`, `ItemAuthor`, `ItemIdentifier`, `ItemRead`, `Tag`, `ItemTag`, `DiscussionMessage` |
 | Projects | `Project`, `ProjectMember`, `ProjectItem` |
 | Documents | `FileRevision`, `Attachment`, `PdfAnnotation`, `PdfAnnotationSegment` |
-| Pipeline | `Job` |
 | Discovery | `ImportBatch`, `CitationStyle` |
 | Audit | `AuditEvent` |
 | Operations | `SystemSetting` |

@@ -7,7 +7,7 @@
     <div>
       <p class="eyebrow">{{ _('System workspace') }}</p>
       <h1>{{ _('Administration') }}</h1>
-      <p class="item-byline">{{ _('Manage access, global library items, audit events, background jobs, runtime settings and maintenance.') }}</p>
+      <p class="item-byline">{{ _('Manage access, global library items, audit events, durable workflows, runtime settings and maintenance.') }}</p>
     </div>
     <div class="item-header-actions">
       <a class="button-link secondary-button" href="/metrics">{{ _('Metrics') }}</a>
@@ -33,9 +33,9 @@
       <span>📜</span>
       <span><strong>{{ _('Audit Log') }}</strong><small>{{ _('Security and change log') }}</small></span>
     </a>
-    <a href="/admin/jobs" {% if admin_tab == 'jobs' %}aria-current="page"{% endif %}>
+    <a href="/admin/workflows" {% if admin_tab == 'workflows' %}aria-current="page"{% endif %}>
       <span>⚡</span>
-      <span><strong>{{ _('Background Jobs') }}</strong><small>{{ _('Processing pipeline') }}</small></span>
+      <span><strong>{{ _('Workflows') }}</strong><small>{{ _('Durable operations') }}</small></span>
     </a>
     <a href="/admin/settings" {% if admin_tab == 'settings' %}aria-current="page"{% endif %}>
       <span>⚙</span>
@@ -67,8 +67,8 @@
         <span>{{ _('Total storage') }}</span>
       </section>
       <section class="panel">
-        <strong>{{ failed_jobs|length }}</strong>
-        <span>{{ _('Failed jobs') }}</span>
+        <strong>{{ failed_workflows|length }}</strong>
+        <span>{{ _('Failed workflows') }}</span>
       </section>
     </div>
 
@@ -356,11 +356,11 @@
     </section>
 
     {# ================================================================= #}
-    {# 5. Background Jobs Tab                                           #}
+    {# 5. Durable Workflows Tab                                         #}
     {# ================================================================= #}
-    {% elif admin_tab == 'jobs' %}
+    {% elif admin_tab == 'workflows' %}
     <section class="panel filter-panel" style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
-      <form method="get" action="/admin/jobs" style="display: flex; gap: 1rem; align-items: center;">
+      <form method="get" action="/admin/workflows" style="display: flex; gap: 1rem; align-items: center;">
         <label style="margin: 0; display: flex; gap: .5rem; align-items: center;">
           {{ _('Filter by state') }}:
           <select name="state" onchange="this.form.submit()">
@@ -372,43 +372,33 @@
           </select>
         </label>
       </form>
-      {% if failed_jobs %}
-      <form method="post" action="/admin/jobs/retry-all" style="margin: 0;">{{ csrf_field(csrf) }}
-        <button class="compact-button">{{ _('Retry all failed jobs ({count})', count=failed_jobs|length) }}</button>
-      </form>
-      {% endif %}
     </section>
 
     <section class="panel">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">{{ _('Pipeline monitor') }}</p>
-          <h2>{{ _('Recent background jobs') }}</h2>
+          <p class="eyebrow">{{ _('Workflow monitor') }}</p>
+          <h2>{{ _('Recent durable workflows') }}</h2>
         </div>
       </div>
       <div class="admin-list">
-        {% for job in jobs %}
+        {% for workflow in workflows %}
         <article style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem; align-items: center;">
           <div>
             <div style="display: flex; gap: .5rem; align-items: center;">
-              <strong>{{ job.kind }}</strong>
-              <span class="imported-badge" style="{% if job.state == 'failed' %}background: #fce8e6; color: var(--danger);{% elif job.state == 'running' %}background: #e8f0fe; color: #1a73e8;{% endif %}">{{ job.state }}</span>
+              <strong>{{ workflow.name }}</strong>
+              <span class="imported-badge" style="{% if workflow.state == 'failed' %}background: #fce8e6; color: var(--danger);{% elif workflow.state == 'running' %}background: #e8f0fe; color: #1a73e8;{% endif %}">{{ workflow.state }}</span>
             </div>
-            <small>{{ _('Attempts') }}: {{ job.attempts }} · {{ _('Created') }}: {{ job.created_at.strftime('%Y-%m-%d %H:%M:%S') }}{% if job.error %} · <span style="color: var(--danger);">{{ job.error }}</span>{% endif %}</small>
+            <small>{{ _('Created') }}: {{ workflow.created_at.strftime('%Y-%m-%d %H:%M:%S') if workflow.created_at else '—' }}{% if workflow.error %} · <span style="color: var(--danger);">{{ workflow.error }}</span>{% endif %}</small>
           </div>
           <div style="display: flex; gap: .5rem; align-items: center;">
-            {% if job.kind == 'system.backup' and job.state == 'succeeded' %}
-            <a class="button-link secondary-button compact-button" href="/admin/maintenance/backups/{{ job.id }}/download">{{ _('Download') }}</a>
-            {% endif %}
-            {% if job.state == 'failed' %}
-            <form method="post" action="/admin/jobs/{{ job.id }}/retry">{{ csrf_field(csrf) }}
-              <button class="secondary-button compact-button">{{ _('Retry') }}</button>
-            </form>
+            {% if workflow.name == 'operations.backup' and workflow.state == 'succeeded' %}
+            <a class="button-link secondary-button compact-button" href="/admin/maintenance/backups/{{ workflow.id }}/download">{{ _('Download') }}</a>
             {% endif %}
           </div>
         </article>
         {% else %}
-        <div class="empty-state">{{ _('No background jobs.') }}</div>
+        <div class="empty-state">{{ _('No durable workflows.') }}</div>
         {% endfor %}
       </div>
     </section>
@@ -478,7 +468,7 @@
           <h2>{{ _('Full-Text Search Re-index') }}</h2>
           <p>{{ _('Rebuild SQLite FTS5 / PostgreSQL tsvector full-text index across all items and extracted PDF text.') }}</p>
           <form method="post" action="/admin/maintenance/reindex" style="margin-top: .8rem;">{{ csrf_field(csrf) }}
-            <button class="secondary-button compact-button">{{ _('Dispatch Re-index Job') }}</button>
+            <button class="secondary-button compact-button">{{ _('Dispatch Re-index Workflow') }}</button>
           </form>
         </div>
       </section>
@@ -489,7 +479,7 @@
           <h2>{{ _('Object Store Integrity Check') }}</h2>
           <p>{{ _('Verify existence and SHA-256 checksums of all PDF files and attachments against the database.') }}</p>
           <form method="post" action="/admin/maintenance/check-objects" style="margin-top: .8rem;">{{ csrf_field(csrf) }}
-            <button class="secondary-button compact-button">{{ _('Dispatch Check Job') }}</button>
+            <button class="secondary-button compact-button">{{ _('Dispatch Check Workflow') }}</button>
           </form>
         </div>
       </section>
@@ -500,7 +490,7 @@
           <h2>{{ _('Download Full Backup') }}</h2>
           <p>{{ _('Generate a complete ZIP archive containing database dump, manifest, and all storage objects.') }}</p>
           <form method="post" action="/admin/maintenance/backup" style="margin-top: .8rem;">{{ csrf_field(csrf) }}
-            <button class="secondary-button compact-button">{{ _('Dispatch Backup Job') }}</button>
+            <button class="secondary-button compact-button">{{ _('Dispatch Backup Workflow') }}</button>
           </form>
         </div>
       </section>
@@ -511,33 +501,33 @@
           <h2>{{ _('Rebuild Tag Recommendations') }}</h2>
           <p>{{ _('Queue fresh recommendations for every Item after an engine or local model change.') }}</p>
           <form method="post" action="/admin/maintenance/recommend-tags" style="margin-top: .8rem;">{{ csrf_field(csrf) }}
-            <button class="secondary-button compact-button">{{ _('Dispatch Recommendation Jobs') }}</button>
+            <button class="secondary-button compact-button">{{ _('Dispatch Recommendation Workflows') }}</button>
           </form>
         </div>
       </section>
     </div>
 
-    {% if system_jobs %}
+    {% if system_workflows %}
     <section class="panel" style="margin-top: 1.5rem;">
       <div class="section-heading">
         <div>
           <p class="eyebrow">{{ _('History') }}</p>
-          <h2>{{ _('Recent system maintenance jobs') }}</h2>
+          <h2>{{ _('Recent maintenance workflows') }}</h2>
         </div>
       </div>
       <div class="admin-list">
-        {% for job in system_jobs %}
+        {% for workflow in system_workflows %}
         <article style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem; align-items: center;">
           <div>
             <div style="display: flex; gap: .5rem; align-items: center;">
-              <strong>{{ job.kind }}</strong>
-              <span class="imported-badge" style="{% if job.state == 'failed' %}background: #fce8e6; color: var(--danger);{% elif job.state == 'running' %}background: #e8f0fe; color: #1a73e8;{% endif %}">{{ job.state }}</span>
+              <strong>{{ workflow.name }}</strong>
+              <span class="imported-badge" style="{% if workflow.state == 'failed' %}background: #fce8e6; color: var(--danger);{% elif workflow.state == 'running' %}background: #e8f0fe; color: #1a73e8;{% endif %}">{{ workflow.state }}</span>
             </div>
-            <small>{{ _('Created') }}: {{ job.created_at.strftime('%Y-%m-%d %H:%M:%S') }}{% if job.error %} · <span style="color: var(--danger);">{{ job.error }}</span>{% endif %}</small>
+            <small>{{ _('Created') }}: {{ workflow.created_at.strftime('%Y-%m-%d %H:%M:%S') if workflow.created_at else '—' }}{% if workflow.error %} · <span style="color: var(--danger);">{{ workflow.error }}</span>{% endif %}</small>
           </div>
           <div>
-            {% if job.kind == 'system.backup' and job.state == 'succeeded' %}
-            <a class="button-link secondary-button compact-button" href="/admin/maintenance/backups/{{ job.id }}/download">{{ _('Download') }}</a>
+            {% if workflow.name == 'operations.backup' and workflow.state == 'succeeded' %}
+            <a class="button-link secondary-button compact-button" href="/admin/maintenance/backups/{{ workflow.id }}/download">{{ _('Download') }}</a>
             {% endif %}
           </div>
         </article>

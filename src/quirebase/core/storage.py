@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-import asyncio
-import hashlib
 import os
+import re
 import tempfile
 from collections.abc import AsyncIterable, AsyncIterator
 from contextlib import asynccontextmanager, suppress
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-from uuid import uuid4
+from uuid import UUID
 
 import anyio
-from filelock import FileLock, Timeout
 from obstore.exceptions import BaseError as ObstoreError
 from obstore.store import LocalStore, S3Store
 
@@ -26,6 +25,41 @@ if TYPE_CHECKING:
     from obstore.store import ObjectStore as ObstoreDataPlane
 
 type ObjectSource = Path | bytes | AsyncIterable[bytes]
+
+
+class ObjectSuffix(StrEnum):
+    PDF = ".pdf"
+    BINARY = ".bin"
+    PNG = ".png"
+
+
+_MANAGED_OBJECT_RE = re.compile(
+    r"^(?P<a>[0-9a-f]{2})/(?P<b>[0-9a-f]{2})/(?P<id>[0-9a-f]{32})(?P<suffix>\.pdf|\.bin|\.png)$"
+)
+_LEGACY_CAS_RE = re.compile(
+    r"^(?:[0-9a-f]{2}/[0-9a-f]{2}/)?(?P<digest>[0-9a-f]{64})(?:\.[a-z0-9]+)?$"
+)
+
+
+def object_key(object_id: UUID, suffix: ObjectSuffix) -> str:
+    """Return the only supported key layout for a managed object."""
+    encoded = object_id.hex
+    return f"{encoded[:2]}/{encoded[2:4]}/{encoded}{suffix.value}"
+
+
+def managed_object_id(key: str) -> UUID | None:
+    match = _MANAGED_OBJECT_RE.fullmatch(key)
+    if match is None or key[:2] != match["id"][:2] or key[3:5] != match["id"][2:4]:
+        return None
+    return UUID(hex=match["id"])
+
+
+def is_managed_object_key(key: str) -> bool:
+    return managed_object_id(key) is not None
+
+
+def is_legacy_cas_key(key: str) -> bool:
+    return _LEGACY_CAS_RE.fullmatch(key) is not None and not is_managed_object_key(key)
 
 
 def _temporary_path(*, prefix: str, suffix: str = "") -> Path:
@@ -49,30 +83,10 @@ class ObjectResponse:
     body: AsyncIterable[bytes]
 
 
-@dataclass
-class _LocalLease:
-    marker: Path
-    lock: FileLock = field(repr=False)
-    released: bool = field(default=False, init=False)
-
-    def release(self) -> None:
-        if self.released:
-            return
-        self.lock.release()
-        self.marker.unlink(missing_ok=True)
-        self.released = True
-
-
-@dataclass
-class StagedObject:
+@dataclass(frozen=True)
+class StoredObject:
     key: str
-    sha256: str
     size: int
-    _lease: _LocalLease | None = field(default=None, repr=False)
-
-    async def release(self) -> None:
-        if self._lease is not None:
-            await asyncio.to_thread(self._lease.release)
 
 
 def _metadata(value: ObjectMeta) -> ObjectMetadata:
@@ -91,42 +105,6 @@ async def _path_chunks(path: Path, chunk_size: int = 1024 * 1024) -> AsyncIterat
             yield chunk
     finally:
         await source.aclose()
-
-
-def _consume_current_cancellation() -> None:
-    task = asyncio.current_task()
-    if task is not None:
-        task.uncancel()
-
-
-async def _finish_task_despite_cancellation[Result](task: asyncio.Task[Result]) -> Result:
-    while True:
-        try:
-            return await asyncio.shield(task)
-        except asyncio.CancelledError:
-            _consume_current_cancellation()
-
-
-async def _acquire_cleanup_lock(lock: FileLock) -> None:
-    """Acquire an independent file lock without blocking the event loop indefinitely."""
-    while True:
-        acquisition = asyncio.create_task(asyncio.to_thread(lock.acquire, timeout=0.1))
-        try:
-            await asyncio.shield(acquisition)
-        except asyncio.CancelledError:
-            _consume_current_cancellation()
-            try:
-                await _finish_task_despite_cancellation(acquisition)
-            except Timeout:
-                pass
-            else:
-                release = asyncio.create_task(asyncio.to_thread(lock.release))
-                await _finish_task_despite_cancellation(release)
-            raise
-        except Timeout:
-            await asyncio.sleep(0)
-        else:
-            return
 
 
 class ObjectStore:
@@ -162,58 +140,44 @@ class ObjectStore:
         return self._local_root is not None
 
     async def put(self, key: str, source: ObjectSource) -> ObjectMetadata:
+        """Write an explicit non-business key (used by probes and migrations)."""
         self._validate_key(key)
         await self._store.put_async(key, source, mode="overwrite")
         return _metadata(await self._store.head_async(key))
 
-    async def put_cas(
+    async def put_object(
         self,
+        object_id: UUID,
+        suffix: ObjectSuffix,
         source: ObjectSource,
         *,
-        suffix: str,
         max_bytes: int,
         required_prefix: bytes | None = None,
-    ) -> StagedObject:
-        temporary = _temporary_path(prefix="quirebase-cas-")
-        digest = hashlib.sha256()
+    ) -> StoredObject:
+        """Stream bytes directly to a preallocated owned key."""
+        key = object_key(object_id, suffix)
         size = 0
         prefix = bytearray()
-        lease: _LocalLease | None = None
+
+        async def checked_chunks() -> AsyncIterator[bytes]:
+            nonlocal size
+            async for chunk in self._source_chunks(source):
+                size += len(chunk)
+                if size > max_bytes:
+                    raise ValueError("file exceeds configured size limit")
+                if required_prefix is not None and len(prefix) < len(required_prefix):
+                    prefix.extend(chunk[: len(required_prefix) - len(prefix)])
+                yield chunk
+
         try:
-            async with await anyio.open_file(temporary, "wb") as target:
-                async for chunk in self._source_chunks(source):
-                    size += len(chunk)
-                    if size > max_bytes:
-                        raise ValueError("file exceeds configured size limit")
-                    if required_prefix is not None and len(prefix) < len(required_prefix):
-                        prefix.extend(chunk[: len(required_prefix) - len(prefix)])
-                    digest.update(chunk)
-                    await target.write(chunk)
+            await self._store.put_async(key, checked_chunks(), mode="overwrite")
             if required_prefix is not None and bytes(prefix) != required_prefix:
                 raise ValueError("file content does not match the required format")
-            sha256 = digest.hexdigest()
-            key = f"{sha256[:2]}/{sha256[2:4]}/{sha256}{suffix}"
-            if self._local_root is not None:
-                cleanup_lock = self._cleanup_lock(key)
-                await _acquire_cleanup_lock(cleanup_lock)
-                try:
-                    lease = await asyncio.to_thread(self._acquire_local_lease, key)
-                    await self._store.put_async(key, temporary, mode="overwrite")
-                finally:
-                    await asyncio.to_thread(cleanup_lock.release)
-            else:
-                # CAS objects are immutable. Identical concurrent uploads may atomically
-                # overwrite the same bytes so multipart remains available.
-                # Size and digest are already known, so a second HEAD would only add a
-                # failure window after the atomic publish.
-                await self._store.put_async(key, temporary, mode="overwrite")
-            return StagedObject(key=key, sha256=sha256, size=size, _lease=lease)
+            return StoredObject(key=key, size=size)
         except BaseException:
-            if lease is not None:
-                await asyncio.to_thread(lease.release)
+            with suppress(Exception):
+                await self._store.delete_async(key)
             raise
-        finally:
-            await asyncio.shield(asyncio.to_thread(temporary.unlink, missing_ok=True))
 
     async def head(self, key: str) -> ObjectMetadata:
         self._validate_key(key)
@@ -241,48 +205,29 @@ class ObjectStore:
             options = {"range": byte_range}
         result = await self._store.get_async(key, options=options)
         body = result.stream(min_chunk_size=chunk_size) if chunk_size else result
-        return ObjectResponse(
-            metadata=_metadata(result.meta),
-            byte_range=result.range,
-            body=body,
-        )
+        return ObjectResponse(metadata=_metadata(result.meta), byte_range=result.range, body=body)
 
     async def get_range(
         self, key: str, start: int, end: int, *, chunk_size: int | None = None
     ) -> ObjectResponse:
-        """Read the half-open byte range ``[start, end)``."""
         if start < 0 or end <= start:
             raise ValueError("invalid object range")
         return await self.get(key, byte_range=(start, end), chunk_size=chunk_size)
 
     async def delete(self, key: str) -> bool:
         self._validate_key(key)
-        if self._local_root is None:
-            try:
-                await self._store.delete_async(key)
-            except (FileNotFoundError, ObstoreError) as error:
-                if not (
-                    isinstance(error, FileNotFoundError) or type(error).__name__ == "NotFoundError"
-                ):
-                    raise
-            return True
-        cleanup_lock = self._cleanup_lock(key)
-        await _acquire_cleanup_lock(cleanup_lock)
-        try:
-            if await asyncio.to_thread(self._has_active_local_lease, key):
-                return False
-            with suppress(FileNotFoundError):
-                await self._store.delete_async(key)
-            return True
-        finally:
-            await asyncio.to_thread(cleanup_lock.release)
+        if not await self.exists(key):
+            return False
+        with suppress(FileNotFoundError):
+            await self._store.delete_async(key)
+        return True
 
     @asynccontextmanager
     async def materialize(self, key: str) -> AsyncIterator[Path]:
         self._validate_key(key)
         if self._local_root is not None:
             path = self._local_path(key)
-            if not await asyncio.to_thread(path.is_file):
+            if not await anyio.to_thread.run_sync(path.is_file):
                 raise FileNotFoundError(key)
             yield path
             return
@@ -294,7 +239,7 @@ class ObjectStore:
                     await target.write(chunk)
             yield temporary
         finally:
-            await asyncio.shield(asyncio.to_thread(temporary.unlink, missing_ok=True))
+            await anyio.to_thread.run_sync(lambda: temporary.unlink(missing_ok=True))
 
     async def iter_prefix(self, prefix: str) -> AsyncIterator[ObjectMetadata]:
         async for batch in self._store.list(prefix.strip("/") or None):
@@ -323,47 +268,6 @@ class ObjectStore:
         if self._local_root not in candidate.parents:
             raise ValueError("invalid object key")
         return candidate
-
-    def _lock_root(self) -> Path:
-        assert self._local_root is not None
-        return self._local_root / ".locks"
-
-    @staticmethod
-    def _lock_name(key: str) -> str:
-        return hashlib.sha256(key.encode()).hexdigest()
-
-    def _cleanup_lock(self, key: str) -> FileLock:
-        self._validate_key(key)
-        root = self._lock_root()
-        root.mkdir(parents=True, exist_ok=True)
-        return FileLock(
-            root / f"{self._lock_name(key)[:2]}.cleanup.lock",
-            thread_local=False,
-        )
-
-    def _acquire_local_lease(self, key: str) -> _LocalLease:
-        root = self._lock_root()
-        root.mkdir(parents=True, exist_ok=True)
-        marker = root / f"{self._lock_name(key)}.{uuid4().hex}.lease.lock"
-        lock = FileLock(marker, thread_local=False)
-        lock.acquire()
-        return _LocalLease(marker, lock)
-
-    def _has_active_local_lease(self, key: str) -> bool:
-        root = self._lock_root()
-        if not root.is_dir():
-            return False
-        active = False
-        for marker in root.glob(f"{self._lock_name(key)}.*.lease.lock"):
-            probe = FileLock(marker, thread_local=False)
-            try:
-                probe.acquire(blocking=False)
-            except Timeout:
-                active = True
-            else:
-                probe.release()
-                marker.unlink(missing_ok=True)
-        return active
 
 
 @lru_cache

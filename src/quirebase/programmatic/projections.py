@@ -83,7 +83,6 @@ def document_list_view(item_id: str, workspace: Any) -> DocumentListView:
             original_name=row.original_name,
             mime_type=row.mime_type,
             size=row.size,
-            sha256=row.sha256,
             created_at=row.created_at.isoformat(),
             page_count=row.page_count,
             processing_state=row.processing_state,
@@ -97,7 +96,6 @@ def document_list_view(item_id: str, workspace: Any) -> DocumentListView:
             original_name=row.original_name,
             mime_type=row.mime_type,
             size=row.size,
-            sha256=row.sha256,
             created_at=row.created_at.isoformat(),
         )
         for row in workspace.attachments

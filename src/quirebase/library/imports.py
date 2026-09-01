@@ -23,6 +23,7 @@ from quirebase.core.errors import (
     ValidationFailure,
 )
 from quirebase.core.storage import ObjectSource, get_object_store
+from quirebase.documents.pdf import extract_doi
 from quirebase.documents.revisions import (
     StagedPdf,
     attach_staged_pdf,
@@ -33,7 +34,6 @@ from quirebase.library.activity import get_accessible_item_identifiers
 from quirebase.library.citations import format_csl_export, format_standard_export
 from quirebase.library.providers import candidate_record_values, lookup_candidate
 from quirebase.models import ImportBatch, Item, ItemAuthor, User
-from quirebase.pipeline.inspection import extract_doi
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
@@ -245,7 +245,6 @@ async def stage_pdf_import_batch(
                 rec_dict.setdefault("doi", detected_doi)
                 rec_dict["_pdf"] = {
                     "object_key": staged.object_key,
-                    "sha256": staged.sha256,
                     "size": staged.size,
                     "original_name": staged.original_name,
                     "detected_doi": detected_doi,
@@ -345,7 +344,6 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
                 item,
                 (
                     pdf["object_key"],
-                    pdf["sha256"],
                     pdf["size"],
                     pdf["original_name"],
                 ),

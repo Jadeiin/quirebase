@@ -10,7 +10,7 @@ from sqlalchemy import select
 from quirebase.core.config import get_settings
 from quirebase.core.crypto import token_hash
 from quirebase.core.database import get_db
-from quirebase.models import Job, LoginSession, SystemSetting, User
+from quirebase.models import LoginSession, SystemSetting, User
 from quirebase.web.app import app
 
 
@@ -89,7 +89,7 @@ async def test_admin_pages_accessible_by_admin(async_db, tmp_path, monkeypatch):
         "/admin/users",
         "/admin/items",
         "/admin/audit",
-        "/admin/jobs",
+        "/admin/workflows",
         "/admin/settings",
         "/admin/maintenance",
     ]:
@@ -97,6 +97,18 @@ async def test_admin_pages_accessible_by_admin(async_db, tmp_path, monkeypatch):
         assert res.status_code == 200
         assert "Administration" in res.text or "Quirebase" in res.text
     await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_admin_workflow_filter_rejects_unknown_state(async_db, tmp_path, monkeypatch):
+    client, _user, _login = await admin_client(async_db, tmp_path, monkeypatch)
+    try:
+        response = await client.get("/admin/workflows", params={"state": "unknown"})
+
+        assert response.status_code == 422
+        assert "unknown workflow state" in response.text
+    finally:
+        await client.aclose()
 
 
 @pytest.mark.anyio
@@ -172,7 +184,7 @@ async def test_admin_settings_endpoint(async_db, tmp_path, monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_admin_maintenance_triggers(async_db, tmp_path, monkeypatch):
+async def test_admin_maintenance_triggers(async_db, tmp_path, monkeypatch, fake_durable_operations):
     db = async_db
     client, _admin, login = await admin_client(db, tmp_path, monkeypatch)
 
@@ -183,10 +195,7 @@ async def test_admin_maintenance_triggers(async_db, tmp_path, monkeypatch):
         follow_redirects=False,
     )
     assert res.status_code == 303
-    assert res.headers["location"] == "/admin/jobs"
-
-    reindex_job = await db.scalar(select(Job).where(Job.kind == "system.reindex_all"))
-    assert reindex_job is not None
+    assert res.headers["location"] == "/admin/maintenance"
 
     # Check objects trigger
     res = await client.post(
@@ -195,10 +204,7 @@ async def test_admin_maintenance_triggers(async_db, tmp_path, monkeypatch):
         follow_redirects=False,
     )
     assert res.status_code == 303
-    assert res.headers["location"] == "/admin/jobs"
-
-    check_job = await db.scalar(select(Job).where(Job.kind == "system.check_objects"))
-    assert check_job is not None
+    assert res.headers["location"] == "/admin/maintenance"
 
     # Backup trigger
     res = await client.post(
@@ -207,18 +213,10 @@ async def test_admin_maintenance_triggers(async_db, tmp_path, monkeypatch):
         follow_redirects=False,
     )
     assert res.status_code == 303
-    assert res.headers["location"] == "/admin/jobs"
-
-    backup_job = await db.scalar(select(Job).where(Job.kind == "system.backup"))
-    assert backup_job is not None
-
-    # Complete the job and verify download
-    from quirebase.pipeline import run_job
-
-    await run_job(db, backup_job)
-    assert backup_job.state == "succeeded"
-
-    download_res = await client.get(f"/admin/maintenance/backups/{backup_job.id}/download")
-    assert download_res.status_code == 200
-    assert download_res.headers["content-type"] == "application/zip"
+    assert res.headers["location"] == "/admin/maintenance"
+    assert {row.name for row in await fake_durable_operations.list()} == {
+        "operations.reindex_all",
+        "operations.check_objects",
+        "operations.backup",
+    }
     await client.aclose()

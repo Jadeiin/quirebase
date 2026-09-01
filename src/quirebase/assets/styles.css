@@ -663,3 +663,18 @@ label { display: grid; gap: .3rem; color: #46514c; font-size: .82rem; font-weigh
 .reset-preferences-btn:hover { color: var(--ink); }
 .revision-select-group { display: flex; flex-direction: column; gap: .35rem; margin-block: .4rem; padding: .4rem .6rem; background: var(--surface-soft); border-radius: .4rem; border: 1px solid var(--line); max-height: 120px; overflow-y: auto; }
 .revision-select-label { display: flex; align-items: center; gap: .45rem; font-size: .85rem; cursor: pointer; margin: 0; }
+
+/* --- Durable upload progress --- */
+.workflow-modal-backdrop { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: 1rem; background: rgb(15 23 42 / 48%); backdrop-filter: blur(3px); }
+.workflow-modal { width: min(28rem, 100%); padding: 2rem; border: 1px solid var(--line); border-radius: .9rem; background: var(--surface); box-shadow: 0 24px 70px rgb(15 23 42 / 28%); text-align: center; }
+.workflow-modal h2 { margin-block: .25rem .65rem; }
+.workflow-modal p { color: var(--muted); }
+.workflow-spinner, .workflow-failure-mark { display: grid; place-items: center; width: 3.25rem; height: 3.25rem; margin: 0 auto 1rem; border-radius: 50%; }
+.workflow-spinner { border: .3rem solid var(--accent-soft); border-top-color: var(--accent); animation: workflow-spin .8s linear infinite; }
+.workflow-failure-mark { color: #991b1b; background: #fee2e2; font-size: 1.6rem; font-weight: 800; }
+.workflow-progress-track { height: .35rem; margin-block: 1.25rem; overflow: hidden; border-radius: 999px; background: var(--surface-soft); }
+.workflow-progress-track span { display: block; width: 38%; height: 100%; border-radius: inherit; background: var(--accent); animation: workflow-progress 1.25s ease-in-out infinite; }
+.workflow-modal-actions { display: flex; justify-content: center; align-items: center; gap: 1rem; margin-top: 1.25rem; }
+@keyframes workflow-spin { to { transform: rotate(360deg); } }
+@keyframes workflow-progress { from { transform: translateX(-110%); } to { transform: translateX(275%); } }
+@media (prefers-reduced-motion: reduce) { .workflow-spinner, .workflow-progress-track span { animation-duration: 2.5s; } }

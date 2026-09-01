@@ -24,7 +24,6 @@ EXPECTED_TABLES = {
     "item_tags",
     "item_tag_recommendations",
     "items",
-    "jobs",
     "login_sessions",
     "login_throttles",
     "pdf_annotation_segments",

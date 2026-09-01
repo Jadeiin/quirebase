@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from uuid import uuid4
 
 import typer
 import uvicorn
@@ -20,13 +21,26 @@ from .core.config import get_settings
 from .core.crypto import hash_password_async
 from .core.database import AsyncSessionLocal, engine
 from .core.storage import get_object_store
+from .core.workflows import (
+    initialize_durable_operations,
+    launch_worker,
+    recover_workflows,
+    verify_durable_operations,
+)
 from .library.tag_recommendations import validate_engine_configuration
 from .models import User
 from .operations import check_objects, create_backup, restore_backup, verify_backup
-from .pipeline import run_forever
+from .operations.maintenance import run_periodic_maintenance
+from .operations.object_migration import migrate_legacy_objects
 from .search import reindex_all
 
 app = typer.Typer(help="Quirebase administration")
+
+
+def _register_workflows() -> None:
+    import quirebase.documents.workflows  # ruff: ignore[unused-import]
+    import quirebase.library.workflows  # ruff: ignore[unused-import]
+    import quirebase.operations.workflows  # ruff: ignore[unused-import]
 
 
 @app.command("serve")
@@ -36,7 +50,14 @@ def serve(host: str = "127.0.0.1", port: int = 9060, reload: bool = False):
 
 @app.command("worker")
 def worker():
-    asyncio.run(run_forever())
+    _register_workflows()
+    asyncio.run(_run_worker())
+
+
+async def _run_worker() -> None:
+    async with asyncio.TaskGroup() as tasks:
+        tasks.create_task(launch_worker())
+        tasks.create_task(run_periodic_maintenance())
 
 
 @app.command("init-db")
@@ -48,6 +69,7 @@ def init_db():
     alembic = Config()
     alembic.set_main_option("script_location", str(migrations))
     command.upgrade(alembic, "head")
+    asyncio.run(initialize_durable_operations())
     settings = get_settings()
     if settings.object_store == "local":
         settings.object_dir.mkdir(parents=True, exist_ok=True)
@@ -155,16 +177,24 @@ def doctor():
 
         async def probe_object_store() -> None:
             store = get_object_store()
-            key = ".doctor/write-test"
-            await store.put(key, b"ok")
-            await store.head(key)
-            await store.delete(key)
+            key = f".doctor/{uuid4().hex}"
+            try:
+                await store.put(key, b"ok")
+                await store.head(key)
+            finally:
+                await store.delete(key)
 
         asyncio.run(probe_object_store())
         typer.echo(f"[ok] objects: {get_settings().object_store}")
     except Exception as error:
         failures += 1
         typer.echo(f"[failed] objects: {error}")
+    try:
+        asyncio.run(verify_durable_operations())
+        typer.echo("[ok] workflows: DBOS system schema and Client")
+    except Exception as error:
+        failures += 1
+        typer.echo(f"[failed] workflows: {error}")
     for label, directory in (("exports", get_settings().export_dir),):
         try:
             directory.mkdir(parents=True, exist_ok=True)
@@ -200,6 +230,39 @@ def doctor():
         else:
             typer.echo("[ok] object integrity")
     raise typer.Exit(code=1 if failures else 0)
+
+
+@app.command("recover-workflows")
+def recover_workflows_command(
+    dead_executor_id: str = typer.Argument(..., help="Stable ID of the dead executor"),
+    apply: bool = typer.Option(False, "--apply", help="Trigger recovery; default is dry-run"),
+):
+    _register_workflows()
+    workflow_ids = asyncio.run(recover_workflows(dead_executor_id, apply=apply))
+    mode = "recovering" if apply else "would recover"
+    for workflow_id in workflow_ids:
+        typer.echo(f"{mode}: {workflow_id}")
+    typer.echo(f"{len(workflow_ids)} workflow(s) {mode} for executor {dead_executor_id}.")
+
+
+@app.command("migrate-objects")
+def migrate_objects_command(
+    apply: bool = typer.Option(
+        False,
+        "--apply",
+        help="Copy objects and update references; Web and workers must be stopped",
+    ),
+):
+    async def run():
+        async with AsyncSessionLocal() as db:
+            return await migrate_legacy_objects(db, apply=apply)
+
+    report = asyncio.run(run())
+    mode = "applied" if apply else "dry-run"
+    typer.echo(
+        f"Object migration {mode}: planned={report.planned}, copied={report.copied}, "
+        f"updated={report.references_updated}, deleted={report.legacy_deleted}"
+    )
 
 
 @app.command("reindex")

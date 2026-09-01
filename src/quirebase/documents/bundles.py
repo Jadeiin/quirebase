@@ -25,8 +25,8 @@ from quirebase.core.errors import ResourceNotFound
 from quirebase.core.storage import get_object_store
 from quirebase.core.timezones import annotation_export_timezone
 from quirebase.documents.annotations import select_visible_annotations
+from quirebase.documents.pdf import export_annotations
 from quirebase.models import Attachment, FileRevision, Item, PdfAnnotation, User
-from quirebase.pipeline.inspection import export_annotations
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterable, AsyncIterator

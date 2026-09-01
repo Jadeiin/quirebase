@@ -213,7 +213,6 @@ async def test_documents_list_returns_metadata_but_not_content_or_storage_keys(
     revision = FileRevision(
         item_id=item.id,
         object_key="secret/storage-key.pdf",
-        sha256="a" * 64,
         size=123,
         mime_type="application/pdf",
         original_name="paper.pdf",

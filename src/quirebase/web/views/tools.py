@@ -39,7 +39,7 @@ async def tools_page(
     login_session: LoginSession = Depends(current_login),
     db: AsyncSession = Depends(get_db),
 ):
-    if mode not in ("", "doi", "pdf", "title", "similar"):
+    if mode not in ("", "doi", "title", "similar"):
         raise HTTPException(404)
     if tab not in ("", "duplicates", "tags", "citation-styles"):
         tab = ""

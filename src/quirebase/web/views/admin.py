@@ -8,7 +8,6 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from quirebase.accounts import (
     change_user_role,
     create_user_admin,
-    list_failed_jobs,
     list_invitations,
     list_users,
     list_users_paginated,
@@ -19,11 +18,10 @@ from quirebase.accounts import (
 from quirebase.accounts import (
     create_invitation as create_invitation_op,
 )
-from quirebase.accounts import (
-    retry_job as retry_job_op,
-)
 from quirebase.audit import query_events
 from quirebase.core.database import get_db
+from quirebase.core.errors import ValidationFailure
+from quirebase.core.workflows import durable_operations
 from quirebase.library import (
     admin_delete_item,
     get_storage_metrics,
@@ -31,14 +29,10 @@ from quirebase.library import (
 )
 from quirebase.models import LoginSession, User
 from quirebase.operations import (
+    dispatch_maintenance_workflow,
     get_backup_artifact,
     get_runtime_settings,
     update_runtime_settings,
-)
-from quirebase.pipeline import (
-    dispatch_maintenance_job,
-    list_jobs_admin,
-    retry_all_failed_jobs,
 )
 from quirebase.web.deps import current_login, current_user, protected_router, require_admin
 from quirebase.web.templates import templates
@@ -63,7 +57,7 @@ async def admin_overview_page(
 ):
     users = await list_users(db, user)
     invitations = await list_invitations(db, user)
-    failed_jobs = await list_failed_jobs(db, user)
+    failed_workflows = await durable_operations().list(status="failed", limit=100)
     storage = await get_storage_metrics(db, user)
     recent_events, _ = await query_events(db, user, page=1, page_size=10)
 
@@ -75,7 +69,7 @@ async def admin_overview_page(
             "admin_tab": "overview",
             "users": users,
             "invitations": invitations,
-            "failed_jobs": failed_jobs,
+            "failed_workflows": failed_workflows,
             "storage": storage,
             "recent_events": recent_events,
             "csrf": login_session.csrf_token,
@@ -310,53 +304,36 @@ async def admin_audit_page(
 
 
 # =========================================================================
-# 5. Background Pipeline Jobs
+# 5. Durable workflows
 # =========================================================================
 
 
-@router.get("/admin/jobs", response_class=HTMLResponse)
-async def admin_jobs_page(
+@router.get("/admin/workflows", response_class=HTMLResponse)
+async def admin_workflows_page(
     request: Request,
     state: str = Query(default=""),
     user: User = Depends(current_user),
     login_session: LoginSession = Depends(current_login),
     db: AsyncSession = Depends(get_db),
 ):
-    jobs = await list_jobs_admin(db, user, state=state, limit=100)
-    failed_jobs = await list_failed_jobs(db, user)
+    del db
+    normalized_state = state.strip().casefold()
+    if normalized_state not in {"", "pending", "running", "succeeded", "failed", "cancelled"}:
+        raise ValidationFailure(f"unknown workflow state: {state}")
+    workflows = await durable_operations().list(status=normalized_state, limit=100)
 
     return templates.TemplateResponse(
         request,
         "admin.html",
         {
             "user": user,
-            "admin_tab": "jobs",
-            "jobs": jobs,
-            "failed_jobs": failed_jobs,
-            "state_filter": state,
+            "admin_tab": "workflows",
+            "workflows": workflows,
+            "state_filter": normalized_state,
             "csrf": login_session.csrf_token,
             "active_page": "admin",
         },
     )
-
-
-@router.post("/admin/jobs/{job_id}/retry")
-async def retry_job_endpoint(
-    job_id: str,
-    user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    await retry_job_op(db, user, job_id)
-    return RedirectResponse("/admin/jobs", status_code=303)
-
-
-@router.post("/admin/jobs/retry-all")
-async def retry_all_jobs_endpoint(
-    user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    await retry_all_failed_jobs(db, user)
-    return RedirectResponse("/admin/jobs", status_code=303)
 
 
 # =========================================================================
@@ -428,7 +405,12 @@ async def admin_maintenance_page(
     db: AsyncSession = Depends(get_db),
 ):
     storage = await get_storage_metrics(db, user)
-    system_jobs = await list_jobs_admin(db, user, kind_prefix="system.", limit=20)
+    workflows = await durable_operations().list(limit=100)
+    system_workflows = tuple(
+        workflow
+        for workflow in workflows
+        if (workflow.attributes or {}).get("capability") == "operations"
+    )[:20]
 
     return templates.TemplateResponse(
         request,
@@ -437,7 +419,7 @@ async def admin_maintenance_page(
             "user": user,
             "admin_tab": "maintenance",
             "storage": storage,
-            "system_jobs": system_jobs,
+            "system_workflows": system_workflows,
             "csrf": login_session.csrf_token,
             "active_page": "admin",
         },
@@ -449,8 +431,8 @@ async def trigger_reindex_job(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await dispatch_maintenance_job(db, user, "system.reindex_all")
-    return RedirectResponse("/admin/jobs", status_code=303)
+    await dispatch_maintenance_workflow(db, user, "reindex_all")
+    return RedirectResponse("/admin/maintenance", status_code=303)
 
 
 @router.post("/admin/maintenance/check-objects")
@@ -458,8 +440,8 @@ async def trigger_check_objects_job(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await dispatch_maintenance_job(db, user, "system.check_objects")
-    return RedirectResponse("/admin/jobs", status_code=303)
+    await dispatch_maintenance_workflow(db, user, "check_objects")
+    return RedirectResponse("/admin/maintenance", status_code=303)
 
 
 @router.post("/admin/maintenance/backup")
@@ -467,8 +449,8 @@ async def trigger_backup_job(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await dispatch_maintenance_job(db, user, "system.backup")
-    return RedirectResponse("/admin/jobs", status_code=303)
+    await dispatch_maintenance_workflow(db, user, "backup")
+    return RedirectResponse("/admin/maintenance", status_code=303)
 
 
 @router.post("/admin/maintenance/recommend-tags")
@@ -476,17 +458,17 @@ async def trigger_recommend_tags_job(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await dispatch_maintenance_job(db, user, "system.recommend_tags_all")
-    return RedirectResponse("/admin/jobs", status_code=303)
+    await dispatch_maintenance_workflow(db, user, "recommend_tags_all")
+    return RedirectResponse("/admin/maintenance", status_code=303)
 
 
-@router.get("/admin/maintenance/backups/{job_id}/download")
+@router.get("/admin/maintenance/backups/{workflow_id}/download")
 async def download_backup_endpoint(
-    job_id: str,
+    workflow_id: str,
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    path, filename = await get_backup_artifact(db, user, job_id)
+    path, filename = await get_backup_artifact(db, user, workflow_id)
     return FileResponse(
         str(path),
         media_type="application/zip",

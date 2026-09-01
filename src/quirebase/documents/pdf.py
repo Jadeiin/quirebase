@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 from datetime import UTC, tzinfo
 from typing import TYPE_CHECKING
@@ -180,7 +179,3 @@ def export_annotations(
                 annotation.update()
         output.parent.mkdir(parents=True, exist_ok=True)
         document.save(output, garbage=4, deflate=True)
-
-
-def job_payload(**values: object) -> str:
-    return json.dumps(values, separators=(",", ":"))

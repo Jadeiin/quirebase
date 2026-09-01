@@ -3,12 +3,10 @@ from __future__ import annotations
 from quirebase.accounts.administration import (
     change_user_role,
     create_user_admin,
-    list_failed_jobs,
     list_invitations,
     list_users,
     list_users_paginated,
     reset_user_password,
-    retry_job,
     revoke_user_sessions,
     update_user_status,
 )
@@ -74,7 +72,6 @@ __all__ = [
     "get_login_session_by_token",
     "get_valid_invitation",
     "list_api_tokens",
-    "list_failed_jobs",
     "list_invitations",
     "list_user_sessions",
     "list_users",
@@ -83,7 +80,6 @@ __all__ = [
     "record_login_failure",
     "reset_user_password",
     "resolve_api_token_user",
-    "retry_job",
     "revoke_all_sessions",
     "revoke_api_token",
     "revoke_session",
