@@ -16,24 +16,24 @@ from quirebase.pipeline.inspection import job_payload
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
     from quirebase.documents.schemas import ExportCreate
 
 
-def create_export_job(db: Session, user: User, item_id: str, data: ExportCreate) -> Job:
-    revision = require_revision(db, user, data.revision_id)
+async def create_export_job(db: AsyncSession, user: User, item_id: str, data: ExportCreate) -> Job:
+    revision = await require_revision(db, user, data.revision_id)
     if revision.item_id != item_id:
         raise ResourceNotFound("revision not found for item")
-    locked_revision = db.scalar(
+    locked_revision = await db.scalar(
         select(FileRevision).where(FileRevision.id == revision.id).with_for_update()
     )
     if locked_revision is None:
         raise ResourceNotFound("revision not found for item")
     revision = locked_revision
     if data.project_id and (
-        project_member(db, user, data.project_id) is None
-        or db.get(ProjectItem, (data.project_id, item_id)) is None
+        await project_member(db, user, data.project_id) is None
+        or await db.get(ProjectItem, (data.project_id, item_id)) is None
     ):
         raise ResourceUnavailable("project membership or project item not found")
     job = Job(
@@ -48,19 +48,19 @@ def create_export_job(db: Session, user: User, item_id: str, data: ExportCreate)
         owner_id=user.id,
     )
     db.add(job)
-    db.commit()
+    await db.commit()
     return job
 
 
-def get_export_status(db: Session, user: User, job_id: str) -> dict[str, Any]:
-    job = db.get(Job, job_id)
+async def get_export_status(db: AsyncSession, user: User, job_id: str) -> dict[str, Any]:
+    job = await db.get(Job, job_id)
     if job is None or job.kind != "pdf.export_annotations" or job.owner_id != user.id:
         raise ResourceNotFound("export job not found")
     return {"id": job.id, "state": job.state, "error": job.error}
 
 
-def get_export_file_path(db: Session, user: User, job_id: str) -> Path:
-    job = db.get(Job, job_id)
+async def get_export_file_path(db: AsyncSession, user: User, job_id: str) -> Path:
+    job = await db.get(Job, job_id)
     if (
         job is None
         or job.kind != "pdf.export_annotations"
@@ -70,10 +70,10 @@ def get_export_file_path(db: Session, user: User, job_id: str) -> Path:
         raise ResourceNotFound("export job not found or not ready")
     result = json.loads(job.result or "{}")
     payload = json.loads(job.payload)
-    revision = require_revision(db, user, payload["revision_id"])
+    revision = await require_revision(db, user, payload["revision_id"])
     if payload.get("project_id") and (
-        project_member(db, user, payload["project_id"]) is None
-        or db.get(ProjectItem, (payload["project_id"], revision.item_id)) is None
+        await project_member(db, user, payload["project_id"]) is None
+        or await db.get(ProjectItem, (payload["project_id"], revision.item_id)) is None
     ):
         raise ResourceUnavailable("project membership or project item not found")
     return get_settings().export_dir / result["filename"]

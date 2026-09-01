@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -11,7 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from quirebase.audit import record_event
 from quirebase.core.config import get_settings
-from quirebase.core.database import SessionLocal
+from quirebase.core.database import AsyncSessionLocal
 from quirebase.core.errors import ResourceUnavailable, ValidationFailure
 from quirebase.core.storage import LocalObjectStore
 from quirebase.core.timezones import annotation_export_timezone
@@ -32,9 +33,9 @@ from quirebase.pipeline.inspection import create_thumbnail, export_annotations, 
 from quirebase.search import reindex_all
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
-JobHandler = Callable[["Session", Job, dict[str, Any]], dict[str, Any]]
+JobHandler = Callable[["AsyncSession", Job, dict[str, Any]], Awaitable[dict[str, Any]]]
 JOB_HANDLERS: dict[str, JobHandler] = {}
 
 
@@ -97,12 +98,12 @@ def get_job_handler(kind: str) -> JobHandler:
     return handler
 
 
-def handle_pdf_inspect(db: Session, job: Job, payload: dict[str, Any]) -> dict[str, Any]:
-    revision = db.get(FileRevision, payload["revision_id"])
+async def handle_pdf_inspect(db: AsyncSession, job: Job, payload: dict[str, Any]) -> dict[str, Any]:
+    revision = await db.get(FileRevision, payload["revision_id"])
     if revision is None:
         raise ValueError("revision no longer exists")
     path = LocalObjectStore().path(revision.object_key)
-    pages, text, geometry = inspect_pdf(path)
+    pages, text, geometry = await asyncio.to_thread(inspect_pdf, path)
     if pages < 1:
         raise ValueError("PDF contains no pages")
     geometry_json = json.dumps(geometry, separators=(",", ":"))
@@ -112,13 +113,17 @@ def handle_pdf_inspect(db: Session, job: Job, payload: dict[str, Any]) -> dict[s
         page_geometry=geometry_json,
         full_text=text,
     )
-    create_thumbnail(path, get_settings().object_dir / "thumbnails" / f"{revision.id}.png")
-    propagate_file_revision_change(db, revision.item_id, owner_id=job.owner_id)
+    await asyncio.to_thread(
+        create_thumbnail, path, get_settings().object_dir / "thumbnails" / f"{revision.id}.png"
+    )
+    await propagate_file_revision_change(db, revision.item_id, owner_id=job.owner_id)
     return {"page_count": pages}
 
 
-def handle_pdf_export_annotations(db: Session, job: Job, payload: dict[str, Any]) -> dict[str, Any]:
-    revision = db.get(FileRevision, payload["revision_id"])
+async def handle_pdf_export_annotations(
+    db: AsyncSession, job: Job, payload: dict[str, Any]
+) -> dict[str, Any]:
+    revision = await db.get(FileRevision, payload["revision_id"])
     if revision is None:
         raise ValueError("revision no longer exists")
     scopes = []
@@ -130,8 +135,8 @@ def handle_pdf_export_annotations(db: Session, job: Job, payload: dict[str, Any]
             )
         )
     if payload.get("project_id"):
-        membership = db.get(ProjectMember, (payload["project_id"], job.owner_id))
-        assignment = db.get(ProjectItem, (payload["project_id"], revision.item_id))
+        membership = await db.get(ProjectMember, (payload["project_id"], job.owner_id))
+        assignment = await db.get(ProjectItem, (payload["project_id"], revision.item_id))
         if membership is None or assignment is None:
             raise PermissionError("project membership no longer exists")
         scopes.append(
@@ -144,24 +149,31 @@ def handle_pdf_export_annotations(db: Session, job: Job, payload: dict[str, Any]
         []
         if not scopes
         else list(
-            db.scalars(
-                select(PdfAnnotation)
-                .options(selectinload(PdfAnnotation.segments))
-                .where(
-                    PdfAnnotation.file_revision_id == revision.id,
-                    PdfAnnotation.deleted_at.is_(None),
-                    or_(*scopes),
+            (
+                await db.scalars(
+                    select(PdfAnnotation)
+                    .options(selectinload(PdfAnnotation.segments))
+                    .where(
+                        PdfAnnotation.file_revision_id == revision.id,
+                        PdfAnnotation.deleted_at.is_(None),
+                        or_(*scopes),
+                    )
                 )
             ).all()
         )
     )
     filename = f"{job.id}.pdf"
-    author_rows = db.execute(
-        select(User.id, User.username).where(User.id.in_({record.author_id for record in records}))
+    author_rows = (
+        await db.execute(
+            select(User.id, User.username).where(
+                User.id.in_({record.author_id for record in records})
+            )
+        )
     ).all()
     author_names: dict[str, str] = {row[0]: row[1] for row in author_rows}
     display_timezone = annotation_export_timezone(payload.get("timezone"))
-    export_annotations(
+    await asyncio.to_thread(
+        export_annotations,
         LocalObjectStore().path(revision.object_key),
         get_settings().export_dir / filename,
         records,
@@ -171,37 +183,46 @@ def handle_pdf_export_annotations(db: Session, job: Job, payload: dict[str, Any]
     return {"filename": filename}
 
 
-def handle_system_reindex(db: Session, job: Job, payload: dict[str, Any]) -> dict[str, Any]:
-    count = reindex_all(db)
+async def handle_system_reindex(
+    db: AsyncSession, job: Job, payload: dict[str, Any]
+) -> dict[str, Any]:
+    count = await reindex_all(db)
     return {"reindexed_items": count}
 
 
-def handle_system_check_objects(db: Session, job: Job, payload: dict[str, Any]) -> dict[str, Any]:
-    errors = check_objects(db)
+async def handle_system_check_objects(
+    db: AsyncSession, job: Job, payload: dict[str, Any]
+) -> dict[str, Any]:
+    errors = await check_objects(db)
     return {"errors": errors, "checked_status": "ok" if not errors else "inconsistencies_found"}
 
 
-def handle_system_backup(db: Session, job: Job, payload: dict[str, Any]) -> dict[str, Any]:
+async def handle_system_backup(
+    db: AsyncSession, job: Job, payload: dict[str, Any]
+) -> dict[str, Any]:
     from quirebase.operations.maintenance import create_backup
 
     filename = f"backup_{job.id}.zip"
     dest_path = get_settings().export_dir / filename
-    create_backup(dest_path)
-    return {"filename": filename, "size_bytes": dest_path.stat().st_size}
+    await create_backup(dest_path)
+    size_bytes = await asyncio.to_thread(lambda: dest_path.stat().st_size)
+    return {"filename": filename, "size_bytes": size_bytes}
 
 
-def handle_system_recommend_tags_all(
-    db: Session, job: Job, payload: dict[str, Any]
+async def handle_system_recommend_tags_all(
+    db: AsyncSession, job: Job, payload: dict[str, Any]
 ) -> dict[str, Any]:
     from quirebase.library import enqueue_all_item_tag_recommendations
 
-    return {"enqueued_items": enqueue_all_item_tag_recommendations(db, owner_id=job.owner_id)}
+    return {"enqueued_items": await enqueue_all_item_tag_recommendations(db, owner_id=job.owner_id)}
 
 
-def handle_item_recommend_tags(db: Session, job: Job, payload: dict[str, Any]) -> dict[str, Any]:
+async def handle_item_recommend_tags(
+    db: AsyncSession, job: Job, payload: dict[str, Any]
+) -> dict[str, Any]:
     from quirebase.library import handle_item_tag_recommendation
 
-    return handle_item_tag_recommendation(db, job, payload)
+    return await handle_item_tag_recommendation(db, job, payload)
 
 
 JOB_HANDLERS.update({
@@ -215,8 +236,8 @@ JOB_HANDLERS.update({
 })
 
 
-def enqueue_job(
-    db: Session,
+async def enqueue_job(
+    db: AsyncSession,
     kind: str,
     payload: dict[str, Any],
     owner_id: str | None = None,
@@ -233,11 +254,11 @@ def enqueue_job(
         idempotency_key=key,
     )
     db.add(job)
-    db.flush()
+    await db.flush()
     return job
 
 
-def dispatch_maintenance_job(db: Session, admin: User, kind: str) -> Job:
+async def dispatch_maintenance_job(db: AsyncSession, admin: User, kind: str) -> Job:
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")
     if kind not in (
@@ -247,7 +268,7 @@ def dispatch_maintenance_job(db: Session, admin: User, kind: str) -> Job:
         "system.recommend_tags_all",
     ):
         raise ValidationFailure(f"unknown maintenance job kind: {kind}")
-    job = enqueue_job(db, kind, {}, owner_id=admin.id)
+    job = await enqueue_job(db, kind, {}, owner_id=admin.id)
     record_event(
         db,
         admin.id,
@@ -255,12 +276,12 @@ def dispatch_maintenance_job(db: Session, admin: User, kind: str) -> Job:
         "job",
         job.id,
     )
-    db.commit()
+    await db.commit()
     return job
 
 
-def list_jobs_admin(
-    db: Session,
+async def list_jobs_admin(
+    db: AsyncSession,
     admin: User,
     state: str = "",
     limit: int = 50,
@@ -278,13 +299,13 @@ def list_jobs_admin(
         query = query.where(Job.state == requested_state)
     if kind_prefix.strip():
         query = query.where(Job.kind.startswith(kind_prefix.strip()))
-    return list(db.scalars(query.order_by(Job.created_at.desc()).limit(limit)).all())
+    return list((await db.scalars(query.order_by(Job.created_at.desc()).limit(limit))).all())
 
 
-def retry_all_failed_jobs(db: Session, admin: User) -> int:
+async def retry_all_failed_jobs(db: AsyncSession, admin: User) -> int:
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")
-    failed = list(db.scalars(select(Job).where(Job.state == JobState.failed)).all())
+    failed = list((await db.scalars(select(Job).where(Job.state == JobState.failed))).all())
     for job in failed:
         reset_job_for_retry(job)
     if failed:
@@ -296,11 +317,11 @@ def retry_all_failed_jobs(db: Session, admin: User) -> int:
             None,
             detail={"count": len(failed)},
         )
-        db.commit()
+        await db.commit()
     return len(failed)
 
 
-def claim_job(db: Session) -> Job | None:
+async def claim_job(db: AsyncSession) -> Job | None:
     now = datetime.now(UTC)
     query = (
         select(Job)
@@ -312,16 +333,16 @@ def claim_job(db: Session) -> Job | None:
         .order_by(Job.created_at)
         .limit(1)
     )
-    if db.bind and db.bind.dialect.name == "postgresql":
+    if db.get_bind().dialect.name == "postgresql":
         query = query.with_for_update(skip_locked=True)
-    job = db.scalar(query)
+    job = await db.scalar(query)
     if job:
         mark_job_running(job, now)
-        db.commit()
+        await db.commit()
     return job
 
 
-def run_job(db: Session, job: Job) -> None:
+async def run_job(db: AsyncSession, job: Job) -> None:
     job_id = job.id
     attempts = job.attempts
     try:
@@ -329,31 +350,31 @@ def run_job(db: Session, job: Job) -> None:
         if not isinstance(payload, dict):
             raise TypeError("job payload must be a JSON object")
         handler = get_job_handler(job.kind)
-        result = handler(db, job, payload)
+        result = await handler(db, job, payload)
         mark_job_succeeded(job, result)
-        db.commit()
+        await db.commit()
     except Exception as error:
-        db.rollback()
-        failed_job = db.get(Job, job_id)
+        await db.rollback()
+        failed_job = await db.get(Job, job_id)
         if failed_job:
             record_job_failure(failed_job, error, attempts)
-            db.commit()
+            await db.commit()
 
 
-def run_once() -> bool:
-    with SessionLocal() as db:
-        job = claim_job(db)
+async def run_once() -> bool:
+    async with AsyncSessionLocal() as db:
+        job = await claim_job(db)
         if job is None:
             return False
-        run_job(db, job)
+        await run_job(db, job)
         return True
 
 
-def run_forever() -> None:
+async def run_forever() -> None:
     last_cleanup = 0.0
     while True:
         if time.monotonic() - last_cleanup >= 3600:
-            cleanup_exports()
+            await cleanup_exports()
             last_cleanup = time.monotonic()
-        if not run_once():
-            time.sleep(get_settings().worker_poll_seconds)
+        if not await run_once():
+            await asyncio.sleep(get_settings().worker_poll_seconds)

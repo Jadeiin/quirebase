@@ -30,20 +30,20 @@ from inquiro.providers._payload import (
 
 
 class OpenAlexLookupAdapter:
-    def lookup(
+    async def lookup(
         self, client: ProviderContext, value: str, settings: Any, *, endpoint: str
     ) -> ProviderRecord:
         api_key = getattr(settings, "openalex_api_key", None)
         params = {"api_key": api_key} if api_key else None
         lookup_target = f"doi:{value}" if DOI_PATTERN.fullmatch(value) else value
         try:
-            body = client._get(
+            body = await client._get(
                 f"{endpoint}/works/{quote(lookup_target, safe=':')}",
                 params,
             )
         except (RemoteNotFound, ProviderUnavailable):
             if lookup_target.startswith("doi:"):
-                body = client._get(
+                body = await client._get(
                     f"{endpoint}/works/https://doi.org/{quote(value, safe='')}",
                     params,
                 )
@@ -106,7 +106,7 @@ class OpenAlexLookupAdapter:
 
 
 class OpenAlexSearchAdapter:
-    def search(
+    async def search(
         self,
         client: ProviderContext,
         clauses: list[SearchClause],
@@ -149,7 +149,9 @@ class OpenAlexSearchAdapter:
             if field == "publication":
                 source_ids: list[str] = []
                 for value in values:
-                    source_ids.extend(self._resolve_source_ids(client, value, settings, endpoint))
+                    source_ids.extend(
+                        await self._resolve_source_ids(client, value, settings, endpoint)
+                    )
                 source_ids = list(dict.fromkeys(source_ids))
                 if not source_ids:
                     if negated:
@@ -169,7 +171,7 @@ class OpenAlexSearchAdapter:
             params["filter"] = ",".join(filter_parts)
         if sort == "relevance" and not any(".search:" in value for value in filter_parts):
             params["sort"] = "cited_by_count:desc"
-        body = client._get(f"{endpoint}/works", params)
+        body = await client._get(f"{endpoint}/works", params)
         try:
             payload = json.loads(body)
         except (json.JSONDecodeError, TypeError) as error:
@@ -212,7 +214,7 @@ class OpenAlexSearchAdapter:
             )
         return ProviderSearchPage("openalex", results, total, page, per_page)
 
-    def _resolve_source_ids(
+    async def _resolve_source_ids(
         self, client: ProviderContext, name: str, settings: Any, endpoint: str
     ) -> list[str]:
         params: dict[str, Any] = {"search": name, "per-page": "10"}
@@ -220,7 +222,7 @@ class OpenAlexSearchAdapter:
         if api_key:
             params["api_key"] = api_key
         try:
-            body = client._get(f"{endpoint}/sources", params)
+            body = await client._get(f"{endpoint}/sources", params)
             payload = json.loads(body)
         except (json.JSONDecodeError, TypeError) as error:
             raise ProviderUnavailable("OpenAlex returned invalid source results") from error
@@ -232,7 +234,7 @@ class OpenAlexSearchAdapter:
 
 
 class OpenAlexDocumentAdapter:
-    def acquire(
+    async def acquire(
         self,
         client: ProviderContext,
         value: str,
@@ -245,7 +247,7 @@ class OpenAlexDocumentAdapter:
         if DOI_PATTERN.fullmatch(value):
             params = {"api_key": api_key, "select": "id,has_content"}
             try:
-                body = client._get(
+                body = await client._get(
                     f"https://api.openalex.org/works/{quote(f'doi:{value}', safe=':')}",
                     params,
                 )
@@ -265,7 +267,7 @@ class OpenAlexDocumentAdapter:
                 raise PdfNotAvailable("OpenAlex does not have a PDF for this work")
 
         download_url = f"{endpoint}/{work_id}.pdf?{urlencode({'api_key': api_key})}"
-        return client._download_pdf(
+        return await client._download_pdf(
             download_url,
             filename=f"{work_id}.pdf",
             provider="openalex",

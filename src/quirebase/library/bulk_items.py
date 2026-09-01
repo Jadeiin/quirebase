@@ -32,11 +32,11 @@ from quirebase.models import (
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
-def apply_bulk_item_action(
-    db: Session,
+async def apply_bulk_item_action(
+    db: AsyncSession,
     user: User,
     item_ids: list[str],
     action: str,
@@ -44,28 +44,29 @@ def apply_bulk_item_action(
     tag_name: str = "",
     confirm_delete: str = "",
 ) -> list[str]:
-    items = require_accessible_items(db, user, item_ids)
+    items = await require_accessible_items(db, user, item_ids)
 
     # Fail-closed: All selected items must be editable for mutating bulk actions
-    if any(not can_edit_item(db, user, item.id) for item in items):
-        raise PermissionDenied("all selected items must be editable")
+    for item in items:
+        if not await can_edit_item(db, user, item.id):
+            raise PermissionDenied("all selected items must be editable")
 
     cleanup_keys: list[str] = []
     if action in ("add_project", "project_add"):
-        membership = project_member(db, user, project_id)
+        membership = await project_member(db, user, project_id)
         if membership is None or membership.role not in ("owner", "editor"):
             raise ValidationFailure("choose an editable project")
         for item in items:
-            if db.get(ProjectItem, (project_id, item.id)) is None:
+            if await db.get(ProjectItem, (project_id, item.id)) is None:
                 db.add(ProjectItem(project_id=project_id, item_id=item.id))
-                search_index(db).index_item(db, item.id)
+                await search_index(db).index_item(db, item.id)
         audit_action = "library.bulk.add_project"
     elif action in ("add_tag", "tag"):
-        tag_record = get_or_create_tag(db, user, tag_name)
+        tag_record = await get_or_create_tag(db, user, tag_name)
         for item in items:
-            if db.get(ItemTag, (item.id, tag_record.id)) is None:
+            if await db.get(ItemTag, (item.id, tag_record.id)) is None:
                 db.add(ItemTag(item_id=item.id, tag_id=tag_record.id))
-                search_index(db).index_item(db, item.id)
+                await search_index(db).index_item(db, item.id)
         audit_action = "library.bulk.add_tag"
     elif action in ("delete_items", "delete"):
         if confirm_delete != "delete":
@@ -73,22 +74,26 @@ def apply_bulk_item_action(
         if user.role != "administrator" and any(item.created_by != user.id for item in items):
             raise PermissionDenied("only item owners can permanently delete items")
         cleanup_keys = list(
-            db.scalars(
-                select(FileRevision.object_key).where(
-                    FileRevision.item_id.in_([item.id for item in items])
+            (
+                await db.scalars(
+                    select(FileRevision.object_key).where(
+                        FileRevision.item_id.in_([item.id for item in items])
+                    )
                 )
             ).all()
         )
         cleanup_keys.extend(
-            db.scalars(
-                select(Attachment.object_key).where(
-                    Attachment.item_id.in_([item.id for item in items])
+            (
+                await db.scalars(
+                    select(Attachment.object_key).where(
+                        Attachment.item_id.in_([item.id for item in items])
+                    )
                 )
             ).all()
         )
         for item in items:
-            search_index(db).remove_item(db, item.id)
-            db.delete(item)
+            await search_index(db).remove_item(db, item.id)
+            await db.delete(item)
         audit_action = "library.bulk.delete_items"
     else:
         raise ValidationFailure("unknown bulk action")
@@ -101,15 +106,15 @@ def apply_bulk_item_action(
         None,
         detail={"item_ids": [item.id for item in items]},
     )
-    db.commit()
+    await db.commit()
 
-    delete_unreferenced_objects(db, cleanup_keys)
+    await delete_unreferenced_objects(db, cleanup_keys)
 
     return cleanup_keys
 
 
-def download_selected_item_documents(
-    db: Session,
+async def download_selected_item_documents(
+    db: AsyncSession,
     user: User,
     item_ids: list[str],
     *,
@@ -117,8 +122,8 @@ def download_selected_item_documents(
     include_supplements: bool = False,
     timezone: str | None = None,
 ) -> ItemDownloadBundle:
-    items = require_accessible_items(db, user, item_ids)
-    bundle = assemble_document_bundle(
+    items = await require_accessible_items(db, user, item_ids)
+    bundle = await assemble_document_bundle(
         db,
         user,
         items,
@@ -138,5 +143,5 @@ def download_selected_item_documents(
             "include_supplements": include_supplements,
         },
     )
-    db.commit()
+    await db.commit()
     return bundle

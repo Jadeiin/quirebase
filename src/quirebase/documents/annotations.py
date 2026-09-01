@@ -31,7 +31,7 @@ from quirebase.models import (
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
     from quirebase.documents.schemas import AnnotationCreate, AnnotationUpdate
 
@@ -112,8 +112,8 @@ def validate_segments(data: AnnotationCreate, revision: FileRevision) -> None:
             raise ValidationFailure("annotation is outside the PDF page")
 
 
-def select_visible_annotations(
-    db: Session,
+async def select_visible_annotations(
+    db: AsyncSession,
     user: User,
     revision_id: str,
     item_id: str,
@@ -125,8 +125,8 @@ def select_visible_annotations(
     ]
     if project_id:
         if (
-            project_member(db, user, project_id) is None
-            or db.get(ProjectItem, (project_id, item_id)) is None
+            await project_member(db, user, project_id) is None
+            or await db.get(ProjectItem, (project_id, item_id)) is None
         ):
             raise ResourceUnavailable("project membership or project item not found")
         scopes.append(
@@ -136,45 +136,47 @@ def select_visible_annotations(
             )
         )
     return list(
-        db.scalars(
-            select(PdfAnnotation)
-            .options(selectinload(PdfAnnotation.segments))
-            .where(
-                PdfAnnotation.file_revision_id == revision_id,
-                PdfAnnotation.deleted_at.is_(None),
-                or_(*scopes),
+        (
+            await db.scalars(
+                select(PdfAnnotation)
+                .options(selectinload(PdfAnnotation.segments))
+                .where(
+                    PdfAnnotation.file_revision_id == revision_id,
+                    PdfAnnotation.deleted_at.is_(None),
+                    or_(*scopes),
+                )
+                .order_by(PdfAnnotation.created_at)
             )
-            .order_by(PdfAnnotation.created_at)
         ).all()
     )
 
 
-def list_document_annotations(
-    db: Session,
+async def list_document_annotations(
+    db: AsyncSession,
     user: User,
     item_id: str,
     revision_id: str,
     project_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    revision = require_revision(db, user, revision_id)
+    revision = await require_revision(db, user, revision_id)
     if revision.item_id != item_id:
         raise ResourceNotFound("revision not found for item")
-    records = select_visible_annotations(db, user, revision_id, item_id, project_id)
+    records = await select_visible_annotations(db, user, revision_id, item_id, project_id)
     return [annotation_json(row, user.id) for row in records]
 
 
-def create_document_annotation(
-    db: Session,
+async def create_document_annotation(
+    db: AsyncSession,
     user: User,
     item_id: str,
     data: AnnotationCreate,
 ) -> dict[str, Any]:
-    revision = require_revision(db, user, data.revision_id)
+    revision = await require_revision(db, user, data.revision_id)
     if revision.item_id != item_id:
         raise ResourceNotFound("revision not found for item")
     if data.scope is AnnotationScope.project and (
-        project_member(db, user, data.project_id) is None
-        or db.get(ProjectItem, (data.project_id, item_id)) is None
+        await project_member(db, user, data.project_id) is None
+        or await db.get(ProjectItem, (data.project_id, item_id)) is None
     ):
         raise ResourceUnavailable("project membership or project item not found")
     validate_segments(data, revision)
@@ -207,28 +209,28 @@ def create_document_annotation(
             )
         )
     db.add(record)
-    db.flush()
+    await db.flush()
     record_event(db, user.id, "annotation.create", "pdf_annotation", record.id)
-    db.commit()
+    await db.commit()
     return annotation_json(record, user.id)
 
 
-def update_document_annotation(
-    db: Session,
+async def update_document_annotation(
+    db: AsyncSession,
     user: User,
     item_id: str,
     annotation_id: str,
     data: AnnotationUpdate,
 ) -> dict[str, Any]:
-    record = require_editable_annotation(db, user, item_id, annotation_id)
+    record = await require_editable_annotation(db, user, item_id, annotation_id)
     if record.version != data.version:
         raise VersionConflict(record.version)
     if data.scope is not None:
         record.scope = data.scope
         record.project_id = data.project_id if data.scope is AnnotationScope.project else None
         if record.scope == AnnotationScope.project and (
-            project_member(db, user, record.project_id) is None
-            or db.get(ProjectItem, (record.project_id, item_id)) is None
+            await project_member(db, user, record.project_id) is None
+            or await db.get(ProjectItem, (record.project_id, item_id)) is None
         ):
             raise ResourceUnavailable("project membership or project item not found")
     if data.color is not None:
@@ -237,18 +239,18 @@ def update_document_annotation(
         record.body = data.body
     record.version += 1
     record_event(db, user.id, "annotation.update", "pdf_annotation", record.id)
-    db.commit()
+    await db.commit()
     return annotation_json(record, user.id)
 
 
-def delete_document_annotation(
-    db: Session,
+async def delete_document_annotation(
+    db: AsyncSession,
     user: User,
     item_id: str,
     annotation_id: str,
 ) -> None:
-    record = require_editable_annotation(db, user, item_id, annotation_id)
+    record = await require_editable_annotation(db, user, item_id, annotation_id)
     record.deleted_at = datetime.now(UTC)
     record.version += 1
     record_event(db, user.id, "annotation.delete", "pdf_annotation", record.id)
-    db.commit()
+    await db.commit()

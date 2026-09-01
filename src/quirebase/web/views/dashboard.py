@@ -13,22 +13,22 @@ from quirebase.web.deps import current_login, current_user, protected_router
 from quirebase.web.templates import templates
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 router = protected_router()
 
 
 @router.get("/", response_class=HTMLResponse)
-def dashboard(
+async def dashboard(
     request: Request,
     q: str = "",
     user: User = Depends(current_user),
     login: LoginSession = Depends(current_login),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     if q.strip():
         return RedirectResponse(f"/library?{urlencode({'q': q.strip()})}", status_code=303)
-    data = get_dashboard_data(db, user)
+    data = await get_dashboard_data(db, user)
     return templates.TemplateResponse(
         request,
         "index.html",

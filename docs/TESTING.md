@@ -2,6 +2,12 @@
 
 ## Test seams
 
+Runtime I/O tests run on one event loop. Database fixtures use SQLAlchemy's `AsyncEngine` and
+`AsyncSession`; HTTP tests use `httpx2.AsyncClient` with Starlette's `ASGITransport`; and Inquiro
+Provider contracts await the runtime and its async stream lifecycle. A test owns its session and
+does not share it with concurrent tasks. Pure projections may remain ordinary synchronous test
+helpers.
+
 Select the seam before writing a behavior test and name it in the issue or specification. Use
 the narrowest seam that proves the caller-visible behavior:
 

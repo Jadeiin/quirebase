@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from quirebase.core.config import get_settings
-from quirebase.core.database import SessionLocal
+from quirebase.core.database import AsyncSessionLocal, engine
 from quirebase.mcp import SessionFactory, create_mcp_http_mount
 from quirebase.web.api.routes import router as api_router
 from quirebase.web.errors import register_error_handlers
@@ -30,7 +30,7 @@ from quirebase.web.views.tools import router as views_tools_router
 PACKAGE_DIR = Path(__file__).resolve().parent.parent
 
 
-def create_app(*, mcp_session_factory: SessionFactory = SessionLocal) -> FastAPI:
+def create_app(*, mcp_session_factory: SessionFactory = AsyncSessionLocal) -> FastAPI:
     settings = get_settings()
     mcp_http = create_mcp_http_mount(
         mcp_session_factory,
@@ -40,8 +40,12 @@ def create_app(*, mcp_session_factory: SessionFactory = SessionLocal) -> FastAPI
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
-        async with mcp_http.server.session_manager.run():
-            yield
+        try:
+            async with mcp_http.server.session_manager.run():
+                yield
+        finally:
+            if mcp_session_factory is AsyncSessionLocal:
+                await engine.dispose()
 
     app = FastAPI(title="Quirebase", version="0.1.0", lifespan=lifespan)
     app.state.mcp_server = mcp_http.server

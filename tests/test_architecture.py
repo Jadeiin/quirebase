@@ -406,6 +406,121 @@ def test_release_metadata_pins_workspace_packages_to_the_quirebase_version():
     assert optional_dependencies["keybert"] == [f"rubrica[keybert]=={root_version}"]
 
 
+def test_persistence_dependencies_use_sqlalchemy_async_optional_groups():
+    metadata = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    dependencies = set(metadata["project"]["dependencies"])
+    optional_dependencies = metadata["project"]["optional-dependencies"]
+
+    assert "sqlalchemy[asyncio,aiosqlite]>=2.0,<3" in dependencies
+    assert optional_dependencies["postgres"] == [
+        "sqlalchemy[postgresql-psycopgbinary,postgresql-asyncpg]>=2.0,<3"
+    ]
+    independently_declared = {
+        dependency.split("[", 1)[0].split("<", 1)[0].split(">", 1)[0].split("=", 1)[0]
+        for dependency in dependencies
+    }
+    assert independently_declared.isdisjoint({
+        "greenlet",
+        "aiosqlite",
+        "asyncpg",
+        "psycopg",
+        "psycopg-binary",
+    })
+
+
+def test_runtime_sources_do_not_restore_synchronous_io_adapters():
+    runtime_roots = (
+        SRC_ROOT,
+        REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro",
+        REPO_ROOT / "migrations",
+    )
+    for py_file in (path for root in runtime_roots for path in get_python_files(root)):
+        tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    assert alias.name != "greenlet", f"{py_file} imports greenlet directly"
+            elif isinstance(node, ast.ImportFrom):
+                imported_names = {alias.name for alias in node.names}
+                if node.module == "quirebase.core.crypto":
+                    blocking_password_functions = imported_names & {
+                        "hash_password",
+                        "verify_password",
+                    }
+                    assert not blocking_password_functions, (
+                        f"{py_file} imports blocking password functions "
+                        f"{sorted(blocking_password_functions)}; async runtime callers must use "
+                        "the named async boundaries"
+                    )
+                if node.module == "sqlalchemy":
+                    assert "create_engine" not in imported_names, (
+                        f"{py_file} imports SQLAlchemy's synchronous engine factory"
+                    )
+                if node.module == "sqlalchemy.orm":
+                    forbidden = imported_names & {"Session", "sessionmaker"}
+                    assert not forbidden, (
+                        f"{py_file} imports synchronous SQLAlchemy names {sorted(forbidden)}"
+                    )
+                if node.module == "time":
+                    assert "sleep" not in imported_names, f"{py_file} imports blocking time.sleep"
+            elif (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+            ):
+                assert not (node.func.value.id == "httpx2" and node.func.attr == "Client"), (
+                    f"{py_file}:{node.lineno} constructs synchronous httpx2.Client"
+                )
+                assert not (node.func.value.id == "time" and node.func.attr == "sleep"), (
+                    f"{py_file}:{node.lineno} calls blocking time.sleep"
+                )
+
+
+def test_provider_runtime_and_contract_lifecycles_are_async_only():
+    required_async_methods = {
+        "ProviderRuntime": {
+            "lookup",
+            "search",
+            "acquire_document",
+            "aclose",
+            "__aenter__",
+            "__aexit__",
+        },
+        "LookupImplementation": {"lookup"},
+        "SearchImplementation": {"search"},
+        "DocumentImplementation": {"acquire"},
+        "ProviderContext": {"_get", "_download_pdf"},
+        "Exchange": {"send", "aclose"},
+    }
+    files = (
+        REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro" / "runtime.py",
+        REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro" / "transport.py",
+        REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro" / "providers" / "_contracts.py",
+    )
+    classes: dict[str, ast.ClassDef] = {}
+    for py_file in files:
+        tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+        classes.update({node.name: node for node in tree.body if isinstance(node, ast.ClassDef)})
+
+    for class_name, methods in required_async_methods.items():
+        class_node = classes[class_name]
+        async_methods = {
+            node.name for node in class_node.body if isinstance(node, ast.AsyncFunctionDef)
+        }
+        assert methods <= async_methods, (
+            f"{class_name} must keep native async methods {sorted(methods - async_methods)}"
+        )
+        synchronous_context_methods = {
+            node.name
+            for node in class_node.body
+            if isinstance(node, ast.FunctionDef) and node.name in {"close", "__enter__", "__exit__"}
+        }
+        assert not synchronous_context_methods, (
+            f"{class_name} restores synchronous lifecycle methods "
+            f"{sorted(synchronous_context_methods)}"
+        )
+
+
 def test_session_detection_follows_type_and_variable_aliases():
     tree = ast.parse(
         """

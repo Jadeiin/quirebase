@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+
 from quirebase.access.items import can_read_item
 from quirebase.access.projects import project_member
 from quirebase.core.errors import ResourceUnavailable
@@ -15,30 +18,34 @@ from quirebase.models import (
 )
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
-def can_edit_annotation(db: Session, user: User, annotation: PdfAnnotation) -> bool:
+async def can_edit_annotation(db: AsyncSession, user: User, annotation: PdfAnnotation) -> bool:
     if annotation.author_id == user.id or user.role == SystemRole.administrator.value:
         return True
     if annotation.scope is AnnotationScope.project and annotation.project_id:
-        member = project_member(db, user, annotation.project_id)
+        member = await project_member(db, user, annotation.project_id)
         return member is not None and member.role == ProjectRole.owner
     return False
 
 
-def require_editable_annotation(
-    db: Session, user: User, item_id: str, annotation_id: str
+async def require_editable_annotation(
+    db: AsyncSession, user: User, item_id: str, annotation_id: str
 ) -> PdfAnnotation:
-    record = db.get(PdfAnnotation, annotation_id)
-    record_revision = db.get(FileRevision, record.file_revision_id) if record else None
+    record = await db.scalar(
+        select(PdfAnnotation)
+        .options(selectinload(PdfAnnotation.segments))
+        .where(PdfAnnotation.id == annotation_id)
+    )
+    record_revision = await db.get(FileRevision, record.file_revision_id) if record else None
     if (
         record is None
         or record.deleted_at
-        or not can_read_item(db, user, item_id)
+        or not await can_read_item(db, user, item_id)
         or record_revision is None
         or record_revision.item_id != item_id
-        or not can_edit_annotation(db, user, record)
+        or not await can_edit_annotation(db, user, record)
     ):
         raise ResourceUnavailable("annotation not found or cannot be edited")
     return record

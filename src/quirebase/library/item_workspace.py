@@ -35,7 +35,7 @@ from quirebase.models import (
 )
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class WorkspaceSection(StrEnum):
@@ -146,20 +146,22 @@ type ItemWorkspace = (
 )
 
 
-def _record_read(db: Session, user: User, item_id: str) -> None:
-    read = db.get(ItemRead, (user.id, item_id))
+async def _record_read(db: AsyncSession, user: User, item_id: str) -> None:
+    read = await db.get(ItemRead, (user.id, item_id))
     if read is None:
         db.add(ItemRead(user_id=user.id, item_id=item_id))
     else:
         read.last_read_at = datetime.now(UTC)
 
 
-def _open_summary(db: Session, user: User, item: Item) -> SummaryWorkspace:
+async def _open_summary(db: AsyncSession, user: User, item: Item) -> SummaryWorkspace:
     revisions = tuple(
-        db.scalars(
-            select(FileRevision)
-            .where(FileRevision.item_id == item.id)
-            .order_by(FileRevision.created_at.desc())
+        (
+            await db.scalars(
+                select(FileRevision)
+                .where(FileRevision.item_id == item.id)
+                .order_by(FileRevision.created_at.desc())
+            )
         ).all()
     )
     member_projects = select(ProjectMember.project_id).where(ProjectMember.user_id == user.id)
@@ -167,7 +169,7 @@ def _open_summary(db: Session, user: User, item: Item) -> SummaryWorkspace:
     annotation_count = 0
     if revision_ids:
         annotation_count = (
-            db.scalar(
+            await db.scalar(
                 select(func.count(PdfAnnotation.id)).where(
                     PdfAnnotation.file_revision_id.in_(revision_ids),
                     PdfAnnotation.deleted_at.is_(None),
@@ -186,31 +188,33 @@ def _open_summary(db: Session, user: User, item: Item) -> SummaryWorkspace:
             or 0
         )
     message_count = (
-        db.scalar(
+        await db.scalar(
             select(func.count(DiscussionMessage.id)).where(DiscussionMessage.item_id == item.id)
         )
         or 0
     )
     attachment_count = (
-        db.scalar(select(func.count(Attachment.id)).where(Attachment.item_id == item.id)) or 0
+        await db.scalar(select(func.count(Attachment.id)).where(Attachment.item_id == item.id)) or 0
     )
-    item_owner = db.get(User, item.created_by)
+    item_owner = await db.get(User, item.created_by)
     if item_owner is None:
         raise ResourceNotFound("item owner not found")
     identifiers = tuple(
-        db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item.id)).all()
+        (await db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item.id))).all()
     )
     tags = tuple(
-        db.scalars(
-            select(Tag)
-            .join(ItemTag, ItemTag.tag_id == Tag.id)
-            .where(ItemTag.item_id == item.id)
-            .order_by(Tag.name)
+        (
+            await db.scalars(
+                select(Tag)
+                .join(ItemTag, ItemTag.tag_id == Tag.id)
+                .where(ItemTag.item_id == item.id)
+                .order_by(Tag.name)
+            )
         ).all()
     )
     return SummaryWorkspace(
         item=item,
-        can_edit=can_edit_item(db, user, item.id),
+        can_edit=await can_edit_item(db, user, item.id),
         can_delete=can_delete_item(db, user, item),
         revisions=revisions[:1],
         revision_count=len(revisions),
@@ -219,13 +223,13 @@ def _open_summary(db: Session, user: User, item: Item) -> SummaryWorkspace:
         message_count=message_count,
         tags=tags,
         item_owner=item_owner,
-        updater=db.get(User, item.updated_by) if item.updated_by else None,
+        updater=await db.get(User, item.updated_by) if item.updated_by else None,
         identifiers=identifiers,
     )
 
 
-def _revisions(
-    db: Session, item_id: str, *, all_revisions: bool = False
+async def _revisions(
+    db: AsyncSession, item_id: str, *, all_revisions: bool = False
 ) -> tuple[FileRevision, ...]:
     query = (
         select(FileRevision)
@@ -234,37 +238,41 @@ def _revisions(
     )
     if not all_revisions:
         query = query.limit(1)
-    return tuple(db.scalars(query).all())
+    return tuple((await db.scalars(query)).all())
 
 
-def _open_metadata(db: Session, user: User, item: Item) -> MetadataWorkspace:
-    authors = tuple(get_item_authors(db, item.id, role="author"))
-    editors = tuple(get_item_authors(db, item.id, role="editor"))
+async def _open_metadata(db: AsyncSession, user: User, item: Item) -> MetadataWorkspace:
+    authors = tuple(await get_item_authors(db, item.id, role="author"))
+    editors = tuple(await get_item_authors(db, item.id, role="editor"))
     identifiers = tuple(
-        db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item.id)).all()
+        (await db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item.id))).all()
     )
     return MetadataWorkspace(
         item=item,
-        can_edit=can_edit_item(db, user, item.id),
+        can_edit=await can_edit_item(db, user, item.id),
         can_delete=can_delete_item(db, user, item),
-        revisions=_revisions(db, item.id),
+        revisions=await _revisions(db, item.id),
         authors=authors,
         editors=editors,
         metadata=metadata_from_item(item, authors, editors, identifiers),
     )
 
 
-def _open_files(db: Session, user: User, item: Item) -> FilesWorkspace:
+async def _open_files(db: AsyncSession, user: User, item: Item) -> FilesWorkspace:
     attachments = tuple(
-        db.scalars(
-            select(Attachment).where(Attachment.item_id == item.id).order_by(Attachment.created_at)
+        (
+            await db.scalars(
+                select(Attachment)
+                .where(Attachment.item_id == item.id)
+                .order_by(Attachment.created_at)
+            )
         ).all()
     )
     return FilesWorkspace(
         item=item,
-        can_edit=can_edit_item(db, user, item.id),
+        can_edit=await can_edit_item(db, user, item.id),
         can_delete=can_delete_item(db, user, item),
-        revisions=_revisions(db, item.id, all_revisions=True),
+        revisions=await _revisions(db, item.id, all_revisions=True),
         attachments=attachments,
     )
 
@@ -292,117 +300,128 @@ def _typed_tag_matrix(raw: dict[str, Any]) -> TagMatrix:
     )
 
 
-def _open_organize(db: Session, user: User, item: Item) -> OrganizeWorkspace:
+async def _open_organize(db: AsyncSession, user: User, item: Item) -> OrganizeWorkspace:
     tags = tuple(
-        db.scalars(
-            select(Tag)
-            .join(ItemTag, ItemTag.tag_id == Tag.id)
-            .where(ItemTag.item_id == item.id)
-            .order_by(Tag.name)
+        (
+            await db.scalars(
+                select(Tag)
+                .join(ItemTag, ItemTag.tag_id == Tag.id)
+                .where(ItemTag.item_id == item.id)
+                .order_by(Tag.name)
+            )
         ).all()
     )
-    membership_rows = db.execute(
-        select(Project, ProjectMember.role)
-        .join(ProjectMember, ProjectMember.project_id == Project.id)
-        .where(ProjectMember.user_id == user.id)
-        .order_by(Project.name)
+    membership_rows = (
+        await db.execute(
+            select(Project, ProjectMember.role)
+            .join(ProjectMember, ProjectMember.project_id == Project.id)
+            .where(ProjectMember.user_id == user.id)
+            .order_by(Project.name)
+        )
     ).all()
     memberships = tuple(ProjectMembership(project=row[0], role=row[1]) for row in membership_rows)
     assigned_project_ids = frozenset(
-        db.scalars(select(ProjectItem.project_id).where(ProjectItem.item_id == item.id)).all()
+        (
+            await db.scalars(select(ProjectItem.project_id).where(ProjectItem.item_id == item.id))
+        ).all()
     )
     return OrganizeWorkspace(
         item=item,
-        can_edit=can_edit_item(db, user, item.id),
+        can_edit=await can_edit_item(db, user, item.id),
         can_delete=can_delete_item(db, user, item),
-        revisions=_revisions(db, item.id),
+        revisions=await _revisions(db, item.id),
         tags=tags,
         memberships=memberships,
         assigned_project_ids=assigned_project_ids,
-        tag_matrix=_typed_tag_matrix(get_tag_matrix_for_item(db, user, item.id)),
+        tag_matrix=_typed_tag_matrix(await get_tag_matrix_for_item(db, user, item.id)),
     )
 
 
-def _open_annotations(db: Session, user: User, item: Item) -> AnnotationsWorkspace:
-    revisions = _revisions(db, item.id, all_revisions=True)
+async def _open_annotations(db: AsyncSession, user: User, item: Item) -> AnnotationsWorkspace:
+    revisions = await _revisions(db, item.id, all_revisions=True)
     annotations: tuple[AnnotationView, ...] = ()
     if revisions:
         member_projects = select(ProjectMember.project_id).where(ProjectMember.user_id == user.id)
-        rows = db.execute(
-            select(PdfAnnotation, FileRevision, User)
-            .join(FileRevision, FileRevision.id == PdfAnnotation.file_revision_id)
-            .join(User, User.id == PdfAnnotation.author_id)
-            .where(
-                PdfAnnotation.file_revision_id.in_([revision.id for revision in revisions]),
-                PdfAnnotation.deleted_at.is_(None),
-                or_(
-                    and_(
-                        PdfAnnotation.scope == AnnotationScope.private,
-                        PdfAnnotation.author_id == user.id,
+        rows = (
+            await db.execute(
+                select(PdfAnnotation, FileRevision, User)
+                .options(selectinload(PdfAnnotation.segments))
+                .join(FileRevision, FileRevision.id == PdfAnnotation.file_revision_id)
+                .join(User, User.id == PdfAnnotation.author_id)
+                .where(
+                    PdfAnnotation.file_revision_id.in_([revision.id for revision in revisions]),
+                    PdfAnnotation.deleted_at.is_(None),
+                    or_(
+                        and_(
+                            PdfAnnotation.scope == AnnotationScope.private,
+                            PdfAnnotation.author_id == user.id,
+                        ),
+                        and_(
+                            PdfAnnotation.scope == AnnotationScope.project,
+                            PdfAnnotation.project_id.in_(member_projects),
+                        ),
                     ),
-                    and_(
-                        PdfAnnotation.scope == AnnotationScope.project,
-                        PdfAnnotation.project_id.in_(member_projects),
-                    ),
-                ),
+                )
+                .order_by(PdfAnnotation.updated_at.desc())
             )
-            .order_by(PdfAnnotation.updated_at.desc())
         ).all()
         annotations = tuple(
             AnnotationView(annotation=row[0], revision=row[1], author=row[2]) for row in rows
         )
     return AnnotationsWorkspace(
         item=item,
-        can_edit=can_edit_item(db, user, item.id),
+        can_edit=await can_edit_item(db, user, item.id),
         can_delete=can_delete_item(db, user, item),
         revisions=revisions,
         annotations=annotations,
     )
 
 
-def _open_discussion(db: Session, user: User, item: Item) -> DiscussionWorkspace:
+async def _open_discussion(db: AsyncSession, user: User, item: Item) -> DiscussionWorkspace:
     messages = tuple(
-        db.scalars(
-            select(DiscussionMessage)
-            .options(selectinload(DiscussionMessage.author))
-            .where(DiscussionMessage.item_id == item.id)
-            .order_by(DiscussionMessage.created_at)
+        (
+            await db.scalars(
+                select(DiscussionMessage)
+                .options(selectinload(DiscussionMessage.author))
+                .where(DiscussionMessage.item_id == item.id)
+                .order_by(DiscussionMessage.created_at)
+            )
         ).all()
     )
     return DiscussionWorkspace(
         item=item,
-        can_edit=can_edit_item(db, user, item.id),
+        can_edit=await can_edit_item(db, user, item.id),
         can_delete=can_delete_item(db, user, item),
-        revisions=_revisions(db, item.id),
+        revisions=await _revisions(db, item.id),
         messages=messages,
     )
 
 
-def open_item_workspace(
-    db: Session,
+async def open_item_workspace(
+    db: AsyncSession,
     user: User,
     item_id: str,
     section: WorkspaceSection,
 ) -> ItemWorkspace:
     try:
-        item = require_readable_item(db, user, item_id)
+        item = await require_readable_item(db, user, item_id)
         view: ItemWorkspace
         match section:
             case WorkspaceSection.summary:
-                view = _open_summary(db, user, item)
+                view = await _open_summary(db, user, item)
             case WorkspaceSection.metadata:
-                view = _open_metadata(db, user, item)
+                view = await _open_metadata(db, user, item)
             case WorkspaceSection.files:
-                view = _open_files(db, user, item)
+                view = await _open_files(db, user, item)
             case WorkspaceSection.organize:
-                view = _open_organize(db, user, item)
+                view = await _open_organize(db, user, item)
             case WorkspaceSection.annotations:
-                view = _open_annotations(db, user, item)
+                view = await _open_annotations(db, user, item)
             case WorkspaceSection.discussion:
-                view = _open_discussion(db, user, item)
-        _record_read(db, user, item.id)
-        db.commit()
+                view = await _open_discussion(db, user, item)
+        await _record_read(db, user, item.id)
+        await db.commit()
         return view
     except Exception:
-        db.rollback()
+        await db.rollback()
         raise

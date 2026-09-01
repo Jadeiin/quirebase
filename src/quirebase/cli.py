@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import typer
@@ -8,10 +9,16 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import inspect, select, text
 
-from .accounts import create_api_token, list_api_tokens, revoke_api_token
+from .accounts import (
+    ApiTokenGrant,
+    ApiTokenSummary,
+    create_api_token,
+    list_api_tokens,
+    revoke_api_token,
+)
 from .core.config import get_settings
-from .core.crypto import hash_password
-from .core.database import SessionLocal, engine
+from .core.crypto import hash_password_async
+from .core.database import AsyncSessionLocal, engine
 from .library.tag_recommendations import validate_engine_configuration
 from .models import User
 from .operations import check_objects, create_backup, restore_backup, verify_backup
@@ -28,7 +35,7 @@ def serve(host: str = "127.0.0.1", port: int = 9060, reload: bool = False):
 
 @app.command("worker")
 def worker():
-    run_forever()
+    asyncio.run(run_forever())
 
 
 @app.command("init-db")
@@ -51,16 +58,25 @@ def create_admin(
     username: str = typer.Option(..., prompt=True),
     password: str = typer.Option(..., prompt=True, hide_input=True, confirmation_prompt=True),
 ):
-    with SessionLocal() as db:
-        if db.scalar(select(User).where(User.username == username)):
-            raise typer.BadParameter("username already exists")
-        db.add(User(username=username, password_hash=hash_password(password), role="administrator"))
-        db.commit()
+    async def create() -> None:
+        async with AsyncSessionLocal() as db:
+            if await db.scalar(select(User).where(User.username == username)):
+                raise typer.BadParameter("username already exists")
+            db.add(
+                User(
+                    username=username,
+                    password_hash=await hash_password_async(password),
+                    role="administrator",
+                )
+            )
+            await db.commit()
+
+    asyncio.run(create())
     typer.echo(f"Administrator {username!r} created.")
 
 
-def _active_user(db, username: str) -> User:
-    user = db.scalar(select(User).where(User.username == username, User.active.is_(True)))
+async def _active_user(db, username: str) -> User:
+    user = await db.scalar(select(User).where(User.username == username, User.active.is_(True)))
     if user is None:
         raise typer.BadParameter("active user not found")
     return user
@@ -72,9 +88,12 @@ def create_api_token_command(
     name: str = typer.Option("MCP", help="Human-readable token name"),
     days: int = typer.Option(30, min=1, max=365, help="Token lifetime in days"),
 ):
-    with SessionLocal() as db:
-        user = _active_user(db, username)
-        grant = create_api_token(db, user, name, expires_in_days=days)
+    async def create() -> ApiTokenGrant:
+        async with AsyncSessionLocal() as db:
+            user = await _active_user(db, username)
+            return await create_api_token(db, user, name, expires_in_days=days)
+
+    grant = asyncio.run(create())
     typer.echo(f"Token ID: {grant.token_id}")
     typer.echo(f"Expires: {grant.expires_at.isoformat()}")
     typer.echo(f"API Token (shown once): {grant.raw_token}")
@@ -82,9 +101,12 @@ def create_api_token_command(
 
 @app.command("list-api-tokens")
 def list_api_tokens_command(username: str = typer.Argument(...)):
-    with SessionLocal() as db:
-        user = _active_user(db, username)
-        tokens = list_api_tokens(db, user)
+    async def list_tokens() -> tuple[ApiTokenSummary, ...]:
+        async with AsyncSessionLocal() as db:
+            user = await _active_user(db, username)
+            return await list_api_tokens(db, user)
+
+    tokens = asyncio.run(list_tokens())
     for token in tokens:
         typer.echo(
             f"{token.token_id}\t{token.status}\t{token.expires_at.isoformat()}\t{token.name}"
@@ -96,19 +118,34 @@ def revoke_api_token_command(
     username: str = typer.Argument(...),
     token_id: str = typer.Argument(...),
 ):
-    with SessionLocal() as db:
-        user = _active_user(db, username)
-        revoke_api_token(db, user, token_id)
+    async def revoke() -> None:
+        async with AsyncSessionLocal() as db:
+            user = await _active_user(db, username)
+            await revoke_api_token(db, user, token_id)
+
+    asyncio.run(revoke())
     typer.echo(f"Revoked API Token {token_id}.")
 
 
 @app.command("doctor")
 def doctor():
+    async def database_check() -> tuple[str, bool, list[str]]:
+        async with engine.connect() as connection:
+            await connection.execute(text("SELECT 1"))
+            dialect = connection.dialect.name
+            has_users = await connection.run_sync(lambda sync: inspect(sync).has_table("users"))
+        object_errors: list[str] = []
+        if has_users:
+            async with AsyncSessionLocal() as db:
+                object_errors = await check_objects(db)
+        return dialect, has_users, object_errors
+
     failures = 0
+    has_users = False
+    object_errors: list[str] = []
     try:
-        with engine.connect() as connection:
-            connection.execute(text("SELECT 1"))
-        typer.echo(f"[ok] database ({engine.dialect.name})")
+        dialect, has_users, object_errors = asyncio.run(database_check())
+        typer.echo(f"[ok] database ({dialect})")
     except Exception as error:
         failures += 1
         typer.echo(f"[failed] database: {error}")
@@ -139,12 +176,10 @@ def doctor():
     except Exception as error:
         failures += 1
         typer.echo(f"[failed] recommendations: {error}")
-    if not inspect(engine).has_table("users"):
+    if not has_users:
         failures += 1
         typer.echo("[failed] schema is not initialized; run quirebase init-db")
     else:
-        with SessionLocal() as db:
-            object_errors = check_objects(db)
         if object_errors:
             failures += len(object_errors)
             for object_error in object_errors:
@@ -156,21 +191,25 @@ def doctor():
 
 @app.command("reindex")
 def reindex():
-    with SessionLocal() as db:
-        count = reindex_all(db)
-        db.commit()
+    async def run() -> int:
+        async with AsyncSessionLocal() as db:
+            count = await reindex_all(db)
+            await db.commit()
+            return count
+
+    count = asyncio.run(run())
     typer.echo(f"Indexed {count} items.")
 
 
 @app.command("backup")
 def backup(destination: Path = typer.Argument(...)):
-    path = create_backup(destination.resolve())
+    path = asyncio.run(create_backup(destination.resolve()))
     typer.echo(f"Backup created: {path}")
 
 
 @app.command("verify-backup")
 def verify_backup_command(archive: Path = typer.Argument(...)):
-    manifest = verify_backup(archive.resolve())
+    manifest = asyncio.run(verify_backup(archive.resolve()))
     typer.echo(f"Backup verified: {manifest['database_kind']} {manifest['created_at']}")
 
 
@@ -183,8 +222,8 @@ def restore(
 ):
     if not force:
         raise typer.BadParameter("restore is destructive; inspect the target and pass --force")
-    engine.dispose()
-    restore_backup(archive.resolve(), force=True)
+    asyncio.run(engine.dispose())
+    asyncio.run(restore_backup(archive.resolve(), force=True))
     typer.echo("Backup restored. Restart all web and worker processes.")
 
 

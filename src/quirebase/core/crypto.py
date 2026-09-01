@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import secrets
 
@@ -20,6 +21,16 @@ def verify_password(encoded: str, password: str) -> bool:
         return password_hasher.verify(encoded, password)
     except (VerifyMismatchError, InvalidHashError):
         return False
+
+
+async def hash_password_async(password: str) -> str:
+    """Hash a password without running Argon2 on the event-loop thread."""
+    return await asyncio.to_thread(hash_password, password)
+
+
+async def verify_password_async(encoded: str, password: str) -> bool:
+    """Verify a password without running Argon2 on the event-loop thread."""
+    return await asyncio.to_thread(verify_password, encoded, password)
 
 
 def token_hash(token: str) -> str:

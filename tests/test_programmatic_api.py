@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
-from contextlib import contextmanager
+from contextlib import asynccontextmanager
 
+import httpx2
+import pytest
 from fastapi.routing import APIRoute
-from fastapi.testclient import TestClient
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import select
 
 from quirebase.accounts import create_api_token
 from quirebase.core.database import get_db
@@ -20,17 +21,18 @@ from quirebase.web.api.routes import router as programmatic_api_router
 from quirebase.web.app import create_app
 
 
-@contextmanager
-def api_client(db):
-    factory = sessionmaker(bind=db.get_bind(), expire_on_commit=False)
+@asynccontextmanager
+async def api_client(factory):
     app = create_app(mcp_session_factory=factory)
 
-    def override_db():
-        with factory() as session:
+    async def override_db():
+        async with factory() as session:
             yield session
 
     app.dependency_overrides[get_db] = override_db
-    with TestClient(app) as client:
+    async with httpx2.AsyncClient(
+        transport=httpx2.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
         yield client, app
 
 
@@ -38,18 +40,22 @@ def bearer(raw_token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {raw_token}"}
 
 
-def test_http_api_requires_a_bearer_api_token_and_rejects_cookie_or_query_token(db):
+@pytest.mark.anyio
+async def test_http_api_requires_a_bearer_api_token_and_rejects_cookie_or_query_token(
+    async_db, async_session_factory
+):
+    db = async_db
     user = User(username="api-auth-user", password_hash="unused")
     db.add(user)
-    db.commit()
-    grant = create_api_token(db, user, "HTTP API", expires_in_days=30)
+    await db.commit()
+    grant = await create_api_token(db, user, "HTTP API", expires_in_days=30)
 
-    with api_client(db) as (client, _app):
+    async with api_client(async_session_factory) as (client, _app):
         client.cookies.set("quirebase_session", "not-an-api-credential")
-        missing = client.get("/api/v1/items")
-        query = client.get(f"/api/v1/items?token={grant.raw_token}")
-        invalid = client.get("/api/v1/items", headers=bearer("invalid"))
-        accepted = client.get("/api/v1/items", headers=bearer(grant.raw_token))
+        missing = await client.get("/api/v1/items")
+        query = await client.get(f"/api/v1/items?token={grant.raw_token}")
+        invalid = await client.get("/api/v1/items", headers=bearer("invalid"))
+        accepted = await client.get("/api/v1/items", headers=bearer(grant.raw_token))
 
     assert missing.status_code == 401
     assert missing.headers["www-authenticate"] == "Bearer"
@@ -59,7 +65,10 @@ def test_http_api_requires_a_bearer_api_token_and_rejects_cookie_or_query_token(
     assert accepted.json() == {"items": [], "total": 0, "page": 1, "per_page": 25}
 
 
-def test_http_api_exposes_the_same_ordinary_user_capability_set_as_mcp(db):
+@pytest.mark.anyio
+async def test_http_api_exposes_the_same_ordinary_user_capability_set_as_mcp(
+    async_session_factory,
+):
     expected = {
         ("GET", "/api/v1/items"),
         ("POST", "/api/v1/items"),
@@ -88,7 +97,7 @@ def test_http_api_exposes_the_same_ordinary_user_capability_set_as_mcp(db):
         ("POST", "/api/v1/discovery/search"),
     }
 
-    with api_client(db) as (_client, _app):
+    async with api_client(async_session_factory) as (_client, _app):
         actual = {
             (method, route.path)
             for route in programmatic_api_router.routes
@@ -108,15 +117,19 @@ def test_http_api_exposes_the_same_ordinary_user_capability_set_as_mcp(db):
     assert response_models["GET", "/api/v1/items/{item_id}/documents"] is DocumentListView
 
 
-def test_http_api_library_project_tag_and_discussion_lifecycle(db):
+@pytest.mark.anyio
+async def test_http_api_library_project_tag_and_discussion_lifecycle(
+    async_db, async_session_factory
+):
+    db = async_db
     user = User(username="api-lifecycle", password_hash="unused")
     db.add(user)
-    db.commit()
-    grant = create_api_token(db, user, "Lifecycle", expires_in_days=30)
+    await db.commit()
+    grant = await create_api_token(db, user, "Lifecycle", expires_in_days=30)
     headers = bearer(grant.raw_token)
 
-    with api_client(db) as (client, _app):
-        created = client.post(
+    async with api_client(async_session_factory) as (client, _app):
+        created = await client.post(
             "/api/v1/items",
             headers=headers,
             json={
@@ -128,7 +141,12 @@ def test_http_api_library_project_tag_and_discussion_lifecycle(db):
         )
         assert created.status_code == 201
         item_id = created.json()["id"]
-        event = db.query(AuditEvent).filter_by(action="item.create", target_id=item_id).one()
+        event = await db.scalar(
+            select(AuditEvent).where(
+                AuditEvent.action == "item.create", AuditEvent.target_id == item_id
+            )
+        )
+        assert event is not None
         assert json.loads(event.detail) == {
             "invocation": {
                 "protocol": "http",
@@ -138,63 +156,71 @@ def test_http_api_library_project_tag_and_discussion_lifecycle(db):
             }
         }
 
-        listed = client.get("/api/v1/items?query=HTTP", headers=headers)
-        detail = client.get(f"/api/v1/items/{item_id}", headers=headers)
+        listed = await client.get("/api/v1/items?query=HTTP", headers=headers)
+        detail = await client.get(f"/api/v1/items/{item_id}", headers=headers)
         assert listed.json()["items"][0]["id"] == item_id
         assert detail.json()["metadata"]["custom_fields"] == [{"name": "rating", "value": 5}]
 
         metadata = detail.json()["metadata"]
         metadata["title"] = "Updated through HTTP API"
-        updated = client.put(
+        updated = await client.put(
             f"/api/v1/items/{item_id}",
             headers=headers,
             json={"expected_version": detail.json()["version"], "metadata": metadata},
         )
         assert updated.status_code == 200
 
-        project = client.post("/api/v1/projects", headers=headers, json={"name": "API Project"})
-        project_id = project.json()["id"]
-        assert client.put(
-            f"/api/v1/projects/{project_id}/items/{item_id}", headers=headers
-        ).json() == {"ok": True}
-        assert (
-            client.get(f"/api/v1/projects/{project_id}", headers=headers).json()["item_count"] == 1
+        project = await client.post(
+            "/api/v1/projects", headers=headers, json={"name": "API Project"}
         )
+        project_id = project.json()["id"]
+        assert (
+            await client.put(f"/api/v1/projects/{project_id}/items/{item_id}", headers=headers)
+        ).json() == {"ok": True}
+        assert (await client.get(f"/api/v1/projects/{project_id}", headers=headers)).json()[
+            "item_count"
+        ] == 1
 
-        tag = client.post(
+        tag = await client.post(
             f"/api/v1/items/{item_id}/tags", headers=headers, json={"name": "Reviewed"}
         )
         assert tag.status_code == 200
-        assert client.get("/api/v1/tags", headers=headers).json()[0]["name"] == "Reviewed"
+        assert (await client.get("/api/v1/tags", headers=headers)).json()[0]["name"] == "Reviewed"
 
-        discussion = client.post(
+        discussion = await client.post(
             f"/api/v1/items/{item_id}/discussions",
             headers=headers,
             json={"body": "Programmatic note"},
         )
         assert discussion.status_code == 201
         message_id = discussion.json()["id"]
+        assert (await client.get(f"/api/v1/items/{item_id}/discussions", headers=headers)).json()[
+            0
+        ]["body"] == "Programmatic note"
         assert (
-            client.get(f"/api/v1/items/{item_id}/discussions", headers=headers).json()[0]["body"]
-            == "Programmatic note"
-        )
-        assert client.delete(
-            f"/api/v1/items/{item_id}/discussions/{message_id}", headers=headers
+            await client.delete(
+                f"/api/v1/items/{item_id}/discussions/{message_id}", headers=headers
+            )
         ).json() == {"ok": True}
 
 
-def test_http_api_document_and_annotation_views_match_programmatic_contracts(db):
+@pytest.mark.anyio
+async def test_http_api_document_and_annotation_views_match_programmatic_contracts(
+    async_db, async_session_factory
+):
+    db = async_db
     user = User(username="api-annotations", password_hash="unused")
     db.add(user)
-    db.flush()
+    await db.flush()
     item_response_title = "Annotated Item"
-    db.commit()
-    grant = create_api_token(db, user, "Annotations", expires_in_days=30)
+    await db.commit()
+    user_id = user.id
+    grant = await create_api_token(db, user, "Annotations", expires_in_days=30)
     headers = bearer(grant.raw_token)
 
-    with api_client(db) as (client, _app):
-        item_id = client.post(
-            "/api/v1/items", headers=headers, json={"title": item_response_title}
+    async with api_client(async_session_factory) as (client, _app):
+        item_id = (
+            await client.post("/api/v1/items", headers=headers, json={"title": item_response_title})
         ).json()["id"]
 
     revision = FileRevision(
@@ -207,17 +233,17 @@ def test_http_api_document_and_annotation_views_match_programmatic_contracts(db)
         page_count=1,
         page_geometry="[[0, 0, 100, 100]]",
         processing_state="ready",
-        created_by=user.id,
+        created_by=user_id,
     )
     db.add(revision)
-    db.commit()
+    await db.commit()
 
-    with api_client(db) as (client, _app):
-        documents = client.get(f"/api/v1/items/{item_id}/documents", headers=headers)
+    async with api_client(async_session_factory) as (client, _app):
+        documents = await client.get(f"/api/v1/items/{item_id}/documents", headers=headers)
         assert documents.status_code == 200
         assert documents.json()["files"][0]["original_name"] == "api.pdf"
 
-        created = client.post(
+        created = await client.post(
             f"/api/v1/items/{item_id}/annotations",
             headers=headers,
             json={
@@ -229,7 +255,7 @@ def test_http_api_document_and_annotation_views_match_programmatic_contracts(db)
         )
         assert created.status_code == 201
         annotation_id = created.json()["id"]
-        listed = client.get(
+        listed = await client.get(
             f"/api/v1/items/{item_id}/annotations",
             headers=headers,
             params={"revision_id": revision.id},

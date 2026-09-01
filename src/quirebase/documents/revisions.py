@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 from dataclasses import dataclass, field
@@ -7,7 +8,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, BinaryIO
 
 from sqlalchemy import select, update
-from sqlalchemy.orm import Session
 
 from quirebase.access.documents import require_attachment, require_revision
 from quirebase.access.items import can_edit_item, require_editable_item, require_readable_item
@@ -38,7 +38,9 @@ from quirebase.pipeline.derived_state import propagate_file_revision_change
 from quirebase.pipeline.inspection import job_payload, validate_pdf_container
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Coroutine, Iterable
+
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class UnsupportedMediaType(DomainError):
@@ -94,8 +96,82 @@ def stage_pdf(source: BinaryIO, filename: str, max_bytes: int) -> StagedPdf:
     return StagedPdf(key, digest, size, Path(filename).name, lease)
 
 
-def attach_staged_pdf(
-    db: Session,
+def _consume_current_cancellation() -> None:
+    task = asyncio.current_task()
+    if task is not None:
+        task.uncancel()
+
+
+async def _finish_task_despite_cancellation[StagedResult](
+    task: asyncio.Task[StagedResult],
+) -> StagedResult:
+    """Wait for an ownership-bearing task even if more cancellations arrive."""
+    while True:
+        try:
+            return await asyncio.shield(task)
+        except asyncio.CancelledError:
+            _consume_current_cancellation()
+
+
+async def _run_staging_worker[StagedResult](
+    operation: Callable[[], StagedResult],
+    cleanup: Callable[[StagedResult], Coroutine[Any, Any, None]],
+) -> StagedResult:
+    """Run blocking staging without abandoning a lease-bearing result on cancellation."""
+    worker = asyncio.create_task(asyncio.to_thread(operation))
+    try:
+        return await asyncio.shield(worker)
+    except asyncio.CancelledError as cancellation:
+        _consume_current_cancellation()
+        try:
+            staged = await _finish_task_despite_cancellation(worker)
+        except Exception:
+            raise cancellation from None
+        cleanup_task = asyncio.create_task(cleanup(staged))
+        await _finish_task_despite_cancellation(cleanup_task)
+        raise
+
+
+async def _release_staged_pdf(db: AsyncSession, staged: StagedPdf) -> None:
+    await asyncio.to_thread(staged.release)
+    await discard_staged_object(db, staged.object_key)
+
+
+async def _release_staged_attachment(
+    db: AsyncSession, staged: tuple[str, str, int, ObjectLease]
+) -> None:
+    object_key, _digest, _size, lease = staged
+    await asyncio.to_thread(lease.release)
+    await discard_staged_object(db, object_key)
+
+
+async def stage_pdf_async(
+    db: AsyncSession,
+    source: BinaryIO,
+    filename: str,
+    max_bytes: int,
+) -> StagedPdf:
+    """Stage a PDF in a worker and reclaim its lease/object if the caller is cancelled."""
+    return await _run_staging_worker(
+        lambda: stage_pdf(source, filename, max_bytes),
+        lambda staged: _release_staged_pdf(db, staged),
+    )
+
+
+async def _rollback_and_release_pdf(db: AsyncSession, staged: StagedPdf) -> None:
+    await db.rollback()
+    await _release_staged_pdf(db, staged)
+
+
+async def _rollback_and_release_attachment(
+    db: AsyncSession, staged: tuple[str, str, int, ObjectLease]
+) -> None:
+    await db.rollback()
+    await _release_staged_attachment(db, staged)
+
+
+async def attach_staged_pdf(
+    db: AsyncSession,
     user: User,
     item: Item,
     staged: tuple[str, str, int, str],
@@ -110,7 +186,7 @@ def attach_staged_pdf(
         created_by=user.id,
     )
     db.add(revision)
-    db.flush()
+    await db.flush()
     db.add(
         Job(
             kind="pdf.inspect",
@@ -139,20 +215,24 @@ def _pdf_import_object_keys(records_json: str) -> set[str]:
     }
 
 
-def _object_is_referenced(db: Session, object_key: str) -> bool:
-    if db.scalar(select(FileRevision.object_key).where(FileRevision.object_key == object_key)):
+async def _object_is_referenced(db: AsyncSession, object_key: str) -> bool:
+    if await db.scalar(
+        select(FileRevision.object_key).where(FileRevision.object_key == object_key)
+    ):
         return True
-    if db.scalar(select(Attachment.object_key).where(Attachment.object_key == object_key)):
+    if await db.scalar(select(Attachment.object_key).where(Attachment.object_key == object_key)):
         return True
     return any(
         object_key in _pdf_import_object_keys(records)
-        for records in db.scalars(
-            select(ImportBatch.records).where(ImportBatch.file_format == "pdf")
+        for records in (
+            await db.scalars(select(ImportBatch.records).where(ImportBatch.file_format == "pdf"))
         )
     )
 
 
-def delete_unreferenced_objects(db: Session, object_keys: Iterable[str]) -> tuple[str, ...]:
+async def delete_unreferenced_objects(
+    db: AsyncSession, object_keys: Iterable[str]
+) -> tuple[str, ...]:
     """Delete objects only when no committed, pending, or in-flight record references them."""
     keys = tuple(dict.fromkeys(key for key in object_keys if key))
     if not keys:
@@ -160,23 +240,26 @@ def delete_unreferenced_objects(db: Session, object_keys: Iterable[str]) -> tupl
     store = LocalObjectStore()
     actually_deleted: list[str] = []
     for object_key in keys:
-        with store.cleanup_lock(object_key):
-            if store.has_active_lease(object_key):
+        lock = await asyncio.to_thread(store.cleanup_lock, object_key)
+        await asyncio.to_thread(lock.acquire)
+        try:
+            if await asyncio.to_thread(store.has_active_lease, object_key):
                 continue
-            with Session(db.bind) as check_db:
-                if _object_is_referenced(check_db, object_key):
-                    continue
-            store.delete(object_key)
+            if await _object_is_referenced(db, object_key):
+                continue
+            await asyncio.to_thread(store.delete, object_key)
             actually_deleted.append(object_key)
+        finally:
+            await asyncio.to_thread(lock.release)
     return tuple(actually_deleted)
 
 
-def discard_staged_object(db: Session, object_key: str) -> None:
-    delete_unreferenced_objects(db, (object_key,))
+async def discard_staged_object(db: AsyncSession, object_key: str) -> None:
+    await delete_unreferenced_objects(db, (object_key,))
 
 
-def store_pdf_revision(
-    db: Session,
+async def store_pdf_revision(
+    db: AsyncSession,
     user: User,
     item_id: str,
     source: BinaryIO,
@@ -185,19 +268,22 @@ def store_pdf_revision(
 ) -> FileRevision:
     from quirebase.operations.settings import get_effective_setting
 
-    item = require_editable_item(db, user, item_id)
+    item = await require_editable_item(db, user, item_id)
     if max_bytes is None:
-        max_bytes = get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes)
-    staged = stage_pdf(source, filename, max_bytes)
+        max_bytes = await get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes)
+    staged = await stage_pdf_async(db, source, filename, max_bytes)
     try:
-        revision = attach_staged_pdf(db, user, item, staged.revision_data())
-        db.commit()
-    except Exception:
-        db.rollback()
-        staged.release()
-        discard_staged_object(db, staged.object_key)
+        revision = await attach_staged_pdf(db, user, item, staged.revision_data())
+        await db.commit()
+    except asyncio.CancelledError:
+        _consume_current_cancellation()
+        cleanup_task = asyncio.create_task(_rollback_and_release_pdf(db, staged))
+        await _finish_task_despite_cancellation(cleanup_task)
         raise
-    staged.release()
+    except Exception:
+        await _rollback_and_release_pdf(db, staged)
+        raise
+    await asyncio.to_thread(staged.release)
     return revision
 
 
@@ -212,22 +298,24 @@ def _is_image_container(path: Path, content_type: str) -> bool:
     }.get(content_type, False)
 
 
-def _lock_item_for_attachment_role_replacement(db: Session, item_id: str) -> None:
+async def _lock_item_for_attachment_role_replacement(db: AsyncSession, item_id: str) -> None:
     if db.get_bind().dialect.name == "sqlite":
-        locked_item_id = db.scalar(
+        locked_item_id = await db.scalar(
             update(Item)
             .where(Item.id == item_id)
             .values(updated_at=Item.updated_at)
             .returning(Item.id)
         )
     else:
-        locked_item_id = db.scalar(select(Item.id).where(Item.id == item_id).with_for_update())
+        locked_item_id = await db.scalar(
+            select(Item.id).where(Item.id == item_id).with_for_update()
+        )
     if locked_item_id is None:
         raise ResourceUnavailable("item not accessible")
 
 
-def create_attachment(
-    db: Session,
+async def create_attachment(
+    db: AsyncSession,
     user: User,
     item_id: str,
     source: BinaryIO,
@@ -238,10 +326,10 @@ def create_attachment(
 ) -> Attachment:
     from quirebase.operations.settings import get_effective_setting
 
-    if not can_edit_item(db, user, item_id) or not filename:
+    if not await can_edit_item(db, user, item_id) or not filename:
         raise ResourceUnavailable("item not accessible or filename missing")
     if max_bytes is None:
-        max_bytes = get_effective_setting(
+        max_bytes = await get_effective_setting(
             db, "max_attachment_bytes", get_settings().max_attachment_bytes
         )
     if role == AttachmentRole.graphical_abstract and content_type not in (
@@ -250,19 +338,23 @@ def create_attachment(
         raise ValidationFailure("graphical abstract must be a PNG, JPEG, WebP, or GIF image")
     store = LocalObjectStore()
     try:
-        key, digest, size, lease = store.put_staged_attachment(source, max_bytes)
+        staged = await _run_staging_worker(
+            lambda: store.put_staged_attachment(source, max_bytes),
+            lambda staged: _release_staged_attachment(db, staged),
+        )
     except ValueError as error:
         raise ValidationFailure(str(error)) from error
-    if role == AttachmentRole.graphical_abstract and not _is_image_container(
-        store.path(key), content_type
+    key, digest, size, lease = staged
+    if role == AttachmentRole.graphical_abstract and not await asyncio.to_thread(
+        _is_image_container, store.path(key), content_type
     ):
-        lease.release()
-        discard_staged_object(db, key)
+        await asyncio.to_thread(lease.release)
+        await discard_staged_object(db, key)
         raise ValidationFailure("graphical abstract content does not match its image type")
     try:
         if role is not None:
-            _lock_item_for_attachment_role_replacement(db, item_id)
-            current = db.scalar(
+            await _lock_item_for_attachment_role_replacement(db, item_id)
+            current = await db.scalar(
                 select(Attachment).where(
                     Attachment.item_id == item_id,
                     Attachment.role == role,
@@ -270,7 +362,7 @@ def create_attachment(
             )
             if current is not None:
                 current.role = None
-                db.flush()
+                await db.flush()
         record = Attachment(
             item_id=item_id,
             object_key=key,
@@ -282,22 +374,25 @@ def create_attachment(
             created_by=user.id,
         )
         db.add(record)
-        db.flush()
+        await db.flush()
         record_event(db, user.id, "attachment.upload", "attachment", record.id)
-        db.commit()
-    except Exception:
-        db.rollback()
-        lease.release()
-        discard_staged_object(db, key)
+        await db.commit()
+    except asyncio.CancelledError:
+        _consume_current_cancellation()
+        cleanup_task = asyncio.create_task(_rollback_and_release_attachment(db, staged))
+        await _finish_task_despite_cancellation(cleanup_task)
         raise
-    lease.release()
+    except Exception:
+        await _rollback_and_release_attachment(db, staged)
+        raise
+    await asyncio.to_thread(lease.release)
     return record
 
 
-def get_attachment_file(
-    db: Session, user: User, item_id: str, attachment_id: str
+async def get_attachment_file(
+    db: AsyncSession, user: User, item_id: str, attachment_id: str
 ) -> tuple[Path, str, str]:
-    record = require_attachment(db, user, item_id, attachment_id)
+    record = await require_attachment(db, user, item_id, attachment_id)
     return (
         LocalObjectStore().path(record.object_key),
         record.original_name,
@@ -305,10 +400,10 @@ def get_attachment_file(
     )
 
 
-def get_revision_file(
-    db: Session, user: User, item_id: str, revision_id: str
+async def get_revision_file(
+    db: AsyncSession, user: User, item_id: str, revision_id: str
 ) -> tuple[Path, str, str]:
-    revision = require_revision(db, user, revision_id)
+    revision = await require_revision(db, user, revision_id)
     if revision.item_id != item_id:
         raise ResourceNotFound("revision not found for item")
     return (
@@ -318,21 +413,21 @@ def get_revision_file(
     )
 
 
-def get_revision_thumbnail(
-    db: Session, user: User, item_id: str, revision_id: str
+async def get_revision_thumbnail(
+    db: AsyncSession, user: User, item_id: str, revision_id: str
 ) -> Path:
-    revision = require_revision(db, user, revision_id)
+    revision = await require_revision(db, user, revision_id)
     if revision.item_id != item_id:
         raise ResourceNotFound("revision not found for item")
     path = get_settings().object_dir / "thumbnails" / f"{revision.id}.png"
-    if not path.is_file():
+    if not await asyncio.to_thread(path.is_file):
         raise ResourceNotFound("revision thumbnail not found")
     return path
 
 
-def get_item_thumbnail(db: Session, user: User, item_id: str) -> ItemThumbnail:
-    require_readable_item(db, user, item_id)
-    graphical_abstract = db.scalar(
+async def get_item_thumbnail(db: AsyncSession, user: User, item_id: str) -> ItemThumbnail:
+    await require_readable_item(db, user, item_id)
+    graphical_abstract = await db.scalar(
         select(Attachment).where(
             Attachment.item_id == item_id,
             Attachment.role == AttachmentRole.graphical_abstract,
@@ -340,24 +435,26 @@ def get_item_thumbnail(db: Session, user: User, item_id: str) -> ItemThumbnail:
     )
     if graphical_abstract is not None:
         path = LocalObjectStore().path(graphical_abstract.object_key)
-        if path.is_file():
+        if await asyncio.to_thread(path.is_file):
             return ItemThumbnail(
                 path=path,
                 media_type=graphical_abstract.mime_type,
                 source_kind="graphical_abstract",
                 source_id=graphical_abstract.id,
             )
-    revisions = db.scalars(
-        select(FileRevision)
-        .where(
-            FileRevision.item_id == item_id,
-            FileRevision.processing_state == "ready",
+    revisions = (
+        await db.scalars(
+            select(FileRevision)
+            .where(
+                FileRevision.item_id == item_id,
+                FileRevision.processing_state == "ready",
+            )
+            .order_by(FileRevision.created_at.desc())
         )
-        .order_by(FileRevision.created_at.desc())
     ).all()
     for revision in revisions:
         path = get_settings().object_dir / "thumbnails" / f"{revision.id}.png"
-        if path.is_file():
+        if await asyncio.to_thread(path.is_file):
             return ItemThumbnail(
                 path=path,
                 media_type="image/png",
@@ -375,16 +472,16 @@ def _job_targets_revision(job: Job, revision_id: str) -> bool:
     return isinstance(payload, dict) and payload.get("revision_id") == revision_id
 
 
-def delete_file_revision(
-    db: Session, user: User, item_id: str, revision_id: str
+async def delete_file_revision(
+    db: AsyncSession, user: User, item_id: str, revision_id: str
 ) -> None:
-    require_editable_item(db, user, item_id)
-    revision = db.scalar(
+    await require_editable_item(db, user, item_id)
+    revision = await db.scalar(
         select(FileRevision).where(FileRevision.id == revision_id).with_for_update()
     )
     if revision is None or revision.item_id != item_id:
         raise ResourceNotFound("file revision not found")
-    inspection_job = db.scalar(
+    inspection_job = await db.scalar(
         select(Job)
         .where(
             Job.kind == "pdf.inspect",
@@ -394,57 +491,65 @@ def delete_file_revision(
     )
     export_jobs = tuple(
         job
-        for job in db.scalars(
-            select(Job)
-            .where(
-                Job.kind == "pdf.export_annotations",
-                Job.state.in_([JobState.pending, JobState.running, JobState.failed]),
+        for job in (
+            await db.scalars(
+                select(Job)
+                .where(
+                    Job.kind == "pdf.export_annotations",
+                    Job.state.in_([JobState.pending, JobState.running, JobState.failed]),
+                )
+                .with_for_update()
             )
-            .with_for_update()
         ).all()
         if _job_targets_revision(job, revision_id)
     )
     revision_jobs = tuple(job for job in (inspection_job, *export_jobs) if job is not None)
     if any(job.state == JobState.running for job in revision_jobs):
-        raise VersionConflict(message="PDF background work is still running; retry deletion shortly")
+        raise VersionConflict(
+            message="PDF background work is still running; retry deletion shortly"
+        )
     object_key = revision.object_key
     thumbnail = get_settings().object_dir / "thumbnails" / f"{revision.id}.png"
     for job in revision_jobs:
         if job.state in {JobState.pending, JobState.failed}:
-            db.delete(job)
-    db.delete(revision)
-    db.flush()
-    propagate_file_revision_change(db, item_id, owner_id=user.id)
+            await db.delete(job)
+    await db.delete(revision)
+    await db.flush()
+    await propagate_file_revision_change(db, item_id, owner_id=user.id)
     record_event(db, user.id, "pdf.delete", "file_revision", revision.id)
-    db.commit()
+    await db.commit()
     with contextlib.suppress(OSError):
-        thumbnail.unlink(missing_ok=True)
-    delete_unreferenced_objects(db, (object_key,))
+        await asyncio.to_thread(thumbnail.unlink, missing_ok=True)
+    await delete_unreferenced_objects(db, (object_key,))
 
 
-def delete_attachment(db: Session, user: User, item_id: str, attachment_id: str) -> None:
-    require_editable_item(db, user, item_id)
-    attachment = db.get(Attachment, attachment_id)
+async def delete_attachment(db: AsyncSession, user: User, item_id: str, attachment_id: str) -> None:
+    await require_editable_item(db, user, item_id)
+    attachment = await db.get(Attachment, attachment_id)
     if attachment is None or attachment.item_id != item_id:
         raise ResourceNotFound("attachment not found")
     object_key = attachment.object_key
-    db.delete(attachment)
+    await db.delete(attachment)
     record_event(db, user.id, "attachment.delete", "attachment", attachment.id)
-    db.commit()
-    delete_unreferenced_objects(db, (object_key,))
+    await db.commit()
+    await delete_unreferenced_objects(db, (object_key,))
 
 
-def get_pdf_viewer_data(db: Session, user: User, item_id: str, revision_id: str) -> dict[str, Any]:
-    revision = require_revision(db, user, revision_id)
+async def get_pdf_viewer_data(
+    db: AsyncSession, user: User, item_id: str, revision_id: str
+) -> dict[str, Any]:
+    revision = await require_revision(db, user, revision_id)
     if revision.item_id != item_id:
         raise ResourceNotFound("revision not found for item")
     projects = list(
-        db.scalars(
-            select(Project)
-            .join(ProjectMember, ProjectMember.project_id == Project.id)
-            .join(ProjectItem, ProjectItem.project_id == Project.id)
-            .where(ProjectMember.user_id == user.id, ProjectItem.item_id == item_id)
-            .order_by(Project.name)
+        (
+            await db.scalars(
+                select(Project)
+                .join(ProjectMember, ProjectMember.project_id == Project.id)
+                .join(ProjectItem, ProjectItem.project_id == Project.id)
+                .where(ProjectMember.user_id == user.id, ProjectItem.item_id == item_id)
+                .order_by(Project.name)
+            )
         ).all()
     )
     return {

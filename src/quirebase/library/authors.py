@@ -11,7 +11,7 @@ from quirebase.core.errors import ValidationFailure
 from quirebase.models import Author, Item, ItemAuthor, User
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def parse_author_name(name_str: str) -> tuple[str, str | None]:
@@ -47,7 +47,9 @@ def parse_author_list_string(raw: str | None) -> list[dict[str, str | None]]:
     return authors
 
 
-def find_or_create_author(db: Session, last_name: str, first_name: str | None = None) -> Author:
+async def find_or_create_author(
+    db: AsyncSession, last_name: str, first_name: str | None = None
+) -> Author:
     last = " ".join(last_name.split())
     if not last:
         raise ValidationFailure("author last name is required")
@@ -57,25 +59,27 @@ def find_or_create_author(db: Session, last_name: str, first_name: str | None = 
         Author.last_name.ilike(last),
         Author.first_name.ilike(first) if first else Author.first_name.is_(None),
     )
-    author = db.scalar(stmt)
+    author = await db.scalar(stmt)
     if author is None:
         author = Author(last_name=last, first_name=first)
         db.add(author)
-        db.flush()
+        await db.flush()
     return author
 
 
-def set_item_authors(
-    db: Session,
+async def set_item_authors(
+    db: AsyncSession,
     user: User,
     item_id: str,
     authors_data: list[dict],
     role: str = "author",
 ) -> list[ItemAuthor]:
-    item = require_editable_item(db, user, item_id)
+    item = await require_editable_item(db, user, item_id)
 
-    db.execute(delete(ItemAuthor).where(ItemAuthor.item_id == item_id, ItemAuthor.role == role))
-    db.flush()
+    await db.execute(
+        delete(ItemAuthor).where(ItemAuthor.item_id == item_id, ItemAuthor.role == role)
+    )
+    await db.flush()
 
     links: list[ItemAuthor] = []
     formatted_names: list[str] = []
@@ -87,7 +91,7 @@ def set_item_authors(
             first = first.strip() or None
         if not last:
             continue
-        author = find_or_create_author(db, last_name=last, first_name=first)
+        author = await find_or_create_author(db, last_name=last, first_name=first)
         is_corr = bool(entry.get("is_corresponding", False))
         link = ItemAuthor(
             item_id=item_id,
@@ -111,12 +115,12 @@ def set_item_authors(
     elif role == "editor":
         item.editors = joined_str
 
-    db.flush()
+    await db.flush()
     return links
 
 
-def set_item_authors_from_string(
-    db: Session,
+async def set_item_authors_from_string(
+    db: AsyncSession,
     user: User,
     item: Item,
     role: str = "author",
@@ -125,21 +129,25 @@ def set_item_authors_from_string(
     parsed_authors = parse_author_list_string(raw)
     if not parsed_authors:
         return []
-    return set_item_authors(db, user, item.id, parsed_authors, role=role)
+    return await set_item_authors(db, user, item.id, parsed_authors, role=role)
 
 
-def get_item_authors(db: Session, item_id: str, role: str = "author") -> list[ItemAuthor]:
+async def get_item_authors(
+    db: AsyncSession, item_id: str, role: str = "author"
+) -> list[ItemAuthor]:
     return list(
-        db.scalars(
-            select(ItemAuthor)
-            .options(selectinload(ItemAuthor.author))
-            .where(ItemAuthor.item_id == item_id, ItemAuthor.role == role)
-            .order_by(ItemAuthor.position)
+        (
+            await db.scalars(
+                select(ItemAuthor)
+                .options(selectinload(ItemAuthor.author))
+                .where(ItemAuthor.item_id == item_id, ItemAuthor.role == role)
+                .order_by(ItemAuthor.position)
+            )
         ).all()
     )
 
 
-def search_authors_typeahead(db: Session, query: str, limit: int = 10) -> list[dict]:
+async def search_authors_typeahead(db: AsyncSession, query: str, limit: int = 10) -> list[dict]:
     term = query.strip()
     if not term:
         return []
@@ -155,7 +163,7 @@ def search_authors_typeahead(db: Session, query: str, limit: int = 10) -> list[d
         .order_by(Author.last_name, Author.first_name)
         .limit(limit)
     )
-    authors = list(db.scalars(stmt).all())
+    authors = list((await db.scalars(stmt)).all())
     return [
         {
             "id": a.id,

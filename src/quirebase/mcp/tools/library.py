@@ -37,7 +37,7 @@ def register_library_tools(server: MCPServer, runtime: McpRuntime) -> None:
         description="Search bibliographic Items visible to the authenticated User.",
         annotations=READ_ONLY,
     )
-    def library_search(
+    async def library_search(
         query: str = "",
         tag: str = "",
         project: str = "",
@@ -48,8 +48,8 @@ def register_library_tools(server: MCPServer, runtime: McpRuntime) -> None:
     ) -> LibrarySearchView:
         per_page = 25
 
-        def run(db, user):
-            items, total, _tags, _years = search_library(
+        async def run(db, user):
+            items, total, _tags, _years = await search_library(
                 db,
                 user,
                 q=query,
@@ -68,29 +68,29 @@ def register_library_tools(server: MCPServer, runtime: McpRuntime) -> None:
                 per_page=per_page,
             )
 
-        return runtime.call("library.search", run)
+        return await runtime.call("library.search", run)
 
     @server.tool(
         name="library.get_item",
         description="Get bibliographic metadata for one visible Item; never returns file content.",
         annotations=READ_ONLY,
     )
-    def library_get_item(item_id: str) -> ItemDetailView:
-        def run(db, user):
-            workspace = open_item_workspace(db, user, item_id, WorkspaceSection.metadata)
+    async def library_get_item(item_id: str) -> ItemDetailView:
+        async def run(db, user):
+            workspace = await open_item_workspace(db, user, item_id, WorkspaceSection.metadata)
             if not isinstance(workspace, MetadataWorkspace):  # pragma: no cover
                 raise ToolError("item metadata unavailable")
             return item_detail_view(workspace)
 
-        return runtime.call("library.get_item", run, conceal_resource="item not found")
+        return await runtime.call("library.get_item", run, conceal_resource="item not found")
 
     @server.tool(
         name="library.create_item",
         description="Create a bibliographic Item owned by the authenticated User.",
         annotations=WRITE,
     )
-    def library_create_item(metadata: ItemMetadata) -> WriteResult:
-        result = runtime.call(
+    async def library_create_item(metadata: ItemMetadata) -> WriteResult:
+        result = await runtime.call(
             "library.create_item", lambda db, user: create_item(db, user, metadata)
         )
         return WriteResult(id=result.item_id, version=result.version)
@@ -100,10 +100,10 @@ def register_library_tools(server: MCPServer, runtime: McpRuntime) -> None:
         description="Replace editable Item metadata using optimistic version checking.",
         annotations=WRITE,
     )
-    def library_update_item(
+    async def library_update_item(
         item_id: str, expected_version: Annotated[int, Field(ge=1)], metadata: ItemMetadata
     ) -> WriteResult:
-        result = runtime.call(
+        result = await runtime.call(
             "library.update_item",
             lambda db, user: revise_item_metadata(db, user, item_id, expected_version, metadata),
             conceal_resource="item not found",
@@ -115,12 +115,12 @@ def register_library_tools(server: MCPServer, runtime: McpRuntime) -> None:
         description="Render a visible Item as a plain-text or HTML citation.",
         annotations=READ_ONLY,
     )
-    def citations_format_item(
+    async def citations_format_item(
         item_id: str,
         style_key: str = "apa",
         output: Annotated[str, Field(pattern="^(text|html)$")] = "text",
     ) -> CitationView:
-        content, media_type = runtime.call(
+        content, media_type = await runtime.call(
             "citations.format_item",
             lambda db, user: get_item_citation_text_response(
                 db, user, item_id, style_key=style_key, output=output

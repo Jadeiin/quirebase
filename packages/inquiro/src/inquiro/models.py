@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import IO, Self
 
@@ -59,14 +60,24 @@ class AcquiredDocument:
     sha256: str
     provider: str | None = None
 
-    def close(self) -> None:
-        self.stream.close()
+    async def aclose(self) -> None:
+        await asyncio.to_thread(self.stream.close)
 
-    def __enter__(self) -> Self:
+    async def __aenter__(self) -> Self:
         return self
 
-    def __exit__(self, *_exc: object) -> None:
-        self.close()
+    async def __aexit__(self, *_exc: object) -> None:
+        await self.aclose()
+
+    def __aiter__(self):
+        return self._iter_chunks()
+
+    async def _iter_chunks(self):
+        while True:
+            chunk = await asyncio.to_thread(self.stream.read, 64 * 1024)
+            if not chunk:
+                break
+            yield chunk
 
 
 @dataclass(frozen=True)

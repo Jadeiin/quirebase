@@ -23,7 +23,7 @@ from inquiro.providers._payload import (
 
 
 class NasaAdsLookupAdapter:
-    def lookup(
+    async def lookup(
         self, client: ProviderContext, value: str, settings: Any, *, endpoint: str
     ) -> ProviderRecord:
         token = getattr(settings, "nasa_ads_token", None) or ""
@@ -33,7 +33,7 @@ class NasaAdsLookupAdapter:
             "rows": "1",
         }
         headers = {"Authorization": f"Bearer {token}"}
-        body = client._get(endpoint, params, headers=headers)
+        body = await client._get(endpoint, params, headers=headers)
         try:
             payload = json.loads(body)
         except (json.JSONDecodeError, TypeError) as error:
@@ -65,7 +65,7 @@ class NasaAdsLookupAdapter:
 
 
 class NasaAdsSearchAdapter:
-    def search(
+    async def search(
         self,
         client: ProviderContext,
         clauses: list[SearchClause],
@@ -108,7 +108,7 @@ class NasaAdsSearchAdapter:
         }
         headers = {"Authorization": f"Bearer {token}"}
         try:
-            payload = json.loads(client._get(endpoint, params, headers=headers))
+            payload = json.loads(await client._get(endpoint, params, headers=headers))
         except (json.JSONDecodeError, TypeError) as error:
             raise ProviderUnavailable("NASA ADS returned invalid search results") from error
         response = payload.get("response", {})

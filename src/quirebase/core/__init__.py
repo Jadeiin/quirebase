@@ -1,7 +1,15 @@
 from __future__ import annotations
 
 from quirebase.core.config import Settings, get_settings
-from quirebase.core.database import Base, SessionLocal, engine, get_db, make_engine
+from quirebase.core.database import (
+    AsyncSessionLocal,
+    Base,
+    async_database_url,
+    engine,
+    get_db,
+    is_sqlite_database_url,
+    make_async_engine,
+)
 from quirebase.core.errors import (
     DomainError,
     PermissionDenied,
@@ -25,17 +33,18 @@ from quirebase.core.i18n import (
 
 __all__ = [
     "DEFAULT_LOCALE",
+    "AsyncSessionLocal",
     "Base",
     "DomainError",
     "PermissionDenied",
     "ResourceNotFound",
     "ResourceUnavailable",
-    "SessionLocal",
     "Settings",
     "UpstreamServiceError",
     "ValidationFailure",
     "VersionConflict",
     "_",
+    "async_database_url",
     "engine",
     "format_date",
     "format_datetime",
@@ -43,7 +52,8 @@ __all__ = [
     "get_db",
     "get_settings",
     "gettext",
-    "make_engine",
+    "is_sqlite_database_url",
+    "make_async_engine",
     "negotiate_locale",
     "ngettext",
     "pgettext",

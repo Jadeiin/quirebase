@@ -10,7 +10,17 @@ artifact; Quirebase pins both dependencies to its own version so a standard whee
 cannot silently combine incompatible workspace releases. The release workflow verifies the full
 wheel set in an isolated environment before publishing.
 
-SQLite is intended for a single-host installation with one worker. PostgreSQL is recommended for teams and supports concurrent workers through `FOR UPDATE SKIP LOCKED`. Set `QUIREBASE_DATABASE_URL`, `QUIREBASE_DATA_DIR`, `QUIREBASE_ALLOWED_HOSTS`, and secure cookies behind HTTPS. Native MCP clients send no `Origin`; explicitly set `QUIREBASE_MCP_ALLOWED_ORIGINS` to a comma-separated list of trusted origins before enabling browser-based MCP clients. Quirebase then handles CORS preflights for the MCP methods and headers and exposes `MCP-Session-Id`; a `:*` suffix permits any numeric port for a named development origin such as `http://localhost:*`.
+SQLite is intended for a single-host installation with one worker. The application uses SQLAlchemy's
+`asyncio` and `aiosqlite` optional groups and derives `sqlite+aiosqlite` from the familiar
+`sqlite:///...` setting. PostgreSQL is recommended for teams and supports concurrent workers
+through `FOR UPDATE SKIP LOCKED`; the `postgres` extra installs SQLAlchemy's
+`postgresql-psycopgbinary` and `postgresql-asyncpg` groups. A `postgresql+psycopg://...` setting
+uses psycopg's native async implementation. Set `QUIREBASE_DATABASE_URL`, `QUIREBASE_DATA_DIR`,
+`QUIREBASE_ALLOWED_HOSTS`, and secure cookies behind HTTPS. Native MCP clients send no `Origin`;
+explicitly set `QUIREBASE_MCP_ALLOWED_ORIGINS` to a comma-separated list of trusted origins before
+enabling browser-based MCP clients. Quirebase then handles CORS preflights for the MCP methods and
+headers and exposes `MCP-Session-Id`; a `:*` suffix permits any numeric port for a named development
+origin such as `http://localhost:*`.
 
 The JSON HTTP API is served under `/api/v1/` and described by the application's OpenAPI document at `/openapi.json` and interactive `/docs` page. It accepts the same expiring API Tokens as MCP through `Authorization: Bearer`; Login Session cookies, CSRF tokens and query-string tokens are not API credentials. Cross-origin browser access to `/api/v1/` is not enabled by `QUIREBASE_MCP_ALLOWED_ORIGINS`.
 

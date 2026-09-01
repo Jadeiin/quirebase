@@ -31,22 +31,29 @@ def register_organization_tools(server: MCPServer, runtime: McpRuntime) -> None:
     @server.tool(
         name="tags.list", description="List Tags with visible Item counts.", annotations=READ_ONLY
     )
-    def tags_list() -> list[TagView]:
-        return runtime.call(
-            "tags.list",
-            lambda db, user: [
+    async def tags_list() -> list[TagView]:
+        async def run(db, user):
+            rows = await list_accessible_tags_with_counts(db, user)
+            return [
                 TagView(id=tag.id, name=tag.name, accessible_item_count=count)
-                for tag, count in list_accessible_tags_with_counts(db, user)
-            ],
+                for tag, count in rows
+            ]
+
+        return await runtime.call(
+            "tags.list",
+            run,
         )
 
     @server.tool(
         name="tags.add_to_item", description="Add a Tag to an editable Item.", annotations=WRITE
     )
-    def tags_add_to_item(item_id: str, name: str) -> WriteResult:
-        assignment = runtime.call(
+    async def tags_add_to_item(item_id: str, name: str) -> WriteResult:
+        async def run(db, user):
+            return await add_tag_to_item(db, user, item_id, name)
+
+        assignment = await runtime.call(
             "tags.add_to_item",
-            lambda db, user: add_tag_to_item(db, user, item_id, name),
+            run,
             conceal_resource="item not found",
         )
         return WriteResult(id=assignment.tag_id)
@@ -56,10 +63,13 @@ def register_organization_tools(server: MCPServer, runtime: McpRuntime) -> None:
         description="Remove a Tag from an editable Item.",
         annotations=DESTRUCTIVE,
     )
-    def tags_remove_from_item(item_id: str, tag_id: str) -> dict[str, bool]:
-        runtime.call(
+    async def tags_remove_from_item(item_id: str, tag_id: str) -> dict[str, bool]:
+        async def run(db, user):
+            await remove_tag_from_item(db, user, item_id, tag_id)
+
+        await runtime.call(
             "tags.remove_from_item",
-            lambda db, user: remove_tag_from_item(db, user, item_id, tag_id),
+            run,
             conceal_resource="item not found",
         )
         return {"ok": True}
@@ -69,12 +79,15 @@ def register_organization_tools(server: MCPServer, runtime: McpRuntime) -> None:
         description="Replace all Tags for an editable Item.",
         annotations=DESTRUCTIVE,
     )
-    def tags_set_for_item(
+    async def tags_set_for_item(
         item_id: str, tag_ids: list[str], new_names: list[str] | None = None
     ) -> dict[str, bool]:
-        runtime.call(
+        async def run(db, user):
+            await set_item_tags(db, user, item_id, tag_ids, new_names)
+
+        await runtime.call(
             "tags.set_for_item",
-            lambda db, user: set_item_tags(db, user, item_id, tag_ids, new_names),
+            run,
             conceal_resource="item not found",
         )
         return {"ok": True}
@@ -84,24 +97,27 @@ def register_organization_tools(server: MCPServer, runtime: McpRuntime) -> None:
         description="List Discussion Messages for a visible Item.",
         annotations=READ_ONLY,
     )
-    def discussions_list(item_id: str) -> list[DiscussionMessageView]:
-        def run(db, user):
-            workspace = open_item_workspace(db, user, item_id, WorkspaceSection.discussion)
+    async def discussions_list(item_id: str) -> list[DiscussionMessageView]:
+        async def run(db, user):
+            workspace = await open_item_workspace(db, user, item_id, WorkspaceSection.discussion)
             if not isinstance(workspace, DiscussionWorkspace):  # pragma: no cover
                 return []
             return discussion_message_views(workspace)
 
-        return runtime.call("discussions.list", run, conceal_resource="item not found")
+        return await runtime.call("discussions.list", run, conceal_resource="item not found")
 
     @server.tool(
         name="discussions.add",
         description="Add a Discussion Message to a visible Item.",
         annotations=WRITE,
     )
-    def discussions_add(item_id: str, body: str) -> WriteResult:
-        message = runtime.call(
+    async def discussions_add(item_id: str, body: str) -> WriteResult:
+        async def run(db, user):
+            return await add_discussion_message(db, user, item_id, body)
+
+        message = await runtime.call(
             "discussions.add",
-            lambda db, user: add_discussion_message(db, user, item_id, body),
+            run,
             conceal_resource="item not found",
         )
         return WriteResult(id=message.id)
@@ -111,10 +127,13 @@ def register_organization_tools(server: MCPServer, runtime: McpRuntime) -> None:
         description="Delete the User's own Discussion Message.",
         annotations=DESTRUCTIVE,
     )
-    def discussions_delete(item_id: str, message_id: str) -> dict[str, bool]:
-        runtime.call(
+    async def discussions_delete(item_id: str, message_id: str) -> dict[str, bool]:
+        async def run(db, user):
+            await delete_discussion_message(db, user, item_id, message_id)
+
+        await runtime.call(
             "discussions.delete",
-            lambda db, user: delete_discussion_message(db, user, item_id, message_id),
+            run,
             conceal_resource="discussion message not found",
         )
         return {"ok": True}

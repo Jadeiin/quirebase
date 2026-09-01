@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
 from typing import TYPE_CHECKING, Any
 
@@ -14,11 +15,11 @@ from quirebase.models import Attachment, FileRevision, Item, User
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
-def list_global_items(
-    db: Session,
+async def list_global_items(
+    db: AsyncSession,
     admin: User,
     search: str = "",
     owner_id: str | None = None,
@@ -34,7 +35,7 @@ def list_global_items(
     if search.strip():
         search_value = search.strip()
         term = f"%{search_value}%"
-        matching_ids = search_index(db).matching_item_ids(db, search_value)
+        matching_ids = await search_index(db).matching_item_ids(db, search_value)
         filters.append(
             or_(
                 Item.id.in_(matching_ids),
@@ -54,50 +55,40 @@ def list_global_items(
         query = query.where(*filters)
         count_query = count_query.where(*filters)
 
-    total = db.scalar(count_query) or 0
+    total = await db.scalar(count_query) or 0
     offset = max(0, (page - 1) * page_size)
     items = list(
-        db.scalars(query.order_by(Item.created_at.desc()).offset(offset).limit(page_size)).all()
+        (
+            await db.scalars(query.order_by(Item.created_at.desc()).offset(offset).limit(page_size))
+        ).all()
     )
     return items, total
 
 
-def get_storage_metrics(db: Session, admin: User) -> dict[str, Any]:
+async def get_storage_metrics(db: AsyncSession, admin: User) -> dict[str, Any]:
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")
     store = LocalObjectStore()
     settings = get_settings()
 
-    total_items = db.scalar(select(func.count(Item.id))) or 0
-    revisions = list(db.scalars(select(FileRevision)).all())
-    attachments = list(db.scalars(select(Attachment)).all())
+    total_items = await db.scalar(select(func.count(Item.id))) or 0
+    revisions = list((await db.scalars(select(FileRevision))).all())
+    attachments = list((await db.scalars(select(Attachment))).all())
 
-    revisions_bytes = 0
-    missing_revisions = 0
-    for rev in revisions:
-        path = store.path(rev.object_key)
-        if path.is_file():
-            revisions_bytes += path.stat().st_size
-        else:
-            missing_revisions += 1
-
-    attachments_bytes = 0
-    missing_attachments = 0
-    for att in attachments:
-        path = store.path(att.object_key)
-        if path.is_file():
-            attachments_bytes += path.stat().st_size
-        else:
-            missing_attachments += 1
-
-    thumbnails_dir = settings.object_dir / "thumbnails"
-    thumbnails_count = 0
-    thumbnails_bytes = 0
-    if thumbnails_dir.exists():
-        for thumb in thumbnails_dir.glob("*.png"):
-            if thumb.is_file():
-                thumbnails_count += 1
-                thumbnails_bytes += thumb.stat().st_size
+    (
+        revisions_bytes,
+        missing_revisions,
+        attachments_bytes,
+        missing_attachments,
+        thumbnails_count,
+        thumbnails_bytes,
+    ) = await asyncio.to_thread(
+        _storage_metrics,
+        store,
+        settings.object_dir / "thumbnails",
+        revisions,
+        attachments,
+    )
 
     total_disk_bytes = revisions_bytes + attachments_bytes + thumbnails_bytes
 
@@ -114,10 +105,53 @@ def get_storage_metrics(db: Session, admin: User) -> dict[str, Any]:
     }
 
 
-def _delete_item(db: Session, actor: User, item_id: str, *, require_admin: bool = False) -> None:
+def _storage_metrics(
+    store: LocalObjectStore,
+    thumbnails_dir,
+    revisions: list[FileRevision],
+    attachments: list[Attachment],
+) -> tuple[int, int, int, int, int, int]:
+    revisions_bytes = 0
+    missing_revisions = 0
+    for revision in revisions:
+        path = store.path(revision.object_key)
+        if path.is_file():
+            revisions_bytes += path.stat().st_size
+        else:
+            missing_revisions += 1
+
+    attachments_bytes = 0
+    missing_attachments = 0
+    for attachment in attachments:
+        path = store.path(attachment.object_key)
+        if path.is_file():
+            attachments_bytes += path.stat().st_size
+        else:
+            missing_attachments += 1
+
+    thumbnails_count = 0
+    thumbnails_bytes = 0
+    if thumbnails_dir.exists():
+        for thumbnail in thumbnails_dir.glob("*.png"):
+            if thumbnail.is_file():
+                thumbnails_count += 1
+                thumbnails_bytes += thumbnail.stat().st_size
+    return (
+        revisions_bytes,
+        missing_revisions,
+        attachments_bytes,
+        missing_attachments,
+        thumbnails_count,
+        thumbnails_bytes,
+    )
+
+
+async def _delete_item(
+    db: AsyncSession, actor: User, item_id: str, *, require_admin: bool = False
+) -> None:
     if require_admin and actor.role != "administrator":
         raise ResourceUnavailable("administrator required")
-    item = db.get(Item, item_id)
+    item = await db.get(Item, item_id)
     if item is None:
         raise ResourceNotFound("item not found")
     if not require_admin and item.created_by != actor.id and actor.role != "administrator":
@@ -126,29 +160,33 @@ def _delete_item(db: Session, actor: User, item_id: str, *, require_admin: bool 
     title = item.title
     # Collect keys to clean up from storage
     cleanup_keys = list(
-        db.scalars(select(FileRevision.object_key).where(FileRevision.item_id == item.id)).all()
+        (
+            await db.scalars(select(FileRevision.object_key).where(FileRevision.item_id == item.id))
+        ).all()
     )
     cleanup_keys.extend(
-        db.scalars(select(Attachment.object_key).where(Attachment.item_id == item.id)).all()
+        (await db.scalars(select(Attachment.object_key).where(Attachment.item_id == item.id))).all()
     )
 
     # Clean thumbnail if present
     settings = get_settings()
-    for rev_id in db.scalars(select(FileRevision.id).where(FileRevision.item_id == item.id)).all():
+    for rev_id in (
+        await db.scalars(select(FileRevision.id).where(FileRevision.item_id == item.id))
+    ).all():
         thumb_path = settings.object_dir / "thumbnails" / f"{rev_id}.png"
-        if thumb_path.exists():
+        if await asyncio.to_thread(thumb_path.exists):
             with contextlib.suppress(OSError):
-                thumb_path.unlink()
+                await asyncio.to_thread(thumb_path.unlink)
 
     # Remove from search index
-    search_index(db).remove_item(db, item.id)
+    await search_index(db).remove_item(db, item.id)
 
     # Explicitly delete child relations for cross-dialect foreign key safety
-    db.execute(delete(FileRevision).where(FileRevision.item_id == item.id))
-    db.execute(delete(Attachment).where(Attachment.item_id == item.id))
+    await db.execute(delete(FileRevision).where(FileRevision.item_id == item.id))
+    await db.execute(delete(Attachment).where(Attachment.item_id == item.id))
 
     # Delete entity from database
-    db.delete(item)
+    await db.delete(item)
 
     # Record audit event before commit
     record_event(
@@ -159,17 +197,17 @@ def _delete_item(db: Session, actor: User, item_id: str, *, require_admin: bool 
         item.id,
         detail={"title": title},
     )
-    db.commit()
+    await db.commit()
 
     # Clean object store files after a successful commit and a centralized reference check.
     if cleanup_keys:
-        delete_unreferenced_objects(db, cleanup_keys)
+        await delete_unreferenced_objects(db, cleanup_keys)
 
 
-def delete_item(db: Session, actor: User, item_id: str) -> None:
+async def delete_item(db: AsyncSession, actor: User, item_id: str) -> None:
     """Permanently delete one Item owned by the actor or an administrator."""
-    _delete_item(db, actor, item_id)
+    await _delete_item(db, actor, item_id)
 
 
-def admin_delete_item(db: Session, admin: User, item_id: str) -> None:
-    _delete_item(db, admin, item_id, require_admin=True)
+async def admin_delete_item(db: AsyncSession, admin: User, item_id: str) -> None:
+    await _delete_item(db, admin, item_id, require_admin=True)

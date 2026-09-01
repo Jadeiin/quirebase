@@ -24,7 +24,7 @@ from inquiro.providers._payload import (
 
 
 class PubMedLookupAdapter:
-    def lookup(
+    async def lookup(
         self, client: ProviderContext, value: str, settings: Any, *, endpoint: str
     ) -> ProviderRecord:
         params = {"db": "pubmed", "id": value, "retmode": "json", "tool": "inquiro"}
@@ -34,7 +34,7 @@ class PubMedLookupAdapter:
         api_key = getattr(settings, "ncbi_api_key", None)
         if api_key:
             params["api_key"] = api_key
-        body = client._get(f"{endpoint}/esummary.fcgi", params)
+        body = await client._get(f"{endpoint}/esummary.fcgi", params)
         try:
             payload = json.loads(body)
         except (json.JSONDecodeError, TypeError) as error:
@@ -77,7 +77,7 @@ class PubMedLookupAdapter:
 
 
 class PubMedSearchAdapter:
-    def search(
+    async def search(
         self,
         client: ProviderContext,
         clauses: list[SearchClause],
@@ -117,7 +117,7 @@ class PubMedSearchAdapter:
         api_key = getattr(settings, "ncbi_api_key", None)
         if api_key:
             search_params["api_key"] = api_key
-        search_body = client._get(f"{endpoint}/esearch.fcgi", search_params)
+        search_body = await client._get(f"{endpoint}/esearch.fcgi", search_params)
         try:
             search_data = json.loads(search_body).get("esearchresult", {})
             ids = search_data.get("idlist", [])
@@ -136,7 +136,7 @@ class PubMedSearchAdapter:
             summary_params["email"] = contact
         if api_key:
             summary_params["api_key"] = api_key
-        summary_body = client._get(f"{endpoint}/esummary.fcgi", summary_params)
+        summary_body = await client._get(f"{endpoint}/esummary.fcgi", summary_params)
         try:
             summary_data = json.loads(summary_body).get("result", {})
         except (json.JSONDecodeError, TypeError) as error:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, TypeVar
 
@@ -13,7 +13,7 @@ from quirebase.audit import programmatic_invocation
 from quirebase.core.errors import DomainError, ResourceNotFound, ResourceUnavailable
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
     from quirebase.mcp.auth import SessionFactory
     from quirebase.mcp.policy import ToolPolicy
@@ -53,27 +53,25 @@ class McpRuntime:
     identity_provider: IdentityProvider
     policy: ToolPolicy
 
-    def call(
+    async def call(
         self,
         tool_name: str,
-        operation: Callable[[Session, Any], Result],
+        operation: Callable[[AsyncSession, Any], Awaitable[Result]],
         *,
         conceal_resource: str | None = None,
     ) -> Result:
         self.policy.require(tool_name)
         identity = self.identity_provider()
         try:
-            with (
-                programmatic_invocation(
-                    "mcp",
-                    tool_name,
-                    api_token_id=identity.api_token_id,
-                    client_id=identity.client_id,
-                ),
-                self.session_factory() as db,
+            with programmatic_invocation(
+                "mcp",
+                tool_name,
+                api_token_id=identity.api_token_id,
+                client_id=identity.client_id,
             ):
-                user = resolve_api_token_user(db, identity.user_id)
-                result = operation(db, user)
+                async with self.session_factory() as db:
+                    user = await resolve_api_token_user(db, identity.user_id)
+                    result = await operation(db, user)
         except AuthenticationFailure as error:
             raise ToolError("authentication required") from error
         except (ResourceNotFound, ResourceUnavailable) as error:

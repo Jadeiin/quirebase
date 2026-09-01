@@ -24,29 +24,29 @@ from quirebase.web.deps import current_login, current_user, protected_router
 from quirebase.web.templates import templates
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 router = protected_router()
 
 
 @router.post("/projects")
-def create_project(
+async def create_project(
     name: str = Form(),
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    project = create_project_op(db, user, name)
+    project = await create_project_op(db, user, name)
     return RedirectResponse(f"/projects/{project.id}", status_code=303)
 
 
 @router.get("/projects", response_class=HTMLResponse)
-def projects_page(
+async def projects_page(
     request: Request,
     user: User = Depends(current_user),
     login_session: LoginSession = Depends(current_login),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    projects = list_user_projects(db, user)
+    projects = await list_user_projects(db, user)
     return templates.TemplateResponse(
         request,
         "projects.html",
@@ -60,14 +60,14 @@ def projects_page(
 
 
 @router.get("/projects/{project_id}", response_class=HTMLResponse)
-def project_page(
+async def project_page(
     request: Request,
     project_id: str,
     user: User = Depends(current_user),
     login_session: LoginSession = Depends(current_login),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    workspace = open_project_workspace(db, user, project_id)
+    workspace = await open_project_workspace(db, user, project_id)
     return templates.TemplateResponse(
         request,
         "project.html",
@@ -84,23 +84,23 @@ def project_page(
 
 
 @router.post("/projects/{project_id}/members")
-def add_project_member(
+async def add_project_member(
     project_id: str,
     username: str = Form(),
     role: str = Form(default="viewer"),
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    add_project_member_op(db, user, project_id, username, role)
+    await add_project_member_op(db, user, project_id, username, role)
     return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
 
 @router.post("/projects/{project_id}/members/{member_id}/remove")
-def remove_project_member(
+async def remove_project_member(
     project_id: str,
     member_id: str,
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    remove_project_member_op(db, user, project_id, member_id)
+    await remove_project_member_op(db, user, project_id, member_id)
     return RedirectResponse(f"/projects/{project_id}", status_code=303)

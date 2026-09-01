@@ -1,20 +1,27 @@
 from __future__ import annotations
 
 import json
+from unittest.mock import AsyncMock
 
 import httpx2
 import pytest
 from inquiro import CandidatePage, CandidateRecord, Identifier
 from provider_helpers import provider_runtime
-from test_http import authenticated_client
+from sqlalchemy import select
+from test_http import authenticated_async_client
 
 from quirebase.core.config import get_settings
 from quirebase.models import AuditEvent
-from quirebase.web.app import app
 
 
-def test_online_search_page_keeps_search_separate_from_import(db, tmp_path, monkeypatch):
-    client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_online_search_page_keeps_search_separate_from_import(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
     result = CandidateRecord(
         provider="openalex",
         identifier=Identifier("openalex", "W99"),
@@ -25,15 +32,15 @@ def test_online_search_page_keeps_search_separate_from_import(db, tmp_path, monk
     )
     monkeypatch.setattr(
         "quirebase.library.discovery.search_candidates",
-        lambda *_args, **_kwargs: CandidatePage("openalex", (result,), 11, 1, 10),
+        AsyncMock(return_value=CandidatePage("openalex", (result,), 11, 1, 10)),
     )
     try:
-        empty = client.get("/online-search")
+        empty = await client.get("/online-search")
         assert empty.status_code == 200
         assert "联网检索" in empty.text
         assert "Candidate paper" not in empty.text
 
-        searched = client.get(
+        searched = await client.get(
             "/online-search",
             params=[
                 ("provider", "openalex"),
@@ -47,11 +54,12 @@ def test_online_search_page_keeps_search_separate_from_import(db, tmp_path, monk
         assert 'action="/metadata/preview"' in searched.text
         assert 'name="csrf_token" value="test-csrf"' in searched.text
         assert 'name="identifier" value="W99"' in searched.text
-        event = db.query(AuditEvent).filter_by(action="metadata.search").one()
+        event = await db.scalar(select(AuditEvent).where(AuditEvent.action == "metadata.search"))
+        assert event is not None
         assert json.loads(event.detail)["fields"] == ["title"]
         assert item.title not in searched.text
     finally:
-        app.dependency_overrides.clear()
+        await client.aclose()
         get_settings.cache_clear()
 
 
@@ -59,12 +67,15 @@ def test_online_search_page_keeps_search_separate_from_import(db, tmp_path, monk
     ("year_from", "expected_message"),
     [("not-a-year", "invalid literal"), ("999", "starting year is invalid")],
 )
-def test_online_search_page_renders_invalid_year_errors(
-    db, tmp_path, monkeypatch, year_from, expected_message
+@pytest.mark.anyio
+async def test_online_search_page_renders_invalid_year_errors(
+    async_db, async_session_factory, tmp_path, monkeypatch, year_from, expected_message
 ):
-    client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+    client, _item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
     try:
-        response = client.get(
+        response = await client.get(
             "/online-search",
             params={
                 "provider": "crossref",
@@ -78,18 +89,23 @@ def test_online_search_page_renders_invalid_year_errors(
         assert response.status_code == 200
         assert expected_message in response.text
     finally:
-        app.dependency_overrides.clear()
+        await client.aclose()
         get_settings.cache_clear()
 
 
-def test_search_page_preserves_sparse_condition_rows(db, tmp_path, monkeypatch):
-    client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_search_page_preserves_sparse_condition_rows(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    client, _item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
     monkeypatch.setattr(
         "quirebase.library.discovery.search_candidates",
-        lambda *_args, **_kwargs: CandidatePage("openalex", (), 0, 1, 10),
+        AsyncMock(return_value=CandidatePage("openalex", (), 0, 1, 10)),
     )
     try:
-        response = client.get(
+        response = await client.get(
             "/online-search",
             params=[
                 ("field", "title"),
@@ -107,11 +123,12 @@ def test_search_page_preserves_sparse_condition_rows(db, tmp_path, monkeypatch):
         assert 'data-initial-clauses="3"' in response.text
         assert 'value="review"' in response.text
     finally:
-        app.dependency_overrides.clear()
+        await client.aclose()
         get_settings.cache_clear()
 
 
-def test_fallback_identifiers_can_be_staged_for_import(db, monkeypatch):
+@pytest.mark.anyio
+async def test_fallback_identifiers_can_be_staged_for_import(async_db, monkeypatch):
     from quirebase.library.imports import stage_identifier_import_batch
     from quirebase.models import User
 
@@ -162,11 +179,12 @@ def test_fallback_identifiers_can_be_staged_for_import(db, monkeypatch):
         ),
     )
 
+    db = async_db
     user = User(username="search_user", password_hash="unused")
     db.add(user)
-    db.flush()
+    await db.commit()
 
-    batch_nasa, records_nasa, errors_nasa = stage_identifier_import_batch(
+    batch_nasa, records_nasa, errors_nasa = await stage_identifier_import_batch(
         db,
         user,
         "2025ApJ...123..456A",
@@ -176,7 +194,7 @@ def test_fallback_identifiers_can_be_staged_for_import(db, monkeypatch):
     assert len(records_nasa) == 1
     assert batch_nasa.file_format == "metadata:bibcode"
 
-    batch_ieee, records_ieee, errors_ieee = stage_identifier_import_batch(
+    batch_ieee, records_ieee, errors_ieee = await stage_identifier_import_batch(
         db,
         user,
         "9876543",

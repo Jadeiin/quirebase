@@ -17,51 +17,53 @@ from quirebase.models import User
 from quirebase.web.deps import current_user, protected_router
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 router = protected_router()
 
 
 @router.get("/documents/{item_id}/annotations")
-def list_annotations(
+async def list_annotations(
     item_id: str,
     revision_id: str,
     project_id: str | None = None,
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    annotations = list_document_annotations(db, user, item_id, revision_id, project_id=project_id)
+    annotations = await list_document_annotations(
+        db, user, item_id, revision_id, project_id=project_id
+    )
     return {"annotations": annotations}
 
 
 @router.post("/documents/{item_id}/annotations")
-def create_annotation(
+async def create_annotation(
     item_id: str,
     data: AnnotationCreate,
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    result = create_document_annotation(db, user, item_id, data)
+    result = await create_document_annotation(db, user, item_id, data)
     return JSONResponse(result, status_code=201)
 
 
 @router.patch("/documents/{item_id}/annotations/{annotation_id}")
-def update_annotation(
+async def update_annotation(
     item_id: str,
     annotation_id: str,
     data: AnnotationUpdate,
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    return update_document_annotation(db, user, item_id, annotation_id, data)
+    return await update_document_annotation(db, user, item_id, annotation_id, data)
 
 
 @router.delete("/documents/{item_id}/annotations/{annotation_id}")
-def delete_annotation(
+async def delete_annotation(
     item_id: str,
     annotation_id: str,
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    delete_document_annotation(db, user, item_id, annotation_id)
+    await delete_document_annotation(db, user, item_id, annotation_id)
     return Response(status_code=204)

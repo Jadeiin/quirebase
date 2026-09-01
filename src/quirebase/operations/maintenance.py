@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import hashlib
 import json
 import shutil
 import sqlite3
-import subprocess
 import tempfile
 import zipfile
 from datetime import UTC, datetime, timedelta
@@ -15,11 +15,12 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import select
 
 from quirebase.core.config import get_settings
+from quirebase.core.database import is_sqlite_database_url
 from quirebase.core.storage import LocalObjectStore
 from quirebase.models import Attachment, FileRevision, JobState, User
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def sha256_file(path: Path) -> str:
@@ -31,60 +32,108 @@ def sha256_file(path: Path) -> str:
 
 
 def sqlite_path(database_url: str) -> Path:
+    if database_url.startswith("sqlite+aiosqlite:///"):
+        return Path(database_url.removeprefix("sqlite+aiosqlite:///"))
     if not database_url.startswith("sqlite:///"):
         raise ValueError("not a SQLite database URL")
     return Path(database_url.removeprefix("sqlite:///"))
 
 
-def create_backup(destination: Path) -> Path:
+async def create_backup(destination: Path) -> Path:
+    """Create a verified backup without blocking the event loop."""
     settings = get_settings()
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory() as temporary:
-        root = Path(temporary)
-        if settings.database_url.startswith("sqlite:///"):
+    await asyncio.to_thread(destination.parent.mkdir, parents=True, exist_ok=True)
+    root = Path(await asyncio.to_thread(tempfile.mkdtemp))
+    try:
+        if is_sqlite_database_url(settings.database_url):
             source = sqlite_path(settings.database_url)
-            with (
-                contextlib.closing(sqlite3.connect(source)) as source_db,
-                contextlib.closing(sqlite3.connect(root / "database.sqlite3")) as target,
-            ):
-                source_db.backup(target)
+            await asyncio.to_thread(_sqlite_snapshot, source, root / "database.sqlite3")
             database_file = "database.sqlite3"
             database_kind = "sqlite"
         else:
             executable = shutil.which("pg_dump")
             if executable is None:
                 raise RuntimeError("pg_dump is required for PostgreSQL backups")
-            subprocess.run(
-                [
-                    executable,
-                    "--format=custom",
-                    "--file",
-                    str(root / "database.dump"),
-                    settings.database_url,
-                ],
-                check=True,
+            _stdout, stderr, returncode = await _run_subprocess(
+                executable,
+                "--format=custom",
+                "--file",
+                str(root / "database.dump"),
+                settings.database_url,
             )
+            if returncode:
+                message = stderr.decode(errors="replace").strip() if stderr else ""
+                raise RuntimeError(f"pg_dump failed ({returncode}): {message}")
             database_file = "database.dump"
             database_kind = "postgresql"
-        manifest = {
-            "format": 1,
-            "created_at": datetime.now(UTC).isoformat(),
-            "database_kind": database_kind,
-            "database_file": database_file,
-            "database_sha256": sha256_file(root / database_file),
-        }
-        (root / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-        with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-            archive.write(root / "manifest.json", "manifest.json")
-            archive.write(root / database_file, database_file)
-            if settings.object_dir.exists():
-                for path in settings.object_dir.rglob("*"):
-                    if path.is_file():
-                        archive.write(path, Path("objects") / path.relative_to(settings.object_dir))
+        await asyncio.to_thread(
+            _write_backup_archive,
+            destination,
+            root,
+            database_file,
+            database_kind,
+            settings.object_dir,
+        )
+    finally:
+        await asyncio.to_thread(shutil.rmtree, root, ignore_errors=True)
     return destination
 
 
-def verify_backup(archive_path: Path) -> dict[str, Any]:
+def _sqlite_snapshot(source: Path, destination: Path) -> None:
+    with (
+        contextlib.closing(sqlite3.connect(source)) as source_db,
+        contextlib.closing(sqlite3.connect(destination)) as target,
+    ):
+        source_db.backup(target)
+
+
+async def _run_subprocess(*args: str) -> tuple[bytes, bytes, int]:
+    """Run a maintenance subprocess and terminate it when its task is cancelled."""
+    process = await asyncio.create_subprocess_exec(
+        *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout, stderr = await process.communicate()
+    except asyncio.CancelledError:
+        with contextlib.suppress(ProcessLookupError):
+            process.terminate()
+        with contextlib.suppress(ProcessLookupError):
+            await process.wait()
+        raise
+    return stdout or b"", stderr or b"", process.returncode or 0
+
+
+def _write_backup_archive(
+    destination: Path,
+    root: Path,
+    database_file: str,
+    database_kind: str,
+    object_dir: Path,
+) -> None:
+    manifest = {
+        "format": 1,
+        "created_at": datetime.now(UTC).isoformat(),
+        "database_kind": database_kind,
+        "database_file": database_file,
+        "database_sha256": sha256_file(root / database_file),
+    }
+    (root / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.write(root / "manifest.json", "manifest.json")
+        archive.write(root / database_file, database_file)
+        if object_dir.exists():
+            for path in object_dir.rglob("*"):
+                if path.is_file():
+                    archive.write(path, Path("objects") / path.relative_to(object_dir))
+
+
+async def verify_backup(archive_path: Path) -> dict[str, Any]:
+    return await asyncio.to_thread(_verify_backup, archive_path)
+
+
+def _verify_backup(archive_path: Path) -> dict[str, Any]:
     with zipfile.ZipFile(archive_path) as archive:
         names = set(archive.namelist())
         if "manifest.json" not in names:
@@ -101,53 +150,86 @@ def verify_backup(archive_path: Path) -> dict[str, Any]:
         return manifest
 
 
-def restore_backup(archive_path: Path, *, force: bool = False) -> None:
-    manifest = verify_backup(archive_path)
+async def restore_backup(archive_path: Path, *, force: bool = False) -> None:
+    manifest = await verify_backup(archive_path)
     settings = get_settings()
-    expected_kind = "sqlite" if settings.database_url.startswith("sqlite:///") else "postgresql"
+    expected_kind = "sqlite" if is_sqlite_database_url(settings.database_url) else "postgresql"
     if manifest["database_kind"] != expected_kind:
         raise ValueError("backup database kind does not match configured database")
     if not force:
         raise ValueError("restore requires explicit force confirmation")
-    with tempfile.TemporaryDirectory() as temporary:
-        root = Path(temporary)
-        with zipfile.ZipFile(archive_path) as archive:
-            archive.extractall(root)
+    root = Path(await asyncio.to_thread(tempfile.mkdtemp))
+    try:
+        await asyncio.to_thread(_extract_backup, archive_path, root)
         if expected_kind == "sqlite":
             target = sqlite_path(settings.database_url)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(root / manifest["database_file"], target)
+            await asyncio.to_thread(
+                _restore_sqlite_and_objects,
+                root / manifest["database_file"],
+                target,
+                root / "objects",
+                settings.object_dir,
+            )
         else:
             executable = shutil.which("pg_restore")
             if executable is None:
                 raise RuntimeError("pg_restore is required for PostgreSQL restores")
-            subprocess.run(
-                [
-                    executable,
-                    "--clean",
-                    "--if-exists",
-                    "--dbname",
-                    settings.database_url,
-                    str(root / manifest["database_file"]),
-                ],
-                check=True,
+            _stdout, stderr, returncode = await _run_subprocess(
+                executable,
+                "--clean",
+                "--if-exists",
+                "--dbname",
+                settings.database_url,
+                str(root / manifest["database_file"]),
             )
-        restored_objects = root / "objects"
-        if restored_objects.exists():
-            settings.object_dir.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(restored_objects, settings.object_dir, dirs_exist_ok=True)
+            if returncode:
+                message = stderr.decode(errors="replace").strip() if stderr else ""
+                raise RuntimeError(f"pg_restore failed ({returncode}): {message}")
+            await asyncio.to_thread(
+                _restore_objects,
+                root / "objects",
+                settings.object_dir,
+            )
+    finally:
+        await asyncio.to_thread(shutil.rmtree, root, ignore_errors=True)
 
 
-def cleanup_exports(db: Session | None = None) -> int:
+def _extract_backup(archive_path: Path, root: Path) -> None:
+    with zipfile.ZipFile(archive_path) as archive:
+        archive.extractall(root)
+
+
+def _restore_sqlite_and_objects(
+    database_file: Path,
+    target: Path,
+    restored_objects: Path,
+    object_dir: Path,
+) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(database_file, target)
+    _restore_objects(restored_objects, object_dir)
+
+
+def _restore_objects(restored_objects: Path, object_dir: Path) -> None:
+    if restored_objects.exists():
+        object_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(restored_objects, object_dir, dirs_exist_ok=True)
+
+
+async def cleanup_exports(db: AsyncSession | None = None) -> int:
     from quirebase.operations.settings import get_effective_setting
 
     directory = get_settings().export_dir
     ttl_hours = (
-        get_effective_setting(db, "export_ttl_hours", get_settings().export_ttl_hours)
+        await get_effective_setting(db, "export_ttl_hours", get_settings().export_ttl_hours)
         if db is not None
         else get_settings().export_ttl_hours
     )
     cutoff = datetime.now(UTC) - timedelta(hours=ttl_hours)
+    return await asyncio.to_thread(_cleanup_exports, directory, cutoff)
+
+
+def _cleanup_exports(directory: Path, cutoff: datetime) -> int:
     removed = 0
     if directory.exists():
         for path in directory.iterdir():
@@ -159,16 +241,26 @@ def cleanup_exports(db: Session | None = None) -> int:
     return removed
 
 
-def check_objects(db: Session) -> list[str]:
+async def check_objects(db: AsyncSession) -> list[str]:
     store = LocalObjectStore()
+    revisions = list((await db.scalars(select(FileRevision))).all())
+    attachments = list((await db.scalars(select(Attachment))).all())
+    return await asyncio.to_thread(_check_objects, store, revisions, attachments)
+
+
+def _check_objects(
+    store: LocalObjectStore,
+    revisions: list[FileRevision],
+    attachments: list[Attachment],
+) -> list[str]:
     errors = []
-    for revision in db.scalars(select(FileRevision)).all():
+    for revision in revisions:
         path = store.path(revision.object_key)
         if not path.is_file():
             errors.append(f"{revision.id}: missing object")
         elif sha256_file(path) != revision.sha256:
             errors.append(f"{revision.id}: checksum mismatch")
-    for attachment in db.scalars(select(Attachment)).all():
+    for attachment in attachments:
         path = store.path(attachment.object_key)
         if not path.is_file():
             errors.append(f"{attachment.id}: missing attachment")
@@ -177,13 +269,13 @@ def check_objects(db: Session) -> list[str]:
     return errors
 
 
-def get_backup_artifact(db: Session, admin: User, job_id: str) -> tuple[Path, str]:
+async def get_backup_artifact(db: AsyncSession, admin: User, job_id: str) -> tuple[Path, str]:
     from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
     from quirebase.models import Job
 
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")
-    job = db.get(Job, job_id)
+    job = await db.get(Job, job_id)
     if (
         job is None
         or job.kind != "system.backup"
@@ -201,7 +293,7 @@ def get_backup_artifact(db: Session, admin: User, job_id: str) -> tuple[Path, st
         raise ResourceNotFound("backup filename missing")
 
     backup_file = get_settings().export_dir / filename
-    if not backup_file.is_file():
+    if not await asyncio.to_thread(backup_file.is_file):
         raise ResourceNotFound("backup artifact expired or deleted")
 
     return backup_file, f"quirebase_backup_{job.id[:8]}.zip"

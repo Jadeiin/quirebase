@@ -77,7 +77,7 @@ from quirebase.web.responses import content_disposition
 from quirebase.web.templates import templates
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 router = protected_router()
 
@@ -230,16 +230,16 @@ def _initial_structured_people(
     return people
 
 
-def render_item_workspace(
+async def render_item_workspace(
     request: Request,
     item_id: str,
     section: str,
     user: User,
     login_session: LoginSession,
-    db: Session,
+    db: AsyncSession,
 ):
     selected = WorkspaceSection.parse(section)
-    view = open_item_workspace(db, user, item_id, selected)
+    view = await open_item_workspace(db, user, item_id, selected)
     context: dict[str, Any] = {
         "item": view.item,
         "can_edit": view.can_edit,
@@ -250,7 +250,7 @@ def render_item_workspace(
         case SummaryWorkspace():
             item_thumbnail = None
             with contextlib.suppress(ResourceNotFound):
-                item_thumbnail = get_item_thumbnail(db, user, item_id)
+                item_thumbnail = await get_item_thumbnail(db, user, item_id)
             context.update(
                 revision_count=view.revision_count,
                 attachment_count=view.attachment_count,
@@ -302,38 +302,38 @@ def render_item_workspace(
 
 
 @router.post("/items")
-def create_item(
+async def create_item(
     metadata: ItemMetadata = Depends(_item_metadata_from_form),
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    result = create_item_op(db, user, metadata)
+    result = await create_item_op(db, user, metadata)
     return RedirectResponse(f"/items/{result.item_id}", status_code=303)
 
 
 @router.get("/items/{item_id}", response_class=HTMLResponse)
-def item_page(
+async def item_page(
     request: Request,
     item_id: str,
     user: User = Depends(current_user),
     login_session: LoginSession = Depends(current_login),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    return render_item_workspace(request, item_id, "summary", user, login_session, db)
+    return await render_item_workspace(request, item_id, "summary", user, login_session, db)
 
 
 @router.get("/items/{item_id}/download")
-def download_item_route(
+async def download_item_route(
     item_id: str,
     revisions: str | None = None,
     include_annotations: bool = False,
     include_supplements: bool = False,
     timezone: str | None = None,
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     revision_ids = [r.strip() for r in revisions.split(",") if r.strip()] if revisions else None
-    bundle = create_item_document_bundle(
+    bundle = await create_item_document_bundle(
         db,
         user,
         item_id,
@@ -350,81 +350,81 @@ def download_item_route(
 
 
 @router.get("/items/{item_id}/{section}", response_class=HTMLResponse)
-def item_section_page(
+async def item_section_page(
     request: Request,
     item_id: str,
     section: str,
     user: User = Depends(current_user),
     login_session: LoginSession = Depends(current_login),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    return render_item_workspace(request, item_id, section, user, login_session, db)
+    return await render_item_workspace(request, item_id, section, user, login_session, db)
 
 
 @router.post("/items/{item_id}/edit")
-def edit_item(
+async def edit_item(
     item_id: str,
     version: int = Form(),
     metadata: ItemMetadata = Depends(_item_metadata_from_form),
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    result = revise_item_metadata(db, user, item_id, version, metadata)
+    result = await revise_item_metadata(db, user, item_id, version, metadata)
     return RedirectResponse(f"/items/{result.item_id}/metadata", status_code=303)
 
 
 @router.post("/items/{item_id}/delete")
-def delete_item_route(
+async def delete_item_route(
     item_id: str,
     confirm: str = Form(default=""),
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     if confirm != "delete":
         raise ValidationFailure("confirm deletion to continue")
-    delete_item_op(db, user, item_id)
+    await delete_item_op(db, user, item_id)
     return RedirectResponse("/library", status_code=303)
 
 
 @router.post("/items/{item_id}/sync-metadata")
-def sync_metadata_route(
+async def sync_metadata_route(
     item_id: str,
     version: int = Form(),
     provider: str = Form(),
     uid: str = Form(),
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    sync_metadata_from_upstream(
+    await sync_metadata_from_upstream(
         db,
         user,
         item_id,
         version,
         provider=provider,
         uid_value=uid,
-        settings=get_effective_settings_model(db),
+        settings=await get_effective_settings_model(db),
     )
     return RedirectResponse(f"/items/{item_id}", status_code=303)
 
 
 @router.post("/items/{item_id}/rescan-doi")
-def rescan_doi_route(
+async def rescan_doi_route(
     item_id: str,
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    rescan_pdf_doi(db, user, item_id)
+    await rescan_pdf_doi(db, user, item_id)
     return RedirectResponse(f"/items/{item_id}", status_code=303)
 
 
 @router.post("/items/{item_id}/update-bibtex-key")
-def update_bibtex_key_route(
+async def update_bibtex_key_route(
     item_id: str,
     version: int = Form(),
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    regenerate_bibtex_key(
+    await regenerate_bibtex_key(
         db,
         user,
         item_id,
@@ -434,67 +434,69 @@ def update_bibtex_key_route(
 
 
 @router.post("/items/{item_id}/tags/matrix")
-def update_tag_matrix_route(
+async def update_tag_matrix_route(
     item_id: str,
     tag_ids: list[str] = Form(default=[]),
     suggested_tags: list[str] = Form(default=[]),
     new_tags: str = Form(default=""),
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     new_names = [*suggested_tags, *(line.strip() for line in new_tags.splitlines() if line.strip())]
-    set_item_tags(db, user, item_id, tag_ids, new_names=new_names)
+    await set_item_tags(db, user, item_id, tag_ids, new_names=new_names)
     return RedirectResponse(f"/items/{item_id}/organize", status_code=303)
 
 
 @router.post("/items/{item_id}/tag-recommendations")
-def regenerate_tag_recommendations(
+async def regenerate_tag_recommendations(
     item_id: str,
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    force_item_tag_recommendation(db, user, item_id)
+    await force_item_tag_recommendation(db, user, item_id)
     return RedirectResponse(f"/items/{item_id}/organize", status_code=303)
 
 
 @router.get("/api/authors/suggest")
-def suggest_authors(
+async def suggest_authors(
     q: str = "",
     _user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    return search_authors_typeahead(db, query=q)
+    return await search_authors_typeahead(db, query=q)
 
 
 @router.post("/items/{item_id}/attachments")
-def upload_attachment(
+async def upload_attachment(
     item_id: str,
     attachment: UploadFile = File(),
     graphical_abstract: bool = Form(False),
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    create_attachment_op(
+    await create_attachment_op(
         db,
         user,
         item_id,
         attachment.file,
         attachment.filename or "",
         attachment.content_type or "application/octet-stream",
-        get_effective_setting(db, "max_attachment_bytes", get_settings().max_attachment_bytes),
+        await get_effective_setting(
+            db, "max_attachment_bytes", get_settings().max_attachment_bytes
+        ),
         role=AttachmentRole.graphical_abstract if graphical_abstract else None,
     )
     return RedirectResponse(f"/items/{item_id}/files", status_code=303)
 
 
 @router.get("/items/{item_id}/attachments/{attachment_id}")
-def download_attachment(
+async def download_attachment(
     item_id: str,
     attachment_id: str,
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    path, original_name, media_type = get_attachment_file(db, user, item_id, attachment_id)
+    path, original_name, media_type = await get_attachment_file(db, user, item_id, attachment_id)
     return FileResponse(
         path,
         media_type=media_type,
@@ -504,121 +506,121 @@ def download_attachment(
 
 
 @router.post("/items/{item_id}/attachments/{attachment_id}/delete")
-def delete_item_attachment(
+async def delete_item_attachment(
     item_id: str,
     attachment_id: str,
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    delete_attachment(db, user, item_id, attachment_id)
+    await delete_attachment(db, user, item_id, attachment_id)
     return RedirectResponse(f"/items/{item_id}/files", status_code=303)
 
 
 @router.post("/items/{item_id}/tags")
-def add_tag(
+async def add_tag(
     item_id: str,
     name: str = Form(),
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    add_tag_to_item(db, user, item_id, name)
+    await add_tag_to_item(db, user, item_id, name)
     return RedirectResponse(f"/items/{item_id}/organize", status_code=303)
 
 
 @router.post("/items/{item_id}/tags/{tag_id}/remove")
-def remove_tag(
+async def remove_tag(
     item_id: str,
     tag_id: str,
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    remove_tag_from_item(db, user, item_id, tag_id)
+    await remove_tag_from_item(db, user, item_id, tag_id)
     return RedirectResponse(f"/items/{item_id}/organize", status_code=303)
 
 
 @router.post("/items/{item_id}/discussion")
-def add_discussion_message(
+async def add_discussion_message(
     item_id: str,
     body: str = Form(),
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    add_discussion_message_op(db, user, item_id, body)
+    await add_discussion_message_op(db, user, item_id, body)
     return RedirectResponse(f"/items/{item_id}/discussion", status_code=303)
 
 
 @router.post("/items/{item_id}/discussion/{message_id}/delete")
-def delete_discussion_message(
+async def delete_discussion_message(
     item_id: str,
     message_id: str,
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    delete_discussion_message_op(db, user, item_id, message_id)
+    await delete_discussion_message_op(db, user, item_id, message_id)
     return RedirectResponse(f"/items/{item_id}/discussion", status_code=303)
 
 
 @router.post("/items/{item_id}/projects/{project_id}")
-def add_item_to_project(
+async def add_item_to_project(
     item_id: str,
     project_id: str,
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    add_item_to_project_op(db, user, project_id, item_id)
+    await add_item_to_project_op(db, user, project_id, item_id)
     return RedirectResponse(f"/items/{item_id}/organize", status_code=303)
 
 
 @router.post("/items/{item_id}/projects/{project_id}/remove")
-def remove_item_from_project(
+async def remove_item_from_project(
     item_id: str,
     project_id: str,
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    remove_item_from_project_op(db, user, project_id, item_id)
+    await remove_item_from_project_op(db, user, project_id, item_id)
     return RedirectResponse(f"/items/{item_id}/organize", status_code=303)
 
 
 @router.post("/items/{item_id}/pdf")
-def upload_pdf(
+async def upload_pdf(
     item_id: str,
     pdf: UploadFile = File(),
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    store_pdf_revision(
+    await store_pdf_revision(
         db,
         user,
         item_id,
         pdf.file,
         pdf.filename or "",
-        get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes),
+        await get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes),
     )
     return RedirectResponse(f"/items/{item_id}/files", status_code=303)
 
 
 @router.post("/items/{item_id}/pdf/{revision_id}/delete")
-def delete_pdf_revision(
+async def delete_pdf_revision(
     item_id: str,
     revision_id: str,
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    delete_file_revision(db, user, item_id, revision_id)
+    await delete_file_revision(db, user, item_id, revision_id)
     return RedirectResponse(f"/items/{item_id}/files", status_code=303)
 
 
 @router.get("/items/{item_id}/pdf/{revision_id}", response_class=HTMLResponse)
-def pdf_viewer(
+async def pdf_viewer(
     request: Request,
     item_id: str,
     revision_id: str,
     user: User = Depends(current_user),
     login_session: LoginSession = Depends(current_login),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    viewer_data = get_pdf_viewer_data(db, user, item_id, revision_id)
+    viewer_data = await get_pdf_viewer_data(db, user, item_id, revision_id)
     return templates.TemplateResponse(
         request,
         "pdf.html",

@@ -25,7 +25,7 @@ type ProviderCapability = Literal["lookup", "search", "document"]
 
 
 class LookupImplementation(Protocol):
-    def lookup(
+    async def lookup(
         self,
         client: ProviderContext,
         value: str,
@@ -36,7 +36,7 @@ class LookupImplementation(Protocol):
 
 
 class SearchImplementation(Protocol):
-    def search(
+    async def search(
         self,
         client: ProviderContext,
         clauses: list[SearchClause],
@@ -52,7 +52,7 @@ class SearchImplementation(Protocol):
 
 
 class DocumentImplementation(Protocol):
-    def acquire(
+    async def acquire(
         self,
         client: ProviderContext,
         value: str,
@@ -98,19 +98,19 @@ class ProviderContext:
     def __init__(self, transport: BoundedTransport) -> None:
         self._transport = transport
 
-    def _get(
+    async def _get(
         self,
         url: str,
         params: Mapping[str, object] | None = None,
         headers: Mapping[str, str] | None = None,
     ) -> bytes:
-        return self._transport.get(url, params, headers)
+        return await self._transport.get(url, params, headers)
 
-    def _download_pdf(
+    async def _download_pdf(
         self,
         url: str,
         *,
         filename: str | None = None,
         provider: str | None = None,
     ) -> AcquiredDocument:
-        return self._transport.download_pdf(url, filename=filename, provider=provider)
+        return await self._transport.download_pdf(url, filename=filename, provider=provider)

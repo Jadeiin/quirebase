@@ -1,20 +1,27 @@
 from __future__ import annotations
 
+import asyncio
 import io
 import json
 import zipfile
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
+from unittest.mock import AsyncMock
 
 import pymupdf
+import pytest
 from inquiro import CandidateRecord, Identifier
-from sqlalchemy.orm import Session
-from test_http import authenticated_client
+from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
+from test_http import authenticated_async_client
 
 from quirebase.core.config import get_settings
+from quirebase.core.errors import ResourceUnavailable
 from quirebase.core.storage import LocalObjectStore
 from quirebase.documents.revisions import delete_unreferenced_objects, stage_pdf
+from quirebase.library.imports import stage_pdf_import_batch
 from quirebase.models import (
+    AuditEvent,
     ImportBatch,
     Item,
     ItemRead,
@@ -25,7 +32,6 @@ from quirebase.models import (
     Tag,
     User,
 )
-from quirebase.web.app import app
 
 
 def provider_candidate(identifier: str, title: str, *, authors: str | None = None):
@@ -56,8 +62,92 @@ def published_pdf_bytes(doi: str = "10.1000/published") -> bytes:
     return contents
 
 
-def test_dashboard_sidebar_limits_and_recent_reading(db, tmp_path, monkeypatch):
-    client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_pdf_import_revalidates_user_after_provider_io(
+    async_db, async_session_factory, monkeypatch
+):
+    db = async_db
+    user = User(username="deactivated-importer", password_hash="unused")
+    db.add(user)
+    await db.commit()
+    user_id = user.id
+    objects_before = set(get_settings().object_dir.rglob("*.pdf"))
+
+    async def deactivate_during_lookup(identifier, _provider, _settings):
+        async with async_session_factory() as administrator_db:
+            persisted = await administrator_db.get(User, user_id)
+            assert persisted is not None
+            persisted.active = False
+            await administrator_db.commit()
+        return provider_candidate(identifier, "Stale authorization candidate")
+
+    monkeypatch.setattr(
+        "quirebase.library.imports.lookup_candidate",
+        deactivate_during_lookup,
+    )
+
+    with pytest.raises(ResourceUnavailable, match="user not available"):
+        await stage_pdf_import_batch(
+            db,
+            user,
+            [(BytesIO(published_pdf_bytes("10.1000/deactivated")), "deactivated.pdf")],
+            max_bytes=100_000,
+        )
+
+    assert await db.scalar(select(func.count()).select_from(ImportBatch)) == 0
+    assert (
+        await db.scalar(
+            select(func.count())
+            .select_from(AuditEvent)
+            .where(AuditEvent.action == "pdf.import.preview")
+        )
+        == 0
+    )
+    assert set(get_settings().object_dir.rglob("*.pdf")) == objects_before
+
+
+@pytest.mark.anyio
+async def test_cancelled_pdf_import_releases_all_staged_objects(async_db, monkeypatch):
+    db = async_db
+    user = User(username="cancelled-importer", password_hash="unused")
+    db.add(user)
+    await db.commit()
+    provider_started = asyncio.Event()
+    release_provider = asyncio.Event()
+    objects_before = set(get_settings().object_dir.rglob("*.pdf"))
+
+    async def delayed_lookup(identifier, _provider, _settings):
+        provider_started.set()
+        await release_provider.wait()
+        return provider_candidate(identifier, "Cancelled candidate")
+
+    monkeypatch.setattr("quirebase.library.imports.lookup_candidate", delayed_lookup)
+    importing = asyncio.create_task(
+        stage_pdf_import_batch(
+            db,
+            user,
+            [(BytesIO(published_pdf_bytes("10.1000/cancelled")), "cancelled.pdf")],
+            max_bytes=100_000,
+        )
+    )
+    await provider_started.wait()
+    importing.cancel()
+    release_provider.set()
+
+    with pytest.raises(asyncio.CancelledError):
+        await importing
+    assert await db.scalar(select(func.count()).select_from(ImportBatch)) == 0
+    assert set(get_settings().object_dir.rglob("*.pdf")) == objects_before
+
+
+@pytest.mark.anyio
+async def test_dashboard_sidebar_limits_and_recent_reading(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
     try:
         baseline = datetime(2026, 1, 1, tzinfo=UTC)
         for number in range(12):
@@ -68,9 +158,9 @@ def test_dashboard_sidebar_limits_and_recent_reading(db, tmp_path, monkeypatch):
                     created_at=baseline + timedelta(days=number),
                 )
             )
-        db.commit()
+        await db.commit()
 
-        dashboard = client.get("/")
+        dashboard = await client.get("/")
         assert dashboard.status_code == 200
         assert 'lang="zh-CN"' in dashboard.text
         assert "主导航" in dashboard.text
@@ -79,41 +169,59 @@ def test_dashboard_sidebar_limits_and_recent_reading(db, tmp_path, monkeypatch):
         assert "Dashboard paper 11" in dashboard.text
         assert "Dashboard paper 0" not in dashboard.text
 
-        opened = client.get(f"/items/{item.id}")
+        opened = await client.get(f"/items/{item.id}")
         assert opened.status_code == 200
-        assert db.get(ItemRead, (item.created_by, item.id)) is not None
-        refreshed = client.get("/")
+        assert await db.get(ItemRead, (item.created_by, item.id)) is not None
+        refreshed = await client.get("/")
         assert "最近阅读" in refreshed.text
         assert item.title in refreshed.text
-        assert client.get("/source").status_code == 404
+        assert (await client.get("/source")).status_code == 404
     finally:
-        app.dependency_overrides.clear()
+        await client.aclose()
         get_settings.cache_clear()
 
 
-def test_item_page_validates_access_before_recording_read(db, tmp_path, monkeypatch):
-    client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_item_page_validates_access_before_recording_read(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
     other_user = User(username="private-owner", password_hash="unused")
     db.add(other_user)
-    db.flush()
+    await db.flush()
     private_item = Item(title="Private paper", created_by=other_user.id)
     db.add(private_item)
-    db.commit()
+    await db.commit()
+    private_item_id = private_item.id
+    reader_id = item.created_by
 
-    assert client.get("/items/missing-item").status_code == 404
-    assert client.get(f"/items/{private_item.id}").status_code == 404
-    assert db.get(ItemRead, (item.created_by, "missing-item")) is None
-    assert db.get(ItemRead, (item.created_by, private_item.id)) is None
+    try:
+        assert (await client.get("/items/missing-item")).status_code == 404
+        assert (await client.get(f"/items/{private_item_id}")).status_code == 404
+        assert await db.get(ItemRead, (reader_id, "missing-item")) is None
+        assert await db.get(ItemRead, (reader_id, private_item_id)) is None
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
 
 
-def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
-    client, original, _revision = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_library_pagination_filters_and_bulk_actions(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, original, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
     try:
         project = Project(name="Review project", created_by=original.created_by)
         second_project = Project(name="Reading queue", created_by=original.created_by)
         tag = Tag(name="Methods", created_by=original.created_by)
         db.add_all([project, second_project, tag])
-        db.flush()
+        await db.flush()
         db.add_all([
             ProjectMember(project_id=project.id, user_id=original.created_by, role="owner"),
             ProjectMember(project_id=second_project.id, user_id=original.created_by, role="editor"),
@@ -130,16 +238,16 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
                 updated_at=datetime(2026, 1, 1, tzinfo=UTC) + timedelta(days=number),
             )
             db.add(item)
-            db.flush()
+            await db.flush()
             if number < 2:
                 selected.append(item)
                 db.add_all([
                     ItemTag(item_id=item.id, tag_id=tag.id),
                     ProjectItem(project_id=project.id, item_id=item.id),
                 ])
-        db.commit()
+        await db.commit()
 
-        first_page = client.get("/library")
+        first_page = await client.get("/library")
         assert first_page.status_code == 200
         assert "第 1 页" in first_page.text
         assert "共 2 页" in first_page.text
@@ -148,19 +256,19 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
         assert 'name="journal_mode"' in first_page.text
         assert 'name="style" :value="style"' in first_page.text
         assert 'name="tag_name"' in first_page.text
-        second_page = client.get("/library?page=2")
+        second_page = await client.get("/library?page=2")
         assert second_page.status_code == 200
         assert "Library paper 00" in second_page.text
 
-        filtered = client.get("/library?author=Alice&year=2025&keyword=imaging")
+        filtered = await client.get("/library?author=Alice&year=2025&keyword=imaging")
         assert filtered.status_code == 200
         assert "Library paper 00" in filtered.text
         assert "Library paper 02" not in filtered.text
-        project_filter = client.get(f"/library?project={project.id}&tag={tag.id}")
+        project_filter = await client.get(f"/library?project={project.id}&tag={tag.id}")
         assert "Library paper 00" in project_filter.text
         assert "Library paper 02" not in project_filter.text
 
-        tagged = client.post(
+        tagged = await client.post(
             "/library/bulk",
             data={
                 "csrf_token": "test-csrf",
@@ -171,10 +279,11 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
             follow_redirects=False,
         )
         assert tagged.status_code == 303
-        priority = db.query(Tag).filter_by(name="Priority").one()
-        assert db.get(ItemTag, (selected[0].id, priority.id)) is not None
+        priority = await db.scalar(select(Tag).where(Tag.name == "Priority"))
+        assert priority is not None
+        assert await db.get(ItemTag, (selected[0].id, priority.id)) is not None
 
-        assigned = client.post(
+        assigned = await client.post(
             "/library/bulk",
             data={
                 "csrf_token": "test-csrf",
@@ -185,10 +294,10 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
             follow_redirects=False,
         )
         assert assigned.status_code == 303
-        assert db.get(ProjectItem, (second_project.id, selected[0].id)) is not None
-        assert db.get(ProjectItem, (second_project.id, selected[1].id)) is not None
+        assert await db.get(ProjectItem, (second_project.id, selected[0].id)) is not None
+        assert await db.get(ProjectItem, (second_project.id, selected[1].id)) is not None
 
-        exported = client.post(
+        exported = await client.post(
             "/library/bulk",
             data={
                 "csrf_token": "test-csrf",
@@ -201,7 +310,7 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
         assert "Library paper 00" in exported.text
         assert "This abstract should be optional." in exported.text
 
-        native_checkbox_export = client.post(
+        native_checkbox_export = await client.post(
             "/library/bulk",
             data={
                 "csrf_token": "test-csrf",
@@ -213,7 +322,7 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
         assert native_checkbox_export.status_code == 200
         assert "This abstract should be optional." in native_checkbox_export.text
 
-        exported_without_abstract = client.post(
+        exported_without_abstract = await client.post(
             "/library/bulk",
             data={
                 "csrf_token": "test-csrf",
@@ -225,7 +334,7 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
         assert exported_without_abstract.status_code == 200
         assert "This abstract should be optional." not in exported_without_abstract.text
 
-        pdf_archive = client.post(
+        pdf_archive = await client.post(
             "/library/bulk",
             data={"csrf_token": "test-csrf", "action": "download_pdfs", "item_ids": original.id},
         )
@@ -239,7 +348,7 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
                 "manifest.json",
             ]
 
-        annotated_pdf_archive = client.post(
+        annotated_pdf_archive = await client.post(
             "/library/bulk",
             data={
                 "csrf_token": "test-csrf",
@@ -254,7 +363,7 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
             in annotated_pdf_archive.headers["content-disposition"]
         )
 
-        deleted = client.post(
+        deleted = await client.post(
             "/library/bulk",
             data={
                 "csrf_token": "test-csrf",
@@ -265,16 +374,22 @@ def test_library_pagination_filters_and_bulk_actions(db, tmp_path, monkeypatch):
             follow_redirects=False,
         )
         assert deleted.status_code == 303
-        assert db.get(Item, selected[1].id) is None
+        assert await db.get(Item, selected[1].id) is None
     finally:
-        app.dependency_overrides.clear()
+        await client.aclose()
         get_settings.cache_clear()
 
 
-def test_pdf_import_batch_previews_before_creating_items(db, tmp_path, monkeypatch):
-    client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_pdf_import_batch_previews_before_creating_items(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, _item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
     try:
-        import_page = client.get("/bibliography/import")
+        import_page = await client.get("/bibliography/import")
         assert import_page.status_code == 200
         assert "通过标识符导入" in import_page.text
         assert "文献记录文件" in import_page.text
@@ -284,13 +399,15 @@ def test_pdf_import_batch_previews_before_creating_items(db, tmp_path, monkeypat
 
         monkeypatch.setattr(
             "quirebase.library.imports.lookup_candidate",
-            lambda identifier, _provider, _settings: provider_candidate(
-                identifier,
-                f"Article {identifier.rsplit('/', 1)[-1]}",
-                authors="P. Author",
+            AsyncMock(
+                side_effect=lambda identifier, _provider, _settings: provider_candidate(
+                    identifier,
+                    f"Article {identifier.rsplit('/', 1)[-1]}",
+                    authors="P. Author",
+                )
             ),
         )
-        preview = client.post(
+        preview = await client.post(
             "/imports/pdf/published",
             data={"csrf_token": "test-csrf"},
             files=[
@@ -311,38 +428,57 @@ def test_pdf_import_batch_previews_before_creating_items(db, tmp_path, monkeypat
         assert preview.status_code == 200
         assert "first.pdf" in preview.text
         assert "second.pdf" in preview.text
-        assert db.query(Item).filter(Item.title.like("Article %")).count() == 0
+        assert (
+            await db.scalar(
+                select(func.count()).select_from(Item).where(Item.title.like("Article %"))
+            )
+            == 0
+        )
 
-        batch = db.query(ImportBatch).filter_by(file_format="pdf").one()
+        batch = await db.scalar(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
+        assert batch is not None
         assert f"/bibliography/import/{batch.id}" in preview.text
 
-        committed = client.post(
+        committed = await client.post(
             f"/bibliography/import/{batch.id}",
             data={"csrf_token": "test-csrf"},
             follow_redirects=False,
         )
         assert committed.status_code == 303
-        first = db.query(Item).filter_by(doi="10.1000/first").one()
-        second = db.query(Item).filter_by(doi="10.1000/second").one()
+        first = await db.scalar(
+            select(Item).options(selectinload(Item.revisions)).where(Item.doi == "10.1000/first")
+        )
+        second = await db.scalar(
+            select(Item).options(selectinload(Item.revisions)).where(Item.doi == "10.1000/second")
+        )
+        assert first is not None and second is not None
         assert first.revisions[0].original_name == "first.pdf"
         assert second.revisions[0].original_name == "second.pdf"
-        assert db.get(ImportBatch, batch.id) is None
+        assert await db.get(ImportBatch, batch.id) is None
     finally:
-        app.dependency_overrides.clear()
+        await client.aclose()
         get_settings.cache_clear()
 
 
-def test_pdf_import_batch_keeps_successes_and_reports_failed_files(db, tmp_path, monkeypatch):
-    client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_pdf_import_batch_keeps_successes_and_reports_failed_files(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, _item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
     objects_before = set(get_settings().object_dir.rglob("*.pdf"))
     monkeypatch.setattr(
         "quirebase.library.imports.lookup_candidate",
-        lambda identifier, _provider, _settings: provider_candidate(
-            identifier, "Importable article"
+        AsyncMock(
+            side_effect=lambda identifier, _provider, _settings: provider_candidate(
+                identifier, "Importable article"
+            )
         ),
     )
     try:
-        preview = client.post(
+        preview = await client.post(
             "/imports/pdf/published",
             data={"csrf_token": "test-csrf"},
             files=[
@@ -356,31 +492,41 @@ def test_pdf_import_batch_keeps_successes_and_reports_failed_files(db, tmp_path,
         assert preview.status_code == 200
         assert "valid.pdf" in preview.text
         assert "missing-doi.pdf" in preview.text
-        batch = db.query(ImportBatch).filter_by(file_format="pdf").one()
+        batch = await db.scalar(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
+        assert batch is not None
         assert '"code": "missing_doi"' in batch.errors
         assert f"/bibliography/import/{batch.id}" in preview.text
         assert len(set(get_settings().object_dir.rglob("*.pdf")) - objects_before) == 1
 
-        committed = client.post(
+        committed = await client.post(
             f"/bibliography/import/{batch.id}",
             data={"csrf_token": "test-csrf"},
             follow_redirects=False,
         )
         assert committed.status_code == 303
-        article = db.query(Item).filter_by(doi="10.1000/valid").one()
+        article = await db.scalar(
+            select(Item).options(selectinload(Item.revisions)).where(Item.doi == "10.1000/valid")
+        )
+        assert article is not None
         assert article.revisions[0].original_name == "valid.pdf"
     finally:
-        app.dependency_overrides.clear()
+        await client.aclose()
         get_settings.cache_clear()
 
 
-def test_pdf_import_batch_rejects_an_accessible_duplicate_doi(db, tmp_path, monkeypatch):
-    client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_pdf_import_batch_rejects_an_accessible_duplicate_doi(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
     item.doi = "10.1000/existing"
-    db.commit()
+    await db.commit()
     objects_before = set(get_settings().object_dir.rglob("*.pdf"))
     try:
-        preview = client.post(
+        preview = await client.post(
             "/imports/pdf/published",
             data={"csrf_token": "test-csrf"},
             files=[
@@ -396,27 +542,36 @@ def test_pdf_import_batch_rejects_an_accessible_duplicate_doi(db, tmp_path, monk
         )
         assert preview.status_code == 200
         assert "duplicate.pdf" in preview.text
-        batch = db.query(ImportBatch).filter_by(file_format="pdf").one()
+        batch = await db.scalar(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
+        assert batch is not None
         assert '"code": "existing_doi"' in batch.errors
         assert batch.records == "[]"
         assert f'action="/bibliography/import/{batch.id}?csrf_token=' not in preview.text
         assert set(get_settings().object_dir.rglob("*.pdf")) == objects_before
     finally:
-        app.dependency_overrides.clear()
+        await client.aclose()
         get_settings.cache_clear()
 
 
-def test_discard_pdf_import_batch_removes_staged_objects(db, tmp_path, monkeypatch):
-    client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_discard_pdf_import_batch_removes_staged_objects(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, _item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
     objects_before = set(get_settings().object_dir.rglob("*.pdf"))
     monkeypatch.setattr(
         "quirebase.library.imports.lookup_candidate",
-        lambda identifier, _provider, _settings: provider_candidate(
-            identifier, "Discarded candidate"
+        AsyncMock(
+            side_effect=lambda identifier, _provider, _settings: provider_candidate(
+                identifier, "Discarded candidate"
+            )
         ),
     )
     try:
-        preview = client.post(
+        preview = await client.post(
             "/imports/pdf/published",
             data={"csrf_token": "test-csrf"},
             files=[
@@ -431,35 +586,44 @@ def test_discard_pdf_import_batch_removes_staged_objects(db, tmp_path, monkeypat
             ],
         )
         assert preview.status_code == 200
-        batch = db.query(ImportBatch).filter_by(file_format="pdf").one()
+        batch = await db.scalar(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
+        assert batch is not None
         assert len(set(get_settings().object_dir.rglob("*.pdf")) - objects_before) == 1
 
-        discarded = client.post(
+        discarded = await client.post(
             f"/bibliography/import/{batch.id}/discard",
             data={"csrf_token": "test-csrf"},
             follow_redirects=False,
         )
         assert discarded.status_code == 303
         assert discarded.headers["location"] == "/bibliography/import"
-        assert db.get(ImportBatch, batch.id) is None
+        assert await db.get(ImportBatch, batch.id) is None
         assert set(get_settings().object_dir.rglob("*.pdf")) == objects_before
     finally:
-        app.dependency_overrides.clear()
+        await client.aclose()
         get_settings.cache_clear()
 
 
-def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(db, tmp_path, monkeypatch):
-    client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, _item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
     shared_pdf = published_pdf_bytes("10.1000/shared-staged")
     monkeypatch.setattr(
         "quirebase.library.imports.lookup_candidate",
-        lambda identifier, _provider, _settings: provider_candidate(
-            identifier, "Shared staged PDF"
+        AsyncMock(
+            side_effect=lambda identifier, _provider, _settings: provider_candidate(
+                identifier, "Shared staged PDF"
+            )
         ),
     )
     try:
         for filename in ("first-copy.pdf", "second-copy.pdf"):
-            preview = client.post(
+            preview = await client.post(
                 "/imports/pdf/published",
                 data={"csrf_token": "test-csrf"},
                 files=[
@@ -475,7 +639,9 @@ def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(db, tmp
             )
             assert preview.status_code == 200
 
-        batches = db.query(ImportBatch).filter_by(file_format="pdf").all()
+        batches = list(
+            await db.scalars(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
+        )
         assert len(batches) == 2
         first_pdf = json.loads(batches[0].records)[0]["_pdf"]
         second_pdf = json.loads(batches[1].records)[0]["_pdf"]
@@ -483,7 +649,7 @@ def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(db, tmp
         object_path = LocalObjectStore().path(first_pdf["object_key"])
         assert object_path.is_file()
 
-        discarded = client.post(
+        discarded = await client.post(
             f"/bibliography/import/{batches[0].id}/discard",
             data={"csrf_token": "test-csrf"},
             follow_redirects=False,
@@ -491,23 +657,32 @@ def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(db, tmp
         assert discarded.status_code == 303
         assert object_path.is_file()
 
-        committed = client.post(
+        committed = await client.post(
             f"/bibliography/import/{batches[1].id}",
             data={"csrf_token": "test-csrf"},
             follow_redirects=False,
         )
         assert committed.status_code == 303
-        imported = db.query(Item).filter_by(doi="10.1000/shared-staged").one()
+        imported = await db.scalar(
+            select(Item)
+            .options(selectinload(Item.revisions))
+            .where(Item.doi == "10.1000/shared-staged")
+        )
+        assert imported is not None
         assert LocalObjectStore().path(imported.revisions[0].object_key).is_file()
     finally:
-        app.dependency_overrides.clear()
+        await client.aclose()
         get_settings.cache_clear()
 
 
-def test_cleanup_preserves_object_referenced_by_an_uncommitted_pdf_import_batch(
-    db, tmp_path, monkeypatch
+@pytest.mark.anyio
+async def test_cleanup_preserves_object_referenced_by_an_uncommitted_pdf_import_batch(
+    async_db, async_session_factory, tmp_path, monkeypatch
 ):
-    _client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+    db = async_db
+    client, item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
     pdf = published_pdf_bytes("10.1000/in-flight-staged")
     discarded = stage_pdf(
         BytesIO(pdf),
@@ -538,37 +713,45 @@ def test_cleanup_preserves_object_referenced_by_an_uncommitted_pdf_import_batch(
         errors="[]",
     )
     db.add(batch)
-    db.flush()
+    await db.flush()
 
     try:
         discarded.release()
-        with Session(db.bind) as cleanup_db:
-            assert delete_unreferenced_objects(cleanup_db, (discarded.object_key,)) == ()
+        async with async_session_factory() as cleanup_db:
+            assert await delete_unreferenced_objects(cleanup_db, (discarded.object_key,)) == ()
         assert object_path.is_file()
 
-        db.commit()
+        await db.commit()
         in_flight.release()
-        with Session(db.bind) as cleanup_db:
-            assert delete_unreferenced_objects(cleanup_db, (in_flight.object_key,)) == ()
+        async with async_session_factory() as cleanup_db:
+            assert await delete_unreferenced_objects(cleanup_db, (in_flight.object_key,)) == ()
         assert object_path.is_file()
     finally:
         discarded.release()
         in_flight.release()
-        app.dependency_overrides.clear()
+        await client.aclose()
         get_settings.cache_clear()
 
 
-def test_commit_pdf_import_batch_rechecks_doi_after_stale_preview(db, tmp_path, monkeypatch):
-    client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_commit_pdf_import_batch_rechecks_doi_after_stale_preview(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, _item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
     monkeypatch.setattr(
         "quirebase.library.imports.lookup_candidate",
-        lambda identifier, _provider, _settings: provider_candidate(
-            identifier, "Stale DOI candidate"
+        AsyncMock(
+            side_effect=lambda identifier, _provider, _settings: provider_candidate(
+                identifier, "Stale DOI candidate"
+            )
         ),
     )
     try:
         for filename in ("first-preview.pdf", "stale-preview.pdf"):
-            preview = client.post(
+            preview = await client.post(
                 "/imports/pdf/published",
                 data={"csrf_token": "test-csrf"},
                 files=[
@@ -584,23 +767,30 @@ def test_commit_pdf_import_batch_rechecks_doi_after_stale_preview(db, tmp_path, 
             )
             assert preview.status_code == 200
 
-        batches = db.query(ImportBatch).filter_by(file_format="pdf").all()
+        batches = list(
+            await db.scalars(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
+        )
         assert len(batches) == 2
-        first = client.post(
+        first = await client.post(
             f"/bibliography/import/{batches[0].id}",
             data={"csrf_token": "test-csrf"},
             follow_redirects=False,
         )
         assert first.status_code == 303
 
-        stale = client.post(
+        stale = await client.post(
             f"/bibliography/import/{batches[1].id}",
             data={"csrf_token": "test-csrf"},
             follow_redirects=False,
         )
         assert stale.status_code == 409
-        assert db.query(Item).filter_by(doi="10.1000/stale-preview").count() == 1
-        assert db.get(ImportBatch, batches[1].id) is not None
+        assert (
+            await db.scalar(
+                select(func.count()).select_from(Item).where(Item.doi == "10.1000/stale-preview")
+            )
+            == 1
+        )
+        assert await db.get(ImportBatch, batches[1].id) is not None
     finally:
-        app.dependency_overrides.clear()
+        await client.aclose()
         get_settings.cache_clear()

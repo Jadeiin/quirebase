@@ -16,7 +16,7 @@ from quirebase.models import Item, ItemTag, ItemTagRecommendation, Job, Tag, Use
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class TagConflict(DomainError):
@@ -30,39 +30,39 @@ def normalize_tag_name(name: str) -> str:
     return normalized
 
 
-def get_or_create_tag(db: Session, user: User, name: str) -> Tag:
+async def get_or_create_tag(db: AsyncSession, user: User, name: str) -> Tag:
     normalized = normalize_tag_name(name)
-    tag = db.scalar(select(Tag).where(Tag.name == normalized))
+    tag = await db.scalar(select(Tag).where(Tag.name == normalized))
     if tag is None:
         tag = Tag(name=normalized, created_by=user.id)
         db.add(tag)
-        db.flush()
+        await db.flush()
     return tag
 
 
-def add_tag_to_item(db: Session, user: User, item_id: str, name: str) -> ItemTag:
-    if not can_edit_item(db, user, item_id):
+async def add_tag_to_item(db: AsyncSession, user: User, item_id: str, name: str) -> ItemTag:
+    if not await can_edit_item(db, user, item_id):
         raise ResourceUnavailable("item not found or cannot be edited")
-    tag = get_or_create_tag(db, user, name)
-    assignment = db.get(ItemTag, (item_id, tag.id))
+    tag = await get_or_create_tag(db, user, name)
+    assignment = await db.get(ItemTag, (item_id, tag.id))
     if assignment is None:
         assignment = ItemTag(item_id=item_id, tag_id=tag.id)
         db.add(assignment)
-        db.flush()
-        search_index(db).index_item(db, item_id)
+        await db.flush()
+        await search_index(db).index_item(db, item_id)
         record_event(db, user.id, "tag.add", "item", item_id)
-        db.commit()
+        await db.commit()
     return assignment
 
 
-def remove_tag_from_item(db: Session, user: User, item_id: str, tag_id: str) -> None:
-    if not can_edit_item(db, user, item_id):
+async def remove_tag_from_item(db: AsyncSession, user: User, item_id: str, tag_id: str) -> None:
+    if not await can_edit_item(db, user, item_id):
         raise ResourceUnavailable("item not found or cannot be edited")
-    assignment = db.get(ItemTag, (item_id, tag_id))
+    assignment = await db.get(ItemTag, (item_id, tag_id))
     if assignment:
-        db.delete(assignment)
-        db.flush()
-        search_index(db).index_item(db, item_id)
+        await db.delete(assignment)
+        await db.flush()
+        await search_index(db).index_item(db, item_id)
         record_event(
             db,
             user.id,
@@ -71,58 +71,66 @@ def remove_tag_from_item(db: Session, user: User, item_id: str, tag_id: str) -> 
             item_id,
             detail={"tag_id": tag_id},
         )
-        db.commit()
+        await db.commit()
 
 
-def rename_tag(db: Session, user: User, tag_id: str, name: str) -> Tag:
-    tag = db.get(Tag, tag_id)
+async def rename_tag(db: AsyncSession, user: User, tag_id: str, name: str) -> Tag:
+    tag = await db.get(Tag, tag_id)
     if tag is None or (tag.created_by != user.id and user.role != "administrator"):
         raise ResourceUnavailable("tag not found or cannot be managed")
     normalized = normalize_tag_name(name)
-    if db.scalar(select(Tag.id).where(Tag.name == normalized, Tag.id != tag.id)):
+    if await db.scalar(select(Tag.id).where(Tag.name == normalized, Tag.id != tag.id)):
         raise TagConflict("tag name already exists")
     tag.name = normalized
-    item_ids = list(db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == tag.id)).all())
+    item_ids = list(
+        (await db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == tag.id))).all()
+    )
     for item_id in item_ids:
-        search_index(db).index_item(db, item_id)
+        await search_index(db).index_item(db, item_id)
     record_event(db, user.id, "tag.rename", "tag", tag.id)
-    db.commit()
+    await db.commit()
     return tag
 
 
-def delete_tag(db: Session, user: User, tag_id: str) -> None:
-    tag = db.get(Tag, tag_id)
+async def delete_tag(db: AsyncSession, user: User, tag_id: str) -> None:
+    tag = await db.get(Tag, tag_id)
     if tag is None or (tag.created_by != user.id and user.role != "administrator"):
         raise ResourceUnavailable("tag not found or cannot be managed")
-    item_ids = list(db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == tag.id)).all())
-    db.delete(tag)
-    db.flush()
+    item_ids = list(
+        (await db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == tag.id))).all()
+    )
+    await db.delete(tag)
+    await db.flush()
     for item_id in item_ids:
-        search_index(db).index_item(db, item_id)
+        await search_index(db).index_item(db, item_id)
     record_event(db, user.id, "tag.delete", "tag", tag_id)
-    db.commit()
+    await db.commit()
 
 
-def list_accessible_tags_with_counts(db: Session, user: User) -> list[tuple[Tag, int]]:
+async def list_accessible_tags_with_counts(db: AsyncSession, user: User) -> list[tuple[Tag, int]]:
     accessible_ids = visible_items_query(user).with_only_columns(Item.id).subquery()
-    rows = db.execute(
-        select(Tag, func.count(ItemTag.item_id))
-        .outerjoin(
-            ItemTag,
-            and_(ItemTag.tag_id == Tag.id, ItemTag.item_id.in_(select(accessible_ids.c.id))),
+    rows = (
+        await db.execute(
+            select(Tag, func.count(ItemTag.item_id))
+            .outerjoin(
+                ItemTag,
+                and_(ItemTag.tag_id == Tag.id, ItemTag.item_id.in_(select(accessible_ids.c.id))),
+            )
+            .group_by(Tag.id)
+            .order_by(Tag.name)
         )
-        .group_by(Tag.id)
-        .order_by(Tag.name)
     ).all()
     return [(row[0], row[1]) for row in rows]
 
 
-def get_tag_matrix_for_item(db: Session, user: User, item_id: str) -> dict[str, Any]:
-    if not can_read_item(db, user, item_id):
+async def get_tag_matrix_for_item(db: AsyncSession, user: User, item_id: str) -> dict[str, Any]:
+    if not await can_read_item(db, user, item_id):
         raise ResourceUnavailable("item not found")
-    all_tags = list(db.scalars(select(Tag).order_by(Tag.name)).all())
-    assigned_ids = set(db.scalars(select(ItemTag.tag_id).where(ItemTag.item_id == item_id)).all())
-    recommendation = db.scalar(
+    all_tags = list((await db.scalars(select(Tag).order_by(Tag.name))).all())
+    assigned_ids = set(
+        (await db.scalars(select(ItemTag.tag_id).where(ItemTag.item_id == item_id))).all()
+    )
+    recommendation = await db.scalar(
         select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == item_id)
     )
     single_words, phrases = decoded_candidates(recommendation)
@@ -134,8 +142,12 @@ def get_tag_matrix_for_item(db: Session, user: User, item_id: str) -> dict[str, 
         name for name in single_words if name.casefold() not in existing_names
     )
     suggested_phrases = tuple(name for name in phrases if name.casefold() not in existing_names)
-    state = recommendation_state(db, recommendation)
-    job = db.get(Job, recommendation.job_id) if recommendation and recommendation.job_id else None
+    state = await recommendation_state(db, recommendation)
+    job = (
+        await db.get(Job, recommendation.job_id)
+        if recommendation and recommendation.job_id
+        else None
+    )
 
     # Group by first letter A-Z or '#'
     groups_dict: dict[str, list[Tag]] = {}
@@ -167,36 +179,36 @@ def get_tag_matrix_for_item(db: Session, user: User, item_id: str) -> dict[str, 
     }
 
 
-def set_item_tags(
-    db: Session,
+async def set_item_tags(
+    db: AsyncSession,
     user: User,
     item_id: str,
     tag_ids: list[str],
     new_names: list[str] | None = None,
 ) -> None:
-    if not can_edit_item(db, user, item_id):
+    if not await can_edit_item(db, user, item_id):
         raise ResourceUnavailable("item not found or cannot be edited")
     tag_ids = list(tag_ids)
     for raw_name in new_names or []:
         if raw_name.strip():
-            tag = get_or_create_tag(db, user, raw_name)
+            tag = await get_or_create_tag(db, user, raw_name)
             if tag.id not in tag_ids:
                 tag_ids.append(tag.id)
-    db.execute(delete(ItemTag).where(ItemTag.item_id == item_id))
-    db.flush()
-    valid_ids = set(db.scalars(select(Tag.id).where(Tag.id.in_(tag_ids))).all())
+    await db.execute(delete(ItemTag).where(ItemTag.item_id == item_id))
+    await db.flush()
+    valid_ids = set((await db.scalars(select(Tag.id).where(Tag.id.in_(tag_ids)))).all())
     for tag_id in tag_ids:
         if tag_id in valid_ids:
             db.add(ItemTag(item_id=item_id, tag_id=tag_id))
-    db.flush()
-    search_index(db).index_item(db, item_id)
+    await db.flush()
+    await search_index(db).index_item(db, item_id)
     record_event(db, user.id, "tag.set", "item", item_id)
-    db.commit()
+    await db.commit()
 
 
-def merge_tags(db: Session, user: User, source_tag_id: str, target_tag_id: str) -> Tag:
-    source_tag = db.get(Tag, source_tag_id)
-    target_tag = db.get(Tag, target_tag_id)
+async def merge_tags(db: AsyncSession, user: User, source_tag_id: str, target_tag_id: str) -> Tag:
+    source_tag = await db.get(Tag, source_tag_id)
+    target_tag = await db.get(Tag, target_tag_id)
     if source_tag is None or target_tag is None:
         raise ResourceUnavailable("tags not found")
     if source_tag.id == target_tag.id:
@@ -205,19 +217,19 @@ def merge_tags(db: Session, user: User, source_tag_id: str, target_tag_id: str) 
         raise ResourceUnavailable("not authorized to merge these tags")
 
     source_item_ids = set(
-        db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == source_tag.id)).all()
+        (await db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == source_tag.id))).all()
     )
     target_item_ids = set(
-        db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == target_tag.id)).all()
+        (await db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == target_tag.id))).all()
     )
     for item_id in source_item_ids - target_item_ids:
         db.add(ItemTag(item_id=item_id, tag_id=target_tag.id))
-    db.execute(delete(ItemTag).where(ItemTag.tag_id == source_tag.id))
-    db.delete(source_tag)
-    db.flush()
+    await db.execute(delete(ItemTag).where(ItemTag.tag_id == source_tag.id))
+    await db.delete(source_tag)
+    await db.flush()
 
     for item_id in source_item_ids:
-        search_index(db).index_item(db, item_id)
+        await search_index(db).index_item(db, item_id)
     record_event(
         db,
         user.id,
@@ -226,5 +238,5 @@ def merge_tags(db: Session, user: User, source_tag_id: str, target_tag_id: str) 
         target_tag.id,
         detail={"merged_from": source_tag.name},
     )
-    db.commit()
+    await db.commit()
     return target_tag

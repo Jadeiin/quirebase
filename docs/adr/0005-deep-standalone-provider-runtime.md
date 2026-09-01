@@ -1,6 +1,6 @@
 # ADR 0005: use a deep standalone runtime for scholarly Providers
 
-Status: accepted.
+Status: superseded by [ADR 0006](0006-async-runtime-and-persistence.md).
 
 Inquiro is an independently installable package in the Quirebase monorepo. It is independent of
 Quirebase business policy and persistence, owns several true external Provider dependencies, and
@@ -8,8 +8,8 @@ offers reusable scholarly lookup and Search behaviour outside the application. Q
 Inquiro and Rubrica are released to the same package index at one version so the application wheel
 can resolve its exact workspace-package dependencies independently.
 
-Inquiro exposes one synchronous `ProviderRuntime` with `lookup`, `search` and
-`acquire_document` operations. The runtime owns the fixed Provider catalog and order, shared
+Inquiro exposed one synchronous `ProviderRuntime` with `lookup`, `search` and
+`acquire_document` operations. The runtime owned the fixed Provider catalog and order, shared
 identifier parsing, document-source classification, capability dispatch, typed credentials,
 validation, error normalization and transport lifecycle. Its normalized Candidate Record and page
 values are immutable; document acquisition returns a context-managed stream with immutable receipt
@@ -50,7 +50,8 @@ adopts it; the Web Adapter never imports Inquiro directly.
 ## Consequences
 
 - Existing internal Python signatures and compatibility aliases are replaced rather than shimmed;
-  every Quirebase caller and contract test migrates atomically in the monorepo.
+  every Quirebase caller and contract test migrates atomically in the monorepo. The original
+  synchronous lifecycle is retained here only as historical context; it is no longer an API.
 - Adding a Provider changes the private catalog and its contract tests, not ordinary callers.
 - Inquiro retains its bibliography and citation Modules, but callers import those explicit Module
   Interfaces rather than widening the Provider facade.

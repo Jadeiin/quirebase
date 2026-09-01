@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from inquiro import CandidateRecord, Identifier
-from test_http import authenticated_client
+from sqlalchemy import func, select
+from test_http import authenticated_async_client
 
 from quirebase.core.errors import ResourceNotFound, UpstreamServiceError, ValidationFailure
 from quirebase.models import (
@@ -23,10 +24,16 @@ from quirebase.models import (
 )
 
 
-def test_web_new_item_exposes_and_saves_complete_metadata(db, tmp_path, monkeypatch):
-    client, _item, _ = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_web_new_item_exposes_and_saves_complete_metadata(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, _item, _ = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
 
-    page = client.get("/bibliography/import")
+    page = await client.get("/bibliography/import")
     assert page.status_code == 200
     assert 'data-method="manual"' in page.text
     for field in (
@@ -54,7 +61,7 @@ def test_web_new_item_exposes_and_saves_complete_metadata(db, tmp_path, monkeypa
     ):
         assert f'name="{field}"' in page.text
 
-    response = client.post(
+    response = await client.post(
         "/items",
         data={
             "csrf_token": "test-csrf",
@@ -88,7 +95,8 @@ def test_web_new_item_exposes_and_saves_complete_metadata(db, tmp_path, monkeypa
     )
 
     assert response.status_code == 303
-    created = db.query(Item).filter_by(title="Complete manual record").one()
+    created = await db.scalar(select(Item).where(Item.title == "Complete manual record"))
+    assert created is not None
     assert response.headers["location"] == f"/items/{created.id}"
     assert created.authors == "Lovelace, Ada; Turing, Alan"
     assert created.editors == "Hopper, Grace"
@@ -97,14 +105,22 @@ def test_web_new_item_exposes_and_saves_complete_metadata(db, tmp_path, monkeypa
     assert created.keywords == "forms; metadata"
     assert created.urls == "https://example.test/record\nhttps://example.test/pdf"
     assert json.loads(created.custom_fields or "") == {"rating": 5}
+    await client.aclose()
 
 
-def test_web_edit_rich_metadata_and_structured_authors(db, tmp_path, monkeypatch):
-    client, item, _ = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_web_edit_rich_metadata_and_structured_authors(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _ = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    item_id = item.id
     csrf = "test-csrf"
 
-    response = client.post(
-        f"/items/{item.id}/edit",
+    response = await client.post(
+        f"/items/{item_id}/edit",
         data={
             "csrf_token": csrf,
             "version": item.version,
@@ -136,7 +152,8 @@ def test_web_edit_rich_metadata_and_structured_authors(db, tmp_path, monkeypatch
     assert response.status_code == 200
 
     db.expire_all()
-    updated = db.get(Item, item.id)
+    updated = await db.get(Item, item_id)
+    assert updated is not None
     assert updated.title == "Attention Is All You Need"
     assert updated.journal_abbreviation == "NeurIPS"
     assert updated.volume == "30"
@@ -153,27 +170,37 @@ def test_web_edit_rich_metadata_and_structured_authors(db, tmp_path, monkeypatch
     assert updated.editors == "Guyon, Isabelle; von Luxburg, Ulrike"
 
     # Verify ItemAuthor links
-    authors = (
-        db
-        .query(ItemAuthor)
-        .filter_by(item_id=item.id, role="author")
-        .order_by(ItemAuthor.position)
-        .all()
+    authors = list(
+        await db.scalars(
+            select(ItemAuthor)
+            .where(ItemAuthor.item_id == item_id, ItemAuthor.role == "author")
+            .order_by(ItemAuthor.position)
+        )
     )
     assert len(authors) == 3
     assert authors[0].is_corresponding is True
     assert authors[1].is_corresponding is False
+    await client.aclose()
 
 
-def test_web_tag_matrix_batch_and_selection(db, tmp_path, monkeypatch):
-    client, item, _ = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_web_tag_matrix_batch_and_selection(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _ = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    item_id = item.id
     csrf = "test-csrf"
     item.keywords = "Natural Language Processing; New Research Direction"
 
     tag1 = Tag(name="Machine Learning", created_by=item.created_by)
     tag2 = Tag(name="Transformers", created_by=item.created_by)
     db.add_all([tag1, tag2])
-    recommendation = db.query(ItemTagRecommendation).filter_by(item_id=item.id).one_or_none()
+    recommendation = await db.scalar(
+        select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == item.id)
+    )
     if recommendation is None:
         recommendation = ItemTagRecommendation(
             item_id=item.id,
@@ -186,16 +213,16 @@ def test_web_tag_matrix_batch_and_selection(db, tmp_path, monkeypatch):
     recommendation.single_words = json.dumps([])
     recommendation.phrases = json.dumps(["Natural Language Processing", "New Research Direction"])
     recommendation.generated_at = datetime.now(UTC)
-    db.commit()
+    await db.commit()
 
-    organize = client.get(f"/items/{item.id}/organize")
+    organize = await client.get(f"/items/{item_id}/organize")
     assert organize.status_code == 200
     assert "New Research Direction" in organize.text
     assert 'name="suggested_tags" value="New Research Direction"' in organize.text
 
     # Submit matrix form with selected tag1 and newly added tags
-    response = client.post(
-        f"/items/{item.id}/tags/matrix",
+    response = await client.post(
+        f"/items/{item_id}/tags/matrix",
         data={
             "csrf_token": csrf,
             "tag_ids": [tag1.id],
@@ -207,23 +234,29 @@ def test_web_tag_matrix_batch_and_selection(db, tmp_path, monkeypatch):
     assert response.status_code == 200
 
     db.expire_all()
-    item_tags = [
-        t.name
-        for t in db
-        .query(Tag)
-        .join(ItemTag, ItemTag.tag_id == Tag.id)
-        .filter(ItemTag.item_id == item.id)
-        .all()
-    ]
+    item_tags = list(
+        await db.scalars(
+            select(Tag).join(ItemTag, ItemTag.tag_id == Tag.id).where(ItemTag.item_id == item_id)
+        )
+    )
+    item_tags = [tag.name for tag in item_tags]
     assert "Machine Learning" in item_tags
     assert "Natural Language Processing" in item_tags
     assert "New Research Direction" in item_tags
     assert "Deep Learning" in item_tags
     assert "Transformers" not in item_tags
+    await client.aclose()
 
 
-def test_web_tag_recommendation_pending_failed_and_retry_states(db, tmp_path, monkeypatch):
-    client, item, _ = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_web_tag_recommendation_pending_failed_and_retry_states(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _ = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    item_id = item.id
     job = Job(
         kind="item.recommend_tags",
         payload="{}",
@@ -231,7 +264,7 @@ def test_web_tag_recommendation_pending_failed_and_retry_states(db, tmp_path, mo
         owner_id=item.created_by,
     )
     db.add(job)
-    db.flush()
+    await db.flush()
     recommendation = ItemTagRecommendation(
         item_id=item.id,
         input_fingerprint="c" * 64,
@@ -243,9 +276,9 @@ def test_web_tag_recommendation_pending_failed_and_retry_states(db, tmp_path, mo
         phrases=json.dumps([]),
     )
     db.add(recommendation)
-    db.commit()
+    await db.commit()
 
-    pending = client.get(f"/items/{item.id}/organize")
+    pending = await client.get(f"/items/{item_id}/organize")
     assert "正在生成标签推荐" in pending.text
     assert "stale-candidate" not in pending.text
     assert pending.text.index("tag-recommendation-action") < pending.text.index(
@@ -254,40 +287,50 @@ def test_web_tag_recommendation_pending_failed_and_retry_states(db, tmp_path, mo
 
     job.state = JobState.failed
     job.error = "RuntimeError: extraction failed"
-    db.commit()
-    failed = client.get(f"/items/{item.id}/organize")
+    await db.commit()
+    failed = await client.get(f"/items/{item_id}/organize")
     assert "标签推荐生成失败" in failed.text
     assert "extraction failed" in failed.text
     assert "重试推荐" in failed.text
 
-    retry = client.post(
-        f"/items/{item.id}/tag-recommendations",
+    retry = await client.post(
+        f"/items/{item_id}/tag-recommendations",
         data={"csrf_token": "test-csrf"},
         follow_redirects=False,
     )
     assert retry.status_code == 303
-    db.refresh(recommendation)
+    await db.refresh(recommendation)
     assert recommendation.generation_token == 2
     assert recommendation.generated_at is None
+    await client.aclose()
 
 
-def test_web_sync_metadata_and_bibtex_key_update(db, tmp_path, monkeypatch):
-    client, item, _ = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_web_sync_metadata_and_bibtex_key_update(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _ = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    item_id = item.id
     csrf = "test-csrf"
 
     item.title = "Temporary Title"
     item.authors = "Smith, John"
     item.publication_date = "2020-01-01"
-    db.commit()
+    await db.commit()
 
     # Test update citation key
-    response = client.post(
-        f"/items/{item.id}/update-bibtex-key",
+    response = await client.post(
+        f"/items/{item_id}/update-bibtex-key",
         data={"csrf_token": csrf, "version": item.version},
         follow_redirects=True,
     )
     assert response.status_code == 200
     db.expire_all()
+    item = await db.get(Item, item_id)
+    assert item is not None
     assert item.bibtex_id == "Smith2020Temporary"
 
     # Test sync metadata upstream
@@ -306,14 +349,16 @@ def test_web_sync_metadata_and_bibtex_key_update(db, tmp_path, monkeypatch):
 
     with patch(
         "quirebase.library.identifiers.lookup_candidate",
-        return_value=CandidateRecord(
-            provider="crossref",
-            identifier=Identifier("doi", "10.1038/s41586-019-1666-5"),
-            **mock_payload,
+        new=AsyncMock(
+            return_value=CandidateRecord(
+                provider="crossref",
+                identifier=Identifier("doi", "10.1038/s41586-019-1666-5"),
+                **mock_payload,
+            )
         ),
     ):
-        response = client.post(
-            f"/items/{item.id}/sync-metadata",
+        response = await client.post(
+            f"/items/{item_id}/sync-metadata",
             data={
                 "version": item.version,
                 "provider": "doi",
@@ -325,25 +370,36 @@ def test_web_sync_metadata_and_bibtex_key_update(db, tmp_path, monkeypatch):
         assert response.status_code == 200
 
     db.expire_all()
+    item = await db.get(Item, item_id)
+    assert item is not None
     assert item.title == "Quantum Supremacy Using a Programmable Superconducting Processor"
     assert item.volume == "574"
     assert item.doi == "10.1038/s41586-019-1666-5"
+    await client.aclose()
 
 
-def test_web_sync_metadata_uses_effective_runtime_provider_settings(db, tmp_path, monkeypatch):
-    client, item, _ = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_web_sync_metadata_uses_effective_runtime_provider_settings(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _ = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
     db.add(SystemSetting(key="nasa_ads_token", value="runtime-ads-token"))
-    db.commit()
+    await db.commit()
 
     with patch(
         "quirebase.library.identifiers.lookup_candidate",
-        return_value=CandidateRecord(
-            provider="nasa",
-            identifier=Identifier("bibcode", "2024ApJ...123A...1X"),
-            title="Runtime-configured metadata",
+        new=AsyncMock(
+            return_value=CandidateRecord(
+                provider="nasa",
+                identifier=Identifier("bibcode", "2024ApJ...123A...1X"),
+                title="Runtime-configured metadata",
+            )
         ),
     ) as lookup:
-        response = client.post(
+        response = await client.post(
             f"/items/{item.id}/sync-metadata",
             data={
                 "csrf_token": "test-csrf",
@@ -356,6 +412,7 @@ def test_web_sync_metadata_uses_effective_runtime_provider_settings(db, tmp_path
 
     assert response.status_code == 303
     assert lookup.call_args.args[2].nasa_ads_token == "runtime-ads-token"
+    await client.aclose()
 
 
 @pytest.mark.parametrize(
@@ -366,13 +423,16 @@ def test_web_sync_metadata_uses_effective_runtime_provider_settings(db, tmp_path
         (UpstreamServiceError("provider unavailable"), 502),
     ],
 )
-def test_web_sync_metadata_translates_expected_lookup_failures(
-    db, tmp_path, monkeypatch, error, status_code
+@pytest.mark.anyio
+async def test_web_sync_metadata_translates_expected_lookup_failures(
+    async_db, async_session_factory, tmp_path, monkeypatch, error, status_code
 ):
-    client, item, _ = authenticated_client(db, tmp_path, monkeypatch)
+    client, item, _ = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
 
-    with patch("quirebase.library.identifiers.lookup_candidate", side_effect=error):
-        response = client.post(
+    with patch("quirebase.library.identifiers.lookup_candidate", new=AsyncMock(side_effect=error)):
+        response = await client.post(
             f"/items/{item.id}/sync-metadata",
             data={
                 "csrf_token": "test-csrf",
@@ -384,18 +444,23 @@ def test_web_sync_metadata_translates_expected_lookup_failures(
         )
 
     assert response.status_code == status_code
+    await client.aclose()
 
 
-def test_web_author_suggest_api(db, tmp_path, monkeypatch):
-    client, _, _ = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_web_author_suggest_api(async_db, async_session_factory, tmp_path, monkeypatch):
+    db = async_db
+    client, _, _ = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
 
     a1 = Author(last_name="LeCun", first_name="Yann")
     a2 = Author(last_name="Bengio", first_name="Yoshua")
     a3 = Author(last_name="Hinton", first_name="Geoffrey")
     db.add_all([a1, a2, a3])
-    db.commit()
+    await db.commit()
 
-    response = client.get("/api/authors/suggest?q=le")
+    response = await client.get("/api/authors/suggest?q=le")
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 1
@@ -403,18 +468,26 @@ def test_web_author_suggest_api(db, tmp_path, monkeypatch):
     assert data[0]["first_name"] == "Yann"
 
     client.cookies.clear()
-    assert client.get("/api/authors/suggest?q=le").status_code == 401
+    assert (await client.get("/api/authors/suggest?q=le")).status_code == 401
+    await client.aclose()
 
 
-def test_web_edit_synchronizes_identifier_rows(db, tmp_path, monkeypatch):
-    client, item, _ = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_web_edit_synchronizes_identifier_rows(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _ = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    item_id = item.id
     db.add(ItemIdentifier(item_id=item.id, provider="pmid", value="old-pmid"))
     item.doi = "10.1000/old"
     item.identifiers = '{"doi": "10.1000/old", "pmid": "old-pmid"}'
-    db.commit()
+    await db.commit()
 
-    response = client.post(
-        f"/items/{item.id}/edit",
+    response = await client.post(
+        f"/items/{item_id}/edit",
         data={
             "csrf_token": "test-csrf",
             "version": item.version,
@@ -427,26 +500,35 @@ def test_web_edit_synchronizes_identifier_rows(db, tmp_path, monkeypatch):
 
     assert response.status_code == 303
     db.expire_all()
-    updated = db.get(Item, item.id)
+    updated = await db.get(Item, item_id)
+    assert updated is not None
     assert updated.doi == "10.1000/new"
     assert updated.identifiers == '{"arxiv": "2401.12345"}'
-    links = db.query(ItemIdentifier).filter_by(item_id=item.id).all()
+    links = list(await db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item_id)))
     assert {(link.provider, link.value) for link in links} == {
         ("arxiv", "2401.12345"),
     }
+    await client.aclose()
 
 
-def test_web_edit_can_clear_all_structured_editors(db, tmp_path, monkeypatch):
-    client, item, _ = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_web_edit_can_clear_all_structured_editors(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _ = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    item_id = item.id
     editor = Author(last_name="Knuth", first_name="Donald")
     db.add(editor)
-    db.flush()
+    await db.flush()
     db.add(ItemAuthor(item_id=item.id, author_id=editor.id, position=1, role="editor"))
     item.editors = "Knuth, Donald"
-    db.commit()
+    await db.commit()
 
-    response = client.post(
-        f"/items/{item.id}/edit",
+    response = await client.post(
+        f"/items/{item_id}/edit",
         data={
             "csrf_token": "test-csrf",
             "version": item.version,
@@ -458,16 +540,32 @@ def test_web_edit_can_clear_all_structured_editors(db, tmp_path, monkeypatch):
 
     assert response.status_code == 303
     db.expire_all()
-    assert db.get(Item, item.id).editors is None
-    assert db.query(ItemAuthor).filter_by(item_id=item.id, role="editor").count() == 0
+    updated = await db.get(Item, item_id)
+    assert updated is not None
+    assert updated.editors is None
+    assert (
+        await db.scalar(
+            select(func.count())
+            .select_from(ItemAuthor)
+            .where(ItemAuthor.item_id == item_id, ItemAuthor.role == "editor")
+        )
+        == 0
+    )
+    await client.aclose()
 
 
-def test_metadata_editor_serializes_structured_people_as_json(db, tmp_path, monkeypatch):
-    client, item, _ = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_metadata_editor_serializes_structured_people_as_json(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _ = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
     author = Author(last_name='O"Connor & Co\\', first_name='Ada "A"')
     editor = Author(last_name="D'Angelo", first_name="Luca")
     db.add_all([author, editor])
-    db.flush()
+    await db.flush()
     db.add_all([
         ItemAuthor(
             item_id=item.id,
@@ -483,12 +581,13 @@ def test_metadata_editor_serializes_structured_people_as_json(db, tmp_path, monk
             role="editor",
         ),
     ])
-    db.commit()
+    await db.commit()
 
-    response = client.get(f"/items/{item.id}/metadata")
+    response = await client.get(f"/items/{item.id}/metadata")
 
     assert response.status_code == 200
     assert "data-initial-authors=" in response.text
     assert 'O\\"Connor \\u0026 Co\\\\' in response.text
     assert "data-initial-editors=" in response.text
     assert "D\\u0027Angelo" in response.text
+    await client.aclose()

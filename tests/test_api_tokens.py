@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import asyncio
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 
-import anyio
+import httpx2
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy.orm import sessionmaker
-from test_http import authenticated_client
+from sqlalchemy import select
 from typer.testing import CliRunner
 
 from quirebase import cli
@@ -20,6 +20,7 @@ from quirebase.accounts import (
 from quirebase.accounts.sessions import create_login_session, get_login_session_by_token
 from quirebase.core.config import get_settings
 from quirebase.core.crypto import token_hash
+from quirebase.core.database import get_db
 from quirebase.core.errors import ValidationFailure
 from quirebase.mcp import ApiTokenVerifier
 from quirebase.models import ApiToken, AuditEvent, User
@@ -28,14 +29,55 @@ from quirebase.web.app import create_app
 runner = CliRunner()
 
 
-def test_api_token_is_shown_once_and_stored_as_a_hash(db):
+@asynccontextmanager
+async def mcp_client(test_app):
+    async with (
+        test_app.router.lifespan_context(test_app),
+        httpx2.AsyncClient(
+            transport=httpx2.ASGITransport(app=test_app), base_url="http://testserver"
+        ) as client,
+    ):
+        yield client
+
+
+async def account_client(db, session_factory, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+    user = User(username="reader", password_hash="unused")
+    db.add(user)
+    await db.flush()
+    raw_token = "test-session-token"
+    login, _generated = await create_login_session(db, user, session_days=1)
+    login.token_hash = token_hash(raw_token)
+    login.csrf_token = "test-csrf"
+    await db.commit()
+
+    test_app = create_app(mcp_session_factory=session_factory)
+
+    async def override_db():
+        await asyncio.sleep(0)
+        yield db
+
+    test_app.dependency_overrides[get_db] = override_db
+    client = httpx2.AsyncClient(
+        transport=httpx2.ASGITransport(app=test_app),
+        base_url="http://testserver",
+        headers={"Accept-Language": "zh-CN,zh;q=0.9"},
+    )
+    client.cookies.set(get_settings().session_cookie, raw_token)
+    return client, user
+
+
+@pytest.mark.anyio
+async def test_api_token_is_shown_once_and_stored_as_a_hash(async_db):
+    db = async_db
     user = User(username="token-owner", password_hash="unused")
     db.add(user)
-    db.commit()
+    await db.commit()
 
-    grant = create_api_token(db, user, "Research client", expires_in_days=30)
-    stored = db.get(ApiToken, grant.token_id)
-    verified = verify_api_token(db, grant.raw_token)
+    grant = await create_api_token(db, user, "Research client", expires_in_days=30)
+    stored = await db.get(ApiToken, grant.token_id)
+    verified = await verify_api_token(db, grant.raw_token)
 
     assert grant.raw_token.startswith(API_TOKEN_PREFIX)
     assert stored is not None
@@ -43,32 +85,37 @@ def test_api_token_is_shown_once_and_stored_as_a_hash(db):
     assert grant.raw_token not in stored.token_hash
     assert verified is not None
     assert verified.user_id == user.id
-    assert list_api_tokens(db, user)[0].name == "Research client"
-    assert db.query(AuditEvent).filter_by(action="auth.api_token.create").one().actor_id == user.id
+    assert (await list_api_tokens(db, user))[0].name == "Research client"
+    event = await db.scalar(select(AuditEvent).where(AuditEvent.action == "auth.api_token.create"))
+    assert event is not None and event.actor_id == user.id
 
 
-def test_revoked_expired_and_inactive_user_tokens_are_rejected(db):
+@pytest.mark.anyio
+async def test_revoked_expired_and_inactive_user_tokens_are_rejected(async_db):
+    db = async_db
     user = User(username="revoked-token-owner", password_hash="unused")
     db.add(user)
-    db.commit()
-    revoked = create_api_token(db, user, "Revoked", expires_in_days=1)
-    revoke_api_token(db, user, revoked.token_id)
-    assert verify_api_token(db, revoked.raw_token) is None
+    await db.commit()
+    revoked = await create_api_token(db, user, "Revoked", expires_in_days=1)
+    await revoke_api_token(db, user, revoked.token_id)
+    assert await verify_api_token(db, revoked.raw_token) is None
 
-    expired = create_api_token(db, user, "Expired", expires_in_days=1)
-    record = db.get(ApiToken, expired.token_id)
+    expired = await create_api_token(db, user, "Expired", expires_in_days=1)
+    record = await db.get(ApiToken, expired.token_id)
     assert record is not None
     record.expires_at = datetime.now(UTC) - timedelta(seconds=1)
-    db.commit()
-    assert verify_api_token(db, expired.raw_token) is None
+    await db.commit()
+    assert await verify_api_token(db, expired.raw_token) is None
 
-    inactive = create_api_token(db, user, "Inactive", expires_in_days=1)
+    inactive = await create_api_token(db, user, "Inactive", expires_in_days=1)
     user.active = False
-    db.commit()
-    assert verify_api_token(db, inactive.raw_token) is None
+    await db.commit()
+    assert await verify_api_token(db, inactive.raw_token) is None
 
 
-def test_token_expiry_preserves_timezone_offsets_with_aware_and_naive_datetimes(db):
+@pytest.mark.anyio
+async def test_token_expiry_preserves_timezone_offsets_with_aware_and_naive_datetimes(async_db):
+    db = async_db
     from datetime import timezone
 
     tz_plus_8 = timezone(timedelta(hours=8))
@@ -76,29 +123,29 @@ def test_token_expiry_preserves_timezone_offsets_with_aware_and_naive_datetimes(
 
     user = User(username="tz-token-owner", password_hash="unused")
     db.add(user)
-    db.commit()
+    await db.commit()
 
-    grant = create_api_token(db, user, "TZ Token", expires_in_days=1)
-    record = db.get(ApiToken, grant.token_id)
+    grant = await create_api_token(db, user, "TZ Token", expires_in_days=1)
+    record = await db.get(ApiToken, grant.token_id)
     assert record is not None
 
     # An expiry 5 minutes ago in UTC, represented with +08:00 offset
     past_instant = datetime.now(UTC) - timedelta(minutes=5)
     record.expires_at = past_instant.astimezone(tz_plus_8)
-    db.commit()
+    await db.commit()
 
-    summary = list_api_tokens(db, user)[0]
+    summary = (await list_api_tokens(db, user))[0]
     assert summary.status == "expired"
-    assert verify_api_token(db, grant.raw_token) is None
+    assert await verify_api_token(db, grant.raw_token) is None
 
     # An expiry 10 minutes in the future in UTC, represented with -05:00 offset
     future_instant = datetime.now(UTC) + timedelta(minutes=10)
     record.expires_at = future_instant.astimezone(tz_minus_5)
-    db.commit()
+    await db.commit()
 
-    active_summary = list_api_tokens(db, user)[0]
+    active_summary = (await list_api_tokens(db, user))[0]
     assert active_summary.status == "active"
-    verified = verify_api_token(db, grant.raw_token)
+    verified = await verify_api_token(db, grant.raw_token)
     assert verified is not None
     assert verified.expires_at.tzinfo == UTC
     assert int(verified.expires_at.timestamp()) == int(future_instant.timestamp())
@@ -106,49 +153,56 @@ def test_token_expiry_preserves_timezone_offsets_with_aware_and_naive_datetimes(
     # Naive datetime (simulating SQLite return)
     naive_future = datetime.now(UTC) + timedelta(minutes=15)
     record.expires_at = naive_future.replace(tzinfo=None)
-    db.commit()
-    naive_verified = verify_api_token(db, grant.raw_token)
+    await db.commit()
+    naive_verified = await verify_api_token(db, grant.raw_token)
     assert naive_verified is not None
     assert naive_verified.expires_at.tzinfo == UTC
 
 
-def test_login_session_expiry_preserves_timezone_offset(db):
+@pytest.mark.anyio
+async def test_login_session_expiry_preserves_timezone_offset(async_db):
+    db = async_db
     from datetime import timezone
 
     user = User(username="tz-session-owner", password_hash="unused")
     db.add(user)
-    db.commit()
-    login, raw_token = create_login_session(db, user, session_days=1)
+    await db.commit()
+    login, raw_token = await create_login_session(db, user, session_days=1)
     login.expires_at = (datetime.now(UTC) - timedelta(minutes=5)).astimezone(
         timezone(timedelta(hours=8))
     )
-    db.commit()
+    await db.commit()
 
-    assert get_login_session_by_token(db, raw_token) is None
+    assert await get_login_session_by_token(db, raw_token) is None
 
 
-def test_api_token_lifetime_and_name_are_bounded(db):
+@pytest.mark.anyio
+async def test_api_token_lifetime_and_name_are_bounded(async_db):
+    db = async_db
     user = User(username="bounded-token-owner", password_hash="unused")
     db.add(user)
-    db.commit()
+    await db.commit()
 
     with pytest.raises(ValidationFailure, match="name"):
-        create_api_token(db, user, " ", expires_in_days=30)
+        await create_api_token(db, user, " ", expires_in_days=30)
     with pytest.raises(ValidationFailure, match="120"):
-        create_api_token(db, user, "x" * 121, expires_in_days=30)
+        await create_api_token(db, user, "x" * 121, expires_in_days=30)
     with pytest.raises(ValidationFailure, match="1-365"):
-        create_api_token(db, user, "Too long", expires_in_days=366)
+        await create_api_token(db, user, "Too long", expires_in_days=366)
 
 
-def test_mcp_verifier_redacts_raw_token_and_returns_no_scopes(db):
+@pytest.mark.anyio
+async def test_mcp_verifier_redacts_raw_token_and_returns_no_scopes(
+    async_db, async_session_factory
+):
+    db = async_db
     user = User(username="verifier-owner", password_hash="unused")
     db.add(user)
-    db.commit()
-    grant = create_api_token(db, user, "Verifier", expires_in_days=30)
-    factory = sessionmaker(bind=db.get_bind(), expire_on_commit=False)
-    verifier = ApiTokenVerifier(factory)
+    await db.commit()
+    grant = await create_api_token(db, user, "Verifier", expires_in_days=30)
+    verifier = ApiTokenVerifier(async_session_factory)
 
-    access = anyio.run(verifier.verify_token, grant.raw_token)
+    access = await verifier.verify_token(grant.raw_token)
 
     assert access is not None
     assert access.token == "<redacted>"
@@ -157,13 +211,14 @@ def test_mcp_verifier_redacts_raw_token_and_returns_no_scopes(db):
     assert access.scopes == []
 
 
-def test_mcp_http_accepts_only_a_valid_bearer_api_token(db):
+@pytest.mark.anyio
+async def test_mcp_http_accepts_only_a_valid_bearer_api_token(async_db, async_session_factory):
+    db = async_db
     user = User(username="http-token-owner", password_hash="unused")
     db.add(user)
-    db.commit()
-    grant = create_api_token(db, user, "HTTP", expires_in_days=30)
-    factory = sessionmaker(bind=db.get_bind(), expire_on_commit=False)
-    test_app = create_app(mcp_session_factory=factory)
+    await db.commit()
+    grant = await create_api_token(db, user, "HTTP", expires_in_days=30)
+    test_app = create_app(mcp_session_factory=async_session_factory)
     initialize = {
         "jsonrpc": "2.0",
         "id": 1,
@@ -179,25 +234,22 @@ def test_mcp_http_accepts_only_a_valid_bearer_api_token(db):
         "Content-Type": "application/json",
     }
 
-    with TestClient(test_app) as client:
-        assert client.post("/mcp/", json=initialize, headers=headers).status_code == 401
+    async with mcp_client(test_app) as client:
+        assert (await client.post("/mcp/", json=initialize, headers=headers)).status_code == 401
         assert (
-            client.post(
-                f"/mcp/?token={grant.raw_token}", json=initialize, headers=headers
-            ).status_code
-            == 401
-        )
-        invalid = client.post(
+            await client.post(f"/mcp/?token={grant.raw_token}", json=initialize, headers=headers)
+        ).status_code == 401
+        invalid = await client.post(
             "/mcp/",
             json=initialize,
             headers={**headers, "Authorization": "Bearer invalid"},
         )
-        accepted = client.post(
+        accepted = await client.post(
             "/mcp/",
             json=initialize,
             headers={**headers, "Authorization": f"Bearer {grant.raw_token}"},
         )
-        called = client.post(
+        called = await client.post(
             "/mcp/",
             json={
                 "jsonrpc": "2.0",
@@ -214,21 +266,24 @@ def test_mcp_http_accepts_only_a_valid_bearer_api_token(db):
     assert called.status_code == 200
 
 
-def test_mcp_http_rejects_malformed_arguments_without_protocol_audit(db):
+@pytest.mark.anyio
+async def test_mcp_http_rejects_malformed_arguments_without_protocol_audit(
+    async_db, async_session_factory
+):
+    db = async_db
     user = User(username="invalid-mcp-arguments", password_hash="unused")
     db.add(user)
-    db.commit()
-    grant = create_api_token(db, user, "Malformed call", expires_in_days=30)
-    factory = sessionmaker(bind=db.get_bind(), expire_on_commit=False)
-    test_app = create_app(mcp_session_factory=factory)
+    await db.commit()
+    grant = await create_api_token(db, user, "Malformed call", expires_in_days=30)
+    test_app = create_app(mcp_session_factory=async_session_factory)
     headers = {
         "Accept": "application/json, text/event-stream",
         "Authorization": f"Bearer {grant.raw_token}",
         "Content-Type": "application/json",
     }
 
-    with TestClient(test_app) as client:
-        response = client.post(
+    async with mcp_client(test_app) as client:
+        response = await client.post(
             "/mcp/",
             json={
                 "jsonrpc": "2.0",
@@ -241,7 +296,9 @@ def test_mcp_http_rejects_malformed_arguments_without_protocol_audit(db):
 
     assert response.status_code == 200
     assert response.json()["result"]["isError"] is True
-    events = db.query(AuditEvent).filter_by(target_id=grant.token_id).all()
+    events = list(
+        (await db.scalars(select(AuditEvent).where(AuditEvent.target_id == grant.token_id))).all()
+    )
     assert [event.action for event in events] == ["auth.api_token.create"]
 
 
@@ -253,15 +310,18 @@ def test_mcp_http_rejects_malformed_arguments_without_protocol_audit(db):
         ("*", "arbitrary.example:9000"),
     ],
 )
-def test_mcp_http_preserves_web_allowed_host_semantics(db, monkeypatch, allowed_hosts, host):
+@pytest.mark.anyio
+async def test_mcp_http_preserves_web_allowed_host_semantics(
+    async_db, async_session_factory, monkeypatch, allowed_hosts, host
+):
+    db = async_db
     user = User(username=f"host-{host}", password_hash="unused")
     db.add(user)
-    db.commit()
-    grant = create_api_token(db, user, "HTTP host", expires_in_days=30)
-    factory = sessionmaker(bind=db.get_bind(), expire_on_commit=False)
+    await db.commit()
+    grant = await create_api_token(db, user, "HTTP host", expires_in_days=30)
     monkeypatch.setenv("QUIREBASE_ALLOWED_HOSTS", allowed_hosts)
     get_settings.cache_clear()
-    test_app = create_app(mcp_session_factory=factory)
+    test_app = create_app(mcp_session_factory=async_session_factory)
     initialize = {
         "jsonrpc": "2.0",
         "id": 1,
@@ -280,8 +340,8 @@ def test_mcp_http_preserves_web_allowed_host_semantics(db, monkeypatch, allowed_
     }
 
     try:
-        with TestClient(test_app) as client:
-            response = client.post("/mcp/", json=initialize, headers=headers)
+        async with mcp_client(test_app) as client:
+            response = await client.post("/mcp/", json=initialize, headers=headers)
         assert response.status_code == 200
     finally:
         get_settings.cache_clear()
@@ -296,18 +356,24 @@ def test_mcp_http_preserves_web_allowed_host_semantics(db, monkeypatch, allowed_
         ("https://client.example", "https://other.example", 403),
     ],
 )
-def test_mcp_http_validates_browser_origins_with_wildcard_hosts(
-    db, monkeypatch, configured_origins, origin, expected_status
+@pytest.mark.anyio
+async def test_mcp_http_validates_browser_origins_with_wildcard_hosts(
+    async_db,
+    async_session_factory,
+    monkeypatch,
+    configured_origins,
+    origin,
+    expected_status,
 ):
+    db = async_db
     user = User(username=f"origin-{expected_status}-{origin}", password_hash="unused")
     db.add(user)
-    db.commit()
-    grant = create_api_token(db, user, "Browser MCP", expires_in_days=30)
-    factory = sessionmaker(bind=db.get_bind(), expire_on_commit=False)
+    await db.commit()
+    grant = await create_api_token(db, user, "Browser MCP", expires_in_days=30)
     monkeypatch.setenv("QUIREBASE_ALLOWED_HOSTS", "*")
     monkeypatch.setenv("QUIREBASE_MCP_ALLOWED_ORIGINS", configured_origins)
     get_settings.cache_clear()
-    test_app = create_app(mcp_session_factory=factory)
+    test_app = create_app(mcp_session_factory=async_session_factory)
     initialize = {
         "jsonrpc": "2.0",
         "id": 1,
@@ -327,8 +393,8 @@ def test_mcp_http_validates_browser_origins_with_wildcard_hosts(
     }
 
     try:
-        with TestClient(test_app) as client:
-            response = client.post("/mcp/", json=initialize, headers=headers)
+        async with mcp_client(test_app) as client:
+            response = await client.post("/mcp/", json=initialize, headers=headers)
         assert response.status_code == expected_status
         if expected_status == 200:
             assert response.headers["access-control-allow-origin"] == origin
@@ -336,16 +402,18 @@ def test_mcp_http_validates_browser_origins_with_wildcard_hosts(
         get_settings.cache_clear()
 
 
-def test_mcp_http_handles_browser_cors_preflight_before_authentication(db, monkeypatch):
-    factory = sessionmaker(bind=db.get_bind(), expire_on_commit=False)
+@pytest.mark.anyio
+async def test_mcp_http_handles_browser_cors_preflight_before_authentication(
+    async_session_factory, monkeypatch
+):
     monkeypatch.setenv("QUIREBASE_ALLOWED_HOSTS", "*")
     monkeypatch.setenv("QUIREBASE_MCP_ALLOWED_ORIGINS", "https://client.example")
     get_settings.cache_clear()
-    test_app = create_app(mcp_session_factory=factory)
+    test_app = create_app(mcp_session_factory=async_session_factory)
 
     try:
-        with TestClient(test_app) as client:
-            response = client.options(
+        async with mcp_client(test_app) as client:
+            response = await client.options(
                 "/mcp/",
                 headers={
                     "Host": "internal.quirebase:8000",
@@ -368,16 +436,18 @@ def test_mcp_http_handles_browser_cors_preflight_before_authentication(db, monke
         get_settings.cache_clear()
 
 
-def test_mcp_http_rejects_untrusted_origin_before_authentication(db, monkeypatch):
-    factory = sessionmaker(bind=db.get_bind(), expire_on_commit=False)
+@pytest.mark.anyio
+async def test_mcp_http_rejects_untrusted_origin_before_authentication(
+    async_session_factory, monkeypatch
+):
     monkeypatch.setenv("QUIREBASE_ALLOWED_HOSTS", "*")
     monkeypatch.delenv("QUIREBASE_MCP_ALLOWED_ORIGINS", raising=False)
     get_settings.cache_clear()
-    test_app = create_app(mcp_session_factory=factory)
+    test_app = create_app(mcp_session_factory=async_session_factory)
 
     try:
-        with TestClient(test_app) as client:
-            response = client.post(
+        async with mcp_client(test_app) as client:
+            response = await client.post(
                 "/mcp/",
                 json={},
                 headers={
@@ -392,14 +462,18 @@ def test_mcp_http_rejects_untrusted_origin_before_authentication(db, monkeypatch
         get_settings.cache_clear()
 
 
-def test_api_token_cli_creates_lists_and_revokes(db, monkeypatch):
+@pytest.mark.anyio
+async def test_api_token_cli_creates_lists_and_revokes(
+    async_db, async_session_factory, monkeypatch
+):
+    db = async_db
     user = User(username="cli-token-owner", password_hash="unused")
     db.add(user)
-    db.commit()
-    factory = sessionmaker(bind=db.get_bind(), expire_on_commit=False)
-    monkeypatch.setattr(cli, "SessionLocal", factory)
+    await db.commit()
+    monkeypatch.setattr(cli, "AsyncSessionLocal", async_session_factory)
 
-    created = runner.invoke(
+    created = await asyncio.to_thread(
+        runner.invoke,
         cli.app,
         ["create-api-token", user.username, "--name", "CLI client", "--days", "7"],
     )
@@ -409,70 +483,82 @@ def test_api_token_cli_creates_lists_and_revokes(db, monkeypatch):
     raw_token = created.output.split("API Token (shown once): ", 1)[1].strip()
     assert raw_token.startswith(API_TOKEN_PREFIX)
 
-    listed = runner.invoke(cli.app, ["list-api-tokens", user.username])
+    listed = await asyncio.to_thread(runner.invoke, cli.app, ["list-api-tokens", user.username])
     assert listed.exit_code == 0
     assert f"{token_id}\tactive" in listed.output
     assert raw_token not in listed.output
 
-    revoked = runner.invoke(cli.app, ["revoke-api-token", user.username, token_id])
+    revoked = await asyncio.to_thread(
+        runner.invoke, cli.app, ["revoke-api-token", user.username, token_id]
+    )
     assert revoked.exit_code == 0
-    with factory() as verification_db:
-        assert verify_api_token(verification_db, raw_token) is None
+    async with async_session_factory() as verification_db:
+        assert await verify_api_token(verification_db, raw_token) is None
 
 
-def test_member_can_create_view_and_revoke_own_api_token_from_settings(db, tmp_path, monkeypatch):
-    client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_member_can_create_view_and_revoke_own_api_token_from_settings(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, user = await account_client(db, async_session_factory, tmp_path, monkeypatch)
     try:
-        user = db.query(User).filter_by(username="reader").one()
-        page = client.get("/account/settings")
+        page = await client.get("/account/settings")
         assert page.status_code == 200
         assert "MCP 和 API Token" in page.text
         assert "http://testserver/api/v1/" in page.text
         assert "http://testserver/mcp/" in page.text
         assert "Authorization: Bearer YOUR_API_TOKEN" in page.text
 
-        created = client.post(
+        created = await client.post(
             "/account/api-tokens",
             data={"csrf_token": "test-csrf", "name": "Desktop MCP", "days": "30"},
         )
-        token = db.query(ApiToken).filter_by(user_id=user.id, name="Desktop MCP").one()
+        token = await db.scalar(
+            select(ApiToken).where(ApiToken.user_id == user.id, ApiToken.name == "Desktop MCP")
+        )
+        assert token is not None
         assert created.status_code == 201
         assert created.headers["cache-control"] == "no-store"
         assert API_TOKEN_PREFIX in created.text
         assert token.token_hash not in created.text
 
-        revisited = client.get("/account/settings")
+        revisited = await client.get("/account/settings")
         assert revisited.status_code == 200
         assert "Desktop MCP" in revisited.text
         assert API_TOKEN_PREFIX not in revisited.text
 
-        revoked = client.post(
+        revoked = await client.post(
             f"/account/api-tokens/{token.id}/revoke",
             data={"csrf_token": "test-csrf"},
             follow_redirects=False,
         )
-        db.refresh(token)
+        await db.refresh(token)
         assert revoked.status_code == 303
         assert revoked.headers["location"] == "/account/settings#api-tokens"
         assert token.revoked_at is not None
     finally:
-        client.app.dependency_overrides.clear()
+        await client.aclose()
 
 
-def test_member_cannot_revoke_another_users_api_token(db, tmp_path, monkeypatch):
-    client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_member_cannot_revoke_another_users_api_token(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, _user = await account_client(db, async_session_factory, tmp_path, monkeypatch)
     try:
         other = User(username="other-token-owner", password_hash="unused")
         db.add(other)
-        db.commit()
-        grant = create_api_token(db, other, "Other token", expires_in_days=30)
+        await db.commit()
+        grant = await create_api_token(db, other, "Other token", expires_in_days=30)
 
-        response = client.post(
+        response = await client.post(
             f"/account/api-tokens/{grant.token_id}/revoke",
             data={"csrf_token": "test-csrf"},
         )
 
         assert response.status_code == 404
-        assert verify_api_token(db, grant.raw_token) is not None
+        assert await verify_api_token(db, grant.raw_token) is not None
     finally:
-        client.app.dependency_overrides.clear()
+        await client.aclose()

@@ -161,8 +161,8 @@ a typed read model containing the Project, the caller's membership, members and 
 Membership authorization and the related queries remain coordinated behind that operation; only
 the Web adapter maps the typed view to template context.
 
-`inquiro` presents one synchronous `ProviderRuntime` as its reusable Provider Interface. Its
-`lookup` and `search` operations return immutable Candidate Record values, while
+`inquiro` presents one asynchronous `ProviderRuntime` as its reusable Provider Interface. Callers
+use `async with` and await its operations; `lookup` and `search` return immutable Candidate Record values, while
 `acquire_document` returns a managed `AcquiredDocument` stream and immutable receipt metadata.
 The runtime owns the fixed Provider catalog and ordering, identifier parsing, document-source
 classification, capability dispatch, typed credentials, input and result validation, error

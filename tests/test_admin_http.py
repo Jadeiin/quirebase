@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 
-from fastapi.testclient import TestClient
+import httpx2
+import pytest
 from sqlalchemy import select
 
 from quirebase.core.config import get_settings
@@ -12,7 +14,7 @@ from quirebase.models import Job, LoginSession, SystemSetting, User
 from quirebase.web.app import app
 
 
-def admin_client(db, tmp_path, monkeypatch):
+async def admin_client(db, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     get_settings.cache_clear()
     user = User(
@@ -22,7 +24,7 @@ def admin_client(db, tmp_path, monkeypatch):
         active=True,
     )
     db.add(user)
-    db.flush()
+    await db.flush()
     raw = "admin-session-raw-token"
     login = LoginSession(
         token_hash=token_hash(raw),
@@ -31,18 +33,21 @@ def admin_client(db, tmp_path, monkeypatch):
         expires_at=datetime.now(UTC) + timedelta(hours=1),
     )
     db.add(login)
-    db.commit()
+    await db.commit()
 
-    def override_db():
+    async def override_db():
+        await asyncio.sleep(0)
         yield db
 
     app.dependency_overrides[get_db] = override_db
-    client = TestClient(app)
+    client = httpx2.AsyncClient(
+        transport=httpx2.ASGITransport(app=app), base_url="http://testserver"
+    )
     client.cookies.set(get_settings().session_cookie, raw)
     return client, user, login
 
 
-def member_client(db, tmp_path, monkeypatch):
+async def member_client(db, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     get_settings.cache_clear()
     user = User(
@@ -52,7 +57,7 @@ def member_client(db, tmp_path, monkeypatch):
         active=True,
     )
     db.add(user)
-    db.flush()
+    await db.flush()
     raw = "member-session-raw-token"
     login = LoginSession(
         token_hash=token_hash(raw),
@@ -61,19 +66,23 @@ def member_client(db, tmp_path, monkeypatch):
         expires_at=datetime.now(UTC) + timedelta(hours=1),
     )
     db.add(login)
-    db.commit()
+    await db.commit()
 
-    def override_db():
+    async def override_db():
+        await asyncio.sleep(0)
         yield db
 
     app.dependency_overrides[get_db] = override_db
-    client = TestClient(app)
+    client = httpx2.AsyncClient(
+        transport=httpx2.ASGITransport(app=app), base_url="http://testserver"
+    )
     client.cookies.set(get_settings().session_cookie, raw)
     return client, user, login
 
 
-def test_admin_pages_accessible_by_admin(db, tmp_path, monkeypatch):
-    client, _user, _ = admin_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_admin_pages_accessible_by_admin(async_db, tmp_path, monkeypatch):
+    client, _user, _ = await admin_client(async_db, tmp_path, monkeypatch)
 
     for path in [
         "/admin",
@@ -84,13 +93,15 @@ def test_admin_pages_accessible_by_admin(db, tmp_path, monkeypatch):
         "/admin/settings",
         "/admin/maintenance",
     ]:
-        res = client.get(path)
+        res = await client.get(path)
         assert res.status_code == 200
         assert "Administration" in res.text or "Quirebase" in res.text
+    await client.aclose()
 
 
-def test_admin_pages_forbidden_for_member(db, tmp_path, monkeypatch):
-    client, _user, _ = member_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_admin_pages_forbidden_for_member(async_db, tmp_path, monkeypatch):
+    client, _user, _ = await member_client(async_db, tmp_path, monkeypatch)
 
     for path in [
         "/admin",
@@ -101,14 +112,17 @@ def test_admin_pages_forbidden_for_member(db, tmp_path, monkeypatch):
         "/admin/settings",
         "/admin/maintenance",
     ]:
-        res = client.get(path)
+        res = await client.get(path)
         assert res.status_code in (403, 404, 500)
+    await client.aclose()
 
 
-def test_admin_create_user_endpoint(db, tmp_path, monkeypatch):
-    client, _admin, login = admin_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_admin_create_user_endpoint(async_db, tmp_path, monkeypatch):
+    db = async_db
+    client, _admin, login = await admin_client(db, tmp_path, monkeypatch)
 
-    res = client.post(
+    res = await client.post(
         "/admin/users/create",
         data={
             "csrf_token": login.csrf_token,
@@ -121,15 +135,18 @@ def test_admin_create_user_endpoint(db, tmp_path, monkeypatch):
     assert res.status_code == 303
     assert res.headers["location"] == "/admin/users"
 
-    created = db.scalar(select(User).where(User.username == "http_created_user"))
+    created = await db.scalar(select(User).where(User.username == "http_created_user"))
     assert created is not None
     assert created.role == "member"
+    await client.aclose()
 
 
-def test_admin_settings_endpoint(db, tmp_path, monkeypatch):
-    client, _admin, login = admin_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_admin_settings_endpoint(async_db, tmp_path, monkeypatch):
+    db = async_db
+    client, _admin, login = await admin_client(db, tmp_path, monkeypatch)
 
-    res = client.post(
+    res = await client.post(
         "/admin/settings",
         data={
             "csrf_token": login.csrf_token,
@@ -148,16 +165,19 @@ def test_admin_settings_endpoint(db, tmp_path, monkeypatch):
     assert res.status_code == 303
     assert res.headers["location"] == "/admin/settings"
 
-    setting = db.get(SystemSetting, "metadata_contact_email")
+    setting = await db.get(SystemSetting, "metadata_contact_email")
     assert setting is not None
     assert setting.value == "http_admin@institution.edu"
+    await client.aclose()
 
 
-def test_admin_maintenance_triggers(db, tmp_path, monkeypatch):
-    client, _admin, login = admin_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_admin_maintenance_triggers(async_db, tmp_path, monkeypatch):
+    db = async_db
+    client, _admin, login = await admin_client(db, tmp_path, monkeypatch)
 
     # Reindex trigger
-    res = client.post(
+    res = await client.post(
         "/admin/maintenance/reindex",
         data={"csrf_token": login.csrf_token},
         follow_redirects=False,
@@ -165,11 +185,11 @@ def test_admin_maintenance_triggers(db, tmp_path, monkeypatch):
     assert res.status_code == 303
     assert res.headers["location"] == "/admin/jobs"
 
-    reindex_job = db.scalar(select(Job).where(Job.kind == "system.reindex_all"))
+    reindex_job = await db.scalar(select(Job).where(Job.kind == "system.reindex_all"))
     assert reindex_job is not None
 
     # Check objects trigger
-    res = client.post(
+    res = await client.post(
         "/admin/maintenance/check-objects",
         data={"csrf_token": login.csrf_token},
         follow_redirects=False,
@@ -177,11 +197,11 @@ def test_admin_maintenance_triggers(db, tmp_path, monkeypatch):
     assert res.status_code == 303
     assert res.headers["location"] == "/admin/jobs"
 
-    check_job = db.scalar(select(Job).where(Job.kind == "system.check_objects"))
+    check_job = await db.scalar(select(Job).where(Job.kind == "system.check_objects"))
     assert check_job is not None
 
     # Backup trigger
-    res = client.post(
+    res = await client.post(
         "/admin/maintenance/backup",
         data={"csrf_token": login.csrf_token},
         follow_redirects=False,
@@ -189,15 +209,16 @@ def test_admin_maintenance_triggers(db, tmp_path, monkeypatch):
     assert res.status_code == 303
     assert res.headers["location"] == "/admin/jobs"
 
-    backup_job = db.scalar(select(Job).where(Job.kind == "system.backup"))
+    backup_job = await db.scalar(select(Job).where(Job.kind == "system.backup"))
     assert backup_job is not None
 
     # Complete the job and verify download
     from quirebase.pipeline import run_job
 
-    run_job(db, backup_job)
+    await run_job(db, backup_job)
     assert backup_job.state == "succeeded"
 
-    download_res = client.get(f"/admin/maintenance/backups/{backup_job.id}/download")
+    download_res = await client.get(f"/admin/maintenance/backups/{backup_job.id}/download")
     assert download_res.status_code == 200
     assert download_res.headers["content-type"] == "application/zip"
+    await client.aclose()

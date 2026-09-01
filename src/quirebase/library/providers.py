@@ -37,14 +37,14 @@ def provider_runtime(settings: Settings) -> ProviderRuntime:
     return ProviderRuntime(provider_config(settings))
 
 
-def lookup_candidate(
+async def lookup_candidate(
     value: str,
     provider: str,
     settings: Settings,
 ) -> CandidateRecord:
     try:
-        with provider_runtime(settings) as runtime:
-            return runtime.lookup(value, provider=provider)
+        async with provider_runtime(settings) as runtime:
+            return await runtime.lookup(value, provider=provider)
     except InvalidProviderRequest as error:
         raise ValidationFailure(str(error)) from error
     except CandidateNotFound as error:
@@ -53,10 +53,10 @@ def lookup_candidate(
         raise UpstreamServiceError(str(error)) from error
 
 
-def search_candidates(query: SearchQuery, settings: Settings) -> CandidatePage:
+async def search_candidates(query: SearchQuery, settings: Settings) -> CandidatePage:
     try:
-        with provider_runtime(settings) as runtime:
-            return runtime.search(query)
+        async with provider_runtime(settings) as runtime:
+            return await runtime.search(query)
     except InvalidProviderRequest as error:
         raise ValidationFailure(str(error)) from error
     except CandidateNotFound as error:

@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
+import shutil
+import tempfile
 import zipfile
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
-from tempfile import NamedTemporaryFile, TemporaryDirectory
+from typing import TYPE_CHECKING
 
 from inquiro.richtext import convert_rich_text
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import selectinload
 
 from quirebase.access.documents import require_revision
 from quirebase.access.items import require_accessible_items
@@ -23,6 +26,9 @@ from quirebase.core.timezones import annotation_export_timezone
 from quirebase.documents.annotations import select_visible_annotations
 from quirebase.models import Attachment, FileRevision, Item, PdfAnnotation, User
 from quirebase.pipeline.inspection import export_annotations
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @dataclass(frozen=True)
@@ -43,34 +49,37 @@ def _item_archive_prefix(item: Item) -> str:
     )
 
 
-def _own_annotations(db: Session, user: User, revision_id: str) -> list[PdfAnnotation]:
+async def _own_annotations(db: AsyncSession, user: User, revision_id: str) -> list[PdfAnnotation]:
     return list(
-        db.scalars(
-            select(PdfAnnotation)
-            .options(selectinload(PdfAnnotation.segments))
-            .where(
-                PdfAnnotation.file_revision_id == revision_id,
-                PdfAnnotation.author_id == user.id,
-                PdfAnnotation.deleted_at.is_(None),
+        (
+            await db.scalars(
+                select(PdfAnnotation)
+                .options(selectinload(PdfAnnotation.segments))
+                .where(
+                    PdfAnnotation.file_revision_id == revision_id,
+                    PdfAnnotation.author_id == user.id,
+                    PdfAnnotation.deleted_at.is_(None),
+                )
+                .order_by(PdfAnnotation.created_at)
             )
-            .order_by(PdfAnnotation.created_at)
         ).all()
     )
 
 
-def _write_annotated_pdf(
+async def _write_annotated_pdf(
     source: Path,
     target: Path,
-    db: Session,
+    db: AsyncSession,
     user: User,
     revision_id: str,
     timezone: str | None,
 ) -> bool:
     """Flatten the user's annotations onto a copy; return False when none exist."""
-    annotations = _own_annotations(db, user, revision_id)
+    annotations = await _own_annotations(db, user, revision_id)
     if not annotations:
         return False
-    export_annotations(
+    await asyncio.to_thread(
+        export_annotations,
         source,
         target,
         annotations,
@@ -102,9 +111,9 @@ def _bundle_path(root: str, filename: str) -> str:
     return f"{root}/{filename}" if root else filename
 
 
-def _write_item_bundle_entries(
+async def _write_item_bundle_entries(
     bundle: zipfile.ZipFile,
-    db: Session,
+    db: AsyncSession,
     user: User,
     item: Item,
     store: LocalObjectStore,
@@ -123,7 +132,7 @@ def _write_item_bundle_entries(
     )
     if revision_ids:
         query = query.where(FileRevision.id.in_(revision_ids))
-    revisions = db.scalars(query).all()
+    revisions = (await db.scalars(query)).all()
     prefix = _item_archive_prefix(item)
     manifest = []
     for index, revision in enumerate(revisions, start=1):
@@ -137,10 +146,10 @@ def _write_item_bundle_entries(
         exported = source
         if include_annotations:
             annotated = temporary_root / f"{revision.id}.pdf"
-            if _write_annotated_pdf(source, annotated, db, user, revision.id, timezone):
+            if await _write_annotated_pdf(source, annotated, db, user, revision.id, timezone):
                 exported = annotated
         archive_filename = _bundle_path(root, filename)
-        bundle.write(exported, archive_filename)
+        await asyncio.to_thread(bundle.write, exported, archive_filename)
         manifest.append({
             "version": index,
             "revision_id": revision.id,
@@ -151,27 +160,33 @@ def _write_item_bundle_entries(
                 revision.processing_state, "value", revision.processing_state
             ),
         })
-    bundle.writestr(
+    await asyncio.to_thread(
+        bundle.writestr,
         _bundle_path(root, "manifest.json"),
         json.dumps({"pdf_revisions": manifest}, ensure_ascii=False, indent=2),
     )
     if include_supplements:
-        attachments = db.scalars(
-            select(Attachment).where(Attachment.item_id == item.id).order_by(Attachment.created_at)
+        attachments = (
+            await db.scalars(
+                select(Attachment)
+                .where(Attachment.item_id == item.id)
+                .order_by(Attachment.created_at)
+            )
         ).all()
         for index, attachment in enumerate(attachments, start=1):
             safe_name = _archive_name(
                 Path(attachment.original_name).name, f"supplement-{index:02d}"
             )
-            bundle.write(
+            await asyncio.to_thread(
+                bundle.write,
                 store.path(attachment.object_key),
                 _bundle_path(root, f"supplements/{index:02d}-{safe_name}"),
             )
     return prefix
 
 
-def create_item_document_bundle(
-    db: Session,
+async def create_item_document_bundle(
+    db: AsyncSession,
     user: User,
     item_id: str,
     *,
@@ -181,16 +196,16 @@ def create_item_document_bundle(
     timezone: str | None = None,
 ) -> ItemDownloadBundle:
     """Create a single-Item document bundle without changing source files."""
-    item = require_accessible_items(db, user, [item_id])[0]
+    item = (await require_accessible_items(db, user, [item_id]))[0]
     archive = BytesIO()
     store = LocalObjectStore()
     prefix = _item_archive_prefix(item)
-    with (
-        TemporaryDirectory() as temporary_dir,
-        zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as bundle,
-    ):
-        temporary_root = Path(temporary_dir)
-        _write_item_bundle_entries(
+    temporary_root = Path(await asyncio.to_thread(tempfile.mkdtemp))
+    bundle = await asyncio.to_thread(
+        zipfile.ZipFile, archive, "w", compression=zipfile.ZIP_DEFLATED
+    )
+    try:
+        await _write_item_bundle_entries(
             bundle,
             db,
             user,
@@ -202,6 +217,9 @@ def create_item_document_bundle(
             include_supplements=include_supplements,
             timezone=timezone,
         )
+    finally:
+        await asyncio.to_thread(bundle.close)
+        await asyncio.to_thread(shutil.rmtree, temporary_root, ignore_errors=True)
     record_event(
         db,
         user.id,
@@ -214,14 +232,14 @@ def create_item_document_bundle(
             "revision_ids": revision_ids or [],
         },
     )
-    db.commit()
+    await db.commit()
     archive.seek(0)
     kind = _download_kind(include_annotations, include_supplements)
     return ItemDownloadBundle(content=archive, filename=f"{prefix}-{kind}.zip")
 
 
-def assemble_document_bundle(
-    db: Session,
+async def assemble_document_bundle(
+    db: AsyncSession,
     user: User,
     items: list[Item],
     *,
@@ -234,17 +252,17 @@ def assemble_document_bundle(
     store = LocalObjectStore()
     item_manifest = []
     used_roots: set[str] = set()
-    with (
-        TemporaryDirectory() as temporary_dir,
-        zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as bundle,
-    ):
-        temporary_root = Path(temporary_dir)
+    temporary_root = Path(await asyncio.to_thread(tempfile.mkdtemp))
+    bundle = await asyncio.to_thread(
+        zipfile.ZipFile, archive, "w", compression=zipfile.ZIP_DEFLATED
+    )
+    try:
         for item in items:
             root = _item_archive_prefix(item)
             if root in used_roots:
                 root = f"{root}-{item.id[:8]}"
             used_roots.add(root)
-            _write_item_bundle_entries(
+            await _write_item_bundle_entries(
                 bundle,
                 db,
                 user,
@@ -261,17 +279,21 @@ def assemble_document_bundle(
                 "title": convert_rich_text(item.title, source="html", target="text"),
                 "folder": root,
             })
-        bundle.writestr(
+        await asyncio.to_thread(
+            bundle.writestr,
             "manifest.json",
             json.dumps({"items": item_manifest}, ensure_ascii=False, indent=2),
         )
+    finally:
+        await asyncio.to_thread(bundle.close)
+        await asyncio.to_thread(shutil.rmtree, temporary_root, ignore_errors=True)
     archive.seek(0)
     kind = _download_kind(include_annotations, include_supplements)
     return ItemDownloadBundle(content=archive, filename=f"quirebase-selected-{kind}.zip")
 
 
-def _record_revision_pdf_export(
-    db: Session,
+async def _record_revision_pdf_export(
+    db: AsyncSession,
     user: User,
     item_id: str,
     revision_id: str,
@@ -291,11 +313,11 @@ def _record_revision_pdf_export(
             "project_id": project_id,
         },
     )
-    db.commit()
+    await db.commit()
 
 
-def export_revision_pdf(
-    db: Session,
+async def export_revision_pdf(
+    db: AsyncSession,
     user: User,
     item_id: str,
     revision_id: str,
@@ -305,13 +327,13 @@ def export_revision_pdf(
     timezone: str | None = None,
 ) -> tuple[Path, str, str, bool]:
     """Export a single FileRevision, optionally flattening annotations onto the PDF."""
-    revision = require_revision(db, user, revision_id)
+    revision = await require_revision(db, user, revision_id)
     if revision.item_id != item_id:
         raise ResourceNotFound("revision not found for item")
     store = LocalObjectStore()
     source = store.path(revision.object_key)
     if not include_annotations:
-        _record_revision_pdf_export(
+        await _record_revision_pdf_export(
             db,
             user,
             item_id,
@@ -321,9 +343,9 @@ def export_revision_pdf(
         )
         return source, revision.original_name, "application/pdf", False
 
-    annotations = select_visible_annotations(db, user, revision.id, item_id, project_id)
+    annotations = await select_visible_annotations(db, user, revision.id, item_id, project_id)
     if not annotations:
-        _record_revision_pdf_export(
+        await _record_revision_pdf_export(
             db,
             user,
             item_id,
@@ -333,18 +355,20 @@ def export_revision_pdf(
         )
         return source, revision.original_name, "application/pdf", False
 
-    with NamedTemporaryFile(suffix=".pdf", delete=False) as target:
-        target_path = Path(target.name)
+    target_path = await asyncio.to_thread(_create_temporary_pdf)
     try:
         author_names = {user.id: user.username}
         if project_id:
-            author_rows = db.execute(
-                select(User.id, User.username).where(
-                    User.id.in_({record.author_id for record in annotations})
+            author_rows = (
+                await db.execute(
+                    select(User.id, User.username).where(
+                        User.id.in_({record.author_id for record in annotations})
+                    )
                 )
             ).all()
             author_names = {row[0]: row[1] for row in author_rows}
-        export_annotations(
+        await asyncio.to_thread(
+            export_annotations,
             source,
             target_path,
             annotations,
@@ -353,10 +377,10 @@ def export_revision_pdf(
         )
         safe_name = _archive_name(Path(revision.original_name).stem, "document")
     except BaseException:
-        target_path.unlink(missing_ok=True)
+        await asyncio.to_thread(target_path.unlink, missing_ok=True)
         raise
     try:
-        _record_revision_pdf_export(
+        await _record_revision_pdf_export(
             db,
             user,
             item_id,
@@ -365,6 +389,11 @@ def export_revision_pdf(
             project_id=project_id,
         )
     except BaseException:
-        target_path.unlink(missing_ok=True)
+        await asyncio.to_thread(target_path.unlink, missing_ok=True)
         raise
     return target_path, f"{safe_name}-annotated.pdf", "application/pdf", True
+
+
+def _create_temporary_pdf() -> Path:
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as target:
+        return Path(target.name)

@@ -14,13 +14,13 @@ from quirebase.accounts.throttling import (
     record_login_failure,
 )
 from quirebase.audit import record_event
-from quirebase.core.crypto import hash_password, token_hash, verify_password
+from quirebase.core.crypto import hash_password_async, token_hash, verify_password_async
 from quirebase.core.errors import DomainError, ResourceNotFound, ValidationFailure
 from quirebase.core.timezones import as_utc
 from quirebase.models import Invitation, LoginSession, User
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class AuthenticationFailure(DomainError):
@@ -31,23 +31,23 @@ class InvalidCredentials(AuthenticationFailure):
     pass
 
 
-def resolve_api_token_user(db: Session, subject: str) -> User:
+async def resolve_api_token_user(db: AsyncSession, subject: str) -> User:
     """Resolve a verified API Token subject to an active local User."""
-    user = db.get(User, subject)
+    user = await db.get(User, subject)
     if user is None or not user.active:
         raise AuthenticationFailure("access token subject is not an active user")
     return user
 
 
-def authenticate_user(
-    db: Session,
+async def authenticate_user(
+    db: AsyncSession,
     identity: str,
     username: str,
     password: str,
     session_days: int = 30,
 ) -> tuple[LoginSession, str]:
     try:
-        check_login_throttle(db, identity)
+        await check_login_throttle(db, identity)
     except LoginThrottled:
         record_event(
             db,
@@ -56,12 +56,17 @@ def authenticate_user(
             "user",
             detail={"identity_hash": identity},
         )
-        db.commit()
+        await db.commit()
         raise
 
-    user = db.scalar(select(User).where(User.username == username))
-    if user is None or not user.active or not verify_password(user.password_hash, password):
-        record_login_failure(db, identity)
+    user = await db.scalar(select(User).where(User.username == username))
+    password_valid = bool(
+        user is not None
+        and user.active
+        and await verify_password_async(user.password_hash, password)
+    )
+    if not password_valid:
+        await record_login_failure(db, identity)
         record_event(
             db,
             None,
@@ -70,11 +75,12 @@ def authenticate_user(
             user.id if user else None,
             detail={"identity_hash": identity},
         )
-        db.commit()
+        await db.commit()
         raise InvalidCredentials("Invalid credentials")
 
-    clear_login_failures(db, identity)
-    login_session, raw = create_login_session(db, user, session_days=session_days)
+    assert user is not None
+    await clear_login_failures(db, identity)
+    login_session, raw = await create_login_session(db, user, session_days=session_days)
     record_event(
         db,
         user.id,
@@ -83,46 +89,50 @@ def authenticate_user(
         login_session.id,
         detail={"identity_hash": identity},
     )
-    db.commit()
+    await db.commit()
     return login_session, raw
 
 
-def logout(db: Session, user: User, login_session: LoginSession) -> None:
+async def logout(db: AsyncSession, user: User, login_session: LoginSession) -> None:
     record_event(db, user.id, "auth.logout", "login_session", login_session.id)
-    db.delete(login_session)
-    db.commit()
+    await db.delete(login_session)
+    await db.commit()
 
 
-def accept_invitation(db: Session, token: str, password: str) -> User:
-    invitation = db.scalar(select(Invitation).where(Invitation.token_hash == token_hash(token)))
+async def accept_invitation(db: AsyncSession, token: str, password: str) -> User:
+    invitation = await db.scalar(
+        select(Invitation).where(Invitation.token_hash == token_hash(token))
+    )
     if (
         invitation is None
         or invitation.accepted_at is not None
         or as_utc(invitation.expires_at) <= datetime.now(UTC)
     ):
         raise ResourceNotFound("invitation not found or expired")
-    if db.scalar(select(User).where(User.username == invitation.username)):
+    if await db.scalar(select(User).where(User.username == invitation.username)):
         raise InvitationConflict("username already exists")
     try:
-        encoded = hash_password(password)
+        encoded = await hash_password_async(password)
     except ValueError as error:
         raise ValidationFailure(str(error)) from error
 
     user = User(username=invitation.username, password_hash=encoded, role=invitation.role)
     db.add(user)
     invitation.accepted_at = datetime.now(UTC)
-    db.flush()
+    await db.flush()
     record_event(db, user.id, "invitation.accept", "user", user.id)
-    db.commit()
+    await db.commit()
     return user
 
 
-def change_own_password(db: Session, user: User, current_password: str, new_password: str) -> None:
-    if not verify_password(user.password_hash, current_password):
+async def change_own_password(
+    db: AsyncSession, user: User, current_password: str, new_password: str
+) -> None:
+    if not await verify_password_async(user.password_hash, current_password):
         raise InvalidCredentials("Current password incorrect")
     try:
-        user.password_hash = hash_password(new_password)
+        user.password_hash = await hash_password_async(new_password)
     except ValueError as error:
         raise ValidationFailure(str(error)) from error
     record_event(db, user.id, "account.password.changed", "user", user.id)
-    db.commit()
+    await db.commit()

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 
 from inquiro import ProviderRuntime
@@ -11,17 +12,22 @@ SAMPLES = (
     ("arxiv", "1706.03762"),
 )
 
-for provider, value in SAMPLES:
-    with ProviderRuntime() as runtime:
-        record = runtime.lookup(value, provider=provider)
-    print(
-        json.dumps(
-            {
-                "provider": record.identifier.provider,
-                "identifier": record.identifier.value,
-                "title": record.title,
-                "authors": record.authors,
-            },
-            ensure_ascii=False,
+
+async def main() -> None:
+    for provider, value in SAMPLES:
+        async with ProviderRuntime() as runtime:
+            record = await runtime.lookup(value, provider=provider)
+        print(
+            json.dumps(
+                {
+                    "provider": record.identifier.provider,
+                    "identifier": record.identifier.value,
+                    "title": record.title,
+                    "authors": record.authors,
+                },
+                ensure_ascii=False,
+            )
         )
-    )
+
+
+asyncio.run(main())

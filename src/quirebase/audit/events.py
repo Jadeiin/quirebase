@@ -10,13 +10,13 @@ from quirebase.core.errors import ResourceUnavailable
 from quirebase.models import AuditEvent
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
     from quirebase.models import User
 
 
 def record_event(
-    db: Session,
+    db: AsyncSession,
     actor_id: str | None,
     action: str,
     target_type: str,
@@ -47,8 +47,8 @@ def record_event(
     return event
 
 
-def query_events(
-    db: Session,
+async def query_events(
+    db: AsyncSession,
     admin: User,
     actor_id: str | None = None,
     action: str | None = None,
@@ -81,11 +81,13 @@ def query_events(
     if filters:
         query = query.where(*filters)
         count_query = count_query.where(*filters)
-    total = db.scalar(count_query) or 0
+    total = await db.scalar(count_query) or 0
     offset = max(0, (page - 1) * page_size)
     events = list(
-        db.scalars(
-            query.order_by(AuditEvent.created_at.desc()).offset(offset).limit(page_size)
+        (
+            await db.scalars(
+                query.order_by(AuditEvent.created_at.desc()).offset(offset).limit(page_size)
+            )
         ).all()
     )
     return events, total

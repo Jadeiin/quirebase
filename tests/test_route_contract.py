@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from test_http import authenticated_client
+import pytest
+from test_http import authenticated_async_client
 
 from quirebase.core.crypto import hash_password
 from quirebase.models import DiscussionMessage, Item, Tag, User
@@ -168,14 +169,19 @@ def test_operational_routes_contract():
     assert operational_routes == EXPECTED_OPERATIONAL_ROUTES
 
 
-def test_http_behavioral_contract(db, tmp_path, monkeypatch):
-    client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_http_behavioral_contract(async_db, async_session_factory, tmp_path, monkeypatch):
+    db = async_db
+    client, item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    item_id = item.id
 
     # 1. Non-admin accessing /admin or /metrics returns 404 (hides admin routes)
-    admin_resp = client.get("/admin")
+    admin_resp = await client.get("/admin")
     assert admin_resp.status_code == 404
 
-    metrics_resp = client.get("/metrics")
+    metrics_resp = await client.get("/metrics")
     assert metrics_resp.status_code == 404
 
     # 2. Inaccessible item edits return 404
@@ -185,30 +191,36 @@ def test_http_behavioral_contract(db, tmp_path, monkeypatch):
         role="member",
     )
     db.add(other_user)
-    db.flush()
+    await db.flush()
     other_item = Item(title="Private item", created_by=other_user.id)
     db.add(other_item)
-    db.commit()
+    await db.commit()
 
-    edit_resp = client.post(
+    edit_resp = await client.post(
         f"/items/{other_item.id}/edit",
         data={"csrf_token": "test-csrf", "version": 1, "title": "New Title"},
     )
     assert edit_resp.status_code == 404
 
     # 3. Version conflict returns 409 with detail {"version": ...}
-    conflict_resp = client.post(
-        f"/items/{item.id}/edit",
+    conflict_resp = await client.post(
+        f"/items/{item_id}/edit",
         data={"csrf_token": "test-csrf", "version": 999, "title": "Conflict Title"},
     )
     assert conflict_resp.status_code == 409
     assert "version" in str(conflict_resp.json())
+    await client.aclose()
 
 
-def test_oversized_bibliography_upload_returns_payload_too_large(db, tmp_path, monkeypatch):
-    client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_oversized_bibliography_upload_returns_payload_too_large(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    client, _item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
     try:
-        response = client.post(
+        response = await client.post(
             "/bibliography/preview",
             data={"csrf_token": "test-csrf", "file_format": "bibtex"},
             files={
@@ -223,22 +235,28 @@ def test_oversized_bibliography_upload_returns_payload_too_large(db, tmp_path, m
         assert response.status_code == 413
         assert response.json() == {"detail": "bibliography files are limited to 5 MiB"}
     finally:
-        app.dependency_overrides.clear()
+        await client.aclose()
 
 
-def test_tag_rename_conceals_missing_and_foreign_tags(db, tmp_path, monkeypatch):
-    client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_tag_rename_conceals_missing_and_foreign_tags(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, _item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
     other_user = User(username="tag-owner", password_hash="unused")
     db.add(other_user)
-    db.flush()
+    await db.flush()
     foreign_tag = Tag(name="Foreign tag", created_by=other_user.id)
     db.add(foreign_tag)
-    db.commit()
+    await db.commit()
     try:
-        missing = client.post(
+        missing = await client.post(
             "/tools/tags/missing", data={"csrf_token": "test-csrf", "name": "Renamed"}
         )
-        foreign = client.post(
+        foreign = await client.post(
             f"/tools/tags/{foreign_tag.id}",
             data={"csrf_token": "test-csrf", "name": "Renamed"},
         )
@@ -246,44 +264,56 @@ def test_tag_rename_conceals_missing_and_foreign_tags(db, tmp_path, monkeypatch)
         assert foreign.status_code == 404
         assert foreign.content == missing.content
     finally:
-        app.dependency_overrides.clear()
+        await client.aclose()
 
 
-def test_tag_delete_conceals_missing_and_foreign_tags(db, tmp_path, monkeypatch):
-    client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_tag_delete_conceals_missing_and_foreign_tags(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, _item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
     other_user = User(username="foreign-tag-owner", password_hash="unused")
     db.add(other_user)
-    db.flush()
+    await db.flush()
     foreign_tag = Tag(name="Protected tag", created_by=other_user.id)
     db.add(foreign_tag)
-    db.commit()
+    await db.commit()
     try:
-        missing = client.post("/tools/tags/missing/delete", data={"csrf_token": "test-csrf"})
-        foreign = client.post(
+        missing = await client.post("/tools/tags/missing/delete", data={"csrf_token": "test-csrf"})
+        foreign = await client.post(
             f"/tools/tags/{foreign_tag.id}/delete", data={"csrf_token": "test-csrf"}
         )
 
         assert foreign.status_code == 404
         assert foreign.content == missing.content
     finally:
-        app.dependency_overrides.clear()
+        await client.aclose()
 
 
-def test_discussion_delete_conceals_missing_and_foreign_messages(db, tmp_path, monkeypatch):
-    client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_discussion_delete_conceals_missing_and_foreign_messages(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
     other_user = User(username="message-author", password_hash="unused")
     db.add(other_user)
-    db.flush()
+    await db.flush()
     foreign_message = DiscussionMessage(
         item_id=item.id, author_id=other_user.id, body="Private authorship"
     )
     db.add(foreign_message)
-    db.commit()
+    await db.commit()
     try:
-        missing = client.post(
+        missing = await client.post(
             f"/items/{item.id}/discussion/missing/delete", data={"csrf_token": "test-csrf"}
         )
-        foreign = client.post(
+        foreign = await client.post(
             f"/items/{item.id}/discussion/{foreign_message.id}/delete",
             data={"csrf_token": "test-csrf"},
         )
@@ -291,13 +321,18 @@ def test_discussion_delete_conceals_missing_and_foreign_messages(db, tmp_path, m
         assert foreign.status_code == 404
         assert foreign.content == missing.content
     finally:
-        app.dependency_overrides.clear()
+        await client.aclose()
 
 
-def test_invitation_creation_is_hidden_from_non_administrators(db, tmp_path, monkeypatch):
-    client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_invitation_creation_is_hidden_from_non_administrators(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    client, _item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
     try:
-        response = client.post(
+        response = await client.post(
             "/admin/invitations",
             data={"csrf_token": "test-csrf", "username": "invitee", "role": "member"},
         )
@@ -305,13 +340,18 @@ def test_invitation_creation_is_hidden_from_non_administrators(db, tmp_path, mon
         assert response.status_code == 404
         assert response.json() == {"detail": "not found"}
     finally:
-        app.dependency_overrides.clear()
+        await client.aclose()
 
 
-def test_admin_mutation_is_hidden_before_csrf_validation(db, tmp_path, monkeypatch):
-    client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_admin_mutation_is_hidden_before_csrf_validation(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    client, _item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
     try:
-        response = client.post(
+        response = await client.post(
             "/admin/invitations",
             data={"username": "invitee", "role": "member"},
         )
@@ -319,18 +359,24 @@ def test_admin_mutation_is_hidden_before_csrf_validation(db, tmp_path, monkeypat
         assert response.status_code == 404
         assert response.json() == {"detail": "not found"}
     finally:
-        app.dependency_overrides.clear()
+        await client.aclose()
 
 
-def test_discussion_author_can_delete_own_message(db, tmp_path, monkeypatch):
-    client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_discussion_author_can_delete_own_message(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
     own_message = DiscussionMessage(
         item_id=item.id, author_id=item.created_by, body="Finished reviewing"
     )
     db.add(own_message)
-    db.commit()
+    await db.commit()
     try:
-        response = client.post(
+        response = await client.post(
             f"/items/{item.id}/discussion/{own_message.id}/delete",
             data={"csrf_token": "test-csrf"},
             follow_redirects=False,
@@ -339,16 +385,23 @@ def test_discussion_author_can_delete_own_message(db, tmp_path, monkeypatch):
         assert response.status_code == 303
         assert response.headers["location"] == f"/items/{item.id}/discussion"
     finally:
-        app.dependency_overrides.clear()
+        await client.aclose()
 
 
-def test_administrator_can_create_invitation(db, tmp_path, monkeypatch):
-    client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
-    administrator = db.get(User, item.created_by)
+@pytest.mark.anyio
+async def test_administrator_can_create_invitation(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    administrator = await db.get(User, item.created_by)
+    assert administrator is not None
     administrator.role = "administrator"
-    db.commit()
+    await db.commit()
     try:
-        response = client.post(
+        response = await client.post(
             "/admin/invitations",
             data={"csrf_token": "test-csrf", "username": "new-member", "role": "member"},
         )
@@ -356,4 +409,4 @@ def test_administrator_can_create_invitation(db, tmp_path, monkeypatch):
         assert response.status_code == 200
         assert "/accept-invitation/" in response.text
     finally:
-        app.dependency_overrides.clear()
+        await client.aclose()

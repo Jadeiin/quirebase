@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from mcp.server import MCPServer
 
 from quirebase.core.config import get_settings
-from quirebase.core.database import SessionLocal
+from quirebase.core.database import AsyncSessionLocal
 from quirebase.mcp.policy import ToolPolicy
 from quirebase.mcp.runtime import (
     IdentityProvider,
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 def create_mcp_server(
     *,
     identity_provider: IdentityProvider = api_token_request_identity,
-    session_factory: SessionFactory = SessionLocal,
+    session_factory: SessionFactory = AsyncSessionLocal,
     token_verifier: TokenVerifier | None = None,
     settings: Settings | None = None,
 ) -> MCPServer:

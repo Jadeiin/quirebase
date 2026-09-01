@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.core.errors import ValidationFailure
@@ -32,14 +32,14 @@ from quirebase.projects.members import (
 from quirebase.projects.workspaces import create_project, open_project_workspace
 
 
-def state_records(db):
+async def state_records(db):
     user = User(username="state-owner", password_hash="unused")
     db.add(user)
-    db.flush()
+    await db.flush()
     item = Item(title="State constraints", created_by=user.id)
     project = Project(name="State project", created_by=user.id)
     db.add_all([item, project])
-    db.flush()
+    await db.flush()
     member = ProjectMember(project_id=project.id, user_id=user.id, role=ProjectRole.owner)
     revision = FileRevision(
         item_id=item.id,
@@ -50,7 +50,7 @@ def state_records(db):
         created_by=user.id,
     )
     db.add_all([member, revision])
-    db.flush()
+    await db.flush()
     annotation = PdfAnnotation(
         file_revision_id=revision.id,
         author_id=user.id,
@@ -59,39 +59,51 @@ def state_records(db):
     )
     job = Job(kind="pdf.inspect", payload="{}", idempotency_key="state:1")
     db.add_all([annotation, job])
-    db.commit()
+    await db.commit()
     return member, revision, annotation, job, project
 
 
-def assert_rejected(db, statement: str, parameters: dict[str, str]) -> None:
-    with pytest.raises(IntegrityError), db.begin_nested():
-        db.execute(text(statement), parameters)
-    db.rollback()
+async def assert_rejected(db, statement: str, parameters: dict[str, str]) -> None:
+    with pytest.raises(IntegrityError):
+        await db.execute(text(statement), parameters)
+    await db.rollback()
 
 
-def test_closed_domain_states_are_loaded_as_domain_types(db):
-    member, revision, annotation, job, _project = state_records(db)
+@pytest.mark.anyio
+async def test_closed_domain_states_are_loaded_as_domain_types(async_db):
+    db = async_db
+    member, revision, annotation, job, _project = await state_records(db)
+    keys = (member.project_id, member.user_id, revision.id, annotation.id, job.id)
 
-    db.expire_all()
+    db.expunge_all()
 
-    assert db.get(ProjectMember, (member.project_id, member.user_id)).role is ProjectRole.owner
-    assert db.get(FileRevision, revision.id).processing_state is FileRevisionProcessingState.pending
-    assert db.get(PdfAnnotation, annotation.id).kind is AnnotationKind.note
-    assert db.get(PdfAnnotation, annotation.id).scope is AnnotationScope.private
-    assert db.get(Job, job.id).state is JobState.pending
+    loaded_member = await db.get(ProjectMember, keys[:2])
+    loaded_revision = await db.get(FileRevision, keys[2])
+    loaded_annotation = await db.get(PdfAnnotation, keys[3])
+    loaded_job = await db.get(Job, keys[4])
+    assert loaded_member is not None and loaded_member.role is ProjectRole.owner
+    assert loaded_revision is not None
+    assert loaded_revision.processing_state is FileRevisionProcessingState.pending
+    assert loaded_annotation is not None and loaded_annotation.kind is AnnotationKind.note
+    assert loaded_annotation.scope is AnnotationScope.private
+    assert loaded_job is not None and loaded_job.state is JobState.pending
 
 
-def test_underline_is_an_allowed_annotation_kind(db):
-    _member, _revision, annotation, _job, _project = state_records(db)
+@pytest.mark.anyio
+async def test_underline_is_an_allowed_annotation_kind(async_db):
+    db = async_db
+    _member, _revision, annotation, _job, _project = await state_records(db)
+    annotation_id = annotation.id
 
-    db.execute(
+    await db.execute(
         text("UPDATE pdf_annotations SET kind = 'underline' WHERE id = :id"),
         {"id": annotation.id},
     )
-    db.commit()
-    db.expire_all()
+    await db.commit()
+    db.expunge_all()
 
-    assert db.get(PdfAnnotation, annotation.id).kind is AnnotationKind.underline
+    loaded = await db.get(PdfAnnotation, annotation_id)
+    assert loaded is not None and loaded.kind is AnnotationKind.underline
 
 
 def test_annotation_commands_use_domain_types():
@@ -106,89 +118,102 @@ def test_annotation_commands_use_domain_types():
     assert command.scope is AnnotationScope.private
 
 
-def test_project_membership_preserves_an_owner_and_returns_domain_roles(db):
+@pytest.mark.anyio
+async def test_project_membership_preserves_an_owner_and_returns_domain_roles(async_db):
+    db = async_db
     owner = User(username="project-owner", password_hash="unused")
     teammate = User(username="project-teammate", password_hash="unused")
     db.add_all([owner, teammate])
-    db.commit()
-    project = create_project(db, owner, "Lifecycle project")
+    await db.commit()
+    project = await create_project(db, owner, "Lifecycle project")
 
     with pytest.raises(ProjectMemberConflict, match="retain an owner"):
-        remove_project_member(db, owner, project.id, owner.id)
+        await remove_project_member(db, owner, project.id, owner.id)
 
-    added = add_project_member(db, owner, project.id, teammate.username, ProjectRole.editor)
+    added = await add_project_member(db, owner, project.id, teammate.username, ProjectRole.editor)
     assert added.role == ProjectRole.editor
     assert [
         (member.user.username, member.role)
-        for member in open_project_workspace(db, owner, project.id).members
+        for member in (await open_project_workspace(db, owner, project.id)).members
     ] == [
         (owner.username, ProjectRole.owner),
         (teammate.username, ProjectRole.editor),
     ]
 
-    remove_project_member(db, owner, project.id, teammate.id)
+    await remove_project_member(db, owner, project.id, teammate.id)
     assert [
         (member.user.username, member.role)
-        for member in open_project_workspace(db, owner, project.id).members
+        for member in (await open_project_workspace(db, owner, project.id)).members
     ] == [(owner.username, ProjectRole.owner)]
-    event = (
-        db.query(AuditEvent).filter_by(action="project.member.remove", target_id=project.id).one()
+    event = await db.scalar(
+        select(AuditEvent).where(
+            AuditEvent.action == "project.member.remove", AuditEvent.target_id == project.id
+        )
     )
+    assert event is not None
     assert json.loads(event.detail) == {"user_id": teammate.id}
 
 
-def assert_closed_state_constraints(db) -> None:
-    member, revision, annotation, job, project = state_records(db)
+async def assert_closed_state_constraints(db) -> None:
+    member, revision, annotation, job, project = await state_records(db)
+    member_key = {"project_id": member.project_id, "user_id": member.user_id}
+    revision_id = revision.id
+    annotation_id = annotation.id
+    job_id = job.id
+    project_id = project.id
 
-    assert_rejected(
+    await assert_rejected(
         db,
         "UPDATE project_members SET role = :value WHERE project_id = :project_id AND user_id = :user_id",
-        {"value": "guest", "project_id": member.project_id, "user_id": member.user_id},
+        {"value": "guest", **member_key},
     )
-    assert_rejected(
+    await assert_rejected(
         db,
         "UPDATE file_revisions SET processing_state = :value WHERE id = :id",
-        {"value": "unknown", "id": revision.id},
+        {"value": "unknown", "id": revision_id},
     )
-    assert_rejected(
+    await assert_rejected(
         db,
         "UPDATE pdf_annotations SET kind = :value WHERE id = :id",
-        {"value": "drawing", "id": annotation.id},
+        {"value": "drawing", "id": annotation_id},
     )
-    assert_rejected(
+    await assert_rejected(
         db,
         "UPDATE pdf_annotations SET scope = :scope WHERE id = :id",
-        {"scope": "public", "id": annotation.id},
+        {"scope": "public", "id": annotation_id},
     )
-    assert_rejected(
+    await assert_rejected(
         db,
         "UPDATE pdf_annotations SET scope = 'project', project_id = NULL WHERE id = :id",
-        {"id": annotation.id},
+        {"id": annotation_id},
     )
-    assert_rejected(
+    await assert_rejected(
         db,
         "UPDATE pdf_annotations SET scope = 'private', project_id = :project_id WHERE id = :id",
-        {"project_id": project.id, "id": annotation.id},
+        {"project_id": project_id, "id": annotation_id},
     )
-    assert_rejected(
+    await assert_rejected(
         db,
         "UPDATE jobs SET kind = '' WHERE id = :id",
-        {"id": job.id},
+        {"id": job_id},
     )
-    assert_rejected(
+    await assert_rejected(
         db,
         "UPDATE jobs SET state = :value WHERE id = :id",
-        {"value": "cancelled", "id": job.id},
+        {"value": "cancelled", "id": job_id},
     )
 
 
-def test_database_rejects_invalid_closed_states_and_scope_combinations(db):
-    assert_closed_state_constraints(db)
+@pytest.mark.anyio
+async def test_database_rejects_invalid_closed_states_and_scope_combinations(async_db):
+    await assert_closed_state_constraints(async_db)
 
 
-def test_enqueue_job_accepts_extensible_kinds_but_rejects_invalid_shape(db):
-    job = enqueue_job(db, "custom.not_registered", json.loads("{}"))
+@pytest.mark.anyio
+async def test_enqueue_job_accepts_extensible_kinds_but_rejects_invalid_shape(async_db):
+    db = async_db
+    job = await enqueue_job(db, "custom.not_registered", json.loads("{}"))
     assert job.kind == "custom.not_registered"
 
     with pytest.raises(ValidationFailure, match="1 to 40"):
-        enqueue_job(db, " ", {})
+        await enqueue_job(db, " ", {})

@@ -59,7 +59,7 @@ class ProviderRuntime:
         if config.max_document_bytes <= 0:
             raise InvalidProviderRequest("provider document limit must be positive")
 
-    def acquire_document(self, request: DocumentRequest) -> AcquiredDocument:
+    async def acquire_document(self, request: DocumentRequest) -> AcquiredDocument:
         self._require_open()
         source = request.source.strip()
         parsed_url = urlsplit(source)
@@ -75,7 +75,7 @@ class ProviderRuntime:
             except InvalidProviderRequest:
                 if request.provider != "auto":
                     raise
-                return self._transport.download_pdf(source)
+                return await self._transport.download_pdf(source)
         else:
             identifier = parse_identifier(
                 source,
@@ -87,7 +87,7 @@ class ProviderRuntime:
             raise PdfNotAvailable("provider does not offer PDF acquisition")
         definition.require_credentials(self._config, "document")
         try:
-            return definition.document_adapter.acquire(
+            return await definition.document_adapter.acquire(
                 self._context,
                 identifier.value,
                 self._config,
@@ -100,7 +100,7 @@ class ProviderRuntime:
         except (TypeError, ValueError) as error:
             raise ProviderUnavailable("PDF provider returned invalid document metadata") from error
 
-    def lookup(self, value: str, *, provider: str = "auto") -> CandidateRecord:
+    async def lookup(self, value: str, *, provider: str = "auto") -> CandidateRecord:
         self._require_open()
         identifier = parse_identifier(value, provider, registrations=self._providers)
         definition = self._identifier_provider(identifier.provider)
@@ -108,7 +108,7 @@ class ProviderRuntime:
             raise InvalidProviderRequest(f"unknown identifier provider: {identifier.provider}")
         definition.require_credentials(self._config, "lookup")
         try:
-            record = definition.lookup_adapter.lookup(
+            record = await definition.lookup_adapter.lookup(
                 self._context,
                 identifier.value,
                 self._config,
@@ -124,7 +124,7 @@ class ProviderRuntime:
             raise ProviderUnavailable("metadata provider returned a record without a title")
         return self._candidate(definition.name, identifier, record)
 
-    def search(self, query: SearchQuery) -> CandidatePage:
+    async def search(self, query: SearchQuery) -> CandidatePage:
         self._require_open()
         definition = next(
             (provider for provider in self._providers if provider.name == query.provider), None
@@ -147,7 +147,7 @@ class ProviderRuntime:
         per_page = max(1, min(query.per_page, 25))
         definition.require_credentials(self._config, "search")
         try:
-            result = definition.search_adapter.search(
+            result = await definition.search_adapter.search(
                 self._context,
                 list(query.clauses),
                 page=page,
@@ -181,17 +181,17 @@ class ProviderRuntime:
         )
         return CandidatePage(result.provider, records, result.total, page, per_page)
 
-    def close(self) -> None:
+    async def aclose(self) -> None:
         if not self._closed:
-            self._transport.close()
+            await self._transport.aclose()
             self._closed = True
 
-    def __enter__(self) -> Self:
+    async def __aenter__(self) -> Self:
         self._require_open()
         return self
 
-    def __exit__(self, *_exc: object) -> None:
-        self.close()
+    async def __aexit__(self, *_exc: object) -> None:
+        await self.aclose()
 
     def _identifier_provider(self, alias: str) -> ProviderDefinition | None:
         return next(

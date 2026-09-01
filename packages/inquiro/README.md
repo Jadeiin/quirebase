@@ -2,21 +2,31 @@
 
 Academic metadata discovery, multi-provider search, bibliography interchange, and CSL citation engine.
 
-Provider lookup, Search and PDF acquisition use one synchronous runtime:
+Provider lookup, Search and PDF acquisition use one asynchronous runtime:
 
 ```python
+import asyncio
+
 from inquiro import DocumentRequest, ProviderRuntime, SearchClause, SearchQuery
 
-with ProviderRuntime() as providers:
-    candidate = providers.lookup("10.1038/s41586-019-1666-5")
-    page = providers.search(
-        SearchQuery(
-            provider="crossref",
-            clauses=(SearchClause("title", "and", "machine learning"),),
+
+async def main():
+    async with ProviderRuntime() as providers:
+        candidate = await providers.lookup("10.1038/s41586-019-1666-5")
+        page = await providers.search(
+            SearchQuery(
+                provider="crossref",
+                clauses=(SearchClause("title", "and", "machine learning"),),
+            )
         )
-    )
-    with providers.acquire_document(DocumentRequest("https://example.org/article.pdf")) as document:
-        consume(document.stream)
+        async with await providers.acquire_document(
+            DocumentRequest("https://example.org/article.pdf")
+        ) as document:
+            async for chunk in document:
+                consume(chunk)
+
+
+asyncio.run(main())
 ```
 
 The runtime owns the fixed Provider catalog, identifier parsing, credentials and bounded HTTP

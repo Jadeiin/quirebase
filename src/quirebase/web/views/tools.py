@@ -25,32 +25,32 @@ from quirebase.web.deps import current_login, current_user, protected_router
 from quirebase.web.templates import templates
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 router = protected_router()
 
 
 @router.get("/tools", response_class=HTMLResponse)
-def tools_page(
+async def tools_page(
     request: Request,
     tab: str = "",
     mode: str = "",
     user: User = Depends(current_user),
     login_session: LoginSession = Depends(current_login),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     if mode not in ("", "doi", "pdf", "title", "similar"):
         raise HTTPException(404)
     if tab not in ("", "duplicates", "tags", "citation-styles"):
         tab = ""
     active_tool = tab or "duplicates"
-    groups = find_duplicates(db, user, mode)
-    tags = list_accessible_tags_with_counts(db, user)
+    groups = await find_duplicates(db, user, mode)
+    tags = await list_accessible_tags_with_counts(db, user)
     tags_data = [{"id": tag.id, "name": tag.name, "count": count} for tag, count in tags]
     manageable_tags = [
         tag for tag, _count in tags if tag.created_by == user.id or user.role == "administrator"
     ]
-    custom_styles = list_custom_citation_styles(db, user)
+    custom_styles = await list_custom_citation_styles(db, user)
     return templates.TemplateResponse(
         request,
         "tools.html",
@@ -71,53 +71,53 @@ def tools_page(
 
 
 @router.post("/citation-styles")
-def create_citation_style(
+async def create_citation_style(
     name: str = Form(),
     csl: str = Form(),
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    create_custom_citation_style(db, user, name, csl)
+    await create_custom_citation_style(db, user, name, csl)
     return RedirectResponse("/tools?tab=citation-styles#citation-styles", status_code=303)
 
 
 @router.post("/citation-styles/{style_id}/delete")
-def delete_citation_style(
+async def delete_citation_style(
     style_id: str,
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    delete_custom_citation_style(db, user, style_id)
+    await delete_custom_citation_style(db, user, style_id)
     return RedirectResponse("/tools?tab=citation-styles#citation-styles", status_code=303)
 
 
 @router.post("/tools/tags/merge")
-def merge_tag_route(
+async def merge_tag_route(
     source_tag_id: str = Form(),
     target_tag_id: str = Form(),
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    merge_tags(db, user, source_tag_id, target_tag_id)
+    await merge_tags(db, user, source_tag_id, target_tag_id)
     return RedirectResponse("/tools?tab=tags#tags", status_code=303)
 
 
 @router.post("/tools/tags/{tag_id}")
-def rename_tag(
+async def rename_tag(
     tag_id: str,
     name: str = Form(),
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    rename_tag_op(db, user, tag_id, name)
+    await rename_tag_op(db, user, tag_id, name)
     return RedirectResponse("/tools?tab=tags#tags", status_code=303)
 
 
 @router.post("/tools/tags/{tag_id}/delete")
-def delete_tag(
+async def delete_tag(
     tag_id: str,
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    delete_tag_op(db, user, tag_id)
+    await delete_tag_op(db, user, tag_id)
     return RedirectResponse("/tools?tab=tags#tags", status_code=303)

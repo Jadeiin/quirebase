@@ -20,14 +20,16 @@ from quirebase.library import (
 from quirebase.models import Author, Item, ItemAuthor, ItemIdentifier, User
 
 
-def test_regenerate_bibtex_key_is_a_narrow_atomic_item_mutation(db):
+@pytest.mark.anyio
+async def test_regenerate_bibtex_key_is_a_narrow_atomic_item_mutation(async_db):
+    db = async_db
     owner = User(
         username="item-mutation-owner",
         password_hash="unused",
         role="administrator",
     )
     db.add(owner)
-    db.flush()
+    await db.flush()
     item = Item(
         title="Computing Machinery and Intelligence",
         abstract="Can machines think?",
@@ -37,32 +39,38 @@ def test_regenerate_bibtex_key_is_a_narrow_atomic_item_mutation(db):
         created_by=owner.id,
     )
     db.add(item)
-    db.commit()
+    await db.commit()
+    owner_id = owner.id
+    item_id = item.id
+    item_version = item.version
 
-    result = regenerate_bibtex_key(
+    result = await regenerate_bibtex_key(
         db,
         owner,
-        item.id,
-        item.version,
+        item_id,
+        item_version,
     )
 
-    workspace = open_item_workspace(db, owner, item.id, WorkspaceSection.metadata)
+    workspace = await open_item_workspace(db, owner, item_id, WorkspaceSection.metadata)
     assert isinstance(workspace, MetadataWorkspace)
     updated = workspace.item
-    events, total = query_events(db, owner, action="item.bibtex_key.regenerate")
-    assert result.item_id == item.id
+    events, total = await query_events(db, owner, action="item.bibtex_key.regenerate")
+    assert result.item_id == item_id
     assert result.version == 2
     assert updated.bibtex_id == "Turing1950Computing"
     assert updated.abstract == "Can machines think?"
     assert updated.doi == "10.1093/mind/lix.236.433"
     assert total == 1
-    assert events[0].target_id == item.id
+    assert events[0].target_id == item_id
+    assert updated.updated_by == owner_id
 
 
-def test_revise_item_metadata_makes_the_dedicated_doi_authoritative(db):
+@pytest.mark.anyio
+async def test_revise_item_metadata_makes_the_dedicated_doi_authoritative(async_db):
+    db = async_db
     owner = User(username="identifier-owner", password_hash="unused")
     db.add(owner)
-    db.flush()
+    await db.flush()
     item = Item(
         title="Identifier precedence",
         doi="10.1000/old",
@@ -70,17 +78,20 @@ def test_revise_item_metadata_makes_the_dedicated_doi_authoritative(db):
         created_by=owner.id,
     )
     db.add(item)
-    db.flush()
+    await db.flush()
     db.add(ItemIdentifier(item_id=item.id, provider="pmid", value="old-pmid"))
-    db.commit()
+    await db.commit()
+    item_id = item.id
+    item_version = item.version
+    item_title = item.title
 
-    result = revise_item_metadata(
+    result = await revise_item_metadata(
         db,
         owner,
-        item.id,
-        item.version,
+        item_id,
+        item_version,
         ItemMetadata(
-            title=item.title,
+            title=item_title,
             doi="https://doi.org/10.1000/new",
             identifiers=(
                 ExternalIdentifier("doi", "10.1000/stale"),
@@ -89,7 +100,7 @@ def test_revise_item_metadata_makes_the_dedicated_doi_authoritative(db):
         ),
     )
 
-    workspace = open_item_workspace(db, owner, item.id, WorkspaceSection.summary)
+    workspace = await open_item_workspace(db, owner, item_id, WorkspaceSection.summary)
     assert isinstance(workspace, SummaryWorkspace)
     updated = workspace.item
     identifiers = {link.provider: link.value for link in workspace.identifiers}
@@ -98,24 +109,29 @@ def test_revise_item_metadata_makes_the_dedicated_doi_authoritative(db):
     assert identifiers == {"arxiv": "2401.12345"}
 
 
-def test_revise_item_metadata_replaces_contributors_in_order(db):
+@pytest.mark.anyio
+async def test_revise_item_metadata_replaces_contributors_in_order(async_db):
+    db = async_db
     owner = User(username="contributor-owner", password_hash="unused")
     old_author = Author(last_name="Old", first_name="Author")
     db.add_all([owner, old_author])
-    db.flush()
+    await db.flush()
     item = Item(title="Contributor replacement", authors="Old, Author", created_by=owner.id)
     db.add(item)
-    db.flush()
+    await db.flush()
     db.add(ItemAuthor(item_id=item.id, author_id=old_author.id, position=1, role="author"))
-    db.commit()
+    await db.commit()
+    item_id = item.id
+    item_version = item.version
+    item_title = item.title
 
-    revise_item_metadata(
+    await revise_item_metadata(
         db,
         owner,
-        item.id,
-        item.version,
+        item_id,
+        item_version,
         ItemMetadata(
-            title=item.title,
+            title=item_title,
             authors=(
                 Contributor("Shannon", "Claude", is_corresponding=True),
                 Contributor("Weaver", "Warren"),
@@ -124,7 +140,7 @@ def test_revise_item_metadata_replaces_contributors_in_order(db):
         ),
     )
 
-    workspace = open_item_workspace(db, owner, item.id, WorkspaceSection.metadata)
+    workspace = await open_item_workspace(db, owner, item_id, WorkspaceSection.metadata)
     assert isinstance(workspace, MetadataWorkspace)
     assert workspace.item.authors == "Shannon, Claude; Weaver, Warren"
     assert workspace.item.editors is None
@@ -134,17 +150,19 @@ def test_revise_item_metadata_replaces_contributors_in_order(db):
     ]
     assert [link.position for link in workspace.authors] == [1, 2]
     assert workspace.authors[0].is_corresponding
-    matches, total, _, _ = search_library(db, owner, q="Contributor replacement")
+    matches, total, _, _ = await search_library(db, owner, q="Contributor replacement")
     assert total == 1
-    assert matches[0].id == item.id
+    assert matches[0].id == item_id
 
 
-def test_create_item_accepts_typed_metadata_and_returns_a_mutation_result(db):
+@pytest.mark.anyio
+async def test_create_item_accepts_typed_metadata_and_returns_a_mutation_result(async_db):
+    db = async_db
     owner = User(username="create-item-owner", password_hash="unused")
     db.add(owner)
-    db.commit()
+    await db.commit()
 
-    result = create_item(
+    result = await create_item(
         db,
         owner,
         ItemMetadata(
@@ -157,7 +175,7 @@ def test_create_item_accepts_typed_metadata_and_returns_a_mutation_result(db):
         ),
     )
 
-    workspace = open_item_workspace(db, owner, result.item_id, WorkspaceSection.summary)
+    workspace = await open_item_workspace(db, owner, result.item_id, WorkspaceSection.summary)
     assert isinstance(workspace, SummaryWorkspace)
     created = workspace.item
     assert result.version == 1
@@ -168,20 +186,24 @@ def test_create_item_accepts_typed_metadata_and_returns_a_mutation_result(db):
     assert created.keywords == "Information Theory; Communication"
 
 
-def test_revise_item_metadata_rolls_back_every_change_when_a_group_is_invalid(db):
+@pytest.mark.anyio
+async def test_revise_item_metadata_rolls_back_every_change_when_a_group_is_invalid(async_db):
+    db = async_db
     owner = User(username="atomic-item-owner", password_hash="unused")
     db.add(owner)
-    db.flush()
+    await db.flush()
     item = Item(title="Original title", created_by=owner.id)
     db.add(item)
-    db.commit()
+    await db.commit()
+    item_id = item.id
+    item_version = item.version
 
     with pytest.raises(ValidationFailure, match="editors cannot be corresponding authors"):
-        revise_item_metadata(
+        await revise_item_metadata(
             db,
             owner,
-            item.id,
-            item.version,
+            item_id,
+            item_version,
             ItemMetadata(
                 title="Partially updated title",
                 editors=(Contributor("Invalid", is_corresponding=True),),
@@ -190,33 +212,37 @@ def test_revise_item_metadata_rolls_back_every_change_when_a_group_is_invalid(db
         )
 
     db.expire_all()
-    unchanged = db.get(Item, item.id)
+    unchanged = await db.get(Item, item_id)
     assert unchanged is not None
     assert unchanged.title == "Original title"
     assert unchanged.version == 1
     assert unchanged.doi is None
 
 
-def test_revise_item_metadata_enforces_item_owner_permissions(db):
+@pytest.mark.anyio
+async def test_revise_item_metadata_enforces_item_owner_permissions(async_db):
+    db = async_db
     owner = User(username="permission-owner", password_hash="unused")
     outsider = User(username="permission-outsider", password_hash="unused")
     db.add_all([owner, outsider])
-    db.flush()
+    await db.flush()
     item = Item(title="Private metadata", created_by=owner.id)
     db.add(item)
-    db.commit()
+    await db.commit()
+    item_id = item.id
+    item_version = item.version
 
     with pytest.raises(ResourceUnavailable, match="item not found"):
-        revise_item_metadata(
+        await revise_item_metadata(
             db,
             outsider,
-            item.id,
-            item.version,
+            item_id,
+            item_version,
             ItemMetadata(title="Unauthorized update"),
         )
 
     db.expire_all()
-    unchanged = db.get(Item, item.id)
+    unchanged = await db.get(Item, item_id)
     assert unchanged is not None
     assert unchanged.title == "Private metadata"
     assert unchanged.version == 1

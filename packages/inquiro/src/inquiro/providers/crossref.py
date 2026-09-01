@@ -29,12 +29,12 @@ from inquiro.providers._payload import (
 
 
 class CrossrefLookupAdapter:
-    def lookup(
+    async def lookup(
         self, client: ProviderContext, value: str, settings: Any, *, endpoint: str
     ) -> ProviderRecord:
         contact = settings.contact_email
         params = {"mailto": contact} if contact else None
-        body = client._get(f"{endpoint}/{quote(value, safe='')}", params)
+        body = await client._get(f"{endpoint}/{quote(value, safe='')}", params)
         try:
             payload = json.loads(body)
         except (json.JSONDecodeError, TypeError) as error:
@@ -109,7 +109,7 @@ class CrossrefLookupAdapter:
 
 
 class CrossrefSearchAdapter:
-    def search(
+    async def search(
         self,
         client: ProviderContext,
         clauses: list[SearchClause],
@@ -167,7 +167,7 @@ class CrossrefSearchAdapter:
             filters.append(f"until-pub-date:{year_to}-12-31")
         if filters:
             params["filter"] = ",".join(filters)
-        body = client._get(endpoint, params)
+        body = await client._get(endpoint, params)
         try:
             payload = json.loads(body)
         except (json.JSONDecodeError, TypeError) as error:
@@ -208,7 +208,7 @@ class CrossrefSearchAdapter:
 
 
 class CrossrefDocumentAdapter:
-    def acquire(
+    async def acquire(
         self,
         client: ProviderContext,
         value: str,
@@ -217,7 +217,7 @@ class CrossrefDocumentAdapter:
         endpoint: str,
     ) -> AcquiredDocument:
         params = {"mailto": settings.contact_email} if settings.contact_email else None
-        body = client._get(f"{endpoint}/{quote(value, safe='')}", params)
+        body = await client._get(f"{endpoint}/{quote(value, safe='')}", params)
         try:
             payload = json.loads(body)
             if not isinstance(payload, dict):
@@ -245,7 +245,7 @@ class CrossrefDocumentAdapter:
         )
         if not pdf_url:
             raise PdfNotAvailable("Crossref does not provide a PDF link for this DOI")
-        return client._download_pdf(pdf_url, provider="crossref")
+        return await client._download_pdf(pdf_url, provider="crossref")
 
 
 CROSSREF_PROVIDER = ProviderDefinition(

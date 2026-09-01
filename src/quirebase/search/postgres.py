@@ -8,13 +8,13 @@ from quirebase.models import Item
 from quirebase.search.content import search_text_for_item
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.sql.selectable import SelectBase
 
 
 class PostgreSQLSearchIndex:
-    def ensure_schema(self, db: Session) -> None:
-        db.execute(
+    async def ensure_schema(self, db: AsyncSession) -> None:
+        await db.execute(
             text(
                 """
                 CREATE TABLE IF NOT EXISTS item_search (
@@ -24,53 +24,57 @@ class PostgreSQLSearchIndex:
                 """
             )
         )
-        db.execute(
+        await db.execute(
             text(
                 "CREATE INDEX IF NOT EXISTS ix_item_search_document "
                 "ON item_search USING gin(document)"
             )
         )
 
-    def index_item(self, db: Session, item_id: str) -> None:
-        self.ensure_schema(db)
-        item = db.get(Item, item_id)
-        self.remove_item(db, item_id)
+    async def index_item(self, db: AsyncSession, item_id: str) -> None:
+        await self.ensure_schema(db)
+        item = await db.get(Item, item_id)
+        await self.remove_item(db, item_id)
         if item is not None:
-            db.execute(
+            await db.execute(
                 text(
                     """
                     INSERT INTO item_search(item_id, document)
                     VALUES (:item_id, to_tsvector('simple', :content))
                     """
                 ),
-                {"item_id": item.id, "content": search_text_for_item(db, item)},
+                {"item_id": item.id, "content": await search_text_for_item(db, item)},
             )
 
-    def remove_item(self, db: Session, item_id: str) -> None:
-        self.ensure_schema(db)
-        db.execute(text("DELETE FROM item_search WHERE item_id = :item_id"), {"item_id": item_id})
+    async def remove_item(self, db: AsyncSession, item_id: str) -> None:
+        await self.ensure_schema(db)
+        await db.execute(
+            text("DELETE FROM item_search WHERE item_id = :item_id"), {"item_id": item_id}
+        )
 
-    def search(self, db: Session, query: str, limit: int = 200) -> list[str]:
-        self.ensure_schema(db)
+    async def search(self, db: AsyncSession, query: str, limit: int = 200) -> list[str]:
+        await self.ensure_schema(db)
         if not query.strip():
             return []
         return list(
-            db.scalars(
-                text(
-                    """
+            (
+                await db.scalars(
+                    text(
+                        """
                     SELECT item_id FROM item_search
                     WHERE document @@ websearch_to_tsquery('simple', :query)
                     ORDER BY ts_rank(document, websearch_to_tsquery('simple', :query)) DESC
                     LIMIT :limit
                     """
-                ),
-                {"query": query, "limit": limit},
+                    ),
+                    {"query": query, "limit": limit},
+                )
             ).all()
         )
 
-    def matching_item_ids(self, db: Session, query: str) -> SelectBase:
+    async def matching_item_ids(self, db: AsyncSession, query: str) -> SelectBase:
         """Return an unbounded full-text match as a database-side ID query."""
-        self.ensure_schema(db)
+        await self.ensure_schema(db)
         if not query.strip():
             return select(Item.id).where(false())
         return (

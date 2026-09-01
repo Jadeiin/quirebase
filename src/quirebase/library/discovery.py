@@ -5,14 +5,15 @@ from typing import TYPE_CHECKING
 
 from inquiro import SearchClause, SearchQuery
 
+from quirebase.core.errors import ResourceUnavailable
 from quirebase.library.activity import record_discovery_search_audit
 from quirebase.library.providers import search_candidates
+from quirebase.models import User
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
     from quirebase.core.config import Settings
-    from quirebase.models import User
 
 
 @dataclass(frozen=True)
@@ -44,8 +45,8 @@ class CandidatePageView:
     per_page: int
 
 
-def search_candidate_records(
-    db: Session,
+async def search_candidate_records(
+    db: AsyncSession,
     user: User,
     provider: str,
     clauses: tuple[DiscoveryClause, ...],
@@ -57,7 +58,11 @@ def search_candidate_records(
     year_to: int | None = None,
     settings: Settings,
 ) -> CandidatePageView:
-    result = search_candidates(
+    user_id = user.id
+    # Authentication and settings reads may have opened a short transaction;
+    # do not keep that transaction alive while the Provider performs network I/O.
+    await db.rollback()
+    result = await search_candidates(
         SearchQuery(
             provider=provider,
             clauses=tuple(
@@ -91,5 +96,10 @@ def search_candidate_records(
         page=result.page,
         per_page=result.per_page,
     )
-    record_discovery_search_audit(db, user, provider, clauses, len(page_view.results))
+    reloaded_user = await db.get(User, user_id)
+    if reloaded_user is None or not reloaded_user.active:
+        raise ResourceUnavailable("user not available")
+    await record_discovery_search_audit(
+        db, reloaded_user, provider, clauses, len(page_view.results)
+    )
     return page_view

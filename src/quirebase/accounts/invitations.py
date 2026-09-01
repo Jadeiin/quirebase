@@ -11,15 +11,17 @@ from quirebase.core.timezones import as_utc
 from quirebase.models import Invitation, User
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class InvitationConflict(DomainError):
     pass
 
 
-def get_valid_invitation(db: Session, token: str) -> Invitation | None:
-    invitation = db.scalar(select(Invitation).where(Invitation.token_hash == token_hash(token)))
+async def get_valid_invitation(db: AsyncSession, token: str) -> Invitation | None:
+    invitation = await db.scalar(
+        select(Invitation).where(Invitation.token_hash == token_hash(token))
+    )
     if (
         invitation
         and invitation.accepted_at is None
@@ -29,8 +31,8 @@ def get_valid_invitation(db: Session, token: str) -> Invitation | None:
     return None
 
 
-def create_invitation(
-    db: Session,
+async def create_invitation(
+    db: AsyncSession,
     creator: User,
     username: str,
     role: str = "member",
@@ -41,7 +43,7 @@ def create_invitation(
     normalized = username.strip()
     if not normalized or len(normalized) > 120 or role not in ("member", "administrator"):
         raise ValidationFailure("invalid username or role")
-    if db.scalar(select(User).where(User.username == normalized)) or db.scalar(
+    if await db.scalar(select(User).where(User.username == normalized)) or await db.scalar(
         select(Invitation).where(Invitation.username == normalized)
     ):
         raise InvitationConflict("username already exists or is invited")
@@ -54,5 +56,5 @@ def create_invitation(
         expires_at=datetime.now(UTC) + timedelta(days=expires_days),
     )
     db.add(invitation)
-    db.commit()
+    await db.commit()
     return invitation, raw

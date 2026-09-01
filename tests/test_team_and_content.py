@@ -1,65 +1,80 @@
 from datetime import UTC, datetime
 
-from test_http import authenticated_client
+import pytest
+from sqlalchemy import func, select
+from test_http import authenticated_async_client
 
 from quirebase.accounts.throttling import check_login_throttle, record_login_failure
 from quirebase.core.config import get_settings
 from quirebase.models import DiscussionMessage, ItemTag, LoginThrottle, Tag
-from quirebase.web.app import app
 
 
-def test_tags_discussion_and_search(db, tmp_path, monkeypatch):
-    client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_tags_discussion_and_search(async_db, async_session_factory, tmp_path, monkeypatch):
+    db = async_db
+    client, item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
     try:
-        tagged = client.post(
+        tagged = await client.post(
             f"/items/{item.id}/tags", data={"csrf_token": "test-csrf", "name": "Quantum Optics"}
         )
         assert tagged.status_code == 200
-        assert db.query(Tag).count() == 1
-        assert db.query(ItemTag).count() == 1
-        assert item.title in client.get("/?q=optics").text
+        assert await db.scalar(select(func.count()).select_from(Tag)) == 1
+        assert await db.scalar(select(func.count()).select_from(ItemTag)) == 1
+        assert item.title in (await client.get("/?q=optics")).text
 
-        posted = client.post(
+        posted = await client.post(
             f"/items/{item.id}/discussion", data={"csrf_token": "test-csrf", "body": "Looks useful"}
         )
         assert posted.status_code == 200
-        assert db.query(DiscussionMessage).one().body == "Looks useful"
+        message = await db.scalar(select(DiscussionMessage))
+        assert message is not None
+        assert message.body == "Looks useful"
 
-        uploaded = client.post(
+        uploaded = await client.post(
             f"/items/{item.id}/attachments",
             data={"csrf_token": "test-csrf"},
             files={"attachment": ("notes.txt", b"supplement", "text/plain")},
         )
         assert uploaded.status_code == 200
-        page = client.get(f"/items/{item.id}/files")
+        page = await client.get(f"/items/{item.id}/files")
         assert "notes.txt" in page.text
         assert page.headers["x-content-type-options"] == "nosniff"
     finally:
-        app.dependency_overrides.clear()
+        await client.aclose()
         get_settings.cache_clear()
 
 
-def test_csp_allows_browser_pdf_downloads_from_external_http_sources(db, tmp_path, monkeypatch):
-    client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_csp_allows_browser_pdf_downloads_from_external_http_sources(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    client, item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
     try:
-        response = client.get(f"/items/{item.id}/files")
+        response = await client.get(f"/items/{item.id}/files")
 
         assert "connect-src 'self' https: http:" in response.headers["content-security-policy"]
     finally:
-        app.dependency_overrides.clear()
+        await client.aclose()
         get_settings.cache_clear()
 
 
-def test_durable_login_throttle(db):
+@pytest.mark.anyio
+async def test_durable_login_throttle(async_db):
+    db = async_db
     identity = "a" * 64
     for _ in range(5):
-        record_login_failure(db, identity)
-    row = db.get(LoginThrottle, identity)
+        await record_login_failure(db, identity)
+    row = await db.get(LoginThrottle, identity)
+    assert row is not None
     assert row.failures == 5
     assert row.window_started_at.replace(tzinfo=UTC) <= datetime.now(UTC)
 
     try:
-        check_login_throttle(db, identity)
+        await check_login_throttle(db, identity)
     except Exception as error:
         assert error.status_code == 429
     else:

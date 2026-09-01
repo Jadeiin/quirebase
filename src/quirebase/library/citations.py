@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any
@@ -37,7 +38,7 @@ from quirebase.core.errors import ResourceNotFound, ValidationFailure
 from quirebase.models import CitationStyle
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
     from quirebase.models import Item, User
 
@@ -51,29 +52,33 @@ def preview_citation_key(formula: str, *, force_ascii: bool = False) -> str:
         raise ValidationFailure(str(error)) from error
 
 
-def resolve_style_xml(db: Session, user: User | None, style_key: str) -> str | None:
-    builtin = builtin_style_xml(style_key)
+async def resolve_style_xml(db: AsyncSession, user: User | None, style_key: str) -> str | None:
+    builtin = await asyncio.to_thread(builtin_style_xml, style_key)
     if builtin:
         return builtin
     if user is None:
         return None
-    style = db.get(CitationStyle, style_key)
+    style = await db.get(CitationStyle, style_key)
     if style is None or style.created_by != user.id:
         return None
     return style.csl_xml
 
 
-def list_custom_citation_styles(db: Session, user: User) -> list[CitationStyle]:
+async def list_custom_citation_styles(db: AsyncSession, user: User) -> list[CitationStyle]:
     return list(
-        db.scalars(
-            select(CitationStyle)
-            .where(CitationStyle.created_by == user.id)
-            .order_by(CitationStyle.name)
+        (
+            await db.scalars(
+                select(CitationStyle)
+                .where(CitationStyle.created_by == user.id)
+                .order_by(CitationStyle.name)
+            )
         ).all()
     )
 
 
-def create_custom_citation_style(db: Session, user: User, name: str, csl: str) -> CitationStyle:
+async def create_custom_citation_style(
+    db: AsyncSession, user: User, name: str, csl: str
+) -> CitationStyle:
     name = name.strip()
     if not name:
         raise ValidationFailure("style name is required")
@@ -83,26 +88,26 @@ def create_custom_citation_style(db: Session, user: User, name: str, csl: str) -
         raise ValidationFailure("the CSL text is not a valid citation style")
     style = CitationStyle(name=name, csl_xml=csl, created_by=user.id)
     db.add(style)
-    db.commit()
+    await db.commit()
     return style
 
 
-def delete_custom_citation_style(db: Session, user: User, style_id: str) -> None:
-    style = db.get(CitationStyle, style_id)
+async def delete_custom_citation_style(db: AsyncSession, user: User, style_id: str) -> None:
+    style = await db.get(CitationStyle, style_id)
     if style is None or style.created_by != user.id:
         raise ResourceNotFound("citation style not found")
-    db.delete(style)
-    db.commit()
+    await db.delete(style)
+    await db.commit()
 
 
-def format_csl_export(
-    db: Session,
+async def format_csl_export(
+    db: AsyncSession,
     user: User,
     items: list[Item],
     style_key: str = "apa",
     options: BibliographyExportOptions | None = None,
 ) -> tuple[str, str, str]:
-    style_xml = resolve_style_xml(db, user, style_key)
+    style_xml = await resolve_style_xml(db, user, style_key)
     if style_xml is None:
         raise ValidationFailure("unknown citation style")
     try:
@@ -206,25 +211,25 @@ def _item_to_bibliography_record(item: Item) -> BibliographyRecord:
     )
 
 
-def get_item_citation_response(
-    db: Session,
+async def get_item_citation_response(
+    db: AsyncSession,
     user: User,
     item_id: str,
     file_format: str,
     style_key: str = "apa",
     options: BibliographyExportOptions | None = None,
 ) -> tuple[str, str, str]:
-    item = require_readable_item(db, user, item_id)
+    item = await require_readable_item(db, user, item_id)
     if file_format == "csl":
-        return format_csl_export(db, user, [item], style_key=style_key, options=options)
+        return await format_csl_export(db, user, [item], style_key=style_key, options=options)
     return format_standard_export([item], file_format, options=options)
 
 
-def get_item_citation_text_response(
-    db: Session, user: User, item_id: str, style_key: str = "apa", output: str = "text"
+async def get_item_citation_text_response(
+    db: AsyncSession, user: User, item_id: str, style_key: str = "apa", output: str = "text"
 ) -> tuple[str, str]:
-    item = require_readable_item(db, user, item_id)
-    style_xml = resolve_style_xml(db, user, style_key)
+    item = await require_readable_item(db, user, item_id)
+    style_xml = await resolve_style_xml(db, user, style_key)
     if style_xml is None:
         raise ValidationFailure("unknown citation style")
     try:

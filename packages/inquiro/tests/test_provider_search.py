@@ -7,8 +7,10 @@ import pytest
 from inquiro import Identifier, ProviderUnavailable, SearchClause, SearchQuery
 from inquiro_provider_helpers import provider_runtime
 
+pytestmark = pytest.mark.anyio
 
-def search_metadata(
+
+async def search_metadata(
     provider,
     clauses,
     *,
@@ -23,8 +25,8 @@ def search_metadata(
     transport = transport or httpx2.MockTransport(
         lambda request: (_ for _ in ()).throw(AssertionError(str(request.url)))
     )
-    with provider_runtime(settings=settings, transport=transport) as runtime:
-        return runtime.search(
+    async with provider_runtime(settings=settings, transport=transport) as runtime:
+        return await runtime.search(
             SearchQuery(
                 provider=provider,
                 clauses=tuple(clauses),
@@ -137,8 +139,8 @@ def search_response(request: httpx2.Request) -> httpx2.Response:
         ("openalex", "OpenAlex result"),
     ],
 )
-def test_search_adapters_normalize_results(provider, title):
-    page = search_metadata(
+async def test_search_adapters_normalize_results(provider, title):
+    page = await search_metadata(
         provider,
         [
             SearchClause("title", "and", "machine learning"),
@@ -156,17 +158,17 @@ def test_search_adapters_normalize_results(provider, title):
     assert page.results[0].identifier
 
 
-def test_search_rejects_invalid_or_excessive_clauses():
+async def test_search_rejects_invalid_or_excessive_clauses():
     with pytest.raises(ValueError, match="unknown search provider"):
-        search_metadata("other", [SearchClause("any", "and", "term")])
+        await search_metadata("other", [SearchClause("any", "and", "term")])
     with pytest.raises(ValueError, match="unknown search provider"):
-        search_metadata("datacite", [SearchClause("any", "and", "term")])
+        await search_metadata("datacite", [SearchClause("any", "and", "term")])
     with pytest.raises(ValueError, match="one to five"):
-        search_metadata("openalex", [SearchClause("any", "and", "term")] * 6)
+        await search_metadata("openalex", [SearchClause("any", "and", "term")] * 6)
     with pytest.raises(ValueError, match="clause is invalid"):
-        search_metadata("openalex", [SearchClause("private-field", "and", "term")])
+        await search_metadata("openalex", [SearchClause("private-field", "and", "term")])
     with pytest.raises(ValueError, match="only supports OR"):
-        search_metadata(
+        await search_metadata(
             "openalex",
             [
                 SearchClause("title", "and", "term"),
@@ -175,8 +177,8 @@ def test_search_rejects_invalid_or_excessive_clauses():
         )
 
 
-def test_openalex_resolves_publication_names_to_source_ids():
-    page = search_metadata(
+async def test_openalex_resolves_publication_names_to_source_ids():
+    page = await search_metadata(
         "openalex",
         [SearchClause("publication", "and", "Journal")],
         settings=SimpleNamespace(openalex_api_key="test-key"),
@@ -185,7 +187,7 @@ def test_openalex_resolves_publication_names_to_source_ids():
     assert page.results[0].title == "OpenAlex result"
 
 
-def test_openalex_supports_adjacent_or_on_same_field():
+async def test_openalex_supports_adjacent_or_on_same_field():
     seen_filter = None
 
     def handler(request: httpx2.Request) -> httpx2.Response:
@@ -193,7 +195,7 @@ def test_openalex_supports_adjacent_or_on_same_field():
         seen_filter = request.url.params.get("filter")
         return httpx2.Response(200, json={"meta": {"count": 0}, "results": []})
 
-    search_metadata(
+    await search_metadata(
         "openalex",
         [
             SearchClause("title", "and", "quantum"),
@@ -205,13 +207,13 @@ def test_openalex_supports_adjacent_or_on_same_field():
     assert seen_filter == "title.search:quantum|photonics"
 
 
-def test_search_validation_and_pagination_are_bounded():
+async def test_search_validation_and_pagination_are_bounded():
     with pytest.raises(ValueError, match="clause is invalid"):
-        search_metadata("crossref", [SearchClause("any", "and", " ")])
+        await search_metadata("crossref", [SearchClause("any", "and", " ")])
     with pytest.raises(ValueError, match="clause is invalid"):
-        search_metadata("crossref", [SearchClause("any", "and", "x" * 301)])
+        await search_metadata("crossref", [SearchClause("any", "and", "x" * 301)])
     with pytest.raises(ValueError, match="must not be after"):
-        search_metadata(
+        await search_metadata(
             "crossref",
             [SearchClause("any", "and", "term")],
             year_from=2026,
@@ -224,7 +226,7 @@ def test_search_validation_and_pagination_are_bounded():
         captured.update(request.url.params)
         return httpx2.Response(200, json={"message": {"total-results": 0, "items": []}})
 
-    page = search_metadata(
+    page = await search_metadata(
         "crossref",
         [SearchClause("any", "and", "term")],
         page=999,
@@ -237,8 +239,8 @@ def test_search_validation_and_pagination_are_bounded():
     assert captured["rows"] == "25"
 
 
-def test_search_404_is_an_empty_page():
-    page = search_metadata(
+async def test_search_404_is_an_empty_page():
+    page = await search_metadata(
         "crossref",
         [SearchClause("any", "and", "missing")],
         transport=httpx2.MockTransport(lambda _request: httpx2.Response(404)),
@@ -249,14 +251,14 @@ def test_search_404_is_an_empty_page():
     assert page.total == 0
 
 
-def test_openlibrary_preserves_boolean_and_year_filters():
+async def test_openlibrary_preserves_boolean_and_year_filters():
     captured: dict[str, str] = {}
 
     def handler(request: httpx2.Request) -> httpx2.Response:
         captured.update(request.url.params)
         return httpx2.Response(200, json={"numFound": 0, "docs": []})
 
-    search_metadata(
+    await search_metadata(
         "openlibrary",
         [
             SearchClause("title", "and", "distributed systems"),
@@ -340,8 +342,8 @@ def extra_search_response(request: httpx2.Request) -> httpx2.Response:
         ("ieee", "IEEE result", "doi"),
     ],
 )
-def test_extra_search_adapters_normalize_results(provider, title, identifier_provider):
-    page = search_metadata(
+async def test_extra_search_adapters_normalize_results(provider, title, identifier_provider):
+    page = await search_metadata(
         provider,
         [SearchClause("title", "and", "machine learning")],
         settings=SimpleNamespace(nasa_ads_token="ads-token", ieee_api_key="ieee-key"),
@@ -352,7 +354,7 @@ def test_extra_search_adapters_normalize_results(provider, title, identifier_pro
     assert page.results[0].identifier.provider == identifier_provider
 
 
-def test_pmc_forwards_credentials_to_esearch_and_esummary():
+async def test_pmc_forwards_credentials_to_esearch_and_esummary():
     recorded_params = []
 
     def pmc_credential_response(request: httpx2.Request) -> httpx2.Response:
@@ -376,7 +378,7 @@ def test_pmc_forwards_credentials_to_esearch_and_esummary():
             },
         )
 
-    search_metadata(
+    await search_metadata(
         "pmc",
         [SearchClause("title", "and", "test")],
         settings=SimpleNamespace(
@@ -395,9 +397,9 @@ def test_pmc_forwards_credentials_to_esearch_and_esummary():
     assert esummary_params["api_key"] == "ncbi-secret-key"
 
 
-def test_credentialed_sources_require_keys():
+async def test_credentialed_sources_require_keys():
     with pytest.raises(ProviderUnavailable) as nasa_error:
-        search_metadata(
+        await search_metadata(
             "nasa",
             [SearchClause("title", "and", "term")],
             transport=httpx2.MockTransport(extra_search_response),
@@ -405,7 +407,7 @@ def test_credentialed_sources_require_keys():
     assert str(nasa_error.value) == "NASA ADS requires INQUIRO_NASA_ADS_TOKEN"
 
     with pytest.raises(ProviderUnavailable) as ieee_error:
-        search_metadata(
+        await search_metadata(
             "ieee",
             [SearchClause("title", "and", "term")],
             transport=httpx2.MockTransport(extra_search_response),
@@ -413,7 +415,7 @@ def test_credentialed_sources_require_keys():
     assert str(ieee_error.value) == "IEEE Xplore requires INQUIRO_IEEE_API_KEY"
 
 
-def test_extra_search_fallback_identifiers_without_doi():
+async def test_extra_search_fallback_identifiers_without_doi():
     def fallback_response(request: httpx2.Request) -> httpx2.Response:
         if request.url.host == "api.adsabs.harvard.edu":
             return httpx2.Response(
@@ -451,7 +453,7 @@ def test_extra_search_fallback_identifiers_without_doi():
             )
         raise NotImplementedError(str(request.url))
 
-    nasa_page = search_metadata(
+    nasa_page = await search_metadata(
         "nasa",
         [SearchClause("title", "and", "machine learning")],
         settings=SimpleNamespace(nasa_ads_token="ads-token"),
@@ -459,7 +461,7 @@ def test_extra_search_fallback_identifiers_without_doi():
     )
     assert nasa_page.results[0].identifier == Identifier("bibcode", "2025ApJ...123..456A")
 
-    ieee_page = search_metadata(
+    ieee_page = await search_metadata(
         "ieee",
         [SearchClause("title", "and", "machine learning")],
         settings=SimpleNamespace(ieee_api_key="ieee-key"),

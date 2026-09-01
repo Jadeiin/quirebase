@@ -47,17 +47,17 @@ from quirebase.web.deps import (
 from quirebase.web.templates import templates
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 public_router = make_public_router()
 router = protected_router()
 
 
-def _account_settings_context(
+async def _account_settings_context(
     request: Request,
     user: User,
     login_session: LoginSession,
-    db: Session,
+    db: AsyncSession,
     *,
     api_token: str | None = None,
     error: str | None = None,
@@ -66,8 +66,8 @@ def _account_settings_context(
     return {
         "user": user,
         "login": login_session,
-        "sessions": list_user_sessions(db, user.id),
-        "api_tokens": list_api_tokens(db, user),
+        "sessions": await list_user_sessions(db, user.id),
+        "api_tokens": await list_api_tokens(db, user),
         "api_token": api_token,
         "api_endpoint": f"{str(request.base_url).rstrip('/')}/api/v1/",
         "mcp_endpoint": str(request.url_for("mcp", path="/")),
@@ -78,11 +78,11 @@ def _account_settings_context(
     }
 
 
-def _account_settings_response(
+async def _account_settings_response(
     request: Request,
     user: User,
     login_session: LoginSession,
-    db: Session,
+    db: AsyncSession,
     *,
     api_token: str | None = None,
     error: str | None = None,
@@ -92,7 +92,7 @@ def _account_settings_response(
     response = templates.TemplateResponse(
         request,
         "account_settings.html",
-        _account_settings_context(
+        await _account_settings_context(
             request,
             user,
             login_session,
@@ -109,21 +109,21 @@ def _account_settings_response(
 
 
 @public_router.get("/login", response_class=HTMLResponse)
-def login_page(request: Request):
+async def login_page(request: Request):  # ruff: ignore[unused-async]
     return templates.TemplateResponse(request, "login.html", {})
 
 
 @public_router.post("/login")
-def login(
+async def login(
     request: Request,
     username: str = Form(),
     password: str = Form(),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     identity = login_identity(request, username)
-    session_days = get_effective_setting(db, "session_days", get_settings().session_days)
+    session_days = await get_effective_setting(db, "session_days", get_settings().session_days)
     try:
-        _session, raw_token = authenticate_user(
+        _session, raw_token = await authenticate_user(
             db, identity, username, password, session_days=session_days
         )
     except InvalidCredentials:
@@ -144,8 +144,8 @@ def login(
 
 
 @public_router.get("/accept-invitation/{token}", response_class=HTMLResponse)
-def accept_invitation_page(request: Request, token: str, db: Session = Depends(get_db)):
-    invitation = get_valid_invitation(db, token)
+async def accept_invitation_page(request: Request, token: str, db: AsyncSession = Depends(get_db)):
+    invitation = await get_valid_invitation(db, token)
     return templates.TemplateResponse(
         request,
         "accept_invitation.html",
@@ -154,34 +154,34 @@ def accept_invitation_page(request: Request, token: str, db: Session = Depends(g
 
 
 @public_router.post("/accept-invitation/{token}")
-def accept_invitation(token: str, password: str = Form(), db: Session = Depends(get_db)):
-    accept_invitation_op(db, token, password)
+async def accept_invitation(token: str, password: str = Form(), db: AsyncSession = Depends(get_db)):
+    await accept_invitation_op(db, token, password)
     return RedirectResponse("/login", status_code=303)
 
 
 @router.get("/account/settings", response_class=HTMLResponse)
-def account_settings_page(
+async def account_settings_page(
     request: Request,
     user: User = Depends(current_user),
     login_session: LoginSession = Depends(current_login),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    return _account_settings_response(request, user, login_session, db)
+    return await _account_settings_response(request, user, login_session, db)
 
 
 @router.post("/account/api-tokens")
-def create_own_api_token(
+async def create_own_api_token(
     request: Request,
     name: str = Form(),
     days: int = Form(),
     user: User = Depends(current_user),
     login_session: LoginSession = Depends(current_login),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     try:
-        grant = create_api_token(db, user, name, expires_in_days=days)
+        grant = await create_api_token(db, user, name, expires_in_days=days)
     except ValidationFailure as error:
-        return _account_settings_response(
+        return await _account_settings_response(
             request,
             user,
             login_session,
@@ -189,7 +189,7 @@ def create_own_api_token(
             error=str(error),
             status_code=422,
         )
-    return _account_settings_response(
+    return await _account_settings_response(
         request,
         user,
         login_session,
@@ -201,17 +201,17 @@ def create_own_api_token(
 
 
 @router.post("/account/api-tokens/{token_id}/revoke")
-def revoke_own_api_token(
+async def revoke_own_api_token(
     token_id: str,
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    revoke_api_token(db, user, token_id)
+    await revoke_api_token(db, user, token_id)
     return RedirectResponse("/account/settings#api-tokens", status_code=303)
 
 
 @router.post("/account/settings/locale")
-def update_locale(
+async def update_locale(  # ruff: ignore[unused-async]
     locale: str = Form(),
     user: User = Depends(current_user),
     login_session: LoginSession = Depends(current_login),
@@ -229,17 +229,17 @@ def update_locale(
 
 
 @router.post("/account/settings/password")
-def update_password(
+async def update_password(
     request: Request,
     current_password: str = Form(),
     new_password: str = Form(),
     confirm_password: str = Form(),
     user: User = Depends(current_user),
     login_session: LoginSession = Depends(current_login),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     if new_password != confirm_password:
-        return _account_settings_response(
+        return await _account_settings_response(
             request,
             user,
             login_session,
@@ -248,9 +248,9 @@ def update_password(
             status_code=422,
         )
     try:
-        change_own_password_op(db, user, current_password, new_password)
+        await change_own_password_op(db, user, current_password, new_password)
     except (InvalidCredentials, ValidationFailure) as err:
-        return _account_settings_response(
+        return await _account_settings_response(
             request,
             user,
             login_session,
@@ -258,7 +258,7 @@ def update_password(
             error=str(err),
             status_code=422,
         )
-    return _account_settings_response(
+    return await _account_settings_response(
         request,
         user,
         login_session,
@@ -268,13 +268,13 @@ def update_password(
 
 
 @router.get("/account/sessions", response_class=HTMLResponse)
-def sessions_page(
+async def sessions_page(
     request: Request,
     user: User = Depends(current_user),
     login_session: LoginSession = Depends(current_login),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    sessions = list_user_sessions(db, user.id)
+    sessions = await list_user_sessions(db, user.id)
     return templates.TemplateResponse(
         request,
         "sessions.html",
@@ -289,36 +289,36 @@ def sessions_page(
 
 
 @router.post("/account/sessions/{session_id}/revoke")
-def revoke_session(
+async def revoke_session(
     request: Request,
     session_id: str,
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    revoke_session_op(db, user, session_id)
+    await revoke_session_op(db, user, session_id)
     referer = request.headers.get("referer")
     target = "/account/settings" if referer and "settings" in referer else "/account/sessions"
     return RedirectResponse(target, status_code=303)
 
 
 @router.post("/account/sessions/revoke-all")
-def revoke_all_sessions(
+async def revoke_all_sessions(
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    revoke_all_sessions_op(db, user)
+    await revoke_all_sessions_op(db, user)
     response = RedirectResponse("/login", status_code=303)
     response.delete_cookie(get_settings().session_cookie)
     return response
 
 
 @router.post("/logout")
-def logout(
+async def logout(
     user: User = Depends(current_user),
     login_session: LoginSession = Depends(current_login),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    logout_op(db, user, login_session)
+    await logout_op(db, user, login_session)
     response = RedirectResponse("/login", status_code=303)
     response.delete_cookie(get_settings().session_cookie)
     return response

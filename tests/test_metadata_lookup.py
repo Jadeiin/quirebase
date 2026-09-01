@@ -1,14 +1,22 @@
+from unittest.mock import AsyncMock
+
+import pytest
 from inquiro import CandidateRecord, Identifier
 from sqlalchemy import select
-from test_http import authenticated_client
+from test_http import authenticated_async_client
 
 from quirebase.core.config import get_settings
 from quirebase.models import AuditEvent, ImportBatch, Item, ItemTagRecommendation, Job, JobState
-from quirebase.web.app import app
 
 
-def test_online_preview_uses_existing_confirmed_import_flow(db, tmp_path, monkeypatch):
-    client, _item, _revision = authenticated_client(db, tmp_path, monkeypatch)
+@pytest.mark.anyio
+async def test_online_preview_uses_existing_confirmed_import_flow(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, _item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
     record = CandidateRecord(
         provider="crossref",
         identifier=Identifier("doi", "10.1/looked-up"),
@@ -23,33 +31,37 @@ def test_online_preview_uses_existing_confirmed_import_flow(db, tmp_path, monkey
     )
     monkeypatch.setattr(
         "quirebase.library.imports.lookup_candidate",
-        lambda _value, _provider, _settings: record,
+        AsyncMock(return_value=record),
     )
     try:
-        preview = client.post(
+        preview = await client.post(
             "/metadata/preview",
             data={"csrf_token": "test-csrf", "identifier": "10.1/looked-up", "provider": "auto"},
         )
         assert preview.status_code == 200
         assert "Looked-up paper" in preview.text
-        assert db.scalar(select(Item).where(Item.title == "Looked-up paper")) is None
-        batch = db.scalar(select(ImportBatch).where(ImportBatch.file_format == "metadata:doi"))
-        committed = client.post(
+        assert await db.scalar(select(Item).where(Item.title == "Looked-up paper")) is None
+        batch = await db.scalar(
+            select(ImportBatch).where(ImportBatch.file_format == "metadata:doi")
+        )
+        assert batch is not None
+        committed = await client.post(
             f"/bibliography/import/{batch.id}",
             follow_redirects=False,
             data={"csrf_token": "test-csrf"},
         )
         assert committed.status_code == 303
-        imported = db.scalar(select(Item).where(Item.title == "Looked-up paper"))
+        imported = await db.scalar(select(Item).where(Item.title == "Looked-up paper"))
+        assert imported is not None
         assert imported.doi == "10.1/looked-up"
-        recommendation = db.scalar(
+        recommendation = await db.scalar(
             select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == imported.id)
         )
         assert recommendation is not None
-        job = db.get(Job, recommendation.job_id)
+        job = await db.get(Job, recommendation.job_id)
         assert job is not None
         assert job.state == JobState.pending
-        assert db.scalar(select(AuditEvent).where(AuditEvent.action == "metadata.lookup"))
+        assert await db.scalar(select(AuditEvent).where(AuditEvent.action == "metadata.lookup"))
     finally:
-        app.dependency_overrides.clear()
+        await client.aclose()
         get_settings.cache_clear()

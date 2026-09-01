@@ -111,8 +111,7 @@ def test_remote_attachment_can_optionally_be_used_as_graphical_abstract():
     assert "Add attachment from URL" in item
     assert "Add Graphical Abstract from URL" not in item
     assert (
-        ".upload-actions { display: flex; align-items: center; justify-content: flex-end;"
-        in styles
+        ".upload-actions { display: flex; align-items: center; justify-content: flex-end;" in styles
     )
 
 

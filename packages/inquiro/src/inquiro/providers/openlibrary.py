@@ -22,13 +22,13 @@ from inquiro.providers._payload import (
 
 
 class OpenLibraryLookupAdapter:
-    def lookup(
+    async def lookup(
         self, client: ProviderContext, value: str, settings: Any, *, endpoint: str
     ) -> ProviderRecord:
         key = f"ISBN:{value}"
         try:
             payload = json.loads(
-                client._get(
+                await client._get(
                     f"{endpoint}/api/books",
                     {"bibkeys": key, "format": "json", "jscmd": "data"},
                 )
@@ -58,7 +58,7 @@ class OpenLibraryLookupAdapter:
 
 
 class OpenLibrarySearchAdapter:
-    def search(
+    async def search(
         self,
         client: ProviderContext,
         clauses: list[SearchClause],
@@ -91,7 +91,7 @@ class OpenLibrarySearchAdapter:
             params["first_publish_year"] = f"[{year_from or 0} TO {year_to or 3000}]"
         if sort == "published":
             params["sort"] = "new"
-        body = client._get(f"{endpoint}/search.json", params)
+        body = await client._get(f"{endpoint}/search.json", params)
         try:
             payload = json.loads(body)
         except (json.JSONDecodeError, TypeError) as error:

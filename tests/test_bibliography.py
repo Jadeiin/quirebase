@@ -1,5 +1,6 @@
 import json
 
+import pytest
 import rispy
 from bibtexparser import parse_string as parse_bibtex_string
 from inquiro.bibliography import (
@@ -43,7 +44,9 @@ def _item_payload(record):
     }
 
 
-def test_bibtex_parse_and_round_trip(db):
+@pytest.mark.anyio
+async def test_bibtex_parse_and_round_trip(async_db):
+    db = async_db
     source = """@article{sample,
       title = {An Example Paper},
       author = {Doe, Jane and Smith, Alex},
@@ -58,7 +61,7 @@ def test_bibtex_parse_and_round_trip(db):
     assert records[0]["authors"] == "Doe, Jane; Smith, Alex"
     user = User(username="bibtex", password_hash="unused")
     db.add(user)
-    db.flush()
+    await db.flush()
     item = Item(created_by=user.id, **records[0])
     output = export_bibliography_records([record_from_item(i) for i in [item]], "bibtex")
 
@@ -67,7 +70,7 @@ def test_bibtex_parse_and_round_trip(db):
     assert exported.fields_dict["doi"].value == "10.1234/example"
 
 
-def test_bibtex_import_projects_literal_and_suffix_contributors_to_first_last(db):
+def test_bibtex_import_projects_literal_and_suffix_contributors_to_first_last():
     source = r"""@article{contributors,
       title = {Stable names},
       author = {{World Health Organization} and de la Cruz, Jr., Juan}
@@ -88,10 +91,12 @@ def test_bibtex_import_projects_literal_and_suffix_contributors_to_first_last(db
     assert round_trip[0].authors == records[0].authors
 
 
-def test_bibtex_export_can_protect_text_field_capitalization(db):
+@pytest.mark.anyio
+async def test_bibtex_export_can_protect_text_field_capitalization(async_db):
+    db = async_db
     user = User(username="bibtex-case", password_hash="unused")
     db.add(user)
-    db.flush()
+    await db.flush()
     item = Item(
         title="An API for GraphQL and eBPF",
         abstract="Using CUDA with an LLM",
@@ -123,14 +128,16 @@ def test_bibtex_export_can_protect_text_field_capitalization(db):
     assert "author = {Doe, Jane and Smith, Alex}" in protected
 
 
-def test_duplicate_stored_citation_keys_are_disambiguated_only_for_export(db):
+@pytest.mark.anyio
+async def test_duplicate_stored_citation_keys_are_disambiguated_only_for_export(async_db):
+    db = async_db
     user = User(username="duplicate-export-keys", password_hash="unused")
     db.add(user)
-    db.flush()
+    await db.flush()
     first = Item(title="First", bibtex_id="SharedKey", created_by=user.id)
     second = Item(title="Second", bibtex_id="sharedkey", created_by=user.id)
     db.add_all([first, second])
-    db.commit()
+    await db.commit()
 
     output = export_bibliography_records([record_from_item(i) for i in [first, second]], "bibtex")
     entries = parse_bibtex_string(output).entries_dict
@@ -140,10 +147,12 @@ def test_duplicate_stored_citation_keys_are_disambiguated_only_for_export(db):
     assert list(entries) == ["SharedKey", "sharedkeya"]
 
 
-def test_bibtex_case_protection_does_not_add_repeated_outer_braces(db):
+@pytest.mark.anyio
+async def test_bibtex_case_protection_does_not_add_repeated_outer_braces(async_db):
+    db = async_db
     user = User(username="bibtex-braces", password_hash="unused")
     db.add(user)
-    db.flush()
+    await db.flush()
     item = Item(title="{Already Protected}", created_by=user.id)
 
     protected = export_bibliography_records(
@@ -155,10 +164,12 @@ def test_bibtex_case_protection_does_not_add_repeated_outer_braces(db):
     assert "title = {{Already Protected}}" in protected
 
 
-def test_bibtex_case_protection_leaves_latex_commands_intact(db):
+@pytest.mark.anyio
+async def test_bibtex_case_protection_leaves_latex_commands_intact(async_db):
+    db = async_db
     user = User(username="bibtex-latex", password_hash="unused")
     db.add(user)
-    db.flush()
+    await db.flush()
     item = Item(title=r"Using \LaTeX with {CUDA}", created_by=user.id)
 
     protected = export_bibliography_records(
@@ -170,10 +181,12 @@ def test_bibtex_case_protection_leaves_latex_commands_intact(db):
     assert r"title = {{U}sing \LaTeX with {CUDA}}" in protected
 
 
-def test_bibtex_export_can_include_identifiers_and_custom_fields(db):
+@pytest.mark.anyio
+async def test_bibtex_export_can_include_identifiers_and_custom_fields(async_db):
+    db = async_db
     user = User(username="bibtex-extras", password_hash="unused")
     db.add(user)
-    db.flush()
+    await db.flush()
     item = Item(
         title="Extra fields",
         identifiers=json.dumps({"openalex": "W123", "arxiv": "2401.00001"}),
@@ -215,7 +228,9 @@ def test_bibtex_export_can_include_identifiers_and_custom_fields(db):
     }
 
 
-def test_ris_parse_and_round_trip(db):
+@pytest.mark.anyio
+async def test_ris_parse_and_round_trip(async_db):
+    db = async_db
     source = """TY  - JOUR
 TI  - RIS Example
 AU  - Example, Ada
@@ -229,7 +244,7 @@ ER  -
     assert errors == []
     user = User(username="ris", password_hash="unused")
     db.add(user)
-    db.flush()
+    await db.flush()
     item = Item(created_by=user.id, **records[0])
     output = export_bibliography_records([record_from_item(i) for i in [item]], "ris")
 
@@ -238,7 +253,9 @@ ER  -
     assert exported["authors"] == ["Example, Ada"]
 
 
-def test_endnote_parse_and_round_trip(db):
+@pytest.mark.anyio
+async def test_endnote_parse_and_round_trip(async_db):
+    db = async_db
     source = """%0 Journal Article
 %A Doe, Jane
 %A Smith, Alex
@@ -260,7 +277,7 @@ def test_endnote_parse_and_round_trip(db):
 
     user = User(username="endnote", password_hash="unused")
     db.add(user)
-    db.flush()
+    await db.flush()
     item = Item(created_by=user.id, **records[0])
     output = export_bibliography_records([record_from_item(i) for i in [item]], "endnote")
 
@@ -271,7 +288,9 @@ def test_endnote_parse_and_round_trip(db):
     assert "%R 10.1234/endnote" in output
 
 
-def test_endnote_multiline_abstract_round_trip(db):
+@pytest.mark.anyio
+async def test_endnote_multiline_abstract_round_trip(async_db):
+    db = async_db
     multiline_abstract = (
         "First line of abstract.\nSecond line of abstract.\nThird line of abstract."
     )
@@ -287,7 +306,7 @@ def test_endnote_multiline_abstract_round_trip(db):
 
     user = User(username="multiline_user", password_hash="unused")
     db.add(user)
-    db.flush()
+    await db.flush()
     item = Item(created_by=user.id, **records[0])
     exported = export_bibliography_records([record_from_item(i) for i in [item]], "endnote")
 

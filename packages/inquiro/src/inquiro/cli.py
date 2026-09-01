@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import os
 import sys
@@ -36,13 +37,13 @@ if TYPE_CHECKING:
 
 
 class Runtime(Protocol):
-    def lookup(self, value: str, *, provider: str = "auto") -> CandidateRecord: ...
+    async def lookup(self, value: str, *, provider: str = "auto") -> CandidateRecord: ...
 
-    def search(self, query: SearchQuery) -> CandidatePage: ...
+    async def search(self, query: SearchQuery) -> CandidatePage: ...
 
-    def __enter__(self) -> Self: ...
+    async def __aenter__(self) -> Self: ...
 
-    def __exit__(
+    async def __aexit__(
         self,
         exc_type: type[BaseException] | None,
         exc_value: BaseException | None,
@@ -260,20 +261,20 @@ def _write_result(result: CandidateRecord | CandidatePage, args: argparse.Namesp
     )
 
 
-def _run(args: argparse.Namespace, runtime_factory: RuntimeFactory) -> None:
-    with runtime_factory(_provider_config(args)) as runtime:
+async def _run(args: argparse.Namespace, runtime_factory: RuntimeFactory) -> None:
+    async with runtime_factory(_provider_config(args)) as runtime:
         result: CandidateRecord | CandidatePage
         if args.command == "lookup":
-            result = runtime.lookup(args.identifier, provider=args.provider)
+            result = await runtime.lookup(args.identifier, provider=args.provider)
         else:
-            result = runtime.search(_search_query(args))
+            result = await runtime.search(_search_query(args))
     _write_result(result, args)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
-        _run(args, ProviderRuntime)
+        asyncio.run(_run(args, ProviderRuntime))
     except InquiroError as error:
         _write_json(
             {"error": {"type": type(error).__name__, "message": str(error)}},

@@ -17,17 +17,17 @@ from quirebase.web.deps import (
 )
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 public_router = make_public_router()
 router = protected_router()
 
 
 @public_router.get("/healthz")
-def healthz():
+async def healthz():  # ruff: ignore[unused-async]
     return check_health()
 
 
 @router.get("/metrics", response_class=PlainTextResponse)
-def metrics(user: User = Depends(current_user), db: Session = Depends(get_db)):
-    return get_system_metrics(db, user)
+async def metrics(user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    return await get_system_metrics(db, user)

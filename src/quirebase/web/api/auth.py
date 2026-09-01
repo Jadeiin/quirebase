@@ -4,7 +4,9 @@ from typing import TYPE_CHECKING, Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy.orm import Session  # ruff: ignore[typing-only-third-party-import]
+from sqlalchemy.ext.asyncio import (  # ruff: ignore[typing-only-third-party-import] - FastAPI resolves this dependency at runtime
+    AsyncSession,
+)
 
 from quirebase.accounts import resolve_api_token_user, verify_api_token
 from quirebase.audit import identify_programmatic_invocation, programmatic_invocation
@@ -13,6 +15,7 @@ from quirebase.models import User
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
+
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -25,9 +28,9 @@ async def http_api_invocation(request: Request) -> AsyncIterator[None]:  # ruff:
         yield
 
 
-def current_api_user(
+async def current_api_user(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> User:
     """Authenticate the HTTP API exclusively with an Accounts-owned API Token."""
     if credentials is None or credentials.scheme.casefold() != "bearer":
@@ -36,7 +39,7 @@ def current_api_user(
             detail="authentication required",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    verified = verify_api_token(db, credentials.credentials)
+    verified = await verify_api_token(db, credentials.credentials)
     if verified is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -47,4 +50,4 @@ def current_api_user(
         api_token_id=verified.token_id,
         client_id="http-api",
     )
-    return resolve_api_token_user(db, verified.user_id)
+    return await resolve_api_token_user(db, verified.user_id)

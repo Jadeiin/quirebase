@@ -9,7 +9,7 @@ from quirebase.library import (
 from quirebase.models import Item, User
 
 
-def create_item_record(
+async def create_item_record(
     db,
     actor: User,
     *,
@@ -24,11 +24,11 @@ def create_item_record(
         )
         for person in parse_author_list_string(authors)
     )
-    result = create_item(
+    result = await create_item(
         db,
         actor,
         ItemMetadata(title=title, abstract=abstract, authors=contributors),
     )
-    item = db.get(Item, result.item_id)
+    item = await db.get(Item, result.item_id)
     assert item is not None
     return item

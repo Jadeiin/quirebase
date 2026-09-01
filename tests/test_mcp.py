@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import json
 
-import anyio
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import func, select
 
 from quirebase.mcp import (
     TOOL_ALLOWLIST,
@@ -25,16 +24,12 @@ from quirebase.models import (
 )
 
 
-def _server(db, identity: RequestIdentity):
-    factory = sessionmaker(bind=db.get_bind(), expire_on_commit=False)
-    return create_mcp_server(identity_provider=lambda: identity, session_factory=factory)
+def _server(session_factory, identity: RequestIdentity):
+    return create_mcp_server(identity_provider=lambda: identity, session_factory=session_factory)
 
 
-def _call(server, name: str, arguments: dict):
-    async def invoke():
-        return await server.call_tool(name, arguments)
-
-    return anyio.run(invoke)
+async def _call(server, name: str, arguments: dict):
+    return await server.call_tool(name, arguments)
 
 
 def test_tool_policy_filters_discovery_and_enforces_calls():
@@ -46,13 +41,11 @@ def test_tool_policy_filters_discovery_and_enforces_calls():
         policy.require("admin.delete_user")
 
 
-def test_registered_tools_match_the_server_allowlist():
+@pytest.mark.anyio
+async def test_registered_tools_match_the_server_allowlist():
     server = create_mcp_server(identity_provider=lambda: RequestIdentity("unused"))
 
-    async def inspect_tools():
-        return await server.list_tools()
-
-    registered = anyio.run(inspect_tools)
+    registered = await server.list_tools()
 
     assert {tool.name for tool in registered} == TOOL_ALLOWLIST
     assert not any(name.startswith("admin.") for name in TOOL_ALLOWLIST)
@@ -63,18 +56,22 @@ def test_registered_tools_match_the_server_allowlist():
     assert annotations["annotations.delete"].destructive_hint is True
 
 
-def test_library_search_returns_only_items_visible_to_token_user(db):
+@pytest.mark.anyio
+async def test_library_search_returns_only_items_visible_to_token_user(
+    async_db, async_session_factory
+):
+    db = async_db
     user = User(username="mcp-reader", password_hash="unused")
     other = User(username="other-owner", password_hash="unused")
     db.add_all([user, other])
-    db.flush()
+    await db.flush()
     own = Item(title="<i>Visible</i> Item", created_by=user.id, doi="10.1/visible")
     hidden = Item(title="Hidden Item", created_by=other.id)
     db.add_all([own, hidden])
-    db.commit()
+    await db.commit()
 
-    server = _server(db, RequestIdentity(user.id))
-    result = _call(server, "library.search", {"query": ""})
+    server = _server(async_session_factory, RequestIdentity(user.id))
+    result = await _call(server, "library.search", {"query": ""})
 
     assert result.is_error is False
     assert result.structured_content is not None
@@ -92,23 +89,25 @@ def test_library_search_returns_only_items_visible_to_token_user(db):
     ]
 
 
-def test_library_get_item_reuses_project_access(db):
+@pytest.mark.anyio
+async def test_library_get_item_reuses_project_access(async_db, async_session_factory):
+    db = async_db
     reader = User(username="project-reader", password_hash="unused")
     owner = User(username="project-owner", password_hash="unused")
     db.add_all([reader, owner])
-    db.flush()
+    await db.flush()
     item = Item(title="Shared Item", abstract="Shared abstract", created_by=owner.id)
     project = Project(name="Shared project", created_by=owner.id)
     db.add_all([item, project])
-    db.flush()
+    await db.flush()
     db.add_all([
         ProjectMember(project_id=project.id, user_id=reader.id, role="viewer"),
         ProjectItem(project_id=project.id, item_id=item.id),
     ])
-    db.commit()
+    await db.commit()
 
-    server = _server(db, RequestIdentity(reader.id))
-    result = _call(server, "library.get_item", {"item_id": item.id})
+    server = _server(async_session_factory, RequestIdentity(reader.id))
+    result = await _call(server, "library.get_item", {"item_id": item.id})
 
     assert result.is_error is False
     assert result.structured_content is not None
@@ -116,43 +115,52 @@ def test_library_get_item_reuses_project_access(db):
     assert result.structured_content["abstract_html"] == "Shared abstract"
 
 
-def test_library_get_item_conceals_inaccessible_item(db):
+@pytest.mark.anyio
+async def test_library_get_item_conceals_inaccessible_item(async_db, async_session_factory):
+    db = async_db
     reader = User(username="mcp-outsider", password_hash="unused")
     owner = User(username="private-owner", password_hash="unused")
     db.add_all([reader, owner])
-    db.flush()
+    await db.flush()
     item = Item(title="Private Item", created_by=owner.id)
     db.add(item)
-    db.commit()
-    server = _server(db, RequestIdentity(reader.id))
+    await db.commit()
+    server = _server(async_session_factory, RequestIdentity(reader.id))
 
     with pytest.raises(ToolError, match="item not found"):
-        _call(server, "library.get_item", {"item_id": item.id})
+        await _call(server, "library.get_item", {"item_id": item.id})
 
 
-def test_library_create_item_uses_token_user_as_owner(db):
+@pytest.mark.anyio
+async def test_library_create_item_uses_token_user_as_owner(async_db, async_session_factory):
+    db = async_db
     user = User(username="mcp-writer", password_hash="unused")
     db.add(user)
-    db.commit()
+    await db.commit()
 
     identity = RequestIdentity(
         user.id,
         client_id="quirebase-api-token:write-token",
         api_token_id="write-token",
     )
-    result = _call(
-        _server(db, identity),
+    result = await _call(
+        _server(async_session_factory, identity),
         "library.create_item",
         {"metadata": {"title": "Created through MCP", "doi": "10.1/mcp"}},
     )
 
     assert result.is_error is False
     assert result.structured_content is not None
-    item = db.get(Item, result.structured_content["id"])
+    item = await db.get(Item, result.structured_content["id"])
     assert item is not None
     assert item.created_by == user.id
     assert item.title == "Created through MCP"
-    business_event = db.query(AuditEvent).filter_by(action="item.create", target_id=item.id).one()
+    business_event = await db.scalar(
+        select(AuditEvent).where(
+            AuditEvent.action == "item.create", AuditEvent.target_id == item.id
+        )
+    )
+    assert business_event is not None
     assert json.loads(business_event.detail) == {
         "invocation": {
             "protocol": "mcp",
@@ -163,38 +171,45 @@ def test_library_create_item_uses_token_user_as_owner(db):
     }
 
 
-def test_project_and_tag_mutations_reuse_item_permissions(db):
+@pytest.mark.anyio
+async def test_project_and_tag_mutations_reuse_item_permissions(async_db, async_session_factory):
+    db = async_db
     owner = User(username="mcp-project-owner", password_hash="unused")
     outsider = User(username="mcp-project-outsider", password_hash="unused")
     db.add_all([owner, outsider])
-    db.flush()
+    await db.flush()
     item = Item(title="Owned", created_by=owner.id)
     hidden = Item(title="Hidden", created_by=outsider.id)
     project = Project(name="MCP project", created_by=owner.id)
     db.add_all([item, hidden, project])
-    db.flush()
+    await db.flush()
     db.add(ProjectMember(project_id=project.id, user_id=owner.id, role="owner"))
-    db.commit()
-    server = _server(db, RequestIdentity(owner.id))
+    await db.commit()
+    server = _server(async_session_factory, RequestIdentity(owner.id))
 
-    added = _call(server, "projects.add_item", {"project_id": project.id, "item_id": item.id})
-    tagged = _call(server, "tags.add_to_item", {"item_id": item.id, "name": "MCP"})
+    added = await _call(server, "projects.add_item", {"project_id": project.id, "item_id": item.id})
+    tagged = await _call(server, "tags.add_to_item", {"item_id": item.id, "name": "MCP"})
 
     assert added.is_error is False
     assert tagged.is_error is False
-    assert db.get(ProjectItem, (project.id, item.id)) is not None
-    assert db.get(Tag, tagged.structured_content["id"]).name == "MCP"
+    assert await db.get(ProjectItem, (project.id, item.id)) is not None
+    tag = await db.get(Tag, tagged.structured_content["id"])
+    assert tag is not None and tag.name == "MCP"
     with pytest.raises(ToolError, match="project or item not found"):
-        _call(server, "projects.add_item", {"project_id": project.id, "item_id": hidden.id})
+        await _call(server, "projects.add_item", {"project_id": project.id, "item_id": hidden.id})
 
 
-def test_documents_list_returns_metadata_but_not_content_or_storage_keys(db):
+@pytest.mark.anyio
+async def test_documents_list_returns_metadata_but_not_content_or_storage_keys(
+    async_db, async_session_factory
+):
+    db = async_db
     user = User(username="mcp-doc-reader", password_hash="unused")
     db.add(user)
-    db.flush()
+    await db.flush()
     item = Item(title="Documented", created_by=user.id)
     db.add(item)
-    db.flush()
+    await db.flush()
     revision = FileRevision(
         item_id=item.id,
         object_key="secret/storage-key.pdf",
@@ -209,9 +224,13 @@ def test_documents_list_returns_metadata_but_not_content_or_storage_keys(db):
         created_by=user.id,
     )
     db.add(revision)
-    db.commit()
+    await db.commit()
 
-    result = _call(_server(db, RequestIdentity(user.id)), "documents.list", {"item_id": item.id})
+    result = await _call(
+        _server(async_session_factory, RequestIdentity(user.id)),
+        "documents.list",
+        {"item_id": item.id},
+    )
 
     assert result.is_error is False
     assert result.structured_content is not None
@@ -221,11 +240,15 @@ def test_documents_list_returns_metadata_but_not_content_or_storage_keys(db):
     assert "secret/storage-key.pdf" not in serialized
 
 
-def test_item_metadata_can_round_trip_without_losing_replaceable_fields(db):
+@pytest.mark.anyio
+async def test_item_metadata_can_round_trip_without_losing_replaceable_fields(
+    async_db, async_session_factory
+):
+    db = async_db
     user = User(username="mcp-round-trip", password_hash="unused")
     db.add(user)
-    db.commit()
-    server = _server(db, RequestIdentity(user.id))
+    await db.commit()
+    server = _server(async_session_factory, RequestIdentity(user.id))
     metadata = {
         "title": "Complete metadata",
         "abstract": "Abstract",
@@ -252,15 +275,15 @@ def test_item_metadata_can_round_trip_without_losing_replaceable_fields(db):
             {"name": "flags", "value": ["reviewed", "important"]},
         ],
     }
-    created = _call(server, "library.create_item", {"metadata": metadata})
+    created = await _call(server, "library.create_item", {"metadata": metadata})
     assert created.structured_content is not None
     item_id = created.structured_content["id"]
 
-    read = _call(server, "library.get_item", {"item_id": item_id})
+    read = await _call(server, "library.get_item", {"item_id": item_id})
     assert read.structured_content is not None
     returned_metadata = read.structured_content["metadata"]
 
-    updated = _call(
+    updated = await _call(
         server,
         "library.update_item",
         {
@@ -269,30 +292,37 @@ def test_item_metadata_can_round_trip_without_losing_replaceable_fields(db):
             "metadata": returned_metadata,
         },
     )
-    reread = _call(server, "library.get_item", {"item_id": item_id})
+    reread = await _call(server, "library.get_item", {"item_id": item_id})
 
     assert updated.is_error is False
     assert reread.structured_content is not None
     assert reread.structured_content["metadata"] == returned_metadata
 
 
-def test_mcp_reads_and_failures_do_not_create_audit_events(db):
+@pytest.mark.anyio
+async def test_mcp_reads_and_failures_do_not_create_audit_events(async_db, async_session_factory):
+    db = async_db
     user = User(username="mcp-audited", password_hash="unused")
     db.add(user)
-    db.commit()
+    await db.commit()
     identity = RequestIdentity(
         user_id=user.id,
         client_id="quirebase-api-token:token-123",
         api_token_id="token-123",
     )
-    server = _server(db, identity)
+    server = _server(async_session_factory, identity)
 
-    result = _call(server, "library.search", {"query": ""})
+    result = await _call(server, "library.search", {"query": ""})
     with pytest.raises(ToolError, match="item not found"):
-        _call(server, "library.get_item", {"item_id": "missing"})
+        await _call(server, "library.get_item", {"item_id": "missing"})
 
     assert result.is_error is False
-    assert db.query(AuditEvent).filter_by(actor_id=user.id).count() == 0
+    assert (
+        await db.scalar(
+            select(func.count()).select_from(AuditEvent).where(AuditEvent.actor_id == user.id)
+        )
+        == 0
+    )
 
 
 @pytest.mark.parametrize(
@@ -318,13 +348,22 @@ def test_mcp_reads_and_failures_do_not_create_audit_events(db):
         ),
     ],
 )
-def test_annotation_handler_validation_does_not_create_an_audit_event(db, tool_name, arguments):
+@pytest.mark.anyio
+async def test_annotation_handler_validation_does_not_create_an_audit_event(
+    async_db, async_session_factory, tool_name, arguments
+):
+    db = async_db
     user = User(username=f"mcp-invalid-{tool_name}", password_hash="unused")
     db.add(user)
-    db.commit()
-    server = _server(db, RequestIdentity(user.id, client_id="test-client"))
+    await db.commit()
+    server = _server(async_session_factory, RequestIdentity(user.id, client_id="test-client"))
 
     with pytest.raises(ToolError):
-        _call(server, tool_name, arguments)
+        await _call(server, tool_name, arguments)
 
-    assert db.query(AuditEvent).filter_by(actor_id=user.id).count() == 0
+    assert (
+        await db.scalar(
+            select(func.count()).select_from(AuditEvent).where(AuditEvent.actor_id == user.id)
+        )
+        == 0
+    )

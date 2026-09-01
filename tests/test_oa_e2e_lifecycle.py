@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import httpx2
+import pytest
 from inquiro import CandidateRecord, Identifier
 from inquiro.bibliography import (
     builtin_style_xml,
@@ -13,7 +14,8 @@ from inquiro.bibliography import (
 from item_helpers import create_item_record as create_item
 from provider_helpers import provider_runtime
 from sqlalchemy import select
-from test_http import authenticated_client
+from sqlalchemy.orm import selectinload
+from test_http import authenticated_async_client
 
 from quirebase.core.config import get_settings
 from quirebase.library import (
@@ -34,7 +36,6 @@ from quirebase.models import (
     ItemIdentifier,
     User,
 )
-from quirebase.web.app import app
 
 # Realistic Open Access Work from PMC Open Access Subset (corpus paper PMC10670526 / DOI 10.3390/ejihpe13110181)
 OA_CORPUS_OPENALEX_PAYLOAD = {
@@ -94,14 +95,15 @@ OA_CORPUS_OPENALEX_PAYLOAD = {
 }
 
 
-def test_seam1_oa_corpus_metadata_lookup_and_reconstruction():
+@pytest.mark.anyio
+async def test_seam1_oa_corpus_metadata_lookup_and_reconstruction():
     """Seam 1: External OpenAlex lookup parses inverted index, cleans HTML, and formats URLs/UIDs for OA paper."""
 
     def mock_handler(_request: httpx2.Request) -> httpx2.Response:
         return httpx2.Response(200, json=OA_CORPUS_OPENALEX_PAYLOAD)
 
-    with provider_runtime(transport=httpx2.MockTransport(mock_handler)) as runtime:
-        record = runtime.lookup("10.3390/ejihpe13110181", provider="openalex")
+    async with provider_runtime(transport=httpx2.MockTransport(mock_handler)) as runtime:
+        record = await runtime.lookup("10.3390/ejihpe13110181", provider="openalex")
     identifier = record.identifier
 
     assert isinstance(identifier, Identifier)
@@ -132,11 +134,14 @@ def test_seam1_oa_corpus_metadata_lookup_and_reconstruction():
     assert "https://www.mdpi.com/2254-9625/13/11/181/pdf?version=1699524259" in str(record.urls)
 
 
-def test_seam2_oa_corpus_batch_import_and_relational_mapping(db, monkeypatch):
+@pytest.mark.anyio
+async def test_seam2_oa_corpus_batch_import_and_relational_mapping(async_db, monkeypatch):
     """Seam 2: Ingesting an OA record creates Item, Author links, Tags, and ItemIdentifiers."""
+    db = async_db
     user = User(username="oa_corpus_tester", password_hash="secret")
     db.add(user)
-    db.flush()
+    await db.commit()
+    user_id = user.id
 
     def mock_handler(_request: httpx2.Request) -> httpx2.Response:
         return httpx2.Response(200, json=OA_CORPUS_OPENALEX_PAYLOAD)
@@ -149,7 +154,7 @@ def test_seam2_oa_corpus_batch_import_and_relational_mapping(db, monkeypatch):
         ),
     )
 
-    batch, records, errors = stage_identifier_import_batch(
+    batch, records, errors = await stage_identifier_import_batch(
         db,
         user,
         identifier="10.3390/ejihpe13110181",
@@ -158,17 +163,17 @@ def test_seam2_oa_corpus_batch_import_and_relational_mapping(db, monkeypatch):
     assert not errors
     assert len(records) == 1
 
-    commit_import_batch(db, user, batch.id)
+    await commit_import_batch(db, user, batch.id)
 
     # Verify persisted Item
-    item = db.scalar(
+    item = await db.scalar(
         select(Item).where(
             Item.title
             == "Drivers and Consequences of <i>ChatGPT</i> Use in Higher Education: Key Stakeholder Perspectives"
         )
     )
     assert item is not None
-    assert item.created_by == user.id
+    assert item.created_by == user_id
     assert item.volume == "13"
     assert item.issue == "11"
     assert item.pages == "2599-2614"
@@ -176,8 +181,13 @@ def test_seam2_oa_corpus_batch_import_and_relational_mapping(db, monkeypatch):
 
     # Verify structured ItemAuthor relations
     author_links = list(
-        db.scalars(
-            select(ItemAuthor).where(ItemAuthor.item_id == item.id).order_by(ItemAuthor.position)
+        (
+            await db.scalars(
+                select(ItemAuthor)
+                .options(selectinload(ItemAuthor.author))
+                .where(ItemAuthor.item_id == item.id)
+                .order_by(ItemAuthor.position)
+            )
         ).all()
     )
     assert len(author_links) == 2
@@ -190,21 +200,25 @@ def test_seam2_oa_corpus_batch_import_and_relational_mapping(db, monkeypatch):
     assert "Educational Technology and Stakeholder Engagement" in item.keywords
 
     # Verify ItemIdentifiers
-    idents = list(db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item.id)).all())
+    idents = list(
+        (await db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item.id))).all()
+    )
     ident_dict = {i.provider: i.value for i in idents}
     assert ident_dict.get("openalex") == "W4388656112"
     assert "doi" not in ident_dict
     assert item.doi == "10.3390/ejihpe13110181"
 
 
-def test_seam3_oa_corpus_upstream_sync_and_reconciliation(db):
+@pytest.mark.anyio
+async def test_seam3_oa_corpus_upstream_sync_and_reconciliation(async_db):
     """Seam 3: Upstream sync merges rich OA metadata into existing item without data loss."""
+    db = async_db
     user = User(username="sync_corpus_tester", password_hash="secret")
     db.add(user)
-    db.flush()
+    await db.flush()
 
     # Initial minimal item
-    item = create_item(
+    item = await create_item(
         db,
         user,
         title="Drivers and Consequences of ChatGPT Use (Draft)",
@@ -238,9 +252,9 @@ def test_seam3_oa_corpus_upstream_sync_and_reconciliation(db):
 
     with patch(
         "quirebase.library.identifiers.lookup_candidate",
-        return_value=mock_rec,
+        new=AsyncMock(return_value=mock_rec),
     ):
-        updated = sync_metadata_from_upstream(
+        updated = await sync_metadata_from_upstream(
             db,
             user,
             item.id,
@@ -265,7 +279,7 @@ def test_seam3_oa_corpus_upstream_sync_and_reconciliation(db):
     assert updated.author_links[1].author.last_name == "Sobaih"
 
     # Audit event recorded
-    audit = db.scalar(
+    audit = await db.scalar(
         select(AuditEvent)
         .where(AuditEvent.target_id == item.id)
         .where(AuditEvent.action == "item.sync_upstream")
@@ -273,11 +287,13 @@ def test_seam3_oa_corpus_upstream_sync_and_reconciliation(db):
     assert audit is not None
 
 
-def test_seam4_oa_corpus_citation_generation_and_csl_export(db):
+@pytest.mark.anyio
+async def test_seam4_oa_corpus_citation_generation_and_csl_export(async_db):
     """Seam 4: Synced OA item maps to CSL-JSON and renders valid APA & IEEE citations."""
+    db = async_db
     user = User(username="cite_corpus_tester", password_hash="secret")
     db.add(user)
-    db.flush()
+    await db.flush()
 
     item = Item(
         title="Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives",
@@ -295,7 +311,7 @@ def test_seam4_oa_corpus_citation_generation_and_csl_export(db):
         created_by=user.id,
     )
     db.add(item)
-    db.commit()
+    await db.commit()
 
     csl_json = record_to_csl_json(record_from_item(item))
     assert (
@@ -324,12 +340,18 @@ def test_seam4_oa_corpus_citation_generation_and_csl_export(db):
     assert "https://doi.org/10.3390/ejihpe13110181" in rendered[0]
 
 
-def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(db, tmp_path, monkeypatch):
+@pytest.mark.anyio
+async def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
     """Seam 5: Web UI displays rich metadata and preserves structured authors upon editing."""
-    client, seed_item, _rev = authenticated_client(db, tmp_path, monkeypatch)
+    db = async_db
+    client, seed_item, _rev = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
     try:
         user_id = seed_item.created_by
-        user = db.get(User, user_id)
+        user = await db.get(User, user_id)
         assert user is not None
 
         item = Item(
@@ -344,20 +366,22 @@ def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(db, tmp_path, monke
             updated_by=user_id,
         )
         db.add(item)
-        db.commit()
+        await db.commit()
+        item_id = item.id
+        item_version = item.version
 
         # 1. Fetch workspace view
-        resp = client.get(f"/items/{item.id}")
+        resp = await client.get(f"/items/{item_id}")
         assert resp.status_code == 200
         assert "Drivers and Consequences of ChatGPT Use" in resp.text
         assert "10.3390/ejihpe13110181" in resp.text
 
         # 2. Submit edit form modifying title and adding second author
-        edit_resp = client.post(
-            f"/items/{item.id}/edit",
+        edit_resp = await client.post(
+            f"/items/{item_id}/edit",
             data={
                 "csrf_token": "test-csrf",
-                "version": str(item.version),
+                "version": str(item_version),
                 "title": "Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives",
                 "author_last_name[]": ["Hasanein", "Sobaih"],
                 "author_first_name[]": ["Ahmed M.", "Abu Elnasr E."],
@@ -376,13 +400,15 @@ def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(db, tmp_path, monke
 
         # 3. Verify structured relations in DB
         db.expire_all()
-        workspace_data = open_item_workspace(db, user, item.id, WorkspaceSection.summary)
+        user = await db.get(User, user_id)
+        assert user is not None
+        workspace_data = await open_item_workspace(db, user, item_id, WorkspaceSection.summary)
         assert isinstance(workspace_data, SummaryWorkspace)
         assert (
             workspace_data.item.title
             == "Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives"
         )
-        metadata = open_item_workspace(db, user, item.id, WorkspaceSection.metadata)
+        metadata = await open_item_workspace(db, user, item_id, WorkspaceSection.metadata)
         assert isinstance(metadata, MetadataWorkspace)
         author_links = metadata.authors
         assert len(author_links) == 2
@@ -390,5 +416,5 @@ def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(db, tmp_path, monke
         assert author_links[1].author.last_name == "Sobaih"
         assert author_links[1].author.first_name == "Abu Elnasr E."
     finally:
-        app.dependency_overrides.clear()
+        await client.aclose()
         get_settings.cache_clear()

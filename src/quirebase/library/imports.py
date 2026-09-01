@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import TYPE_CHECKING, BinaryIO
 
@@ -8,6 +9,7 @@ from inquiro.bibliography import (
     BibliographyRecord,
     parse_bibliography_records,
 )
+from sqlalchemy.orm import selectinload
 
 from quirebase.access.items import require_accessible_items, visible_items_query
 from quirebase.audit import record_event
@@ -25,12 +27,12 @@ from quirebase.documents.revisions import (
     StagedPdf,
     attach_staged_pdf,
     delete_unreferenced_objects,
-    stage_pdf,
+    stage_pdf_async,
 )
 from quirebase.library.activity import get_accessible_item_identifiers
 from quirebase.library.citations import format_csl_export, format_standard_export
 from quirebase.library.providers import candidate_record_values, lookup_candidate
-from quirebase.models import ImportBatch, Item, User
+from quirebase.models import ImportBatch, Item, ItemAuthor, User
 from quirebase.pipeline.inspection import extract_doi
 from quirebase.search import search_index
 
@@ -38,7 +40,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from inquiro.bibliography import BibliographyExportOptions
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class BatchConflict(DomainError):
@@ -46,6 +48,21 @@ class BatchConflict(DomainError):
 
 
 MAX_PDF_IMPORT_FILES = 50
+
+
+def _consume_current_cancellation() -> None:
+    task = asyncio.current_task()
+    if task is not None:
+        task.uncancel()
+
+
+async def _finish_cleanup_despite_cancellation(task: asyncio.Task[None]) -> None:
+    while True:
+        try:
+            await asyncio.shield(task)
+            return
+        except asyncio.CancelledError:
+            _consume_current_cancellation()
 
 
 def _pdf_object_keys(records_json: str) -> set[str]:
@@ -91,8 +108,8 @@ def _record_to_item_payload(record: BibliographyRecord) -> dict[str, str | None]
     }
 
 
-def stage_import_batch(
-    db: Session, user: User, file_bytes: bytes, file_format: str
+async def stage_import_batch(
+    db: AsyncSession, user: User, file_bytes: bytes, file_format: str
 ) -> tuple[ImportBatch, list[dict], list[dict]]:
     if file_format not in SUPPORTED_FORMATS:
         raise ValidationFailure("format must be bibtex, biblatex, ris, or endnote")
@@ -111,12 +128,12 @@ def stage_import_batch(
         errors=json.dumps(errors, ensure_ascii=False),
     )
     db.add(batch)
-    db.commit()
+    await db.commit()
     return batch, records, errors
 
 
-def stage_identifier_import_batch(
-    db: Session,
+async def stage_identifier_import_batch(
+    db: AsyncSession,
     user: User,
     identifier: str,
     provider: str = "auto",
@@ -124,8 +141,15 @@ def stage_identifier_import_batch(
 ) -> tuple[ImportBatch, list[dict], list[dict]]:
     from quirebase.operations.settings import get_effective_settings_model
 
-    effective_settings = settings or get_effective_settings_model(db)
-    record = lookup_candidate(identifier, provider, effective_settings)
+    user_id = user.id
+    effective_settings = settings or await get_effective_settings_model(db)
+    # Settings are a short read; release its transaction before external I/O.
+    await db.rollback()
+    record = await lookup_candidate(identifier, provider, effective_settings)
+    reloaded_user = await db.get(User, user_id)
+    if reloaded_user is None or not reloaded_user.active:
+        raise ResourceUnavailable("user not available")
+    user = reloaded_user
     rec_dict = candidate_record_values(record)
     batch = ImportBatch(
         owner_id=user.id,
@@ -134,7 +158,7 @@ def stage_identifier_import_batch(
         errors="[]",
     )
     db.add(batch)
-    db.flush()
+    await db.flush()
     record_event(
         db,
         user.id,
@@ -143,12 +167,12 @@ def stage_identifier_import_batch(
         batch.id,
         detail={"provider": record.identifier.provider},
     )
-    db.commit()
+    await db.commit()
     return batch, [rec_dict], []
 
 
-def stage_pdf_import_batch(
-    db: Session,
+async def stage_pdf_import_batch(
+    db: AsyncSession,
     user: User,
     uploads: Sequence[tuple[BinaryIO, str]],
     *,
@@ -162,26 +186,40 @@ def stage_pdf_import_batch(
     if len(uploads) > MAX_PDF_IMPORT_FILES:
         raise ValidationFailure(f"a PDF import batch is limited to {MAX_PDF_IMPORT_FILES} files")
 
-    effective_settings = settings or get_effective_settings_model(db)
+    user_id = user.id
+    effective_settings = settings or await get_effective_settings_model(db)
     if max_bytes is None:
-        max_bytes = get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes)
+        max_bytes = await get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes)
     known_dois = {
-        value for provider, value in get_accessible_item_identifiers(db, user) if provider == "doi"
+        value
+        for provider, value in await get_accessible_item_identifiers(db, user)
+        if provider == "doi"
     }
+    # The settings and duplicate check above are intentionally a short read
+    # transaction. Provider lookups must not hold it while waiting on network I/O.
+    await db.rollback()
     batch_dois: set[str] = set()
     retained_keys: set[str] = set()
     staged_pdfs: list[StagedPdf] = []
     records: list[dict] = []
     errors: list[dict] = []
 
+    async def cleanup_staged_pdfs() -> None:
+        await db.rollback()
+        for staged_pdf in staged_pdfs:
+            await asyncio.to_thread(staged_pdf.release)
+        await delete_unreferenced_objects(db, {staged_pdf.object_key for staged_pdf in staged_pdfs})
+
     try:
         for row, (source, filename) in enumerate(uploads, start=1):
             staged: StagedPdf | None = None
             diagnostic_code = "invalid_pdf"
             try:
-                staged = stage_pdf(source, filename, max_bytes)
+                staged = await stage_pdf_async(db, source, filename, max_bytes)
                 staged_pdfs.append(staged)
-                detected_doi = extract_doi(LocalObjectStore().path(staged.object_key))
+                detected_doi = await asyncio.to_thread(
+                    extract_doi, LocalObjectStore().path(staged.object_key)
+                )
                 if not detected_doi:
                     diagnostic_code = "missing_doi"
                     raise ValidationFailure("no DOI was found in this PDF")
@@ -193,7 +231,7 @@ def stage_pdf_import_batch(
                     diagnostic_code = "duplicate_batch_doi"
                     raise BatchConflict("another PDF in this batch has the same DOI")
                 try:
-                    record = lookup_candidate(detected_doi, "doi", effective_settings)
+                    record = await lookup_candidate(detected_doi, "doi", effective_settings)
                 except ValidationFailure:
                     diagnostic_code = "invalid_doi"
                     raise
@@ -224,45 +262,55 @@ def stage_pdf_import_batch(
                     "message": str(error),
                 })
                 if staged is not None and staged.object_key not in retained_keys:
-                    staged.release()
-                    delete_unreferenced_objects(db, (staged.object_key,))
+                    await asyncio.to_thread(staged.release)
+                    await delete_unreferenced_objects(db, (staged.object_key,))
+                    await db.rollback()
+
+        # PDF inspection and metadata lookup above may take long enough for the
+        # caller's account state to change. Start the write phase from a fresh
+        # authorization read rather than trusting the pre-I/O ORM instance.
+        reloaded_user = await db.get(User, user_id, populate_existing=True)
+        if reloaded_user is None or not reloaded_user.active:
+            raise ResourceUnavailable("user not available")
 
         batch = ImportBatch(
-            owner_id=user.id,
+            owner_id=reloaded_user.id,
             file_format="pdf",
             records=json.dumps(records, ensure_ascii=False),
             errors=json.dumps(errors, ensure_ascii=False),
         )
         db.add(batch)
-        db.flush()
+        await db.flush()
         record_event(
             db,
-            user.id,
+            reloaded_user.id,
             "pdf.import.preview",
             "import_batch",
             batch.id,
             detail={"candidates": len(records), "diagnostics": len(errors)},
         )
-        db.commit()
+        await db.commit()
         for staged in staged_pdfs:
-            staged.release()
+            await asyncio.to_thread(staged.release)
         return batch, records, errors
+    except asyncio.CancelledError:
+        _consume_current_cancellation()
+        cleanup_task = asyncio.create_task(cleanup_staged_pdfs())
+        await _finish_cleanup_despite_cancellation(cleanup_task)
+        raise
     except Exception:
-        db.rollback()
-        for staged in staged_pdfs:
-            staged.release()
-        delete_unreferenced_objects(db, {staged.object_key for staged in staged_pdfs})
+        await cleanup_staged_pdfs()
         raise
 
 
-def _create_item_from_record(db: Session, user: User, record: dict) -> Item:
+async def _create_item_from_record(db: AsyncSession, user: User, record: dict) -> Item:
     from quirebase.library import create_item_from_metadata_record
 
-    return create_item_from_metadata_record(db, user, record)
+    return await create_item_from_metadata_record(db, user, record)
 
 
-def commit_import_batch(db: Session, user: User, batch_id: str) -> None:
-    batch = db.get(ImportBatch, batch_id)
+async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> None:
+    batch = await db.get(ImportBatch, batch_id)
     if batch is None or batch.owner_id != user.id:
         raise ResourceUnavailable("import batch not found")
     errors = json.loads(batch.errors)
@@ -274,7 +322,7 @@ def commit_import_batch(db: Session, user: User, batch_id: str) -> None:
     if batch.file_format == "pdf":
         known_dois = {
             value
-            for provider, value in get_accessible_item_identifiers(db, user)
+            for provider, value in await get_accessible_item_identifiers(db, user)
             if provider == "doi"
         }
         candidate_dois: set[str] = set()
@@ -290,9 +338,9 @@ def commit_import_batch(db: Session, user: User, batch_id: str) -> None:
     for record in records:
         candidate = dict(record)
         pdf = candidate.pop("_pdf", None)
-        item = _create_item_from_record(db, user, candidate)
+        item = await _create_item_from_record(db, user, candidate)
         if pdf is not None:
-            attach_staged_pdf(
+            await attach_staged_pdf(
                 db,
                 user,
                 item,
@@ -303,7 +351,7 @@ def commit_import_batch(db: Session, user: User, batch_id: str) -> None:
                     pdf["original_name"],
                 ),
             )
-        search_index(db).index_item(db, item.id)
+        await search_index(db).index_item(db, item.id)
         record_event(
             db,
             user.id,
@@ -312,43 +360,51 @@ def commit_import_batch(db: Session, user: User, batch_id: str) -> None:
             item.id,
             detail={"format": batch.file_format, "filename": pdf["original_name"] if pdf else None},
         )
-    db.delete(batch)
-    db.commit()
+    await db.delete(batch)
+    await db.commit()
 
 
-def discard_import_batch(db: Session, user: User, batch_id: str) -> None:
-    batch = db.get(ImportBatch, batch_id)
+async def discard_import_batch(db: AsyncSession, user: User, batch_id: str) -> None:
+    batch = await db.get(ImportBatch, batch_id)
     if batch is None or batch.owner_id != user.id:
         raise ResourceUnavailable("import batch not found")
     object_keys = _pdf_object_keys(batch.records)
     record_event(db, user.id, "import.batch.discard", "import_batch", batch.id)
-    db.delete(batch)
-    db.commit()
-    delete_unreferenced_objects(db, object_keys)
+    await db.delete(batch)
+    await db.commit()
+    await delete_unreferenced_objects(db, object_keys)
 
 
-def export_accessible_bibliography(
-    db: Session,
+async def export_accessible_bibliography(
+    db: AsyncSession,
     user: User,
     file_format: str,
     style_key: str = "apa",
     options: BibliographyExportOptions | None = None,
 ) -> tuple[str, str, str]:
-    items = list(db.scalars(visible_items_query(user).order_by(Item.updated_at.desc())).all())
+    items = list(
+        (
+            await db.scalars(
+                visible_items_query(user)
+                .options(selectinload(Item.author_links).selectinload(ItemAuthor.author))
+                .order_by(Item.updated_at.desc())
+            )
+        ).all()
+    )
     if file_format == "csl":
-        return format_csl_export(db, user, items, style_key=style_key, options=options)
+        return await format_csl_export(db, user, items, style_key=style_key, options=options)
     return format_standard_export(items, file_format, options=options)
 
 
-def export_selected_bibliography(
-    db: Session,
+async def export_selected_bibliography(
+    db: AsyncSession,
     user: User,
     item_ids: list[str],
     file_format: str,
     style_key: str = "apa",
     options: BibliographyExportOptions | None = None,
 ) -> tuple[str, str, str]:
-    items = require_accessible_items(db, user, item_ids)
+    items = await require_accessible_items(db, user, item_ids)
     if file_format == "csl":
-        return format_csl_export(db, user, items, style_key=style_key, options=options)
+        return await format_csl_export(db, user, items, style_key=style_key, options=options)
     return format_standard_export(items, file_format, options=options)

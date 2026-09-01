@@ -46,7 +46,7 @@ def _ieee_boolean_query(clauses: list[SearchClause]) -> str:
 
 
 class IeeeLookupAdapter:
-    def lookup(
+    async def lookup(
         self, client: ProviderContext, value: str, settings: Any, *, endpoint: str
     ) -> ProviderRecord:
         api_key = getattr(settings, "ieee_api_key", None) or ""
@@ -55,7 +55,7 @@ class IeeeLookupAdapter:
             "format": "json",
             "article_number": value,
         }
-        body = client._get(endpoint, params)
+        body = await client._get(endpoint, params)
         try:
             payload = json.loads(body)
         except (json.JSONDecodeError, TypeError) as error:
@@ -92,7 +92,7 @@ class IeeeLookupAdapter:
 
 
 class IeeeSearchAdapter:
-    def search(
+    async def search(
         self,
         client: ProviderContext,
         clauses: list[SearchClause],
@@ -124,7 +124,7 @@ class IeeeSearchAdapter:
             params["sort_field"] = "article_citations"
             params["sort_order"] = "desc"
         try:
-            payload = json.loads(client._get(endpoint, params))
+            payload = json.loads(await client._get(endpoint, params))
         except (json.JSONDecodeError, TypeError) as error:
             raise ProviderUnavailable("IEEE Xplore returned invalid search results") from error
         results = []
@@ -160,7 +160,7 @@ class IeeeSearchAdapter:
 
 
 class IeeeDocumentAdapter:
-    def acquire(
+    async def acquire(
         self,
         client: ProviderContext,
         value: str,
@@ -168,7 +168,7 @@ class IeeeDocumentAdapter:
         *,
         endpoint: str,
     ) -> AcquiredDocument:
-        body = client._get(
+        body = await client._get(
             endpoint,
             {
                 "apikey": settings.ieee_api_key,
@@ -197,7 +197,7 @@ class IeeeDocumentAdapter:
         pdf_url = first_text(article.get("pdf_url"))
         if not pdf_url:
             raise PdfNotAvailable("IEEE Xplore did not provide a PDF link")
-        return client._download_pdf(
+        return await client._download_pdf(
             pdf_url,
             filename=f"{value}.pdf",
             provider="ieee",

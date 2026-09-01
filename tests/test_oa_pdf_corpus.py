@@ -8,12 +8,11 @@ from pathlib import Path
 import pymupdf
 import pytest
 from sqlalchemy import select
-from test_http import authenticated_client
+from test_http import authenticated_async_client
 
 from quirebase.core.config import get_settings
 from quirebase.models import FileRevision, Job
 from quirebase.pipeline import create_thumbnail, inspect_pdf, run_job, validate_pdf_container
-from quirebase.web.app import app
 
 CORPUS = json.loads((Path(__file__).parent / "oa_corpus.json").read_text(encoding="utf-8"))
 PAPERS = CORPUS["papers"]
@@ -62,34 +61,44 @@ def test_real_oa_pdf_service_pipeline(paper, tmp_path):
 
 @pytest.mark.oa
 @pytest.mark.parametrize("paper", PAPERS, ids=lambda paper: paper["id"])
-def test_real_oa_pdf_web_worker_search_annotation_export(paper, db, tmp_path, monkeypatch):
+@pytest.mark.anyio
+async def test_real_oa_pdf_web_worker_search_annotation_export(
+    paper, async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
     source = paper_path(paper)
-    client, item, _placeholder = authenticated_client(db, tmp_path, monkeypatch)
+    client, item, _placeholder = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
     try:
         with source.open("rb") as stream:
-            uploaded = client.post(
+            uploaded = await client.post(
                 f"/items/{item.id}/pdf",
                 data={"csrf_token": "test-csrf"},
                 files={"pdf": (source.name, stream, "application/pdf")},
                 follow_redirects=False,
             )
         assert uploaded.status_code == 303
-        revision = db.scalar(
+        revision = await db.scalar(
             select(FileRevision).where(
                 FileRevision.item_id == item.id, FileRevision.original_name == source.name
             )
         )
-        job = db.scalar(select(Job).where(Job.idempotency_key == f"pdf.inspect:{revision.id}"))
-        run_job(db, job)
-        db.refresh(revision)
-        db.refresh(job)
+        assert revision is not None
+        job = await db.scalar(
+            select(Job).where(Job.idempotency_key == f"pdf.inspect:{revision.id}")
+        )
+        assert job is not None
+        await run_job(db, job)
+        await db.refresh(revision)
+        await db.refresh(job)
         assert job.state == "succeeded", job.error
         assert revision.processing_state == "ready"
         assert revision.page_count == paper["pages"]
         assert paper["search_phrase"].casefold() in revision.full_text.casefold()
-        assert item.title in client.get(f"/?q={paper['search_phrase']}").text
+        assert item.title in (await client.get(f"/?q={paper['search_phrase']}")).text
 
-        content = client.get(
+        content = await client.get(
             f"/documents/{item.id}/revisions/{revision.id}/content",
             headers={"Range": "bytes=0-1023"},
         )
@@ -101,7 +110,7 @@ def test_real_oa_pdf_web_worker_search_annotation_export(paper, db, tmp_path, mo
         left, bottom, right, top = json.loads(revision.page_geometry)[0]
         x1, x2 = left + 20, min(left + 120, right - 5)
         y1, y2 = top - 20, max(top - 40, bottom + 5)
-        created = client.post(
+        created = await client.post(
             f"/documents/{item.id}/annotations",
             headers={"X-CSRF-Token": "test-csrf"},
             json={
@@ -114,15 +123,16 @@ def test_real_oa_pdf_web_worker_search_annotation_export(paper, db, tmp_path, mo
             },
         )
         assert created.status_code == 201, created.text
-        requested = client.post(
+        requested = await client.post(
             f"/documents/{item.id}/annotation-exports",
             headers={"X-CSRF-Token": "test-csrf"},
             json={"revision_id": revision.id, "include_private": True},
         )
         assert requested.status_code == 202
-        export_job = db.get(Job, requested.json()["id"])
-        run_job(db, export_job)
-        exported = client.get(f"/annotation-exports/{export_job.id}/content")
+        export_job = await db.get(Job, requested.json()["id"])
+        assert export_job is not None
+        await run_job(db, export_job)
+        exported = await client.get(f"/annotation-exports/{export_job.id}/content")
         assert exported.status_code == 200
         assert hashlib.sha256(source.read_bytes()).hexdigest() == paper["sha256"]
         document = pymupdf.open(stream=exported.content, filetype="pdf")
@@ -132,5 +142,5 @@ def test_real_oa_pdf_web_worker_search_annotation_export(paper, db, tmp_path, mo
         finally:
             document.close()
     finally:
-        app.dependency_overrides.clear()
+        await client.aclose()
         get_settings.cache_clear()

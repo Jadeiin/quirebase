@@ -1,15 +1,17 @@
-import contextlib
-from concurrent.futures import ThreadPoolExecutor
+import asyncio
+import threading
 from io import BytesIO
-from threading import Barrier, BrokenBarrierError
 
 import pytest
-from sqlalchemy import select
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import select, text
 
 from quirebase.core.config import Settings
 from quirebase.core.storage import LocalObjectStore
-from quirebase.documents.revisions import create_attachment, delete_unreferenced_objects
+from quirebase.documents.revisions import (
+    create_attachment,
+    delete_unreferenced_objects,
+    store_pdf_revision,
+)
 from quirebase.models import Attachment, AttachmentRole, Item, User
 
 
@@ -46,34 +48,40 @@ def test_staged_object_cleanup_does_not_leave_per_object_directories(tmp_path):
     assert len([path for path in store.settings.object_dir.rglob("*") if path.is_dir()]) <= 1
 
 
-def test_database_fixture_isolates_the_default_object_store(db, tmp_path):
+@pytest.mark.anyio
+async def test_database_fixture_isolates_the_default_object_store(async_db, tmp_path):
+    assert await async_db.scalar(text("SELECT 1")) == 1
     store = LocalObjectStore()
 
-    assert store.settings.data_dir == tmp_path / "data"
+    assert store.settings.data_dir == tmp_path / "async-data"
 
 
-def test_attachment_upload_lease_prevents_concurrent_cleanup(db, monkeypatch):
+@pytest.mark.anyio
+async def test_attachment_upload_lease_prevents_concurrent_cleanup(
+    async_db, async_session_factory, monkeypatch
+):
+    db = async_db
     user = User(username="attachment-uploader", password_hash="unused")
     db.add(user)
-    db.flush()
+    await db.flush()
     item = Item(title="Attachment lease", created_by=user.id)
     db.add(item)
-    db.commit()
+    await db.commit()
     original_commit = db.commit
     store = LocalObjectStore()
 
-    def commit_while_cleanup_runs():
+    async def commit_while_cleanup_runs():
         object_path = next(store.settings.object_dir.glob("*/*/*.bin"))
         object_key = str(object_path.relative_to(store.settings.object_dir))
-        with Session(db.bind) as concurrent_db:
-            deleted = delete_unreferenced_objects(concurrent_db, (object_key,))
+        async with async_session_factory() as concurrent_db:
+            deleted = await delete_unreferenced_objects(concurrent_db, (object_key,))
         assert deleted == ()
         assert object_path.exists()
-        original_commit()
+        await original_commit()
 
     monkeypatch.setattr(db, "commit", commit_while_cleanup_runs)
 
-    attachment = create_attachment(
+    attachment = await create_attachment(
         db,
         user,
         item.id,
@@ -85,40 +93,122 @@ def test_attachment_upload_lease_prevents_concurrent_cleanup(db, monkeypatch):
     assert store.path(attachment.object_key).exists()
 
 
-def test_concurrent_graphical_abstract_uploads_are_serialized(db):
+@pytest.mark.anyio
+async def test_cancelled_pdf_staging_reclaims_completed_thread_result(async_db, monkeypatch):
+    from quirebase.documents import revisions
+
+    db = async_db
+    user = User(username="cancelled-pdf-uploader", password_hash="unused")
+    db.add(user)
+    await db.flush()
+    item = Item(title="Cancelled PDF", created_by=user.id)
+    db.add(item)
+    await db.commit()
+    started = asyncio.Event()
+    release_worker = threading.Event()
+    worker_finished = threading.Event()
+    loop = asyncio.get_running_loop()
+    original_stage_pdf = revisions.stage_pdf
+    monkeypatch.setattr(revisions, "validate_pdf_container", lambda _path: None)
+
+    def delayed_stage_pdf(source, filename, maximum):
+        loop.call_soon_threadsafe(started.set)
+        release_worker.wait()
+        try:
+            return original_stage_pdf(source, filename, maximum)
+        finally:
+            worker_finished.set()
+
+    monkeypatch.setattr(revisions, "stage_pdf", delayed_stage_pdf)
+    upload = asyncio.create_task(
+        store_pdf_revision(
+            db,
+            user,
+            item.id,
+            BytesIO(b"%PDF-1.4\ncancelled"),
+            "cancelled.pdf",
+            100,
+        )
+    )
+    await started.wait()
+    upload.cancel()
+    release_worker.set()
+
+    with pytest.raises(asyncio.CancelledError):
+        await upload
+    assert await asyncio.to_thread(worker_finished.wait, 1)
+    assert list(LocalObjectStore().settings.object_dir.rglob("*.pdf")) == []
+
+
+@pytest.mark.anyio
+async def test_cancelled_attachment_staging_reclaims_completed_thread_result(async_db, monkeypatch):
+    db = async_db
+    user = User(username="cancelled-attachment-uploader", password_hash="unused")
+    db.add(user)
+    await db.flush()
+    item = Item(title="Cancelled attachment", created_by=user.id)
+    db.add(item)
+    await db.commit()
+    started = asyncio.Event()
+    release_worker = threading.Event()
+    worker_finished = threading.Event()
+    loop = asyncio.get_running_loop()
+    original_put = LocalObjectStore.put_staged_attachment
+
+    def delayed_put(store, source, maximum):
+        loop.call_soon_threadsafe(started.set)
+        release_worker.wait()
+        try:
+            return original_put(store, source, maximum)
+        finally:
+            worker_finished.set()
+
+    monkeypatch.setattr(LocalObjectStore, "put_staged_attachment", delayed_put)
+    upload = asyncio.create_task(
+        create_attachment(
+            db,
+            user,
+            item.id,
+            BytesIO(b"cancelled attachment"),
+            "cancelled.txt",
+            "text/plain",
+            100,
+        )
+    )
+    await started.wait()
+    upload.cancel()
+    release_worker.set()
+
+    with pytest.raises(asyncio.CancelledError):
+        await upload
+    assert await asyncio.to_thread(worker_finished.wait, 1)
+    assert list(LocalObjectStore().settings.object_dir.rglob("*.bin")) == []
+
+
+@pytest.mark.anyio
+async def test_concurrent_graphical_abstract_uploads_are_serialized(
+    async_db, async_session_factory
+):
+    db = async_db
     user = User(username="concurrent-attachment-uploader", password_hash="unused")
     db.add(user)
-    db.flush()
+    await db.flush()
     item = Item(title="Concurrent graphical abstract", created_by=user.id)
     db.add(item)
-    db.commit()
+    await db.commit()
+    user_id, item_id = user.id, item.id
 
-    current_role_reads = Barrier(2)
+    start = asyncio.Barrier(2)
 
-    class SynchronizedRoleReadSession(Session):
-        def scalar(self, statement, *args, **kwargs):
-            if (
-                getattr(statement, "is_select", False)
-                and Attachment.__table__ in statement.get_final_froms()
-            ):
-                with contextlib.suppress(BrokenBarrierError):
-                    current_role_reads.wait(timeout=0.25)
-            return super().scalar(statement, *args, **kwargs)
-
-    factory = sessionmaker(
-        db.bind,
-        class_=SynchronizedRoleReadSession,
-        expire_on_commit=False,
-    )
-
-    def upload(index: int) -> str:
-        with factory() as worker_db:
-            worker_user = worker_db.get(User, user.id)
+    async def upload(index: int) -> str:
+        async with async_session_factory() as worker_db:
+            worker_user = await worker_db.get(User, user_id)
             assert worker_user is not None
-            attachment = create_attachment(
+            await start.wait()
+            attachment = await create_attachment(
                 worker_db,
                 worker_user,
-                item.id,
+                item_id,
                 BytesIO(b"\x89PNG\r\n\x1a\n" + bytes([index])),
                 f"abstract-{index}.png",
                 "image/png",
@@ -126,11 +216,10 @@ def test_concurrent_graphical_abstract_uploads_are_serialized(db):
             )
             return attachment.id
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        attachment_ids = tuple(executor.map(upload, range(2)))
+    attachment_ids = await asyncio.gather(upload(0), upload(1))
 
-    attachments = db.scalars(
-        select(Attachment).where(Attachment.id.in_(attachment_ids))
+    attachments = (
+        await db.scalars(select(Attachment).where(Attachment.id.in_(attachment_ids)))
     ).all()
     assert len(attachments) == 2
     assert sum(record.role == AttachmentRole.graphical_abstract for record in attachments) == 1

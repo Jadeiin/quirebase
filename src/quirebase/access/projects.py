@@ -8,43 +8,47 @@ from quirebase.core.errors import PermissionDenied, ResourceUnavailable
 from quirebase.models import Project, ProjectMember, ProjectRole, SystemRole, User
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
-def visible_projects(db: Session, user: User) -> list[Project]:
+async def visible_projects(db: AsyncSession, user: User) -> list[Project]:
     query = select(Project).order_by(Project.name)
     if user.role != SystemRole.administrator.value:
         query = query.join(ProjectMember).where(ProjectMember.user_id == user.id)
-    return list(db.scalars(query).all())
+    return list((await db.scalars(query)).all())
 
 
-def editable_projects(db: Session, user: User) -> list[Project]:
+async def editable_projects(db: AsyncSession, user: User) -> list[Project]:
     return list(
-        db.scalars(
-            select(Project)
-            .join(ProjectMember)
-            .where(
-                ProjectMember.user_id == user.id,
-                ProjectMember.role.in_([ProjectRole.owner, ProjectRole.editor]),
+        (
+            await db.scalars(
+                select(Project)
+                .join(ProjectMember)
+                .where(
+                    ProjectMember.user_id == user.id,
+                    ProjectMember.role.in_([ProjectRole.owner, ProjectRole.editor]),
+                )
+                .order_by(Project.name)
             )
-            .order_by(Project.name)
         ).all()
     )
 
 
-def project_member(db: Session, user: User, project_id: str | None) -> ProjectMember | None:
+async def project_member(
+    db: AsyncSession, user: User, project_id: str | None
+) -> ProjectMember | None:
     if project_id is None:
         return None
-    return db.get(ProjectMember, (project_id, user.id))
+    return await db.get(ProjectMember, (project_id, user.id))
 
 
-def require_project_member(
-    db: Session, user: User, project_id: str, allowed_roles: set[str] | None = None
+async def require_project_member(
+    db: AsyncSession, user: User, project_id: str, allowed_roles: set[str] | None = None
 ) -> ProjectMember:
-    member = project_member(db, user, project_id)
+    member = await project_member(db, user, project_id)
     if member is None:
         if user.role == SystemRole.administrator.value:
-            project = db.get(Project, project_id)
+            project = await db.get(Project, project_id)
             if project is None:
                 raise ResourceUnavailable("project not found")
             return ProjectMember(

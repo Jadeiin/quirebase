@@ -8,23 +8,29 @@ from sqlalchemy import select
 from quirebase.models import FileRevision, Item, ItemTag, Project, ProjectItem, Tag
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
-def search_text_for_item(db: Session, item: Item) -> str:
-    full_text = db.scalar(
+async def search_text_for_item(db: AsyncSession, item: Item) -> str:
+    full_text = await db.scalar(
         select(FileRevision.full_text)
         .where(FileRevision.item_id == item.id, FileRevision.full_text.is_not(None))
         .order_by(FileRevision.created_at.desc())
         .limit(1)
     )
-    tags = db.scalars(
-        select(Tag.name).join(ItemTag, ItemTag.tag_id == Tag.id).where(ItemTag.item_id == item.id)
+    tags = (
+        await db.scalars(
+            select(Tag.name)
+            .join(ItemTag, ItemTag.tag_id == Tag.id)
+            .where(ItemTag.item_id == item.id)
+        )
     ).all()
-    projects = db.scalars(
-        select(Project.name)
-        .join(ProjectItem, ProjectItem.project_id == Project.id)
-        .where(ProjectItem.item_id == item.id)
+    projects = (
+        await db.scalars(
+            select(Project.name)
+            .join(ProjectItem, ProjectItem.project_id == Project.id)
+            .where(ProjectItem.item_id == item.id)
+        )
     ).all()
     return "\n".join(
         value

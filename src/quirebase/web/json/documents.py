@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import TYPE_CHECKING
 
@@ -27,15 +28,15 @@ from quirebase.web.responses import content_disposition
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 router = protected_router()
 
 RANGE_PATTERN = re.compile(r"bytes=(\d*)-(\d*)$")
 
 
-def ranged_file(request: Request, path: Path, etag: str, filename: str):
-    size = path.stat().st_size
+async def ranged_file(request: Request, path: Path, etag: str, filename: str):
+    size = (await asyncio.to_thread(path.stat)).st_size
     headers = {
         "Accept-Ranges": "bytes",
         "ETag": f'"{etag}"',
@@ -57,16 +58,19 @@ def ranged_file(request: Request, path: Path, etag: str, filename: str):
     if start >= size or start > end:
         raise HTTPException(416, headers={"Content-Range": f"bytes */{size}"})
 
-    def chunks():
-        with path.open("rb") as stream:
-            stream.seek(start)
+    async def chunks():
+        stream = await asyncio.to_thread(path.open, "rb")
+        try:
+            await asyncio.to_thread(stream.seek, start)
             remaining = end - start + 1
             while remaining:
-                chunk = stream.read(min(1024 * 1024, remaining))
+                chunk = await asyncio.to_thread(stream.read, min(1024 * 1024, remaining))
                 if not chunk:
                     break
                 remaining -= len(chunk)
                 yield chunk
+        finally:
+            await asyncio.to_thread(stream.close)
 
     headers.update({
         "Content-Range": f"bytes {start}-{end}/{size}",
@@ -78,7 +82,7 @@ def ranged_file(request: Request, path: Path, etag: str, filename: str):
 
 
 @router.get("/documents/{item_id}/citation")
-def export_item_bibliography(
+async def export_item_bibliography(
     item_id: str,
     file_format: str,
     style: str = "apa",
@@ -95,9 +99,9 @@ def export_item_bibliography(
     citation_key_formula: str = "",
     citation_key_force_ascii: bool = False,
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    contents, media_type, filename = get_item_citation_response(
+    contents, media_type, filename = await get_item_citation_response(
         db,
         user,
         item_id,
@@ -128,7 +132,7 @@ def export_item_bibliography(
 
 
 @router.get("/documents/{item_id}/citation-copy")
-def copy_citation(
+async def copy_citation(
     item_id: str,
     file_format: str = "csl",
     style: str = "apa",
@@ -145,9 +149,9 @@ def copy_citation(
     citation_key_formula: str = "",
     citation_key_force_ascii: bool = False,
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    contents, _media_type, _filename = get_item_citation_response(
+    contents, _media_type, _filename = await get_item_citation_response(
         db,
         user,
         item_id,
@@ -174,63 +178,63 @@ def copy_citation(
 
 
 @router.get("/documents/{item_id}/citation-text")
-def citation_text(
+async def citation_text(
     item_id: str,
     style: str = "apa",
     output: str = "text",
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    rendered, media_type = get_item_citation_text_response(
+    rendered, media_type = await get_item_citation_text_response(
         db, user, item_id, style_key=style, output=output
     )
     return Response(rendered, media_type=f"{media_type}; charset=utf-8")
 
 
 @router.get("/documents/{item_id}/revisions/{revision_id}/content")
-def pdf_content(
+async def pdf_content(
     request: Request,
     item_id: str,
     revision_id: str,
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    path, original_name, sha256 = get_revision_file(db, user, item_id, revision_id)
-    return ranged_file(request, path, sha256, original_name)
+    path, original_name, sha256 = await get_revision_file(db, user, item_id, revision_id)
+    return await ranged_file(request, path, sha256, original_name)
 
 
 @router.get("/documents/{item_id}/revisions/{revision_id}/thumbnail")
-def pdf_thumbnail(
+async def pdf_thumbnail(
     item_id: str,
     revision_id: str,
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    path = get_revision_thumbnail(db, user, item_id, revision_id)
+    path = await get_revision_thumbnail(db, user, item_id, revision_id)
     return FileResponse(path, media_type="image/png")
 
 
 @router.get("/documents/{item_id}/thumbnail")
-def item_thumbnail(
+async def item_thumbnail(
     item_id: str,
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    thumbnail = get_item_thumbnail(db, user, item_id)
+    thumbnail = await get_item_thumbnail(db, user, item_id)
     return FileResponse(thumbnail.path, media_type=thumbnail.media_type)
 
 
 @router.get("/documents/{item_id}/revisions/{revision_id}/export")
-def export_revision_pdf_route(
+async def export_revision_pdf_route(
     item_id: str,
     revision_id: str,
     include_annotations: bool = True,
     project_id: str | None = None,
     timezone: str | None = None,
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    path, filename, media_type, temporary = export_revision_pdf(
+    path, filename, media_type, temporary = await export_revision_pdf(
         db,
         user,
         item_id,

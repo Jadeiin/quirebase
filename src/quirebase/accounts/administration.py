@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import delete, func, or_, select
 
 from quirebase.audit import record_event
-from quirebase.core.crypto import hash_password
+from quirebase.core.crypto import hash_password_async
 from quirebase.core.errors import (
     PermissionDenied,
     ResourceNotFound,
@@ -15,17 +15,17 @@ from quirebase.core.errors import (
 from quirebase.models import Invitation, Job, JobState, LoginSession, SystemRole, User
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
-def list_users(db: Session, admin: User) -> list[User]:
+async def list_users(db: AsyncSession, admin: User) -> list[User]:
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")
-    return list(db.scalars(select(User).order_by(User.username)).all())
+    return list((await db.scalars(select(User).order_by(User.username))).all())
 
 
-def list_users_paginated(
-    db: Session,
+async def list_users_paginated(
+    db: AsyncSession,
     admin: User,
     search: str = "",
     role: str = "",
@@ -48,14 +48,16 @@ def list_users_paginated(
     if filters:
         query = query.where(*filters)
         count_query = count_query.where(*filters)
-    total = db.scalar(count_query) or 0
+    total = await db.scalar(count_query) or 0
     offset = max(0, (page - 1) * page_size)
-    users = list(db.scalars(query.order_by(User.username).offset(offset).limit(page_size)).all())
+    users = list(
+        (await db.scalars(query.order_by(User.username).offset(offset).limit(page_size))).all()
+    )
     return users, total
 
 
-def create_user_admin(
-    db: Session, admin: User, username: str, password: str, role: str = "member"
+async def create_user_admin(
+    db: AsyncSession, admin: User, username: str, password: str, role: str = "member"
 ) -> User:
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")
@@ -66,17 +68,17 @@ def create_user_admin(
         raise ValidationFailure("password must contain at least 12 characters")
     if role not in (SystemRole.administrator.value, SystemRole.member.value):
         raise ValidationFailure("invalid user role")
-    existing = db.scalar(select(User).where(User.username == cleaned_name))
+    existing = await db.scalar(select(User).where(User.username == cleaned_name))
     if existing is not None:
         raise ValidationFailure(f"username '{cleaned_name}' is already taken")
     user = User(
         username=cleaned_name,
-        password_hash=hash_password(password),
+        password_hash=await hash_password_async(password),
         role=role,
         active=True,
     )
     db.add(user)
-    db.flush()
+    await db.flush()
     record_event(
         db,
         admin.id,
@@ -85,14 +87,14 @@ def create_user_admin(
         user.id,
         detail={"username": user.username, "role": user.role},
     )
-    db.commit()
+    await db.commit()
     return user
 
 
-def update_user_status(db: Session, admin: User, user_id: str, active: bool) -> User:
+async def update_user_status(db: AsyncSession, admin: User, user_id: str, active: bool) -> User:
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")
-    user = db.get(User, user_id)
+    user = await db.get(User, user_id)
     if user is None:
         raise ResourceNotFound("user not found")
     if user.id == admin.id and not active:
@@ -100,7 +102,7 @@ def update_user_status(db: Session, admin: User, user_id: str, active: bool) -> 
     user.active = active
     if not active:
         # Revoke all active sessions upon deactivation
-        db.execute(delete(LoginSession).where(LoginSession.user_id == user.id))
+        await db.execute(delete(LoginSession).where(LoginSession.user_id == user.id))
     record_event(
         db,
         admin.id,
@@ -109,16 +111,16 @@ def update_user_status(db: Session, admin: User, user_id: str, active: bool) -> 
         user.id,
         detail={"active": active},
     )
-    db.commit()
+    await db.commit()
     return user
 
 
-def change_user_role(db: Session, admin: User, user_id: str, new_role: str) -> User:
+async def change_user_role(db: AsyncSession, admin: User, user_id: str, new_role: str) -> User:
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")
     if new_role not in (SystemRole.administrator.value, SystemRole.member.value):
         raise ValidationFailure("invalid user role")
-    user = db.get(User, user_id)
+    user = await db.get(User, user_id)
     if user is None:
         raise ResourceNotFound("user not found")
     if user.id == admin.id and new_role != SystemRole.administrator.value:
@@ -132,21 +134,23 @@ def change_user_role(db: Session, admin: User, user_id: str, new_role: str) -> U
         user.id,
         detail={"new_role": new_role},
     )
-    db.commit()
+    await db.commit()
     return user
 
 
-def reset_user_password(db: Session, admin: User, user_id: str, new_password: str) -> None:
+async def reset_user_password(
+    db: AsyncSession, admin: User, user_id: str, new_password: str
+) -> None:
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")
     if len(new_password) < 12:
         raise ValidationFailure("password must contain at least 12 characters")
-    user = db.get(User, user_id)
+    user = await db.get(User, user_id)
     if user is None:
         raise ResourceNotFound("user not found")
-    user.password_hash = hash_password(new_password)
+    user.password_hash = await hash_password_async(new_password)
     # Revoke sessions after password reset
-    db.execute(delete(LoginSession).where(LoginSession.user_id == user.id))
+    await db.execute(delete(LoginSession).where(LoginSession.user_id == user.id))
     record_event(
         db,
         admin.id,
@@ -154,16 +158,16 @@ def reset_user_password(db: Session, admin: User, user_id: str, new_password: st
         "user",
         user.id,
     )
-    db.commit()
+    await db.commit()
 
 
-def revoke_user_sessions(db: Session, admin: User, user_id: str) -> int:
+async def revoke_user_sessions(db: AsyncSession, admin: User, user_id: str) -> int:
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")
-    user = db.get(User, user_id)
+    user = await db.get(User, user_id)
     if user is None:
         raise ResourceNotFound("user not found")
-    result = db.execute(delete(LoginSession).where(LoginSession.user_id == user.id))
+    result = await db.execute(delete(LoginSession).where(LoginSession.user_id == user.id))
     deleted_count = result.rowcount if hasattr(result, "rowcount") else 1
     record_event(
         db,
@@ -172,30 +176,32 @@ def revoke_user_sessions(db: Session, admin: User, user_id: str) -> int:
         "user",
         user.id,
     )
-    db.commit()
+    await db.commit()
     return deleted_count
 
 
-def list_invitations(db: Session, admin: User) -> list[Invitation]:
+async def list_invitations(db: AsyncSession, admin: User) -> list[Invitation]:
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")
-    return list(db.scalars(select(Invitation).order_by(Invitation.created_at.desc())).all())
+    return list((await db.scalars(select(Invitation).order_by(Invitation.created_at.desc()))).all())
 
 
-def list_failed_jobs(db: Session, admin: User) -> list[Job]:
+async def list_failed_jobs(db: AsyncSession, admin: User) -> list[Job]:
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")
     return list(
-        db.scalars(
-            select(Job).where(Job.state == JobState.failed).order_by(Job.updated_at.desc())
+        (
+            await db.scalars(
+                select(Job).where(Job.state == JobState.failed).order_by(Job.updated_at.desc())
+            )
         ).all()
     )
 
 
-def retry_job(db: Session, admin: User, job_id: str) -> None:
+async def retry_job(db: AsyncSession, admin: User, job_id: str) -> None:
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")
-    job = db.get(Job, job_id)
+    job = await db.get(Job, job_id)
     if job is None or job.state != JobState.failed:
         raise ResourceNotFound("failed job not found")
     job.state = JobState.pending
@@ -209,4 +215,4 @@ def retry_job(db: Session, admin: User, job_id: str) -> None:
         "job",
         job.id,
     )
-    db.commit()
+    await db.commit()

@@ -29,13 +29,13 @@ from quirebase.web.responses import content_disposition
 from quirebase.web.templates import templates
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 router = protected_router()
 
 
 @router.get("/bibliography/import", response_class=HTMLResponse)
-def import_page(
+async def import_page(  # ruff: ignore[unused-async]
     request: Request,
     user: User = Depends(current_user),
     login: LoginSession = Depends(current_login),
@@ -54,7 +54,7 @@ def import_page(
 
 
 @router.get("/online-search", response_class=HTMLResponse)
-def online_search_page(
+async def online_search_page(
     request: Request,
     provider: str = "openalex",
     sort: str = "relevance",
@@ -63,7 +63,7 @@ def online_search_page(
     page: int = 1,
     user: User = Depends(current_user),
     login: LoginSession = Depends(current_login),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     fields = request.query_params.getlist("field")
     operators = request.query_params.getlist("operator")
@@ -86,7 +86,7 @@ def online_search_page(
     )
     results = None
     error = None
-    effective_settings = get_effective_settings_model(db)
+    effective_settings = await get_effective_settings_model(db)
     if clauses:
         try:
             start_year = int(year_from) if year_from else None
@@ -95,7 +95,7 @@ def online_search_page(
                 raise ValueError("starting year is invalid")
             if end_year and not 1000 <= end_year <= 3000:
                 raise ValueError("ending year is invalid")
-            results = search_candidate_records(
+            results = await search_candidate_records(
                 db,
                 user,
                 provider,
@@ -109,7 +109,11 @@ def online_search_page(
             )
         except (DomainError, ValueError) as caught:
             error = str(caught)
-    imported = get_accessible_item_identifiers(db, user)
+    imported = await get_accessible_item_identifiers(db, user)
+    # Search releases the pre-provider transaction, which expires dependency
+    # instances even when the session does not expire on commit.
+    await db.refresh(user)
+    await db.refresh(login)
     query_items = [
         (key, value) for key, value in request.query_params.multi_items() if key != "page"
     ]
@@ -143,19 +147,25 @@ def online_search_page(
 
 
 @router.post("/imports/pdf/published")
-def preview_pdf_import(
+async def preview_pdf_import(
     request: Request,
     pdfs: list[UploadFile] = File(),
     user: User = Depends(current_user),
     login: LoginSession = Depends(current_login),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    batch, records, errors = stage_pdf_import_batch(
+    batch, records, errors = await stage_pdf_import_batch(
         db,
         user,
         [(pdf.file, pdf.filename or "") for pdf in pdfs],
-        settings=get_effective_settings_model(db),
+        settings=await get_effective_settings_model(db),
     )
+    # The import service deliberately ends its short read transaction before
+    # provider I/O. Its rollback expires dependency-loaded ORM instances, so
+    # reload the values rendered after the service returns instead of allowing
+    # an implicit lazy query in the async template path.
+    await db.refresh(user)
+    await db.refresh(login)
     return templates.TemplateResponse(
         request,
         "import_preview.html",
@@ -171,16 +181,16 @@ def preview_pdf_import(
 
 
 @router.post("/bibliography/preview")
-def preview_bibliography_import(
+async def preview_bibliography_import(
     request: Request,
     bibliography: UploadFile = File(),
     file_format: str = Form(),
     user: User = Depends(current_user),
     login: LoginSession = Depends(current_login),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    raw = bibliography.file.read(5 * 1024 * 1024 + 1)
-    batch, records, errors = stage_import_batch(db, user, raw, file_format)
+    raw = await bibliography.read(5 * 1024 * 1024 + 1)
+    batch, records, errors = await stage_import_batch(db, user, raw, file_format)
     return templates.TemplateResponse(
         request,
         "import_preview.html",
@@ -196,17 +206,19 @@ def preview_bibliography_import(
 
 
 @router.post("/metadata/preview")
-def preview_identifier_import(
+async def preview_identifier_import(
     request: Request,
     identifier: str = Form(),
     provider: str = Form(default="auto"),
     user: User = Depends(current_user),
     login: LoginSession = Depends(current_login),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    batch, records, errors = stage_identifier_import_batch(
-        db, user, identifier, provider, settings=get_effective_settings_model(db)
+    batch, records, errors = await stage_identifier_import_batch(
+        db, user, identifier, provider, settings=await get_effective_settings_model(db)
     )
+    await db.refresh(user)
+    await db.refresh(login)
     return templates.TemplateResponse(
         request,
         "import_preview.html",
@@ -222,33 +234,33 @@ def preview_identifier_import(
 
 
 @router.post("/bibliography/import/{batch_id}")
-def commit_import_batch_route(
+async def commit_import_batch_route(
     batch_id: str,
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    commit_import_batch(db, user, batch_id)
+    await commit_import_batch(db, user, batch_id)
     return RedirectResponse("/", status_code=303)
 
 
 @router.post("/bibliography/import/{batch_id}/discard")
-def discard_import_batch_route(
+async def discard_import_batch_route(
     batch_id: str,
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    discard_import_batch(db, user, batch_id)
+    await discard_import_batch(db, user, batch_id)
     return RedirectResponse("/bibliography/import", status_code=303)
 
 
 @router.get("/bibliography/export")
-def export_accessible_bibliography_route(
+async def export_accessible_bibliography_route(
     file_format: str,
     style: str = "apa",
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    contents, media_type, filename = export_accessible_bibliography(
+    contents, media_type, filename = await export_accessible_bibliography(
         db, user, file_format, style_key=style
     )
     return Response(

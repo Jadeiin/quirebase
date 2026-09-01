@@ -11,7 +11,7 @@ from quirebase.core.database import get_db
 from quirebase.models import LoginSession, User
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
@@ -21,11 +21,11 @@ def login_identity(request: Request, username: str) -> str:
     return token_hash(f"{address}\0{username.casefold()}")
 
 
-def current_login(request: Request, db: Session = Depends(get_db)) -> LoginSession:
+async def current_login(request: Request, db: AsyncSession = Depends(get_db)) -> LoginSession:
     raw = request.cookies.get(get_settings().session_cookie)
     if not raw:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    login = get_login_session_by_token(db, raw)
+    login = await get_login_session_by_token(db, raw)
     if login is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
     request.state.csrf_token = login.csrf_token

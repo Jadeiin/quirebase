@@ -27,7 +27,7 @@ from quirebase.search import search_index
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
     from quirebase.models import ItemAuthor, ItemIdentifier, User
 
@@ -228,8 +228,8 @@ def _serialize_custom_fields(fields: tuple[CustomField, ...]) -> str | None:
     return json.dumps(values, ensure_ascii=False) if values else None
 
 
-def _create_item(
-    db: Session,
+async def _create_item(
+    db: AsyncSession,
     actor: User,
     metadata: ItemMetadata,
 ) -> ItemWriteResult:
@@ -240,156 +240,161 @@ def _create_item(
     )
     item = Item(**values)
     db.add(item)
-    db.flush()
-    set_item_identifiers(db, actor, item.id, _identifier_pairs(metadata))
-    set_item_authors(
+    await db.flush()
+    await set_item_identifiers(db, actor, item.id, _identifier_pairs(metadata))
+    await set_item_authors(
         db,
         actor,
         item.id,
         _contributor_payload(metadata.authors, editor=False),
         role="author",
     )
-    set_item_authors(
+    await set_item_authors(
         db,
         actor,
         item.id,
         _contributor_payload(metadata.editors, editor=True),
         role="editor",
     )
-    search_index(db).index_item(db, item.id)
-    request_item_tag_recommendation(db, item.id, owner_id=actor.id)
+    await search_index(db).index_item(db, item.id)
+    await request_item_tag_recommendation(db, item.id, owner_id=actor.id)
     record_event(db, actor.id, "item.create", "item", item.id)
-    db.commit()
+    await db.commit()
     return ItemWriteResult(item_id=item.id, version=item.version)
 
 
-def create_item(
-    db: Session,
+async def create_item(
+    db: AsyncSession,
     actor: User,
     metadata: ItemMetadata,
 ) -> ItemWriteResult:
     try:
-        return _create_item(db, actor, metadata)
+        return await _create_item(db, actor, metadata)
     except Exception:
-        db.rollback()
+        await db.rollback()
         raise
 
 
-def _revise_item_metadata(
-    db: Session,
+async def _revise_item_metadata(
+    db: AsyncSession,
     actor: User,
     item_id: str,
     expected_version: int,
     metadata: ItemMetadata,
 ) -> ItemWriteResult:
-    require_editable_item(db, actor, item_id)
+    actor_id = actor.id
+    item = await require_editable_item(db, actor, item_id)
     values = _bibliographic_values(metadata)
     values.update(
         custom_fields=_serialize_custom_fields(metadata.custom_fields),
-        updated_by=actor.id,
+        updated_by=actor_id,
         updated_at=datetime.now(UTC),
         version=Item.version + 1,
     )
-    version = db.scalar(
+    version = await db.scalar(
         update(Item)
         .where(Item.id == item_id, Item.version == expected_version)
         .values(**values)
         .returning(Item.version)
     )
     if version is None:
-        db.rollback()
-        current = db.get(Item, item_id)
+        await db.rollback()
+        current = await db.get(Item, item_id)
         raise VersionConflict(current.version if current else None)
 
-    set_item_identifiers(db, actor, item_id, _identifier_pairs(metadata))
-    set_item_authors(
+    await set_item_identifiers(db, actor, item_id, _identifier_pairs(metadata))
+    await set_item_authors(
         db,
         actor,
         item_id,
         _contributor_payload(metadata.authors, editor=False),
         role="author",
     )
-    set_item_authors(
+    await set_item_authors(
         db,
         actor,
         item_id,
         _contributor_payload(metadata.editors, editor=True),
         role="editor",
     )
-    db.expire_all()
-    search_index(db).index_item(db, item_id)
-    request_item_tag_recommendation(db, item_id, owner_id=actor.id)
+    # The bulk UPDATE does not reliably populate every value used by the search
+    # projection. Refresh only the mutated aggregate; expiring the whole session
+    # also expires the caller's User and invites implicit async ORM I/O later.
+    await db.refresh(item)
+    await search_index(db).index_item(db, item_id)
+    await request_item_tag_recommendation(db, item_id, owner_id=actor_id)
     record_event(
         db,
-        actor.id,
+        actor_id,
         "item.update",
         "item",
         item_id,
         detail={"version": version},
     )
-    db.commit()
+    await db.commit()
     return ItemWriteResult(item_id=item_id, version=version)
 
 
-def revise_item_metadata(
-    db: Session,
+async def revise_item_metadata(
+    db: AsyncSession,
     actor: User,
     item_id: str,
     expected_version: int,
     metadata: ItemMetadata,
 ) -> ItemWriteResult:
     try:
-        return _revise_item_metadata(db, actor, item_id, expected_version, metadata)
+        return await _revise_item_metadata(db, actor, item_id, expected_version, metadata)
     except Exception:
-        db.rollback()
+        await db.rollback()
         raise
 
 
-def _regenerate_bibtex_key(
-    db: Session,
+async def _regenerate_bibtex_key(
+    db: AsyncSession,
     actor: User,
     item_id: str,
     expected_version: int,
 ) -> ItemWriteResult:
-    item = require_editable_item(db, actor, item_id)
+    actor_id = actor.id
+    item = await require_editable_item(db, actor, item_id)
     key = generate_bibtex_key(item)
-    version = db.scalar(
+    version = await db.scalar(
         update(Item)
         .where(Item.id == item_id, Item.version == expected_version)
         .values(
             bibtex_id=key,
-            updated_by=actor.id,
+            updated_by=actor_id,
             updated_at=datetime.now(UTC),
             version=Item.version + 1,
         )
         .returning(Item.version)
     )
     if version is None:
-        db.rollback()
-        current = db.get(Item, item_id)
+        await db.rollback()
+        current = await db.get(Item, item_id)
         raise VersionConflict(current.version if current else None)
-    db.expire_all()
-    search_index(db).index_item(db, item_id)
+    await db.refresh(item)
+    await search_index(db).index_item(db, item_id)
     record_event(
         db,
-        actor.id,
+        actor_id,
         "item.bibtex_key.regenerate",
         "item",
         item_id,
         detail={"version": version},
     )
-    db.commit()
+    await db.commit()
     return ItemWriteResult(item_id=item_id, version=version)
 
 
-def regenerate_bibtex_key(
-    db: Session,
+async def regenerate_bibtex_key(
+    db: AsyncSession,
     actor: User,
     item_id: str,
     expected_version: int,
 ) -> ItemWriteResult:
     try:
-        return _regenerate_bibtex_key(db, actor, item_id, expected_version)
+        return await _regenerate_bibtex_key(db, actor, item_id, expected_version)
     except Exception:
-        db.rollback()
+        await db.rollback()
         raise

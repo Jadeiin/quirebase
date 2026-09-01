@@ -1,3 +1,5 @@
+import asyncio
+import json
 from types import SimpleNamespace
 
 import httpx2
@@ -6,21 +8,26 @@ from inquiro import (
     CandidateNotFound,
     CandidateRecord,
     Identifier,
+    ProviderConfig,
+    ProviderRuntime,
     ProviderUnavailable,
 )
+from inquiro.transport import MockExchange, TransportRequest, TransportResponse
 from inquiro_provider_helpers import provider_runtime
 
+pytestmark = pytest.mark.anyio
 
-def lookup_metadata(value, provider="auto", settings=None, transport=None):
+
+async def lookup_metadata(value, provider="auto", settings=None, transport=None):
     assert transport is not None
-    with provider_runtime(settings=settings, transport=transport) as runtime:
-        record = runtime.lookup(value, provider=provider)
+    async with provider_runtime(settings=settings, transport=transport) as runtime:
+        record = await runtime.lookup(value, provider=provider)
     return record.identifier, record
 
 
-def parse_identifier(value, provider="auto"):
+async def parse_identifier(value, provider="auto"):
     settings = SimpleNamespace(nasa_ads_token="ads-token", ieee_api_key="ieee-key")
-    identifier, _record = lookup_metadata(
+    identifier, _record = await lookup_metadata(
         value,
         provider,
         settings=settings,
@@ -168,23 +175,23 @@ def response(request: httpx2.Request) -> httpx2.Response:
         ("1234567", "article_number", Identifier("article_number", "1234567")),
     ],
 )
-def test_identifier_detection(value, provider, expected):
-    assert parse_identifier(value, provider) == expected
+async def test_identifier_detection(value, provider, expected):
+    assert await parse_identifier(value, provider) == expected
 
 
-def test_auto_detection_does_not_match_bibcode():
+async def test_auto_detection_does_not_match_bibcode():
     with pytest.raises(ValueError, match="not a recognized DOI"):
-        parse_identifier("2025ApJ...123..456A", "auto")
+        await parse_identifier("2025ApJ...123..456A", "auto")
 
 
-def test_identifier_input_cannot_be_used_as_an_arbitrary_url():
+async def test_identifier_input_cannot_be_used_as_an_arbitrary_url():
     with pytest.raises(ValueError):
-        parse_identifier("https://127.0.0.1/admin", "auto")
+        await parse_identifier("https://127.0.0.1/admin", "auto")
 
 
-def test_pmc_does_not_offer_metadata_lookup():
+async def test_pmc_does_not_offer_metadata_lookup():
     with pytest.raises(ValueError, match="unknown identifier provider: pmc"):
-        lookup_metadata("PMC123", "pmc", transport=httpx2.MockTransport(response))
+        await lookup_metadata("PMC123", "pmc", transport=httpx2.MockTransport(response))
 
 
 @pytest.mark.parametrize(
@@ -194,9 +201,9 @@ def test_pmc_does_not_offer_metadata_lookup():
         ("1234567", "article_number", "IEEE Xplore requires INQUIRO_IEEE_API_KEY"),
     ],
 )
-def test_credentialed_lookup_errors_remain_provider_specific(value, provider, message):
+async def test_credentialed_lookup_errors_remain_provider_specific(value, provider, message):
     with pytest.raises(ProviderUnavailable) as error:
-        lookup_metadata(value, provider, transport=httpx2.MockTransport(response))
+        await lookup_metadata(value, provider, transport=httpx2.MockTransport(response))
     assert str(error.value) == message
 
 
@@ -209,9 +216,9 @@ def test_credentialed_lookup_errors_remain_provider_specific(value, provider, me
         ("invalid-number", "article_number"),
     ],
 )
-def test_explicit_provider_rejects_malformed_identifiers(value, provider):
+async def test_explicit_provider_rejects_malformed_identifiers(value, provider):
     with pytest.raises(ValueError, match=f"identifier is not a valid {provider}"):
-        parse_identifier(value, provider)
+        await parse_identifier(value, provider)
 
 
 @pytest.mark.parametrize(
@@ -227,8 +234,8 @@ def test_explicit_provider_rejects_malformed_identifiers(value, provider):
         ("1234567", "article_number", "IEEE Example"),
     ],
 )
-def test_provider_adapters_map_records(value, provider, title):
-    parsed, record = lookup_metadata(
+async def test_provider_adapters_map_records(value, provider, title):
+    parsed, record = await lookup_metadata(
         value,
         provider,
         settings=SimpleNamespace(
@@ -243,7 +250,7 @@ def test_provider_adapters_map_records(value, provider, title):
     assert record.identifiers
 
 
-def test_crossref_lookup_preserves_rich_candidate_metadata():
+async def test_crossref_lookup_preserves_rich_candidate_metadata():
     def rich_crossref_response(_request: httpx2.Request) -> httpx2.Response:
         return httpx2.Response(
             200,
@@ -273,7 +280,7 @@ def test_crossref_lookup_preserves_rich_candidate_metadata():
             },
         )
 
-    _identifier, record = lookup_metadata(
+    _identifier, record = await lookup_metadata(
         "10.1234/rich",
         "doi",
         transport=httpx2.MockTransport(rich_crossref_response),
@@ -291,10 +298,10 @@ def test_crossref_lookup_preserves_rich_candidate_metadata():
     ]
 
 
-def test_metadata_response_size_is_limited():
+async def test_metadata_response_size_is_limited():
     transport = httpx2.MockTransport(lambda _request: httpx2.Response(200, content=b"x" * 2048))
     with pytest.raises(ProviderUnavailable, match="size limit"):
-        lookup_metadata(
+        await lookup_metadata(
             "10.1234/sample",
             "doi",
             settings=SimpleNamespace(metadata_max_response_bytes=1024),
@@ -302,20 +309,20 @@ def test_metadata_response_size_is_limited():
         )
 
 
-def test_lookup_404_is_a_typed_candidate_failure():
+async def test_lookup_404_is_a_typed_candidate_failure():
     transport = httpx2.MockTransport(lambda _request: httpx2.Response(404))
     with pytest.raises(CandidateNotFound, match="not found"):
-        lookup_metadata("10.9999/missing", "doi", transport=transport)
+        await lookup_metadata("10.9999/missing", "doi", transport=transport)
 
 
 @pytest.mark.parametrize("status_code", [301, 429, 503])
-def test_lookup_transport_failures_share_one_error_contract(status_code):
+async def test_lookup_transport_failures_share_one_error_contract(status_code):
     transport = httpx2.MockTransport(lambda _request: httpx2.Response(status_code))
     with pytest.raises(ProviderUnavailable):
-        lookup_metadata("10.9999/failure", "doi", transport=transport)
+        await lookup_metadata("10.9999/failure", "doi", transport=transport)
 
 
-def test_pubmed_lookup_passes_configured_identity_and_api_key():
+async def test_pubmed_lookup_passes_configured_identity_and_api_key():
     captured: dict[str, str] = {}
 
     def handler(request: httpx2.Request) -> httpx2.Response:
@@ -325,7 +332,7 @@ def test_pubmed_lookup_passes_configured_identity_and_api_key():
             json={"result": {"42": {"title": "Configured PubMed", "authors": []}}},
         )
 
-    _, record = lookup_metadata(
+    _, record = await lookup_metadata(
         "42",
         "pmid",
         settings=SimpleNamespace(
@@ -364,7 +371,7 @@ def test_candidate_record_is_an_immutable_normalized_value():
         record.title = "changed"
 
 
-def test_openalex_abstract_inverted_index_and_html_cleaning():
+async def test_openalex_abstract_inverted_index_and_html_cleaning():
     mock_payload = {
         "id": "https://openalex.org/W4391019623",
         "doi": "https://doi.org/10.48550/arxiv.2309.12825",
@@ -394,7 +401,7 @@ def test_openalex_abstract_inverted_index_and_html_cleaning():
     def handler(request: httpx2.Request) -> httpx2.Response:
         return httpx2.Response(200, json=mock_payload)
 
-    _ident, record = lookup_metadata(
+    _ident, record = await lookup_metadata(
         "W4391019623",
         "openalex",
         transport=httpx2.MockTransport(handler),
@@ -405,3 +412,30 @@ def test_openalex_abstract_inverted_index_and_html_cleaning():
     assert record.authors == "Guanqi He; Jordan Key"
     assert record.keywords == "Robotics"
     assert "https://arxiv.org/abs/2309.12825" in str(record.urls)
+
+
+async def test_slow_provider_lookup_does_not_block_an_independent_lookup():
+    slow_started = asyncio.Event()
+    release_slow = asyncio.Event()
+
+    async def send(request: TransportRequest) -> TransportResponse:
+        title = "Fast result"
+        if "slow" in request.url:
+            slow_started.set()
+            await release_slow.wait()
+            title = "Slow result"
+        return TransportResponse(
+            200,
+            json.dumps({"message": {"title": [title], "DOI": "10.1234/result"}}).encode(),
+        )
+
+    runtime = ProviderRuntime.with_exchange(ProviderConfig(), MockExchange(send))
+    async with runtime:
+        slow = asyncio.create_task(runtime.lookup("10.1234/slow", provider="doi"))
+        await slow_started.wait()
+        try:
+            fast = await runtime.lookup("10.1234/fast", provider="doi")
+            assert fast.title == "Fast result"
+        finally:
+            release_slow.set()
+        assert (await slow).title == "Slow result"

@@ -19,7 +19,7 @@ dependencies = [
   "pydantic-settings>=2.10,<3",
   "python-multipart>=0.0.20,<1",
   "rubrica==0.1.2",
-  "sqlalchemy>=2.0,<3",
+  "sqlalchemy[asyncio,aiosqlite]>=2.0,<3",
   "typer>=0.16,<1",
   "uvicorn[standard]>=0.35,<1",
   "babel>=2.18.0",
@@ -30,7 +30,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-postgres = ["psycopg[binary]>=3.2,<4"]
+postgres = [
+  "sqlalchemy[postgresql-psycopgbinary,postgresql-asyncpg]>=2.0,<3",
+]
 citation = ["inquiro[citation]==0.1.2"]
 keybert = ["rubrica[keybert]==0.1.2"]
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any, Self
 
@@ -23,18 +24,18 @@ class FakeRuntime:
         self.search_query: SearchQuery | None = None
         self.closed = False
 
-    def lookup(self, value: str, *, provider: str = "auto") -> object:
+    async def lookup(self, value: str, *, provider: str = "auto") -> object:
         self.lookup_call = (value, provider)
         return self.result
 
-    def search(self, query: SearchQuery) -> object:
+    async def search(self, query: SearchQuery) -> object:
         self.search_query = query
         return self.result
 
-    def __enter__(self) -> Self:
+    async def __aenter__(self) -> Self:
         return self
 
-    def __exit__(self, *_exc: object) -> None:
+    async def __aexit__(self, *_exc: object) -> None:
         self.closed = True
 
 
@@ -61,7 +62,7 @@ def test_lookup_outputs_candidate_as_json_and_closes_runtime(capsys, monkeypatch
         "--provider",
         "doi",
     ])
-    _run(args, factory)
+    asyncio.run(_run(args, factory))
 
     output = json.loads(capsys.readouterr().out)
     assert output["identifier"] == {"provider": "doi", "value": "10.1000/example"}
@@ -102,7 +103,7 @@ def test_search_maps_all_options_to_one_runtime_query(capsys):
         "--year-to",
         "2025",
     ])
-    _run(args, factory)
+    asyncio.run(_run(args, factory))
 
     assert json.loads(capsys.readouterr().out) == {
         "provider": "openalex",
@@ -160,7 +161,7 @@ def test_lookup_exports_each_bibliography_format(
         file_format,
         "--include-identifiers",
     ])
-    _run(args, lambda config: FakeRuntime(config, candidate))
+    asyncio.run(_run(args, lambda config: FakeRuntime(config, candidate)))
 
     output = capsys.readouterr().out
     assert expected in output
@@ -193,7 +194,7 @@ def test_search_export_disambiguates_duplicate_generated_keys(capsys):
         "--preserve-case",
     ])
 
-    _run(args, lambda config: FakeRuntime(config, page))
+    asyncio.run(_run(args, lambda config: FakeRuntime(config, page)))
 
     output = capsys.readouterr().out
     assert "@article{Doe2025Same," in output
@@ -212,7 +213,7 @@ def test_known_errors_are_structured_on_stderr(
     monkeypatch,
 ):
     class FailingRuntime(FakeRuntime):
-        def lookup(self, value: str, *, provider: str = "auto") -> Any:
+        async def lookup(self, value: str, *, provider: str = "auto") -> Any:
             raise error
 
     monkeypatch.setattr("inquiro.cli.ProviderRuntime", lambda config: FailingRuntime(config, None))

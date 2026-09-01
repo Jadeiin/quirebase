@@ -9,7 +9,7 @@ from quirebase.audit import record_event
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
     from quirebase.models import User
 
@@ -19,8 +19,8 @@ class SearchClauseView(Protocol):
     def field(self) -> str: ...
 
 
-def record_discovery_search_audit(
-    db: Session,
+async def record_discovery_search_audit(
+    db: AsyncSession,
     user: User,
     provider: str,
     clauses: Sequence[SearchClauseView],
@@ -37,12 +37,12 @@ def record_discovery_search_audit(
             "result_count": result_count,
         },
     )
-    db.commit()
+    await db.commit()
 
 
-def get_accessible_item_identifiers(db: Session, user: User) -> set[tuple[str, str]]:
+async def get_accessible_item_identifiers(db: AsyncSession, user: User) -> set[tuple[str, str]]:
     identifiers_by_provider: set[tuple[str, str]] = set()
-    for item in db.scalars(visible_items_query(user)).all():
+    for item in (await db.scalars(visible_items_query(user))).all():
         if item.doi:
             identifiers_by_provider.add(("doi", item.doi.casefold()))
         try:

@@ -20,7 +20,7 @@ def register_discovery_tools(server: MCPServer, runtime: McpRuntime, settings: S
         description="Search an external scholarly metadata Provider; never forwards the API Token.",
         annotations=OPEN_WORLD_READ,
     )
-    def discovery_search(
+    async def discovery_search(
         provider: str,
         clauses: list[DiscoveryClause],
         page: Annotated[int, Field(ge=1)] = 1,
@@ -29,9 +29,8 @@ def register_discovery_tools(server: MCPServer, runtime: McpRuntime, settings: S
         year_from: int | None = None,
         year_to: int | None = None,
     ) -> CandidatePageView:
-        return runtime.call(
-            "discovery.search",
-            lambda db, user: search_candidate_records(
+        async def run(db, user):
+            return await search_candidate_records(
                 db,
                 user,
                 provider,
@@ -42,5 +41,9 @@ def register_discovery_tools(server: MCPServer, runtime: McpRuntime, settings: S
                 year_from=year_from,
                 year_to=year_to,
                 settings=settings,
-            ),
+            )
+
+        return await runtime.call(
+            "discovery.search",
+            run,
         )

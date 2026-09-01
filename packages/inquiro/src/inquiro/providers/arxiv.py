@@ -26,10 +26,10 @@ from inquiro.providers._payload import (
 
 
 class ArxivLookupAdapter:
-    def lookup(
+    async def lookup(
         self, client: ProviderContext, value: str, settings: Any, *, endpoint: str
     ) -> ProviderRecord:
-        body = client._get(
+        body = await client._get(
             endpoint,
             {"id_list": value, "max_results": "1"},
         )
@@ -87,7 +87,7 @@ class ArxivLookupAdapter:
 
 
 class ArxivSearchAdapter:
-    def search(
+    async def search(
         self,
         client: ProviderContext,
         clauses: list[SearchClause],
@@ -122,7 +122,7 @@ class ArxivSearchAdapter:
             "sortBy": "submittedDate" if sort == "published" else "relevance",
             "sortOrder": "descending",
         }
-        body = client._get(endpoint, params)
+        body = await client._get(endpoint, params)
         try:
             root = ElementTree.fromstring(body)
         except ElementTree.ParseError as error:
@@ -167,7 +167,7 @@ class ArxivSearchAdapter:
 
 
 class ArxivDocumentAdapter:
-    def acquire(
+    async def acquire(
         self,
         client: ProviderContext,
         value: str,
@@ -176,7 +176,7 @@ class ArxivDocumentAdapter:
         endpoint: str,
     ) -> AcquiredDocument:
         filename = f"{value.replace('/', '_')}.pdf"
-        return client._download_pdf(
+        return await client._download_pdf(
             f"{endpoint}/{value}.pdf",
             filename=filename,
             provider="arxiv",

@@ -21,13 +21,13 @@ from quirebase.web.responses import content_disposition
 from quirebase.web.templates import templates
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 router = protected_router()
 
 
 @router.get("/library", response_class=HTMLResponse)
-def library(
+async def library(
     request: Request,
     q: str = "",
     tag: str = "",
@@ -38,11 +38,11 @@ def library(
     page: int = 1,
     user: User = Depends(current_user),
     login_session: LoginSession = Depends(current_login),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     page = max(page, 1)
     per_page = 25
-    items, total, tags, years = search_library(
+    items, total, tags, years = await search_library(
         db,
         user,
         q=q,
@@ -60,8 +60,8 @@ def library(
         {
             "user": user,
             "items": items,
-            "projects": visible_projects(db, user),
-            "editable_projects": editable_projects(db, user),
+            "projects": await visible_projects(db, user),
+            "editable_projects": await editable_projects(db, user),
             "tags": tags,
             "years": years,
             "csrf": login_session.csrf_token,
@@ -82,7 +82,7 @@ def library(
 
 
 @router.post("/library/bulk")
-def library_bulk_action(
+async def library_bulk_action(
     action: str = Form(),
     item_ids: list[str] = Form(default=[]),
     project_id: str = Form(default=""),
@@ -105,7 +105,7 @@ def library_bulk_action(
     include_supplements: bool = Form(default=False),
     timezone: str = Form(default=""),
     user: User = Depends(current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     if action == "export_csl" or action.startswith("export_"):
         options = BibliographyExportOptions(
@@ -125,7 +125,7 @@ def library_bulk_action(
             citation_key_force_ascii=citation_key_force_ascii,
         )
         if action == "export_csl":
-            contents, media_type, filename = export_selected_bibliography(
+            contents, media_type, filename = await export_selected_bibliography(
                 db,
                 user,
                 item_ids,
@@ -134,7 +134,7 @@ def library_bulk_action(
                 options=options,
             )
         else:
-            contents, media_type, filename = export_selected_bibliography(
+            contents, media_type, filename = await export_selected_bibliography(
                 db,
                 user,
                 item_ids,
@@ -147,7 +147,7 @@ def library_bulk_action(
             headers={"Content-Disposition": content_disposition(filename)},
         )
     if action == "download_pdfs":
-        archive = download_selected_item_documents(
+        archive = await download_selected_item_documents(
             db,
             user,
             item_ids,
@@ -161,7 +161,7 @@ def library_bulk_action(
             headers={"Content-Disposition": content_disposition(archive.filename)},
         )
 
-    apply_bulk_item_action(
+    await apply_bulk_item_action(
         db,
         user,
         item_ids=item_ids,

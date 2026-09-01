@@ -11,7 +11,7 @@ from quirebase.core.errors import ResourceUnavailable, ValidationFailure
 from quirebase.models import SystemSetting, User
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 ALLOWED_RUNTIME_KEYS: set[str] = {
     "metadata_contact_email",
@@ -33,7 +33,7 @@ INTEGER_KEYS: set[str] = {
 }
 
 
-def get_runtime_settings(db: Session) -> dict[str, Any]:
+async def get_runtime_settings(db: AsyncSession) -> dict[str, Any]:
     base = get_settings()
     current: dict[str, Any] = {
         "metadata_contact_email": base.metadata_contact_email or "",
@@ -48,7 +48,7 @@ def get_runtime_settings(db: Session) -> dict[str, Any]:
         "database_url": base.database_url,
         "data_dir": str(base.data_dir),
     }
-    db_settings = list(db.scalars(select(SystemSetting)).all())
+    db_settings = list((await db.scalars(select(SystemSetting))).all())
     for item in db_settings:
         if item.key in ALLOWED_RUNTIME_KEYS:
             if item.key in INTEGER_KEYS:
@@ -61,9 +61,9 @@ def get_runtime_settings(db: Session) -> dict[str, Any]:
     return current
 
 
-def get_effective_setting(db: Session, key: str, default: Any = None) -> Any:
+async def get_effective_setting(db: AsyncSession, key: str, default: Any = None) -> Any:
     if key in ALLOWED_RUNTIME_KEYS:
-        record = db.get(SystemSetting, key)
+        record = await db.get(SystemSetting, key)
         if record is not None and record.value is not None:
             if key in INTEGER_KEYS:
                 try:
@@ -74,13 +74,13 @@ def get_effective_setting(db: Session, key: str, default: Any = None) -> Any:
     return getattr(get_settings(), key, default)
 
 
-def get_effective_settings_model(db: Session) -> Any:
+async def get_effective_settings_model(db: AsyncSession) -> Any:
     from quirebase.core.config import Settings
 
-    return Settings(**get_runtime_settings(db))
+    return Settings(**await get_runtime_settings(db))
 
 
-def update_runtime_settings(db: Session, admin: User, updates: dict[str, Any]) -> None:
+async def update_runtime_settings(db: AsyncSession, admin: User, updates: dict[str, Any]) -> None:
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")
     sanitized: dict[str, str] = {}
@@ -99,7 +99,7 @@ def update_runtime_settings(db: Session, admin: User, updates: dict[str, Any]) -
 
     now = datetime.now(UTC)
     for key, val in sanitized.items():
-        existing = db.get(SystemSetting, key)
+        existing = await db.get(SystemSetting, key)
         if existing:
             existing.value = val
             existing.updated_at = now
@@ -121,4 +121,4 @@ def update_runtime_settings(db: Session, admin: User, updates: dict[str, Any]) -
         None,
         detail={"modified_keys": list(sanitized.keys())},
     )
-    db.commit()
+    await db.commit()

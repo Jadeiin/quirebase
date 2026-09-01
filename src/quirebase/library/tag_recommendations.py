@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import importlib.metadata
 import importlib.util
@@ -37,7 +38,7 @@ from quirebase.models import (
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 _URL = re.compile(r"https?://\S+|www\.\S+", re.IGNORECASE)
 _DOI = re.compile(r"\b(?:doi\s*:\s*)?10\.\d{4,9}/\S+", re.IGNORECASE)
@@ -154,8 +155,8 @@ def validate_engine_configuration(settings: Settings) -> EngineDescriptor:
     return descriptor
 
 
-def _item_text(db: Session, item: Item, settings: Settings) -> str:
-    full_text = db.scalar(
+async def _item_text(db: AsyncSession, item: Item, settings: Settings) -> str:
+    full_text = await db.scalar(
         select(FileRevision.full_text)
         .where(
             FileRevision.item_id == item.id,
@@ -172,12 +173,12 @@ def _item_text(db: Session, item: Item, settings: Settings) -> str:
     )
 
 
-def _linked_job(db: Session, record: ItemTagRecommendation) -> Job | None:
-    return db.get(Job, record.job_id) if record.job_id else None
+async def _linked_job(db: AsyncSession, record: ItemTagRecommendation) -> Job | None:
+    return await db.get(Job, record.job_id) if record.job_id else None
 
 
-def request_item_tag_recommendation(
-    db: Session,
+async def request_item_tag_recommendation(
+    db: AsyncSession,
     item_id: str,
     *,
     owner_id: str | None = None,
@@ -188,30 +189,32 @@ def request_item_tag_recommendation(
     effective = settings or get_settings()
     if force:
         if db.get_bind().dialect.name == "sqlite":
-            locked_item_id = db.scalar(
+            locked_item_id = await db.scalar(
                 update(Item)
                 .where(Item.id == item_id)
                 .values(updated_at=Item.updated_at)
                 .returning(Item.id)
             )
         else:
-            locked_item_id = db.scalar(select(Item.id).where(Item.id == item_id).with_for_update())
+            locked_item_id = await db.scalar(
+                select(Item.id).where(Item.id == item_id).with_for_update()
+            )
         if locked_item_id is None:
             raise ValueError("Item no longer exists")
-    item = db.get(Item, item_id)
+    item = await db.get(Item, item_id)
     if item is None:
         raise ValueError("Item no longer exists")
-    descriptor = describe_engine(effective)
+    descriptor = await asyncio.to_thread(describe_engine, effective)
     fingerprint = input_fingerprint(
-        _item_text(db, item, effective),
+        await _item_text(db, item, effective),
         descriptor,
         max_chars=effective.recommendation_max_chars,
     )
-    record = db.scalar(
+    record = await db.scalar(
         select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == item_id)
     )
     if record is not None and record.input_fingerprint == fingerprint and not force:
-        job = _linked_job(db, record)
+        job = await _linked_job(db, record)
         if record.generated_at is not None or (
             job is not None
             and job.state in {JobState.pending, JobState.running, JobState.succeeded}
@@ -245,28 +248,28 @@ def request_item_tag_recommendation(
         owner_id=owner_id,
     )
     db.add(job)
-    db.flush()
+    await db.flush()
     record.job_id = job.id
-    db.flush()
+    await db.flush()
     return record
 
 
-def force_item_tag_recommendation(
-    db: Session,
+async def force_item_tag_recommendation(
+    db: AsyncSession,
     user: User,
     item_id: str,
     *,
     settings: Settings | None = None,
 ) -> ItemTagRecommendation:
-    require_editable_item(db, user, item_id)
+    await require_editable_item(db, user, item_id)
     try:
-        record = request_item_tag_recommendation(
+        record = await request_item_tag_recommendation(
             db, item_id, owner_id=user.id, force=True, settings=settings
         )
-        db.commit()
+        await db.commit()
         return record
     except Exception:
-        db.rollback()
+        await db.rollback()
         raise
 
 
@@ -282,8 +285,8 @@ def _engine(settings: Settings):
     raise RuntimeError(f"unsupported recommendation engine: {settings.recommendation_engine}")
 
 
-def handle_item_tag_recommendation(
-    db: Session,
+async def handle_item_tag_recommendation(
+    db: AsyncSession,
     job: Job,
     payload: dict[str, Any],
     *,
@@ -292,25 +295,31 @@ def handle_item_tag_recommendation(
     effective = settings or get_settings()
     item_id = str(payload["item_id"])
     token = int(payload["generation_token"])
-    record = db.scalar(
+    record = await db.scalar(
         select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == item_id)
     )
     if record is None or record.generation_token != token or record.job_id != job.id:
         return {"stale": True}
-    item = db.get(Item, item_id)
+    item = await db.get(Item, item_id)
     if item is None:
         raise ValueError("Item no longer exists")
-    text = _item_text(db, item, effective)
-    descriptor = describe_engine(effective)
+    text = await _item_text(db, item, effective)
+    descriptor = await asyncio.to_thread(describe_engine, effective)
     fingerprint = input_fingerprint(text, descriptor, max_chars=effective.recommendation_max_chars)
     if fingerprint != record.input_fingerprint:
-        request_item_tag_recommendation(db, item_id, owner_id=job.owner_id, settings=effective)
+        await request_item_tag_recommendation(
+            db, item_id, owner_id=job.owner_id, settings=effective
+        )
         return {"stale": True, "replacement_enqueued": True}
-    result = _engine(effective).recommend(
-        (RecommendationDocument(identifier=item_id, text=text),),
-        RecommendationLimits(single_words=10, phrases=10),
+    result = (
+        await asyncio.to_thread(
+            lambda: _engine(effective).recommend(
+                (RecommendationDocument(identifier=item_id, text=text),),
+                RecommendationLimits(single_words=10, phrases=10),
+            )
+        )
     )[0]
-    db.refresh(record)
+    await db.refresh(record)
     if record.generation_token != token or record.job_id != job.id:
         return {"stale": True}
     record.single_words = json.dumps(result.single_words, ensure_ascii=False)
@@ -322,12 +331,12 @@ def handle_item_tag_recommendation(
     }
 
 
-def recommendation_state(db: Session, record: ItemTagRecommendation | None) -> str:
+async def recommendation_state(db: AsyncSession, record: ItemTagRecommendation | None) -> str:
     if record is None:
         return "empty"
     if record.generated_at is not None:
         return "ready"
-    job = _linked_job(db, record)
+    job = await _linked_job(db, record)
     if job is None:
         return "failed"
     if job.state == JobState.failed:
@@ -348,15 +357,15 @@ def decoded_candidates(
     return words, phrases
 
 
-def enqueue_all_item_tag_recommendations(
-    db: Session,
+async def enqueue_all_item_tag_recommendations(
+    db: AsyncSession,
     *,
     owner_id: str | None = None,
     settings: Settings | None = None,
 ) -> int:
-    item_ids = tuple(db.scalars(select(Item.id).order_by(Item.id)).all())
+    item_ids = tuple((await db.scalars(select(Item.id).order_by(Item.id))).all())
     for item_id in item_ids:
-        request_item_tag_recommendation(
+        await request_item_tag_recommendation(
             db, item_id, owner_id=owner_id, force=True, settings=settings
         )
     return len(item_ids)

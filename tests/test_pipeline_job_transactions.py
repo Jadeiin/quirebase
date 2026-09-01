@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from io import BytesIO
 
 import pymupdf
 import pytest
 from sqlalchemy import select
-from test_http import authenticated_client
+from test_http import authenticated_async_client
 from test_library_ui import pdf_bytes
 
 from quirebase.core.config import get_settings
@@ -20,24 +21,32 @@ from quirebase.pipeline.jobs import (
 )
 
 
-def test_job_failure_rolls_back_partial_revision_state(db, tmp_path, monkeypatch):
-    _client, item, _revision = authenticated_client(db, tmp_path, monkeypatch)
-    user = db.get(User, item.created_by)
+@pytest.mark.anyio
+async def test_job_failure_rolls_back_partial_revision_state(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    user = await db.get(User, item.created_by)
+    assert user is not None
 
-    revision = store_pdf_revision(
+    revision = await store_pdf_revision(
         db,
         user,
         item.id,
         BytesIO(pdf_bytes()),
         "sample.pdf",
     )
-    job = db.scalar(
+    job = await db.scalar(
         select(Job).where(
             Job.kind == "pdf.inspect", Job.idempotency_key == f"pdf.inspect:{revision.id}"
         )
     )
     assert job is not None
     assert revision.processing_state == "pending"
+    revision_id, job_id = revision.id, job.id
 
     # Simulate thumbnail failure during processing
     monkeypatch.setattr(
@@ -45,22 +54,32 @@ def test_job_failure_rolls_back_partial_revision_state(db, tmp_path, monkeypatch
         lambda _src, _dst: (_ for _ in ()).throw(RuntimeError("Thumbnail generation crashed")),
     )
 
-    run_job(db, job)
+    await run_job(db, job)
 
     # Verify database session state: revision processing_state was rolled back and is NOT "ready"
-    updated_revision = db.get(FileRevision, revision.id)
+    updated_revision = await db.get(FileRevision, revision_id)
+    assert updated_revision is not None
     assert updated_revision.processing_state == "pending"
 
     # Verify job record state was saved with error and retry state
-    updated_job = db.get(Job, job.id)
+    updated_job = await db.get(Job, job_id)
+    assert updated_job is not None
     assert updated_job.state == "pending"
     assert "Thumbnail generation crashed" in updated_job.error
     assert updated_job.lease_until is None
+    await client.aclose()
 
 
-def test_current_pdf_annotation_export_uses_username_and_annotation_body(db, tmp_path, monkeypatch):
-    _client, item, revision = authenticated_client(db, tmp_path, monkeypatch)
-    user = db.get(User, item.created_by)
+@pytest.mark.anyio
+async def test_current_pdf_annotation_export_uses_username_and_annotation_body(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    user = await db.get(User, item.created_by)
+    assert user is not None
     with pymupdf.open() as document:
         document.new_page(width=300, height=400)
         source = BytesIO(document.tobytes())
@@ -102,9 +121,9 @@ def test_current_pdf_annotation_export_uses_username_and_annotation_body(db, tmp
         owner_id=user.id,
     )
     db.add_all([annotation, job])
-    db.commit()
+    await db.commit()
 
-    run_job(db, job)
+    await run_job(db, job)
 
     result = json.loads(job.result)
     with pymupdf.open(get_settings().export_dir / result["filename"]) as document:
@@ -112,12 +131,16 @@ def test_current_pdf_annotation_export_uses_username_and_annotation_body(db, tmp
         exported = next(page.annots())
         assert exported.info["title"] == user.username
         assert exported.info["content"] == "Reviewer-facing annotation"
+    await client.aclose()
 
 
-def test_custom_job_handler_registry(db, tmp_path, monkeypatch):
+@pytest.mark.anyio
+async def test_custom_job_handler_registry(async_db, tmp_path, monkeypatch):
+    db = async_db
     called = []
 
-    def custom_handler(session, job, payload):
+    async def custom_handler(session, job, payload):
+        await asyncio.sleep(0)
         called.append(payload.get("data"))
         return {"processed": True}
 
@@ -130,7 +153,7 @@ def test_custom_job_handler_registry(db, tmp_path, monkeypatch):
         role="member",
     )
     db.add(user)
-    db.flush()
+    await db.flush()
 
     test_job = Job(
         kind="custom.test_job",
@@ -139,16 +162,17 @@ def test_custom_job_handler_registry(db, tmp_path, monkeypatch):
         owner_id=user.id,
     )
     db.add(test_job)
-    db.commit()
+    await db.commit()
 
-    run_job(db, test_job)
+    await run_job(db, test_job)
     assert called == ["test_value"]
     assert test_job.state == "succeeded"
     assert json.loads(test_job.result) == {"processed": True}
 
 
 def test_job_registry_rejects_duplicate_handlers():
-    def first_handler(session, job, payload):
+    async def first_handler(session, job, payload):
+        await asyncio.sleep(0)
         return {}
 
     register_job_handler("custom.duplicate", first_handler)
@@ -156,10 +180,12 @@ def test_job_registry_rejects_duplicate_handlers():
         register_job_handler("custom.duplicate", first_handler)
 
 
-def test_invalid_job_payload_records_failure(db):
+@pytest.mark.anyio
+async def test_invalid_job_payload_records_failure(async_db):
+    db = async_db
     user = User(username="invalid_payload_user", password_hash="test-hash", role="member")
     db.add(user)
-    db.flush()
+    await db.flush()
     job = Job(
         kind="pdf.inspect",
         payload="not-json",
@@ -169,11 +195,11 @@ def test_invalid_job_payload_records_failure(db):
         state="running",
     )
     db.add(job)
-    db.commit()
+    await db.commit()
 
-    run_job(db, job)
+    await run_job(db, job)
 
-    db.refresh(job)
+    await db.refresh(job)
     assert job.state == "pending"
     assert "JSONDecodeError" in job.error
     assert job.lease_until is None

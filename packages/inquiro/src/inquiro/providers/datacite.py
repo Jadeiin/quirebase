@@ -16,11 +16,11 @@ from inquiro.providers._contracts import ProviderContext, ProviderDefinition
 
 
 class DataCiteLookupAdapter:
-    def lookup(
+    async def lookup(
         self, client: ProviderContext, value: str, settings: Any, *, endpoint: str
     ) -> ProviderRecord:
         try:
-            body = client._get(f"{endpoint}/{quote(value, safe='')}")
+            body = await client._get(f"{endpoint}/{quote(value, safe='')}")
             payload = json.loads(body)
         except (json.JSONDecodeError, TypeError) as error:
             raise ProviderUnavailable("DataCite returned invalid metadata") from error

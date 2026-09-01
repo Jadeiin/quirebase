@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Literal
 
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from quirebase.audit import record_event
 from quirebase.core.crypto import generate_token, token_hash
@@ -13,7 +14,7 @@ from quirebase.core.timezones import as_utc
 from quirebase.models import ApiToken, User
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 API_TOKEN_PREFIX = "qb_api_"
 MAX_API_TOKEN_DAYS = 365
@@ -50,8 +51,8 @@ class VerifiedApiToken:
     expires_at: datetime
 
 
-def create_api_token(
-    db: Session,
+async def create_api_token(
+    db: AsyncSession,
     user: User,
     name: str,
     *,
@@ -73,16 +74,20 @@ def create_api_token(
         expires_at=expires_at,
     )
     db.add(token)
-    db.flush()
+    await db.flush()
     record_event(db, user.id, "auth.api_token.create", "api_token", token.id)
-    db.commit()
+    await db.commit()
     return ApiTokenGrant(token_id=token.id, raw_token=raw_token, expires_at=expires_at)
 
 
-def verify_api_token(db: Session, raw_token: str) -> VerifiedApiToken | None:
+async def verify_api_token(db: AsyncSession, raw_token: str) -> VerifiedApiToken | None:
     if not raw_token.startswith(API_TOKEN_PREFIX):
         return None
-    token = db.scalar(select(ApiToken).where(ApiToken.token_hash == token_hash(raw_token)))
+    token = await db.scalar(
+        select(ApiToken)
+        .options(selectinload(ApiToken.user))
+        .where(ApiToken.token_hash == token_hash(raw_token))
+    )
     if (
         token is None
         or token.revoked_at is not None
@@ -97,9 +102,11 @@ def verify_api_token(db: Session, raw_token: str) -> VerifiedApiToken | None:
     )
 
 
-def list_api_tokens(db: Session, user: User) -> tuple[ApiTokenSummary, ...]:
-    records = db.scalars(
-        select(ApiToken).where(ApiToken.user_id == user.id).order_by(ApiToken.created_at.desc())
+async def list_api_tokens(db: AsyncSession, user: User) -> tuple[ApiTokenSummary, ...]:
+    records = (
+        await db.scalars(
+            select(ApiToken).where(ApiToken.user_id == user.id).order_by(ApiToken.created_at.desc())
+        )
     ).all()
     return tuple(
         ApiTokenSummary(
@@ -113,11 +120,11 @@ def list_api_tokens(db: Session, user: User) -> tuple[ApiTokenSummary, ...]:
     )
 
 
-def revoke_api_token(db: Session, user: User, token_id: str) -> None:
-    token = db.get(ApiToken, token_id)
+async def revoke_api_token(db: AsyncSession, user: User, token_id: str) -> None:
+    token = await db.get(ApiToken, token_id)
     if token is None or token.user_id != user.id:
         raise ResourceNotFound("API Token not found")
     if token.revoked_at is None:
         token.revoked_at = datetime.now(UTC)
         record_event(db, user.id, "auth.api_token.revoke", "api_token", token.id)
-        db.commit()
+        await db.commit()

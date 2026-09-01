@@ -26,7 +26,7 @@ from inquiro.providers._payload import (
 
 
 class PmcSearchAdapter:
-    def search(
+    async def search(
         self,
         client: ProviderContext,
         clauses: list[SearchClause],
@@ -67,7 +67,7 @@ class PmcSearchAdapter:
         if api_key:
             params["api_key"] = api_key
         try:
-            found = json.loads(client._get(f"{endpoint}/esearch.fcgi", params)).get(
+            found = json.loads(await client._get(f"{endpoint}/esearch.fcgi", params)).get(
                 "esearchresult", {}
             )
             identifiers = found.get("idlist", [])
@@ -83,9 +83,9 @@ class PmcSearchAdapter:
                 summary_params["email"] = contact
             if api_key:
                 summary_params["api_key"] = api_key
-            payload = json.loads(client._get(f"{endpoint}/esummary.fcgi", summary_params)).get(
-                "result", {}
-            )
+            payload = json.loads(
+                await client._get(f"{endpoint}/esummary.fcgi", summary_params)
+            ).get("result", {})
         except (json.JSONDecodeError, TypeError) as error:
             raise ProviderUnavailable("PMC returned invalid search results") from error
         results = []
@@ -129,7 +129,7 @@ class PmcSearchAdapter:
 
 
 class PmcDocumentAdapter:
-    def acquire(
+    async def acquire(
         self,
         client: ProviderContext,
         value: str,
@@ -137,7 +137,7 @@ class PmcDocumentAdapter:
         *,
         endpoint: str,
     ) -> AcquiredDocument:
-        listing = client._get(
+        listing = await client._get(
             endpoint,
             {
                 "list-type": "2",
@@ -162,7 +162,7 @@ class PmcDocumentAdapter:
         _version, prefix = max(versions)
         version_key = prefix.removesuffix("/")
         try:
-            metadata = json.loads(client._get(f"{endpoint}/metadata/{version_key}.json"))
+            metadata = json.loads(await client._get(f"{endpoint}/metadata/{version_key}.json"))
             if not isinstance(metadata, dict):
                 raise TypeError
         except RemoteNotFound as error:
@@ -175,7 +175,7 @@ class PmcDocumentAdapter:
         parsed = urlsplit(pdf_url)
         if parsed.scheme != "s3" or parsed.netloc != "pmc-oa-opendata":
             raise ProviderUnavailable("PMC returned an invalid PDF location")
-        return client._download_pdf(
+        return await client._download_pdf(
             f"https://{parsed.netloc}.s3.amazonaws.com{parsed.path}",
             filename=f"{version_key}.pdf",
             provider="pmc",
