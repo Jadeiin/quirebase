@@ -5,7 +5,7 @@ import json
 from typing import TYPE_CHECKING, Any
 
 from fastapi import Depends, File, Form, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 
 from quirebase.core.config import get_settings
 from quirebase.core.database import get_db
@@ -75,6 +75,7 @@ from quirebase.projects import (
 from quirebase.web.deps import current_login, current_user, protected_router
 from quirebase.web.responses import content_disposition
 from quirebase.web.templates import templates
+from quirebase.web.uploads import upload_chunks
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -343,7 +344,7 @@ async def download_item_route(
         timezone=timezone,
     )
     return StreamingResponse(
-        bundle.content,
+        bundle.body,
         media_type="application/zip",
         headers={"Content-Disposition": content_disposition(bundle.filename)},
     )
@@ -478,7 +479,7 @@ async def upload_attachment(
         db,
         user,
         item_id,
-        attachment.file,
+        upload_chunks(attachment),
         attachment.filename or "",
         attachment.content_type or "application/octet-stream",
         await get_effective_setting(
@@ -496,12 +497,13 @@ async def download_attachment(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    path, original_name, media_type = await get_attachment_file(db, user, item_id, attachment_id)
-    return FileResponse(
-        path,
+    response, original_name, media_type = await get_attachment_file(
+        db, user, item_id, attachment_id
+    )
+    return StreamingResponse(
+        response.body,
         media_type=media_type,
-        filename=original_name,
-        content_disposition_type="attachment",
+        headers={"Content-Disposition": content_disposition(original_name)},
     )
 
 
@@ -593,7 +595,7 @@ async def upload_pdf(
         db,
         user,
         item_id,
-        pdf.file,
+        upload_chunks(pdf),
         pdf.filename or "",
         await get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes),
     )

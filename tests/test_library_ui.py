@@ -13,11 +13,11 @@ import pytest
 from inquiro import CandidateRecord, Identifier
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
+from storage_helpers import local_object_path
 from test_http import authenticated_async_client
 
 from quirebase.core.config import get_settings
 from quirebase.core.errors import ResourceUnavailable
-from quirebase.core.storage import LocalObjectStore
 from quirebase.documents.revisions import delete_unreferenced_objects, stage_pdf
 from quirebase.library.imports import stage_pdf_import_batch
 from quirebase.models import (
@@ -90,7 +90,7 @@ async def test_pdf_import_revalidates_user_after_provider_io(
         await stage_pdf_import_batch(
             db,
             user,
-            [(BytesIO(published_pdf_bytes("10.1000/deactivated")), "deactivated.pdf")],
+            [(published_pdf_bytes("10.1000/deactivated"), "deactivated.pdf")],
             max_bytes=100_000,
         )
 
@@ -126,7 +126,7 @@ async def test_cancelled_pdf_import_releases_all_staged_objects(async_db, monkey
         stage_pdf_import_batch(
             db,
             user,
-            [(BytesIO(published_pdf_bytes("10.1000/cancelled")), "cancelled.pdf")],
+            [(published_pdf_bytes("10.1000/cancelled"), "cancelled.pdf")],
             max_bytes=100_000,
         )
     )
@@ -646,7 +646,7 @@ async def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(
         first_pdf = json.loads(batches[0].records)[0]["_pdf"]
         second_pdf = json.loads(batches[1].records)[0]["_pdf"]
         assert first_pdf["object_key"] == second_pdf["object_key"]
-        object_path = LocalObjectStore().path(first_pdf["object_key"])
+        object_path = local_object_path(first_pdf["object_key"])
         assert object_path.is_file()
 
         discarded = await client.post(
@@ -669,7 +669,7 @@ async def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(
             .where(Item.doi == "10.1000/shared-staged")
         )
         assert imported is not None
-        assert LocalObjectStore().path(imported.revisions[0].object_key).is_file()
+        assert local_object_path(imported.revisions[0].object_key).is_file()
     finally:
         await client.aclose()
         get_settings.cache_clear()
@@ -684,18 +684,20 @@ async def test_cleanup_preserves_object_referenced_by_an_uncommitted_pdf_import_
         db, async_session_factory, tmp_path, monkeypatch
     )
     pdf = published_pdf_bytes("10.1000/in-flight-staged")
-    discarded = stage_pdf(
-        BytesIO(pdf),
+    discarded = await stage_pdf(
+        db,
+        pdf,
         "discarded-copy.pdf",
         100_000,
     )
-    in_flight = stage_pdf(
-        BytesIO(pdf),
+    in_flight = await stage_pdf(
+        db,
+        pdf,
         "in-flight.pdf",
         100_000,
     )
     assert discarded.object_key == in_flight.object_key
-    object_path = LocalObjectStore().path(in_flight.object_key)
+    object_path = local_object_path(in_flight.object_key)
     batch = ImportBatch(
         owner_id=item.created_by,
         file_format="pdf",
@@ -716,19 +718,19 @@ async def test_cleanup_preserves_object_referenced_by_an_uncommitted_pdf_import_
     await db.flush()
 
     try:
-        discarded.release()
+        await discarded.release()
         async with async_session_factory() as cleanup_db:
             assert await delete_unreferenced_objects(cleanup_db, (discarded.object_key,)) == ()
         assert object_path.is_file()
 
         await db.commit()
-        in_flight.release()
+        await in_flight.release()
         async with async_session_factory() as cleanup_db:
             assert await delete_unreferenced_objects(cleanup_db, (in_flight.object_key,)) == ()
         assert object_path.is_file()
     finally:
-        discarded.release()
-        in_flight.release()
+        await discarded.release()
+        await in_flight.release()
         await client.aclose()
         get_settings.cache_clear()
 

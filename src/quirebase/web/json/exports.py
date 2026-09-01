@@ -3,12 +3,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from fastapi import Depends
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from quirebase.core.database import get_db
 from quirebase.documents import (
     create_export_job,
-    get_export_file_path,
+    get_export_file,
     get_export_status,
 )
 from quirebase.documents.schemas import ExportCreate
@@ -102,5 +102,9 @@ async def export_status(
 async def export_content(
     job_id: str, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)
 ):
-    path = await get_export_file_path(db, user, job_id)
-    return FileResponse(path, media_type="application/pdf", filename="annotated.pdf")
+    response = await get_export_file(db, user, job_id)
+    return StreamingResponse(
+        response.body,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="annotated.pdf"'},
+    )

@@ -557,7 +557,11 @@ def test_inbound_adapters_do_not_own_transactions_persistence_or_audit():
                     raise AssertionError(
                         f"{py_file} directly references AuditEvent in an inbound adapter"
                     )
-                if isinstance(node, ast.Name) and node.id in {"LocalObjectStore", "SearchIndex"}:
+                if isinstance(node, ast.Name) and node.id in {
+                    "LocalObjectStore",
+                    "ObjectStore",
+                    "SearchIndex",
+                }:
                     raise AssertionError(
                         f"{py_file} directly references {node.id} in an inbound adapter"
                     )
@@ -569,6 +573,17 @@ def test_inbound_adapters_do_not_own_transactions_persistence_or_audit():
                         f"{py_file}:{call.lineno} directly invokes SQLAlchemy Session."
                         f"{call.func.attr}() in an inbound adapter"
                     )
+
+
+def test_only_core_storage_imports_obstore():
+    storage_module = SRC_ROOT / "core" / "storage.py"
+    for py_file in get_python_files(SRC_ROOT):
+        if py_file == storage_module:
+            continue
+        for module in imported_modules(py_file):
+            assert not module.startswith("obstore"), (
+                f"{py_file} bypasses the Core ObjectStore facade with {module}"
+            )
 
 
 def test_only_audit_module_constructs_audit_events():

@@ -27,6 +27,7 @@ from quirebase.operations.settings import get_effective_settings_model
 from quirebase.web.deps import current_login, current_user, protected_router
 from quirebase.web.responses import content_disposition
 from quirebase.web.templates import templates
+from quirebase.web.uploads import upload_chunks
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -157,7 +158,7 @@ async def preview_pdf_import(
     batch, records, errors = await stage_pdf_import_batch(
         db,
         user,
-        [(pdf.file, pdf.filename or "") for pdf in pdfs],
+        [(upload_chunks(pdf), pdf.filename or "") for pdf in pdfs],
         settings=await get_effective_settings_model(db),
     )
     # The import service deliberately ends its short read transaction before

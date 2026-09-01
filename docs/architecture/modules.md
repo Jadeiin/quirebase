@@ -197,11 +197,21 @@ attaches its staged PDF as a File Revision in one transaction. Confirmation reva
 Record DOIs against currently accessible Items before writing, and cleanup preserves staged files
 still referenced by another pending Import Batch.
 
+The Core Infrastructure Module owns one thin `ObjectStore` facade over obstore's Local and S3
+data planes. Business Modules operate on object keys, metadata and asynchronous byte streams;
+obstore types and backend configuration do not cross that seam. Components that require a local
+`Path`, including PyMuPDF, use the facade's scoped materialization operation. HTTP adapters pass
+the returned obstore-backed byte stream directly to `StreamingResponse`; streaming ZIP assembly
+uses one unbuffered async-generator bridge and selects `ZIP_AUTO` from each member's known size.
+
 All physical Document deletion crosses the Documents interface through
 `delete_unreferenced_objects`, which checks File Revisions, Attachments and pending PDF Import
 Batches after the caller's transaction commits. In-flight PDF staging holds an object lease until
-its reference commits; cleanup coordinates on the same object key and treats active leases as
-references. Attachment uploads use the same lease boundary. File Revision deletion coordinates
+its reference commits only on the local backend; cleanup coordinates on the same object key and
+treats active local leases as references. S3 deliberately uses immutable content-addressed keys
+with atomic overwrite so concurrent identical uploads retain multipart support. Local leases are
+a transitional single-host mechanism, not an S3 locking protocol. Attachment uploads use the same
+staging boundary. File Revision deletion coordinates
 with its inspection and annotation-export Jobs. The `delete_file_revision` Documents use case
 hides derived-state ordering: after removing the revision, its Implementation uses Pipeline's
 internal derived-state seam to refresh Library Search and request the Library-owned Item Tag

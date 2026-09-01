@@ -95,7 +95,6 @@ async def test_non_admin_cannot_update_settings(async_db):
 @pytest.mark.anyio
 async def test_runtime_settings_applied_to_pdf_upload_limit(async_db, tmp_path, monkeypatch):
     db = async_db
-    import io
 
     from item_helpers import create_item_record as create_item
     from test_library_ui import pdf_bytes
@@ -115,7 +114,7 @@ async def test_runtime_settings_applied_to_pdf_upload_limit(async_db, tmp_path, 
 
     data = pdf_bytes()
     with pytest.raises(ValidationFailure, match="file exceeds configured size limit"):
-        await store_pdf_revision(db, member, item.id, io.BytesIO(data), "test.pdf")
+        await store_pdf_revision(db, member, item.id, data, "test.pdf")
 
 
 @pytest.mark.anyio

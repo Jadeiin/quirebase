@@ -8,14 +8,12 @@ from sqlalchemy import select
 
 from quirebase.access.documents import require_revision
 from quirebase.access.projects import project_member
-from quirebase.core.config import get_settings
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
+from quirebase.core.storage import ObjectResponse, get_object_store
 from quirebase.models import FileRevision, Job, JobState, ProjectItem, User
 from quirebase.pipeline.inspection import job_payload
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from quirebase.documents.schemas import ExportCreate
@@ -59,7 +57,7 @@ async def get_export_status(db: AsyncSession, user: User, job_id: str) -> dict[s
     return {"id": job.id, "state": job.state, "error": job.error}
 
 
-async def get_export_file_path(db: AsyncSession, user: User, job_id: str) -> Path:
+async def get_export_file(db: AsyncSession, user: User, job_id: str) -> ObjectResponse:
     job = await db.get(Job, job_id)
     if (
         job is None
@@ -76,4 +74,7 @@ async def get_export_file_path(db: AsyncSession, user: User, job_id: str) -> Pat
         or await db.get(ProjectItem, (payload["project_id"], revision.item_id)) is None
     ):
         raise ResourceUnavailable("project membership or project item not found")
-    return get_settings().export_dir / result["filename"]
+    object_key = result.get("object_key")
+    if not isinstance(object_key, str) or not await get_object_store().exists(object_key):
+        raise ResourceNotFound("export artifact expired or deleted")
+    return await get_object_store().get(object_key)

@@ -156,7 +156,7 @@ async def library_bulk_action(
             timezone=timezone,
         )
         return StreamingResponse(
-            archive.content,
+            archive.body,
             media_type="application/zip",
             headers={"Content-Disposition": content_disposition(archive.filename)},
         )

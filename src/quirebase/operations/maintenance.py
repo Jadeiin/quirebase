@@ -16,7 +16,7 @@ from sqlalchemy import select
 
 from quirebase.core.config import get_settings
 from quirebase.core.database import is_sqlite_database_url
-from quirebase.core.storage import LocalObjectStore
+from quirebase.core.storage import get_object_store
 from quirebase.models import Attachment, FileRevision, JobState, User
 
 if TYPE_CHECKING:
@@ -42,6 +42,8 @@ def sqlite_path(database_url: str) -> Path:
 async def create_backup(destination: Path) -> Path:
     """Create a verified backup without blocking the event loop."""
     settings = get_settings()
+    if settings.object_store != "local":
+        raise RuntimeError("backup and restore currently require local object storage")
     await asyncio.to_thread(destination.parent.mkdir, parents=True, exist_ok=True)
     root = Path(await asyncio.to_thread(tempfile.mkdtemp))
     try:
@@ -153,6 +155,8 @@ def _verify_backup(archive_path: Path) -> dict[str, Any]:
 async def restore_backup(archive_path: Path, *, force: bool = False) -> None:
     manifest = await verify_backup(archive_path)
     settings = get_settings()
+    if settings.object_store != "local":
+        raise RuntimeError("backup and restore currently require local object storage")
     expected_kind = "sqlite" if is_sqlite_database_url(settings.database_url) else "postgresql"
     if manifest["database_kind"] != expected_kind:
         raise ValueError("backup database kind does not match configured database")
@@ -226,7 +230,12 @@ async def cleanup_exports(db: AsyncSession | None = None) -> int:
         else get_settings().export_ttl_hours
     )
     cutoff = datetime.now(UTC) - timedelta(hours=ttl_hours)
-    return await asyncio.to_thread(_cleanup_exports, directory, cutoff)
+    removed = await asyncio.to_thread(_cleanup_exports, directory, cutoff)
+    store = get_object_store()
+    async for item in store.iter_prefix("artifacts/annotation-exports/"):
+        if item.last_modified < cutoff and await store.delete(item.key):
+            removed += 1
+    return removed
 
 
 def _cleanup_exports(directory: Path, cutoff: datetime) -> int:
@@ -242,31 +251,29 @@ def _cleanup_exports(directory: Path, cutoff: datetime) -> int:
 
 
 async def check_objects(db: AsyncSession) -> list[str]:
-    store = LocalObjectStore()
+    store = get_object_store()
     revisions = list((await db.scalars(select(FileRevision))).all())
     attachments = list((await db.scalars(select(Attachment))).all())
-    return await asyncio.to_thread(_check_objects, store, revisions, attachments)
-
-
-def _check_objects(
-    store: LocalObjectStore,
-    revisions: list[FileRevision],
-    attachments: list[Attachment],
-) -> list[str]:
-    errors = []
+    errors: list[str] = []
     for revision in revisions:
-        path = store.path(revision.object_key)
-        if not path.is_file():
+        if not await store.exists(revision.object_key):
             errors.append(f"{revision.id}: missing object")
-        elif sha256_file(path) != revision.sha256:
+        elif await _object_sha256(store, revision.object_key) != revision.sha256:
             errors.append(f"{revision.id}: checksum mismatch")
     for attachment in attachments:
-        path = store.path(attachment.object_key)
-        if not path.is_file():
+        if not await store.exists(attachment.object_key):
             errors.append(f"{attachment.id}: missing attachment")
-        elif sha256_file(path) != attachment.sha256:
+        elif await _object_sha256(store, attachment.object_key) != attachment.sha256:
             errors.append(f"{attachment.id}: attachment checksum mismatch")
     return errors
+
+
+async def _object_sha256(store, key: str) -> str:
+    digest = hashlib.sha256()
+    response = await store.get(key)
+    async for chunk in response.body:
+        digest.update(chunk)
+    return digest.hexdigest()
 
 
 async def get_backup_artifact(db: AsyncSession, admin: User, job_id: str) -> tuple[Path, str]:

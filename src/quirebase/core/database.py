@@ -60,5 +60,8 @@ AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=As
 
 
 async def get_db() -> AsyncIterator[AsyncSession]:
-    async with AsyncSessionLocal() as session:
+    session = AsyncSessionLocal()
+    try:
         yield session
+    finally:
+        await session.close()

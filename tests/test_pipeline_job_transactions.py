@@ -2,16 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import json
-from io import BytesIO
 
 import pymupdf
 import pytest
 from sqlalchemy import select
+from storage_helpers import put_pdf_object
 from test_http import authenticated_async_client
 from test_library_ui import pdf_bytes
 
-from quirebase.core.config import get_settings
-from quirebase.core.storage import LocalObjectStore
+from quirebase.core.storage import get_object_store
 from quirebase.documents.revisions import store_pdf_revision
 from quirebase.models import FileRevision, Job, PdfAnnotation, PdfAnnotationSegment, User
 from quirebase.pipeline.jobs import (
@@ -36,7 +35,7 @@ async def test_job_failure_rolls_back_partial_revision_state(
         db,
         user,
         item.id,
-        BytesIO(pdf_bytes()),
+        pdf_bytes(),
         "sample.pdf",
     )
     job = await db.scalar(
@@ -82,8 +81,8 @@ async def test_current_pdf_annotation_export_uses_username_and_annotation_body(
     assert user is not None
     with pymupdf.open() as document:
         document.new_page(width=300, height=400)
-        source = BytesIO(document.tobytes())
-    key, digest, size = LocalObjectStore().put_pdf(source=source, maximum=100_000)
+        source = document.tobytes()
+    key, digest, size = await put_pdf_object(source, 100_000)
     revision.object_key = key
     revision.sha256 = digest
     revision.size = size
@@ -126,11 +125,12 @@ async def test_current_pdf_annotation_export_uses_username_and_annotation_body(
     await run_job(db, job)
 
     result = json.loads(job.result)
-    with pymupdf.open(get_settings().export_dir / result["filename"]) as document:
-        page = document[0]
-        exported = next(page.annots())
-        assert exported.info["title"] == user.username
-        assert exported.info["content"] == "Reviewer-facing annotation"
+    async with get_object_store().materialize(result["object_key"]) as path:
+        with pymupdf.open(path) as document:
+            page = document[0]
+            exported = next(page.annots())
+            assert exported.info["title"] == user.username
+            assert exported.info["content"] == "Reviewer-facing annotation"
     await client.aclose()
 
 

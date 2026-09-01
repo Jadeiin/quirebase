@@ -34,9 +34,32 @@ license separately, and set `QUIREBASE_KEYBERT_MODEL_SHA256` to pin its director
 
 Use a reverse proxy for TLS and request-size limits. Do not expose Uvicorn directly to the public internet. Preserve the application data directory independently from the installed wheel.
 
+## Object storage
+
+`QUIREBASE_OBJECT_STORE=local` keeps immutable objects below
+`QUIREBASE_DATA_DIR/objects`. For S3 or an S3-compatible service, set
+`QUIREBASE_OBJECT_STORE=s3`, `QUIREBASE_S3_BUCKET`, and optionally
+`QUIREBASE_S3_REGION`, `QUIREBASE_S3_ENDPOINT`, and `QUIREBASE_S3_PREFIX`. An HTTP
+endpoint is accepted for private MinIO deployments; use TLS for traffic crossing a
+trusted host boundary.
+
+Quirebase currently uses obstore's native S3 authentication. That implementation
+reads the AWS environment configuration supported by obstore; in particular,
+`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and optional `AWS_SESSION_TOKEN` can
+be supplied to the web and worker processes. This is not a promise that every
+source in botocore/boto3's credential-provider chain is consulted. obstore also
+offers an optional `Boto3CredentialProvider` for applications that install boto3
+and deliberately need botocore-compatible credential resolution, but Quirebase
+does not install or select that provider by default.
+
+Before switching an existing installation, copy every physical object below the
+local object directory to the configured bucket/prefix while preserving its key.
+The current release does not perform that external data migration automatically.
+Web and every worker must use the same backend, bucket, and prefix.
+
 ## Backups
 
-`quirebase backup backup.zip` creates a consistent SQLite snapshot or invokes `pg_dump` for PostgreSQL, adds immutable objects, and writes a checksum manifest. Verify it with `quirebase verify-backup backup.zip`. Test restoration periodically on a separate installation. `quirebase restore backup.zip --force` replaces the configured database and overlays backed-up objects; stop all web and worker processes first.
+`quirebase backup backup.zip` creates a consistent SQLite snapshot or invokes `pg_dump` for PostgreSQL, adds immutable objects, and writes a checksum manifest. This backup/restore path currently requires the local object backend; protect an S3 bucket with its own versioning and backup policy. Verify a local backup with `quirebase verify-backup backup.zip`. Test restoration periodically on a separate installation. `quirebase restore backup.zip --force` replaces the configured database and overlays backed-up objects; stop all web and worker processes first.
 
 `quirebase doctor` checks the schema, writable directories, PyMuPDF, the configured Recommendation
 Engine and every stored object's SHA-256. `quirebase reindex` rebuilds the Library Search index. The

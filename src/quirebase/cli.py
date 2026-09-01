@@ -19,6 +19,7 @@ from .accounts import (
 from .core.config import get_settings
 from .core.crypto import hash_password_async
 from .core.database import AsyncSessionLocal, engine
+from .core.storage import get_object_store
 from .library.tag_recommendations import validate_engine_configuration
 from .models import User
 from .operations import check_objects, create_backup, restore_backup, verify_backup
@@ -48,7 +49,8 @@ def init_db():
     alembic.set_main_option("script_location", str(migrations))
     command.upgrade(alembic, "head")
     settings = get_settings()
-    settings.object_dir.mkdir(parents=True, exist_ok=True)
+    if settings.object_store == "local":
+        settings.object_dir.mkdir(parents=True, exist_ok=True)
     settings.export_dir.mkdir(parents=True, exist_ok=True)
     typer.echo("Database and data directories initialized.")
 
@@ -149,10 +151,21 @@ def doctor():
     except Exception as error:
         failures += 1
         typer.echo(f"[failed] database: {error}")
-    for label, directory in (
-        ("objects", get_settings().object_dir),
-        ("exports", get_settings().export_dir),
-    ):
+    try:
+
+        async def probe_object_store() -> None:
+            store = get_object_store()
+            key = ".doctor/write-test"
+            await store.put(key, b"ok")
+            await store.head(key)
+            await store.delete(key)
+
+        asyncio.run(probe_object_store())
+        typer.echo(f"[ok] objects: {get_settings().object_store}")
+    except Exception as error:
+        failures += 1
+        typer.echo(f"[failed] objects: {error}")
+    for label, directory in (("exports", get_settings().export_dir),):
         try:
             directory.mkdir(parents=True, exist_ok=True)
             probe = directory / ".write-test"

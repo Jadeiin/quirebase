@@ -117,7 +117,8 @@ package facades. The detailed comparison is in `docs/architecture/orm-ownership.
 ## Explicit non-goals
 
 - Do not create generic Service, Repository or Utilities layers.
-- Do not add a storage port while `LocalObjectStore` is the only justified adapter.
+- Do not add speculative infrastructure ports. The later Local/S3 object-storage seam is governed
+  by ADR 0007 and is intentionally limited to the operations both real adapters require.
 - Do not split Discovery modules merely because they are long.
 - Do not split `models.py` before the preceding ownership work.
 - Do not include ADR 0004 or AI/MCP implementation in this roadmap.

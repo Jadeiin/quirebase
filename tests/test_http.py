@@ -3,21 +3,23 @@ import json
 import re
 from datetime import UTC, datetime, timedelta
 from html import unescape
-from io import BytesIO
 
 import httpx2
 import pytest
 from sqlalchemy import func, select
+from storage_helpers import local_object_path, put_pdf_object
 
 from quirebase.core.config import get_settings
 from quirebase.core.crypto import token_hash
 from quirebase.core.database import get_db
 from quirebase.core.errors import VersionConflict
-from quirebase.core.storage import LocalObjectStore
+from quirebase.core.storage import ObjectMetadata, ObjectResponse
+from quirebase.documents import create_attachment
 from quirebase.documents.bundles import export_revision_pdf
 from quirebase.library import ItemMetadata, request_item_tag_recommendation, revise_item_metadata
 from quirebase.models import (
     Attachment,
+    AttachmentRole,
     AuditEvent,
     FileRevision,
     Item,
@@ -49,7 +51,7 @@ async def authenticated_async_client(db, session_factory, tmp_path, monkeypatch)
     item = Item(title="Paper", created_by=user.id)
     db.add_all([login, item])
     await db.flush()
-    key, digest, size = LocalObjectStore().put_pdf(source=BytesIO(b"%PDF-1.4\ntest"), maximum=100)
+    key, digest, size = await put_pdf_object(b"%PDF-1.4\ntest", 100)
     revision = FileRevision(
         item_id=item.id,
         object_key=key,
@@ -343,12 +345,11 @@ async def test_deleting_latest_pdf_revision_removes_its_files_and_falls_back_thu
     client, item, old_revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
-    store = LocalObjectStore()
     old_thumbnail = get_settings().object_dir / "thumbnails" / f"{old_revision.id}.png"
     old_thumbnail.parent.mkdir(parents=True, exist_ok=True)
     old_thumbnail.write_bytes(b"old-thumbnail")
     old_revision.full_text = "fallbacksearchtoken"
-    key, digest, size = store.put_pdf(BytesIO(b"%PDF-1.4\nnewer"), maximum=100)
+    key, digest, size = await put_pdf_object(b"%PDF-1.4\nnewer", 100)
     new_revision = FileRevision(
         item_id=item.id,
         object_key=key,
@@ -364,7 +365,7 @@ async def test_deleting_latest_pdf_revision_removes_its_files_and_falls_back_thu
     )
     db.add(new_revision)
     await db.commit()
-    new_object = store.path(key)
+    new_object = local_object_path(key)
     new_thumbnail = get_settings().object_dir / "thumbnails" / f"{new_revision.id}.png"
     new_thumbnail.write_bytes(b"new-thumbnail")
     thumbnail_url = f"/documents/{item.id}/thumbnail"
@@ -416,7 +417,7 @@ async def test_pdf_revision_cannot_be_deleted_while_inspection_is_running(
     thumbnail = get_settings().object_dir / "thumbnails" / f"{revision.id}.png"
     thumbnail.parent.mkdir(parents=True, exist_ok=True)
     thumbnail.write_bytes(b"thumbnail")
-    object_path = LocalObjectStore().path(revision.object_key)
+    object_path = local_object_path(revision.object_key)
     job = Job(
         kind="pdf.inspect",
         payload=json.dumps({"revision_id": revision.id}),
@@ -486,7 +487,7 @@ async def test_pdf_revision_cannot_be_deleted_while_annotation_export_is_running
     client, item, revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
-    object_path = LocalObjectStore().path(revision.object_key)
+    object_path = local_object_path(revision.object_key)
     job = Job(
         kind="pdf.export_annotations",
         payload=json.dumps({"revision_id": revision.id}),
@@ -573,6 +574,108 @@ async def test_graphical_abstract_rejects_content_that_is_not_an_image(
 
 
 @pytest.mark.anyio
+async def test_graphical_abstract_rejects_empty_content_without_leaking_staged_object(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    objects_before = set(get_settings().object_dir.rglob("*.bin"))
+
+    try:
+        uploaded = await client.post(
+            f"/items/{item.id}/attachments",
+            data={"csrf_token": "test-csrf", "graphical_abstract": "true"},
+            files={"attachment": ("abstract.png", b"", "image/png")},
+            follow_redirects=False,
+        )
+
+        assert uploaded.status_code == 422
+        assert (
+            await db.scalar(
+                select(func.count()).select_from(Attachment).where(Attachment.item_id == item.id)
+            )
+            == 0
+        )
+        assert set(get_settings().object_dir.rglob("*.bin")) == objects_before
+        assert not list(get_settings().object_dir.rglob("*.lease.lock"))
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_cancelled_graphical_abstract_header_read_reclaims_staged_object(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    owner = await db.get(User, item.created_by)
+    assert owner is not None
+    read_started = asyncio.Event()
+    stream_released = asyncio.Event()
+    staged_released = asyncio.Event()
+    object_deleted = asyncio.Event()
+
+    class FakeStagedObject:
+        key = "graphical/cancelled.bin"
+        sha256 = "0" * 64
+        size = 12
+
+        async def release(self):
+            staged_released.set()
+
+    async def blocking_body():
+        try:
+            read_started.set()
+            await asyncio.Event().wait()
+            yield b""
+        finally:
+            stream_released.set()
+
+    class BlockingStore:
+        async def put_cas(self, source, **options):
+            return FakeStagedObject()
+
+        async def get_range(self, key, start, end):
+            return ObjectResponse(
+                metadata=ObjectMetadata(key, 12, None, datetime.now(UTC)),
+                byte_range=(start, end),
+                body=blocking_body(),
+            )
+
+        async def delete(self, key):
+            object_deleted.set()
+            return True
+
+    monkeypatch.setattr("quirebase.documents.revisions.get_object_store", BlockingStore)
+    creating = asyncio.create_task(
+        create_attachment(
+            db,
+            owner,
+            item.id,
+            b"ignored",
+            "abstract.png",
+            "image/png",
+            role=AttachmentRole.graphical_abstract,
+        )
+    )
+    await read_started.wait()
+    creating.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await creating
+
+    assert stream_released.is_set()
+    assert staged_released.is_set()
+    assert object_deleted.is_set()
+    assert await db.scalar(select(func.count()).select_from(Attachment)) == 0
+    await client.aclose()
+
+
+@pytest.mark.anyio
 async def test_regular_attachment_accepts_non_image_content(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
@@ -628,7 +731,7 @@ async def test_replacing_and_deleting_graphical_abstract_preserves_attachment_an
                 .order_by(Attachment.created_at)
             )
         ).all()
-        second_object = LocalObjectStore().path(second.object_key)
+        second_object = local_object_path(second.object_key)
         assert first.role is None
         assert second.role == "graphical_abstract"
         assert (await client.get(f"/documents/{item.id}/thumbnail")).content.endswith(

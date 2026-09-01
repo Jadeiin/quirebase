@@ -47,5 +47,5 @@ Recorded from the completed refactor plan (retired once fully implemented):
   and to job statuses by the Job runner, never rendered inside Modules.
 - Job handlers are registered through an explicit mapping; decorator-based
   registration via import side effects is not used.
-- `LocalObjectStore` remains a concrete implementation until a second storage
-  adapter exists; no storage interface is introduced speculatively.
+- At the time of this decision, `LocalObjectStore` remained concrete because no second adapter
+  existed. ADR 0007 supersedes this implementation note now that Local and S3 are both supported.

@@ -1,15 +1,12 @@
 from __future__ import annotations
 
-import asyncio
-import contextlib
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import delete, func, or_, select
 
 from quirebase.audit import record_event
-from quirebase.core.config import get_settings
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
-from quirebase.core.storage import LocalObjectStore
+from quirebase.core.storage import get_object_store
 from quirebase.documents.revisions import delete_unreferenced_objects
 from quirebase.models import Attachment, FileRevision, Item, User
 from quirebase.search import search_index
@@ -68,27 +65,29 @@ async def list_global_items(
 async def get_storage_metrics(db: AsyncSession, admin: User) -> dict[str, Any]:
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")
-    store = LocalObjectStore()
-    settings = get_settings()
+    store = get_object_store()
 
     total_items = await db.scalar(select(func.count(Item.id))) or 0
     revisions = list((await db.scalars(select(FileRevision))).all())
     attachments = list((await db.scalars(select(Attachment))).all())
 
-    (
-        revisions_bytes,
-        missing_revisions,
-        attachments_bytes,
-        missing_attachments,
-        thumbnails_count,
-        thumbnails_bytes,
-    ) = await asyncio.to_thread(
-        _storage_metrics,
-        store,
-        settings.object_dir / "thumbnails",
-        revisions,
-        attachments,
-    )
+    revisions_bytes = 0
+    missing_revisions = 0
+    for revision in revisions:
+        if await store.exists(revision.object_key):
+            revisions_bytes += (await store.head(revision.object_key)).size
+        else:
+            missing_revisions += 1
+    attachments_bytes = 0
+    missing_attachments = 0
+    for attachment in attachments:
+        if await store.exists(attachment.object_key):
+            attachments_bytes += (await store.head(attachment.object_key)).size
+        else:
+            missing_attachments += 1
+    thumbnails = [item async for item in store.iter_prefix("thumbnails/")]
+    thumbnails_count = len(thumbnails)
+    thumbnails_bytes = sum(item.size for item in thumbnails)
 
     total_disk_bytes = revisions_bytes + attachments_bytes + thumbnails_bytes
 
@@ -103,47 +102,6 @@ async def get_storage_metrics(db: AsyncSession, admin: User) -> dict[str, Any]:
         "total_disk_bytes": total_disk_bytes,
         "missing_files_count": missing_revisions + missing_attachments,
     }
-
-
-def _storage_metrics(
-    store: LocalObjectStore,
-    thumbnails_dir,
-    revisions: list[FileRevision],
-    attachments: list[Attachment],
-) -> tuple[int, int, int, int, int, int]:
-    revisions_bytes = 0
-    missing_revisions = 0
-    for revision in revisions:
-        path = store.path(revision.object_key)
-        if path.is_file():
-            revisions_bytes += path.stat().st_size
-        else:
-            missing_revisions += 1
-
-    attachments_bytes = 0
-    missing_attachments = 0
-    for attachment in attachments:
-        path = store.path(attachment.object_key)
-        if path.is_file():
-            attachments_bytes += path.stat().st_size
-        else:
-            missing_attachments += 1
-
-    thumbnails_count = 0
-    thumbnails_bytes = 0
-    if thumbnails_dir.exists():
-        for thumbnail in thumbnails_dir.glob("*.png"):
-            if thumbnail.is_file():
-                thumbnails_count += 1
-                thumbnails_bytes += thumbnail.stat().st_size
-    return (
-        revisions_bytes,
-        missing_revisions,
-        attachments_bytes,
-        missing_attachments,
-        thumbnails_count,
-        thumbnails_bytes,
-    )
 
 
 async def _delete_item(
@@ -169,14 +127,11 @@ async def _delete_item(
     )
 
     # Clean thumbnail if present
-    settings = get_settings()
+    store = get_object_store()
     for rev_id in (
         await db.scalars(select(FileRevision.id).where(FileRevision.item_id == item.id))
     ).all():
-        thumb_path = settings.object_dir / "thumbnails" / f"{rev_id}.png"
-        if await asyncio.to_thread(thumb_path.exists):
-            with contextlib.suppress(OSError):
-                await asyncio.to_thread(thumb_path.unlink)
+        await store.delete(f"thumbnails/{rev_id}.png")
 
     # Remove from search index
     await search_index(db).remove_item(db, item.id)

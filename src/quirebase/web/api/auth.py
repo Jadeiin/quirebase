@@ -24,8 +24,12 @@ async def http_api_invocation(request: Request) -> AsyncIterator[None]:  # ruff:
     """Bind a route name so business Audit Events can retain API provenance."""
     route = request.scope.get("route")
     operation = getattr(route, "name", "unknown")
-    with programmatic_invocation("http", operation):
+    invocation = programmatic_invocation("http", operation)
+    invocation.__enter__()
+    try:
         yield
+    finally:
+        invocation.__exit__(None, None, None)
 
 
 async def current_api_user(

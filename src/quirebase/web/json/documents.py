@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import asyncio
 import re
 from typing import TYPE_CHECKING
 
 from fastapi import Depends, HTTPException, Request
-from fastapi.responses import FileResponse, Response, StreamingResponse
-from starlette.background import BackgroundTask
+from fastapi.responses import Response, StreamingResponse
 
 from quirebase.core.database import get_db
 from quirebase.documents import (
@@ -14,6 +12,7 @@ from quirebase.documents import (
     get_item_thumbnail,
     get_revision_file,
     get_revision_thumbnail,
+    head_revision_file,
 )
 from quirebase.library import (
     DEFAULT_CITATION_KEY_FORMULA,
@@ -26,8 +25,6 @@ from quirebase.web.deps import current_user, protected_router
 from quirebase.web.responses import content_disposition
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from sqlalchemy.ext.asyncio import AsyncSession
 
 router = protected_router()
@@ -35,8 +32,8 @@ router = protected_router()
 RANGE_PATTERN = re.compile(r"bytes=(\d*)-(\d*)$")
 
 
-async def ranged_file(request: Request, path: Path, etag: str, filename: str):
-    size = (await asyncio.to_thread(path.stat)).st_size
+async def ranged_object(request: Request, metadata, etag: str, filename: str, object_get):
+    size = metadata.size
     headers = {
         "Accept-Ranges": "bytes",
         "ETag": f'"{etag}"',
@@ -44,7 +41,9 @@ async def ranged_file(request: Request, path: Path, etag: str, filename: str):
     }
     value = request.headers.get("range")
     if not value:
-        return FileResponse(path, media_type="application/pdf", headers=headers)
+        response = await object_get(None)
+        headers["Content-Length"] = str(size)
+        return StreamingResponse(response.body, media_type="application/pdf", headers=headers)
     match = RANGE_PATTERN.fullmatch(value.strip())
     if not match:
         raise HTTPException(416, headers={"Content-Range": f"bytes */{size}"})
@@ -58,26 +57,13 @@ async def ranged_file(request: Request, path: Path, etag: str, filename: str):
     if start >= size or start > end:
         raise HTTPException(416, headers={"Content-Range": f"bytes */{size}"})
 
-    async def chunks():
-        stream = await asyncio.to_thread(path.open, "rb")
-        try:
-            await asyncio.to_thread(stream.seek, start)
-            remaining = end - start + 1
-            while remaining:
-                chunk = await asyncio.to_thread(stream.read, min(1024 * 1024, remaining))
-                if not chunk:
-                    break
-                remaining -= len(chunk)
-                yield chunk
-        finally:
-            await asyncio.to_thread(stream.close)
-
+    ranged = await object_get((start, end + 1))
     headers.update({
         "Content-Range": f"bytes {start}-{end}/{size}",
         "Content-Length": str(end - start + 1),
     })
     return StreamingResponse(
-        chunks(), status_code=206, media_type="application/pdf", headers=headers
+        ranged.body, status_code=206, media_type="application/pdf", headers=headers
     )
 
 
@@ -199,8 +185,15 @@ async def pdf_content(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    path, original_name, sha256 = await get_revision_file(db, user, item_id, revision_id)
-    return await ranged_file(request, path, sha256, original_name)
+    metadata, original_name, sha256 = await head_revision_file(db, user, item_id, revision_id)
+
+    async def object_get(byte_range: tuple[int, int] | None):
+        response, _name, _sha = await get_revision_file(
+            db, user, item_id, revision_id, byte_range=byte_range
+        )
+        return response
+
+    return await ranged_object(request, metadata, sha256, original_name, object_get)
 
 
 @router.get("/documents/{item_id}/revisions/{revision_id}/thumbnail")
@@ -210,8 +203,8 @@ async def pdf_thumbnail(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    path = await get_revision_thumbnail(db, user, item_id, revision_id)
-    return FileResponse(path, media_type="image/png")
+    response = await get_revision_thumbnail(db, user, item_id, revision_id)
+    return StreamingResponse(response.body, media_type="image/png")
 
 
 @router.get("/documents/{item_id}/thumbnail")
@@ -221,7 +214,7 @@ async def item_thumbnail(
     db: AsyncSession = Depends(get_db),
 ):
     thumbnail = await get_item_thumbnail(db, user, item_id)
-    return FileResponse(thumbnail.path, media_type=thumbnail.media_type)
+    return StreamingResponse(thumbnail.response.body, media_type=thumbnail.media_type)
 
 
 @router.get("/documents/{item_id}/revisions/{revision_id}/export")
@@ -234,7 +227,7 @@ async def export_revision_pdf_route(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    path, filename, media_type, temporary = await export_revision_pdf(
+    exported = await export_revision_pdf(
         db,
         user,
         item_id,
@@ -243,11 +236,8 @@ async def export_revision_pdf_route(
         project_id=project_id,
         timezone=timezone,
     )
-    cleanup_task = BackgroundTask(path.unlink, missing_ok=True) if temporary else None
-    return FileResponse(
-        path,
-        media_type=media_type,
-        filename=filename,
-        content_disposition_type="attachment",
-        background=cleanup_task,
+    return StreamingResponse(
+        exported.body,
+        media_type=exported.media_type,
+        headers={"Content-Disposition": content_disposition(exported.filename)},
     )

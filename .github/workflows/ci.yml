@@ -51,6 +51,26 @@ jobs:
           python-version: "3.12"
       - run: uv sync --extra postgres
       - run: uv run pytest -q tests/test_postgres_contract.py
+  s3-object-store:
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: quirebase
+      AWS_SECRET_ACCESS_KEY: quirebase-secret
+      QUIREBASE_TEST_S3_ENDPOINT: http://localhost:9000
+      QUIREBASE_TEST_S3_BUCKET: quirebase-contract
+      QUIREBASE_TEST_S3_REGION: us-east-1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync
+      - run: docker run --detach --name quirebase-minio --publish 9000:9000 --env MINIO_ROOT_USER=quirebase --env MINIO_ROOT_PASSWORD=quirebase-secret minio/minio:RELEASE.2025-04-22T22-12-26Z server /data
+      - run: curl --fail --retry 20 --retry-connrefused --retry-delay 1 http://localhost:9000/minio/health/live
+      - run: docker run --rm --network host minio/mc alias set local http://localhost:9000 quirebase quirebase-secret
+      - run: docker run --rm --network host minio/mc mb --ignore-existing local/quirebase-contract
+      - run: uv run pytest -q tests/test_storage.py
+      - run: uv run pytest -q tests/test_library_bulk_permissions.py::test_streaming_bundle_cancellation_releases_object_stream
   oa-pdf-corpus:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest

@@ -1,267 +1,336 @@
 import asyncio
+import hashlib
+import os
+import tempfile
 import threading
-from concurrent.futures import ThreadPoolExecutor
-from io import BytesIO
 
+import pymupdf
 import pytest
-from filelock import FileLock
-from sqlalchemy import select, text
+from obstore.store import LocalStore
 
 from quirebase.core.config import Settings
-from quirebase.core.storage import LocalObjectStore
-from quirebase.documents.revisions import (
-    create_attachment,
-    delete_unreferenced_objects,
-    store_pdf_revision,
-)
-from quirebase.models import Attachment, AttachmentRole, Item, User
+from quirebase.core.storage import ObjectStore
+from quirebase.documents.revisions import stage_pdf
+from quirebase.models import FileRevision, Item, User
 
 
-def test_content_addressed_pdf_storage_is_idempotent(tmp_path):
-    store = LocalObjectStore(Settings(data_dir=tmp_path))
-    content = b"%PDF-1.4\nminimal"
-    first = store.put_pdf(BytesIO(content), 100)
-    second = store.put_pdf(BytesIO(content), 100)
-
-    assert first == second
-    assert store.path(first[0]).read_bytes() == content
+async def chunks(value: bytes, size: int = 7):
+    for offset in range(0, len(value), size):
+        await asyncio.sleep(0)
+        yield value[offset : offset + size]
 
 
-def test_storage_rejects_non_pdf_and_oversize(tmp_path):
-    store = LocalObjectStore(Settings(data_dir=tmp_path))
-    with pytest.raises(ValueError, match="not a PDF"):
-        store.put_pdf(BytesIO(b"hello"), 100)
-    with pytest.raises(ValueError, match="size limit"):
-        store.put_pdf(BytesIO(b"%PDF-" + b"x" * 20), 10)
+def test_s3_store_omits_unset_optional_configuration(monkeypatch, tmp_path):
+    constructed = {}
 
+    class StubS3Store:
+        def __init__(self, bucket, **options):
+            constructed["bucket"] = bucket
+            constructed["options"] = options
 
-def test_staged_object_cleanup_does_not_leave_per_object_directories(tmp_path):
-    store = LocalObjectStore(Settings(data_dir=tmp_path))
-    key, _digest, _size, lease = store.put_staged_pdf(
-        BytesIO(b"%PDF-1.4\nminimal"),
-        100,
-    )
+    monkeypatch.setattr("quirebase.core.storage.S3Store", StubS3Store)
 
-    lease.release()
-    store.delete(key)
+    ObjectStore.from_settings(Settings(data_dir=tmp_path, object_store="s3", s3_bucket="documents"))
 
-    assert not store.path(key).parent.exists()
-    assert not list(store.settings.object_dir.rglob("leases"))
-    assert len([path for path in store.settings.object_dir.rglob("*") if path.is_dir()]) <= 1
-
-
-def test_cleanup_lock_can_be_released_from_another_worker_thread(tmp_path):
-    store = LocalObjectStore(Settings(data_dir=tmp_path))
-    lock = store.cleanup_lock("aa/bb/object.pdf")
-    acquired = False
-    with (
-        ThreadPoolExecutor(max_workers=1) as acquiring_worker,
-        ThreadPoolExecutor(max_workers=1) as releasing_worker,
-    ):
-        acquiring_worker.submit(lock.acquire).result()
-        try:
-            releasing_worker.submit(lock.release).result()
-            probe = FileLock(lock.lock_file)
-            probe.acquire(blocking=False)
-            acquired = True
-            probe.release()
-        finally:
-            if not acquired:
-                acquiring_worker.submit(lock.release, True).result()
-
-
-def test_object_lease_can_be_released_from_another_worker_thread(tmp_path):
-    store = LocalObjectStore(Settings(data_dir=tmp_path))
-    with (
-        ThreadPoolExecutor(max_workers=1) as staging_worker,
-        ThreadPoolExecutor(max_workers=1) as releasing_worker,
-    ):
-        key, _digest, _size, lease = staging_worker.submit(
-            store.put_staged_pdf,
-            BytesIO(b"%PDF-1.4\nminimal"),
-            100,
-        ).result()
-        releasing_worker.submit(lease.release).result()
-        still_locked = staging_worker.submit(lambda: lease._lock.is_locked).result()
-        if still_locked:
-            staging_worker.submit(lease._lock.release, True).result()
-
-    assert not still_locked
-    store.delete(key)
+    assert constructed == {
+        "bucket": "documents",
+        "options": {"client_options": {"timeout": "5m"}},
+    }
 
 
 @pytest.mark.anyio
-async def test_database_fixture_isolates_the_default_object_store(async_db, tmp_path):
-    assert await async_db.scalar(text("SELECT 1")) == 1
-    store = LocalObjectStore()
+async def test_local_cleanup_lock_serializes_delete_and_cas_publish(tmp_path):
+    store = ObjectStore.from_settings(Settings(data_dir=tmp_path))
+    content = b"immutable content"
+    digest = hashlib.sha256(content).hexdigest()
+    key = f"{digest[:2]}/{digest[2:4]}/{digest}.bin"
+    delete_started = asyncio.Event()
+    allow_delete = asyncio.Event()
+    data_plane = store._store
 
-    assert store.settings.data_dir == tmp_path / "async-data"
+    class BlockingDeleteStore:
+        def __getattr__(self, name):
+            return getattr(data_plane, name)
+
+        async def delete_async(self, object_key):
+            delete_started.set()
+            await allow_delete.wait()
+            await data_plane.delete_async(object_key)
+
+    store._store = BlockingDeleteStore()
+    deleting = asyncio.create_task(store.delete(key))
+    await delete_started.wait()
+    uploading = asyncio.create_task(store.put_cas(content, suffix=".bin", max_bytes=len(content)))
+    try:
+        await asyncio.sleep(0.05)
+        upload_waited_for_delete = not uploading.done()
+    finally:
+        allow_delete.set()
+    await deleting
+    staged = await uploading
+
+    assert upload_waited_for_delete
+    assert await store.exists(key)
+    await staged.release()
+    await store.delete(key)
 
 
 @pytest.mark.anyio
-async def test_attachment_upload_lease_prevents_concurrent_cleanup(
-    async_db, async_session_factory, monkeypatch
+@pytest.mark.parametrize("remote_materialization", [False, True])
+async def test_cancelled_pdf_validation_waits_for_validator_then_reclaims_object(
+    async_db, tmp_path, monkeypatch, remote_materialization
 ):
-    db = async_db
-    user = User(username="attachment-uploader", password_hash="unused")
-    db.add(user)
-    await db.flush()
-    item = Item(title="Attachment lease", created_by=user.id)
-    db.add(item)
-    await db.commit()
-    original_commit = db.commit
-    store = LocalObjectStore()
+    root = tmp_path / "data-plane"
+    data_plane = LocalStore(root, mkdir=True, automatic_cleanup=True)
+    store = ObjectStore(data_plane, local_root=None if remote_materialization else root)
+    started = threading.Event()
+    finish = threading.Event()
+    materialized_paths = []
 
-    async def commit_while_cleanup_runs():
-        object_path = next(store.settings.object_dir.glob("*/*/*.bin"))
-        object_key = str(object_path.relative_to(store.settings.object_dir))
-        async with async_session_factory() as concurrent_db:
-            deleted = await delete_unreferenced_objects(concurrent_db, (object_key,))
-        assert deleted == ()
-        assert object_path.exists()
-        await original_commit()
+    def blocking_validation(path):
+        materialized_paths.append(path)
+        started.set()
+        assert finish.wait(timeout=5)
+        assert path.is_file()
 
-    monkeypatch.setattr(db, "commit", commit_while_cleanup_runs)
-
-    attachment = await create_attachment(
-        db,
-        user,
-        item.id,
-        BytesIO(b"same bytes as a concurrently deleted attachment"),
-        "supplement.txt",
-        "text/plain",
-    )
-
-    assert store.path(attachment.object_key).exists()
-
-
-@pytest.mark.anyio
-async def test_cancelled_pdf_staging_reclaims_completed_thread_result(async_db, monkeypatch):
-    from quirebase.documents import revisions
-
-    db = async_db
-    user = User(username="cancelled-pdf-uploader", password_hash="unused")
-    db.add(user)
-    await db.flush()
-    item = Item(title="Cancelled PDF", created_by=user.id)
-    db.add(item)
-    await db.commit()
-    started = asyncio.Event()
-    release_worker = threading.Event()
-    worker_finished = threading.Event()
-    loop = asyncio.get_running_loop()
-    original_stage_pdf = revisions.stage_pdf
-    monkeypatch.setattr(revisions, "validate_pdf_container", lambda _path: None)
-
-    def delayed_stage_pdf(source, filename, maximum):
-        loop.call_soon_threadsafe(started.set)
-        release_worker.wait()
-        try:
-            return original_stage_pdf(source, filename, maximum)
-        finally:
-            worker_finished.set()
-
-    monkeypatch.setattr(revisions, "stage_pdf", delayed_stage_pdf)
-    upload = asyncio.create_task(
-        store_pdf_revision(
-            db,
-            user,
-            item.id,
-            BytesIO(b"%PDF-1.4\ncancelled"),
-            "cancelled.pdf",
-            100,
-        )
-    )
-    await started.wait()
-    upload.cancel()
-    release_worker.set()
+    monkeypatch.setattr("quirebase.documents.revisions.get_object_store", lambda: store)
+    monkeypatch.setattr("quirebase.documents.revisions.validate_pdf_container", blocking_validation)
+    content = b"%PDF-cancelled-validation"
+    digest = hashlib.sha256(content).hexdigest()
+    key = f"{digest[:2]}/{digest[2:4]}/{digest}.pdf"
+    staging = asyncio.create_task(stage_pdf(async_db, content, "cancelled.pdf", len(content)))
+    await asyncio.to_thread(started.wait, 5)
+    staging.cancel()
+    try:
+        await asyncio.sleep(0.05)
+        assert not staging.done()
+        assert materialized_paths[0].is_file()
+    finally:
+        finish.set()
 
     with pytest.raises(asyncio.CancelledError):
-        await upload
-    assert await asyncio.to_thread(worker_finished.wait, 1)
-    assert list(LocalObjectStore().settings.object_dir.rglob("*.pdf")) == []
+        await staging
+    assert not await store.exists(key)
+    assert not materialized_paths[0].exists()
+    assert not list(root.rglob("*.lease.lock"))
 
 
 @pytest.mark.anyio
-async def test_cancelled_attachment_staging_reclaims_completed_thread_result(async_db, monkeypatch):
-    db = async_db
-    user = User(username="cancelled-attachment-uploader", password_hash="unused")
-    db.add(user)
-    await db.flush()
-    item = Item(title="Cancelled attachment", created_by=user.id)
-    db.add(item)
-    await db.commit()
-    started = asyncio.Event()
-    release_worker = threading.Event()
-    worker_finished = threading.Event()
-    loop = asyncio.get_running_loop()
-    original_put = LocalObjectStore.put_staged_attachment
-
-    def delayed_put(store, source, maximum):
-        loop.call_soon_threadsafe(started.set)
-        release_worker.wait()
-        try:
-            return original_put(store, source, maximum)
-        finally:
-            worker_finished.set()
-
-    monkeypatch.setattr(LocalObjectStore, "put_staged_attachment", delayed_put)
-    upload = asyncio.create_task(
-        create_attachment(
-            db,
-            user,
-            item.id,
-            BytesIO(b"cancelled attachment"),
-            "cancelled.txt",
-            "text/plain",
-            100,
-        )
-    )
-    await started.wait()
-    upload.cancel()
-    release_worker.set()
-
-    with pytest.raises(asyncio.CancelledError):
-        await upload
-    assert await asyncio.to_thread(worker_finished.wait, 1)
-    assert list(LocalObjectStore().settings.object_dir.rglob("*.bin")) == []
-
-
-@pytest.mark.anyio
-async def test_concurrent_graphical_abstract_uploads_are_serialized(
-    async_db, async_session_factory
+async def test_cancelled_duplicate_pdf_validation_preserves_referenced_cas_object(
+    async_db, tmp_path, monkeypatch
 ):
     db = async_db
-    user = User(username="concurrent-attachment-uploader", password_hash="unused")
+    root = tmp_path / "objects"
+    store = ObjectStore(LocalStore(root, mkdir=True), local_root=root)
+    content = b"%PDF-referenced-duplicate"
+    digest = hashlib.sha256(content).hexdigest()
+    key = f"{digest[:2]}/{digest[2:4]}/{digest}.pdf"
+    await store.put(key, content)
+    user = User(username="cas-owner", password_hash="unused")
     db.add(user)
     await db.flush()
-    item = Item(title="Concurrent graphical abstract", created_by=user.id)
+    item = Item(title="Referenced CAS", created_by=user.id)
     db.add(item)
+    await db.flush()
+    db.add(
+        FileRevision(
+            item_id=item.id,
+            object_key=key,
+            sha256=digest,
+            size=len(content),
+            original_name="existing.pdf",
+            processing_state="ready",
+            created_by=user.id,
+        )
+    )
     await db.commit()
-    user_id, item_id = user.id, item.id
+    started = threading.Event()
+    finish = threading.Event()
 
-    start = asyncio.Barrier(2)
+    def blocking_validation(path):
+        started.set()
+        assert finish.wait(timeout=5)
 
-    async def upload(index: int) -> str:
-        async with async_session_factory() as worker_db:
-            worker_user = await worker_db.get(User, user_id)
-            assert worker_user is not None
-            await start.wait()
-            attachment = await create_attachment(
-                worker_db,
-                worker_user,
-                item_id,
-                BytesIO(b"\x89PNG\r\n\x1a\n" + bytes([index])),
-                f"abstract-{index}.png",
-                "image/png",
-                role=AttachmentRole.graphical_abstract,
-            )
-            return attachment.id
+    monkeypatch.setattr("quirebase.documents.revisions.get_object_store", lambda: store)
+    monkeypatch.setattr("quirebase.documents.revisions.validate_pdf_container", blocking_validation)
+    staging = asyncio.create_task(stage_pdf(db, content, "duplicate.pdf", len(content)))
+    await asyncio.to_thread(started.wait, 5)
+    staging.cancel()
+    finish.set()
 
-    attachment_ids = await asyncio.gather(upload(0), upload(1))
+    with pytest.raises(asyncio.CancelledError):
+        await staging
+    assert await store.exists(key)
+    assert not list(root.rglob("*.lease.lock"))
 
-    attachments = (
-        await db.scalars(select(Attachment).where(Attachment.id.in_(attachment_ids)))
-    ).all()
-    assert len(attachments) == 2
-    assert sum(record.role == AttachmentRole.graphical_abstract for record in attachments) == 1
+
+@pytest.mark.anyio
+async def test_cas_publish_does_not_depend_on_post_upload_head(tmp_path):
+    data_plane = LocalStore(tmp_path / "data-plane", mkdir=True)
+
+    class HeadFailingStore:
+        def __getattr__(self, name):
+            return getattr(data_plane, name)
+
+        async def head_async(self, key):
+            raise RuntimeError("injected post-upload HEAD failure")
+
+    store = ObjectStore(HeadFailingStore())
+    content = b"cas without post-upload head"
+    staged = await store.put_cas(content, suffix=".bin", max_bytes=len(content))
+
+    metadata = await data_plane.head_async(staged.key)
+    assert metadata["size"] == len(content)
+
+
+@pytest.fixture(params=["local", "s3"])
+def object_store(request, tmp_path):
+    if request.param == "local":
+        return ObjectStore.from_settings(Settings(data_dir=tmp_path))
+    endpoint = os.getenv("QUIREBASE_TEST_S3_ENDPOINT")
+    bucket = os.getenv("QUIREBASE_TEST_S3_BUCKET")
+    if not endpoint or not bucket:
+        pytest.skip("S3 contract requires QUIREBASE_TEST_S3_ENDPOINT and bucket")
+    prefix = f"contract/{tmp_path.name}"
+    return ObjectStore.from_settings(
+        Settings(
+            data_dir=tmp_path,
+            object_store="s3",
+            s3_bucket=bucket,
+            s3_endpoint=endpoint,
+            s3_region=os.getenv("QUIREBASE_TEST_S3_REGION", "us-east-1"),
+            s3_prefix=prefix,
+        )
+    )
+
+
+@pytest.mark.anyio
+async def test_object_store_upload_head_range_and_delete(object_store):
+    content = b"0123456789" * 20
+    metadata = await object_store.put("contract/data.bin", chunks(content))
+
+    assert metadata.size == len(content)
+    assert await object_store.exists("contract/data.bin")
+    response = await object_store.get_range("contract/data.bin", 7, 31)
+    assert b"".join([bytes(part) async for part in response.body]) == content[7:31]
+    assert response.byte_range == (7, 31)
+    assert await object_store.delete("contract/data.bin")
+    assert not await object_store.exists("contract/data.bin")
+
+
+@pytest.mark.anyio
+async def test_object_store_put_accepts_path_bytes_and_async_iterable(object_store, tmp_path):
+    path = tmp_path / "source.bin"
+    path.write_bytes(b"path")
+
+    await object_store.put("contract/path.bin", path)
+    await object_store.put("contract/bytes.bin", b"bytes")
+    await object_store.put("contract/stream.bin", chunks(b"stream"))
+
+    for key, expected in (
+        ("contract/path.bin", b"path"),
+        ("contract/bytes.bin", b"bytes"),
+        ("contract/stream.bin", b"stream"),
+    ):
+        response = await object_store.get(key)
+        assert b"".join([bytes(part) async for part in response.body]) == expected
+
+
+@pytest.mark.anyio
+async def test_concurrent_cas_uses_immutable_atomic_overwrite(object_store):
+    content = b"same immutable content" * 100_000
+    first, second = await asyncio.gather(
+        object_store.put_cas(chunks(content), suffix=".bin", max_bytes=len(content)),
+        object_store.put_cas(chunks(content), suffix=".bin", max_bytes=len(content)),
+    )
+    await first.release()
+    await second.release()
+
+    assert first.key == second.key
+    response = await object_store.get(first.key)
+    assert b"".join([bytes(part) async for part in response.body]) == content
+
+
+@pytest.mark.anyio
+async def test_materialize_opens_with_pymupdf(object_store):
+    document = pymupdf.open()
+    document.new_page()
+    pdf = document.tobytes()
+    document.close()
+    staged = await object_store.put_cas(
+        pdf, suffix=".pdf", max_bytes=len(pdf), required_prefix=b"%PDF-"
+    )
+    await staged.release()
+
+    async with object_store.materialize(staged.key) as path:
+        with pymupdf.open(path) as materialized:
+            assert materialized.page_count == 1
+
+
+@pytest.mark.anyio
+async def test_cancelled_cas_cleans_temporary_input(object_store, tmp_path, monkeypatch):
+    started = asyncio.Event()
+
+    async def blocked():
+        started.set()
+        yield b"partial"
+        await asyncio.Event().wait()
+
+    real_mkstemp = tempfile.mkstemp
+
+    def task_mkstemp(*, prefix, suffix=""):
+        return real_mkstemp(prefix=prefix, suffix=suffix, dir=tmp_path)
+
+    monkeypatch.setattr("quirebase.core.storage.tempfile.mkstemp", task_mkstemp)
+    task = asyncio.create_task(object_store.put_cas(blocked(), suffix=".bin", max_bytes=100))
+    await started.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert not list(tmp_path.glob("quirebase-cas-*"))
+
+
+@pytest.mark.anyio
+async def test_cancelled_streaming_put_does_not_publish_partial_object(object_store):
+    first_part_consumed = asyncio.Event()
+
+    async def multipart_source():
+        yield b"x" * (6 * 1024 * 1024)
+        first_part_consumed.set()
+        await asyncio.Event().wait()
+
+    key = "contract/cancelled-multipart.bin"
+    task = asyncio.create_task(object_store.put(key, multipart_source()))
+    await asyncio.wait_for(first_part_consumed.wait(), timeout=10)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert not await object_store.exists(key)
+
+
+@pytest.mark.anyio
+async def test_materialize_scope_cleans_remote_temporary_file_on_cancellation(
+    object_store, tmp_path, monkeypatch
+):
+    await object_store.put("contract/materialize-cancel.bin", b"materialized")
+    real_mkstemp = tempfile.mkstemp
+
+    def task_mkstemp(*, prefix, suffix=""):
+        return real_mkstemp(prefix=prefix, suffix=suffix, dir=tmp_path)
+
+    monkeypatch.setattr("quirebase.core.storage.tempfile.mkstemp", task_mkstemp)
+    entered = asyncio.Event()
+
+    async def hold_materialized_path():
+        async with object_store.materialize("contract/materialize-cancel.bin"):
+            entered.set()
+            await asyncio.Event().wait()
+
+    task = asyncio.create_task(hold_materialized_path())
+    await entered.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert not list(tmp_path.glob("quirebase-object-*"))

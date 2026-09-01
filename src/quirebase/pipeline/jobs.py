@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import tempfile
 import time
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import and_, or_, select
@@ -14,7 +16,7 @@ from quirebase.audit import record_event
 from quirebase.core.config import get_settings
 from quirebase.core.database import AsyncSessionLocal
 from quirebase.core.errors import ResourceUnavailable, ValidationFailure
-from quirebase.core.storage import LocalObjectStore
+from quirebase.core.storage import get_object_store
 from quirebase.core.timezones import annotation_export_timezone
 from quirebase.models import (
     AnnotationScope,
@@ -102,8 +104,16 @@ async def handle_pdf_inspect(db: AsyncSession, job: Job, payload: dict[str, Any]
     revision = await db.get(FileRevision, payload["revision_id"])
     if revision is None:
         raise ValueError("revision no longer exists")
-    path = LocalObjectStore().path(revision.object_key)
-    pages, text, geometry = await asyncio.to_thread(inspect_pdf, path)
+    store = get_object_store()
+    async with store.materialize(revision.object_key) as path:
+        pages, text, geometry = await asyncio.to_thread(inspect_pdf, path)
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as thumbnail:
+            thumbnail_path = Path(thumbnail.name)
+        try:
+            await asyncio.to_thread(create_thumbnail, path, thumbnail_path)
+            await store.put(f"thumbnails/{revision.id}.png", thumbnail_path)
+        finally:
+            await asyncio.to_thread(thumbnail_path.unlink, missing_ok=True)
     if pages < 1:
         raise ValueError("PDF contains no pages")
     geometry_json = json.dumps(geometry, separators=(",", ":"))
@@ -112,9 +122,6 @@ async def handle_pdf_inspect(db: AsyncSession, job: Job, payload: dict[str, Any]
         page_count=pages,
         page_geometry=geometry_json,
         full_text=text,
-    )
-    await asyncio.to_thread(
-        create_thumbnail, path, get_settings().object_dir / "thumbnails" / f"{revision.id}.png"
     )
     await propagate_file_revision_change(db, revision.item_id, owner_id=job.owner_id)
     return {"page_count": pages}
@@ -163,6 +170,7 @@ async def handle_pdf_export_annotations(
         )
     )
     filename = f"{job.id}.pdf"
+    object_key = f"artifacts/annotation-exports/{filename}"
     author_rows = (
         await db.execute(
             select(User.id, User.username).where(
@@ -172,15 +180,23 @@ async def handle_pdf_export_annotations(
     ).all()
     author_names: dict[str, str] = {row[0]: row[1] for row in author_rows}
     display_timezone = annotation_export_timezone(payload.get("timezone"))
-    await asyncio.to_thread(
-        export_annotations,
-        LocalObjectStore().path(revision.object_key),
-        get_settings().export_dir / filename,
-        records,
-        author_names=author_names,
-        display_timezone=display_timezone,
-    )
-    return {"filename": filename}
+    store = get_object_store()
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as output:
+        output_path = Path(output.name)
+    try:
+        async with store.materialize(revision.object_key) as source:
+            await asyncio.to_thread(
+                export_annotations,
+                source,
+                output_path,
+                records,
+                author_names=author_names,
+                display_timezone=display_timezone,
+            )
+        metadata = await store.put(object_key, output_path)
+    finally:
+        await asyncio.to_thread(output_path.unlink, missing_ok=True)
+    return {"filename": filename, "object_key": object_key, "size_bytes": metadata.size}
 
 
 async def handle_system_reindex(

@@ -15,7 +15,7 @@ from quirebase.documents.bundles import (
 )
 from quirebase.documents.exports import (
     create_export_job,
-    get_export_file_path,
+    get_export_file,
     get_export_status,
 )
 from quirebase.documents.revisions import (
@@ -30,6 +30,7 @@ from quirebase.documents.revisions import (
     get_pdf_viewer_data,
     get_revision_file,
     get_revision_thumbnail,
+    head_revision_file,
     store_pdf_revision,
 )
 from quirebase.documents.schemas import AnnotationCreate, AnnotationUpdate, SegmentInput
@@ -53,12 +54,13 @@ __all__ = [
     "delete_unreferenced_objects",
     "export_revision_pdf",
     "get_attachment_file",
-    "get_export_file_path",
+    "get_export_file",
     "get_export_status",
     "get_item_thumbnail",
     "get_pdf_viewer_data",
     "get_revision_file",
     "get_revision_thumbnail",
+    "head_revision_file",
     "list_document_annotations",
     "store_pdf_revision",
     "update_document_annotation",

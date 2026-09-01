@@ -1,17 +1,19 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import zipfile
-from io import BytesIO
+from datetime import UTC, datetime
 
 import pymupdf
 import pytest
 from sqlalchemy import select
+from storage_helpers import collect_body, local_object_path, put_pdf_object
 from test_http import authenticated_async_client
 
 from quirebase.core.crypto import hash_password
 from quirebase.core.errors import PermissionDenied
-from quirebase.core.storage import LocalObjectStore
+from quirebase.core.storage import ObjectMetadata, ObjectResponse
 from quirebase.documents import create_item_document_bundle
 from quirebase.library import apply_bulk_item_action, download_selected_item_documents
 from quirebase.models import (
@@ -26,6 +28,52 @@ from quirebase.models import (
     ProjectMember,
     User,
 )
+
+
+@pytest.mark.anyio
+async def test_streaming_bundle_cancellation_releases_object_stream(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    owner = await db.get(User, item.created_by)
+    assert owner is not None
+    started = asyncio.Event()
+    released = asyncio.Event()
+
+    async def blocking_body():
+        try:
+            started.set()
+            yield b"first chunk"
+            await asyncio.Event().wait()
+        finally:
+            released.set()
+
+    class BlockingStore:
+        async def get(self, key):
+            assert key == revision.object_key
+            return ObjectResponse(
+                metadata=ObjectMetadata(key, revision.size, None, datetime.now(UTC)),
+                byte_range=(0, revision.size),
+                body=blocking_body(),
+            )
+
+    monkeypatch.setattr("quirebase.documents.bundles.get_object_store", BlockingStore)
+    bundle = await create_item_document_bundle(db, owner, item.id)
+
+    async def consume():
+        async for _chunk in bundle.body:
+            pass
+
+    task = asyncio.create_task(consume())
+    await started.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert released.is_set()
+    await client.aclose()
 
 
 @pytest.mark.anyio
@@ -121,7 +169,7 @@ async def test_bulk_delete_preserves_object_referenced_by_pending_pdf_import(
     )
     owner = await db.get(User, item.created_by)
     assert owner is not None
-    object_path = LocalObjectStore().path(revision.object_key)
+    object_path = local_object_path(revision.object_key)
     db.add(
         ImportBatch(
             owner_id=owner.id,
@@ -156,9 +204,10 @@ async def test_bulk_download_pdfs_records_audit_event(
     assert owner is not None
 
     archive = await download_selected_item_documents(db, owner, [item.id])
-    assert archive.content.getvalue()
+    archive_bytes = await collect_body(archive.body)
+    assert archive_bytes.getvalue()
     assert archive.filename == "quirebase-selected-pdfs.zip"
-    with zipfile.ZipFile(archive.content) as bundle:
+    with zipfile.ZipFile(archive_bytes) as bundle:
         assert "manifest.json" in bundle.namelist()
         assert "Paper/manifest.json" in bundle.namelist()
         assert "Paper/Paper-pdf-v01-paper.pdf" in bundle.namelist()
@@ -186,9 +235,7 @@ async def test_item_download_bundle_contains_all_pdf_versions_with_manifest(
     )
     owner = await db.get(User, item.created_by)
     assert owner is not None
-    key, digest, size = LocalObjectStore().put_pdf(
-        source=BytesIO(b"%PDF-1.4\nsecond-pdf"), maximum=100
-    )
+    key, digest, size = await put_pdf_object(b"%PDF-1.4\nsecond-pdf", 100)
     db.add(
         FileRevision(
             item_id=item.id,
@@ -204,7 +251,7 @@ async def test_item_download_bundle_contains_all_pdf_versions_with_manifest(
 
     archive = await create_item_document_bundle(db, owner, item.id)
     assert archive.filename == "Paper-pdfs.zip"
-    with zipfile.ZipFile(archive.content) as bundle:
+    with zipfile.ZipFile(await collect_body(archive.body)) as bundle:
         names = bundle.namelist()
         assert "manifest.json" in names
         assert sum(name.endswith("paper.pdf") for name in names) == 1
@@ -227,8 +274,8 @@ async def test_item_download_embeds_annotations_in_pdf_without_a_sidecar(
     assert owner is not None
     with pymupdf.open() as document:
         document.new_page(width=300, height=400)
-        source = BytesIO(document.tobytes())
-    key, digest, size = LocalObjectStore().put_pdf(source=source, maximum=100_000)
+        source = document.tobytes()
+    key, digest, size = await put_pdf_object(source, 100_000)
     revision.object_key = key
     revision.sha256 = digest
     revision.size = size
@@ -260,7 +307,7 @@ async def test_item_download_embeds_annotations_in_pdf_without_a_sidecar(
     archive = await create_item_document_bundle(db, owner, item.id, include_annotations=True)
 
     assert archive.filename == "Paper-annotated-pdfs.zip"
-    with zipfile.ZipFile(archive.content) as bundle:
+    with zipfile.ZipFile(await collect_body(archive.body)) as bundle:
         names = bundle.namelist()
         assert not any(name.startswith("annotations-") for name in names)
         pdf_name = next(name for name in names if name.endswith(".pdf"))
@@ -275,7 +322,7 @@ async def test_item_download_embeds_annotations_in_pdf_without_a_sidecar(
         db, owner, [item.id], include_annotations=True
     )
     assert bulk_archive.filename == "quirebase-selected-annotated-pdfs.zip"
-    with zipfile.ZipFile(bulk_archive.content) as bundle:
+    with zipfile.ZipFile(await collect_body(bulk_archive.body)) as bundle:
         assert "manifest.json" in bundle.namelist()
         assert "Paper/manifest.json" in bundle.namelist()
         pdf_name = next(

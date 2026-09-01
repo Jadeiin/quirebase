@@ -26,8 +26,11 @@ async def api_client(factory):
     app = create_app(mcp_session_factory=factory)
 
     async def override_db():
-        async with factory() as session:
+        session = factory()
+        try:
             yield session
+        finally:
+            await session.close()
 
     app.dependency_overrides[get_db] = override_db
     async with httpx2.AsyncClient(

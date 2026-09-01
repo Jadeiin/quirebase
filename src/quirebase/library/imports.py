@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import TYPE_CHECKING, BinaryIO
+from typing import TYPE_CHECKING
 
 from inquiro.bibliography import (
     SUPPORTED_FORMATS,
@@ -22,12 +22,12 @@ from quirebase.core.errors import (
     UpstreamServiceError,
     ValidationFailure,
 )
-from quirebase.core.storage import LocalObjectStore
+from quirebase.core.storage import ObjectSource, get_object_store
 from quirebase.documents.revisions import (
     StagedPdf,
     attach_staged_pdf,
     delete_unreferenced_objects,
-    stage_pdf_async,
+    stage_pdf,
 )
 from quirebase.library.activity import get_accessible_item_identifiers
 from quirebase.library.citations import format_csl_export, format_standard_export
@@ -174,7 +174,7 @@ async def stage_identifier_import_batch(
 async def stage_pdf_import_batch(
     db: AsyncSession,
     user: User,
-    uploads: Sequence[tuple[BinaryIO, str]],
+    uploads: Sequence[tuple[ObjectSource, str]],
     *,
     max_bytes: int | None = None,
     settings: Settings | None = None,
@@ -207,7 +207,7 @@ async def stage_pdf_import_batch(
     async def cleanup_staged_pdfs() -> None:
         await db.rollback()
         for staged_pdf in staged_pdfs:
-            await asyncio.to_thread(staged_pdf.release)
+            await staged_pdf.release()
         await delete_unreferenced_objects(db, {staged_pdf.object_key for staged_pdf in staged_pdfs})
 
     try:
@@ -215,11 +215,10 @@ async def stage_pdf_import_batch(
             staged: StagedPdf | None = None
             diagnostic_code = "invalid_pdf"
             try:
-                staged = await stage_pdf_async(db, source, filename, max_bytes)
+                staged = await stage_pdf(db, source, filename, max_bytes)
                 staged_pdfs.append(staged)
-                detected_doi = await asyncio.to_thread(
-                    extract_doi, LocalObjectStore().path(staged.object_key)
-                )
+                async with get_object_store().materialize(staged.object_key) as path:
+                    detected_doi = await asyncio.to_thread(extract_doi, path)
                 if not detected_doi:
                     diagnostic_code = "missing_doi"
                     raise ValidationFailure("no DOI was found in this PDF")
@@ -262,7 +261,7 @@ async def stage_pdf_import_batch(
                     "message": str(error),
                 })
                 if staged is not None and staged.object_key not in retained_keys:
-                    await asyncio.to_thread(staged.release)
+                    await staged.release()
                     await delete_unreferenced_objects(db, (staged.object_key,))
                     await db.rollback()
 
@@ -291,7 +290,7 @@ async def stage_pdf_import_batch(
         )
         await db.commit()
         for staged in staged_pdfs:
-            await asyncio.to_thread(staged.release)
+            await staged.release()
         return batch, records, errors
     except asyncio.CancelledError:
         _consume_current_cancellation()

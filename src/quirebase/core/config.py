@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -16,6 +17,11 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./quirebase.db"
     data_dir: Path = Path("./quirebase-data")
+    object_store: Literal["local", "s3"] = "local"
+    s3_bucket: str | None = None
+    s3_region: str | None = None
+    s3_endpoint: str | None = None
+    s3_prefix: str | None = None
     session_cookie: str = "quirebase_session"
     session_days: int = 30
     secure_cookies: bool = False

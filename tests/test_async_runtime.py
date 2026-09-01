@@ -87,8 +87,11 @@ async def test_http_api_and_database_share_the_asyncio_request_loop(async_sessio
     app = create_app(mcp_session_factory=async_session_factory)
 
     async def override_db():
-        async with async_session_factory() as db:
+        db = async_session_factory()
+        try:
             yield db
+        finally:
+            await db.close()
 
     app.dependency_overrides[get_db] = override_db
     transport = httpx2.ASGITransport(app=app)

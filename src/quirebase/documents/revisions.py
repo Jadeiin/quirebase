@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import json
+from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, BinaryIO
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select, update
 
@@ -20,7 +20,14 @@ from quirebase.core.errors import (
     ValidationFailure,
     VersionConflict,
 )
-from quirebase.core.storage import LocalObjectStore, ObjectLease
+from quirebase.core.storage import (
+    ObjectMetadata,
+    ObjectResponse,
+    ObjectSource,
+    ObjectStore,
+    StagedObject,
+    get_object_store,
+)
 from quirebase.models import (
     Attachment,
     AttachmentRole,
@@ -38,7 +45,7 @@ from quirebase.pipeline.derived_state import propagate_file_revision_change
 from quirebase.pipeline.inspection import job_payload, validate_pdf_container
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine, Iterable
+    from collections.abc import Iterable
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -61,39 +68,68 @@ class StagedPdf:
     sha256: str
     size: int
     original_name: str
-    _lease: ObjectLease = field(repr=False)
+    _staged: StagedObject = field(repr=False)
 
     def revision_data(self) -> tuple[str, str, int, str]:
         return self.object_key, self.sha256, self.size, self.original_name
 
-    def release(self) -> None:
-        self._lease.release()
+    async def release(self) -> None:
+        await self._staged.release()
 
 
 @dataclass(frozen=True)
 class ItemThumbnail:
-    path: Path
+    response: ObjectResponse
     media_type: str
     source_kind: str
     source_id: str
 
 
-def stage_pdf(source: BinaryIO, filename: str, max_bytes: int) -> StagedPdf:
+async def _validate_staged_pdf(store: ObjectStore, object_key: str) -> None:
+    """Own materialization until the validator thread has actually stopped."""
+    async with store.materialize(object_key) as path:
+        await asyncio.to_thread(validate_pdf_container, path)
+
+
+async def stage_pdf(
+    db: AsyncSession, source: ObjectSource, filename: str, max_bytes: int
+) -> StagedPdf:
     if not filename or not filename.lower().endswith(".pdf"):
         raise UnsupportedMediaType("a PDF file is required")
-    store = LocalObjectStore()
+    store = get_object_store()
     try:
-        key, digest, size, lease = store.put_staged_pdf(source, max_bytes)
-        validate_pdf_container(store.path(key))
+        staged = await store.put_cas(
+            source,
+            suffix=".pdf",
+            max_bytes=max_bytes,
+            required_prefix=b"%PDF-",
+        )
     except ValueError as error:
-        if "lease" in locals():
-            lease.release()
-        if "key" in locals():
-            with store.cleanup_lock(key):
-                if not store.has_active_lease(key):
-                    store.delete(key)
         raise ValidationFailure(str(error)) from error
-    return StagedPdf(key, digest, size, Path(filename).name, lease)
+    staged_pdf = StagedPdf(
+        staged.key,
+        staged.sha256,
+        staged.size,
+        Path(filename).name,
+        staged,
+    )
+    validation = asyncio.create_task(_validate_staged_pdf(store, staged.key))
+    try:
+        await asyncio.shield(validation)
+    except asyncio.CancelledError:
+        _consume_current_cancellation()
+        with suppress(Exception):
+            await _finish_task_despite_cancellation(validation)
+        cleanup = asyncio.create_task(_release_staged_pdf(db, staged_pdf))
+        await _finish_task_despite_cancellation(cleanup)
+        raise
+    except ValueError as error:
+        await _release_staged_pdf(db, staged_pdf)
+        raise ValidationFailure(str(error)) from error
+    except Exception:
+        await _release_staged_pdf(db, staged_pdf)
+        raise
+    return staged_pdf
 
 
 def _consume_current_cancellation() -> None:
@@ -113,49 +149,14 @@ async def _finish_task_despite_cancellation[StagedResult](
             _consume_current_cancellation()
 
 
-async def _run_staging_worker[StagedResult](
-    operation: Callable[[], StagedResult],
-    cleanup: Callable[[StagedResult], Coroutine[Any, Any, None]],
-) -> StagedResult:
-    """Run blocking staging without abandoning a lease-bearing result on cancellation."""
-    worker = asyncio.create_task(asyncio.to_thread(operation))
-    try:
-        return await asyncio.shield(worker)
-    except asyncio.CancelledError as cancellation:
-        _consume_current_cancellation()
-        try:
-            staged = await _finish_task_despite_cancellation(worker)
-        except Exception:
-            raise cancellation from None
-        cleanup_task = asyncio.create_task(cleanup(staged))
-        await _finish_task_despite_cancellation(cleanup_task)
-        raise
-
-
 async def _release_staged_pdf(db: AsyncSession, staged: StagedPdf) -> None:
-    await asyncio.to_thread(staged.release)
+    await staged.release()
     await discard_staged_object(db, staged.object_key)
 
 
-async def _release_staged_attachment(
-    db: AsyncSession, staged: tuple[str, str, int, ObjectLease]
-) -> None:
-    object_key, _digest, _size, lease = staged
-    await asyncio.to_thread(lease.release)
-    await discard_staged_object(db, object_key)
-
-
-async def stage_pdf_async(
-    db: AsyncSession,
-    source: BinaryIO,
-    filename: str,
-    max_bytes: int,
-) -> StagedPdf:
-    """Stage a PDF in a worker and reclaim its lease/object if the caller is cancelled."""
-    return await _run_staging_worker(
-        lambda: stage_pdf(source, filename, max_bytes),
-        lambda staged: _release_staged_pdf(db, staged),
-    )
+async def _release_staged_attachment(db: AsyncSession, staged: StagedObject) -> None:
+    await staged.release()
+    await discard_staged_object(db, staged.key)
 
 
 async def _rollback_and_release_pdf(db: AsyncSession, staged: StagedPdf) -> None:
@@ -163,9 +164,7 @@ async def _rollback_and_release_pdf(db: AsyncSession, staged: StagedPdf) -> None
     await _release_staged_pdf(db, staged)
 
 
-async def _rollback_and_release_attachment(
-    db: AsyncSession, staged: tuple[str, str, int, ObjectLease]
-) -> None:
+async def _rollback_and_release_attachment(db: AsyncSession, staged: StagedObject) -> None:
     await db.rollback()
     await _release_staged_attachment(db, staged)
 
@@ -237,20 +236,13 @@ async def delete_unreferenced_objects(
     keys = tuple(dict.fromkeys(key for key in object_keys if key))
     if not keys:
         return ()
-    store = LocalObjectStore()
+    store = get_object_store()
     actually_deleted: list[str] = []
     for object_key in keys:
-        lock = await asyncio.to_thread(store.cleanup_lock, object_key)
-        await asyncio.to_thread(lock.acquire)
-        try:
-            if await asyncio.to_thread(store.has_active_lease, object_key):
-                continue
-            if await _object_is_referenced(db, object_key):
-                continue
-            await asyncio.to_thread(store.delete, object_key)
+        if await _object_is_referenced(db, object_key):
+            continue
+        if await store.delete(object_key):
             actually_deleted.append(object_key)
-        finally:
-            await asyncio.to_thread(lock.release)
     return tuple(actually_deleted)
 
 
@@ -262,7 +254,7 @@ async def store_pdf_revision(
     db: AsyncSession,
     user: User,
     item_id: str,
-    source: BinaryIO,
+    source: ObjectSource,
     filename: str,
     max_bytes: int | None = None,
 ) -> FileRevision:
@@ -271,7 +263,7 @@ async def store_pdf_revision(
     item = await require_editable_item(db, user, item_id)
     if max_bytes is None:
         max_bytes = await get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes)
-    staged = await stage_pdf_async(db, source, filename, max_bytes)
+    staged = await stage_pdf(db, source, filename, max_bytes)
     try:
         revision = await attach_staged_pdf(db, user, item, staged.revision_data())
         await db.commit()
@@ -283,13 +275,11 @@ async def store_pdf_revision(
     except Exception:
         await _rollback_and_release_pdf(db, staged)
         raise
-    await asyncio.to_thread(staged.release)
+    await staged.release()
     return revision
 
 
-def _is_image_container(path: Path, content_type: str) -> bool:
-    with path.open("rb") as source:
-        header = source.read(12)
+def _is_image_header(header: bytes, content_type: str) -> bool:
     return {
         "image/gif": header.startswith((b"GIF87a", b"GIF89a")),
         "image/jpeg": header.startswith(b"\xff\xd8\xff"),
@@ -318,7 +308,7 @@ async def create_attachment(
     db: AsyncSession,
     user: User,
     item_id: str,
-    source: BinaryIO,
+    source: ObjectSource,
     filename: str,
     content_type: str = "application/octet-stream",
     max_bytes: int | None = None,
@@ -336,21 +326,29 @@ async def create_attachment(
         GRAPHICAL_ABSTRACT_MEDIA_TYPES
     ):
         raise ValidationFailure("graphical abstract must be a PNG, JPEG, WebP, or GIF image")
-    store = LocalObjectStore()
+    store = get_object_store()
     try:
-        staged = await _run_staging_worker(
-            lambda: store.put_staged_attachment(source, max_bytes),
-            lambda staged: _release_staged_attachment(db, staged),
-        )
+        staged = await store.put_cas(source, suffix=".bin", max_bytes=max_bytes)
     except ValueError as error:
         raise ValidationFailure(str(error)) from error
-    key, digest, size, lease = staged
-    if role == AttachmentRole.graphical_abstract and not await asyncio.to_thread(
-        _is_image_container, store.path(key), content_type
-    ):
-        await asyncio.to_thread(lease.release)
-        await discard_staged_object(db, key)
-        raise ValidationFailure("graphical abstract content does not match its image type")
+    key, digest, size = staged.key, staged.sha256, staged.size
+    try:
+        if role == AttachmentRole.graphical_abstract:
+            if size:
+                response = await store.get_range(key, 0, min(12, size))
+                header = b"".join([bytes(chunk) async for chunk in response.body])
+            else:
+                header = b""
+            if not _is_image_header(header, content_type):
+                raise ValidationFailure("graphical abstract content does not match its image type")
+    except asyncio.CancelledError:
+        _consume_current_cancellation()
+        cleanup_task = asyncio.create_task(_release_staged_attachment(db, staged))
+        await _finish_task_despite_cancellation(cleanup_task)
+        raise
+    except Exception:
+        await _release_staged_attachment(db, staged)
+        raise
     try:
         if role is not None:
             await _lock_item_for_attachment_role_replacement(db, item_id)
@@ -385,29 +383,49 @@ async def create_attachment(
     except Exception:
         await _rollback_and_release_attachment(db, staged)
         raise
-    await asyncio.to_thread(lease.release)
+    await staged.release()
     return record
 
 
 async def get_attachment_file(
     db: AsyncSession, user: User, item_id: str, attachment_id: str
-) -> tuple[Path, str, str]:
+) -> tuple[ObjectResponse, str, str]:
     record = await require_attachment(db, user, item_id, attachment_id)
     return (
-        LocalObjectStore().path(record.object_key),
+        await get_object_store().get(record.object_key),
         record.original_name,
         record.mime_type or "application/octet-stream",
     )
 
 
 async def get_revision_file(
+    db: AsyncSession,
+    user: User,
+    item_id: str,
+    revision_id: str,
+    *,
+    byte_range: tuple[int, int] | None = None,
+) -> tuple[ObjectResponse, str, str]:
+    revision = await require_revision(db, user, revision_id)
+    if revision.item_id != item_id:
+        raise ResourceNotFound("revision not found for item")
+    store = get_object_store()
+    response = (
+        await store.get_range(revision.object_key, *byte_range)
+        if byte_range is not None
+        else await store.get(revision.object_key)
+    )
+    return response, revision.original_name, revision.sha256
+
+
+async def head_revision_file(
     db: AsyncSession, user: User, item_id: str, revision_id: str
-) -> tuple[Path, str, str]:
+) -> tuple[ObjectMetadata, str, str]:
     revision = await require_revision(db, user, revision_id)
     if revision.item_id != item_id:
         raise ResourceNotFound("revision not found for item")
     return (
-        LocalObjectStore().path(revision.object_key),
+        await get_object_store().head(revision.object_key),
         revision.original_name,
         revision.sha256,
     )
@@ -415,14 +433,14 @@ async def get_revision_file(
 
 async def get_revision_thumbnail(
     db: AsyncSession, user: User, item_id: str, revision_id: str
-) -> Path:
+) -> ObjectResponse:
     revision = await require_revision(db, user, revision_id)
     if revision.item_id != item_id:
         raise ResourceNotFound("revision not found for item")
-    path = get_settings().object_dir / "thumbnails" / f"{revision.id}.png"
-    if not await asyncio.to_thread(path.is_file):
+    key = f"thumbnails/{revision.id}.png"
+    if not await get_object_store().exists(key):
         raise ResourceNotFound("revision thumbnail not found")
-    return path
+    return await get_object_store().get(key)
 
 
 async def get_item_thumbnail(db: AsyncSession, user: User, item_id: str) -> ItemThumbnail:
@@ -434,10 +452,10 @@ async def get_item_thumbnail(db: AsyncSession, user: User, item_id: str) -> Item
         )
     )
     if graphical_abstract is not None:
-        path = LocalObjectStore().path(graphical_abstract.object_key)
-        if await asyncio.to_thread(path.is_file):
+        store = get_object_store()
+        if await store.exists(graphical_abstract.object_key):
             return ItemThumbnail(
-                path=path,
+                response=await store.get(graphical_abstract.object_key),
                 media_type=graphical_abstract.mime_type,
                 source_kind="graphical_abstract",
                 source_id=graphical_abstract.id,
@@ -453,10 +471,11 @@ async def get_item_thumbnail(db: AsyncSession, user: User, item_id: str) -> Item
         )
     ).all()
     for revision in revisions:
-        path = get_settings().object_dir / "thumbnails" / f"{revision.id}.png"
-        if await asyncio.to_thread(path.is_file):
+        key = f"thumbnails/{revision.id}.png"
+        store = get_object_store()
+        if await store.exists(key):
             return ItemThumbnail(
-                path=path,
+                response=await store.get(key),
                 media_type="image/png",
                 source_kind="pdf_thumbnail",
                 source_id=revision.id,
@@ -509,7 +528,7 @@ async def delete_file_revision(
             message="PDF background work is still running; retry deletion shortly"
         )
     object_key = revision.object_key
-    thumbnail = get_settings().object_dir / "thumbnails" / f"{revision.id}.png"
+    thumbnail_key = f"thumbnails/{revision.id}.png"
     for job in revision_jobs:
         if job.state in {JobState.pending, JobState.failed}:
             await db.delete(job)
@@ -518,8 +537,7 @@ async def delete_file_revision(
     await propagate_file_revision_change(db, item_id, owner_id=user.id)
     record_event(db, user.id, "pdf.delete", "file_revision", revision.id)
     await db.commit()
-    with contextlib.suppress(OSError):
-        await asyncio.to_thread(thumbnail.unlink, missing_ok=True)
+    await get_object_store().delete(thumbnail_key)
     await delete_unreferenced_objects(db, (object_key,))
 
 
