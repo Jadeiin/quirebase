@@ -58,7 +58,10 @@ class LocalObjectStore:
     def cleanup_lock(self, object_key: str) -> FileLock:
         lock_root = self._lock_root(object_key)
         lock_root.mkdir(parents=True, exist_ok=True)
-        return FileLock(lock_root / f"{self._lock_name(object_key)[:2]}.cleanup.lock")
+        return FileLock(
+            lock_root / f"{self._lock_name(object_key)[:2]}.cleanup.lock",
+            thread_local=False,
+        )
 
     def has_active_lease(self, object_key: str) -> bool:
         """Return whether a writer has not yet committed its object reference.
@@ -71,7 +74,7 @@ class LocalObjectStore:
             return False
         active = False
         for marker in lock_root.glob(f"{self._lock_name(object_key)}.*.lease.lock"):
-            probe = FileLock(marker)
+            probe = FileLock(marker, thread_local=False)
             try:
                 probe.acquire(blocking=False)
             except Timeout:
@@ -169,6 +172,6 @@ class LocalObjectStore:
         lock_root = self._lock_root(object_key)
         lock_root.mkdir(parents=True, exist_ok=True)
         marker = lock_root / f"{self._lock_name(object_key)}.{uuid4().hex}.lease.lock"
-        lock = FileLock(marker)
+        lock = FileLock(marker, thread_local=False)
         lock.acquire()
         return ObjectLease(marker, lock)

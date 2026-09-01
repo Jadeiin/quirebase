@@ -1,8 +1,10 @@
 import asyncio
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 
 import pytest
+from filelock import FileLock
 from sqlalchemy import select, text
 
 from quirebase.core.config import Settings
@@ -46,6 +48,46 @@ def test_staged_object_cleanup_does_not_leave_per_object_directories(tmp_path):
     assert not store.path(key).parent.exists()
     assert not list(store.settings.object_dir.rglob("leases"))
     assert len([path for path in store.settings.object_dir.rglob("*") if path.is_dir()]) <= 1
+
+
+def test_cleanup_lock_can_be_released_from_another_worker_thread(tmp_path):
+    store = LocalObjectStore(Settings(data_dir=tmp_path))
+    lock = store.cleanup_lock("aa/bb/object.pdf")
+    acquired = False
+    with (
+        ThreadPoolExecutor(max_workers=1) as acquiring_worker,
+        ThreadPoolExecutor(max_workers=1) as releasing_worker,
+    ):
+        acquiring_worker.submit(lock.acquire).result()
+        try:
+            releasing_worker.submit(lock.release).result()
+            probe = FileLock(lock.lock_file)
+            probe.acquire(blocking=False)
+            acquired = True
+            probe.release()
+        finally:
+            if not acquired:
+                acquiring_worker.submit(lock.release, True).result()
+
+
+def test_object_lease_can_be_released_from_another_worker_thread(tmp_path):
+    store = LocalObjectStore(Settings(data_dir=tmp_path))
+    with (
+        ThreadPoolExecutor(max_workers=1) as staging_worker,
+        ThreadPoolExecutor(max_workers=1) as releasing_worker,
+    ):
+        key, _digest, _size, lease = staging_worker.submit(
+            store.put_staged_pdf,
+            BytesIO(b"%PDF-1.4\nminimal"),
+            100,
+        ).result()
+        releasing_worker.submit(lease.release).result()
+        still_locked = staging_worker.submit(lambda: lease._lock.is_locked).result()
+        if still_locked:
+            staging_worker.submit(lease._lock.release, True).result()
+
+    assert not still_locked
+    store.delete(key)
 
 
 @pytest.mark.anyio
