@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_forms.html" import csrf_field %}
+{% from "_workflow_progress.html" import workflow_progress with context %}
 {% block title %}{{ _('Administration') }} · Quirebase{% endblock %}
 {% block content %}
 <header class="item-header">
@@ -461,6 +462,10 @@
     {# 7. Maintenance Tab                                               #}
     {# ================================================================= #}
     {% elif admin_tab == 'maintenance' %}
+    {% set pending_workflow_id = request.query_params.get('workflow') %}
+    {% if pending_workflow_id %}
+    {{ workflow_progress(pending_workflow_id, '/admin/maintenance', '/admin/maintenance', _('Unable to read maintenance status.'), _('System maintenance'), _('Running maintenance workflow…'), _('The requested maintenance operation is running. This page will update automatically.')) }}
+    {% endif %}
     <div class="tool-grid">
       <section class="panel tool-card">
         <span>⌕</span>

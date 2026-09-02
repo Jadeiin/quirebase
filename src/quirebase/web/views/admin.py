@@ -431,8 +431,8 @@ async def trigger_reindex_job(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await dispatch_maintenance_workflow(db, user, "reindex_all")
-    return RedirectResponse("/admin/maintenance", status_code=303)
+    workflow_id = await dispatch_maintenance_workflow(db, user, "reindex_all")
+    return RedirectResponse(f"/admin/maintenance?workflow={workflow_id}", status_code=303)
 
 
 @router.post("/admin/maintenance/check-objects")
@@ -440,8 +440,8 @@ async def trigger_check_objects_job(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await dispatch_maintenance_workflow(db, user, "check_objects")
-    return RedirectResponse("/admin/maintenance", status_code=303)
+    workflow_id = await dispatch_maintenance_workflow(db, user, "check_objects")
+    return RedirectResponse(f"/admin/maintenance?workflow={workflow_id}", status_code=303)
 
 
 @router.post("/admin/maintenance/backup")
@@ -449,8 +449,8 @@ async def trigger_backup_job(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await dispatch_maintenance_workflow(db, user, "backup")
-    return RedirectResponse("/admin/maintenance", status_code=303)
+    workflow_id = await dispatch_maintenance_workflow(db, user, "backup")
+    return RedirectResponse(f"/admin/maintenance?workflow={workflow_id}", status_code=303)
 
 
 @router.post("/admin/maintenance/recommend-tags")
@@ -458,8 +458,8 @@ async def trigger_recommend_tags_job(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await dispatch_maintenance_workflow(db, user, "recommend_tags_all")
-    return RedirectResponse("/admin/maintenance", status_code=303)
+    workflow_id = await dispatch_maintenance_workflow(db, user, "recommend_tags_all")
+    return RedirectResponse(f"/admin/maintenance?workflow={workflow_id}", status_code=303)
 
 
 @router.get("/admin/maintenance/backups/{workflow_id}/download")

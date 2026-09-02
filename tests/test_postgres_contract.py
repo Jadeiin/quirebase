@@ -1,6 +1,10 @@
-import importlib
+from __future__ import annotations
+
+import importlib.util
 import os
 import uuid
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 import sqlalchemy as sa
@@ -13,6 +17,23 @@ from test_domain_states import assert_closed_state_constraints
 from quirebase.core.database import Base, make_async_engine
 from quirebase.models import Item, User
 from quirebase.search import search_index
+
+if TYPE_CHECKING:
+    from types import ModuleType
+
+
+def _load_dbos_migration() -> ModuleType:
+    migration_path = (
+        Path(__file__).parents[1]
+        / "migrations"
+        / "versions"
+        / "0019_dbos_workflows_and_uuid_objects.py"
+    )
+    spec = importlib.util.spec_from_file_location("migration_0019", migration_path)
+    assert spec is not None and spec.loader is not None
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    return migration
 
 
 @pytest.mark.skipif(
@@ -63,9 +84,7 @@ def test_postgresql_dbos_migration_drops_reflected_job_foreign_key(monkeypatch):
             foreign_key = sa.inspect(connection).get_foreign_keys("item_tag_recommendations")[0]
             assert foreign_key["name"] == "item_tag_recommendations_job_id_fkey"
 
-            migration = importlib.import_module(
-                "migrations.versions.0019_dbos_workflows_and_uuid_objects"
-            )
+            migration = _load_dbos_migration()
             monkeypatch.setattr(
                 migration,
                 "op",

@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: quirebase 0.1\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-09-02 10:52+0800\n"
+"POT-Creation-Date: 2026-09-02 18:16+0800\n"
 "PO-Revision-Date: 2026-08-15 19:40+0800\n"
 "Last-Translator: Quirebase Team\n"
 "Language: zh_CN\n"
@@ -213,12 +213,12 @@ msgid "Create account {username}."
 msgstr "为 {username} 创建账号。"
 
 #: src/quirebase/templates/accept_invitation.html:2
-#: src/quirebase/templates/admin.html:173 src/quirebase/templates/login.html:9
+#: src/quirebase/templates/admin.html:174 src/quirebase/templates/login.html:9
 msgid "Password"
 msgstr "密码"
 
 #: src/quirebase/templates/accept_invitation.html:2
-#: src/quirebase/templates/admin.html:167
+#: src/quirebase/templates/admin.html:168
 msgid "Create account"
 msgstr "创建账号"
 
@@ -273,21 +273,21 @@ msgid "User profile"
 msgstr "个人信息"
 
 #: src/quirebase/templates/account_settings.html:41
-#: src/quirebase/templates/admin.html:172
-#: src/quirebase/templates/admin.html:192 src/quirebase/templates/login.html:8
+#: src/quirebase/templates/admin.html:173
+#: src/quirebase/templates/admin.html:193 src/quirebase/templates/login.html:8
 msgid "Username"
 msgstr "用户名"
 
 #: src/quirebase/templates/account_settings.html:42
-#: src/quirebase/templates/admin.html:139
-#: src/quirebase/templates/admin.html:174
-#: src/quirebase/templates/admin.html:193
+#: src/quirebase/templates/admin.html:140
+#: src/quirebase/templates/admin.html:175
+#: src/quirebase/templates/admin.html:194
 msgid "Role"
 msgstr "角色"
 
 #: src/quirebase/templates/account_settings.html:43
-#: src/quirebase/templates/admin.html:392
-#: src/quirebase/templates/admin.html:526
+#: src/quirebase/templates/admin.html:393
+#: src/quirebase/templates/admin.html:531
 msgid "Created"
 msgstr "创建时间"
 
@@ -322,7 +322,7 @@ msgid "Current password"
 msgstr "当前密码"
 
 #: src/quirebase/templates/account_settings.html:83
-#: src/quirebase/templates/admin.html:223
+#: src/quirebase/templates/admin.html:224
 msgid "New password"
 msgstr "新密码"
 
@@ -693,303 +693,303 @@ msgstr "当前设备"
 msgid "No active sessions."
 msgstr "没有活动会话。"
 
-#: src/quirebase/templates/admin.html:3 src/quirebase/templates/admin.html:9
+#: src/quirebase/templates/admin.html:4 src/quirebase/templates/admin.html:10
 #: src/quirebase/templates/base.html:33
 msgid "Administration"
 msgstr "管理"
 
-#: src/quirebase/templates/admin.html:8
+#: src/quirebase/templates/admin.html:9
 msgid "System workspace"
 msgstr "系统工作区"
 
-#: src/quirebase/templates/admin.html:10
+#: src/quirebase/templates/admin.html:11
 msgid ""
 "Manage access, global library items, audit events, durable workflows, "
 "runtime settings and maintenance."
 msgstr "管理访问权限、全局文献条目、审计事件、持久工作流、运行时设置和维护。"
 
-#: src/quirebase/templates/admin.html:13
+#: src/quirebase/templates/admin.html:14
 msgid "Metrics"
 msgstr "指标"
 
-#: src/quirebase/templates/admin.html:19
+#: src/quirebase/templates/admin.html:20
 msgid "Administration navigation"
 msgstr "管理导航"
 
-#: src/quirebase/templates/admin.html:22 src/quirebase/templates/item.html:53
+#: src/quirebase/templates/admin.html:23 src/quirebase/templates/item.html:53
 msgid "Overview"
 msgstr "概览"
 
-#: src/quirebase/templates/admin.html:22
+#: src/quirebase/templates/admin.html:23
 msgid "System stats and health"
 msgstr "系统统计与健康状态"
 
-#: src/quirebase/templates/admin.html:26
+#: src/quirebase/templates/admin.html:27
 msgid "Users & Access"
 msgstr "用户与访问"
 
-#: src/quirebase/templates/admin.html:26 src/quirebase/templates/admin.html:188
+#: src/quirebase/templates/admin.html:27 src/quirebase/templates/admin.html:189
 msgid "Invite a user"
 msgstr "邀请用户"
 
-#: src/quirebase/templates/admin.html:26
+#: src/quirebase/templates/admin.html:27
 msgid "Accounts, roles, and invites"
 msgstr "账号、角色与邀请"
 
-#: src/quirebase/templates/admin.html:30
+#: src/quirebase/templates/admin.html:31
 msgid "Global Items & Files"
 msgstr "全局条目与文件"
 
-#: src/quirebase/templates/admin.html:30
+#: src/quirebase/templates/admin.html:31
 msgid "Library items and storage"
 msgstr "论文库条目与存储"
 
-#: src/quirebase/templates/admin.html:34
+#: src/quirebase/templates/admin.html:35
 msgid "Audit Log"
 msgstr "审计日志"
 
-#: src/quirebase/templates/admin.html:34
+#: src/quirebase/templates/admin.html:35
 msgid "Security and change log"
 msgstr "安全与变更记录"
 
-#: src/quirebase/templates/admin.html:38
+#: src/quirebase/templates/admin.html:39
 msgid "Workflows"
 msgstr "工作流"
 
-#: src/quirebase/templates/admin.html:38
+#: src/quirebase/templates/admin.html:39
 msgid "Durable operations"
 msgstr "持久操作"
 
-#: src/quirebase/templates/admin.html:42
+#: src/quirebase/templates/admin.html:43
 msgid "Runtime Settings"
 msgstr "运行时配置"
 
-#: src/quirebase/templates/admin.html:42
+#: src/quirebase/templates/admin.html:43
 msgid "API keys and thresholds"
 msgstr "API 密钥与阈值"
 
-#: src/quirebase/templates/admin.html:46
+#: src/quirebase/templates/admin.html:47
 msgid "Maintenance"
 msgstr "系统维护"
 
-#: src/quirebase/templates/admin.html:46
+#: src/quirebase/templates/admin.html:47
 msgid "Reindex, verify, and backups"
 msgstr "重建索引、校验与备份"
 
-#: src/quirebase/templates/admin.html:59
+#: src/quirebase/templates/admin.html:60
 msgid "Total users"
 msgstr "用户总数"
 
-#: src/quirebase/templates/admin.html:63
+#: src/quirebase/templates/admin.html:64
 msgid "Total items"
 msgstr "条目总数"
 
-#: src/quirebase/templates/admin.html:67
+#: src/quirebase/templates/admin.html:68
 msgid "Total storage"
 msgstr "存储总容量"
 
-#: src/quirebase/templates/admin.html:71
+#: src/quirebase/templates/admin.html:72
 msgid "Failed workflows"
 msgstr "失败的工作流"
 
-#: src/quirebase/templates/admin.html:79
+#: src/quirebase/templates/admin.html:80
 msgid "Storage breakdown"
 msgstr "存储容量分布"
 
-#: src/quirebase/templates/admin.html:80
+#: src/quirebase/templates/admin.html:81
 msgid "File objects"
 msgstr "文件对象"
 
-#: src/quirebase/templates/admin.html:86
+#: src/quirebase/templates/admin.html:87
 msgid "PDF Revisions"
 msgstr "PDF 版本"
 
-#: src/quirebase/templates/admin.html:87 src/quirebase/templates/admin.html:93
-#: src/quirebase/templates/admin.html:99
+#: src/quirebase/templates/admin.html:88 src/quirebase/templates/admin.html:94
+#: src/quirebase/templates/admin.html:100
 msgid "files"
 msgstr "个文件"
 
-#: src/quirebase/templates/admin.html:92 src/quirebase/templates/item.html:266
+#: src/quirebase/templates/admin.html:93 src/quirebase/templates/item.html:266
 msgid "Attachments"
 msgstr "附件"
 
-#: src/quirebase/templates/admin.html:98
+#: src/quirebase/templates/admin.html:99
 msgid "Thumbnails"
 msgstr "缩略图"
 
-#: src/quirebase/templates/admin.html:108
+#: src/quirebase/templates/admin.html:109
 msgid "Activity"
 msgstr "活动"
 
-#: src/quirebase/templates/admin.html:109
+#: src/quirebase/templates/admin.html:110
 msgid "Recent audit events"
 msgstr "最近审计事件"
 
-#: src/quirebase/templates/admin.html:111
+#: src/quirebase/templates/admin.html:112
 msgid "View all"
 msgstr "查看全部"
 
-#: src/quirebase/templates/admin.html:122
+#: src/quirebase/templates/admin.html:123
 msgid "No recent audit events."
 msgstr "暂无最近审计事件。"
 
-#: src/quirebase/templates/admin.html:135
+#: src/quirebase/templates/admin.html:136
 msgid "Search users"
 msgstr "搜索用户"
 
-#: src/quirebase/templates/admin.html:136
+#: src/quirebase/templates/admin.html:137
 msgid "Username or ID…"
 msgstr "用户名或 ID…"
 
-#: src/quirebase/templates/admin.html:141
+#: src/quirebase/templates/admin.html:142
 msgid "All roles"
 msgstr "所有角色"
-
-#: src/quirebase/templates/admin.html:142
-#: src/quirebase/templates/admin.html:176
-#: src/quirebase/templates/admin.html:195
-msgid "member"
-msgstr "成员"
 
 #: src/quirebase/templates/admin.html:143
 #: src/quirebase/templates/admin.html:177
 #: src/quirebase/templates/admin.html:196
+msgid "member"
+msgstr "成员"
+
+#: src/quirebase/templates/admin.html:144
+#: src/quirebase/templates/admin.html:178
+#: src/quirebase/templates/admin.html:197
 #: src/quirebase/templates/project.html:5
 msgid "administrator"
 msgstr "管理员"
 
-#: src/quirebase/templates/admin.html:147
+#: src/quirebase/templates/admin.html:148
 msgid "Status"
 msgstr "状态"
 
-#: src/quirebase/templates/admin.html:149
+#: src/quirebase/templates/admin.html:150
 msgid "All statuses"
 msgstr "所有状态"
 
-#: src/quirebase/templates/admin.html:150
-#: src/quirebase/templates/admin.html:217
+#: src/quirebase/templates/admin.html:151
+#: src/quirebase/templates/admin.html:218
 msgid "Active"
 msgstr "正常"
 
-#: src/quirebase/templates/admin.html:151
-#: src/quirebase/templates/admin.html:217
+#: src/quirebase/templates/admin.html:152
+#: src/quirebase/templates/admin.html:218
 msgid "Disabled"
 msgstr "已停用"
 
-#: src/quirebase/templates/admin.html:155
-#: src/quirebase/templates/admin.html:269
-#: src/quirebase/templates/admin.html:323
+#: src/quirebase/templates/admin.html:156
+#: src/quirebase/templates/admin.html:270
+#: src/quirebase/templates/admin.html:324
 msgid "Filter"
 msgstr "筛选"
 
-#: src/quirebase/templates/admin.html:157
-#: src/quirebase/templates/admin.html:271
-#: src/quirebase/templates/admin.html:325
+#: src/quirebase/templates/admin.html:158
+#: src/quirebase/templates/admin.html:272
+#: src/quirebase/templates/admin.html:326
 #: src/quirebase/templates/library.html:20
 #: src/quirebase/templates/online_search.html:11
 #: src/quirebase/templates/tools.html:35
 msgid "Clear"
 msgstr "清除"
 
-#: src/quirebase/templates/admin.html:168
+#: src/quirebase/templates/admin.html:169
 msgid "Add user directly"
 msgstr "直接添加用户"
 
-#: src/quirebase/templates/admin.html:180
+#: src/quirebase/templates/admin.html:181
 msgid "Create user"
 msgstr "创建用户"
 
-#: src/quirebase/templates/admin.html:187
+#: src/quirebase/templates/admin.html:188
 msgid "Invitations"
 msgstr "邀请"
 
-#: src/quirebase/templates/admin.html:199
+#: src/quirebase/templates/admin.html:200
 msgid "Create invitation"
 msgstr "创建邀请"
 
-#: src/quirebase/templates/admin.html:207
+#: src/quirebase/templates/admin.html:208
 msgid "Directory"
 msgstr "用户目录"
 
-#: src/quirebase/templates/admin.html:208
+#: src/quirebase/templates/admin.html:209
 #, python-brace-format
 msgid "All users ({count})"
 msgstr "全部用户（{count}）"
 
-#: src/quirebase/templates/admin.html:217
+#: src/quirebase/templates/admin.html:218
 msgid "Joined"
 msgstr "加入时间"
 
-#: src/quirebase/templates/admin.html:221
+#: src/quirebase/templates/admin.html:222
 msgid "Reset password"
 msgstr "重置密码"
 
-#: src/quirebase/templates/admin.html:224
+#: src/quirebase/templates/admin.html:225
 msgid "Update"
 msgstr "更新"
 
-#: src/quirebase/templates/admin.html:230
+#: src/quirebase/templates/admin.html:231
 msgid "Disable"
 msgstr "停用"
 
-#: src/quirebase/templates/admin.html:230
+#: src/quirebase/templates/admin.html:231
 msgid "Enable"
 msgstr "启用"
 
-#: src/quirebase/templates/admin.html:236
+#: src/quirebase/templates/admin.html:237
 msgid "Make Member"
 msgstr "设为普通成员"
 
-#: src/quirebase/templates/admin.html:236
+#: src/quirebase/templates/admin.html:237
 msgid "Make Admin"
 msgstr "设为管理员"
 
-#: src/quirebase/templates/admin.html:239
+#: src/quirebase/templates/admin.html:240
 msgid "Revoke all login sessions for this user?"
 msgstr "确定吊销该用户的所有登录会话？"
 
-#: src/quirebase/templates/admin.html:240
+#: src/quirebase/templates/admin.html:241
 msgid "Revoke sessions"
 msgstr "吊销会话"
 
-#: src/quirebase/templates/admin.html:245
+#: src/quirebase/templates/admin.html:246
 msgid "No users found."
 msgstr "未找到匹配用户。"
 
-#: src/quirebase/templates/admin.html:257
+#: src/quirebase/templates/admin.html:258
 msgid "Search all items"
 msgstr "搜索所有条目"
 
-#: src/quirebase/templates/admin.html:258
+#: src/quirebase/templates/admin.html:259
 msgid "Title, author, DOI, or ID…"
 msgstr "标题、作者、DOI 或 ID…"
 
-#: src/quirebase/templates/admin.html:261
+#: src/quirebase/templates/admin.html:262
 msgid "Has PDF"
 msgstr "包含 PDF"
 
-#: src/quirebase/templates/admin.html:263
+#: src/quirebase/templates/admin.html:264
 msgid "All"
 msgstr "全部"
 
-#: src/quirebase/templates/admin.html:264
+#: src/quirebase/templates/admin.html:265
 msgid "With PDF"
 msgstr "有 PDF"
 
-#: src/quirebase/templates/admin.html:265
+#: src/quirebase/templates/admin.html:266
 msgid "Without PDF"
 msgstr "无 PDF"
 
-#: src/quirebase/templates/admin.html:280
+#: src/quirebase/templates/admin.html:281
 msgid "Global inventory"
 msgstr "全局清单"
 
-#: src/quirebase/templates/admin.html:281
+#: src/quirebase/templates/admin.html:282
 #, python-brace-format
 msgid "All items ({count})"
 msgstr "全部条目（{count}）"
 
-#: src/quirebase/templates/admin.html:289 src/quirebase/templates/index.html:23
+#: src/quirebase/templates/admin.html:290 src/quirebase/templates/index.html:23
 #: src/quirebase/templates/index.html:32 src/quirebase/templates/item.html:12
 #: src/quirebase/templates/library.html:66
 #: src/quirebase/templates/online_search.html:18
@@ -997,227 +997,245 @@ msgstr "全部条目（{count}）"
 msgid "No authors"
 msgstr "无作者"
 
-#: src/quirebase/templates/admin.html:292
+#: src/quirebase/templates/admin.html:293
 msgid "View"
 msgstr "查看"
 
-#: src/quirebase/templates/admin.html:293
+#: src/quirebase/templates/admin.html:294
 msgid ""
 "Permanently delete this item, all its revisions, annotations, and storage"
 " files?"
 msgstr "确定永久删除此条目及其所有版本、批注和存储文件？"
 
-#: src/quirebase/templates/admin.html:294 src/quirebase/templates/item.html:259
+#: src/quirebase/templates/admin.html:295 src/quirebase/templates/item.html:259
 #: src/quirebase/templates/item.html:267 src/quirebase/templates/item.html:416
 #: src/quirebase/templates/pdf.html:65 src/quirebase/templates/tools.html:105
 #: src/quirebase/templates/tools.html:147
 msgid "Delete"
 msgstr "删除"
 
-#: src/quirebase/templates/admin.html:299
+#: src/quirebase/templates/admin.html:300
 msgid "No items found."
 msgstr "未找到匹配条目。"
 
-#: src/quirebase/templates/admin.html:311
+#: src/quirebase/templates/admin.html:312
 msgid "Search audit trail"
 msgstr "搜索审计流水"
 
-#: src/quirebase/templates/admin.html:312
+#: src/quirebase/templates/admin.html:313
 msgid "Action, detail keyword, or target ID…"
 msgstr "动作、详情关键词或目标 ID…"
 
-#: src/quirebase/templates/admin.html:315
+#: src/quirebase/templates/admin.html:316
 msgid "Action"
 msgstr "动作"
 
-#: src/quirebase/templates/admin.html:319
+#: src/quirebase/templates/admin.html:320
 msgid "Target type"
 msgstr "目标类型"
 
-#: src/quirebase/templates/admin.html:334
+#: src/quirebase/templates/admin.html:335
 msgid "Security & Operations Log"
 msgstr "安全与运维日志"
 
-#: src/quirebase/templates/admin.html:335
+#: src/quirebase/templates/admin.html:336
 #, python-brace-format
 msgid "Audit events ({count})"
 msgstr "审计事件（{count}）"
 
-#: src/quirebase/templates/admin.html:346
+#: src/quirebase/templates/admin.html:347
 msgid "Target"
 msgstr "目标"
 
-#: src/quirebase/templates/admin.html:346
+#: src/quirebase/templates/admin.html:347
 msgid "Actor"
 msgstr "操作者"
 
-#: src/quirebase/templates/admin.html:346
+#: src/quirebase/templates/admin.html:347
 msgid "System"
 msgstr "系统"
 
-#: src/quirebase/templates/admin.html:353
+#: src/quirebase/templates/admin.html:354
 msgid "No audit events found."
 msgstr "未找到审计事件。"
 
-#: src/quirebase/templates/admin.html:365
+#: src/quirebase/templates/admin.html:366
 msgid "Filter by state"
 msgstr "按状态筛选"
 
-#: src/quirebase/templates/admin.html:367
+#: src/quirebase/templates/admin.html:368
 msgid "All states"
 msgstr "所有状态"
 
-#: src/quirebase/templates/admin.html:368
+#: src/quirebase/templates/admin.html:369
 msgid "Pending"
 msgstr "待处理"
 
-#: src/quirebase/templates/admin.html:369
+#: src/quirebase/templates/admin.html:370
 msgid "Running"
 msgstr "执行中"
 
-#: src/quirebase/templates/admin.html:370
+#: src/quirebase/templates/admin.html:371
 msgid "Succeeded"
 msgstr "已成功"
 
-#: src/quirebase/templates/admin.html:371
+#: src/quirebase/templates/admin.html:372
 msgid "Failed"
 msgstr "已失败"
 
-#: src/quirebase/templates/admin.html:380
+#: src/quirebase/templates/admin.html:381
 msgid "Workflow monitor"
 msgstr "工作流监控"
 
-#: src/quirebase/templates/admin.html:381
+#: src/quirebase/templates/admin.html:382
 msgid "Recent durable workflows"
 msgstr "最近的持久工作流"
 
-#: src/quirebase/templates/admin.html:396
-#: src/quirebase/templates/admin.html:530 src/quirebase/templates/item.html:30
+#: src/quirebase/templates/admin.html:397
+#: src/quirebase/templates/admin.html:535 src/quirebase/templates/item.html:30
 #: src/quirebase/templates/item.html:259 src/quirebase/templates/item.html:267
 msgid "Download"
 msgstr "下载"
 
-#: src/quirebase/templates/admin.html:401
+#: src/quirebase/templates/admin.html:402
 msgid "No durable workflows."
 msgstr "暂无持久工作流。"
 
-#: src/quirebase/templates/admin.html:414
+#: src/quirebase/templates/admin.html:415
 msgid "Scholarly Providers"
 msgstr "学术数据源"
 
-#: src/quirebase/templates/admin.html:415
+#: src/quirebase/templates/admin.html:416
 msgid "External API Credentials"
 msgstr "外部 API 凭据"
 
-#: src/quirebase/templates/admin.html:418
+#: src/quirebase/templates/admin.html:419
 msgid "Contact email (for PubMed & Crossref rate-limiting)"
 msgstr "联系邮箱（用于 PubMed 与 Crossref 频控）"
 
-#: src/quirebase/templates/admin.html:421
+#: src/quirebase/templates/admin.html:422
 msgid "NCBI API Key (for PubMed / PMC)"
 msgstr "NCBI API 密钥（用于 PubMed / PMC）"
 
-#: src/quirebase/templates/admin.html:424
+#: src/quirebase/templates/admin.html:425
 msgid "NASA ADS Token"
 msgstr "NASA ADS 令牌"
 
-#: src/quirebase/templates/admin.html:427
+#: src/quirebase/templates/admin.html:428
 msgid "IEEE Xplore API Key"
 msgstr "IEEE Xplore API 密钥"
 
-#: src/quirebase/templates/admin.html:430
+#: src/quirebase/templates/admin.html:431
 msgid "OpenAlex API Key (optional)"
 msgstr "OpenAlex API 密钥（可选）"
 
-#: src/quirebase/templates/admin.html:438
+#: src/quirebase/templates/admin.html:439
 msgid "System policies"
 msgstr "系统策略"
 
-#: src/quirebase/templates/admin.html:439
+#: src/quirebase/templates/admin.html:440
 msgid "Sessions & Storage"
 msgstr "会话与存储"
 
-#: src/quirebase/templates/admin.html:442
+#: src/quirebase/templates/admin.html:443
 msgid "Session lifetime (days)"
 msgstr "会话有效期（天）"
 
-#: src/quirebase/templates/admin.html:445
+#: src/quirebase/templates/admin.html:446
 msgid "Max PDF size (bytes)"
 msgstr "最大 PDF 体积（字节）"
 
-#: src/quirebase/templates/admin.html:448
+#: src/quirebase/templates/admin.html:449
 msgid "Max attachment size (bytes)"
 msgstr "最大附件体积（字节）"
 
-#: src/quirebase/templates/admin.html:451
+#: src/quirebase/templates/admin.html:452
 msgid "Export cache TTL (hours)"
 msgstr "导出缓存保留时间（小时）"
 
-#: src/quirebase/templates/admin.html:455
+#: src/quirebase/templates/admin.html:456
 msgid "Save runtime settings"
 msgstr "保存运行时配置"
 
-#: src/quirebase/templates/admin.html:468
+#: src/quirebase/templates/admin.html:467
+msgid "Unable to read maintenance status."
+msgstr "无法读取维护任务状态。"
+
+#: src/quirebase/templates/admin.html:467
+msgid "System maintenance"
+msgstr "系统维护"
+
+#: src/quirebase/templates/admin.html:467
+msgid "Running maintenance workflow…"
+msgstr "正在运行维护工作流…"
+
+#: src/quirebase/templates/admin.html:467
+msgid ""
+"The requested maintenance operation is running. This page will update "
+"automatically."
+msgstr "请求的维护操作正在运行，此页面会自动更新。"
+
+#: src/quirebase/templates/admin.html:473
 msgid "Full-Text Search Re-index"
 msgstr "全文检索全量重建索引"
 
-#: src/quirebase/templates/admin.html:469
+#: src/quirebase/templates/admin.html:474
 msgid ""
 "Rebuild SQLite FTS5 / PostgreSQL tsvector full-text index across all "
 "items and extracted PDF text."
 msgstr "基于所有文献条目与提取的 PDF 全文，全量重建 SQLite FTS5 / PostgreSQL tsvector 索引。"
 
-#: src/quirebase/templates/admin.html:471
+#: src/quirebase/templates/admin.html:476
 msgid "Dispatch Re-index Workflow"
 msgstr "提交重新索引工作流"
 
-#: src/quirebase/templates/admin.html:479
+#: src/quirebase/templates/admin.html:484
 msgid "Object Store Integrity Check"
 msgstr "对象存储完整性校验"
 
-#: src/quirebase/templates/admin.html:480
+#: src/quirebase/templates/admin.html:485
 msgid ""
 "Verify existence and SHA-256 checksums of all PDF files and attachments "
 "against the database."
 msgstr "比对数据库记录，逐项校验所有 PDF 文件和附件的物理存在性及 SHA-256 校验和。"
 
-#: src/quirebase/templates/admin.html:482
+#: src/quirebase/templates/admin.html:487
 msgid "Dispatch Check Workflow"
 msgstr "提交检查工作流"
 
-#: src/quirebase/templates/admin.html:490
+#: src/quirebase/templates/admin.html:495
 msgid "Download Full Backup"
 msgstr "下载完整系统备份"
 
-#: src/quirebase/templates/admin.html:491
+#: src/quirebase/templates/admin.html:496
 msgid ""
 "Generate a complete ZIP archive containing database dump, manifest, and "
 "all storage objects."
 msgstr "生成包含数据库导出文件、清单元数据以及所有存储对象的完整 ZIP 归档包。"
 
-#: src/quirebase/templates/admin.html:493
+#: src/quirebase/templates/admin.html:498
 msgid "Dispatch Backup Workflow"
 msgstr "提交备份工作流"
 
-#: src/quirebase/templates/admin.html:501
+#: src/quirebase/templates/admin.html:506
 msgid "Rebuild Tag Recommendations"
 msgstr "重建标签推荐"
 
-#: src/quirebase/templates/admin.html:502
+#: src/quirebase/templates/admin.html:507
 msgid ""
 "Queue fresh recommendations for every Item after an engine or local model"
 " change."
 msgstr "在切换引擎或本地模型后，为所有条目重新排队生成推荐。"
 
-#: src/quirebase/templates/admin.html:504
+#: src/quirebase/templates/admin.html:509
 msgid "Dispatch Recommendation Workflows"
 msgstr "提交推荐工作流"
 
-#: src/quirebase/templates/admin.html:514
+#: src/quirebase/templates/admin.html:519
 msgid "History"
 msgstr "历史记录"
 
-#: src/quirebase/templates/admin.html:515
+#: src/quirebase/templates/admin.html:520
 msgid "Recent maintenance workflows"
 msgstr "最近的维护工作流"
 

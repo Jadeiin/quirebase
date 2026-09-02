@@ -188,35 +188,31 @@ async def test_admin_maintenance_triggers(async_db, tmp_path, monkeypatch, fake_
     db = async_db
     client, _admin, login = await admin_client(db, tmp_path, monkeypatch)
 
-    # Reindex trigger
-    res = await client.post(
-        "/admin/maintenance/reindex",
-        data={"csrf_token": login.csrf_token},
-        follow_redirects=False,
-    )
-    assert res.status_code == 303
-    assert res.headers["location"] == "/admin/maintenance"
+    routes = {
+        "/admin/maintenance/reindex": "reindex_all",
+        "/admin/maintenance/check-objects": "check_objects",
+        "/admin/maintenance/backup": "backup",
+        "/admin/maintenance/recommend-tags": "recommend_tags_all",
+    }
+    for route, operation in routes.items():
+        res = await client.post(
+            route,
+            data={"csrf_token": login.csrf_token},
+            follow_redirects=False,
+        )
+        assert res.status_code == 303
+        location = res.headers["location"]
+        assert location.startswith(f"/admin/maintenance?workflow=maintenance:{operation}:")
 
-    # Check objects trigger
-    res = await client.post(
-        "/admin/maintenance/check-objects",
-        data={"csrf_token": login.csrf_token},
-        follow_redirects=False,
-    )
-    assert res.status_code == 303
-    assert res.headers["location"] == "/admin/maintenance"
+        progress = await client.get(location)
+        assert progress.status_code == 200
+        assert "workflow-modal-backdrop" in progress.text
+        assert "/api/workflows/maintenance%3A" in progress.text
 
-    # Backup trigger
-    res = await client.post(
-        "/admin/maintenance/backup",
-        data={"csrf_token": login.csrf_token},
-        follow_redirects=False,
-    )
-    assert res.status_code == 303
-    assert res.headers["location"] == "/admin/maintenance"
     assert {row.name for row in await fake_durable_operations.list()} == {
         "operations.reindex_all",
         "operations.check_objects",
         "operations.backup",
+        "operations.recommend_tags_all",
     }
     await client.aclose()
