@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from collections import Counter
 from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select
 
 from quirebase.core.errors import ResourceUnavailable
-from quirebase.core.workflows import list_all_workflows
+from quirebase.core.workflows import durable_operations
 from quirebase.models import FileRevision, Item, User
 
 if TYPE_CHECKING:
@@ -20,9 +19,7 @@ def check_health() -> dict[str, str]:
 async def get_system_metrics(db: AsyncSession, user: User) -> str:
     if user.role != "administrator":
         raise ResourceUnavailable("administrator role required")
-    workflow_counts = Counter(
-        workflow.state for workflow in await list_all_workflows()
-    )
+    workflow_counts = await durable_operations().state_counts()
     lines = [
         f'quirebase_workflows{{state="{state}"}} {count}'
         for state, count in sorted(workflow_counts.items())

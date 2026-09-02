@@ -90,6 +90,8 @@ class DurableOperations(Protocol):
         self, *, status: str = "", limit: int = 100, offset: int = 0, name: str | None = None
     ) -> tuple[WorkflowSummary, ...]: ...
 
+    async def state_counts(self) -> dict[WorkflowState, int]: ...
+
 
 def _sync_database_url() -> str:
     url = async_database_url()
@@ -196,9 +198,7 @@ class DBOSAdapter:
         topic: str,
         idempotency_key: str,
     ) -> None:
-        await self._client.send_async(
-            workflow_id, message, topic, idempotency_key=idempotency_key
-        )
+        await self._client.send_async(workflow_id, message, topic, idempotency_key=idempotency_key)
 
     async def get(self, workflow_id: str) -> WorkflowSummary | None:
         try:
@@ -228,6 +228,23 @@ class DBOSAdapter:
             application_name="quirebase",
         )
         return tuple(_summary(row) for row in rows)
+
+    async def state_counts(self) -> dict[WorkflowState, int]:
+        """Aggregate workflow states in the DBOS system database without loading history."""
+        system_database: Any = self._client._sys_db
+        rows = await asyncio.to_thread(
+            system_database.get_workflow_aggregates,
+            group_by_status=True,
+            select_count=True,
+            application_name=["quirebase"],
+        )
+        counts: dict[WorkflowState, int] = {}
+        for row in rows:
+            raw_status = row["group"].get("status")
+            state = _VISIBLE_STATE.get(raw_status or "")
+            if state is not None:
+                counts[state] = counts.get(state, 0) + int(row["count"] or 0)
+        return counts
 
 
 async def list_all_workflows(*, status: str = "", name: str | None = None):

@@ -168,35 +168,11 @@ async def inspect_imported_revision_workflow(
     revision_id: str, owner_id: str, object_key_value: str, thumbnail_object_id: str
 ) -> dict[str, Any]:
     thumbnail_key = object_key(UUID(thumbnail_object_id), ObjectSuffix.PNG)
+    committed = False
     try:
-        metadata = await get_object_store().head(object_key_value)
-        async with get_object_store().materialize(object_key_value) as source:
-            await asyncio.to_thread(validate_pdf_container, source)
-            page_count, text, geometry = await asyncio.to_thread(inspect_pdf, source)
-            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temporary:
-                thumbnail_path = Path(temporary.name)
-            try:
-                await asyncio.to_thread(create_thumbnail, source, thumbnail_path)
-                await get_object_store().put_object(
-                    UUID(thumbnail_object_id),
-                    ObjectSuffix.PNG,
-                    thumbnail_path,
-                    max_bytes=32 * 1024 * 1024,
-                )
-            finally:
-                await asyncio.to_thread(thumbnail_path.unlink, missing_ok=True)
-        async with AsyncSessionLocal() as db:
-            revision = await db.get(FileRevision, revision_id)
-            if revision is None:
-                raise ValueError("imported revision no longer exists")
-            item_id = revision.item_id
-            revision.thumbnail_object_key = thumbnail_key
-            revision.size = metadata.size
-            revision.page_count = page_count
-            revision.full_text = text
-            revision.page_geometry = json.dumps(geometry, separators=(",", ":"))
-            revision.processing_state = FileRevisionProcessingState.ready
-            await db.commit()
+        inspected = await inspect_imported_pdf(revision_id, object_key_value, thumbnail_object_id)
+        result = await commit_imported_revision(inspected)
+        committed = True
         await DBOS.enqueue_workflow_with_options_async(
             {
                 "workflow_name": FILE_REVISION_CHANGED_WORKFLOW,
@@ -204,13 +180,62 @@ async def inspect_imported_revision_workflow(
                 "workflow_id": f"file-revision-changed:{revision_id}",
                 "application_name": "quirebase",
             },
-            item_id,
+            result["item_id"],
             owner_id,
         )
         return {"revision_id": revision_id, "owner_id": owner_id}
     except BaseException:
-        await remove_owned_object(thumbnail_key)
+        if not committed:
+            await remove_owned_object(thumbnail_key)
         raise
+
+
+@DBOS.step(retries_allowed=True, max_attempts=3)
+async def inspect_imported_pdf(
+    revision_id: str, object_key_value: str, thumbnail_object_id: str
+) -> dict[str, Any]:
+    metadata = await get_object_store().head(object_key_value)
+    thumbnail_key = object_key(UUID(thumbnail_object_id), ObjectSuffix.PNG)
+    async with get_object_store().materialize(object_key_value) as source:
+        await asyncio.to_thread(validate_pdf_container, source)
+        page_count, text, geometry = await asyncio.to_thread(inspect_pdf, source)
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temporary:
+            thumbnail_path = Path(temporary.name)
+        try:
+            await asyncio.to_thread(create_thumbnail, source, thumbnail_path)
+            await get_object_store().put_object(
+                UUID(thumbnail_object_id),
+                ObjectSuffix.PNG,
+                thumbnail_path,
+                max_bytes=32 * 1024 * 1024,
+            )
+        finally:
+            await asyncio.to_thread(thumbnail_path.unlink, missing_ok=True)
+    return {
+        "revision_id": revision_id,
+        "thumbnail_object_key": thumbnail_key,
+        "size": metadata.size,
+        "page_count": page_count,
+        "full_text": text,
+        "page_geometry": json.dumps(geometry, separators=(",", ":")),
+    }
+
+
+@DBOS.step(retries_allowed=True, max_attempts=3)
+async def commit_imported_revision(inspected: dict[str, Any]) -> dict[str, Any]:
+    async with AsyncSessionLocal() as db:
+        revision = await db.get(FileRevision, inspected["revision_id"])
+        if revision is None:
+            raise ValueError("imported revision no longer exists")
+        if revision.processing_state == FileRevisionProcessingState.pending:
+            revision.thumbnail_object_key = inspected["thumbnail_object_key"]
+            revision.size = inspected["size"]
+            revision.page_count = inspected["page_count"]
+            revision.full_text = inspected["full_text"]
+            revision.page_geometry = inspected["page_geometry"]
+            revision.processing_state = FileRevisionProcessingState.ready
+            await db.commit()
+        return {"revision_id": revision.id, "item_id": revision.item_id}
 
 
 def _is_image_header(header: bytes, content_type: str) -> bool:

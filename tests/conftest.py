@@ -72,6 +72,12 @@ class InMemoryDurableOperations:
             if (not status or row.state == status) and (name is None or row.name == name)
         )[offset : offset + limit]
 
+    async def state_counts(self):
+        counts = {}
+        for workflow in self.workflows.values():
+            counts[workflow.state] = counts.get(workflow.state, 0) + 1
+        return counts
+
 
 @pytest.fixture(autouse=True)
 def fake_durable_operations(monkeypatch):

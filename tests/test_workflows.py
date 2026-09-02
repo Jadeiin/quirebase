@@ -10,7 +10,7 @@ from quirebase.core import workflows
 from quirebase.core.storage import ObjectSuffix, get_object_store
 from quirebase.documents import workflows as document_workflows
 from quirebase.models import FileRevision, Item, User
-from quirebase.operations import maintenance
+from quirebase.operations import health, maintenance
 
 
 @pytest.mark.parametrize(
@@ -76,6 +76,64 @@ async def test_unknown_workflow_id_is_reported_as_absent(monkeypatch):
 
 
 @pytest.mark.anyio
+async def test_workflow_state_counts_use_database_aggregation():
+    from quirebase.core.workflows import DBOSAdapter
+
+    class AggregateDatabase:
+        def __init__(self):
+            self.options = None
+
+        def get_workflow_aggregates(self, **options):
+            self.options = options
+            return [
+                {"group": {"status": "SUCCESS"}, "count": 7},
+                {"group": {"status": "ERROR"}, "count": 2},
+                {"group": {"status": "MAX_RECOVERY_ATTEMPTS_EXCEEDED"}, "count": 1},
+                {"group": {"status": "ENQUEUED"}, "count": 3},
+            ]
+
+    database = AggregateDatabase()
+    client = SimpleNamespace(_sys_db=database)
+
+    assert await DBOSAdapter(client).state_counts() == {
+        "succeeded": 7,
+        "failed": 3,
+        "pending": 3,
+    }
+    assert database.options == {
+        "group_by_status": True,
+        "select_count": True,
+        "application_name": ["quirebase"],
+    }
+
+
+@pytest.mark.anyio
+async def test_system_metrics_use_aggregate_workflow_counts(async_db, monkeypatch):
+    admin = User(
+        username="workflow-metrics-admin",
+        password_hash="unused",
+        role="administrator",
+    )
+    async_db.add(admin)
+    await async_db.commit()
+
+    class CountsOnly:
+        async def state_counts(self):
+            await asyncio.sleep(0)
+            return {"pending": 4, "failed": 2}
+
+        async def list(self, **_options):
+            raise AssertionError("metrics must not load workflow history")
+
+    monkeypatch.setattr(health, "durable_operations", lambda: CountsOnly())
+
+    metrics = await health.get_system_metrics(async_db, admin)
+
+    assert 'quirebase_workflows{state="failed"} 2' in metrics
+    assert 'quirebase_workflows{state="pending"} 4' in metrics
+
+
+@pytest.mark.anyio
 async def test_imported_revision_inspection_enqueues_derived_state_sync(
     async_db, async_session_factory, monkeypatch
 ):
@@ -130,6 +188,45 @@ async def test_imported_revision_inspection_enqueues_derived_state_sync(
             (item.id, user.id),
         )
     ]
+
+
+@pytest.mark.anyio
+async def test_imported_revision_keeps_thumbnail_after_database_commit(monkeypatch):
+    removed = []
+
+    async def inspect(*_args):
+        await asyncio.sleep(0)
+        return {"revision_id": "revision-id"}
+
+    async def commit(_inspected):
+        await asyncio.sleep(0)
+        return {"revision_id": "revision-id", "item_id": "item-id"}
+
+    async def fail_to_enqueue(_options, *_args):
+        await asyncio.sleep(0)
+        raise RuntimeError("temporary DBOS failure")
+
+    async def remove(key):
+        await asyncio.sleep(0)
+        removed.append(key)
+
+    monkeypatch.setattr(document_workflows, "inspect_imported_pdf", inspect)
+    monkeypatch.setattr(document_workflows, "commit_imported_revision", commit)
+    monkeypatch.setattr(
+        document_workflows.DBOS, "enqueue_workflow_with_options_async", fail_to_enqueue
+    )
+    monkeypatch.setattr(document_workflows, "remove_owned_object", remove)
+    workflow_body = document_workflows.inspect_imported_revision_workflow.__wrapped__.__wrapped__
+
+    with pytest.raises(RuntimeError, match="temporary DBOS failure"):
+        await workflow_body(
+            "revision-id",
+            "owner-id",
+            "aa/bb/imported.pdf",
+            "00000000-0000-0000-0000-000000000001",
+        )
+
+    assert removed == []
 
 
 @pytest.mark.anyio
