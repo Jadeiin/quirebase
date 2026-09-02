@@ -1,3 +1,35 @@
+## 0.1.3 (2026-09-02)
+
+### Feat
+
+- enhance maintenance workflows with progress tracking
+- show workflow progress for tag recommendations
+- migrate background jobs to DBOS workflows
+- **storage**: add obstore-backed object storage
+- migrate runtime I/O to async
+- manage document thumbnails and attachment roles
+- add token-authenticated MCP and HTTP APIs
+- **inquiro**: deepen bibliography interchange
+- add managed PDF acquisition to inquiro
+- add inquiro CLI and package-owned tests
+- add offline tag recommendations and batch PDF imports
+
+### Fix
+
+- harden DBOS workflow and migration seams
+- preserves thumbnail ownership after commit, moves nondeterministic work into retryable DBOS steps, and uses database-side workflow aggregation
+- ensure FileLock is thread-safe in LocalObjectStore
+- serialize graphical-abstract replacement
+- remove local research refs
+- migrate unsafe authenticated requests from URL query
+- protect in-flight staged objects from concurrent deletion
+- adjust static path to artifacts config
+
+### Refactor
+
+- extract reusable provider and recommendation packages
+- migrate transport to httpx2
+
 ## 0.1.2 (2026-08-21)
 
 ### Feat

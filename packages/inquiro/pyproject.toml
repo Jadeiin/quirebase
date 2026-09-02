@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "inquiro"
-version = "0.1.2"
+version = "0.1.3"
 description = "Academic metadata discovery, multi-provider search, bibliography interchange and CSL citation engine"
 readme = "README.md"
 requires-python = ">=3.12"

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "rubrica"
-version = "0.1.2"
+version = "0.1.3"
 description = "Keyword extraction, keyphrase ranking and tag recommendation engine"
 readme = "README.md"
 requires-python = ">=3.12"
