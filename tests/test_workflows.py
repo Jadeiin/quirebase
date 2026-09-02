@@ -12,6 +12,7 @@ from quirebase.documents import workflows as document_workflows
 from quirebase.library import workflows as library_workflows
 from quirebase.models import FileRevision, Item, User
 from quirebase.operations import health, maintenance
+from quirebase.operations import workflows as operation_workflows
 
 
 @pytest.mark.parametrize(
@@ -106,13 +107,13 @@ def test_library_workflow_uses_documents_owned_file_revision_changed_contract():
 
 @pytest.mark.anyio
 async def test_unknown_workflow_id_is_reported_as_absent(monkeypatch):
-    from dbos._error import DBOSNonExistentWorkflowError
+    from dbos import error
 
     from quirebase.core.workflows import DBOSAdapter
 
     class MissingClient:
         async def retrieve_workflow_async(self, workflow_id):
-            raise DBOSNonExistentWorkflowError("target", workflow_id)
+            raise error.DBOSNonExistentWorkflowError("target", workflow_id)
 
     adapter = DBOSAdapter(MissingClient())
     assert await adapter.get("does-not-exist") is None
@@ -283,3 +284,108 @@ async def test_periodic_maintenance_cycle_cleans_exports_and_reconciles_objects(
 
     assert [name for name, _db in calls] == ["cleanup", "reconcile"]
     assert calls[0][1] is calls[1][1]
+
+
+@pytest.mark.anyio
+async def test_datasource_step_writes_checkpoint_in_datasource_outputs(async_db, tmp_path):
+    from dbos import DBOS, DBOSConfig
+    from sqlalchemy import text
+
+    from quirebase.core.workflows import ads
+
+    sys_db = tmp_path / "sys.db"
+    DBOS(config=DBOSConfig(name="test_app", system_database_url=f"sqlite:///{sys_db}"))
+    DBOS.launch()
+
+    @ads.transaction()
+    async def sample_step(value: int) -> int:
+        session = ads.sql_session()
+        await session.execute(text("SELECT :v"), {"v": value})
+        return value * 2
+
+    @DBOS.workflow()
+    async def sample_workflow(value: int) -> int:
+        return await sample_step(value)
+
+    try:
+        result = await sample_workflow(21)
+        assert result == 42
+        outputs = (
+            await async_db.execute(
+                text("SELECT workflow_id, step_id, output FROM datasource_outputs")
+            )
+        ).fetchall()
+        assert len(outputs) == 1
+        assert outputs[0][1] == 1
+    finally:
+        DBOS.destroy()
+
+
+@pytest.mark.anyio
+async def test_commit_uploaded_revision_uses_datasource_transaction(async_db):
+    user = User(username="upload-tx-user", password_hash="unused")
+    async_db.add(user)
+    await async_db.flush()
+    item = Item(title="TX Item", created_by=user.id)
+    async_db.add(item)
+    await async_db.commit()
+
+    rev_id = str(uuid4())
+    inspected = {
+        "revision_id": rev_id,
+        "object_key": "aa/bb/doc.pdf",
+        "thumbnail_object_key": "aa/bb/thumb.png",
+        "size": 1024,
+        "page_count": 2,
+        "full_text": "Extracted text content",
+        "page_geometry": "[]",
+    }
+    result = await document_workflows.commit_uploaded_revision(
+        item.id, user.id, "my_doc.pdf", inspected
+    )
+    assert result == {"revision_id": rev_id, "item_id": item.id}
+
+    saved = await async_db.get(FileRevision, rev_id)
+    assert saved is not None
+    assert saved.object_key == "aa/bb/doc.pdf"
+    assert saved.page_count == 2
+    assert saved.full_text == "Extracted text content"
+
+
+@pytest.mark.anyio
+async def test_commit_uploaded_attachment_uses_datasource_transaction(async_db):
+    from quirebase.models import Attachment
+
+    user = User(username="att-tx-user", password_hash="unused")
+    async_db.add(user)
+    await async_db.flush()
+    item = Item(title="Attachment Item", created_by=user.id)
+    async_db.add(item)
+    await async_db.commit()
+
+    att_id = str(uuid4())
+    receipt = {"object_key": "aa/bb/data.bin", "size": 256}
+    result = await document_workflows.commit_uploaded_attachment(
+        item.id, user.id, att_id, "data.bin", "application/octet-stream", None, receipt
+    )
+    assert result == {"attachment_id": att_id, "item_id": item.id}
+
+    saved = await async_db.get(Attachment, att_id)
+    assert saved is not None
+    assert saved.object_key == "aa/bb/data.bin"
+    assert saved.size == 256
+
+
+@pytest.mark.anyio
+async def test_operations_and_library_transaction_steps(async_db):
+    user = User(username="op-tx-user", password_hash="unused")
+    async_db.add(user)
+    await async_db.flush()
+    item = Item(title="Reindex Item", created_by=user.id)
+    async_db.add(item)
+    await async_db.commit()
+
+    reindex_res = await operation_workflows.reindex_all_step()
+    assert reindex_res["reindexed_items"] >= 1
+
+    await library_workflows.apply_file_revision_changed(item.id, user.id)

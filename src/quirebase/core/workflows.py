@@ -3,19 +3,19 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from functools import lru_cache
-from typing import TYPE_CHECKING, Any, Literal, Protocol, cast
+from functools import lru_cache, wraps
+from typing import TYPE_CHECKING, Any, Literal, Protocol, cast, overload
 
-from dbos import DBOS, AsyncSQLAlchemyDatasource, DBOSClient, DBOSConfig, EnqueueOptions
-from dbos._error import DBOSNonExistentWorkflowError
+from dbos import DBOS, AsyncSQLAlchemyDatasource, DBOSClient, DBOSConfig, EnqueueOptions, error
 
 from quirebase import __version__
 from quirebase.core.config import get_settings
-from quirebase.core.database import async_database_url, engine
+from quirebase.core.database import async_database_url, engine, is_sqlite_database_url
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Coroutine, Sequence
 
+    from dbos._datasource import DatasourceOptions
     from sqlalchemy.ext.asyncio import AsyncSession
 
 WorkflowState = Literal["pending", "running", "succeeded", "failed", "cancelled"]
@@ -96,6 +96,90 @@ class DurableOperations(Protocol):
 def _sync_database_url() -> str:
     url = async_database_url()
     return url.replace("sqlite+aiosqlite:///", "sqlite:///")
+
+
+IsolationLevel = Literal["SERIALIZABLE", "REPEATABLE READ", "READ COMMITTED"]
+
+
+class AsyncSQLAlchemyDatasourceProxy:
+    """Proxy for DBOS AsyncSQLAlchemyDatasource supporting dynamic bindings and decorator access."""
+
+    def __init__(self) -> None:
+        self._instance: AsyncSQLAlchemyDatasource | None = None
+
+    def set_instance(self, instance: AsyncSQLAlchemyDatasource | None) -> None:
+        self._instance = instance
+
+    async def get_instance_async(self) -> AsyncSQLAlchemyDatasource:
+        if self._instance is None:
+            url = async_database_url()
+            schema = None if is_sqlite_database_url(url) else "dbos"
+            self._instance = await AsyncSQLAlchemyDatasource.create(
+                url, engine=engine, schema=schema
+            )
+        return self._instance
+
+    def sql_session(self) -> AsyncSession:
+        assert self._instance is not None, (
+            "sql_session() must be called within an active datasource transaction"
+        )
+        return self._instance.sql_session()
+
+    async def run_tx_step_async(
+        self,
+        ds_options: DatasourceOptions | None,
+        func: Callable[..., Coroutine[Any, Any, Any]],
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
+        ds = await self.get_instance_async()
+        return await ds.run_tx_step_async(ds_options, func, *args, **kwargs)
+
+    @overload
+    def transaction(
+        self,
+        func: Callable[..., Coroutine[Any, Any, Any]],
+    ) -> Callable[..., Coroutine[Any, Any, Any]]: ...
+
+    @overload
+    def transaction(
+        self,
+        func: None = None,
+        *,
+        name: str | None = None,
+        isolation_level: IsolationLevel = "SERIALIZABLE",
+    ) -> Callable[
+        [Callable[..., Coroutine[Any, Any, Any]]], Callable[..., Coroutine[Any, Any, Any]]
+    ]: ...
+
+    def transaction(
+        self,
+        func: Callable[..., Coroutine[Any, Any, Any]] | None = None,
+        *,
+        name: str | None = None,
+        isolation_level: IsolationLevel = "SERIALIZABLE",
+    ) -> Any:
+        def decorator(
+            f: Callable[..., Coroutine[Any, Any, Any]],
+        ) -> Callable[..., Coroutine[Any, Any, Any]]:
+            step_name = name or f.__name__
+            ds_options: DatasourceOptions = {
+                "isolation_level": isolation_level,
+                "name": step_name,
+            }
+
+            @wraps(f)
+            async def wrapper(*args: Any, **kwargs: Any) -> Any:
+                return await self.run_tx_step_async(ds_options, f, *args, **kwargs)
+
+            return wrapper
+
+        if func is not None:
+            return decorator(func)
+        return decorator
+
+
+ads = AsyncSQLAlchemyDatasourceProxy()
 
 
 def _options(
@@ -220,7 +304,7 @@ class DBOSAdapter:
         try:
             handle: Any = await self._client.retrieve_workflow_async(workflow_id)
             status = await handle.get_status()
-        except DBOSNonExistentWorkflowError:
+        except error.DBOSNonExistentWorkflowError:
             return None
         return _summary(status) if status is not None else None
 
@@ -301,7 +385,10 @@ async def _launch_runtime(executor_id: str) -> None:
             run_admin_server=False,
         )
     )
-    await AsyncSQLAlchemyDatasource.create(async_database_url(), engine=engine, schema="dbos")
+    datasource = await AsyncSQLAlchemyDatasource.create(
+        async_database_url(), engine=engine, schema="dbos"
+    )
+    ads.set_instance(datasource)
     DBOS.launch()
     await DBOS.register_queue_async(UPLOAD_QUEUE)
     await DBOS.register_queue_async(
@@ -317,6 +404,7 @@ async def initialize_durable_operations() -> None:
     await _launch_runtime("quirebase-initializer")
     await asyncio.to_thread(DBOS.destroy, destroy_registry=True)
     durable_operations.cache_clear()
+    ads.set_instance(None)
 
 
 async def launch_worker() -> None:
@@ -326,6 +414,7 @@ async def launch_worker() -> None:
         await asyncio.Event().wait()
     finally:
         await asyncio.to_thread(DBOS.destroy, workflow_completion_timeout_sec=30)
+        ads.set_instance(None)
 
 
 async def recover_workflows(executor_id: str, *, apply: bool) -> Sequence[str]:
@@ -340,3 +429,4 @@ async def recover_workflows(executor_id: str, *, apply: bool) -> Sequence[str]:
         return tuple(handle.get_workflow_id() for handle in handles)
     finally:
         await asyncio.to_thread(DBOS.destroy, workflow_completion_timeout_sec=30)
+        ads.set_instance(None)

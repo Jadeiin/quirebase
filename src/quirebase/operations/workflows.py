@@ -10,7 +10,7 @@ from quirebase.audit import record_event
 from quirebase.core.config import get_settings
 from quirebase.core.database import AsyncSessionLocal
 from quirebase.core.errors import ResourceUnavailable, ValidationFailure
-from quirebase.core.workflows import OPERATIONS_QUEUE, durable_operations
+from quirebase.core.workflows import OPERATIONS_QUEUE, ads, durable_operations
 from quirebase.search import reindex_all
 
 from .maintenance import check_objects, create_backup, reconcile_objects
@@ -53,12 +53,11 @@ async def dispatch_maintenance_workflow(db, admin: User, operation: str) -> str:
     return workflow_id
 
 
-@DBOS.step(retries_allowed=True, max_attempts=3)
+@ads.transaction()
 async def reindex_all_step() -> dict[str, Any]:
-    async with AsyncSessionLocal() as db:
-        count = await reindex_all(db)
-        await db.commit()
-        return {"reindexed_items": count}
+    db = ads.sql_session()
+    count = await reindex_all(db)
+    return {"reindexed_items": count}
 
 
 @DBOS.workflow(name=REINDEX_WORKFLOW)
@@ -100,14 +99,13 @@ async def backup_workflow(workflow_id: str, _owner_id: str) -> dict[str, Any]:
     return await backup_step(workflow_id)
 
 
-@DBOS.step(retries_allowed=True, max_attempts=3)
+@ads.transaction()
 async def recommend_tags_all_step(owner_id: str) -> dict[str, Any]:
     from quirebase.library import enqueue_all_item_tag_recommendations
 
-    async with AsyncSessionLocal() as db:
-        count = await enqueue_all_item_tag_recommendations(db, owner_id=owner_id)
-        await db.commit()
-        return {"enqueued_items": count}
+    db = ads.sql_session()
+    count = await enqueue_all_item_tag_recommendations(db, owner_id=owner_id)
+    return {"enqueued_items": count}
 
 
 @DBOS.workflow(name=RECOMMEND_TAGS_WORKFLOW)

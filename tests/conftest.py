@@ -3,12 +3,13 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
+from dbos import AsyncSQLAlchemyDatasource
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from quirebase.core.config import get_settings
 from quirebase.core.database import Base, make_async_engine
 from quirebase.core.storage import get_object_store
-from quirebase.core.workflows import DBOSAdapter, WorkflowSummary, durable_operations
+from quirebase.core.workflows import DBOSAdapter, WorkflowSummary, ads, durable_operations
 
 
 class InMemoryDurableOperations:
@@ -101,10 +102,16 @@ async def async_session_factory(tmp_path, monkeypatch):
     engine = make_async_engine(f"sqlite:///{tmp_path / 'async-test.db'}")
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
+    ds = await AsyncSQLAlchemyDatasource.create(
+        f"sqlite+aiosqlite:///{tmp_path / 'async-test.db'}",
+        engine=engine,
+    )
+    ads.set_instance(ds)
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     try:
         yield factory
     finally:
+        ads.set_instance(None)
         await engine.dispose()
         get_settings.cache_clear()
         get_object_store.cache_clear()

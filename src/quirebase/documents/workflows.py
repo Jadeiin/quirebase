@@ -16,7 +16,7 @@ from quirebase.core.config import get_settings
 from quirebase.core.database import AsyncSessionLocal
 from quirebase.core.storage import ObjectSuffix, get_object_store, object_key
 from quirebase.core.timezones import annotation_export_timezone
-from quirebase.core.workflows import LIBRARY_QUEUE, enqueue_child_workflow
+from quirebase.core.workflows import LIBRARY_QUEUE, ads, enqueue_child_workflow
 from quirebase.documents.events import FILE_REVISION_CHANGED_WORKFLOW
 from quirebase.models import (
     AnnotationScope,
@@ -162,45 +162,43 @@ async def inspect_uploaded_pdf(
     }
 
 
-@DBOS.step(retries_allowed=True, max_attempts=3)
+@ads.transaction()
 async def commit_uploaded_revision(
     item_id: str,
     owner_id: str,
     filename: str,
     inspected: UploadedPdfInspection,
 ) -> RevisionWorkflowResult:
-    async with AsyncSessionLocal() as db:
-        existing = await db.get(FileRevision, inspected["revision_id"])
-        if existing is not None:
-            if existing.processing_state == FileRevisionProcessingState.pending:
-                existing.object_key = inspected["object_key"]
-                existing.thumbnail_object_key = inspected["thumbnail_object_key"]
-                existing.size = inspected["size"]
-                existing.page_count = inspected["page_count"]
-                existing.page_geometry = inspected["page_geometry"]
-                existing.full_text = inspected["full_text"]
-                existing.processing_state = FileRevisionProcessingState.ready
-                await db.commit()
-            return {"revision_id": existing.id, "item_id": existing.item_id}
-        if await db.get(Item, item_id) is None:
-            raise ValueError("Item no longer exists")
-        revision = FileRevision(
-            id=inspected["revision_id"],
-            item_id=item_id,
-            object_key=inspected["object_key"],
-            thumbnail_object_key=inspected["thumbnail_object_key"],
-            size=inspected["size"],
-            original_name=Path(filename).name[:255],
-            page_count=inspected["page_count"],
-            page_geometry=inspected["page_geometry"],
-            full_text=inspected["full_text"],
-            processing_state=FileRevisionProcessingState.ready,
-            created_by=owner_id,
-        )
-        db.add(revision)
-        record_event(db, owner_id, "pdf.upload", "file_revision", revision.id)
-        await db.commit()
-        return {"revision_id": revision.id, "item_id": item_id}
+    db = ads.sql_session()
+    existing = await db.get(FileRevision, inspected["revision_id"])
+    if existing is not None:
+        if existing.processing_state == FileRevisionProcessingState.pending:
+            existing.object_key = inspected["object_key"]
+            existing.thumbnail_object_key = inspected["thumbnail_object_key"]
+            existing.size = inspected["size"]
+            existing.page_count = inspected["page_count"]
+            existing.page_geometry = inspected["page_geometry"]
+            existing.full_text = inspected["full_text"]
+            existing.processing_state = FileRevisionProcessingState.ready
+        return {"revision_id": existing.id, "item_id": existing.item_id}
+    if await db.get(Item, item_id) is None:
+        raise ValueError("Item no longer exists")
+    revision = FileRevision(
+        id=inspected["revision_id"],
+        item_id=item_id,
+        object_key=inspected["object_key"],
+        thumbnail_object_key=inspected["thumbnail_object_key"],
+        size=inspected["size"],
+        original_name=Path(filename).name[:255],
+        page_count=inspected["page_count"],
+        page_geometry=inspected["page_geometry"],
+        full_text=inspected["full_text"],
+        processing_state=FileRevisionProcessingState.ready,
+        created_by=owner_id,
+    )
+    db.add(revision)
+    record_event(db, owner_id, "pdf.upload", "file_revision", revision.id)
+    return {"revision_id": revision.id, "item_id": item_id}
 
 
 async def _enqueue_file_revision_changed(
@@ -275,21 +273,20 @@ async def inspect_imported_pdf(
     }
 
 
-@DBOS.step(retries_allowed=True, max_attempts=3)
+@ads.transaction()
 async def commit_imported_revision(inspected: PdfInspection) -> RevisionWorkflowResult:
-    async with AsyncSessionLocal() as db:
-        revision = await db.get(FileRevision, inspected["revision_id"])
-        if revision is None:
-            raise ValueError("imported revision no longer exists")
-        if revision.processing_state == FileRevisionProcessingState.pending:
-            revision.thumbnail_object_key = inspected["thumbnail_object_key"]
-            revision.size = inspected["size"]
-            revision.page_count = inspected["page_count"]
-            revision.full_text = inspected["full_text"]
-            revision.page_geometry = inspected["page_geometry"]
-            revision.processing_state = FileRevisionProcessingState.ready
-            await db.commit()
-        return {"revision_id": revision.id, "item_id": revision.item_id}
+    db = ads.sql_session()
+    revision = await db.get(FileRevision, inspected["revision_id"])
+    if revision is None:
+        raise ValueError("imported revision no longer exists")
+    if revision.processing_state == FileRevisionProcessingState.pending:
+        revision.thumbnail_object_key = inspected["thumbnail_object_key"]
+        revision.size = inspected["size"]
+        revision.page_count = inspected["page_count"]
+        revision.full_text = inspected["full_text"]
+        revision.page_geometry = inspected["page_geometry"]
+        revision.processing_state = FileRevisionProcessingState.ready
+    return {"revision_id": revision.id, "item_id": revision.item_id}
 
 
 def _is_image_header(header: bytes, content_type: str) -> bool:
@@ -322,7 +319,7 @@ async def validate_attachment_upload(
     return {"object_key": key, "size": metadata.size}
 
 
-@DBOS.step(retries_allowed=True, max_attempts=3)
+@ads.transaction()
 async def commit_uploaded_attachment(
     item_id: str,
     owner_id: str,
@@ -332,43 +329,42 @@ async def commit_uploaded_attachment(
     role_value: str | None,
     receipt: ValidatedAttachment,
 ) -> AttachmentWorkflowResult:
-    async with AsyncSessionLocal() as db:
-        existing = await db.get(Attachment, attachment_id)
-        if existing is not None:
-            return {"attachment_id": existing.id, "item_id": existing.item_id}
-        if db.get_bind().dialect.name == "sqlite":
-            locked = await db.scalar(
-                update(Item)
-                .where(Item.id == item_id)
-                .values(updated_at=Item.updated_at)
-                .returning(Item.id)
-            )
-        else:
-            locked = await db.scalar(select(Item.id).where(Item.id == item_id).with_for_update())
-        if locked is None:
-            raise ValueError("Item no longer exists")
-        role = AttachmentRole(role_value) if role_value else None
-        if role is not None:
-            current = await db.scalar(
-                select(Attachment).where(Attachment.item_id == item_id, Attachment.role == role)
-            )
-            if current is not None:
-                current.role = None
-                await db.flush()
-        attachment = Attachment(
-            id=attachment_id,
-            item_id=item_id,
-            object_key=receipt["object_key"],
-            size=receipt["size"],
-            mime_type=content_type[:100],
-            original_name=Path(filename).name[:255],
-            role=role,
-            created_by=owner_id,
+    db = ads.sql_session()
+    existing = await db.get(Attachment, attachment_id)
+    if existing is not None:
+        return {"attachment_id": existing.id, "item_id": existing.item_id}
+    if db.get_bind().dialect.name == "sqlite":
+        locked = await db.scalar(
+            update(Item)
+            .where(Item.id == item_id)
+            .values(updated_at=Item.updated_at)
+            .returning(Item.id)
         )
-        db.add(attachment)
-        record_event(db, owner_id, "attachment.upload", "attachment", attachment.id)
-        await db.commit()
-        return {"attachment_id": attachment.id, "item_id": item_id}
+    else:
+        locked = await db.scalar(select(Item.id).where(Item.id == item_id).with_for_update())
+    if locked is None:
+        raise ValueError("Item no longer exists")
+    role = AttachmentRole(role_value) if role_value else None
+    if role is not None:
+        current = await db.scalar(
+            select(Attachment).where(Attachment.item_id == item_id, Attachment.role == role)
+        )
+        if current is not None:
+            current.role = None
+            await db.flush()
+    attachment = Attachment(
+        id=attachment_id,
+        item_id=item_id,
+        object_key=receipt["object_key"],
+        size=receipt["size"],
+        mime_type=content_type[:100],
+        original_name=Path(filename).name[:255],
+        role=role,
+        created_by=owner_id,
+    )
+    db.add(attachment)
+    record_event(db, owner_id, "attachment.upload", "attachment", attachment.id)
+    return {"attachment_id": attachment.id, "item_id": item_id}
 
 
 @DBOS.workflow(name=ATTACHMENT_UPLOAD_WORKFLOW)
