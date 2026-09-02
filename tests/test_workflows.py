@@ -9,6 +9,7 @@ import pytest
 from quirebase.core import workflows
 from quirebase.core.storage import ObjectSuffix, get_object_store
 from quirebase.documents import workflows as document_workflows
+from quirebase.library import workflows as library_workflows
 from quirebase.models import FileRevision, Item, User
 from quirebase.operations import health, maintenance
 
@@ -59,6 +60,48 @@ async def test_transactional_enqueue_records_queue_partition_and_attributes(
     assert summary is not None
     assert summary.queue_name == workflows.DOCUMENTS_QUEUE
     assert summary.attributes == {"capability": "documents"}
+
+
+@pytest.mark.anyio
+async def test_child_workflow_enqueue_uses_core_options(monkeypatch):
+    enqueued = []
+
+    async def enqueue(options, *args):
+        await asyncio.sleep(0)
+        enqueued.append((options, args))
+        return SimpleNamespace(get_workflow_id=lambda: options["workflow_id"])
+
+    monkeypatch.setattr(workflows.DBOS, "enqueue_workflow_with_options_async", enqueue)
+
+    workflow_id = await workflows.enqueue_child_workflow(
+        "library.file_revision_changed",
+        "item-id",
+        "owner-id",
+        queue_name=workflows.LIBRARY_QUEUE,
+        workflow_id="file-revision-changed:revision-id",
+        attributes={"capability": "library"},
+    )
+
+    assert workflow_id == "file-revision-changed:revision-id"
+    assert enqueued == [
+        (
+            {
+                "workflow_name": "library.file_revision_changed",
+                "queue_name": workflows.LIBRARY_QUEUE,
+                "workflow_id": "file-revision-changed:revision-id",
+                "application_name": "quirebase",
+                "attributes": {"capability": "library"},
+            },
+            ("item-id", "owner-id"),
+        )
+    ]
+
+
+def test_library_workflow_uses_documents_owned_file_revision_changed_contract():
+    assert (
+        document_workflows.FILE_REVISION_CHANGED_WORKFLOW
+        == library_workflows.FILE_REVISION_CHANGED_WORKFLOW
+    )
 
 
 @pytest.mark.anyio
@@ -158,9 +201,10 @@ async def test_imported_revision_inspection_enqueues_derived_state_sync(
 
     enqueued = []
 
-    async def enqueue(options, *args):
+    async def enqueue(revision_id, item_id, owner_id):
         await asyncio.sleep(0)
-        enqueued.append((options, args))
+        enqueued.append((revision_id, item_id, owner_id))
+        return f"file-revision-changed:{revision_id}"
 
     monkeypatch.setattr(document_workflows, "AsyncSessionLocal", async_session_factory)
     monkeypatch.setattr(document_workflows, "validate_pdf_container", lambda _source: None)
@@ -172,22 +216,12 @@ async def test_imported_revision_inspection_enqueues_derived_state_sync(
         "create_thumbnail",
         lambda _source, destination: destination.write_bytes(b"thumbnail"),
     )
-    monkeypatch.setattr(document_workflows.DBOS, "enqueue_workflow_with_options_async", enqueue)
+    monkeypatch.setattr(document_workflows, "_enqueue_file_revision_changed", enqueue)
 
     workflow_body = document_workflows.inspect_imported_revision_workflow.__wrapped__.__wrapped__
     await workflow_body(revision.id, user.id, stored.key, str(uuid4()))
 
-    assert enqueued == [
-        (
-            {
-                "workflow_name": document_workflows.FILE_REVISION_CHANGED_WORKFLOW,
-                "queue_name": "library",
-                "workflow_id": f"file-revision-changed:{revision.id}",
-                "application_name": "quirebase",
-            },
-            (item.id, user.id),
-        )
-    ]
+    assert enqueued == [(revision.id, item.id, user.id)]
 
 
 @pytest.mark.anyio
@@ -202,7 +236,7 @@ async def test_imported_revision_keeps_thumbnail_after_database_commit(monkeypat
         await asyncio.sleep(0)
         return {"revision_id": "revision-id", "item_id": "item-id"}
 
-    async def fail_to_enqueue(_options, *_args):
+    async def fail_to_enqueue(*_args):
         await asyncio.sleep(0)
         raise RuntimeError("temporary DBOS failure")
 
@@ -212,9 +246,7 @@ async def test_imported_revision_keeps_thumbnail_after_database_commit(monkeypat
 
     monkeypatch.setattr(document_workflows, "inspect_imported_pdf", inspect)
     monkeypatch.setattr(document_workflows, "commit_imported_revision", commit)
-    monkeypatch.setattr(
-        document_workflows.DBOS, "enqueue_workflow_with_options_async", fail_to_enqueue
-    )
+    monkeypatch.setattr(document_workflows, "_enqueue_file_revision_changed", fail_to_enqueue)
     monkeypatch.setattr(document_workflows, "remove_owned_object", remove)
     workflow_body = document_workflows.inspect_imported_revision_workflow.__wrapped__.__wrapped__
 

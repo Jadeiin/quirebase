@@ -4,7 +4,7 @@ import asyncio
 import json
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, TypedDict, cast
 from uuid import UUID
 
 from dbos import DBOS
@@ -16,6 +16,8 @@ from quirebase.core.config import get_settings
 from quirebase.core.database import AsyncSessionLocal
 from quirebase.core.storage import ObjectSuffix, get_object_store, object_key
 from quirebase.core.timezones import annotation_export_timezone
+from quirebase.core.workflows import LIBRARY_QUEUE, enqueue_child_workflow
+from quirebase.documents.events import FILE_REVISION_CHANGED_WORKFLOW
 from quirebase.models import (
     AnnotationScope,
     Attachment,
@@ -33,9 +35,70 @@ from .pdf import create_thumbnail, export_annotations, inspect_pdf, validate_pdf
 
 REVISION_UPLOAD_WORKFLOW = "documents.upload_revision"
 ATTACHMENT_UPLOAD_WORKFLOW = "documents.upload_attachment"
-FILE_REVISION_CHANGED_WORKFLOW = "library.file_revision_changed"
 ANNOTATION_EXPORT_WORKFLOW = "documents.export_annotations"
 IMPORTED_REVISION_INSPECTION_WORKFLOW = "documents.inspect_imported_revision"
+
+_MAX_THUMBNAIL_BYTES = 32 * 1024 * 1024
+
+
+class UploadReceipt(TypedDict):
+    status: Literal["complete"]
+    key: str
+    size: int
+
+
+class PdfInspectionData(TypedDict):
+    thumbnail_object_key: str
+    size: int
+    page_count: int
+    full_text: str
+    page_geometry: str
+
+
+class PdfInspection(PdfInspectionData):
+    revision_id: str
+
+
+class UploadedPdfInspection(PdfInspection):
+    object_key: str
+
+
+class RevisionWorkflowResult(TypedDict):
+    revision_id: str
+    item_id: str
+
+
+class ImportedRevisionWorkflowResult(TypedDict):
+    revision_id: str
+    owner_id: str
+
+
+class ValidatedAttachment(TypedDict):
+    object_key: str
+    size: int
+
+
+class AttachmentWorkflowResult(TypedDict):
+    attachment_id: str
+    item_id: str
+
+
+class AnnotationExportResult(TypedDict):
+    filename: str
+    object_key: str
+    size_bytes: int
+    revision_id: str
+    project_id: str | None
+
+
+def _require_upload_receipt(value: Any, *, description: str) -> UploadReceipt:
+    if not isinstance(value, dict) or value.get("status") != "complete":
+        raise TimeoutError(f"{description} upload did not complete")
+    key = value.get("key")
+    size = value.get("size")
+    if not isinstance(key, str) or not isinstance(size, int) or isinstance(size, bool):
+        raise TypeError(f"invalid {description} upload receipt")
+    return cast("UploadReceipt", value)
 
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
@@ -43,21 +106,17 @@ async def remove_owned_object(key: str) -> None:
     await get_object_store().delete(key)
 
 
-@DBOS.step(retries_allowed=True, max_attempts=3)
-async def inspect_uploaded_pdf(
-    revision_id: str,
-    object_id: str,
+async def _inspect_pdf_object(
+    object_key_value: str,
     thumbnail_object_id: str,
-    receipt: dict[str, Any],
-) -> dict[str, Any]:
-    expected_key = object_key(UUID(object_id), ObjectSuffix.PDF)
-    if receipt.get("key") != expected_key:
-        raise ValueError("upload receipt does not own the expected object")
-    metadata = await get_object_store().head(expected_key)
-    if metadata.size != int(receipt.get("size", -1)):
+    *,
+    expected_size: int | None = None,
+) -> PdfInspectionData:
+    metadata = await get_object_store().head(object_key_value)
+    if expected_size is not None and metadata.size != expected_size:
         raise ValueError("uploaded object size mismatch")
     thumbnail_key = object_key(UUID(thumbnail_object_id), ObjectSuffix.PNG)
-    async with get_object_store().materialize(expected_key) as source:
+    async with get_object_store().materialize(object_key_value) as source:
         await asyncio.to_thread(validate_pdf_container, source)
         page_count, text, geometry = await asyncio.to_thread(inspect_pdf, source)
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temporary:
@@ -68,13 +127,11 @@ async def inspect_uploaded_pdf(
                 UUID(thumbnail_object_id),
                 ObjectSuffix.PNG,
                 thumbnail_path,
-                max_bytes=32 * 1024 * 1024,
+                max_bytes=_MAX_THUMBNAIL_BYTES,
             )
         finally:
             await asyncio.to_thread(thumbnail_path.unlink, missing_ok=True)
     return {
-        "revision_id": revision_id,
-        "object_key": expected_key,
         "thumbnail_object_key": thumbnail_key,
         "size": metadata.size,
         "page_count": page_count,
@@ -84,12 +141,34 @@ async def inspect_uploaded_pdf(
 
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
+async def inspect_uploaded_pdf(
+    revision_id: str,
+    object_id: str,
+    thumbnail_object_id: str,
+    receipt: UploadReceipt,
+) -> UploadedPdfInspection:
+    expected_key = object_key(UUID(object_id), ObjectSuffix.PDF)
+    if receipt["key"] != expected_key:
+        raise ValueError("upload receipt does not own the expected object")
+    inspected = await _inspect_pdf_object(
+        expected_key,
+        thumbnail_object_id,
+        expected_size=receipt["size"],
+    )
+    return {
+        "revision_id": revision_id,
+        "object_key": expected_key,
+        **inspected,
+    }
+
+
+@DBOS.step(retries_allowed=True, max_attempts=3)
 async def commit_uploaded_revision(
     item_id: str,
     owner_id: str,
     filename: str,
-    inspected: dict[str, Any],
-) -> dict[str, Any]:
+    inspected: UploadedPdfInspection,
+) -> RevisionWorkflowResult:
     async with AsyncSessionLocal() as db:
         existing = await db.get(FileRevision, inspected["revision_id"])
         if existing is not None:
@@ -124,6 +203,18 @@ async def commit_uploaded_revision(
         return {"revision_id": revision.id, "item_id": item_id}
 
 
+async def _enqueue_file_revision_changed(
+    revision_id: str, item_id: str, owner_id: str | None
+) -> str:
+    return await enqueue_child_workflow(
+        FILE_REVISION_CHANGED_WORKFLOW,
+        item_id,
+        owner_id,
+        queue_name=LIBRARY_QUEUE,
+        workflow_id=f"file-revision-changed:{revision_id}",
+    )
+
+
 @DBOS.workflow(name=REVISION_UPLOAD_WORKFLOW)
 async def upload_revision_workflow(
     item_id: str,
@@ -132,7 +223,7 @@ async def upload_revision_workflow(
     object_id: str,
     thumbnail_object_id: str,
     filename: str,
-) -> dict[str, Any]:
+) -> RevisionWorkflowResult:
     key = object_key(UUID(object_id), ObjectSuffix.PDF)
     thumbnail_key = object_key(UUID(thumbnail_object_id), ObjectSuffix.PNG)
     receipt = await DBOS.recv_async(
@@ -140,21 +231,13 @@ async def upload_revision_workflow(
     )
     committed = False
     try:
-        if not isinstance(receipt, dict) or receipt.get("status") != "complete":
-            raise TimeoutError("PDF upload did not complete")
-        inspected = await inspect_uploaded_pdf(revision_id, object_id, thumbnail_object_id, receipt)
+        completed_receipt = _require_upload_receipt(receipt, description="PDF")
+        inspected = await inspect_uploaded_pdf(
+            revision_id, object_id, thumbnail_object_id, completed_receipt
+        )
         result = await commit_uploaded_revision(item_id, owner_id, filename, inspected)
         committed = True
-        await DBOS.enqueue_workflow_with_options_async(
-            {
-                "workflow_name": FILE_REVISION_CHANGED_WORKFLOW,
-                "queue_name": "library",
-                "workflow_id": f"file-revision-changed:{revision_id}",
-                "application_name": "quirebase",
-            },
-            item_id,
-            owner_id,
-        )
+        await _enqueue_file_revision_changed(revision_id, item_id, owner_id)
         return result
     except BaseException:
         if not committed:
@@ -166,23 +249,14 @@ async def upload_revision_workflow(
 @DBOS.workflow(name=IMPORTED_REVISION_INSPECTION_WORKFLOW)
 async def inspect_imported_revision_workflow(
     revision_id: str, owner_id: str, object_key_value: str, thumbnail_object_id: str
-) -> dict[str, Any]:
+) -> ImportedRevisionWorkflowResult:
     thumbnail_key = object_key(UUID(thumbnail_object_id), ObjectSuffix.PNG)
     committed = False
     try:
         inspected = await inspect_imported_pdf(revision_id, object_key_value, thumbnail_object_id)
         result = await commit_imported_revision(inspected)
         committed = True
-        await DBOS.enqueue_workflow_with_options_async(
-            {
-                "workflow_name": FILE_REVISION_CHANGED_WORKFLOW,
-                "queue_name": "library",
-                "workflow_id": f"file-revision-changed:{revision_id}",
-                "application_name": "quirebase",
-            },
-            result["item_id"],
-            owner_id,
-        )
+        await _enqueue_file_revision_changed(revision_id, result["item_id"], owner_id)
         return {"revision_id": revision_id, "owner_id": owner_id}
     except BaseException:
         if not committed:
@@ -193,36 +267,16 @@ async def inspect_imported_revision_workflow(
 @DBOS.step(retries_allowed=True, max_attempts=3)
 async def inspect_imported_pdf(
     revision_id: str, object_key_value: str, thumbnail_object_id: str
-) -> dict[str, Any]:
-    metadata = await get_object_store().head(object_key_value)
-    thumbnail_key = object_key(UUID(thumbnail_object_id), ObjectSuffix.PNG)
-    async with get_object_store().materialize(object_key_value) as source:
-        await asyncio.to_thread(validate_pdf_container, source)
-        page_count, text, geometry = await asyncio.to_thread(inspect_pdf, source)
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temporary:
-            thumbnail_path = Path(temporary.name)
-        try:
-            await asyncio.to_thread(create_thumbnail, source, thumbnail_path)
-            await get_object_store().put_object(
-                UUID(thumbnail_object_id),
-                ObjectSuffix.PNG,
-                thumbnail_path,
-                max_bytes=32 * 1024 * 1024,
-            )
-        finally:
-            await asyncio.to_thread(thumbnail_path.unlink, missing_ok=True)
+) -> PdfInspection:
+    inspected = await _inspect_pdf_object(object_key_value, thumbnail_object_id)
     return {
         "revision_id": revision_id,
-        "thumbnail_object_key": thumbnail_key,
-        "size": metadata.size,
-        "page_count": page_count,
-        "full_text": text,
-        "page_geometry": json.dumps(geometry, separators=(",", ":")),
+        **inspected,
     }
 
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
-async def commit_imported_revision(inspected: dict[str, Any]) -> dict[str, Any]:
+async def commit_imported_revision(inspected: PdfInspection) -> RevisionWorkflowResult:
     async with AsyncSessionLocal() as db:
         revision = await db.get(FileRevision, inspected["revision_id"])
         if revision is None:
@@ -249,13 +303,16 @@ def _is_image_header(header: bytes, content_type: str) -> bool:
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
 async def validate_attachment_upload(
-    object_id: str, content_type: str, graphical_abstract: bool, receipt: dict[str, Any]
-) -> dict[str, Any]:
+    object_id: str,
+    content_type: str,
+    graphical_abstract: bool,
+    receipt: UploadReceipt,
+) -> ValidatedAttachment:
     key = object_key(UUID(object_id), ObjectSuffix.BINARY)
-    if receipt.get("key") != key:
+    if receipt["key"] != key:
         raise ValueError("upload receipt does not own the expected object")
     metadata = await get_object_store().head(key)
-    if metadata.size != int(receipt.get("size", -1)):
+    if metadata.size != receipt["size"]:
         raise ValueError("uploaded object size mismatch")
     if graphical_abstract:
         response = await get_object_store().get_range(key, 0, min(12, metadata.size))
@@ -273,8 +330,8 @@ async def commit_uploaded_attachment(
     filename: str,
     content_type: str,
     role_value: str | None,
-    receipt: dict[str, Any],
-) -> dict[str, Any]:
+    receipt: ValidatedAttachment,
+) -> AttachmentWorkflowResult:
     async with AsyncSessionLocal() as db:
         existing = await db.get(Attachment, attachment_id)
         if existing is not None:
@@ -323,16 +380,18 @@ async def upload_attachment_workflow(
     filename: str,
     content_type: str,
     role_value: str | None,
-) -> dict[str, Any]:
+) -> AttachmentWorkflowResult:
     key = object_key(UUID(object_id), ObjectSuffix.BINARY)
     receipt = await DBOS.recv_async(
         "upload-complete", timeout_seconds=get_settings().workflow_upload_timeout_seconds
     )
     try:
-        if not isinstance(receipt, dict) or receipt.get("status") != "complete":
-            raise TimeoutError("attachment upload did not complete")
+        completed_receipt = _require_upload_receipt(receipt, description="attachment")
         validated = await validate_attachment_upload(
-            object_id, content_type, role_value == AttachmentRole.graphical_abstract.value, receipt
+            object_id,
+            content_type,
+            role_value == AttachmentRole.graphical_abstract.value,
+            completed_receipt,
         )
         return await commit_uploaded_attachment(
             item_id,
@@ -356,7 +415,7 @@ async def build_annotation_export(
     project_id: str | None,
     include_private: bool,
     timezone: str | None,
-) -> dict[str, Any]:
+) -> AnnotationExportResult:
     async with AsyncSessionLocal() as db:
         revision = await db.get(FileRevision, revision_id)
         if revision is None:
@@ -443,7 +502,7 @@ async def annotation_export_workflow(
     project_id: str | None,
     include_private: bool,
     timezone: str | None,
-) -> dict[str, Any]:
+) -> AnnotationExportResult:
     return await build_annotation_export(
         owner_id, revision_id, object_id, project_id, include_private, timezone
     )

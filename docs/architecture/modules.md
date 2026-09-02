@@ -207,8 +207,9 @@ All physical Document deletion crosses the Documents interface. Every logical up
 preallocated UUID object, so rollback and terminal workflow cleanup can delete that key without a
 reservation or local lock. The workflow-first upload interface creates a DBOS execution, streams
 the object, and sends a durable completion message; retryable Documents steps validate and derive
-content before a short idempotent database commit. File Revision changes enqueue the
-Library-owned `FileRevisionChanged` workflow rather than creating a reverse dependency. Operations
+content before a short idempotent database commit. Documents owns the durable
+`FileRevisionChanged` event contract, and the Library workflow that handles it updates derived
+Library state without creating a reverse dependency. Operations
 reconciliation only deletes old managed UUID objects after excluding database references and
 active workflow ownership twice. Unknown keys and doctor probes are never managed.
 

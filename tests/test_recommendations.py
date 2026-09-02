@@ -68,7 +68,11 @@ async def test_item_creation_enqueues_and_worker_persists_yake_results(async_db,
     assert record is not None
     assert record.workflow_id is not None
     await handle_item_tag_recommendation(
-        db, item_result.item_id, record.generation_token, record.workflow_id, user.id,
+        db,
+        item_result.item_id,
+        record.generation_token,
+        record.workflow_id,
+        user.id,
         settings=settings,
     )
     await db.commit()

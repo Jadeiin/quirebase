@@ -85,7 +85,9 @@ async def check_objects_workflow(_workflow_id: str, _owner_id: str) -> dict[str,
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
 async def backup_step(workflow_id: str) -> dict[str, Any]:
-    safe_id = "".join(character if character.isalnum() or character in "._-" else "_" for character in workflow_id)
+    safe_id = "".join(
+        character if character.isalnum() or character in "._-" else "_" for character in workflow_id
+    )
     filename = f"backup_{safe_id}.zip"
     destination = get_settings().export_dir / filename
     await create_backup(destination)

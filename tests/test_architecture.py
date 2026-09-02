@@ -460,6 +460,22 @@ def test_runtime_sources_do_not_restore_synchronous_io_adapters():
                 )
 
 
+def test_documents_workflows_enqueue_children_through_the_core_seam():
+    source = (SRC_ROOT / "documents" / "workflows.py").read_text(encoding="utf-8")
+    assert "DBOS.enqueue_workflow_with_options" not in source
+    assert "enqueue_child_workflow" in source
+
+
+def test_documents_own_the_file_revision_changed_event_contract():
+    definition = 'FILE_REVISION_CHANGED_WORKFLOW = "library.file_revision_changed"'
+    definitions = [
+        source.relative_to(SRC_ROOT)
+        for source in get_python_files(SRC_ROOT)
+        if definition in source.read_text(encoding="utf-8")
+    ]
+    assert definitions == [Path("documents/events.py")]
+
+
 def test_provider_runtime_and_contract_lifecycles_are_async_only():
     required_async_methods = {
         "ProviderRuntime": {

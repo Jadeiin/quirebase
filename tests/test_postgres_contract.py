@@ -1,7 +1,11 @@
+import importlib
 import os
 import uuid
 
 import pytest
+import sqlalchemy as sa
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from test_domain_states import assert_closed_state_constraints
@@ -9,6 +13,76 @@ from test_domain_states import assert_closed_state_constraints
 from quirebase.core.database import Base, make_async_engine
 from quirebase.models import Item, User
 from quirebase.search import search_index
+
+
+@pytest.mark.skipif(
+    not os.getenv("QUIREBASE_TEST_POSTGRES_URL"), reason="PostgreSQL is not configured"
+)
+def test_postgresql_dbos_migration_drops_reflected_job_foreign_key(monkeypatch):
+    engine = sa.create_engine(os.environ["QUIREBASE_TEST_POSTGRES_URL"])
+    table_names = (
+        "item_tag_recommendations",
+        "file_revisions",
+        "attachments",
+        "jobs",
+    )
+    try:
+        with engine.begin() as connection:
+            for table_name in table_names:
+                connection.execute(text(f'DROP TABLE IF EXISTS "{table_name}" CASCADE'))
+
+            metadata = sa.MetaData()
+            jobs = sa.Table("jobs", metadata, sa.Column("id", sa.String(36), primary_key=True))
+            recommendations = sa.Table(
+                "item_tag_recommendations",
+                metadata,
+                sa.Column("id", sa.String(36), primary_key=True),
+                sa.Column(
+                    "job_id",
+                    sa.String(36),
+                    sa.ForeignKey(jobs.c.id, ondelete="SET NULL"),
+                ),
+            )
+            sa.Index("ix_item_tag_recommendations_job_id", recommendations.c.job_id)
+            file_revisions = sa.Table(
+                "file_revisions",
+                metadata,
+                sa.Column("id", sa.String(36), primary_key=True),
+                sa.Column("sha256", sa.String(64)),
+            )
+            sa.Index("ix_file_revisions_sha256", file_revisions.c.sha256)
+            attachments = sa.Table(
+                "attachments",
+                metadata,
+                sa.Column("id", sa.String(36), primary_key=True),
+                sa.Column("sha256", sa.String(64)),
+            )
+            sa.Index("ix_attachments_sha256", attachments.c.sha256)
+            metadata.create_all(connection)
+
+            foreign_key = sa.inspect(connection).get_foreign_keys("item_tag_recommendations")[0]
+            assert foreign_key["name"] == "item_tag_recommendations_job_id_fkey"
+
+            migration = importlib.import_module(
+                "migrations.versions.0019_dbos_workflows_and_uuid_objects"
+            )
+            monkeypatch.setattr(
+                migration,
+                "op",
+                Operations(MigrationContext.configure(connection)),
+            )
+            migration.upgrade()
+
+            inspector = sa.inspect(connection)
+            assert "jobs" not in inspector.get_table_names()
+            assert "job_id" not in {
+                column["name"] for column in inspector.get_columns("item_tag_recommendations")
+            }
+    finally:
+        with engine.begin() as connection:
+            for table_name in table_names:
+                connection.execute(text(f'DROP TABLE IF EXISTS "{table_name}" CASCADE'))
+        engine.dispose()
 
 
 @pytest.mark.skipif(

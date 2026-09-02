@@ -24,9 +24,7 @@ async def chunks(value: bytes, size: int = 7):
 
 def test_object_key_is_strict_two_level_uuid_layout():
     object_id = UUID("abcdef01-2345-6789-abcd-ef0123456789")
-    assert object_key(object_id, ObjectSuffix.PDF) == (
-        "ab/cd/abcdef0123456789abcdef0123456789.pdf"
-    )
+    assert object_key(object_id, ObjectSuffix.PDF) == ("ab/cd/abcdef0123456789abcdef0123456789.pdf")
     assert is_managed_object_key("ab/cd/abcdef0123456789abcdef0123456789.pdf")
     assert not is_managed_object_key("ac/cd/abcdef0123456789abcdef0123456789.pdf")
     assert not is_managed_object_key("ab/cd/abcdef0123456789abcdef0123456789.exe")

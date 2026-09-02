@@ -37,10 +37,10 @@ from quirebase.core.workflows import (
     UPLOAD_QUEUE,
     durable_operations,
 )
+from quirebase.documents.events import FILE_REVISION_CHANGED_WORKFLOW
 from quirebase.documents.pdf import validate_pdf_container
 from quirebase.documents.workflows import (
     ATTACHMENT_UPLOAD_WORKFLOW,
-    FILE_REVISION_CHANGED_WORKFLOW,
     IMPORTED_REVISION_INSPECTION_WORKFLOW,
     REVISION_UPLOAD_WORKFLOW,
 )

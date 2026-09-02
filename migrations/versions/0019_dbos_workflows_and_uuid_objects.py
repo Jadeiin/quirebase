@@ -31,9 +31,14 @@ def upgrade() -> None:
         if "ix_item_tag_recommendations_workflow_id" not in recommendation_indexes:
             batch.create_index("ix_item_tag_recommendations_workflow_id", ["workflow_id"])
         if "job_id" in recommendation_columns:
-            if any(key.get("constrained_columns") == ["job_id"] for key in foreign_keys):
+            job_foreign_key = next(
+                (key for key in foreign_keys if key.get("constrained_columns") == ["job_id"]),
+                None,
+            )
+            if job_foreign_key is not None:
                 batch.drop_constraint(
-                    "fk_item_tag_recommendations_job_id_jobs", type_="foreignkey"
+                    job_foreign_key.get("name") or "fk_item_tag_recommendations_job_id_jobs",
+                    type_="foreignkey",
                 )
             batch.drop_index("ix_item_tag_recommendations_job_id")
             batch.drop_column("job_id")
@@ -41,7 +46,9 @@ def upgrade() -> None:
     revision_indexes = {index["name"] for index in inspector.get_indexes("file_revisions")}
     with op.batch_alter_table("file_revisions") as batch:
         if "thumbnail_object_key" not in revision_columns:
-            batch.add_column(sa.Column("thumbnail_object_key", sa.String(length=200), nullable=True))
+            batch.add_column(
+                sa.Column("thumbnail_object_key", sa.String(length=200), nullable=True)
+            )
         if "ix_file_revisions_thumbnail_object_key" not in revision_indexes:
             batch.create_index("ix_file_revisions_thumbnail_object_key", ["thumbnail_object_key"])
         if "sha256" in revision_columns:

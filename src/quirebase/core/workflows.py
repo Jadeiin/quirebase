@@ -118,6 +118,22 @@ def _options(
     return cast("EnqueueOptions", options)
 
 
+async def enqueue_child_workflow(
+    workflow_name: str,
+    *args: Any,
+    queue_name: str,
+    workflow_id: str,
+    partition_key: str | None = None,
+    attributes: dict[str, Any] | None = None,
+) -> str:
+    """Enqueue a child from durable workflow context through the Core seam."""
+    handle: Any = await DBOS.enqueue_workflow_with_options_async(
+        _options(workflow_name, queue_name, workflow_id, partition_key, attributes),
+        *args,
+    )
+    return handle.get_workflow_id()
+
+
 def _timestamp(value: int | None) -> datetime | None:
     return datetime.fromtimestamp(value / 1000, UTC) if value is not None else None
 
@@ -231,6 +247,8 @@ class DBOSAdapter:
 
     async def state_counts(self) -> dict[WorkflowState, int]:
         """Aggregate workflow states in the DBOS system database without loading history."""
+        # DBOS 2.31 exposes aggregation only on its system database implementation.
+        # Keep this private SDK dependency local until DBOSClient gains an equivalent method.
         system_database: Any = self._client._sys_db
         rows = await asyncio.to_thread(
             system_database.get_workflow_aggregates,

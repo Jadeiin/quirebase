@@ -215,8 +215,7 @@ async def request_item_tag_recommendation(
     if record is not None and record.input_fingerprint == fingerprint and not force:
         workflow = await _linked_workflow(record)
         if record.generated_at is not None or (
-            workflow is not None
-            and workflow.state in {"pending", "running", "succeeded"}
+            workflow is not None and workflow.state in {"pending", "running", "succeeded"}
         ):
             return record
 
@@ -312,9 +311,7 @@ async def handle_item_tag_recommendation(
     descriptor = await asyncio.to_thread(describe_engine, effective)
     fingerprint = input_fingerprint(text, descriptor, max_chars=effective.recommendation_max_chars)
     if fingerprint != record.input_fingerprint:
-        await request_item_tag_recommendation(
-            db, item_id, owner_id=owner_id, settings=effective
-        )
+        await request_item_tag_recommendation(db, item_id, owner_id=owner_id, settings=effective)
         return {"stale": True, "replacement_enqueued": True}
     result = (
         await asyncio.to_thread(

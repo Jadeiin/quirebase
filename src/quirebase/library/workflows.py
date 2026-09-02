@@ -5,11 +5,11 @@ from typing import Any
 from dbos import DBOS
 
 from quirebase.core.database import AsyncSessionLocal
+from quirebase.documents.events import FILE_REVISION_CHANGED_WORKFLOW
 from quirebase.search import search_index
 
 from .tag_recommendations import handle_item_tag_recommendation, request_item_tag_recommendation
 
-FILE_REVISION_CHANGED_WORKFLOW = "library.file_revision_changed"
 RECOMMEND_TAGS_WORKFLOW = "library.recommend_tags"
 
 
@@ -48,6 +48,4 @@ async def recommend_tags_workflow(
     workflow_id: str,
     owner_id: str | None,
 ) -> dict[str, Any]:
-    return await generate_item_tag_recommendation(
-        item_id, generation_token, workflow_id, owner_id
-    )
+    return await generate_item_tag_recommendation(item_id, generation_token, workflow_id, owner_id)
