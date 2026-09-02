@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: quirebase 0.1\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-09-01 21:50+0800\n"
+"POT-Creation-Date: 2026-09-02 10:52+0800\n"
 "PO-Revision-Date: 2026-08-15 19:40+0800\n"
 "Last-Translator: Quirebase Team\n"
 "Language: zh_CN\n"
@@ -16,7 +16,7 @@ msgstr ""
 
 #: src/quirebase/templates/_item_metadata_form.html:4
 #: src/quirebase/templates/account_settings.html:239
-#: src/quirebase/templates/item.html:238
+#: src/quirebase/templates/item.html:239
 #: src/quirebase/templates/online_search.html:10
 msgid "Title"
 msgstr "标题"
@@ -134,7 +134,7 @@ msgid "Issue"
 msgstr "期号 (Issue)"
 
 #: src/quirebase/templates/_item_metadata_form.html:67
-#: src/quirebase/templates/item.html:82
+#: src/quirebase/templates/item.html:83
 msgid "Pages"
 msgstr "页码 (Pages)"
 
@@ -143,7 +143,7 @@ msgid "Affiliation / Institution"
 msgstr "机构单位 / 单位归属"
 
 #: src/quirebase/templates/_item_metadata_form.html:69
-#: src/quirebase/templates/item.html:83
+#: src/quirebase/templates/item.html:84
 msgid "Publisher"
 msgstr "出版者"
 
@@ -152,7 +152,7 @@ msgid "Place published"
 msgstr "出版地点"
 
 #: src/quirebase/templates/_item_metadata_form.html:71
-#: src/quirebase/templates/item.html:245
+#: src/quirebase/templates/item.html:246
 msgid "DOI"
 msgstr "DOI"
 
@@ -169,7 +169,7 @@ msgid "URLs (one per line)"
 msgstr "外部链接 (一行一个)"
 
 #: src/quirebase/templates/_item_metadata_form.html:75
-#: src/quirebase/templates/item.html:115
+#: src/quirebase/templates/item.html:116
 msgid "Keywords"
 msgstr "关键词"
 
@@ -178,7 +178,7 @@ msgid "Separate keywords with semicolons"
 msgstr "使用分号分隔关键词"
 
 #: src/quirebase/templates/_item_metadata_form.html:76
-#: src/quirebase/templates/item.html:65
+#: src/quirebase/templates/item.html:66
 #: src/quirebase/templates/online_search.html:10
 msgid "Abstract"
 msgstr "摘要"
@@ -194,6 +194,14 @@ msgstr "标识符（JSON 对象）"
 #: src/quirebase/templates/_item_metadata_form.html:80
 msgid "Custom fields (JSON object)"
 msgstr "自定义字段（JSON 对象）"
+
+#: src/quirebase/templates/_workflow_progress.html:18
+msgid "Try again"
+msgstr "重试"
+
+#: src/quirebase/templates/_workflow_progress.html:19
+msgid "Continue in background"
+msgstr "转到后台继续"
 
 #: src/quirebase/templates/accept_invitation.html:1
 msgid "Accept invitation"
@@ -561,7 +569,7 @@ msgid "Library order"
 msgstr "文献库顺序"
 
 #: src/quirebase/templates/account_settings.html:239
-#: src/quirebase/templates/item.html:144
+#: src/quirebase/templates/item.html:145
 msgid "Citation key"
 msgstr "引用键 (Citation key)"
 
@@ -708,7 +716,7 @@ msgstr "指标"
 msgid "Administration navigation"
 msgstr "管理导航"
 
-#: src/quirebase/templates/admin.html:22 src/quirebase/templates/item.html:52
+#: src/quirebase/templates/admin.html:22 src/quirebase/templates/item.html:53
 msgid "Overview"
 msgstr "概览"
 
@@ -801,7 +809,7 @@ msgstr "PDF 版本"
 msgid "files"
 msgstr "个文件"
 
-#: src/quirebase/templates/admin.html:92 src/quirebase/templates/item.html:285
+#: src/quirebase/templates/admin.html:92 src/quirebase/templates/item.html:266
 msgid "Attachments"
 msgstr "附件"
 
@@ -982,7 +990,7 @@ msgid "All items ({count})"
 msgstr "全部条目（{count}）"
 
 #: src/quirebase/templates/admin.html:289 src/quirebase/templates/index.html:23
-#: src/quirebase/templates/index.html:32 src/quirebase/templates/item.html:11
+#: src/quirebase/templates/index.html:32 src/quirebase/templates/item.html:12
 #: src/quirebase/templates/library.html:66
 #: src/quirebase/templates/online_search.html:18
 #: src/quirebase/templates/project.html:7 src/quirebase/templates/tools.html:44
@@ -999,8 +1007,8 @@ msgid ""
 " files?"
 msgstr "确定永久删除此条目及其所有版本、批注和存储文件？"
 
-#: src/quirebase/templates/admin.html:294 src/quirebase/templates/item.html:278
-#: src/quirebase/templates/item.html:286 src/quirebase/templates/item.html:431
+#: src/quirebase/templates/admin.html:294 src/quirebase/templates/item.html:259
+#: src/quirebase/templates/item.html:267 src/quirebase/templates/item.html:416
 #: src/quirebase/templates/pdf.html:65 src/quirebase/templates/tools.html:105
 #: src/quirebase/templates/tools.html:147
 msgid "Delete"
@@ -1084,8 +1092,8 @@ msgid "Recent durable workflows"
 msgstr "最近的持久工作流"
 
 #: src/quirebase/templates/admin.html:396
-#: src/quirebase/templates/admin.html:530 src/quirebase/templates/item.html:29
-#: src/quirebase/templates/item.html:278 src/quirebase/templates/item.html:286
+#: src/quirebase/templates/admin.html:530 src/quirebase/templates/item.html:30
+#: src/quirebase/templates/item.html:259 src/quirebase/templates/item.html:267
 msgid "Download"
 msgstr "下载"
 
@@ -1242,7 +1250,7 @@ msgstr "主导航"
 msgid "Dashboard"
 msgstr "仪表盘"
 
-#: src/quirebase/templates/base.html:27 src/quirebase/templates/item.html:7
+#: src/quirebase/templates/base.html:27 src/quirebase/templates/item.html:8
 msgid "Library"
 msgstr "论文库"
 
@@ -1257,7 +1265,7 @@ msgid "Online search"
 msgstr "联网检索"
 
 #: src/quirebase/templates/base.html:30 src/quirebase/templates/index.html:38
-#: src/quirebase/templates/item.html:370 src/quirebase/templates/project.html:5
+#: src/quirebase/templates/item.html:355 src/quirebase/templates/project.html:5
 #: src/quirebase/templates/projects.html:3
 #: src/quirebase/templates/projects.html:5
 msgid "Projects"
@@ -1340,7 +1348,7 @@ msgid ""
 "another reference manager."
 msgstr "预览并导入由 EndNote、Zotero、Mendeley 或其他文献管理器导出的记录。"
 
-#: src/quirebase/templates/import.html:28 src/quirebase/templates/item.html:37
+#: src/quirebase/templates/import.html:28 src/quirebase/templates/item.html:38
 msgid "Format"
 msgstr "格式"
 
@@ -1556,629 +1564,634 @@ msgstr "到期时间：{time}。"
 msgid "Return to administration"
 msgstr "返回管理页面"
 
-#: src/quirebase/templates/item.html:5 src/quirebase/templates/pdf.html:10
+#: src/quirebase/templates/item.html:6 src/quirebase/templates/pdf.html:10
 #: src/quirebase/templates/pdf.html:54
 msgid "Highlight"
 msgstr "高亮"
 
-#: src/quirebase/templates/item.html:5 src/quirebase/templates/pdf.html:11
+#: src/quirebase/templates/item.html:6 src/quirebase/templates/pdf.html:11
 #: src/quirebase/templates/pdf.html:54
 msgid "Underline"
 msgstr "下划线"
 
-#: src/quirebase/templates/item.html:5 src/quirebase/templates/pdf.html:57
+#: src/quirebase/templates/item.html:6 src/quirebase/templates/pdf.html:57
 msgid "Note"
 msgstr "批注"
 
-#: src/quirebase/templates/item.html:7 src/quirebase/templates/library.html:62
+#: src/quirebase/templates/item.html:8 src/quirebase/templates/library.html:62
 msgid "Paper"
 msgstr "论文"
 
-#: src/quirebase/templates/item.html:14
+#: src/quirebase/templates/item.html:15
 msgid "Read PDF"
 msgstr "阅读 PDF"
 
-#: src/quirebase/templates/item.html:17 src/quirebase/templates/item.html:281
+#: src/quirebase/templates/item.html:18 src/quirebase/templates/item.html:262
 #: src/quirebase/templates/pdf.html:43
 msgid "Download PDF"
 msgstr "下载 PDF"
 
-#: src/quirebase/templates/item.html:19
+#: src/quirebase/templates/item.html:20
 msgid "Download options"
 msgstr "下载选项"
 
-#: src/quirebase/templates/item.html:19
+#: src/quirebase/templates/item.html:20
 msgid "Choose what to package with the reading copy."
 msgstr "选择要与阅读副本一起打包的内容。"
 
-#: src/quirebase/templates/item.html:21
+#: src/quirebase/templates/item.html:22
 msgid "Select PDF versions"
 msgstr "选择 PDF 版本"
 
-#: src/quirebase/templates/item.html:28
+#: src/quirebase/templates/item.html:29
 msgid ""
 "Uses your saved PDF annotation and supplement settings. Stored files "
 "remain unchanged."
 msgstr "使用已保存的 PDF 批注和补充材料设置；存储的文件不会改变。"
 
-#: src/quirebase/templates/item.html:30 src/quirebase/templates/item.html:42
+#: src/quirebase/templates/item.html:31 src/quirebase/templates/item.html:43
 #: src/quirebase/templates/library.html:56
 msgid "Export settings"
 msgstr "导出设置"
 
-#: src/quirebase/templates/item.html:35
+#: src/quirebase/templates/item.html:36
 msgid "Export"
 msgstr "导出"
 
-#: src/quirebase/templates/item.html:38
+#: src/quirebase/templates/item.html:39
 msgid ""
 "Uses the CSL, field, encoding, and sorting defaults from your export "
 "settings."
 msgstr "使用导出设置中的 CSL、字段、编码和排序默认值。"
 
-#: src/quirebase/templates/item.html:39
+#: src/quirebase/templates/item.html:40
 msgid "Download file"
 msgstr "下载文件"
 
-#: src/quirebase/templates/item.html:39
+#: src/quirebase/templates/item.html:40
 msgid "Copy to clipboard"
 msgstr "复制到剪贴板"
 
-#: src/quirebase/templates/item.html:40
+#: src/quirebase/templates/item.html:41
 msgid "Copied"
 msgstr "已复制"
 
-#: src/quirebase/templates/item.html:41
+#: src/quirebase/templates/item.html:42
 msgid "Copy failed"
 msgstr "复制失败"
 
-#: src/quirebase/templates/item.html:45
+#: src/quirebase/templates/item.html:46
 msgid "More"
 msgstr "更多"
 
-#: src/quirebase/templates/item.html:45
+#: src/quirebase/templates/item.html:46
 msgid ""
 "Delete this item permanently? Associated files, annotations, and project "
 "memberships will also be removed."
 msgstr "永久删除此条目？关联的文件、批注和项目成员关系也将一并删除。"
 
-#: src/quirebase/templates/item.html:45
+#: src/quirebase/templates/item.html:46
 msgid "Delete item"
 msgstr "删除条目"
 
-#: src/quirebase/templates/item.html:51
+#: src/quirebase/templates/item.html:52
 msgid "Paper workspace"
 msgstr "论文工作区"
 
-#: src/quirebase/templates/item.html:52
+#: src/quirebase/templates/item.html:53
 msgid "Abstract and key details"
 msgstr "摘要与关键信息"
 
-#: src/quirebase/templates/item.html:53
+#: src/quirebase/templates/item.html:54
 msgid "Metadata"
 msgstr "元数据"
 
-#: src/quirebase/templates/item.html:53
+#: src/quirebase/templates/item.html:54
 msgid "Bibliographic fields"
 msgstr "书目字段"
 
-#: src/quirebase/templates/item.html:54
+#: src/quirebase/templates/item.html:55
 msgid "Files"
 msgstr "文件"
 
-#: src/quirebase/templates/item.html:54 src/quirebase/templates/item.html:275
+#: src/quirebase/templates/item.html:55 src/quirebase/templates/item.html:256
 msgid "PDF versions and attachments"
 msgstr "PDF 版本与附件"
 
-#: src/quirebase/templates/item.html:55 src/quirebase/templates/item.html:115
+#: src/quirebase/templates/item.html:56 src/quirebase/templates/item.html:116
 msgid "Organize"
 msgstr "分类整理"
 
-#: src/quirebase/templates/item.html:55 src/quirebase/templates/item.html:302
+#: src/quirebase/templates/item.html:56 src/quirebase/templates/item.html:287
 msgid "Tags and projects"
 msgstr "标签与项目"
 
-#: src/quirebase/templates/item.html:56 src/quirebase/templates/item.html:426
+#: src/quirebase/templates/item.html:57 src/quirebase/templates/item.html:411
 msgid "Notes and annotations"
 msgstr "笔记与批注"
 
-#: src/quirebase/templates/item.html:56
+#: src/quirebase/templates/item.html:57
 msgid "Reading notes"
 msgstr "阅读笔记"
 
-#: src/quirebase/templates/item.html:57 src/quirebase/templates/item.html:430
+#: src/quirebase/templates/item.html:58 src/quirebase/templates/item.html:415
 msgid "Discussion"
 msgstr "讨论"
 
-#: src/quirebase/templates/item.html:57
+#: src/quirebase/templates/item.html:58
 msgid "Team conversation"
 msgstr "团队讨论"
 
-#: src/quirebase/templates/item.html:65
+#: src/quirebase/templates/item.html:66
 msgid "Paper overview"
 msgstr "文献概览"
 
-#: src/quirebase/templates/item.html:65
+#: src/quirebase/templates/item.html:66
 msgid "Edit metadata"
 msgstr "编辑元数据"
 
-#: src/quirebase/templates/item.html:70
+#: src/quirebase/templates/item.html:71
 msgid "Show less"
 msgstr "收起"
 
-#: src/quirebase/templates/item.html:70
+#: src/quirebase/templates/item.html:71
 msgid "Show more"
 msgstr "展开更多"
 
-#: src/quirebase/templates/item.html:72
+#: src/quirebase/templates/item.html:73
 msgid "No abstract available."
 msgstr "暂无摘要。"
 
-#: src/quirebase/templates/item.html:77
+#: src/quirebase/templates/item.html:78
 msgid "Publication details"
 msgstr "出版信息"
 
-#: src/quirebase/templates/item.html:77
+#: src/quirebase/templates/item.html:78
 msgid "View all metadata"
 msgstr "查看全部元数据"
 
-#: src/quirebase/templates/item.html:79 src/quirebase/templates/item.html:241
+#: src/quirebase/templates/item.html:80 src/quirebase/templates/item.html:242
 #: src/quirebase/templates/online_search.html:10
 msgid "Publication"
 msgstr "出版物"
 
-#: src/quirebase/templates/item.html:80 src/quirebase/templates/item.html:242
+#: src/quirebase/templates/item.html:81 src/quirebase/templates/item.html:243
 msgid "Date"
 msgstr "日期"
 
-#: src/quirebase/templates/item.html:81
+#: src/quirebase/templates/item.html:82
 msgid "Volume / Issue"
 msgstr "卷号 / 期号"
 
-#: src/quirebase/templates/item.html:84 src/quirebase/templates/item.html:244
+#: src/quirebase/templates/item.html:85 src/quirebase/templates/item.html:245
 msgid "Affiliation"
 msgstr "机构单位"
 
-#: src/quirebase/templates/item.html:89
+#: src/quirebase/templates/item.html:90
 msgid "Reading and files"
 msgstr "阅读与文件"
 
-#: src/quirebase/templates/item.html:89
+#: src/quirebase/templates/item.html:90
 msgid "Manage files"
 msgstr "管理文件"
 
-#: src/quirebase/templates/item.html:93 src/quirebase/templates/item.html:278
+#: src/quirebase/templates/item.html:94 src/quirebase/templates/item.html:259
 #: src/quirebase/templates/pdf.html:18
 #, python-brace-format
 msgid "{count} pages"
 msgstr "{count} 页"
 
-#: src/quirebase/templates/item.html:94 src/quirebase/templates/item.html:278
+#: src/quirebase/templates/item.html:95 src/quirebase/templates/item.html:259
 msgid "Read"
 msgstr "阅读"
 
-#: src/quirebase/templates/item.html:97 src/quirebase/templates/item.html:278
+#: src/quirebase/templates/item.html:98 src/quirebase/templates/item.html:259
 msgid "No PDF uploaded."
 msgstr "尚未上传 PDF。"
 
-#: src/quirebase/templates/item.html:100
+#: src/quirebase/templates/item.html:101
 msgid "PDF versions"
 msgstr "PDF 版本"
 
-#: src/quirebase/templates/item.html:101
+#: src/quirebase/templates/item.html:102
 msgid "Supplements"
 msgstr "补充材料"
 
-#: src/quirebase/templates/item.html:102
+#: src/quirebase/templates/item.html:103
 msgid "Annotations"
 msgstr "批注"
 
-#: src/quirebase/templates/item.html:103
+#: src/quirebase/templates/item.html:104
 msgid "Messages"
 msgstr "消息"
 
-#: src/quirebase/templates/item.html:109
+#: src/quirebase/templates/item.html:110
 msgid "User-curated"
 msgstr "用户整理"
 
-#: src/quirebase/templates/item.html:109
+#: src/quirebase/templates/item.html:110
 msgid "Tags"
 msgstr "标签"
 
-#: src/quirebase/templates/item.html:109 src/quirebase/templates/tools.html:16
+#: src/quirebase/templates/item.html:110 src/quirebase/templates/tools.html:16
 #: src/quirebase/templates/tools.html:67
 msgid "Manage tags"
 msgstr "管理标签"
 
-#: src/quirebase/templates/item.html:111
+#: src/quirebase/templates/item.html:112
 msgid "No tags assigned yet."
 msgstr "尚未分配标签。"
 
-#: src/quirebase/templates/item.html:118
+#: src/quirebase/templates/item.html:119
 msgid "No keywords."
 msgstr "没有关键词。"
 
-#: src/quirebase/templates/item.html:122
+#: src/quirebase/templates/item.html:123
 msgid "External links"
 msgstr "外部链接"
 
-#: src/quirebase/templates/item.html:126
+#: src/quirebase/templates/item.html:127
 #, python-brace-format
 msgid "External source {number}"
 msgstr "外部来源 {number}"
 
-#: src/quirebase/templates/item.html:127
+#: src/quirebase/templates/item.html:128
 msgid "No external links."
 msgstr "没有外部链接。"
 
-#: src/quirebase/templates/item.html:135 src/quirebase/templates/item.html:136
+#: src/quirebase/templates/item.html:136 src/quirebase/templates/item.html:137
 msgid "Item thumbnail"
 msgstr "条目缩略图"
 
-#: src/quirebase/templates/item.html:140
+#: src/quirebase/templates/item.html:141
 msgid "Record identity"
 msgstr "记录标识"
 
-#: src/quirebase/templates/item.html:141
+#: src/quirebase/templates/item.html:142
 msgid "Key details"
 msgstr "关键字段"
 
-#: src/quirebase/templates/item.html:143
+#: src/quirebase/templates/item.html:144
 #: src/quirebase/templates/library.html:62
 msgid "Type"
 msgstr "文献类型"
 
-#: src/quirebase/templates/item.html:149
+#: src/quirebase/templates/item.html:150
 msgid "Update citation key"
 msgstr "更新引用键"
 
-#: src/quirebase/templates/item.html:155
+#: src/quirebase/templates/item.html:156
 msgid "Metadata sources"
 msgstr "元数据来源"
 
-#: src/quirebase/templates/item.html:155
+#: src/quirebase/templates/item.html:156
 msgid "Upstream sync"
 msgstr "上游同步"
 
-#: src/quirebase/templates/item.html:168
+#: src/quirebase/templates/item.html:169
 msgid "Select upstream provider"
 msgstr "选择上游提供商"
 
-#: src/quirebase/templates/item.html:169
+#: src/quirebase/templates/item.html:170
 msgid "Auto"
 msgstr "自动"
 
-#: src/quirebase/templates/item.html:174 src/quirebase/templates/item.html:207
+#: src/quirebase/templates/item.html:175 src/quirebase/templates/item.html:208
 msgid "Autoupdate"
 msgstr "同步更新"
 
-#: src/quirebase/templates/item.html:183
+#: src/quirebase/templates/item.html:184
 msgid "Missing DOI?"
 msgstr "缺少 DOI？"
 
-#: src/quirebase/templates/item.html:187
+#: src/quirebase/templates/item.html:188
 msgid "Rescan PDF"
 msgstr "重扫 PDF 检索 DOI"
 
-#: src/quirebase/templates/item.html:217
+#: src/quirebase/templates/item.html:218
 msgid "Record history"
 msgstr "记录历史"
 
-#: src/quirebase/templates/item.html:218
+#: src/quirebase/templates/item.html:219
 msgid "Ownership and changes"
 msgstr "归属与变更"
 
-#: src/quirebase/templates/item.html:220
+#: src/quirebase/templates/item.html:221
 msgid "Added by"
 msgstr "添加者"
 
-#: src/quirebase/templates/item.html:221
+#: src/quirebase/templates/item.html:222
 msgid "Last modified by"
 msgstr "最后修改者"
 
-#: src/quirebase/templates/item.html:228
+#: src/quirebase/templates/item.html:229
 msgid "Paper record"
 msgstr "论文记录"
 
-#: src/quirebase/templates/item.html:228
+#: src/quirebase/templates/item.html:229
 msgid "Bibliographic metadata"
 msgstr "书目元数据"
 
-#: src/quirebase/templates/item.html:228
+#: src/quirebase/templates/item.html:229
 msgid ""
 "Review and maintain the fields used for search, citation export, and "
 "organization."
 msgstr "检查并维护用于搜索、引用导出和分类整理的字段。"
 
-#: src/quirebase/templates/item.html:234
+#: src/quirebase/templates/item.html:235
 msgid "Save metadata"
 msgstr "保存元数据"
 
-#: src/quirebase/templates/item.html:239
+#: src/quirebase/templates/item.html:240
 msgid "Authors"
 msgstr "作者"
 
-#: src/quirebase/templates/item.html:240
+#: src/quirebase/templates/item.html:241
 msgid "Editors"
 msgstr "编者"
 
-#: src/quirebase/templates/item.html:243
+#: src/quirebase/templates/item.html:244
 msgid "Volume / Pages"
 msgstr "卷号 / 页码"
 
-#: src/quirebase/templates/item.html:258
+#: src/quirebase/templates/item.html:254
 msgid "Unable to read upload status."
 msgstr "无法读取上传处理状态。"
 
-#: src/quirebase/templates/item.html:263
+#: src/quirebase/templates/item.html:254
 msgid "File processing"
 msgstr "文件处理中"
 
-#: src/quirebase/templates/item.html:264
+#: src/quirebase/templates/item.html:254
 msgid "Processing upload…"
 msgstr "正在处理上传文件…"
 
-#: src/quirebase/templates/item.html:265
+#: src/quirebase/templates/item.html:254
 msgid ""
 "The file is being validated and prepared. This page will update "
 "automatically."
 msgstr "正在验证并准备文件，此页面会自动更新。"
 
-#: src/quirebase/templates/item.html:269
-msgid "Try again"
-msgstr "重试"
-
-#: src/quirebase/templates/item.html:270
-msgid "Continue in background"
-msgstr "转到后台继续"
-
-#: src/quirebase/templates/item.html:275
+#: src/quirebase/templates/item.html:256
 msgid "Document storage"
 msgstr "文档存储"
 
-#: src/quirebase/templates/item.html:275
+#: src/quirebase/templates/item.html:256
 msgid ""
 "Keep the reading copy and supplementary files together without mixing "
 "them with metadata."
 msgstr "集中管理阅读副本和补充文件，同时与元数据保持清晰分区。"
 
-#: src/quirebase/templates/item.html:277
+#: src/quirebase/templates/item.html:258
 msgid "PDF revisions"
 msgstr "PDF 版本"
 
-#: src/quirebase/templates/item.html:277 src/quirebase/templates/item.html:285
+#: src/quirebase/templates/item.html:258 src/quirebase/templates/item.html:266
 #, python-brace-format
 msgid "{count} file(s)"
 msgstr "{count} 个文件"
 
-#: src/quirebase/templates/item.html:278 src/quirebase/templates/item.html:286
+#: src/quirebase/templates/item.html:259 src/quirebase/templates/item.html:267
 #, python-brace-format
 msgid "{bytes} bytes"
 msgstr "{bytes} 字节"
 
-#: src/quirebase/templates/item.html:278
+#: src/quirebase/templates/item.html:259
 msgid ""
 "Delete this PDF revision? Its annotations and thumbnail will also be "
 "removed."
 msgstr "删除此 PDF 版本？其批注和缩略图也会一并删除。"
 
-#: src/quirebase/templates/item.html:280
+#: src/quirebase/templates/item.html:261
 msgid "Add a PDF"
 msgstr "添加 PDF"
 
-#: src/quirebase/templates/item.html:280 src/quirebase/templates/item.html:291
-#: src/quirebase/templates/item.html:296
+#: src/quirebase/templates/item.html:261 src/quirebase/templates/item.html:272
+#: src/quirebase/templates/item.html:277
 msgid "Upload"
 msgstr "上传"
 
-#: src/quirebase/templates/item.html:281
+#: src/quirebase/templates/item.html:262
 msgid "Unable to download and upload this PDF."
 msgstr "无法下载并上传此 PDF。"
 
-#: src/quirebase/templates/item.html:281
+#: src/quirebase/templates/item.html:262
 msgid "Add a PDF from URL"
 msgstr "通过 URL 添加 PDF"
 
-#: src/quirebase/templates/item.html:281
+#: src/quirebase/templates/item.html:262
 msgid "Inferred from this item’s external links."
 msgstr "已从此条目的外部链接中自动推断。"
 
-#: src/quirebase/templates/item.html:286
+#: src/quirebase/templates/item.html:267
 msgid "Graphical Abstract"
 msgstr "图文摘要"
 
-#: src/quirebase/templates/item.html:286
+#: src/quirebase/templates/item.html:267
 msgid "Delete this attachment?"
 msgstr "删除此附件？"
 
-#: src/quirebase/templates/item.html:286
+#: src/quirebase/templates/item.html:267
 msgid "No attachments."
 msgstr "没有附件。"
 
-#: src/quirebase/templates/item.html:290
+#: src/quirebase/templates/item.html:271
 msgid "Add attachment"
 msgstr "添加附件"
 
-#: src/quirebase/templates/item.html:291 src/quirebase/templates/item.html:296
+#: src/quirebase/templates/item.html:272 src/quirebase/templates/item.html:277
 msgid "Use as Graphical Abstract"
 msgstr "设为图文摘要"
 
-#: src/quirebase/templates/item.html:293
+#: src/quirebase/templates/item.html:274
 msgid "Unable to download and upload this attachment."
 msgstr "无法下载并上传此附件。"
 
-#: src/quirebase/templates/item.html:295
+#: src/quirebase/templates/item.html:276
 msgid "Add attachment from URL"
 msgstr "通过 URL 添加附件"
 
-#: src/quirebase/templates/item.html:302
-msgid "Library organization"
-msgstr "论文库整理"
+#: src/quirebase/templates/item.html:285
+msgid "Unable to read recommendation status."
+msgstr "无法读取推荐生成状态。"
 
-#: src/quirebase/templates/item.html:302
-msgid "Use tags for flexible classification and projects for shared collections."
-msgstr "使用标签灵活分类，并通过项目组织共享集合。"
+#: src/quirebase/templates/item.html:285
+msgid "Tag recommendations"
+msgstr "标签推荐"
 
-#: src/quirebase/templates/item.html:307
-msgid "Add new tags"
-msgstr "添加新标签"
-
-#: src/quirebase/templates/item.html:312 src/quirebase/templates/item.html:328
+#: src/quirebase/templates/item.html:285 src/quirebase/templates/item.html:297
+#: src/quirebase/templates/item.html:313
 msgid "Generating Tag recommendations…"
 msgstr "正在生成标签推荐…"
 
-#: src/quirebase/templates/item.html:312
+#: src/quirebase/templates/item.html:285
+msgid "Recommendations are being generated. This page will update automatically."
+msgstr "正在生成推荐，此页面会自动更新。"
+
+#: src/quirebase/templates/item.html:287
+msgid "Library organization"
+msgstr "论文库整理"
+
+#: src/quirebase/templates/item.html:287
+msgid "Use tags for flexible classification and projects for shared collections."
+msgstr "使用标签灵活分类，并通过项目组织共享集合。"
+
+#: src/quirebase/templates/item.html:292
+msgid "Add new tags"
+msgstr "添加新标签"
+
+#: src/quirebase/templates/item.html:297
 msgid "Retry recommendations"
 msgstr "重试推荐"
 
-#: src/quirebase/templates/item.html:312
+#: src/quirebase/templates/item.html:297
 msgid "Regenerate recommendations"
 msgstr "重新生成推荐"
 
-#: src/quirebase/templates/item.html:324
+#: src/quirebase/templates/item.html:309
 msgid "New tags (one per line)"
 msgstr "新标签 (一行一个)"
 
-#: src/quirebase/templates/item.html:325
+#: src/quirebase/templates/item.html:310
 msgid "One tag per line"
 msgstr "一行一个标签"
 
-#: src/quirebase/templates/item.html:331
+#: src/quirebase/templates/item.html:316
 msgid "Tag recommendation failed."
 msgstr "标签推荐生成失败。"
 
-#: src/quirebase/templates/item.html:335
+#: src/quirebase/templates/item.html:320
 msgid "No English Tag candidates were found."
 msgstr "未找到英文标签候选。"
 
-#: src/quirebase/templates/item.html:339
+#: src/quirebase/templates/item.html:324
 msgid "Suggested new tags"
 msgstr "建议的新标签"
 
-#: src/quirebase/templates/item.html:340
+#: src/quirebase/templates/item.html:325
 msgid "Only selected recommendations become Tags."
 msgstr "只有选中的推荐项才会成为标签。"
 
-#: src/quirebase/templates/item.html:341
+#: src/quirebase/templates/item.html:326
 msgid "Single-word keywords"
 msgstr "单词关键词"
 
-#: src/quirebase/templates/item.html:347
+#: src/quirebase/templates/item.html:332
 msgid "Compound phrases"
 msgstr "复合短语"
 
-#: src/quirebase/templates/item.html:355
+#: src/quirebase/templates/item.html:340
 msgid "Add & Save"
 msgstr "添加并保存"
 
-#: src/quirebase/templates/item.html:361
+#: src/quirebase/templates/item.html:346
 msgid "Current tags"
 msgstr "当前已附加标签"
 
-#: src/quirebase/templates/item.html:364
+#: src/quirebase/templates/item.html:349
 #, python-brace-format
 msgid "Remove {name}"
 msgstr "移除 {name}"
 
-#: src/quirebase/templates/item.html:365
+#: src/quirebase/templates/item.html:350
 msgid "No tags attached yet."
 msgstr "尚未附加标签。"
 
-#: src/quirebase/templates/item.html:374 src/quirebase/templates/project.html:8
+#: src/quirebase/templates/item.html:359 src/quirebase/templates/project.html:8
 msgid "Remove"
 msgstr "移除"
 
-#: src/quirebase/templates/item.html:376
+#: src/quirebase/templates/item.html:361
 msgid "Not in this project"
 msgstr "尚未加入此项目"
 
-#: src/quirebase/templates/item.html:376
+#: src/quirebase/templates/item.html:361
 msgid "Add"
 msgstr "添加"
 
-#: src/quirebase/templates/item.html:378
+#: src/quirebase/templates/item.html:363
 msgid "No projects."
 msgstr "没有项目。"
 
-#: src/quirebase/templates/item.html:386
+#: src/quirebase/templates/item.html:371
 msgid "Tag picker matrix"
 msgstr "标签选择矩阵"
 
-#: src/quirebase/templates/item.html:387
+#: src/quirebase/templates/item.html:372
 msgid "Pick from library tags"
 msgstr "从已有标签中勾选"
 
-#: src/quirebase/templates/item.html:390 src/quirebase/templates/tools.html:74
+#: src/quirebase/templates/item.html:375 src/quirebase/templates/tools.html:74
 msgid "Filter tags (e.g. machine learning)..."
 msgstr "过滤标签 (如 machine learning)..."
 
-#: src/quirebase/templates/item.html:407
+#: src/quirebase/templates/item.html:392
 msgid "Recommended"
 msgstr "推荐"
 
-#: src/quirebase/templates/item.html:416
+#: src/quirebase/templates/item.html:401
 msgid "Save tag selection"
 msgstr "保存标签选择"
 
-#: src/quirebase/templates/item.html:420
+#: src/quirebase/templates/item.html:405
 msgid "No library tags available yet."
 msgstr "论文库中暂无可用标签。"
 
-#: src/quirebase/templates/item.html:426
+#: src/quirebase/templates/item.html:411
 msgid "Reading workspace"
 msgstr "阅读工作区"
 
-#: src/quirebase/templates/item.html:426
+#: src/quirebase/templates/item.html:411
 msgid ""
 "Highlights, underlines and margin notes are created in the PDF reader and"
 " collected here for review."
 msgstr "在 PDF 阅读器中创建高亮、下划线和页边批注，并在此集中查看。"
 
-#: src/quirebase/templates/item.html:426
+#: src/quirebase/templates/item.html:411
 msgid "Open annotation tools"
 msgstr "打开批注工具"
 
-#: src/quirebase/templates/item.html:427
+#: src/quirebase/templates/item.html:412
 msgid "All annotations"
 msgstr "全部批注"
 
-#: src/quirebase/templates/item.html:427
+#: src/quirebase/templates/item.html:412
 #, python-brace-format
 msgid "{count} annotation(s)"
 msgstr "{count} 条批注"
 
-#: src/quirebase/templates/item.html:427
+#: src/quirebase/templates/item.html:412
 #: src/quirebase/templates/online_search.html:17
 #: src/quirebase/templates/pdf.html:15
 #, python-brace-format
 msgid "Page {page}"
 msgstr "第 {page} 页"
 
-#: src/quirebase/templates/item.html:427
+#: src/quirebase/templates/item.html:412
 msgid "Open"
 msgstr "打开"
 
-#: src/quirebase/templates/item.html:427
+#: src/quirebase/templates/item.html:412
 msgid "No annotations yet. Open a PDF to highlight, underline or add a note."
 msgstr "暂无批注。打开 PDF 后可以高亮、为文本添加下划线或添加批注。"
 
-#: src/quirebase/templates/item.html:430
+#: src/quirebase/templates/item.html:415
 msgid "Collaboration"
 msgstr "协作"
 
-#: src/quirebase/templates/item.html:430
+#: src/quirebase/templates/item.html:415
 msgid "Keep paper-specific questions and decisions with the research record."
 msgstr "将与论文相关的问题和决定保留在研究记录中。"
 
-#: src/quirebase/templates/item.html:431
+#: src/quirebase/templates/item.html:416
 msgid "No discussion yet."
 msgstr "暂无讨论。"
 
-#: src/quirebase/templates/item.html:431
+#: src/quirebase/templates/item.html:416
 msgid "Add to the discussion"
 msgstr "参与讨论"
 
-#: src/quirebase/templates/item.html:431
+#: src/quirebase/templates/item.html:416
 msgid "Post"
 msgstr "发布"
 

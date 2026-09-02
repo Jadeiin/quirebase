@@ -1,0 +1,23 @@
+{% macro workflow_progress(workflow_id, success_url, continue_url, status_error, eyebrow, title, description) -%}
+<div
+  class="workflow-modal-backdrop"
+  x-data="workflowProgress"
+  data-status-url="/api/workflows/{{ workflow_id|urlencode }}"
+  data-success-url="{{ success_url }}"
+  data-status-error="{{ status_error }}"
+>
+  <section class="workflow-modal" role="dialog" aria-modal="true" aria-labelledby="workflow-progress-title" aria-describedby="workflow-progress-description">
+    <div class="workflow-spinner" x-show="state === 'pending' || state === 'running'" aria-hidden="true"></div>
+    <div class="workflow-failure-mark" x-show="state === 'failed' || state === 'cancelled'" x-cloak aria-hidden="true">!</div>
+    <p class="eyebrow">{{ eyebrow }}</p>
+    <h2 id="workflow-progress-title">{{ title }}</h2>
+    <p id="workflow-progress-description" x-show="state === 'pending' || state === 'running'">{{ description }}</p>
+    <div class="workflow-progress-track" x-show="state === 'pending' || state === 'running'" aria-hidden="true"><span></span></div>
+    <p class="error-message" x-show="error" x-text="error" x-cloak></p>
+    <div class="workflow-modal-actions">
+      <button type="button" class="secondary-button" x-show="state === 'failed'" x-cloak @click="refresh">{{ _('Try again') }}</button>
+      <a href="{{ continue_url }}">{{ _('Continue in background') }}</a>
+    </div>
+  </section>
+</div>
+{%- endmacro %}

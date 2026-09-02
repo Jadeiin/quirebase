@@ -454,8 +454,12 @@ async def regenerate_tag_recommendations(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await force_item_tag_recommendation(db, user, item_id)
-    return RedirectResponse(f"/items/{item_id}/organize", status_code=303)
+    recommendation = await force_item_tag_recommendation(db, user, item_id)
+    if recommendation.workflow_id is None:
+        raise RuntimeError("recommendation workflow was not created")
+    return RedirectResponse(
+        f"/items/{item_id}/organize?workflow={recommendation.workflow_id}", status_code=303
+    )
 
 
 @router.get("/api/authors/suggest")

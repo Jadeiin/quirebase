@@ -4,6 +4,7 @@ import json
 from dataclasses import replace
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
+from urllib.parse import quote
 
 import pytest
 from inquiro import CandidateRecord, Identifier
@@ -298,6 +299,16 @@ async def test_web_tag_recommendation_pending_failed_and_retry_states(
         follow_redirects=False,
     )
     assert retry.status_code == 303
+    progress = await client.get(retry.headers["location"])
+    retry_workflow_id = progress.url.params["workflow"]
+    assert retry_workflow_id.startswith(f"item-recommend-tags:{item_id}:2:")
+    assert "workflow-modal-backdrop" in progress.text
+    assert f"/api/workflows/{quote(retry_workflow_id, safe='')}" in progress.text
+    assert f'data-success-url="/items/{item_id}/organize"' in progress.text
+    assert "标签推荐" in progress.text
+    assert "正在生成标签推荐" in progress.text
+    assert "正在生成推荐" in progress.text
+    assert "此页面会自动更新" in progress.text
     await db.refresh(recommendation)
     assert recommendation.generation_token == 2
     assert recommendation.generated_at is None

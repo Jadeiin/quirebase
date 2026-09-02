@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_forms.html" import csrf_field %}
+{% from "_workflow_progress.html" import workflow_progress with context %}
 {% block title %}{{ item.title|rich_text_plain }} · Quirebase{% endblock %}
 {% block content %}
 {% set annotation_kind_labels = {'highlight': _('Highlight'), 'underline': _('Underline'), 'note': _('Note')} %}
@@ -250,27 +251,7 @@
     {% elif item_section == 'files' %}
     {% set pending_workflow_id = request.query_params.get('workflow') %}
     {% if pending_workflow_id %}
-    <div
-      class="workflow-modal-backdrop"
-      x-data="workflowProgress"
-      data-status-url="/api/workflows/{{ pending_workflow_id|urlencode }}"
-      data-success-url="/items/{{ item.id }}/files"
-      data-status-error="{{ _('Unable to read upload status.') }}"
-    >
-      <section class="workflow-modal" role="dialog" aria-modal="true" aria-labelledby="workflow-progress-title" aria-describedby="workflow-progress-description">
-        <div class="workflow-spinner" x-show="state === 'pending' || state === 'running'" aria-hidden="true"></div>
-        <div class="workflow-failure-mark" x-show="state === 'failed' || state === 'cancelled'" x-cloak aria-hidden="true">!</div>
-        <p class="eyebrow">{{ _('File processing') }}</p>
-        <h2 id="workflow-progress-title">{{ _('Processing upload…') }}</h2>
-        <p id="workflow-progress-description" x-show="state === 'pending' || state === 'running'">{{ _('The file is being validated and prepared. This page will update automatically.') }}</p>
-        <div class="workflow-progress-track" x-show="state === 'pending' || state === 'running'" aria-hidden="true"><span></span></div>
-        <p class="error-message" x-show="error" x-text="error" x-cloak></p>
-        <div class="workflow-modal-actions">
-          <button type="button" class="secondary-button" x-show="state === 'failed'" x-cloak @click="refresh">{{ _('Try again') }}</button>
-          <a href="/items/{{ item.id }}/files">{{ _('Continue in background') }}</a>
-        </div>
-      </section>
-    </div>
+    {{ workflow_progress(pending_workflow_id, '/items/' ~ item.id ~ '/files', '/items/' ~ item.id ~ '/files', _('Unable to read upload status.'), _('File processing'), _('Processing upload…'), _('The file is being validated and prepared. This page will update automatically.')) }}
     {% endif %}
     <section class="panel page-section-heading"><p class="eyebrow">{{ _('Document storage') }}</p><h2>{{ _('PDF versions and attachments') }}</h2><p>{{ _('Keep the reading copy and supplementary files together without mixing them with metadata.') }}</p></section>
     <section class="panel">
@@ -299,6 +280,10 @@
     </section>
 
     {% elif item_section == 'organize' %}
+    {% set pending_workflow_id = request.query_params.get('workflow') %}
+    {% if pending_workflow_id %}
+    {{ workflow_progress(pending_workflow_id, '/items/' ~ item.id ~ '/organize', '/items/' ~ item.id ~ '/organize', _('Unable to read recommendation status.'), _('Tag recommendations'), _('Generating Tag recommendations…'), _('Recommendations are being generated. This page will update automatically.')) }}
+    {% endif %}
     <section class="panel page-section-heading"><p class="eyebrow">{{ _('Library organization') }}</p><h2>{{ _('Tags and projects') }}</h2><p>{{ _('Use tags for flexible classification and projects for shared collections.') }}</p></section>
     <div class="item-two-column">
       <div>
