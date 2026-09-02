@@ -1023,7 +1023,7 @@ wheels = [
 
 [[package]]
 name = "inquiro"
-version = "0.1.2"
+version = "0.1.3"
 source = { editable = "packages/inquiro" }
 dependencies = [
     { name = "bibtexparser" },
@@ -2607,7 +2607,7 @@ wheels = [
 
 [[package]]
 name = "rubrica"
-version = "0.1.2"
+version = "0.1.3"
 source = { editable = "packages/rubrica" }
 dependencies = [
     { name = "yake" },

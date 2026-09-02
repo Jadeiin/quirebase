@@ -67,8 +67,7 @@ jobs:
       - run: uv sync
       - run: docker run --detach --name quirebase-minio --publish 9000:9000 --env MINIO_ROOT_USER=quirebase --env MINIO_ROOT_PASSWORD=quirebase-secret minio/minio:RELEASE.2025-04-22T22-12-26Z server /data
       - run: curl --fail --retry 20 --retry-all-errors --retry-delay 1 http://localhost:9000/minio/health/live
-      - run: docker run --rm --network host minio/mc alias set local http://localhost:9000 quirebase quirebase-secret
-      - run: docker run --rm --network host minio/mc mb --ignore-existing local/quirebase-contract
+      - run: docker run --rm --network host --env "MC_HOST_local=http://${AWS_ACCESS_KEY_ID}:${AWS_SECRET_ACCESS_KEY}@localhost:9000" minio/mc mb --ignore-existing local/quirebase-contract
       - run: uv run pytest -q tests/test_storage.py
       - run: uv run pytest -q tests/test_library_bulk_permissions.py::test_streaming_bundle_cancellation_releases_object_stream
   oa-pdf-corpus:
