@@ -190,11 +190,13 @@ write/read models, translates package failures to typed domain errors and owns D
 Document acquisition is currently a standalone Inquiro capability; any Quirebase workflow that
 adopts it must cross the Library Interface rather than importing Inquiro from Web.
 
-Batch PDF Import crosses the Library Interface through `stage_pdf_import_batch` and
-`commit_import_batch`. Staging validates and uploads at most 50 PDFs, creates a pending Import
+Batch PDF Import crosses the Library Interface through `stage_pdf_import_batch`,
+`retry_pdf_import_batch` and `commit_import_batch`. Staging validates and uploads at most 50 PDFs, creates a pending Import
 Batch and transactionally enqueues its preparation workflow. Retryable steps extract DOI values
 and retrieve Candidate Records without holding a database transaction; one final transaction
-de-duplicates results and makes the batch ready. Diagnostics for individual PDFs do not block
+de-duplicates results and makes the batch ready. A terminal preparation error transactionally
+marks the owning workflow's batch failed without deleting its staged PDFs; retry returns it to
+pending with a new workflow identity. Diagnostics for individual PDFs do not block
 confirmation of the remaining candidates. Confirmation creates each Item and
 attaches its staged PDF as a File Revision in one transaction. Confirmation revalidates Candidate
 Record DOIs against currently accessible Items before writing, and cleanup preserves staged files
@@ -217,10 +219,14 @@ content before a short idempotent database commit. Documents owns the durable
 Library state without creating a reverse dependency. Operations
 reconciliation lists the Object Store once and only deletes old managed UUID objects after
 excluding database references and active workflow ownership twice. Item deletion and Import Batch
-discard transactionally enqueue idempotent Documents cleanup workflows. Storage metrics aggregate
-recorded sizes from business tables without issuing Object Store HEAD requests; an Operations-owned
-scheduled integrity workflow records missing and mismatched objects. Unknown keys and doctor probes
-are never managed.
+discard transactionally enqueue idempotent Documents cleanup workflows on a non-partitioned cleanup
+queue. Revision work is partitioned by File Revision and bounded independently from serialized
+Library Search projection and Recommendation inference. Core queries active workflow reservations
+directly instead of scanning terminal history. Storage metrics aggregate recorded sizes from business
+tables without issuing Object Store HEAD requests; an Operations-owned scheduled integrity workflow
+performs Object Store I/O in retryable steps and commits thumbnail size backfills plus its result in
+a datasource transaction. Global Search rebuilds use bounded Item batches rather than one long
+serializable transaction. Unknown keys and doctor probes are never managed.
 
 An internal helper imported across Modules is an architectural pressure point. Repeated use is
 a signal to move the concept to its owner or deepen the owning interface; it is not a reason to

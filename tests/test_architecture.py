@@ -161,6 +161,7 @@ LIBRARY_FACADE_OPERATIONS = {
     "get_item_citation_text_response",
     "list_custom_citation_styles",
     "record_discovery_search_audit",
+    "retry_pdf_import_batch",
     "regenerate_item_tag_recommendation",
     "request_item_tag_recommendation",
     "resolve_style_xml",

@@ -17,7 +17,7 @@ from quirebase.models import Item, ItemTagRecommendation, User
 
 
 @pytest.mark.anyio
-async def test_request_is_idempotent_until_explicitly_superseded(async_db):
+async def test_request_is_idempotent_until_explicitly_superseded(async_db, fake_durable_operations):
     db = async_db
     user = User(username="recommend-owner", password_hash="hash")
     db.add(user)
@@ -38,6 +38,7 @@ async def test_request_is_idempotent_until_explicitly_superseded(async_db):
     assert second.id == first.id
     assert second.generation_token == 1
     assert second.workflow_id == first_workflow_id
+    assert fake_durable_operations.enqueues[-1]["queue_name"] == "library.recommendation"
 
 
 @pytest.mark.anyio

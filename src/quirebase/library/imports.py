@@ -3,12 +3,14 @@ from __future__ import annotations
 import asyncio
 import json
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 from inquiro.bibliography import (
     SUPPORTED_FORMATS,
     BibliographyRecord,
     parse_bibliography_records,
 )
+from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from quirebase.access.items import require_accessible_items, visible_items_query
@@ -390,8 +392,46 @@ async def get_import_batch_preview(
     batch = await db.get(ImportBatch, batch_id)
     if batch is None or batch.owner_id != user.id:
         raise ResourceUnavailable("import batch not found")
-    records = [] if batch.status == "pending" else json.loads(batch.records)
+    records = json.loads(batch.records) if batch.status == "ready" else []
     return batch, records, json.loads(batch.errors)
+
+
+async def retry_pdf_import_batch(db: AsyncSession, user: User, batch_id: str) -> ImportBatch:
+    """Retry a failed PDF Import Batch without relinquishing its staged objects."""
+    batch = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update())
+    if batch is None or batch.owner_id != user.id:
+        raise ResourceUnavailable("import batch not found")
+    if batch.file_format != "pdf" or batch.status != "failed":
+        raise BatchConflict("only a failed PDF import batch can be retried")
+    pending_records = json.loads(batch.records)
+    if not isinstance(pending_records, list) or not any(
+        isinstance(record, dict) and isinstance(record.get("_pdf"), dict)
+        for record in pending_records
+    ):
+        raise BatchConflict("the failed import batch has no staged PDFs to retry")
+
+    workflow_id = f"prepare-pdf-import:{batch.id}:{uuid4()}"
+    batch.status = "pending"
+    batch.workflow_id = workflow_id
+    await durable_operations().enqueue_in_transaction(
+        db,
+        "library.prepare_pdf_import",
+        batch.id,
+        workflow_id,
+        pending_records,
+        queue_name=IMPORT_QUEUE,
+        workflow_id=workflow_id,
+        attributes={
+            "capability": "library",
+            "operation": "prepare_pdf_import",
+            "owner_id": user.id,
+            "batch_id": batch.id,
+            "object_keys": [record["_pdf"]["object_key"] for record in pending_records],
+        },
+    )
+    record_event(db, user.id, "pdf.import.preview.retry", "import_batch", batch.id)
+    await db.commit()
+    return batch
 
 
 async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> None:

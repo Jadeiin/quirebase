@@ -12,12 +12,16 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from quirebase.core.config import get_settings
 from quirebase.core.database import is_sqlite_database_url
 from quirebase.core.storage import get_object_store, is_managed_object_key
-from quirebase.core.workflows import durable_operations, list_all_workflows
+from quirebase.core.workflows import (
+    durable_operations,
+    list_active_workflows,
+    list_all_workflows,
+)
 from quirebase.models import Attachment, FileRevision, ImportBatch, User
 
 if TYPE_CHECKING:
@@ -230,10 +234,12 @@ async def cleanup_exports(db: AsyncSession | None = None) -> int:
         if db is not None
         else get_settings().export_ttl_hours
     )
+    if db is not None:
+        await db.rollback()
     cutoff = datetime.now(UTC) - timedelta(hours=ttl_hours)
     removed = await asyncio.to_thread(_cleanup_exports, directory, cutoff)
     store = get_object_store()
-    workflows = await list_all_workflows(status="succeeded")
+    workflows = await list_all_workflows(status="succeeded", name="documents.export_annotations")
     for workflow in workflows:
         if (workflow.attributes or {}).get("operation") != "annotation_export":
             continue
@@ -259,13 +265,13 @@ def _cleanup_exports(directory: Path, cutoff: datetime) -> int:
 
 
 async def check_objects(db: AsyncSession) -> list[str]:
-    errors, _candidates = await scan_objects(db)
+    errors, _candidates, _thumbnail_sizes = await scan_objects(db)
     return errors
 
 
 async def scan_objects(
     db: AsyncSession, *, retention_hours: int | None = None
-) -> tuple[list[str], tuple[str, ...]]:
+) -> tuple[list[str], tuple[str, ...], dict[str, int]]:
     """Check references and find old orphans using one Object Store listing."""
     effective_hours = retention_hours or get_settings().object_orphan_retention_hours
     cutoff = datetime.now(UTC) - timedelta(hours=effective_hours)
@@ -291,16 +297,17 @@ async def scan_objects(
     for records in (await db.scalars(select(ImportBatch.records))).all():
         referenced.update(_import_object_keys(records))
     await db.rollback()
-    active = await list_all_workflows()
+    active = await list_active_workflows()
     active_keys = set().union(
         *(
             _workflow_owned_object_keys(workflow.attributes)
             for workflow in active
-            if workflow.state in {"pending", "running"}
+            if workflow.name != "documents.cleanup_objects"
         )
     )
     stored = {item.key: item async for item in get_object_store().iter_prefix("")}
     errors: list[str] = []
+    thumbnail_sizes: dict[str, int] = {}
     for revision in revisions:
         item = stored.get(revision.object_key)
         if item is None:
@@ -312,14 +319,7 @@ async def scan_objects(
             if thumbnail is None:
                 errors.append(f"{revision.id}: missing thumbnail")
             elif revision.thumbnail_size is None:
-                await db.execute(
-                    update(FileRevision)
-                    .where(
-                        FileRevision.id == revision.id,
-                        FileRevision.thumbnail_size.is_(None),
-                    )
-                    .values(thumbnail_size=thumbnail.size)
-                )
+                thumbnail_sizes[revision.id] = thumbnail.size
             elif thumbnail.size != revision.thumbnail_size:
                 errors.append(f"{revision.id}: thumbnail size mismatch")
     for attachment in attachments:
@@ -336,7 +336,7 @@ async def scan_objects(
         and item.key not in referenced
         and item.key not in active_keys
     )
-    return errors, candidates
+    return errors, candidates, thumbnail_sizes
 
 
 def _import_object_keys(records_json: str) -> set[str]:
@@ -384,7 +384,7 @@ async def reconcile_objects(
     db: AsyncSession, *, retention_hours: int | None = None
 ) -> tuple[str, ...]:
     """Delete only old, managed UUID objects that remain unreferenced on recheck."""
-    _errors, candidates = await scan_objects(db, retention_hours=retention_hours)
+    _errors, candidates, _thumbnail_sizes = await scan_objects(db, retention_hours=retention_hours)
     return await delete_orphan_candidates(db, candidates)
 
 
@@ -395,12 +395,13 @@ async def delete_orphan_candidates(
     if not candidates:
         return ()
     referenced = await _referenced_object_keys(db)
-    active = await list_all_workflows()
+    await db.rollback()
+    active = await list_active_workflows()
     active_keys = set().union(
         *(
             _workflow_owned_object_keys(workflow.attributes)
             for workflow in active
-            if workflow.state in {"pending", "running"}
+            if workflow.name != "documents.cleanup_objects"
         )
     )
     deleted: list[str] = []

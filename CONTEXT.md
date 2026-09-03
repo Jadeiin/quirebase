@@ -83,8 +83,9 @@ _Avoid_: Staged Item, Provisional Work
 **Import Batch**:
 A staged collection of Candidate Records and diagnostics from a bibliography file, Identifier
 Lookup or uploaded PDFs awaiting confirmation into the Library. A PDF Import Batch is pending
-while its durable preparation workflow extracts identifiers and retrieves Candidate Records, then
-ready for confirmation. A PDF Candidate Record retains
+while its durable preparation workflow extracts identifiers and retrieves Candidate Records, ready
+for confirmation after successful preparation, and failed after a terminal workflow error. Retrying
+a failed batch preserves its staged PDFs and assigns a new durable workflow. A PDF Candidate Record retains
 its independently owned UUID object until confirmation creates the Item and associated File
 Revision, or until the Import Batch is discarded.
 _Avoid_: Staged Import, Import Queue

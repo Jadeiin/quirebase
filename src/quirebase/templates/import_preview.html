@@ -5,6 +5,12 @@
 {% block content %}
 <section class="panel">
   <h1>{{ _('Import preview') }}</h1>
+  {% if batch.status == 'failed' %}
+    <p class="error-message">{{ _('PDF import preparation failed. The staged PDFs are still available.') }}</p>
+    <form method="post" action="/imports/{{ batch.id }}/retry">{{ csrf_field(csrf) }}
+      <button>{{ _('Try again') }}</button>
+    </form>
+  {% endif %}
   <p>{{ _('{count} record(s) parsed.', count=records|length) }}</p>
   {% if errors %}
     <h2>{{ _('Diagnostics') }}</h2>
@@ -32,6 +38,6 @@
 </section>
 {% set pending_workflow_id = request.query_params.get('workflow') %}
 {% if pending_workflow_id %}
-{{ workflow_progress(pending_workflow_id, '/imports/' ~ batch.id ~ '/preview', '/bibliography/import', _('Unable to read PDF import status.'), _('PDF import'), _('Preparing import preview…'), _('PDFs are being inspected and their metadata retrieved. This page will update automatically.')) }}
+{{ workflow_progress(pending_workflow_id, '/imports/' ~ batch.id ~ '/preview', '/bibliography/import', _('Unable to read PDF import status.'), _('PDF import'), _('Preparing import preview…'), _('PDFs are being inspected and their metadata retrieved. This page will update automatically.'), '/imports/' ~ batch.id ~ '/retry') }}
 {% endif %}
 {% endblock %}

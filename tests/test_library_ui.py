@@ -8,6 +8,7 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pymupdf
 import pytest
@@ -19,6 +20,7 @@ from test_http import authenticated_async_client
 
 from quirebase.core.config import get_settings
 from quirebase.core.errors import UpstreamServiceError
+from quirebase.core.storage import ObjectSuffix, get_object_store
 from quirebase.core.workflows import durable_operations
 from quirebase.documents import workflows as document_workflows
 from quirebase.documents.revisions import delete_unreferenced_objects, stage_pdf
@@ -177,6 +179,69 @@ async def test_pdf_import_leaves_transient_provider_failure_for_dbos_retry(
             await prepare_pdf_import_candidate(worker_db, batch.id, pending)
 
     assert local_object_path(pending["_pdf"]["object_key"]).exists()
+
+
+@pytest.mark.anyio
+async def test_failed_pdf_import_can_retry_with_a_new_durable_workflow(
+    async_db, async_session_factory, fake_durable_operations, tmp_path, monkeypatch
+):
+    client, item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    try:
+        stored = await get_object_store().put_object(
+            uuid4(), ObjectSuffix.PDF, b"%PDF-retry", max_bytes=100
+        )
+        pending = [
+            {
+                "_row": 1,
+                "_pdf": {
+                    "object_key": stored.key,
+                    "size": stored.size,
+                    "original_name": "retry.pdf",
+                },
+            }
+        ]
+        batch = ImportBatch(
+            owner_id=item.created_by,
+            file_format="pdf",
+            records=json.dumps(pending),
+            errors="[]",
+            status="failed",
+            workflow_id="prepare-pdf-import:old",
+        )
+        async_db.add(batch)
+        await async_db.commit()
+
+        preview = await client.get(f"/imports/{batch.id}/preview")
+        assert f'action="/imports/{batch.id}/retry"' in preview.text
+
+        retried = await client.post(
+            f"/imports/{batch.id}/retry",
+            data={"csrf_token": "test-csrf"},
+            follow_redirects=False,
+        )
+
+        assert retried.status_code == 303
+        await async_db.refresh(batch)
+        assert batch.status == "pending"
+        assert batch.workflow_id != "prepare-pdf-import:old"
+        assert retried.headers["location"] == (
+            f"/imports/{batch.id}/preview?workflow={batch.workflow_id}"
+        )
+        enqueue = fake_durable_operations.enqueues[-1]
+        assert enqueue["workflow_id"] == batch.workflow_id
+        assert enqueue["queue_name"] == "library.import"
+        assert await get_object_store().exists(stored.key)
+
+        assert not await library_workflows.fail_pdf_import_batch_step(
+            batch.id, "prepare-pdf-import:old"
+        )
+        await async_db.refresh(batch)
+        assert batch.status == "pending"
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
 
 
 @pytest.mark.anyio

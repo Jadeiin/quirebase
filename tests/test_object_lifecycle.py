@@ -115,6 +115,12 @@ async def test_reconciliation_deletes_only_old_unreferenced_managed_objects(
         workflow_id="active-upload",
         attributes={"object_keys": [active_pdf.key, active_thumbnail.key]},
     )
+    await fake_durable_operations.enqueue(
+        "documents.cleanup_objects",
+        queue_name="documents.cleanup",
+        workflow_id="active-cleanup",
+        attributes={"object_keys": [orphan.key]},
+    )
     deleted = await reconcile_objects(async_db, retention_hours=1)
 
     assert deleted == (orphan.key,)

@@ -1,4 +1,4 @@
-{% macro workflow_progress(workflow_id, success_url, continue_url, status_error, eyebrow, title, description) -%}
+{% macro workflow_progress(workflow_id, success_url, continue_url, status_error, eyebrow, title, description, retry_url='') -%}
 <div
   class="workflow-modal-backdrop"
   x-data="workflowProgress"
@@ -15,7 +15,13 @@
     <div class="workflow-progress-track" x-show="state === 'pending' || state === 'running'" aria-hidden="true"><span></span></div>
     <p class="error-message" x-show="error" x-text="error" x-cloak></p>
     <div class="workflow-modal-actions">
-      <button type="button" class="secondary-button" x-show="state === 'failed'" x-cloak @click="refresh">{{ _('Try again') }}</button>
+      {% if retry_url %}
+      <form method="post" action="{{ retry_url }}" x-show="state === 'failed'" x-cloak>{{ csrf_field(csrf) }}
+        <button type="submit" class="secondary-button">{{ _('Try again') }}</button>
+      </form>
+      {% else %}
+      <button type="button" class="secondary-button" x-show="state === 'failed'" x-cloak @click="refresh">{{ _('Check status again') }}</button>
+      {% endif %}
       <a href="{{ continue_url }}">{{ _('Continue in background') }}</a>
     </div>
   </section>

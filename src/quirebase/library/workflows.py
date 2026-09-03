@@ -9,14 +9,14 @@ from sqlalchemy import select, update
 
 from quirebase.core.database import AsyncSessionLocal
 from quirebase.core.workflows import (
-    DOCUMENTS_QUEUE,
-    LIBRARY_QUEUE,
+    DOCUMENT_CLEANUP_QUEUE,
+    RECOMMENDATION_QUEUE,
     ads,
     durable_operations,
     enqueue_child_workflow,
 )
 from quirebase.documents.events import FILE_REVISION_CHANGED_WORKFLOW, OBJECT_CLEANUP_WORKFLOW
-from quirebase.models import Item, ItemTagRecommendation
+from quirebase.models import ImportBatch, Item, ItemTagRecommendation
 from quirebase.search import search_index
 
 from .tag_recommendations import (
@@ -102,7 +102,7 @@ async def request_item_tag_recommendation(
         item_id,
         token,
         workflow_id,
-        queue_name=LIBRARY_QUEUE,
+        queue_name=RECOMMENDATION_QUEUE,
         workflow_id=workflow_id,
         attributes={"capability": "library", "owner_id": owner_id, "item_id": item_id},
     )
@@ -164,54 +164,72 @@ async def finalize_pdf_import_batch_step(
     )
 
 
+@ads.transaction()
+async def fail_pdf_import_batch_step(batch_id: str, workflow_id: str) -> bool:
+    """Publish terminal failure only for the workflow generation that still owns the batch."""
+    batch = await ads.sql_session().get(ImportBatch, batch_id)
+    if batch is None or batch.status != "pending" or batch.workflow_id != workflow_id:
+        return False
+    batch.status = "failed"
+    return True
+
+
 @DBOS.workflow(name=PREPARE_PDF_IMPORT_WORKFLOW)
 async def prepare_pdf_import_workflow(
     batch_id: str,
     workflow_id: str,
     pending_records: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    records: list[dict[str, Any]] = []
-    errors: list[dict[str, Any]] = []
-    rejected_keys: list[str] = []
-    seen_dois: set[str] = set()
-    all_keys = [pending["_pdf"]["object_key"] for pending in pending_records]
-    for pending in pending_records:
-        result = await prepare_pdf_import_candidate_step(batch_id, pending)
-        normalized_doi = result.get("normalized_doi")
-        if isinstance(normalized_doi, str) and normalized_doi in seen_dois:
-            pdf = pending["_pdf"]
-            errors.append({
-                "row": pending["_row"],
-                "filename": pdf["original_name"],
-                "code": "duplicate_batch_doi",
-                "message": "another PDF in this batch has the same DOI",
-            })
-            rejected_keys.append(pdf["object_key"])
-        elif isinstance(result.get("record"), dict):
-            records.append(result["record"])
-            if isinstance(normalized_doi, str):
-                seen_dois.add(normalized_doi)
-        else:
-            if isinstance(result.get("error"), dict):
-                errors.append(result["error"])
-            rejected_keys.append(result["object_key"])
-    finalized = await finalize_pdf_import_batch_step(batch_id, workflow_id, records, errors)
-    cleanup_keys = rejected_keys if finalized else all_keys
-    if cleanup_keys:
-        await enqueue_child_workflow(
-            OBJECT_CLEANUP_WORKFLOW,
-            cleanup_keys,
-            workflow_id,
-            queue_name=DOCUMENTS_QUEUE,
-            workflow_id=f"prepare-pdf-import-cleanup:{batch_id}",
-            attributes={
-                "capability": "documents",
-                "operation": "pdf_import_cleanup",
-                "batch_id": batch_id,
-                "object_keys": cleanup_keys,
-            },
-        )
-    return {"candidates": len(records), "diagnostics": len(errors), "discarded": not finalized}
+    try:
+        records: list[dict[str, Any]] = []
+        errors: list[dict[str, Any]] = []
+        rejected_keys: list[str] = []
+        seen_dois: set[str] = set()
+        all_keys = [pending["_pdf"]["object_key"] for pending in pending_records]
+        for pending in pending_records:
+            result = await prepare_pdf_import_candidate_step(batch_id, pending)
+            normalized_doi = result.get("normalized_doi")
+            if isinstance(normalized_doi, str) and normalized_doi in seen_dois:
+                pdf = pending["_pdf"]
+                errors.append({
+                    "row": pending["_row"],
+                    "filename": pdf["original_name"],
+                    "code": "duplicate_batch_doi",
+                    "message": "another PDF in this batch has the same DOI",
+                })
+                rejected_keys.append(pdf["object_key"])
+            elif isinstance(result.get("record"), dict):
+                records.append(result["record"])
+                if isinstance(normalized_doi, str):
+                    seen_dois.add(normalized_doi)
+            else:
+                if isinstance(result.get("error"), dict):
+                    errors.append(result["error"])
+                rejected_keys.append(result["object_key"])
+        finalized = await finalize_pdf_import_batch_step(batch_id, workflow_id, records, errors)
+        cleanup_keys = rejected_keys if finalized else all_keys
+        if cleanup_keys:
+            await enqueue_child_workflow(
+                OBJECT_CLEANUP_WORKFLOW,
+                cleanup_keys,
+                workflow_id,
+                queue_name=DOCUMENT_CLEANUP_QUEUE,
+                workflow_id=f"prepare-pdf-import-cleanup:{workflow_id}",
+                attributes={
+                    "capability": "documents",
+                    "operation": "pdf_import_cleanup",
+                    "batch_id": batch_id,
+                    "object_keys": cleanup_keys,
+                },
+            )
+        return {
+            "candidates": len(records),
+            "diagnostics": len(errors),
+            "discarded": not finalized,
+        }
+    except Exception:
+        await fail_pdf_import_batch_step(batch_id, workflow_id)
+        raise
 
 
 @ads.transaction()

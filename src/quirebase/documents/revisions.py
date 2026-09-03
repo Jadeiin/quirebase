@@ -31,12 +31,13 @@ from quirebase.core.storage import (
     object_key,
 )
 from quirebase.core.workflows import (
+    DOCUMENT_CLEANUP_QUEUE,
     DOCUMENTS_QUEUE,
     LIBRARY_QUEUE,
     UPLOAD_COMPLETE_TOPIC,
     UPLOAD_QUEUE,
     durable_operations,
-    list_all_workflows,
+    list_active_workflows,
 )
 from quirebase.documents.events import FILE_REVISION_CHANGED_WORKFLOW, OBJECT_CLEANUP_WORKFLOW
 from quirebase.documents.pdf import validate_pdf_container
@@ -282,9 +283,7 @@ async def _active_object_reservations(
 ) -> set[str]:
     candidates = set(object_keys)
     reserved: set[str] = set()
-    for workflow in await list_all_workflows():
-        if workflow.state not in {"pending", "running"}:
-            continue
+    for workflow in await list_active_workflows():
         if workflow.id == ignore_workflow_id:
             continue
         # Cleanup workflows request deletion; they do not own their targets.
@@ -339,7 +338,7 @@ async def enqueue_object_cleanup(
         db,
         OBJECT_CLEANUP_WORKFLOW,
         keys,
-        queue_name=DOCUMENTS_QUEUE,
+        queue_name=DOCUMENT_CLEANUP_QUEUE,
         workflow_id=workflow_id,
         attributes={
             "capability": "documents",

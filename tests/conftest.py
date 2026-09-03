@@ -18,6 +18,7 @@ class InMemoryDurableOperations:
     def __init__(self) -> None:
         self.workflows: dict[str, WorkflowSummary] = {}
         self.messages: list[tuple[str, object, str, str]] = []
+        self.enqueues: list[dict[str, object]] = []
 
     async def enqueue(
         self,
@@ -28,7 +29,14 @@ class InMemoryDurableOperations:
         partition_key: str | None = None,
         attributes: dict[str, object] | None = None,
     ) -> str:
-        del args, partition_key
+        self.enqueues.append({
+            "workflow_name": workflow_name,
+            "args": args,
+            "queue_name": queue_name,
+            "workflow_id": workflow_id,
+            "partition_key": partition_key,
+            "attributes": attributes,
+        })
         now = datetime.now(UTC)
         self.workflows.setdefault(
             workflow_id,
@@ -71,6 +79,14 @@ class InMemoryDurableOperations:
             row
             for row in rows
             if (not status or row.state == status) and (name is None or row.name == name)
+        )[offset : offset + limit]
+
+    async def list_active(self, *, limit: int = 100, offset: int = 0, name: str | None = None):
+        rows = tuple(reversed(tuple(self.workflows.values())))
+        return tuple(
+            row
+            for row in rows
+            if row.state in {"pending", "running"} and (name is None or row.name == name)
         )[offset : offset + limit]
 
     async def state_counts(self):

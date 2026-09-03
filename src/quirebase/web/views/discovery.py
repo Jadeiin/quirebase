@@ -15,6 +15,7 @@ from quirebase.library import (
     export_accessible_bibliography,
     get_accessible_item_identifiers,
     get_import_batch_preview,
+    retry_pdf_import_batch,
     search_candidate_records,
     stage_identifier_import_batch,
     stage_import_batch,
@@ -187,6 +188,18 @@ async def pdf_import_preview(
             "errors": errors,
             "active_page": "import",
         },
+    )
+
+
+@router.post("/imports/{batch_id}/retry")
+async def retry_pdf_import(
+    batch_id: str,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    batch = await retry_pdf_import_batch(db, user, batch_id)
+    return RedirectResponse(
+        f"/imports/{batch.id}/preview?workflow={batch.workflow_id}", status_code=303
     )
 
 

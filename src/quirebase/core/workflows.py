@@ -23,7 +23,9 @@ WorkflowState = Literal["pending", "running", "succeeded", "failed", "cancelled"
 
 UPLOAD_QUEUE = "documents.upload"
 DOCUMENTS_QUEUE = "documents.revision"
+DOCUMENT_CLEANUP_QUEUE = "documents.cleanup"
 LIBRARY_QUEUE = "library"
+RECOMMENDATION_QUEUE = "library.recommendation"
 IMPORT_QUEUE = "library.import"
 OPERATIONS_QUEUE = "operations"
 UPLOAD_COMPLETE_TOPIC = "upload-complete"
@@ -90,6 +92,10 @@ class DurableOperations(Protocol):
 
     async def list(
         self, *, status: str = "", limit: int = 100, offset: int = 0, name: str | None = None
+    ) -> tuple[WorkflowSummary, ...]: ...
+
+    async def list_active(
+        self, *, limit: int = 100, offset: int = 0, name: str | None = None
     ) -> tuple[WorkflowSummary, ...]: ...
 
     async def state_counts(self) -> dict[WorkflowState, int]: ...
@@ -331,6 +337,21 @@ class DBOSAdapter:
         )
         return tuple(_summary(row) for row in rows)
 
+    async def list_active(
+        self, *, limit: int = 100, offset: int = 0, name: str | None = None
+    ) -> tuple[WorkflowSummary, ...]:
+        rows = await self._client.list_workflows_async(
+            status=["ENQUEUED", "DELAYED", "PENDING"],
+            name=name,
+            limit=limit,
+            offset=offset,
+            sort_desc=True,
+            load_input=False,
+            load_output=False,
+            application_name="quirebase",
+        )
+        return tuple(_summary(row) for row in rows)
+
     async def state_counts(self) -> dict[WorkflowState, int]:
         """Aggregate workflow states in the DBOS system database without loading history."""
         # DBOS 2.31 exposes aggregation only on its system database implementation.
@@ -366,6 +387,19 @@ async def list_all_workflows(*, status: str = "", name: str | None = None):
         offset += len(page)
 
 
+async def list_active_workflows(*, name: str | None = None) -> tuple[WorkflowSummary, ...]:
+    """Read active workflow reservations without scanning terminal history."""
+    page_size = 10_000
+    offset = 0
+    result: list[WorkflowSummary] = []
+    while True:
+        page = await durable_operations().list_active(name=name, limit=page_size, offset=offset)
+        result.extend(page)
+        if len(page) < page_size:
+            return tuple(result)
+        offset += len(page)
+
+
 @lru_cache
 def durable_operations() -> DBOSAdapter:
     return DBOSAdapter.from_settings()
@@ -395,9 +429,13 @@ async def _launch_runtime(executor_id: str) -> None:
     await DBOS.register_queue_async(UPLOAD_QUEUE)
     await DBOS.register_queue_async(
         DOCUMENTS_QUEUE,
+        worker_concurrency=2,
+        global_concurrency=4,
         partition_concurrency=1,
     )
+    await DBOS.register_queue_async(DOCUMENT_CLEANUP_QUEUE, worker_concurrency=2)
     await DBOS.register_queue_async(LIBRARY_QUEUE, global_concurrency=1)
+    await DBOS.register_queue_async(RECOMMENDATION_QUEUE, global_concurrency=1)
     await DBOS.register_queue_async(IMPORT_QUEUE, global_concurrency=2)
     await DBOS.register_queue_async(OPERATIONS_QUEUE, global_concurrency=1)
 

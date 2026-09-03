@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from uuid import uuid4
@@ -9,9 +10,10 @@ import pytest
 
 from quirebase.core import workflows
 from quirebase.core.storage import ObjectSuffix, get_object_store
+from quirebase.documents import enqueue_object_cleanup
 from quirebase.documents import workflows as document_workflows
 from quirebase.library import workflows as library_workflows
-from quirebase.models import FileRevision, Item, User
+from quirebase.models import FileRevision, ImportBatch, Item, ObjectIntegrityScan, User
 from quirebase.operations import health
 from quirebase.operations import workflows as operation_workflows
 
@@ -62,6 +64,20 @@ async def test_transactional_enqueue_records_queue_partition_and_attributes(
     assert summary is not None
     assert summary.queue_name == workflows.DOCUMENTS_QUEUE
     assert summary.attributes == {"capability": "documents"}
+
+
+@pytest.mark.anyio
+async def test_object_cleanup_uses_non_partitioned_cleanup_queue(async_db, fake_durable_operations):
+    await enqueue_object_cleanup(
+        async_db,
+        ["aa/bb/object.pdf"],
+        owner_id="owner-id",
+        operation="test_cleanup",
+    )
+
+    enqueue = fake_durable_operations.enqueues[-1]
+    assert enqueue["queue_name"] == workflows.DOCUMENT_CLEANUP_QUEUE
+    assert enqueue["partition_key"] is None
 
 
 @pytest.mark.anyio
@@ -120,6 +136,45 @@ def test_periodic_maintenance_uses_managed_dbos_schedule():
 
 
 @pytest.mark.anyio
+async def test_worker_registers_partitioned_revision_and_independent_workload_queues(monkeypatch):
+    registrations = []
+
+    class FakeDBOS:
+        def __init__(self, **_config):
+            pass
+
+        @staticmethod
+        def launch():
+            return None
+
+        @staticmethod
+        async def register_queue_async(name, **options):
+            registrations.append((name, options))
+
+    class FakeDatasource:
+        @staticmethod
+        async def create(*_args, **_kwargs):
+            return object()
+
+    monkeypatch.setattr(workflows, "DBOS", FakeDBOS)
+    monkeypatch.setattr(workflows, "AsyncSQLAlchemyDatasource", FakeDatasource)
+
+    try:
+        await workflows._launch_runtime("test-worker")
+    finally:
+        workflows.ads.set_instance(None)
+
+    configured = dict(registrations)
+    assert configured[workflows.DOCUMENTS_QUEUE] == {
+        "worker_concurrency": 2,
+        "global_concurrency": 4,
+        "partition_concurrency": 1,
+    }
+    assert configured[workflows.DOCUMENT_CLEANUP_QUEUE] == {"worker_concurrency": 2}
+    assert configured[workflows.RECOMMENDATION_QUEUE] == {"global_concurrency": 1}
+
+
+@pytest.mark.anyio
 async def test_unknown_workflow_id_is_reported_as_absent(monkeypatch):
     from dbos import error
 
@@ -162,6 +217,32 @@ async def test_workflow_state_counts_use_database_aggregation():
         "group_by_status": True,
         "select_count": True,
         "application_name": ["quirebase"],
+    }
+
+
+@pytest.mark.anyio
+async def test_active_workflow_query_filters_in_dbos_system_database():
+    from quirebase.core.workflows import DBOSAdapter
+
+    class ListingClient:
+        def __init__(self):
+            self.options = None
+
+        async def list_workflows_async(self, **options):
+            self.options = options
+            return []
+
+    client = ListingClient()
+    assert await DBOSAdapter(client).list_active(name="documents.upload_revision") == ()
+    assert client.options == {
+        "status": ["ENQUEUED", "DELAYED", "PENDING"],
+        "name": "documents.upload_revision",
+        "limit": 100,
+        "offset": 0,
+        "sort_desc": True,
+        "load_input": False,
+        "load_output": False,
+        "application_name": "quirebase",
     }
 
 
@@ -305,6 +386,49 @@ async def test_periodic_maintenance_workflow_uses_dbos_steps(monkeypatch):
 
 
 @pytest.mark.anyio
+async def test_integrity_scan_applies_database_backfills_in_datasource_transaction(
+    async_db, async_session_factory, monkeypatch
+):
+    user = User(username="integrity-owner", password_hash="unused")
+    async_db.add(user)
+    await async_db.flush()
+    item = Item(title="Integrity transaction", created_by=user.id)
+    async_db.add(item)
+    await async_db.flush()
+    pdf = await get_object_store().put_object(
+        uuid4(), ObjectSuffix.PDF, b"%PDF-integrity", max_bytes=100
+    )
+    thumbnail = await get_object_store().put_object(
+        uuid4(), ObjectSuffix.PNG, b"thumbnail", max_bytes=100
+    )
+    revision = FileRevision(
+        item_id=item.id,
+        object_key=pdf.key,
+        size=pdf.size,
+        thumbnail_object_key=thumbnail.key,
+        thumbnail_size=None,
+        original_name="integrity.pdf",
+        created_by=user.id,
+    )
+    async_db.add(revision)
+    await async_db.commit()
+    monkeypatch.setattr(operation_workflows, "AsyncSessionLocal", async_session_factory)
+
+    report = await operation_workflows.scan_objects_step()
+
+    await async_db.refresh(revision)
+    assert revision.thumbnail_size is None
+    assert report["thumbnail_sizes"] == {revision.id: thumbnail.size}
+
+    await operation_workflows.record_integrity_scan_step(
+        report["errors"], report["thumbnail_sizes"]
+    )
+    await async_db.refresh(revision)
+    assert revision.thumbnail_size == thumbnail.size
+    assert await async_db.get(ObjectIntegrityScan, "latest") is not None
+
+
+@pytest.mark.anyio
 async def test_datasource_step_writes_checkpoint_in_datasource_outputs(async_db, tmp_path):
     from dbos import DBOS, DBOSConfig
     from sqlalchemy import text
@@ -404,10 +528,37 @@ async def test_operations_and_library_transaction_steps(async_db):
     async_db.add(item)
     await async_db.commit()
 
-    reindex_res = await operation_workflows.reindex_all_step()
+    reindex_res = await operation_workflows.reindex_all_workflow.__wrapped__.__wrapped__(
+        "workflow-id", "owner-id"
+    )
     assert reindex_res["reindexed_items"] >= 1
 
     await library_workflows.apply_file_revision_changed(item.id)
+
+
+@pytest.mark.anyio
+async def test_reindex_workflow_checkpoints_bounded_database_batches(monkeypatch):
+    item_ids = [f"item-{index:03d}" for index in range(101)]
+    indexed_batches = []
+
+    async def list_ids(after_id, limit):
+        await asyncio.sleep(0)
+        start = 0 if after_id is None else item_ids.index(after_id) + 1
+        return tuple(item_ids[start : start + limit])
+
+    async def index_ids(batch):
+        await asyncio.sleep(0)
+        indexed_batches.append(tuple(batch))
+        return len(batch)
+
+    monkeypatch.setattr(operation_workflows, "list_reindex_item_ids_step", list_ids)
+    monkeypatch.setattr(operation_workflows, "reindex_items_step", index_ids)
+    workflow_body = operation_workflows.reindex_all_workflow.__wrapped__.__wrapped__
+
+    result = await workflow_body("workflow-id", "owner-id")
+
+    assert result == {"reindexed_items": 101}
+    assert [len(batch) for batch in indexed_batches] == [100, 1]
 
 
 @pytest.mark.anyio
@@ -492,6 +643,48 @@ async def test_stale_recommendation_workflow_skips_inference(monkeypatch):
 
     workflow_body = library_workflows.recommend_tags_workflow.__wrapped__.__wrapped__
     assert await workflow_body("item-id", 1, "workflow-id") == {"stale": True}
+
+
+@pytest.mark.anyio
+async def test_pdf_import_workflow_marks_batch_failed_and_preserves_pdf(async_db, monkeypatch):
+    user = User(username="failed-import-owner", password_hash="unused")
+    async_db.add(user)
+    await async_db.flush()
+    stored = await get_object_store().put_object(
+        uuid4(), ObjectSuffix.PDF, b"%PDF-retry", max_bytes=100
+    )
+    pending = {
+        "_row": 1,
+        "_pdf": {
+            "object_key": stored.key,
+            "size": stored.size,
+            "original_name": "retry.pdf",
+        },
+    }
+    batch = ImportBatch(
+        owner_id=user.id,
+        file_format="pdf",
+        records=json.dumps([pending]),
+        errors="[]",
+        status="pending",
+        workflow_id="prepare-pdf-import:failed",
+    )
+    async_db.add(batch)
+    await async_db.commit()
+
+    async def exhausted(*_args):
+        await asyncio.sleep(0)
+        raise RuntimeError("provider retries exhausted")
+
+    monkeypatch.setattr(library_workflows, "prepare_pdf_import_candidate_step", exhausted)
+    workflow_body = library_workflows.prepare_pdf_import_workflow.__wrapped__.__wrapped__
+
+    with pytest.raises(RuntimeError, match="provider retries exhausted"):
+        await workflow_body(batch.id, batch.workflow_id, [pending])
+
+    await async_db.refresh(batch)
+    assert batch.status == "failed"
+    assert await get_object_store().exists(stored.key)
 
 
 @pytest.mark.anyio

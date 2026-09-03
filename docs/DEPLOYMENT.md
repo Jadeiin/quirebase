@@ -66,7 +66,9 @@ Engine and every stored object's SHA-256. `quirebase reindex` rebuilds the Libra
 administrator page can retry failed jobs and rebuild all Item Tag Recommendations after an engine
 or model change; `/metrics` exposes authenticated job and content counts. The worker installs an
 hourly DBOS Schedule for export cleanup, Object Store integrity scanning and orphan reconciliation;
-the schedule is persisted and does not depend on a process-local timer loop.
+the schedule is persisted and does not depend on a process-local timer loop. File Revision work is
+partitioned by revision with bounded worker/global concurrency, object cleanup uses its own
+non-partitioned queue, and Recommendation inference is isolated from Library Search projection.
 
 ## Building assets from source
 

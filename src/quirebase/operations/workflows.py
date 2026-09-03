@@ -7,14 +7,15 @@ from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from dbos import DBOS
+from sqlalchemy import select, update
 
 from quirebase.audit import record_event
 from quirebase.core.config import get_settings
 from quirebase.core.database import AsyncSessionLocal
 from quirebase.core.errors import ResourceUnavailable, ValidationFailure
 from quirebase.core.workflows import OPERATIONS_QUEUE, ads, durable_operations
-from quirebase.models import ObjectIntegrityScan
-from quirebase.search import reindex_all
+from quirebase.models import FileRevision, Item, ObjectIntegrityScan
+from quirebase.search import search_index
 
 from .maintenance import (
     cleanup_exports,
@@ -42,6 +43,8 @@ _MAINTENANCE_WORKFLOWS = {
     "recommend_tags_all": RECOMMEND_TAGS_WORKFLOW,
 }
 
+_REINDEX_BATCH_SIZE = 100
+
 
 async def dispatch_maintenance_workflow(db, admin: User, operation: str) -> str:
     if admin.role != "administrator":
@@ -66,23 +69,47 @@ async def dispatch_maintenance_workflow(db, admin: User, operation: str) -> str:
 
 
 @ads.transaction()
-async def reindex_all_step() -> dict[str, Any]:
+async def list_reindex_item_ids_step(after_id: str | None, limit: int) -> tuple[str, ...]:
     db = ads.sql_session()
-    count = await reindex_all(db)
-    return {"reindexed_items": count}
+    query = select(Item.id).order_by(Item.id).limit(limit)
+    if after_id is not None:
+        query = query.where(Item.id > after_id)
+    return tuple((await db.scalars(query)).all())
+
+
+@ads.transaction()
+async def reindex_items_step(item_ids: tuple[str, ...]) -> int:
+    db = ads.sql_session()
+    index = search_index(db)
+    for item_id in item_ids:
+        await index.index_item(db, item_id)
+    return len(item_ids)
 
 
 @DBOS.workflow(name=REINDEX_WORKFLOW)
 async def reindex_all_workflow(_workflow_id: str, _owner_id: str) -> dict[str, Any]:
-    return await reindex_all_step()
+    total = 0
+    after_id: str | None = None
+    while True:
+        item_ids = await list_reindex_item_ids_step(after_id, _REINDEX_BATCH_SIZE)
+        if not item_ids:
+            break
+        total += await reindex_items_step(item_ids)
+        if len(item_ids) < _REINDEX_BATCH_SIZE:
+            break
+        after_id = item_ids[-1]
+    return {"reindexed_items": total}
 
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
 async def scan_objects_step() -> dict[str, Any]:
     async with AsyncSessionLocal() as db:
-        errors, candidates = await scan_objects(db)
-        await db.commit()
-        return {"errors": errors, "orphan_candidates": list(candidates)}
+        errors, candidates, thumbnail_sizes = await scan_objects(db)
+        return {
+            "errors": errors,
+            "orphan_candidates": list(candidates),
+            "thumbnail_sizes": thumbnail_sizes,
+        }
 
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
@@ -93,8 +120,17 @@ async def delete_orphan_candidates_step(candidates: list[str]) -> list[str]:
 
 
 @ads.transaction()
-async def record_integrity_scan_step(errors: list[str]) -> None:
+async def record_integrity_scan_step(errors: list[str], thumbnail_sizes: dict[str, int]) -> None:
     db = ads.sql_session()
+    for revision_id, thumbnail_size in thumbnail_sizes.items():
+        await db.execute(
+            update(FileRevision)
+            .where(
+                FileRevision.id == revision_id,
+                FileRevision.thumbnail_size.is_(None),
+            )
+            .values(thumbnail_size=thumbnail_size)
+        )
     missing_count = sum("missing " in error for error in errors)
     mismatch_count = sum("mismatch" in error for error in errors)
     scan = await db.get(ObjectIntegrityScan, "latest")
@@ -120,7 +156,7 @@ async def _run_integrity_scan() -> dict[str, Any]:
     report = await scan_objects_step()
     errors = report["errors"]
     deleted = await delete_orphan_candidates_step(report["orphan_candidates"])
-    await record_integrity_scan_step(errors)
+    await record_integrity_scan_step(errors, report["thumbnail_sizes"])
     return {
         "errors": errors,
         "deleted_orphans": deleted,

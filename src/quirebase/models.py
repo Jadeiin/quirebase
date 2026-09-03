@@ -410,6 +410,12 @@ class PdfAnnotationSegment(Base):
 
 class ImportBatch(Base):
     __tablename__ = "import_batches"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'ready', 'failed')",
+            name="ck_import_batches_status",
+        ),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     owner_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     file_format: Mapped[str] = mapped_column(String(16))

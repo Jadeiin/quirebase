@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: quirebase 0.1\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-09-02 18:16+0800\n"
+"POT-Creation-Date: 2026-09-03 17:42+0800\n"
 "PO-Revision-Date: 2026-08-15 19:40+0800\n"
 "Last-Translator: Quirebase Team\n"
 "Language: zh_CN\n"
@@ -195,11 +195,16 @@ msgstr "标识符（JSON 对象）"
 msgid "Custom fields (JSON object)"
 msgstr "自定义字段（JSON 对象）"
 
-#: src/quirebase/templates/_workflow_progress.html:18
+#: src/quirebase/templates/_workflow_progress.html:20
+#: src/quirebase/templates/import_preview.html:11
 msgid "Try again"
 msgstr "重试"
 
-#: src/quirebase/templates/_workflow_progress.html:19
+#: src/quirebase/templates/_workflow_progress.html:23
+msgid "Check status again"
+msgstr "重新检查状态"
+
+#: src/quirebase/templates/_workflow_progress.html:25
 msgid "Continue in background"
 msgstr "转到后台继续"
 
@@ -1418,57 +1423,79 @@ msgid ""
 " providers remain isolated until keys and quotas are configured."
 msgstr "无需机构凭据的数据源现已可用；需要凭据的数据源将在配置密钥和配额后启用。"
 
-#: src/quirebase/templates/import_preview.html:3
-#: src/quirebase/templates/import_preview.html:6
+#: src/quirebase/templates/import_preview.html:4
+#: src/quirebase/templates/import_preview.html:7
 msgid "Import preview"
 msgstr "导入预览"
 
-#: src/quirebase/templates/import_preview.html:7
+#: src/quirebase/templates/import_preview.html:9
+msgid "PDF import preparation failed. The staged PDFs are still available."
+msgstr "PDF 导入准备失败，暂存的 PDF 仍然可用。"
+
+#: src/quirebase/templates/import_preview.html:14
 #, python-brace-format
 msgid "{count} record(s) parsed."
 msgstr "已解析 {count} 条记录。"
 
-#: src/quirebase/templates/import_preview.html:9
+#: src/quirebase/templates/import_preview.html:16
 msgid "Diagnostics"
 msgstr "诊断信息"
 
-#: src/quirebase/templates/import_preview.html:10
+#: src/quirebase/templates/import_preview.html:17
 #, python-brace-format
 msgid "Record {row}"
 msgstr "第 {row} 条"
 
-#: src/quirebase/templates/import_preview.html:11
+#: src/quirebase/templates/import_preview.html:18
 msgid "No DOI was found in this PDF."
 msgstr "未在此 PDF 中找到 DOI。"
 
-#: src/quirebase/templates/import_preview.html:12
+#: src/quirebase/templates/import_preview.html:19
 msgid "An accessible item already has this DOI."
 msgstr "可访问的条目中已存在此 DOI。"
 
-#: src/quirebase/templates/import_preview.html:13
+#: src/quirebase/templates/import_preview.html:20
 msgid "Another PDF in this batch has the same DOI."
 msgstr "此批次中的另一个 PDF 使用了相同 DOI。"
 
-#: src/quirebase/templates/import_preview.html:16
+#: src/quirebase/templates/import_preview.html:23
 #, python-brace-format
 msgid "Fix the source file and {try_again}. No records were imported."
 msgstr "请修复源文件后{try_again}。尚未导入任何记录。"
 
-#: src/quirebase/templates/import_preview.html:16
+#: src/quirebase/templates/import_preview.html:23
 msgid "try again"
 msgstr "重试"
 
-#: src/quirebase/templates/import_preview.html:20
+#: src/quirebase/templates/import_preview.html:27
 msgid "Import all records"
 msgstr "导入全部记录"
 
-#: src/quirebase/templates/import_preview.html:24
+#: src/quirebase/templates/import_preview.html:31
 msgid "Discard import batch"
 msgstr "放弃此导入批次"
 
-#: src/quirebase/templates/import_preview.html:28
+#: src/quirebase/templates/import_preview.html:35
 msgid "(missing title)"
 msgstr "（缺少标题）"
+
+#: src/quirebase/templates/import_preview.html:41
+msgid "Unable to read PDF import status."
+msgstr "无法读取 PDF 导入状态。"
+
+#: src/quirebase/templates/import_preview.html:41
+msgid "PDF import"
+msgstr "PDF 导入"
+
+#: src/quirebase/templates/import_preview.html:41
+msgid "Preparing import preview…"
+msgstr "正在准备导入预览…"
+
+#: src/quirebase/templates/import_preview.html:41
+msgid ""
+"PDFs are being inspected and their metadata retrieved. This page will "
+"update automatically."
+msgstr "正在检查 PDF 并获取其元数据。此页面将自动更新。"
 
 #: src/quirebase/templates/index.html:6
 msgid "Workspace overview"
@@ -3161,14 +3188,3 @@ msgstr "CSL XML"
 
 #~ msgid "Durable operation"
 #~ msgstr "持久操作"
-msgid "Unable to read PDF import status."
-msgstr "无法读取 PDF 导入状态。"
-
-msgid "PDF import"
-msgstr "PDF 导入"
-
-msgid "Preparing import preview…"
-msgstr "正在准备导入预览…"
-
-msgid "PDFs are being inspected and their metadata retrieved. This page will update automatically."
-msgstr "正在检查 PDF 并获取其元数据。此页面将自动更新。"
