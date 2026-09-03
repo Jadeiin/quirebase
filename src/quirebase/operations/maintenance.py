@@ -4,7 +4,6 @@ import asyncio
 import contextlib
 import hashlib
 import json
-import logging
 import shutil
 import sqlite3
 import tempfile
@@ -13,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from quirebase.core.config import get_settings
 from quirebase.core.database import is_sqlite_database_url
@@ -23,9 +22,6 @@ from quirebase.models import Attachment, FileRevision, ImportBatch, User
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
-
-logger = logging.getLogger(__name__)
-MAINTENANCE_INTERVAL_SECONDS = 60 * 60
 
 
 def sha256_file(path: Path) -> str:
@@ -262,41 +258,85 @@ def _cleanup_exports(directory: Path, cutoff: datetime) -> int:
     return removed
 
 
-async def run_maintenance_cycle() -> None:
-    """Apply TTL cleanup and reconcile old managed-object orphans."""
-    from quirebase.core.database import AsyncSessionLocal
-
-    async with AsyncSessionLocal() as db:
-        await cleanup_exports(db)
-        await reconcile_objects(db)
-
-
-async def run_periodic_maintenance() -> None:
-    """Run Operations-owned maintenance for the lifetime of a worker."""
-    while True:
-        try:
-            await run_maintenance_cycle()
-        except Exception:
-            logger.exception("periodic maintenance failed")
-        await asyncio.sleep(MAINTENANCE_INTERVAL_SECONDS)
-
-
 async def check_objects(db: AsyncSession) -> list[str]:
-    store = get_object_store()
-    revisions = list((await db.scalars(select(FileRevision))).all())
-    attachments = list((await db.scalars(select(Attachment))).all())
+    errors, _candidates = await scan_objects(db)
+    return errors
+
+
+async def scan_objects(
+    db: AsyncSession, *, retention_hours: int | None = None
+) -> tuple[list[str], tuple[str, ...]]:
+    """Check references and find old orphans using one Object Store listing."""
+    effective_hours = retention_hours or get_settings().object_orphan_retention_hours
+    cutoff = datetime.now(UTC) - timedelta(hours=effective_hours)
+    revisions = (
+        await db.execute(
+            select(
+                FileRevision.id,
+                FileRevision.object_key,
+                FileRevision.size,
+                FileRevision.thumbnail_object_key,
+                FileRevision.thumbnail_size,
+            )
+        )
+    ).all()
+    attachments = (
+        await db.execute(select(Attachment.id, Attachment.object_key, Attachment.size))
+    ).all()
+    referenced = (
+        {revision.object_key for revision in revisions}
+        | {revision.thumbnail_object_key for revision in revisions if revision.thumbnail_object_key}
+        | {attachment.object_key for attachment in attachments}
+    )
+    for records in (await db.scalars(select(ImportBatch.records))).all():
+        referenced.update(_import_object_keys(records))
+    await db.rollback()
+    active = await list_all_workflows()
+    active_keys = set().union(
+        *(
+            _workflow_owned_object_keys(workflow.attributes)
+            for workflow in active
+            if workflow.state in {"pending", "running"}
+        )
+    )
+    stored = {item.key: item async for item in get_object_store().iter_prefix("")}
     errors: list[str] = []
     for revision in revisions:
-        if not await store.exists(revision.object_key):
+        item = stored.get(revision.object_key)
+        if item is None:
             errors.append(f"{revision.id}: missing object")
-        elif (await store.head(revision.object_key)).size != revision.size:
+        elif item.size != revision.size:
             errors.append(f"{revision.id}: size mismatch")
+        if revision.thumbnail_object_key:
+            thumbnail = stored.get(revision.thumbnail_object_key)
+            if thumbnail is None:
+                errors.append(f"{revision.id}: missing thumbnail")
+            elif revision.thumbnail_size is None:
+                await db.execute(
+                    update(FileRevision)
+                    .where(
+                        FileRevision.id == revision.id,
+                        FileRevision.thumbnail_size.is_(None),
+                    )
+                    .values(thumbnail_size=thumbnail.size)
+                )
+            elif thumbnail.size != revision.thumbnail_size:
+                errors.append(f"{revision.id}: thumbnail size mismatch")
     for attachment in attachments:
-        if not await store.exists(attachment.object_key):
+        item = stored.get(attachment.object_key)
+        if item is None:
             errors.append(f"{attachment.id}: missing attachment")
-        elif (await store.head(attachment.object_key)).size != attachment.size:
+        elif item.size != attachment.size:
             errors.append(f"{attachment.id}: attachment size mismatch")
-    return errors
+    candidates = tuple(
+        item.key
+        for item in stored.values()
+        if is_managed_object_key(item.key)
+        and item.last_modified < cutoff
+        and item.key not in referenced
+        and item.key not in active_keys
+    )
+    return errors, candidates
 
 
 def _import_object_keys(records_json: str) -> set[str]:
@@ -344,8 +384,16 @@ async def reconcile_objects(
     db: AsyncSession, *, retention_hours: int | None = None
 ) -> tuple[str, ...]:
     """Delete only old, managed UUID objects that remain unreferenced on recheck."""
-    effective_hours = retention_hours or get_settings().object_orphan_retention_hours
-    cutoff = datetime.now(UTC) - timedelta(hours=effective_hours)
+    _errors, candidates = await scan_objects(db, retention_hours=retention_hours)
+    return await delete_orphan_candidates(db, candidates)
+
+
+async def delete_orphan_candidates(
+    db: AsyncSession, candidates: tuple[str, ...]
+) -> tuple[str, ...]:
+    """Recheck all candidate protections once, then delete remaining objects."""
+    if not candidates:
+        return ()
     referenced = await _referenced_object_keys(db)
     active = await list_all_workflows()
     active_keys = set().union(
@@ -357,19 +405,11 @@ async def reconcile_objects(
     )
     deleted: list[str] = []
     store = get_object_store()
-    for first in range(256):
-        async for item in store.iter_prefix(f"{first:02x}/"):
-            if (
-                not is_managed_object_key(item.key)
-                or item.last_modified >= cutoff
-                or item.key in referenced
-                or item.key in active_keys
-            ):
-                continue
-            if item.key in await _referenced_object_keys(db):
-                continue
-            if await store.delete(item.key):
-                deleted.append(item.key)
+    for key in candidates:
+        if key in referenced or key in active_keys:
+            continue
+        if await store.delete(key):
+            deleted.append(key)
     return tuple(deleted)
 
 

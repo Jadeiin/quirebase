@@ -6,9 +6,8 @@ from sqlalchemy import delete, func, or_, select
 
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
-from quirebase.core.storage import get_object_store
-from quirebase.documents.revisions import delete_unreferenced_objects
-from quirebase.models import Attachment, FileRevision, Item, User
+from quirebase.documents import enqueue_object_cleanup
+from quirebase.models import Attachment, FileRevision, Item, ObjectIntegrityScan, User
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
@@ -65,45 +64,43 @@ async def list_global_items(
 async def get_storage_metrics(db: AsyncSession, admin: User) -> dict[str, Any]:
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")
-    store = get_object_store()
-
     total_items = await db.scalar(select(func.count(Item.id))) or 0
-    revisions = list((await db.scalars(select(FileRevision))).all())
-    attachments = list((await db.scalars(select(Attachment))).all())
-
-    revisions_bytes = 0
-    missing_revisions = 0
-    for revision in revisions:
-        if await store.exists(revision.object_key):
-            revisions_bytes += (await store.head(revision.object_key)).size
-        else:
-            missing_revisions += 1
-    attachments_bytes = 0
-    missing_attachments = 0
-    for attachment in attachments:
-        if await store.exists(attachment.object_key):
-            attachments_bytes += (await store.head(attachment.object_key)).size
-        else:
-            missing_attachments += 1
-    thumbnail_keys = tuple(
-        revision.thumbnail_object_key for revision in revisions if revision.thumbnail_object_key
+    revisions_count, revisions_bytes = (
+        await db.execute(
+            select(func.count(FileRevision.id), func.coalesce(func.sum(FileRevision.size), 0))
+        )
+    ).one()
+    attachments_count, attachments_bytes = (
+        await db.execute(
+            select(func.count(Attachment.id), func.coalesce(func.sum(Attachment.size), 0))
+        )
+    ).one()
+    thumbnails_count, thumbnails_bytes = (
+        await db.execute(
+            select(
+                func.count(FileRevision.thumbnail_object_key),
+                func.coalesce(func.sum(FileRevision.thumbnail_size), 0),
+            )
+        )
+    ).one()
+    latest_scan = await db.scalar(
+        select(ObjectIntegrityScan).order_by(ObjectIntegrityScan.checked_at.desc()).limit(1)
     )
-    thumbnails = [await store.head(key) for key in thumbnail_keys if await store.exists(key)]
-    thumbnails_count = len(thumbnails)
-    thumbnails_bytes = sum(item.size for item in thumbnails)
 
     total_disk_bytes = revisions_bytes + attachments_bytes + thumbnails_bytes
 
     return {
         "items_count": total_items,
-        "revisions_count": len(revisions),
-        "attachments_count": len(attachments),
+        "revisions_count": revisions_count,
+        "attachments_count": attachments_count,
         "thumbnails_count": thumbnails_count,
         "revisions_bytes": revisions_bytes,
         "attachments_bytes": attachments_bytes,
         "thumbnails_bytes": thumbnails_bytes,
         "total_disk_bytes": total_disk_bytes,
-        "missing_files_count": missing_revisions + missing_attachments,
+        "missing_files_count": latest_scan.missing_count if latest_scan else 0,
+        "integrity_status": latest_scan.status if latest_scan else "not_checked",
+        "integrity_checked_at": latest_scan.checked_at if latest_scan else None,
     }
 
 
@@ -158,14 +155,14 @@ async def _delete_item(
         item.id,
         detail={"title": title},
     )
+    await enqueue_object_cleanup(
+        db,
+        [*cleanup_keys, *thumbnail_keys],
+        owner_id=actor.id,
+        operation="item_delete",
+        target_id=item.id,
+    )
     await db.commit()
-    store = get_object_store()
-    for key in thumbnail_keys:
-        await store.delete(key)
-
-    # Clean object store files after a successful commit and a centralized reference check.
-    if cleanup_keys:
-        await delete_unreferenced_objects(db, cleanup_keys)
 
 
 async def delete_item(db: AsyncSession, actor: User, item_id: str) -> None:

@@ -17,7 +17,7 @@ from quirebase.core.database import AsyncSessionLocal
 from quirebase.core.storage import ObjectSuffix, get_object_store, object_key
 from quirebase.core.timezones import annotation_export_timezone
 from quirebase.core.workflows import LIBRARY_QUEUE, ads, enqueue_child_workflow
-from quirebase.documents.events import FILE_REVISION_CHANGED_WORKFLOW
+from quirebase.documents.events import FILE_REVISION_CHANGED_WORKFLOW, OBJECT_CLEANUP_WORKFLOW
 from quirebase.models import (
     AnnotationScope,
     Attachment,
@@ -49,6 +49,7 @@ class UploadReceipt(TypedDict):
 
 class PdfInspectionData(TypedDict):
     thumbnail_object_key: str
+    thumbnail_size: int
     size: int
     page_count: int
     full_text: str
@@ -106,6 +107,27 @@ async def remove_owned_object(key: str) -> None:
     await get_object_store().delete(key)
 
 
+@DBOS.step(retries_allowed=True, max_attempts=3)
+async def delete_unreferenced_objects_step(
+    object_keys: list[str], ignore_workflow_id: str | None = None
+) -> list[str]:
+    from quirebase.documents.revisions import delete_unreferenced_objects
+
+    async with AsyncSessionLocal() as db:
+        return list(
+            await delete_unreferenced_objects(
+                db, object_keys, ignore_workflow_id=ignore_workflow_id
+            )
+        )
+
+
+@DBOS.workflow(name=OBJECT_CLEANUP_WORKFLOW)
+async def cleanup_objects_workflow(
+    object_keys: list[str], ignore_workflow_id: str | None = None
+) -> list[str]:
+    return await delete_unreferenced_objects_step(object_keys, ignore_workflow_id)
+
+
 async def _inspect_pdf_object(
     object_key_value: str,
     thumbnail_object_id: str,
@@ -123,7 +145,7 @@ async def _inspect_pdf_object(
             thumbnail_path = Path(temporary.name)
         try:
             await asyncio.to_thread(create_thumbnail, source, thumbnail_path)
-            await get_object_store().put_object(
+            thumbnail = await get_object_store().put_object(
                 UUID(thumbnail_object_id),
                 ObjectSuffix.PNG,
                 thumbnail_path,
@@ -133,6 +155,7 @@ async def _inspect_pdf_object(
             await asyncio.to_thread(thumbnail_path.unlink, missing_ok=True)
     return {
         "thumbnail_object_key": thumbnail_key,
+        "thumbnail_size": thumbnail.size,
         "size": metadata.size,
         "page_count": page_count,
         "full_text": text,
@@ -175,6 +198,7 @@ async def commit_uploaded_revision(
         if existing.processing_state == FileRevisionProcessingState.pending:
             existing.object_key = inspected["object_key"]
             existing.thumbnail_object_key = inspected["thumbnail_object_key"]
+            existing.thumbnail_size = inspected["thumbnail_size"]
             existing.size = inspected["size"]
             existing.page_count = inspected["page_count"]
             existing.page_geometry = inspected["page_geometry"]
@@ -188,6 +212,7 @@ async def commit_uploaded_revision(
         item_id=item_id,
         object_key=inspected["object_key"],
         thumbnail_object_key=inspected["thumbnail_object_key"],
+        thumbnail_size=inspected["thumbnail_size"],
         size=inspected["size"],
         original_name=Path(filename).name[:255],
         page_count=inspected["page_count"],
@@ -281,6 +306,7 @@ async def commit_imported_revision(inspected: PdfInspection) -> RevisionWorkflow
         raise ValueError("imported revision no longer exists")
     if revision.processing_state == FileRevisionProcessingState.pending:
         revision.thumbnail_object_key = inspected["thumbnail_object_key"]
+        revision.thumbnail_size = inspected["thumbnail_size"]
         revision.size = inspected["size"]
         revision.page_count = inspected["page_count"]
         revision.full_text = inspected["full_text"]

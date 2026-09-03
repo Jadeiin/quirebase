@@ -8,16 +8,16 @@ from sqlalchemy import select
 
 from quirebase.core.config import Settings
 from quirebase.library.item_metadata import ItemMetadata, create_item
-from quirebase.library.tag_recommendations import (
-    force_item_tag_recommendation,
-    handle_item_tag_recommendation,
+from quirebase.library.tag_recommendations import recommend_item_tags
+from quirebase.library.workflows import (
+    commit_item_tag_recommendation_step,
     request_item_tag_recommendation,
 )
 from quirebase.models import Item, ItemTagRecommendation, User
 
 
 @pytest.mark.anyio
-async def test_request_is_idempotent_and_item_keywords_do_not_change_fingerprint(async_db):
+async def test_request_is_idempotent_until_explicitly_superseded(async_db):
     db = async_db
     user = User(username="recommend-owner", password_hash="hash")
     db.add(user)
@@ -30,12 +30,10 @@ async def test_request_is_idempotent_and_item_keywords_do_not_change_fingerprint
     )
     db.add(item)
     await db.flush()
-    settings = Settings(_env_file=None, recommendation_engine="yake")
-
-    first = await request_item_tag_recommendation(db, item.id, owner_id=user.id, settings=settings)
+    first = await request_item_tag_recommendation(db, item.id, owner_id=user.id)
     first_workflow_id = first.workflow_id
     item.keywords = "entirely different upstream keywords"
-    second = await request_item_tag_recommendation(db, item.id, owner_id=user.id, settings=settings)
+    second = await request_item_tag_recommendation(db, item.id, owner_id=user.id)
 
     assert second.id == first.id
     assert second.generation_token == 1
@@ -67,15 +65,13 @@ async def test_item_creation_enqueues_and_worker_persists_yake_results(async_db,
     )
     assert record is not None
     assert record.workflow_id is not None
-    await handle_item_tag_recommendation(
-        db,
+    candidates = await recommend_item_tags(db, item_result.item_id, settings=settings)
+    await commit_item_tag_recommendation_step(
         item_result.item_id,
         record.generation_token,
         record.workflow_id,
-        user.id,
-        settings=settings,
+        candidates,
     )
-    await db.commit()
 
     await db.refresh(record)
     assert record.generated_at is not None
@@ -93,19 +89,17 @@ async def test_stale_job_cannot_overwrite_new_generation(async_db):
     db.add(item)
     await db.flush()
     settings = Settings(_env_file=None, recommendation_engine="yake")
-    first = await request_item_tag_recommendation(db, item.id, owner_id=user.id, settings=settings)
+    first = await request_item_tag_recommendation(db, item.id, owner_id=user.id)
     assert first.workflow_id is not None
-    await request_item_tag_recommendation(
-        db, item.id, owner_id=user.id, force=True, settings=settings
-    )
+    await request_item_tag_recommendation(db, item.id, owner_id=user.id, force=True)
+    await db.commit()
 
-    result = await handle_item_tag_recommendation(
-        db,
+    candidates = await recommend_item_tags(db, item.id, settings=settings)
+    result = await commit_item_tag_recommendation_step(
         item.id,
         1,
         first.workflow_id,
-        user.id,
-        settings=settings,
+        candidates,
     )
 
     current = await db.scalar(
@@ -128,8 +122,7 @@ async def test_concurrent_force_requests_receive_distinct_generation_tokens(
     item = Item(title="Concurrent recommendation requests", created_by=user.id)
     db.add(item)
     await db.flush()
-    settings = Settings(_env_file=None, recommendation_engine="yake")
-    await request_item_tag_recommendation(db, item.id, owner_id=user.id, settings=settings)
+    await request_item_tag_recommendation(db, item.id, owner_id=user.id)
     await db.commit()
     user_id, item_id = user.id, item.id
     original_updated_at = item.updated_at
@@ -139,14 +132,10 @@ async def test_concurrent_force_requests_receive_distinct_generation_tokens(
     async def force_request() -> tuple[int, str]:
         async with async_session_factory() as worker_db:
             await start.wait()
-            worker_user = await worker_db.get(User, user_id)
-            assert worker_user is not None
-            record = await force_item_tag_recommendation(
-                worker_db,
-                worker_user,
-                item_id,
-                settings=settings,
+            record = await request_item_tag_recommendation(
+                worker_db, item_id, owner_id=user_id, force=True
             )
+            await worker_db.commit()
             assert record.workflow_id is not None
             return record.generation_token, record.workflow_id
 
@@ -172,15 +161,49 @@ async def test_missing_keybert_configuration_fails_explicitly(async_db):
         recommendation_engine="keybert",
         keybert_model_path=None,
     )
-    record = await request_item_tag_recommendation(db, item.id, owner_id=user.id, settings=settings)
+    record = await request_item_tag_recommendation(db, item.id, owner_id=user.id)
     assert record.workflow_id is not None
 
     with pytest.raises(RuntimeError, match="KEYBERT_MODEL_PATH"):
-        await handle_item_tag_recommendation(
-            db,
-            item.id,
-            record.generation_token,
-            record.workflow_id,
-            user.id,
-            settings=settings,
+        await recommend_item_tags(db, item.id, settings=settings)
+
+
+@pytest.mark.anyio
+async def test_generation_result_does_not_include_source_text(async_db, monkeypatch):
+    from types import SimpleNamespace
+
+    from quirebase.models import FileRevision, FileRevisionProcessingState
+
+    db = async_db
+    user = User(username="compact-generation-owner", password_hash="hash")
+    db.add(user)
+    await db.flush()
+    item = Item(title="Compact checkpoint", created_by=user.id)
+    db.add(item)
+    await db.flush()
+    db.add(
+        FileRevision(
+            item_id=item.id,
+            object_key="aa/bb/full-text.pdf",
+            size=1,
+            original_name="full-text.pdf",
+            full_text="checkpoint sentinel " * 20_000,
+            processing_state=FileRevisionProcessingState.ready,
+            created_by=user.id,
         )
+    )
+    settings = Settings(
+        _env_file=None,
+        recommendation_engine="yake",
+        recommendation_max_chars=200_000,
+    )
+
+    class Engine:
+        def recommend(self, _documents, _limits):
+            return (SimpleNamespace(single_words=("compact",), phrases=("compact result",)),)
+
+    monkeypatch.setattr("quirebase.library.tag_recommendations._engine", lambda _settings: Engine())
+    candidates = await recommend_item_tags(db, item.id, settings=settings)
+
+    assert candidates == {"single_words": ["compact"], "phrases": ["compact result"]}
+    assert "checkpoint sentinel" not in json.dumps(candidates)

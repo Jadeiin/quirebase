@@ -149,7 +149,9 @@ Item associations, refreshes Library Search and deletes the source Tag atomicall
 
 Item Tag Recommendation generation crosses the Library Interface through generation-request and
 workflow operations. Library owns assembly and cleaning of title, abstract and latest ready
-File Revision text, generation fingerprints, persisted recommendation state and stale-workflow guards.
+File Revision text, transient recommendation state and stale-workflow guards. A generation token
+supersedes queued work when source data changes; engine and model provenance are not persisted for
+this disposable, reproducible result.
 Its Implementation calls the reusable `rubrica` Interface for recommendation computation. Model
 files for KeyBERT are local administrator-provided inputs; the Adapter never accepts a remote model
 identifier. Library metadata writes enqueue generation transactionally through Core's DBOS
@@ -189,9 +191,11 @@ Document acquisition is currently a standalone Inquiro capability; any Quirebase
 adopts it must cross the Library Interface rather than importing Inquiro from Web.
 
 Batch PDF Import crosses the Library Interface through `stage_pdf_import_batch` and
-`commit_import_batch`. Staging validates at most 50 PDFs, extracts and de-duplicates DOI values,
-retrieves Candidate Records and retains only successful staged files. Diagnostics for individual
-PDFs do not block confirmation of the remaining candidates. Confirmation creates each Item and
+`commit_import_batch`. Staging validates and uploads at most 50 PDFs, creates a pending Import
+Batch and transactionally enqueues its preparation workflow. Retryable steps extract DOI values
+and retrieve Candidate Records without holding a database transaction; one final transaction
+de-duplicates results and makes the batch ready. Diagnostics for individual PDFs do not block
+confirmation of the remaining candidates. Confirmation creates each Item and
 attaches its staged PDF as a File Revision in one transaction. Confirmation revalidates Candidate
 Record DOIs against currently accessible Items before writing, and cleanup preserves staged files
 still referenced by another pending Import Batch.
@@ -205,13 +209,18 @@ uses one unbuffered async-generator bridge and selects `ZIP_AUTO` from each memb
 
 All physical Document deletion crosses the Documents interface. Every logical upload owns one
 preallocated UUID object, so rollback and terminal workflow cleanup can delete that key without a
-reservation or local lock. The workflow-first upload interface creates a DBOS execution, streams
+local lock. Pending Import Batches and active workflow attributes are durable object reservations.
+The workflow-first upload interface creates a DBOS execution, streams
 the object, and sends a durable completion message; retryable Documents steps validate and derive
 content before a short idempotent database commit. Documents owns the durable
 `FileRevisionChanged` event contract, and the Library workflow that handles it updates derived
 Library state without creating a reverse dependency. Operations
-reconciliation only deletes old managed UUID objects after excluding database references and
-active workflow ownership twice. Unknown keys and doctor probes are never managed.
+reconciliation lists the Object Store once and only deletes old managed UUID objects after
+excluding database references and active workflow ownership twice. Item deletion and Import Batch
+discard transactionally enqueue idempotent Documents cleanup workflows. Storage metrics aggregate
+recorded sizes from business tables without issuing Object Store HEAD requests; an Operations-owned
+scheduled integrity workflow records missing and mismatched objects. Unknown keys and doctor probes
+are never managed.
 
 An internal helper imported across Modules is an architectural pressure point. Repeated use is
 a signal to move the concept to its owner or deepen the owning interface; it is not a reason to

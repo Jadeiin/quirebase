@@ -30,7 +30,7 @@ Tag Recommendations use offline YAKE by default. To use the optional semantic en
 `quirebase[keybert]`, set `QUIREBASE_RECOMMENDATION_ENGINE=keybert`, and point
 `QUIREBASE_KEYBERT_MODEL_PATH` at an administrator-provisioned local Model2Vec directory. Runtime
 model downloads and remote model identifiers are not supported. Record the model's source and
-license separately, and set `QUIREBASE_KEYBERT_MODEL_SHA256` to pin its directory-content checksum.
+license separately.
 
 Use a reverse proxy for TLS and request-size limits. Do not expose Uvicorn directly to the public internet. Preserve the application data directory independently from the installed wheel.
 
@@ -64,7 +64,9 @@ Web and every worker must use the same backend, bucket, and prefix.
 `quirebase doctor` checks the schema, writable directories, PyMuPDF, the configured Recommendation
 Engine and every stored object's SHA-256. `quirebase reindex` rebuilds the Library Search index. The
 administrator page can retry failed jobs and rebuild all Item Tag Recommendations after an engine
-or model change; `/metrics` exposes authenticated job and content counts.
+or model change; `/metrics` exposes authenticated job and content counts. The worker installs an
+hourly DBOS Schedule for export cleanup, Object Store integrity scanning and orphan reconciliation;
+the schedule is persisted and does not depend on a process-local timer loop.
 
 ## Building assets from source
 

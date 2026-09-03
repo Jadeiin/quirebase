@@ -11,13 +11,21 @@ from test_library_ui import pdf_bytes
 
 from quirebase.core.crypto import hash_password
 from quirebase.core.errors import ResourceUnavailable
+from quirebase.documents import workflows as document_workflows
 from quirebase.library import (
     admin_delete_item,
     get_storage_metrics,
     list_global_items,
 )
 from quirebase.library.imports import commit_import_batch
-from quirebase.models import AuditEvent, FileRevision, ImportBatch, Item, User
+from quirebase.models import (
+    AuditEvent,
+    FileRevision,
+    ImportBatch,
+    Item,
+    ObjectIntegrityScan,
+    User,
+)
 
 
 async def create_test_admin(db, username="admin_item_test"):
@@ -126,6 +134,20 @@ async def test_storage_metrics_calculation(async_db, tmp_path, monkeypatch):
     assert metrics["revisions_count"] >= 1
     assert metrics["revisions_bytes"] >= len(data)
     assert metrics["total_disk_bytes"] >= len(data)
+    assert metrics["integrity_status"] == "not_checked"
+
+    db.add(
+        ObjectIntegrityScan(
+            status="inconsistencies_found",
+            missing_count=2,
+            mismatch_count=1,
+            errors="[]",
+        )
+    )
+    await db.commit()
+    rescanned = await get_storage_metrics(db, admin)
+    assert rescanned["missing_files_count"] == 2
+    assert rescanned["integrity_status"] == "inconsistencies_found"
 
 
 @pytest.mark.anyio
@@ -148,7 +170,9 @@ async def test_admin_delete_item_cascades_and_cleans_storage(async_db, tmp_path,
     assert await db.get(Item, item_id) is None
     assert await db.get(FileRevision, revision_id) is None
 
-    # Object store file is deleted
+    # Database deletion commits independently; the durable cleanup is idempotent.
+    assert object_path.exists()
+    await document_workflows.delete_unreferenced_objects_step([revision.object_key])
     assert not object_path.exists()
 
     # Audit event is recorded
@@ -183,13 +207,15 @@ async def test_admin_delete_item_preserves_shared_objects(async_db, tmp_path, mo
     assert await db.get(Item, item1_id) is None
     assert await db.get(Item, item2_id) is not None
 
-    # Each logical upload owns its object, so deleting item1 removes only its object.
+    # Each logical upload owns its object; its durable cleanup removes only that object.
+    await document_workflows.delete_unreferenced_objects_step([rev1.object_key])
     assert not object_path.exists()
     second_path = local_object_path(rev2.object_key)
     assert second_path.is_file()
 
     # Deleting item2 now removes the file
     await admin_delete_item(db, admin, item2_id)
+    await document_workflows.delete_unreferenced_objects_step([rev2.object_key])
     assert not second_path.exists()
 
 

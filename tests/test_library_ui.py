@@ -4,6 +4,7 @@ import asyncio
 import io
 import json
 import zipfile
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from unittest.mock import AsyncMock
@@ -17,9 +18,17 @@ from storage_helpers import local_object_path
 from test_http import authenticated_async_client
 
 from quirebase.core.config import get_settings
-from quirebase.core.errors import ResourceUnavailable
+from quirebase.core.errors import UpstreamServiceError
+from quirebase.core.workflows import durable_operations
+from quirebase.documents import workflows as document_workflows
 from quirebase.documents.revisions import delete_unreferenced_objects, stage_pdf
-from quirebase.library.imports import stage_pdf_import_batch
+from quirebase.library import workflows as library_workflows
+from quirebase.library.imports import (
+    discard_import_batch,
+    finalize_pdf_import_batch,
+    prepare_pdf_import_candidate,
+    stage_pdf_import_batch,
+)
 from quirebase.models import (
     AuditEvent,
     ImportBatch,
@@ -43,6 +52,42 @@ def provider_candidate(identifier: str, title: str, *, authors: str | None = Non
         doi=identifier,
         identifiers=(Identifier("doi", identifier),),
     )
+
+
+async def finish_pdf_import_preview(db, session_factory, batch: ImportBatch, monkeypatch) -> None:
+    pending = json.loads(batch.records)
+
+    async def prepare(batch_id, candidate):
+        async with session_factory() as worker_db:
+            return await prepare_pdf_import_candidate(worker_db, batch_id, candidate)
+
+    async def finalize(batch_id, workflow_id, records, errors):
+        async with session_factory() as worker_db:
+            result = await finalize_pdf_import_batch(
+                worker_db, batch_id, workflow_id, records, errors
+            )
+            await worker_db.commit()
+            return result
+
+    async def cleanup(_workflow_name, keys, ignore_workflow_id=None, **_options):
+        async with session_factory() as worker_db:
+            await delete_unreferenced_objects(
+                worker_db, keys, ignore_workflow_id=ignore_workflow_id
+            )
+        return f"cleanup:{batch.id}"
+
+    monkeypatch.setattr(library_workflows, "prepare_pdf_import_candidate_step", prepare)
+    monkeypatch.setattr(library_workflows, "finalize_pdf_import_batch_step", finalize)
+    monkeypatch.setattr(library_workflows, "enqueue_child_workflow", cleanup)
+    workflow_body = library_workflows.prepare_pdf_import_workflow.__wrapped__.__wrapped__
+    await workflow_body(batch.id, batch.workflow_id, pending)
+    operations = durable_operations()
+    workflow = await operations.get(batch.workflow_id)
+    if workflow is not None and hasattr(operations, "workflows"):
+        operations.workflows[batch.workflow_id] = replace(  # type: ignore[attr-defined]
+            workflow, state="succeeded", raw_status="SUCCESS"
+        )
+    await db.refresh(batch)
 
 
 def pdf_bytes() -> bytes:
@@ -86,15 +131,16 @@ async def test_pdf_import_revalidates_user_after_provider_io(
         deactivate_during_lookup,
     )
 
-    with pytest.raises(ResourceUnavailable, match="user not available"):
-        await stage_pdf_import_batch(
-            db,
-            user,
-            [(published_pdf_bytes("10.1000/deactivated"), "deactivated.pdf")],
-            max_bytes=100_000,
-        )
-
-    assert await db.scalar(select(func.count()).select_from(ImportBatch)) == 0
+    batch, _records, _errors = await stage_pdf_import_batch(
+        db,
+        user,
+        [(published_pdf_bytes("10.1000/deactivated"), "deactivated.pdf")],
+        max_bytes=100_000,
+    )
+    await finish_pdf_import_preview(db, async_session_factory, batch, monkeypatch)
+    failed_batch = await db.get(ImportBatch, batch.id)
+    assert failed_batch is not None
+    assert failed_batch.status == "failed"
     assert (
         await db.scalar(
             select(func.count())
@@ -107,7 +153,36 @@ async def test_pdf_import_revalidates_user_after_provider_io(
 
 
 @pytest.mark.anyio
-async def test_cancelled_pdf_import_releases_all_staged_objects(async_db, monkeypatch):
+async def test_pdf_import_leaves_transient_provider_failure_for_dbos_retry(
+    async_db, async_session_factory, monkeypatch
+):
+    db = async_db
+    user = User(username="retrying-importer", password_hash="unused")
+    db.add(user)
+    await db.commit()
+    batch, _records, _errors = await stage_pdf_import_batch(
+        db,
+        user,
+        [(published_pdf_bytes("10.1000/retry"), "retry.pdf")],
+        max_bytes=100_000,
+    )
+    pending = json.loads(batch.records)[0]
+    monkeypatch.setattr(
+        "quirebase.library.imports.lookup_candidate",
+        AsyncMock(side_effect=UpstreamServiceError("provider temporarily unavailable")),
+    )
+
+    async with async_session_factory() as worker_db:
+        with pytest.raises(UpstreamServiceError, match="temporarily unavailable"):
+            await prepare_pdf_import_candidate(worker_db, batch.id, pending)
+
+    assert local_object_path(pending["_pdf"]["object_key"]).exists()
+
+
+@pytest.mark.anyio
+async def test_cancelled_pdf_import_keeps_staged_objects_owned_by_batch(
+    async_db, async_session_factory, fake_durable_operations, monkeypatch
+):
     db = async_db
     user = User(username="cancelled-importer", password_hash="unused")
     db.add(user)
@@ -122,21 +197,26 @@ async def test_cancelled_pdf_import_releases_all_staged_objects(async_db, monkey
         return provider_candidate(identifier, "Cancelled candidate")
 
     monkeypatch.setattr("quirebase.library.imports.lookup_candidate", delayed_lookup)
-    importing = asyncio.create_task(
-        stage_pdf_import_batch(
-            db,
-            user,
-            [(published_pdf_bytes("10.1000/cancelled"), "cancelled.pdf")],
-            max_bytes=100_000,
-        )
+    batch, _records, _errors = await stage_pdf_import_batch(
+        db,
+        user,
+        [(published_pdf_bytes("10.1000/cancelled"), "cancelled.pdf")],
+        max_bytes=100_000,
     )
-    await provider_started.wait()
-    importing.cancel()
-    release_provider.set()
+    pending = json.loads(batch.records)[0]
+    async with async_session_factory() as worker_db:
+        importing = asyncio.create_task(prepare_pdf_import_candidate(worker_db, batch.id, pending))
+        await provider_started.wait()
+        importing.cancel()
+        release_provider.set()
 
-    with pytest.raises(asyncio.CancelledError):
-        await importing
-    assert await db.scalar(select(func.count()).select_from(ImportBatch)) == 0
+        with pytest.raises(asyncio.CancelledError):
+            await importing
+    staged_keys = set(get_settings().object_dir.rglob("*.pdf")) - objects_before
+    assert len(staged_keys) == 1
+    await discard_import_batch(db, user, batch.id)
+    fake_durable_operations.workflows.pop(batch.workflow_id)
+    await delete_unreferenced_objects(db, [pending["_pdf"]["object_key"]])
     assert set(get_settings().object_dir.rglob("*.pdf")) == objects_before
 
 
@@ -426,8 +506,6 @@ async def test_pdf_import_batch_previews_before_creating_items(
             ],
         )
         assert preview.status_code == 200
-        assert "first.pdf" in preview.text
-        assert "second.pdf" in preview.text
         assert (
             await db.scalar(
                 select(func.count()).select_from(Item).where(Item.title.like("Article %"))
@@ -437,6 +515,10 @@ async def test_pdf_import_batch_previews_before_creating_items(
 
         batch = await db.scalar(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
         assert batch is not None
+        await finish_pdf_import_preview(db, async_session_factory, batch, monkeypatch)
+        preview = await client.get(f"/imports/{batch.id}/preview")
+        assert "first.pdf" in preview.text
+        assert "second.pdf" in preview.text
         assert f"/bibliography/import/{batch.id}" in preview.text
 
         committed = await client.post(
@@ -490,10 +572,12 @@ async def test_pdf_import_batch_keeps_successes_and_reports_failed_files(
             ],
         )
         assert preview.status_code == 200
-        assert "valid.pdf" in preview.text
-        assert "missing-doi.pdf" in preview.text
         batch = await db.scalar(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
         assert batch is not None
+        await finish_pdf_import_preview(db, async_session_factory, batch, monkeypatch)
+        preview = await client.get(f"/imports/{batch.id}/preview")
+        assert "valid.pdf" in preview.text
+        assert "missing-doi.pdf" in preview.text
         assert '"code": "missing_doi"' in batch.errors
         assert f"/bibliography/import/{batch.id}" in preview.text
         assert len(set(get_settings().object_dir.rglob("*.pdf")) - objects_before) == 1
@@ -541,9 +625,11 @@ async def test_pdf_import_batch_rejects_an_accessible_duplicate_doi(
             ],
         )
         assert preview.status_code == 200
-        assert "duplicate.pdf" in preview.text
         batch = await db.scalar(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
         assert batch is not None
+        await finish_pdf_import_preview(db, async_session_factory, batch, monkeypatch)
+        preview = await client.get(f"/imports/{batch.id}/preview")
+        assert "duplicate.pdf" in preview.text
         assert '"code": "existing_doi"' in batch.errors
         assert batch.records == "[]"
         assert f'action="/bibliography/import/{batch.id}?csrf_token=' not in preview.text
@@ -555,7 +641,7 @@ async def test_pdf_import_batch_rejects_an_accessible_duplicate_doi(
 
 @pytest.mark.anyio
 async def test_discard_pdf_import_batch_removes_staged_objects(
-    async_db, async_session_factory, tmp_path, monkeypatch
+    async_db, async_session_factory, fake_durable_operations, tmp_path, monkeypatch
 ):
     db = async_db
     client, _item, _revision = await authenticated_async_client(
@@ -588,6 +674,7 @@ async def test_discard_pdf_import_batch_removes_staged_objects(
         assert preview.status_code == 200
         batch = await db.scalar(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
         assert batch is not None
+        pending_key = json.loads(batch.records)[0]["_pdf"]["object_key"]
         assert len(set(get_settings().object_dir.rglob("*.pdf")) - objects_before) == 1
 
         discarded = await client.post(
@@ -598,6 +685,8 @@ async def test_discard_pdf_import_batch_removes_staged_objects(
         assert discarded.status_code == 303
         assert discarded.headers["location"] == "/bibliography/import"
         assert await db.get(ImportBatch, batch.id) is None
+        fake_durable_operations.workflows.pop(batch.workflow_id)
+        await document_workflows.delete_unreferenced_objects_step([pending_key])
         assert set(get_settings().object_dir.rglob("*.pdf")) == objects_before
     finally:
         await client.aclose()
@@ -643,6 +732,11 @@ async def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(
             await db.scalars(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
         )
         assert len(batches) == 2
+        for batch in batches:
+            await finish_pdf_import_preview(db, async_session_factory, batch, monkeypatch)
+        batches = list(
+            await db.scalars(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
+        )
         first_pdf = json.loads(batches[0].records)[0]["_pdf"]
         second_pdf = json.loads(batches[1].records)[0]["_pdf"]
         assert first_pdf["object_key"] != second_pdf["object_key"]
@@ -657,6 +751,7 @@ async def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(
             follow_redirects=False,
         )
         assert discarded.status_code == 303
+        await document_workflows.delete_unreferenced_objects_step([first_pdf["object_key"]])
         assert not first_path.exists()
         assert second_path.is_file()
 
@@ -742,6 +837,36 @@ async def test_cleanup_preserves_object_referenced_by_an_uncommitted_pdf_import_
 
 
 @pytest.mark.anyio
+async def test_cleanup_preserves_object_reserved_by_active_pdf_import_workflow(
+    async_db, async_session_factory, fake_durable_operations
+):
+    db = async_db
+    user = User(username="active-import-owner", password_hash="unused")
+    db.add(user)
+    await db.commit()
+    batch, _records, _errors = await stage_pdf_import_batch(
+        db,
+        user,
+        [(published_pdf_bytes("10.1000/active-reservation"), "reserved.pdf")],
+        max_bytes=100_000,
+    )
+    workflow_id = batch.workflow_id
+    object_key = json.loads(batch.records)[0]["_pdf"]["object_key"]
+    object_path = local_object_path(object_key)
+    await db.delete(batch)
+    await db.commit()
+
+    async with async_session_factory() as cleanup_db:
+        assert await delete_unreferenced_objects(cleanup_db, (object_key,)) == ()
+    assert object_path.is_file()
+
+    fake_durable_operations.workflows.pop(workflow_id)
+    async with async_session_factory() as cleanup_db:
+        assert await delete_unreferenced_objects(cleanup_db, (object_key,)) == (object_key,)
+    assert not object_path.exists()
+
+
+@pytest.mark.anyio
 async def test_commit_pdf_import_batch_rechecks_doi_after_stale_preview(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
@@ -779,6 +904,11 @@ async def test_commit_pdf_import_batch_rechecks_doi_after_stale_preview(
             await db.scalars(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
         )
         assert len(batches) == 2
+        for batch in batches:
+            await finish_pdf_import_preview(db, async_session_factory, batch, monkeypatch)
+        batches = list(
+            await db.scalars(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
+        )
         first = await client.post(
             f"/bibliography/import/{batches[0].id}",
             data={"csrf_token": "test-csrf"},

@@ -1,18 +1,26 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy import and_, delete, func, select
 
-from quirebase.access.items import can_edit_item, can_read_item, visible_items_query
+from quirebase.access.items import (
+    can_edit_item,
+    can_read_item,
+    require_editable_item,
+    visible_items_query,
+)
 from quirebase.audit import record_event
 from quirebase.core.errors import (
     DomainError,
     ResourceUnavailable,
     ValidationFailure,
 )
-from quirebase.core.workflows import durable_operations
-from quirebase.library.tag_recommendations import decoded_candidates, recommendation_state
+from quirebase.library.tag_recommendations import decoded_candidates
+from quirebase.library.workflows import (
+    item_tag_recommendation_status,
+    request_item_tag_recommendation,
+)
 from quirebase.models import Item, ItemTag, ItemTagRecommendation, Tag, User
 from quirebase.search import search_index
 
@@ -22,6 +30,15 @@ if TYPE_CHECKING:
 
 class TagConflict(DomainError):
     pass
+
+
+async def regenerate_item_tag_recommendation(db: AsyncSession, user: User, item_id: str) -> str:
+    await require_editable_item(db, user, item_id)
+    recommendation = await request_item_tag_recommendation(
+        db, item_id, owner_id=user.id, force=True
+    )
+    await db.commit()
+    return cast("str", recommendation.workflow_id)
 
 
 def normalize_tag_name(name: str) -> str:
@@ -143,12 +160,7 @@ async def get_tag_matrix_for_item(db: AsyncSession, user: User, item_id: str) ->
         name for name in single_words if name.casefold() not in existing_names
     )
     suggested_phrases = tuple(name for name in phrases if name.casefold() not in existing_names)
-    state = await recommendation_state(db, recommendation)
-    workflow = (
-        await durable_operations().get(recommendation.workflow_id)
-        if recommendation and recommendation.workflow_id
-        else None
-    )
+    state, recommendation_error = await item_tag_recommendation_status(recommendation)
 
     # Group by first letter A-Z or '#'
     groups_dict: dict[str, list[Tag]] = {}
@@ -176,7 +188,7 @@ async def get_tag_matrix_for_item(db: AsyncSession, user: User, item_id: str) ->
         "suggested_single_words": suggested_single_words,
         "suggested_phrases": suggested_phrases,
         "recommendation_state": state,
-        "recommendation_error": workflow.error if state == "failed" and workflow else None,
+        "recommendation_error": recommendation_error,
     }
 
 

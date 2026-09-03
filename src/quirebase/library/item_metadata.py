@@ -20,7 +20,7 @@ from quirebase.library.identifiers import (
     generate_bibtex_key,
     set_item_identifiers,
 )
-from quirebase.library.tag_recommendations import request_item_tag_recommendation
+from quirebase.library.workflows import request_item_tag_recommendation
 from quirebase.models import Item
 from quirebase.search import search_index
 
@@ -322,7 +322,7 @@ async def _revise_item_metadata(
     # also expires the caller's User and invites implicit async ORM I/O later.
     await db.refresh(item)
     await search_index(db).index_item(db, item_id)
-    await request_item_tag_recommendation(db, item_id, owner_id=actor_id)
+    await request_item_tag_recommendation(db, item_id, owner_id=actor_id, force=True)
     record_event(
         db,
         actor_id,

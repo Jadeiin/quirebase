@@ -3161,3 +3161,14 @@ msgstr "CSL XML"
 
 #~ msgid "Durable operation"
 #~ msgstr "持久操作"
+msgid "Unable to read PDF import status."
+msgstr "无法读取 PDF 导入状态。"
+
+msgid "PDF import"
+msgstr "PDF 导入"
+
+msgid "Preparing import preview…"
+msgstr "正在准备导入预览…"
+
+msgid "PDFs are being inspected and their metadata retrieved. This page will update automatically."
+msgstr "正在检查 PDF 并获取其元数据。此页面将自动更新。"

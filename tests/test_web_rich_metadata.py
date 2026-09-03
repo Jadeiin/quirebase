@@ -204,10 +204,7 @@ async def test_web_tag_matrix_batch_and_selection(
     if recommendation is None:
         recommendation = ItemTagRecommendation(
             item_id=item.id,
-            input_fingerprint="b" * 64,
             generation_token=1,
-            engine="yake",
-            engine_version="0.7.3",
         )
         db.add(recommendation)
     recommendation.single_words = json.dumps([])
@@ -266,11 +263,8 @@ async def test_web_tag_recommendation_pending_failed_and_retry_states(
     )
     recommendation = ItemTagRecommendation(
         item_id=item.id,
-        input_fingerprint="c" * 64,
         generation_token=1,
         workflow_id=workflow_id,
-        engine="yake",
-        engine_version="0.7.3",
         single_words=json.dumps(["stale-candidate"]),
         phrases=json.dumps([]),
     )
@@ -301,7 +295,7 @@ async def test_web_tag_recommendation_pending_failed_and_retry_states(
     assert retry.status_code == 303
     progress = await client.get(retry.headers["location"])
     retry_workflow_id = progress.url.params["workflow"]
-    assert retry_workflow_id.startswith(f"item-recommend-tags:{item_id}:2:")
+    assert retry_workflow_id == f"item-recommend-tags:{item_id}:2"
     assert "workflow-modal-backdrop" in progress.text
     assert f"/api/workflows/{quote(retry_workflow_id, safe='')}" in progress.text
     assert f'data-success-url="/items/{item_id}/organize"' in progress.text

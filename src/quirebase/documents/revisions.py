@@ -36,8 +36,9 @@ from quirebase.core.workflows import (
     UPLOAD_COMPLETE_TOPIC,
     UPLOAD_QUEUE,
     durable_operations,
+    list_all_workflows,
 )
-from quirebase.documents.events import FILE_REVISION_CHANGED_WORKFLOW
+from quirebase.documents.events import FILE_REVISION_CHANGED_WORKFLOW, OBJECT_CLEANUP_WORKFLOW
 from quirebase.documents.pdf import validate_pdf_container
 from quirebase.documents.workflows import (
     ATTACHMENT_UPLOAD_WORKFLOW,
@@ -242,36 +243,113 @@ def _pdf_import_object_keys(records_json: str) -> set[str]:
     }
 
 
-async def _object_is_referenced(db: AsyncSession, object_key: str) -> bool:
-    if await db.scalar(
-        select(FileRevision.object_key).where(FileRevision.object_key == object_key)
-    ):
-        return True
-    if await db.scalar(select(Attachment.object_key).where(Attachment.object_key == object_key)):
-        return True
-    return any(
-        object_key in _pdf_import_object_keys(records)
-        for records in (
-            await db.scalars(select(ImportBatch.records).where(ImportBatch.file_format == "pdf"))
-        )
+async def _referenced_candidates(db: AsyncSession, object_keys: tuple[str, ...]) -> set[str]:
+    referenced = set(
+        (
+            await db.scalars(
+                select(FileRevision.object_key).where(FileRevision.object_key.in_(object_keys))
+            )
+        ).all()
     )
+    referenced.update(
+        key
+        for key in (
+            await db.scalars(
+                select(FileRevision.thumbnail_object_key).where(
+                    FileRevision.thumbnail_object_key.in_(object_keys)
+                )
+            )
+        ).all()
+        if key
+    )
+    referenced.update(
+        (
+            await db.scalars(
+                select(Attachment.object_key).where(Attachment.object_key.in_(object_keys))
+            )
+        ).all()
+    )
+    candidates = set(object_keys)
+    for records in await db.scalars(
+        select(ImportBatch.records).where(ImportBatch.file_format == "pdf")
+    ):
+        referenced.update(candidates & _pdf_import_object_keys(records))
+    return referenced
+
+
+async def _active_object_reservations(
+    object_keys: tuple[str, ...], ignore_workflow_id: str | None
+) -> set[str]:
+    candidates = set(object_keys)
+    reserved: set[str] = set()
+    for workflow in await list_all_workflows():
+        if workflow.state not in {"pending", "running"}:
+            continue
+        if workflow.id == ignore_workflow_id:
+            continue
+        # Cleanup workflows request deletion; they do not own their targets.
+        if workflow.name == OBJECT_CLEANUP_WORKFLOW:
+            continue
+        attributes = workflow.attributes or {}
+        raw_keys = attributes.get("object_keys")
+        if isinstance(raw_keys, (list, tuple)):
+            reserved.update(candidates & {key for key in raw_keys if isinstance(key, str)})
+        if isinstance((key := attributes.get("object_key")), str) and key in candidates:
+            reserved.add(key)
+    return reserved
 
 
 async def delete_unreferenced_objects(
-    db: AsyncSession, object_keys: Iterable[str]
+    db: AsyncSession,
+    object_keys: Iterable[str],
+    *,
+    ignore_workflow_id: str | None = None,
 ) -> tuple[str, ...]:
     """Delete objects only when no committed, pending, or in-flight record references them."""
     keys = tuple(dict.fromkeys(key for key in object_keys if key))
     if not keys:
         return ()
+    referenced = await _referenced_candidates(db, keys)
+    await db.rollback()
+    referenced.update(await _active_object_reservations(keys, ignore_workflow_id))
     store = get_object_store()
     actually_deleted: list[str] = []
     for key in keys:
-        if await _object_is_referenced(db, key):
+        if key in referenced:
             continue
         if await store.delete(key):
             actually_deleted.append(key)
     return tuple(actually_deleted)
+
+
+async def enqueue_object_cleanup(
+    db: AsyncSession,
+    object_keys: Iterable[str],
+    *,
+    owner_id: str | None,
+    operation: str,
+    target_id: str | None = None,
+) -> str | None:
+    """Durably request post-commit deletion of currently unreferenced objects."""
+    keys = list(dict.fromkeys(key for key in object_keys if key))
+    if not keys:
+        return None
+    workflow_id = f"cleanup-objects:{uuid4()}"
+    await durable_operations().enqueue_in_transaction(
+        db,
+        OBJECT_CLEANUP_WORKFLOW,
+        keys,
+        queue_name=DOCUMENTS_QUEUE,
+        workflow_id=workflow_id,
+        attributes={
+            "capability": "documents",
+            "operation": operation,
+            "owner_id": owner_id,
+            "target_id": target_id,
+            "object_keys": keys,
+        },
+    )
+    return workflow_id
 
 
 async def discard_staged_object(db: AsyncSession, object_key: str) -> None:

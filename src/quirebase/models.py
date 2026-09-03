@@ -277,12 +277,8 @@ class ItemTagRecommendation(Base):
     item_id: Mapped[str] = mapped_column(
         ForeignKey("items.id", ondelete="CASCADE"), unique=True, index=True
     )
-    input_fingerprint: Mapped[str] = mapped_column(String(64), index=True)
     generation_token: Mapped[int] = mapped_column(Integer, default=1)
     workflow_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
-    engine: Mapped[str] = mapped_column(String(32))
-    engine_version: Mapped[str] = mapped_column(String(64))
-    model_fingerprint: Mapped[str | None] = mapped_column(String(128), nullable=True)
     single_words: Mapped[str | None] = mapped_column(Text, nullable=True)
     phrases: Mapped[str | None] = mapped_column(Text, nullable=True)
     generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -313,6 +309,7 @@ class FileRevision(Base):
     item_id: Mapped[str] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
     object_key: Mapped[str] = mapped_column(String(200), index=True)
     thumbnail_object_key: Mapped[str | None] = mapped_column(String(200), nullable=True, index=True)
+    thumbnail_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     size: Mapped[int] = mapped_column(Integer)
     mime_type: Mapped[str] = mapped_column(String(100), default="application/pdf")
     original_name: Mapped[str] = mapped_column(String(255))
@@ -418,6 +415,8 @@ class ImportBatch(Base):
     file_format: Mapped[str] = mapped_column(String(16))
     records: Mapped[str] = mapped_column(Text)
     errors: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16), default="ready")
+    workflow_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
 
 
@@ -449,3 +448,13 @@ class SystemSetting(Base):
     updated_by: Mapped[str | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+
+
+class ObjectIntegrityScan(Base):
+    __tablename__ = "object_integrity_scans"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    status: Mapped[str] = mapped_column(String(32))
+    missing_count: Mapped[int] = mapped_column(Integer, default=0)
+    mismatch_count: Mapped[int] = mapped_column(Integer, default=0)
+    errors: Mapped[str] = mapped_column(Text, default="[]")
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)

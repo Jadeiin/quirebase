@@ -52,6 +52,7 @@ from quirebase.library.imports import (
     discard_import_batch,
     export_accessible_bibliography,
     export_selected_bibliography,
+    get_import_batch_preview,
     stage_identifier_import_batch,
     stage_import_batch,
     stage_pdf_import_batch,
@@ -83,21 +84,20 @@ from quirebase.library.item_workspace import (
     WorkspaceView,
     open_item_workspace,
 )
-from quirebase.library.tag_recommendations import (
-    enqueue_all_item_tag_recommendations,
-    force_item_tag_recommendation,
-    handle_item_tag_recommendation,
-    request_item_tag_recommendation,
-)
 from quirebase.library.tags import (
     TagConflict,
     add_tag_to_item,
     delete_tag,
     list_accessible_tags_with_counts,
     merge_tags,
+    regenerate_item_tag_recommendation,
     remove_tag_from_item,
     rename_tag,
     set_item_tags,
+)
+from quirebase.library.workflows import (
+    item_ids_for_tag_recommendation,
+    request_item_tag_recommendation,
 )
 
 __all__ = [
@@ -142,19 +142,18 @@ __all__ = [
     "delete_tag",
     "discard_import_batch",
     "download_selected_item_documents",
-    "enqueue_all_item_tag_recommendations",
     "export_accessible_bibliography",
     "export_selected_bibliography",
     "find_duplicates",
-    "force_item_tag_recommendation",
     "format_csl_export",
     "format_standard_export",
     "get_accessible_item_identifiers",
     "get_dashboard_data",
+    "get_import_batch_preview",
     "get_item_citation_response",
     "get_item_citation_text_response",
     "get_storage_metrics",
-    "handle_item_tag_recommendation",
+    "item_ids_for_tag_recommendation",
     "list_accessible_tags_with_counts",
     "list_custom_citation_styles",
     "list_global_items",
@@ -164,6 +163,7 @@ __all__ = [
     "preview_citation_key",
     "record_discovery_search_audit",
     "regenerate_bibtex_key",
+    "regenerate_item_tag_recommendation",
     "remove_tag_from_item",
     "rename_tag",
     "request_item_tag_recommendation",

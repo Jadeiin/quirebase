@@ -13,8 +13,9 @@ from quirebase.core.config import get_settings
 from quirebase.core.database import async_database_url, engine, is_sqlite_database_url
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine, Sequence
+    from collections.abc import Callable, Coroutine, Iterable, Sequence
 
+    from dbos import ScheduleInput
     from dbos._datasource import DatasourceOptions
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +24,7 @@ WorkflowState = Literal["pending", "running", "succeeded", "failed", "cancelled"
 UPLOAD_QUEUE = "documents.upload"
 DOCUMENTS_QUEUE = "documents.revision"
 LIBRARY_QUEUE = "library"
+IMPORT_QUEUE = "library.import"
 OPERATIONS_QUEUE = "operations"
 UPLOAD_COMPLETE_TOPIC = "upload-complete"
 
@@ -396,6 +398,7 @@ async def _launch_runtime(executor_id: str) -> None:
         partition_concurrency=1,
     )
     await DBOS.register_queue_async(LIBRARY_QUEUE, global_concurrency=1)
+    await DBOS.register_queue_async(IMPORT_QUEUE, global_concurrency=2)
     await DBOS.register_queue_async(OPERATIONS_QUEUE, global_concurrency=1)
 
 
@@ -407,9 +410,11 @@ async def initialize_durable_operations() -> None:
     ads.set_instance(None)
 
 
-async def launch_worker() -> None:
+async def launch_worker(schedules: Iterable[ScheduleInput] = ()) -> None:
     """Launch the dedicated workflow executor and wait until cancelled."""
     await _launch_runtime(get_settings().workflow_executor_id)
+    if schedules:
+        await DBOS.apply_schedules_async(list(schedules))
     try:
         await asyncio.Event().wait()
     finally:

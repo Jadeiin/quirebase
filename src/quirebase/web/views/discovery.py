@@ -14,6 +14,7 @@ from quirebase.library import (
     discard_import_batch,
     export_accessible_bibliography,
     get_accessible_item_identifiers,
+    get_import_batch_preview,
     search_candidate_records,
     stage_identifier_import_batch,
     stage_import_batch,
@@ -155,18 +156,26 @@ async def preview_pdf_import(
     login: LoginSession = Depends(current_login),
     db: AsyncSession = Depends(get_db),
 ):
-    batch, records, errors = await stage_pdf_import_batch(
+    batch, _records, _errors = await stage_pdf_import_batch(
         db,
         user,
         [(upload_chunks(pdf), pdf.filename or "") for pdf in pdfs],
         settings=await get_effective_settings_model(db),
     )
-    # The import service deliberately ends its short read transaction before
-    # provider I/O. Its rollback expires dependency-loaded ORM instances, so
-    # reload the values rendered after the service returns instead of allowing
-    # an implicit lazy query in the async template path.
-    await db.refresh(user)
-    await db.refresh(login)
+    return RedirectResponse(
+        f"/imports/{batch.id}/preview?workflow={batch.workflow_id}", status_code=303
+    )
+
+
+@router.get("/imports/{batch_id}/preview", response_class=HTMLResponse)
+async def pdf_import_preview(
+    batch_id: str,
+    request: Request,
+    user: User = Depends(current_user),
+    login: LoginSession = Depends(current_login),
+    db: AsyncSession = Depends(get_db),
+):
+    batch, records, errors = await get_import_batch_preview(db, user, batch_id)
     return templates.TemplateResponse(
         request,
         "import_preview.html",

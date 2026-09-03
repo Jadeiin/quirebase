@@ -2836,3 +2836,14 @@ msgstr ""
 #: src/quirebase/templates/tools.html:161
 msgid "CSL XML"
 msgstr ""
+msgid "Unable to read PDF import status."
+msgstr ""
+
+msgid "PDF import"
+msgstr ""
+
+msgid "Preparing import preview…"
+msgstr ""
+
+msgid "PDFs are being inspected and their metadata retrieved. This page will update automatically."
+msgstr ""

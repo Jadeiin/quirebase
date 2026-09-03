@@ -18,7 +18,7 @@ from quirebase.core.errors import ResourceUnavailable, VersionConflict
 from quirebase.documents.pdf import first_doi_from_text
 from quirebase.library.authors import parse_author_name, set_item_authors_from_string
 from quirebase.library.providers import candidate_record_values, lookup_candidate
-from quirebase.library.tag_recommendations import request_item_tag_recommendation
+from quirebase.library.workflows import request_item_tag_recommendation
 from quirebase.models import FileRevision, Item, ItemIdentifier, User
 from quirebase.search import search_index
 
@@ -356,7 +356,7 @@ async def _sync_metadata_from_upstream(
     await db.flush()
 
     await search_index(db).index_item(db, item_id)
-    await request_item_tag_recommendation(db, item_id, owner_id=user.id)
+    await request_item_tag_recommendation(db, item_id, owner_id=user.id, force=True)
     record_event(
         db,
         user.id,

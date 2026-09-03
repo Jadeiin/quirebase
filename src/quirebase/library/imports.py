@@ -23,6 +23,8 @@ from quirebase.core.errors import (
     ValidationFailure,
 )
 from quirebase.core.storage import ObjectSource, get_object_store
+from quirebase.core.workflows import IMPORT_QUEUE, durable_operations
+from quirebase.documents import enqueue_object_cleanup
 from quirebase.documents.pdf import extract_doi
 from quirebase.documents.revisions import (
     StagedPdf,
@@ -179,29 +181,23 @@ async def stage_pdf_import_batch(
     max_bytes: int | None = None,
     settings: Settings | None = None,
 ) -> tuple[ImportBatch, list[dict], list[dict]]:
-    from quirebase.operations.settings import get_effective_setting, get_effective_settings_model
+    from quirebase.operations.settings import get_effective_setting
 
     if not uploads:
         raise ValidationFailure("at least one PDF is required")
     if len(uploads) > MAX_PDF_IMPORT_FILES:
         raise ValidationFailure(f"a PDF import batch is limited to {MAX_PDF_IMPORT_FILES} files")
 
-    user_id = user.id
-    effective_settings = settings or await get_effective_settings_model(db)
     if max_bytes is None:
-        max_bytes = await get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes)
-    known_dois = {
-        value
-        for provider, value in await get_accessible_item_identifiers(db, user)
-        if provider == "doi"
-    }
-    # The settings and duplicate check above are intentionally a short read
-    # transaction. Provider lookups must not hold it while waiting on network I/O.
+        max_bytes = (
+            settings.max_pdf_bytes
+            if settings is not None
+            else await get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes)
+        )
+    user_id = user.id
     await db.rollback()
-    batch_dois: set[str] = set()
-    retained_keys: set[str] = set()
     staged_pdfs: list[StagedPdf] = []
-    records: list[dict] = []
+    pending_records: list[dict] = []
     errors: list[dict] = []
 
     async def cleanup_staged_pdfs() -> None:
@@ -212,85 +208,67 @@ async def stage_pdf_import_batch(
 
     try:
         for row, (source, filename) in enumerate(uploads, start=1):
-            staged: StagedPdf | None = None
-            diagnostic_code = "invalid_pdf"
             try:
                 staged = await stage_pdf(db, source, filename, max_bytes)
                 staged_pdfs.append(staged)
-                async with get_object_store().materialize(staged.object_key) as path:
-                    detected_doi = await asyncio.to_thread(extract_doi, path)
-                if not detected_doi:
-                    diagnostic_code = "missing_doi"
-                    raise ValidationFailure("no DOI was found in this PDF")
-                normalized_doi = detected_doi.casefold()
-                if normalized_doi in known_dois:
-                    diagnostic_code = "existing_doi"
-                    raise BatchConflict("an accessible Item already has this DOI")
-                if normalized_doi in batch_dois:
-                    diagnostic_code = "duplicate_batch_doi"
-                    raise BatchConflict("another PDF in this batch has the same DOI")
-                try:
-                    record = await lookup_candidate(detected_doi, "doi", effective_settings)
-                except ValidationFailure:
-                    diagnostic_code = "invalid_doi"
-                    raise
-                except ResourceNotFound:
-                    diagnostic_code = "metadata_not_found"
-                    raise
-                except UpstreamServiceError:
-                    diagnostic_code = "metadata_lookup_failed"
-                    raise
-
-                rec_dict = candidate_record_values(record)
-                rec_dict.setdefault("doi", detected_doi)
-                rec_dict["_pdf"] = {
-                    "object_key": staged.object_key,
-                    "size": staged.size,
-                    "original_name": staged.original_name,
-                    "detected_doi": detected_doi,
-                }
-                records.append(rec_dict)
-                batch_dois.add(normalized_doi)
-                retained_keys.add(staged.object_key)
+                pending_records.append({
+                    "_row": row,
+                    "_pdf": {
+                        "object_key": staged.object_key,
+                        "size": staged.size,
+                        "original_name": staged.original_name,
+                    },
+                })
             except DomainError as error:
                 errors.append({
                     "row": row,
                     "filename": filename,
-                    "code": diagnostic_code,
+                    "code": "invalid_pdf",
                     "message": str(error),
                 })
-                if staged is not None and staged.object_key not in retained_keys:
-                    await staged.release()
-                    await delete_unreferenced_objects(db, (staged.object_key,))
-                    await db.rollback()
 
-        # PDF inspection and metadata lookup above may take long enough for the
-        # caller's account state to change. Start the write phase from a fresh
-        # authorization read rather than trusting the pre-I/O ORM instance.
-        reloaded_user = await db.get(User, user_id, populate_existing=True)
+        reloaded_user = await db.get(User, user_id)
         if reloaded_user is None or not reloaded_user.active:
             raise ResourceUnavailable("user not available")
-
         batch = ImportBatch(
             owner_id=reloaded_user.id,
             file_format="pdf",
-            records=json.dumps(records, ensure_ascii=False),
+            records=json.dumps(pending_records, ensure_ascii=False),
             errors=json.dumps(errors, ensure_ascii=False),
+            status="pending",
         )
         db.add(batch)
         await db.flush()
+        workflow_id = f"prepare-pdf-import:{batch.id}"
+        batch.workflow_id = workflow_id
+        await durable_operations().enqueue_in_transaction(
+            db,
+            "library.prepare_pdf_import",
+            batch.id,
+            workflow_id,
+            pending_records,
+            queue_name=IMPORT_QUEUE,
+            workflow_id=workflow_id,
+            attributes={
+                "capability": "library",
+                "operation": "prepare_pdf_import",
+                "owner_id": reloaded_user.id,
+                "batch_id": batch.id,
+                "object_keys": [staged.object_key for staged in staged_pdfs],
+            },
+        )
         record_event(
             db,
             reloaded_user.id,
-            "pdf.import.preview",
+            "pdf.import.preview.request",
             "import_batch",
             batch.id,
-            detail={"candidates": len(records), "diagnostics": len(errors)},
+            detail={"files": len(uploads), "diagnostics": len(errors)},
         )
         await db.commit()
         for staged in staged_pdfs:
             await staged.release()
-        return batch, records, errors
+        return batch, [], errors
     except asyncio.CancelledError:
         _consume_current_cancellation()
         cleanup_task = asyncio.create_task(cleanup_staged_pdfs())
@@ -301,16 +279,127 @@ async def stage_pdf_import_batch(
         raise
 
 
+async def prepare_pdf_import_candidate(
+    db: AsyncSession,
+    batch_id: str,
+    pending: dict,
+) -> dict:
+    """Prepare one staged PDF without holding a database transaction during provider I/O."""
+    from quirebase.operations.settings import get_effective_settings_model
+
+    pdf = pending["_pdf"]
+    row = int(pending["_row"])
+    batch = await db.get(ImportBatch, batch_id)
+    if batch is None or batch.status != "pending":
+        return {"discarded": True, "object_key": pdf["object_key"]}
+    user = await db.get(User, batch.owner_id)
+    if user is None or not user.active:
+        return {"discarded": True, "object_key": pdf["object_key"]}
+    effective_settings = await get_effective_settings_model(db)
+    known_dois = {
+        value
+        for provider, value in await get_accessible_item_identifiers(db, user)
+        if provider == "doi"
+    }
+    await db.rollback()
+    code = "invalid_pdf"
+    try:
+        async with get_object_store().materialize(pdf["object_key"]) as path:
+            detected_doi = await asyncio.to_thread(extract_doi, path)
+        if not detected_doi:
+            code = "missing_doi"
+            raise ValidationFailure("no DOI was found in this PDF")
+        normalized_doi = detected_doi.casefold()
+        if normalized_doi in known_dois:
+            code = "existing_doi"
+            raise BatchConflict("an accessible Item already has this DOI")
+        try:
+            record = await lookup_candidate(detected_doi, "doi", effective_settings)
+        except ValidationFailure:
+            code = "invalid_doi"
+            raise
+        except ResourceNotFound:
+            code = "metadata_not_found"
+            raise
+        candidate = candidate_record_values(record)
+        candidate.setdefault("doi", detected_doi)
+        candidate["_pdf"] = {**pdf, "detected_doi": detected_doi}
+        return {
+            "record": candidate,
+            "normalized_doi": normalized_doi,
+            "object_key": pdf["object_key"],
+        }
+    except UpstreamServiceError:
+        # Keep transient provider failures exceptional so the enclosing DBOS
+        # step can retry them instead of publishing a permanent diagnostic.
+        raise
+    except DomainError as error:
+        return {
+            "error": {
+                "row": row,
+                "filename": pdf["original_name"],
+                "code": code,
+                "message": str(error),
+            },
+            "object_key": pdf["object_key"],
+        }
+
+
+async def finalize_pdf_import_batch(
+    db: AsyncSession,
+    batch_id: str,
+    workflow_id: str,
+    records: list[dict],
+    errors: list[dict],
+) -> bool:
+    batch = await db.get(ImportBatch, batch_id)
+    if batch is None or batch.status != "pending" or batch.workflow_id != workflow_id:
+        return False
+    owner = await db.get(User, batch.owner_id)
+    if owner is None or not owner.active:
+        batch.records = "[]"
+        batch.errors = json.dumps([
+            {"row": 0, "code": "user_unavailable", "message": "user not available"}
+        ])
+        batch.status = "failed"
+        return False
+    initial_errors = json.loads(batch.errors)
+    batch.records = json.dumps(records, ensure_ascii=False)
+    batch.errors = json.dumps([*initial_errors, *errors], ensure_ascii=False)
+    batch.status = "ready"
+    record_event(
+        db,
+        batch.owner_id,
+        "pdf.import.preview",
+        "import_batch",
+        batch.id,
+        detail={"candidates": len(records), "diagnostics": len(initial_errors) + len(errors)},
+    )
+    return True
+
+
 async def _create_item_from_record(db: AsyncSession, user: User, record: dict) -> Item:
     from quirebase.library import create_item_from_metadata_record
 
     return await create_item_from_metadata_record(db, user, record)
 
 
+async def get_import_batch_preview(
+    db: AsyncSession, user: User, batch_id: str
+) -> tuple[ImportBatch, list[dict], list[dict]]:
+    batch = await db.get(ImportBatch, batch_id)
+    if batch is None or batch.owner_id != user.id:
+        raise ResourceUnavailable("import batch not found")
+    records = [] if batch.status == "pending" else json.loads(batch.records)
+    return batch, records, json.loads(batch.errors)
+
+
 async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> None:
     batch = await db.get(ImportBatch, batch_id)
     if batch is None or batch.owner_id != user.id:
         raise ResourceUnavailable("import batch not found")
+    if batch.status != "ready":
+        raise BatchConflict("the import batch is still being prepared")
     errors = json.loads(batch.errors)
     if errors and batch.file_format != "pdf":
         raise BatchConflict("the preview contains errors")
@@ -368,8 +457,14 @@ async def discard_import_batch(db: AsyncSession, user: User, batch_id: str) -> N
     object_keys = _pdf_object_keys(batch.records)
     record_event(db, user.id, "import.batch.discard", "import_batch", batch.id)
     await db.delete(batch)
+    await enqueue_object_cleanup(
+        db,
+        object_keys,
+        owner_id=user.id,
+        operation="import_batch_discard",
+        target_id=batch.id,
+    )
     await db.commit()
-    await delete_unreferenced_objects(db, object_keys)
 
 
 async def export_accessible_bibliography(

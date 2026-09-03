@@ -16,11 +16,11 @@ from quirebase.core.errors import (
     PermissionDenied,
     ValidationFailure,
 )
+from quirebase.documents import enqueue_object_cleanup
 from quirebase.documents.bundles import (
     ItemDownloadBundle,
     assemble_document_bundle,
 )
-from quirebase.documents.revisions import delete_unreferenced_objects
 from quirebase.library.tags import get_or_create_tag
 from quirebase.models import (
     Attachment,
@@ -91,6 +91,17 @@ async def apply_bulk_item_action(
                 )
             ).all()
         )
+        cleanup_keys.extend(
+            key
+            for key in (
+                await db.scalars(
+                    select(FileRevision.thumbnail_object_key).where(
+                        FileRevision.item_id.in_([item.id for item in items])
+                    )
+                )
+            ).all()
+            if key
+        )
         for item in items:
             await search_index(db).remove_item(db, item.id)
             await db.delete(item)
@@ -106,9 +117,14 @@ async def apply_bulk_item_action(
         None,
         detail={"item_ids": [item.id for item in items]},
     )
+    if cleanup_keys:
+        await enqueue_object_cleanup(
+            db,
+            cleanup_keys,
+            owner_id=user.id,
+            operation="bulk_item_delete",
+        )
     await db.commit()
-
-    await delete_unreferenced_objects(db, cleanup_keys)
 
     return cleanup_keys
 

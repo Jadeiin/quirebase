@@ -30,8 +30,8 @@ from .core.workflows import (
 from .library.tag_recommendations import validate_engine_configuration
 from .models import User
 from .operations import check_objects, create_backup, restore_backup, verify_backup
-from .operations.maintenance import run_periodic_maintenance
 from .operations.object_migration import migrate_legacy_objects
+from .operations.workflows import maintenance_schedules
 from .search import reindex_all
 
 app = typer.Typer(help="Quirebase administration")
@@ -55,9 +55,7 @@ def worker():
 
 
 async def _run_worker() -> None:
-    async with asyncio.TaskGroup() as tasks:
-        tasks.create_task(launch_worker())
-        tasks.create_task(run_periodic_maintenance())
+    await launch_worker(maintenance_schedules())
 
 
 @app.command("init-db")
@@ -214,8 +212,7 @@ def doctor():
         typer.echo(f"[failed] PDF dependencies: {error}")
     try:
         descriptor = validate_engine_configuration(get_settings())
-        model = f", model {descriptor.model_fingerprint}" if descriptor.model_fingerprint else ""
-        typer.echo(f"[ok] recommendations: {descriptor.name} {descriptor.version}{model}")
+        typer.echo(f"[ok] recommendations: {descriptor.name} {descriptor.version}")
     except Exception as error:
         failures += 1
         typer.echo(f"[failed] recommendations: {error}")

@@ -64,10 +64,7 @@ async def test_get_tag_matrix_for_item(async_db):
     db.add(
         ItemTagRecommendation(
             item_id=item.id,
-            input_fingerprint="a" * 64,
             generation_token=1,
-            engine="yake",
-            engine_version="0.7.3",
             single_words=json.dumps(["Algorithms", "Compiler"]),
             phrases=json.dumps(["Graph Neural Networks", "New Optimizer"]),
             generated_at=datetime.now(UTC),

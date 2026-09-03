@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_forms.html" import csrf_field %}
+{% from "_workflow_progress.html" import workflow_progress with context %}
 {% block title %}{{ _('Import preview') }} · Quirebase{% endblock %}
 {% block content %}
 <section class="panel">
@@ -29,4 +30,8 @@
     {% endfor %}
   </ol>
 </section>
+{% set pending_workflow_id = request.query_params.get('workflow') %}
+{% if pending_workflow_id %}
+{{ workflow_progress(pending_workflow_id, '/imports/' ~ batch.id ~ '/preview', '/bibliography/import', _('Unable to read PDF import status.'), _('PDF import'), _('Preparing import preview…'), _('PDFs are being inspected and their metadata retrieved. This page will update automatically.')) }}
+{% endif %}
 {% endblock %}

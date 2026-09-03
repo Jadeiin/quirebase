@@ -349,6 +349,7 @@ async def test_deleting_latest_pdf_revision_removes_its_files_and_falls_back_thu
     client, item, old_revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    item_id = item.id
     old_thumbnail = await get_object_store().put_object(
         uuid4(), ObjectSuffix.PNG, b"old-thumbnail", max_bytes=100
     )
@@ -356,7 +357,7 @@ async def test_deleting_latest_pdf_revision_removes_its_files_and_falls_back_thu
     old_revision.full_text = "fallbacksearchtoken"
     key, size = await put_pdf_object(b"%PDF-1.4\nnewer", 100)
     new_revision = FileRevision(
-        item_id=item.id,
+        item_id=item_id,
         object_key=key,
         size=size,
         original_name="newer.pdf",
@@ -373,38 +374,37 @@ async def test_deleting_latest_pdf_revision_removes_its_files_and_falls_back_thu
     new_revision.thumbnail_object_key = new_thumbnail.key
     db.add(new_revision)
     await db.commit()
+    new_revision_id = new_revision.id
     new_object = local_object_path(key)
-    thumbnail_url = f"/documents/{item.id}/thumbnail"
+    thumbnail_url = f"/documents/{item_id}/thumbnail"
     index = search_index(db)
-    await index.index_item(db, item.id)
-    recommendation = await request_item_tag_recommendation(db, item.id, owner_id=item.created_by)
-    previous_fingerprint = recommendation.input_fingerprint
+    await index.index_item(db, item_id)
+    recommendation = await request_item_tag_recommendation(db, item_id, owner_id=item.created_by)
     previous_generation = recommendation.generation_token
     await db.commit()
 
     try:
         assert (await client.get(thumbnail_url)).content == b"new-thumbnail"
-        assert await index.search(db, "deletedsearchtoken") == [item.id]
+        assert await index.search(db, "deletedsearchtoken") == [item_id]
 
         deleted = await client.post(
-            f"/items/{item.id}/pdf/{new_revision.id}/delete",
+            f"/items/{item_id}/pdf/{new_revision_id}/delete",
             data={"csrf_token": "test-csrf"},
             follow_redirects=False,
         )
 
         assert deleted.status_code == 303
-        assert deleted.headers["location"] == f"/items/{item.id}/files"
-        assert await db.get(FileRevision, new_revision.id) is None
+        assert deleted.headers["location"] == f"/items/{item_id}/files"
+        assert await db.get(FileRevision, new_revision_id) is None
         assert not new_object.exists()
         assert not local_object_path(new_thumbnail.key).exists()
         assert (await client.get(thumbnail_url)).content == b"old-thumbnail"
         # Library projections update when the durable FileRevisionChanged workflow runs.
-        assert await index.search(db, "deletedsearchtoken") == [item.id]
+        assert await index.search(db, "deletedsearchtoken") == [item_id]
         refreshed = await db.scalar(
-            select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == item.id)
+            select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == item_id)
         )
         assert refreshed is not None
-        assert refreshed.input_fingerprint == previous_fingerprint
         assert refreshed.generation_token == previous_generation
         assert refreshed.generated_at is None
     finally:

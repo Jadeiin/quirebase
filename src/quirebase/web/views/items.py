@@ -36,10 +36,10 @@ from quirebase.library import (
     SummaryWorkspace,
     WorkspaceSection,
     add_tag_to_item,
-    force_item_tag_recommendation,
     open_item_workspace,
     parse_author_list_string,
     regenerate_bibtex_key,
+    regenerate_item_tag_recommendation,
     remove_tag_from_item,
     rescan_pdf_doi,
     revise_item_metadata,
@@ -454,12 +454,8 @@ async def regenerate_tag_recommendations(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    recommendation = await force_item_tag_recommendation(db, user, item_id)
-    if recommendation.workflow_id is None:
-        raise RuntimeError("recommendation workflow was not created")
-    return RedirectResponse(
-        f"/items/{item_id}/organize?workflow={recommendation.workflow_id}", status_code=303
-    )
+    workflow_id = await regenerate_item_tag_recommendation(db, user, item_id)
+    return RedirectResponse(f"/items/{item_id}/organize?workflow={workflow_id}", status_code=303)
 
 
 @router.get("/api/authors/suggest")
