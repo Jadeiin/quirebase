@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import asyncio
 import os
-from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4, uuid5
 
@@ -133,42 +131,40 @@ async def test_reconciliation_deletes_only_old_unreferenced_managed_objects(
 
 @pytest.mark.anyio
 async def test_cleanup_exports_applies_runtime_ttl_to_annotation_objects(
-    async_db, fake_durable_operations, monkeypatch
+    async_db,
 ):
+    from quirebase.models import ExportArtifact
+
     store = get_object_store()
     expired = await store.put_object(uuid4(), ObjectSuffix.PDF, b"expired export", max_bytes=100)
     recent = await store.put_object(uuid4(), ObjectSuffix.PDF, b"recent export", max_bytes=100)
-    old = (datetime.now(UTC) - timedelta(hours=2)).timestamp()
-    os.utime(get_settings().object_dir / expired.key, (old, old))
+    now = datetime.now(UTC)
+    async_db.add_all([
+        ExportArtifact(
+            workflow_id="expired-export",
+            object_key=expired.key,
+            filename="expired.pdf",
+            size=expired.size,
+            expires_at=now - timedelta(seconds=1),
+        ),
+        ExportArtifact(
+            workflow_id="recent-export",
+            object_key=recent.key,
+            filename="recent.pdf",
+            size=recent.size,
+            expires_at=now + timedelta(hours=1),
+        ),
+    ])
+    await async_db.commit()
 
-    await fake_durable_operations.enqueue(
-        "documents.export_annotations",
-        queue_name="documents.revision",
-        workflow_id="expired-export",
-        attributes={"operation": "annotation_export"},
-    )
-    await fake_durable_operations.enqueue(
-        "documents.export_annotations",
-        queue_name="documents.revision",
-        workflow_id="recent-export",
-        attributes={"operation": "annotation_export"},
-    )
-    for workflow_id, key in (("expired-export", expired.key), ("recent-export", recent.key)):
-        workflow = fake_durable_operations.workflows[workflow_id]
-        fake_durable_operations.workflows[workflow_id] = replace(
-            workflow,
-            state="succeeded",
-            raw_status="SUCCESS",
-            output={"object_key": key},
-        )
-
-    async def one_hour_ttl(*_args, **_kwargs):
-        await asyncio.sleep(0)
-        return 1
-
-    monkeypatch.setattr("quirebase.operations.settings.get_effective_setting", one_hour_ttl)
     assert await cleanup_exports(async_db) == 1
     assert not await store.exists(expired.key)
+    assert await store.exists(recent.key)
+    assert await async_db.get(ExportArtifact, "expired-export") is None
+    assert await async_db.get(ExportArtifact, "recent-export") is not None
+    old = (datetime.now(UTC) - timedelta(hours=2)).timestamp()
+    os.utime(get_settings().object_dir / recent.key, (old, old))
+    assert await reconcile_objects(async_db, retention_hours=1) == ()
     assert await store.exists(recent.key)
 
 

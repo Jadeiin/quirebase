@@ -124,6 +124,7 @@ async def async_session_factory(tmp_path, monkeypatch):
     )
     ads.set_instance(ds)
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    monkeypatch.setattr("quirebase.documents.workflows.AsyncSessionLocal", factory)
     try:
         yield factory
     finally:

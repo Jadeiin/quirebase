@@ -15,6 +15,7 @@ EXPECTED_TABLES = {
     "authors",
     "citation_styles",
     "discussion_messages",
+    "export_artifacts",
     "file_revisions",
     "import_batches",
     "invitations",

@@ -18,9 +18,12 @@ from quirebase.models import FileRevision, Item, ObjectIntegrityScan
 from quirebase.search import search_index
 
 from .maintenance import (
-    cleanup_exports,
+    cleanup_local_exports,
     create_backup,
+    delete_export_artifact_objects,
+    delete_export_artifact_records,
     delete_orphan_candidates,
+    list_expired_export_artifacts,
     scan_objects,
 )
 
@@ -44,6 +47,8 @@ _MAINTENANCE_WORKFLOWS = {
 }
 
 _REINDEX_BATCH_SIZE = 100
+_RECOMMEND_BATCH_SIZE = 100
+_EXPORT_CLEANUP_BATCH_SIZE = 100
 
 
 async def dispatch_maintenance_workflow(db, admin: User, operation: str) -> str:
@@ -68,7 +73,7 @@ async def dispatch_maintenance_workflow(db, admin: User, operation: str) -> str:
     return workflow_id
 
 
-@ads.transaction()
+@ads.transaction(isolation_level="READ COMMITTED")
 async def list_reindex_item_ids_step(after_id: str | None, limit: int) -> tuple[str, ...]:
     db = ads.sql_session()
     query = select(Item.id).order_by(Item.id).limit(limit)
@@ -119,7 +124,7 @@ async def delete_orphan_candidates_step(candidates: list[str]) -> list[str]:
         return list(deleted)
 
 
-@ads.transaction()
+@ads.transaction(isolation_level="READ COMMITTED")
 async def record_integrity_scan_step(errors: list[str], thumbnail_sizes: dict[str, int]) -> None:
     db = ads.sql_session()
     for revision_id, thumbnail_size in thumbnail_sizes.items():
@@ -170,14 +175,53 @@ async def check_objects_workflow(_workflow_id: str, _owner_id: str) -> dict[str,
 
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
-async def cleanup_exports_step() -> int:
-    async with AsyncSessionLocal() as db:
-        return await cleanup_exports(db)
+async def cleanup_exports_step(ttl_hours: int) -> int:
+    return await cleanup_local_exports(ttl_hours)
+
+
+@ads.transaction(isolation_level="READ COMMITTED")
+async def get_export_ttl_step() -> int:
+    from quirebase.operations.settings import get_effective_setting
+
+    return await get_effective_setting(
+        ads.sql_session(), "export_ttl_hours", get_settings().export_ttl_hours
+    )
+
+
+@ads.transaction(isolation_level="READ COMMITTED")
+async def list_expired_export_artifacts_step(
+    limit: int,
+) -> tuple[dict[str, str], ...]:
+    return await list_expired_export_artifacts(ads.sql_session(), limit)
+
+
+@DBOS.step(retries_allowed=True, max_attempts=3)
+async def delete_export_artifact_objects_step(
+    artifacts: tuple[dict[str, str], ...],
+) -> dict[str, Any]:
+    return await delete_export_artifact_objects(artifacts)
+
+
+@ads.transaction(isolation_level="READ COMMITTED")
+async def delete_export_artifact_records_step(workflow_ids: list[str]) -> int:
+    return await delete_export_artifact_records(ads.sql_session(), workflow_ids)
+
+
+async def _run_export_cleanup() -> int:
+    removed = await cleanup_exports_step(await get_export_ttl_step())
+    while True:
+        artifacts = await list_expired_export_artifacts_step(_EXPORT_CLEANUP_BATCH_SIZE)
+        if not artifacts:
+            break
+        result = await delete_export_artifact_objects_step(artifacts)
+        await delete_export_artifact_records_step(result["workflow_ids"])
+        removed += result["removed"]
+    return removed
 
 
 @DBOS.workflow(name=PERIODIC_MAINTENANCE_WORKFLOW)
 async def periodic_maintenance_workflow(_scheduled_time: Any, _context: Any) -> None:
-    await cleanup_exports_step()
+    await _run_export_cleanup()
     await _run_integrity_scan()
 
 
@@ -211,12 +255,14 @@ async def backup_workflow(workflow_id: str, _owner_id: str) -> dict[str, Any]:
     return await backup_step(workflow_id)
 
 
-@ads.transaction()
-async def list_items_for_tag_recommendation_step() -> tuple[str, ...]:
+@ads.transaction(isolation_level="READ COMMITTED")
+async def list_items_for_tag_recommendation_step(
+    after_id: str | None, limit: int
+) -> tuple[str, ...]:
     from quirebase.library import item_ids_for_tag_recommendation
 
     db = ads.sql_session()
-    return await item_ids_for_tag_recommendation(db)
+    return await item_ids_for_tag_recommendation(db, after_id, limit)
 
 
 @ads.transaction()
@@ -233,8 +279,15 @@ async def request_item_tag_recommendation_step(item_id: str, owner_id: str) -> b
 
 @DBOS.workflow(name=RECOMMEND_TAGS_WORKFLOW)
 async def recommend_tags_all_workflow(_workflow_id: str, owner_id: str) -> dict[str, Any]:
-    item_ids = await list_items_for_tag_recommendation_step()
     enqueued = 0
-    for item_id in item_ids:
-        enqueued += await request_item_tag_recommendation_step(item_id, owner_id)
+    after_id: str | None = None
+    while True:
+        item_ids = await list_items_for_tag_recommendation_step(after_id, _RECOMMEND_BATCH_SIZE)
+        if not item_ids:
+            break
+        for item_id in item_ids:
+            enqueued += await request_item_tag_recommendation_step(item_id, owner_id)
+        if len(item_ids) < _RECOMMEND_BATCH_SIZE:
+            break
+        after_id = item_ids[-1]
     return {"enqueued_items": enqueued}

@@ -136,18 +136,43 @@ async def _store_item_tag_recommendation(
     }
 
 
-async def item_ids_for_tag_recommendation(db: AsyncSession) -> tuple[str, ...]:
-    return tuple((await db.scalars(select(Item.id).order_by(Item.id))).all())
+async def item_ids_for_tag_recommendation(
+    db: AsyncSession, after_id: str | None, limit: int
+) -> tuple[str, ...]:
+    query = select(Item.id).order_by(Item.id).limit(limit)
+    if after_id is not None:
+        query = query.where(Item.id > after_id)
+    return tuple((await db.scalars(query)).all())
 
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
-async def prepare_pdf_import_candidate_step(
-    batch_id: str, pending: dict[str, Any]
+async def extract_pdf_import_doi_step(pending: dict[str, Any]) -> dict[str, Any]:
+    from .imports import extract_pdf_import_doi
+
+    return await extract_pdf_import_doi(pending)
+
+
+@ads.transaction(isolation_level="READ COMMITTED")
+async def check_pdf_import_doi_step(
+    batch_id: str,
+    pending: dict[str, Any],
+    detected_doi: str,
 ) -> dict[str, Any]:
-    from .imports import prepare_pdf_import_candidate
+    from .imports import check_pdf_import_doi
+
+    return await check_pdf_import_doi(ads.sql_session(), batch_id, pending, detected_doi)
+
+
+@DBOS.step(retries_allowed=True, max_attempts=3)
+async def lookup_pdf_import_candidate_step(
+    batch_id: str,
+    pending: dict[str, Any],
+    detected_doi: str,
+) -> dict[str, Any]:
+    from .imports import lookup_pdf_import_candidate
 
     async with AsyncSessionLocal() as db:
-        return await prepare_pdf_import_candidate(db, batch_id, pending)
+        return await lookup_pdf_import_candidate(db, batch_id, pending, detected_doi)
 
 
 @ads.transaction()
@@ -187,7 +212,12 @@ async def prepare_pdf_import_workflow(
         seen_dois: set[str] = set()
         all_keys = [pending["_pdf"]["object_key"] for pending in pending_records]
         for pending in pending_records:
-            result = await prepare_pdf_import_candidate_step(batch_id, pending)
+            result = await extract_pdf_import_doi_step(pending)
+            detected_doi = result.get("detected_doi")
+            if isinstance(detected_doi, str):
+                result = await check_pdf_import_doi_step(batch_id, pending, detected_doi)
+                if result.get("eligible"):
+                    result = await lookup_pdf_import_candidate_step(batch_id, pending, detected_doi)
             normalized_doi = result.get("normalized_doi")
             if isinstance(normalized_doi, str) and normalized_doi in seen_dois:
                 pdf = pending["_pdf"]
@@ -269,7 +299,7 @@ async def generate_item_tag_recommendation_step(
             return None
 
 
-@ads.transaction()
+@ads.transaction(isolation_level="READ COMMITTED")
 async def item_tag_recommendation_is_current_step(
     item_id: str,
     generation_token: int,

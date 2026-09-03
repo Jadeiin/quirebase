@@ -15,7 +15,7 @@ Planned deepening work is ordered in `docs/architecture/deep-module-roadmap.md`.
 | `audit` | Business Module | Audit Event construction, programmatic invocation provenance, detail serialization and administrative queries |
 | `library` | Business Module | Items, Authors, Identifiers, Tags, Item Tag Recommendations, Discussion Messages, Import Batches and Citation Styles |
 | `projects` | Business Module | Projects, Project membership and Item assignment |
-| `documents` | Business Module | File Revisions, Attachments, Annotations, uploads, PDF inspection, thumbnails and annotation-export workflows |
+| `documents` | Business Module | File Revisions, Attachments, Annotations, uploads, PDF inspection, thumbnails, annotation-export workflows and Annotation Export Artifacts |
 | `operations` | Business Module | Runtime settings, health, backup, reconciliation and maintenance workflows |
 | `search` | Outbound adapter Module | The Library Search port plus SQLite and PostgreSQL adapters |
 | `web` | Inbound adapter Module | HTTP parsing, authentication dependencies and response formatting |
@@ -192,10 +192,14 @@ adopts it must cross the Library Interface rather than importing Inquiro from We
 
 Batch PDF Import crosses the Library Interface through `stage_pdf_import_batch`,
 `retry_pdf_import_batch` and `commit_import_batch`. Staging validates and uploads at most 50 PDFs, creates a pending Import
-Batch and transactionally enqueues its preparation workflow. Retryable steps extract DOI values
-and retrieve Candidate Records without holding a database transaction; one final transaction
+Batch and transactionally enqueues its preparation workflow. Separate durable steps materialize PDFs
+and extract DOI values, check one DOI against accessible Items in a short transaction, and retrieve
+Candidate Records without holding a database transaction; Provider retries therefore do not repeat
+PDF parsing. One final transaction
 de-duplicates results and makes the batch ready. A terminal preparation error transactionally
-marks the owning workflow's batch failed without deleting its staged PDFs; retry returns it to
+marks the owning workflow's batch failed without deleting its staged PDFs. Cancellation, exhausted
+workflow recovery and missing workflow records converge a pending batch to failed when it is viewed
+or retried; retry returns it to
 pending with a new workflow identity. Diagnostics for individual PDFs do not block
 confirmation of the remaining candidates. Confirmation creates each Item and
 attaches its staged PDF as a File Revision in one transaction. Confirmation revalidates Candidate
@@ -225,8 +229,10 @@ Library Search projection and Recommendation inference. Core queries active work
 directly instead of scanning terminal history. Storage metrics aggregate recorded sizes from business
 tables without issuing Object Store HEAD requests; an Operations-owned scheduled integrity workflow
 performs Object Store I/O in retryable steps and commits thumbnail size backfills plus its result in
-a datasource transaction. Global Search rebuilds use bounded Item batches rather than one long
-serializable transaction. Unknown keys and doctor probes are never managed.
+a datasource transaction. Successful annotation exports persist lightweight Annotation Export Artifact
+records; scheduled maintenance deletes them in bounded expiration-ordered batches without scanning DBOS
+history. Global Search rebuilds and bulk Tag Recommendation requests use bounded keyset Item batches
+rather than one large datasource output. Unknown keys and doctor probes are never managed.
 
 An internal helper imported across Modules is an architectural pressure point. Repeated use is
 a signal to move the concept to its owner or deepen the owning interface; it is not a reason to

@@ -49,6 +49,7 @@ from quirebase.documents.workflows import (
 from quirebase.models import (
     Attachment,
     AttachmentRole,
+    ExportArtifact,
     FileRevision,
     ImportBatch,
     Item,
@@ -267,6 +268,13 @@ async def _referenced_candidates(db: AsyncSession, object_keys: tuple[str, ...])
         (
             await db.scalars(
                 select(Attachment.object_key).where(Attachment.object_key.in_(object_keys))
+            )
+        ).all()
+    )
+    referenced.update(
+        (
+            await db.scalars(
+                select(ExportArtifact.object_key).where(ExportArtifact.object_key.in_(object_keys))
             )
         ).all()
     )

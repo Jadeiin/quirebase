@@ -13,10 +13,15 @@ owned an uncheckpointed infinite maintenance loop.
 
 Library represents PDF Import preparation as a pending Import Batch owned by a DBOS workflow.
 The request validates and stores each upload, then transactionally enqueues preparation. Retryable
-steps extract DOI values and retrieve Candidate Records; one datasource transaction publishes the
-ready preview. A terminal preparation failure transactionally marks the batch failed while retaining
-its staged objects; retry transitions it back to pending under a new workflow identity. The Import
-Batch and active workflow attributes reserve staged object keys.
+steps separately extract DOI values and retrieve Candidate Records, while a datasource transaction
+checks each DOI against accessible Items; Provider retries do not repeat PDF parsing. One datasource
+transaction publishes the ready preview. A terminal preparation failure transactionally marks the
+batch failed while retaining its staged objects. Cancellation, exhausted workflow recovery and a
+missing workflow record are lazily reconciled to failed when the batch is viewed or retried; retry
+transitions it back to pending under a new workflow identity. Lazy reconciliation updates only a
+still-pending batch whose workflow identity matches the observed terminal execution, so a stale
+request cannot overwrite a concurrent retry. The Import Batch and active workflow attributes reserve
+staged object keys.
 
 Documents owns an idempotent object-cleanup workflow on a dedicated non-partitioned queue. File
 Revision workflows use revision partitions with bounded queue-wide and worker concurrency. Item
@@ -33,7 +38,12 @@ size backfills, which are committed together with the scan result in a datasourc
 
 DBOS Schedule runs Operations maintenance hourly on the serialized Operations queue. Workflow and
 step checkpoints replace the worker-owned sleep loop. Active object reservations are queried by
-active DBOS states, and global Search rebuilds use bounded datasource-transaction checkpoints.
+active DBOS states, and global Search rebuilds and bulk Tag Recommendation requests use bounded
+keyset datasource-transaction checkpoints. Successful annotation exports create lightweight
+Annotation Export Artifact records containing their object identity, filename, size and expiration;
+maintenance deletes expired artifacts in bounded batches without reading terminal DBOS history.
+Read-heavy datasource transactions use `READ COMMITTED` where the database supports it, while
+business state transitions retain `SERIALIZABLE` isolation or explicit row locking.
 
 ## Consequences
 

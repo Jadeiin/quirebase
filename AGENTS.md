@@ -1,5 +1,12 @@
 # Quirebase repository guidance
 
+## Alpha compatibility policy
+
+Quirebase is alpha software. Optimize changes for the current design. Add compatibility layers for
+an earlier release's APIs, stored data, or persisted durable workflow inputs and checkpoints only
+when the task or an explicit release plan requires them. Preserve correctness within the current
+version, including concurrent requests, retries, and durable recovery.
+
 ## Agent skills
 
 ### Issue tracker

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import tempfile
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal, TypedDict, cast
 from uuid import UUID
@@ -22,6 +23,7 @@ from quirebase.models import (
     AnnotationScope,
     Attachment,
     AttachmentRole,
+    ExportArtifact,
     FileRevision,
     FileRevisionProcessingState,
     Item,
@@ -525,6 +527,32 @@ async def annotation_export_workflow(
     include_private: bool,
     timezone: str | None,
 ) -> AnnotationExportResult:
-    return await build_annotation_export(
+    result = await build_annotation_export(
         owner_id, revision_id, object_id, project_id, include_private, timezone
+    )
+    workflow_id = DBOS.workflow_id
+    if workflow_id is None:
+        raise RuntimeError("annotation export must run within a DBOS workflow")
+    await record_annotation_export_artifact(workflow_id, result)
+    return result
+
+
+@ads.transaction(isolation_level="READ COMMITTED")
+async def record_annotation_export_artifact(
+    workflow_id: str, result: AnnotationExportResult
+) -> None:
+    from quirebase.operations.settings import get_effective_setting
+
+    db = ads.sql_session()
+    if await db.get(ExportArtifact, workflow_id) is not None:
+        return
+    ttl_hours = await get_effective_setting(db, "export_ttl_hours", get_settings().export_ttl_hours)
+    db.add(
+        ExportArtifact(
+            workflow_id=workflow_id,
+            object_key=result["object_key"],
+            filename=result["filename"],
+            size=result["size_bytes"],
+            expires_at=datetime.now(UTC) + timedelta(hours=ttl_hours),
+        )
     )

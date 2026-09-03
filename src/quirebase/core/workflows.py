@@ -141,7 +141,14 @@ class AsyncSQLAlchemyDatasourceProxy:
         **kwargs: Any,
     ) -> Any:
         ds = await self.get_instance_async()
-        return await ds.run_tx_step_async(ds_options, func, *args, **kwargs)
+        effective_options = ds_options
+        if (
+            ds_options is not None
+            and ds_options.get("isolation_level") == "READ COMMITTED"
+            and ds.engine.dialect.name == "sqlite"
+        ):
+            effective_options = {**ds_options, "isolation_level": "SERIALIZABLE"}
+        return await ds.run_tx_step_async(effective_options, func, *args, **kwargs)
 
     @overload
     def transaction(
@@ -170,7 +177,7 @@ class AsyncSQLAlchemyDatasourceProxy:
         def decorator(
             f: Callable[..., Coroutine[Any, Any, Any]],
         ) -> Callable[..., Coroutine[Any, Any, Any]]:
-            step_name = name or f.__name__
+            step_name = name or f"{f.__module__}.{f.__qualname__}"
             ds_options: DatasourceOptions = {
                 "isolation_level": isolation_level,
                 "name": step_name,

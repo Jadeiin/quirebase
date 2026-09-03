@@ -2,6 +2,12 @@
 
 Quirebase is an AGPL-3.0-only, self-hosted collaborative research library.
 
+> [!IMPORTANT]
+> Quirebase is currently alpha software. Development favors a clear current design over
+> compatibility with earlier releases. APIs, database schemas, and persisted durable workflow
+> inputs or checkpoints may change incompatibly; compatibility shims and replay support are added
+> only when a release plan explicitly requires them.
+
 ## Development
 
 Requirements: Python 3.12+, `uv`, and Bun 1.3+ (or Node.js 22+ with npm) for building the bundled PDF.js assets.

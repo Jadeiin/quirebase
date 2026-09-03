@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from quirebase.core.config import get_settings
 from quirebase.core.database import is_sqlite_database_url
@@ -20,9 +20,8 @@ from quirebase.core.storage import get_object_store, is_managed_object_key
 from quirebase.core.workflows import (
     durable_operations,
     list_active_workflows,
-    list_all_workflows,
 )
-from quirebase.models import Attachment, FileRevision, ImportBatch, User
+from quirebase.models import Attachment, ExportArtifact, FileRevision, ImportBatch, User
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -225,10 +224,9 @@ def _restore_objects(restored_objects: Path, object_dir: Path) -> None:
         shutil.copytree(restored_objects, object_dir, dirs_exist_ok=True)
 
 
-async def cleanup_exports(db: AsyncSession | None = None) -> int:
+async def cleanup_exports(db: AsyncSession | None = None, *, batch_size: int = 100) -> int:
     from quirebase.operations.settings import get_effective_setting
 
-    directory = get_settings().export_dir
     ttl_hours = (
         await get_effective_setting(db, "export_ttl_hours", get_settings().export_ttl_hours)
         if db is not None
@@ -236,20 +234,58 @@ async def cleanup_exports(db: AsyncSession | None = None) -> int:
     )
     if db is not None:
         await db.rollback()
-    cutoff = datetime.now(UTC) - timedelta(hours=ttl_hours)
-    removed = await asyncio.to_thread(_cleanup_exports, directory, cutoff)
-    store = get_object_store()
-    workflows = await list_all_workflows(status="succeeded", name="documents.export_annotations")
-    for workflow in workflows:
-        if (workflow.attributes or {}).get("operation") != "annotation_export":
-            continue
-        output = workflow.output
-        key = output.get("object_key") if isinstance(output, dict) else None
-        if not isinstance(key, str) or not await store.exists(key):
-            continue
-        if (await store.head(key)).last_modified < cutoff and await store.delete(key):
-            removed += 1
+    removed = await cleanup_local_exports(ttl_hours)
+    if db is None:
+        return removed
+    artifacts = await list_expired_export_artifacts(db, batch_size)
+    await db.rollback()
+    if not artifacts:
+        return removed
+    result = await delete_export_artifact_objects(artifacts)
+    removed += result["removed"]
+    await delete_export_artifact_records(db, result["workflow_ids"])
+    await db.commit()
     return removed
+
+
+async def cleanup_local_exports(ttl_hours: int) -> int:
+    cutoff = datetime.now(UTC) - timedelta(hours=ttl_hours)
+    return await asyncio.to_thread(_cleanup_exports, get_settings().export_dir, cutoff)
+
+
+async def list_expired_export_artifacts(db: AsyncSession, limit: int) -> tuple[dict[str, str], ...]:
+    rows = (
+        await db.execute(
+            select(ExportArtifact.workflow_id, ExportArtifact.object_key)
+            .where(ExportArtifact.expires_at <= datetime.now(UTC))
+            .order_by(ExportArtifact.expires_at, ExportArtifact.workflow_id)
+            .limit(limit)
+        )
+    ).all()
+    return tuple(
+        {"workflow_id": workflow_id, "object_key": object_key} for workflow_id, object_key in rows
+    )
+
+
+async def delete_export_artifact_objects(
+    artifacts: tuple[dict[str, str], ...],
+) -> dict[str, Any]:
+    store = get_object_store()
+    removed = 0
+    for artifact in artifacts:
+        if await store.delete(artifact["object_key"]):
+            removed += 1
+    return {
+        "workflow_ids": [artifact["workflow_id"] for artifact in artifacts],
+        "removed": removed,
+    }
+
+
+async def delete_export_artifact_records(db: AsyncSession, workflow_ids: list[str]) -> int:
+    if not workflow_ids:
+        return 0
+    await db.execute(delete(ExportArtifact).where(ExportArtifact.workflow_id.in_(workflow_ids)))
+    return len(workflow_ids)
 
 
 def _cleanup_exports(directory: Path, cutoff: datetime) -> int:
@@ -289,10 +325,12 @@ async def scan_objects(
     attachments = (
         await db.execute(select(Attachment.id, Attachment.object_key, Attachment.size))
     ).all()
+    export_keys = set((await db.scalars(select(ExportArtifact.object_key))).all())
     referenced = (
         {revision.object_key for revision in revisions}
         | {revision.thumbnail_object_key for revision in revisions if revision.thumbnail_object_key}
         | {attachment.object_key for attachment in attachments}
+        | export_keys
     )
     for records in (await db.scalars(select(ImportBatch.records))).all():
         referenced.update(_import_object_keys(records))

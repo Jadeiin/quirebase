@@ -60,6 +60,10 @@ A user-authored highlight, underline or note anchored to a File Revision and sco
 privately or to a Project.
 _Avoid_: Comment
 
+**Annotation Export Artifact**:
+A temporary PDF derived from a File Revision and its visible Annotations for download. It remains
+available until its recorded expiration time and is then eligible for physical cleanup.
+
 **Discussion Message**:
 A conversational message attached to an Item and visible through Item access.
 _Avoid_: Annotation, Comment
@@ -85,7 +89,8 @@ A staged collection of Candidate Records and diagnostics from a bibliography fil
 Lookup or uploaded PDFs awaiting confirmation into the Library. A PDF Import Batch is pending
 while its durable preparation workflow extracts identifiers and retrieves Candidate Records, ready
 for confirmation after successful preparation, and failed after a terminal workflow error. Retrying
-a failed batch preserves its staged PDFs and assigns a new durable workflow. A PDF Candidate Record retains
+a failed batch preserves its staged PDFs and assigns a new durable workflow. A pending PDF Import Batch
+whose associated workflow is terminal or missing converges to failed before retry. A PDF Candidate Record retains
 its independently owned UUID object until confirmation creates the Item and associated File
 Revision, or until the Import Batch is discarded.
 _Avoid_: Staged Import, Import Queue
@@ -161,6 +166,7 @@ An immutable record of a security-sensitive or data-changing action.
 - An Item may belong to multiple Projects.
 - A Project has members with an assigned Project Role (owner, editor, or viewer).
 - An Annotation belongs to exactly one File Revision.
+- An Annotation Export Artifact is derived from one File Revision and expires independently of it.
 - A Project-scoped Annotation references exactly one Project containing the Item.
 - Discovery produces Candidate Records; selecting one refetches metadata into Import.
 - An Import Batch holds parsed Candidate Records until confirmed into Items.

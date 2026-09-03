@@ -97,6 +97,7 @@ ORM_MODEL_OWNERS = {
     "CitationStyle": "library",
     "DiscussionMessage": "library",
     "FileRevision": "documents",
+    "ExportArtifact": "documents",
     "ImportBatch": "library",
     "ObjectIntegrityScan": "operations",
     "Invitation": "accounts",

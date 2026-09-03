@@ -10,7 +10,7 @@ from inquiro.bibliography import (
     BibliographyRecord,
     parse_bibliography_records,
 )
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import selectinload
 
 from quirebase.access.items import require_accessible_items, visible_items_query
@@ -281,16 +281,80 @@ async def stage_pdf_import_batch(
         raise
 
 
-async def prepare_pdf_import_candidate(
+def _pdf_import_candidate_error(pending: dict, code: str, error: DomainError) -> dict:
+    pdf = pending["_pdf"]
+    return {
+        "error": {
+            "row": int(pending["_row"]),
+            "filename": pdf["original_name"],
+            "code": code,
+            "message": str(error),
+        },
+        "object_key": pdf["object_key"],
+    }
+
+
+async def extract_pdf_import_doi(pending: dict) -> dict:
+    """Materialize one staged PDF and extract its DOI without database access."""
+    pdf = pending["_pdf"]
+    try:
+        async with get_object_store().materialize(pdf["object_key"]) as path:
+            detected_doi = await asyncio.to_thread(extract_doi, path)
+    except DomainError as error:
+        return _pdf_import_candidate_error(pending, "invalid_pdf", error)
+    if not detected_doi:
+        return _pdf_import_candidate_error(
+            pending,
+            "missing_doi",
+            ValidationFailure("no DOI was found in this PDF"),
+        )
+    return {
+        "detected_doi": detected_doi,
+        "normalized_doi": detected_doi.casefold(),
+        "object_key": pdf["object_key"],
+    }
+
+
+async def check_pdf_import_doi(
     db: AsyncSession,
     batch_id: str,
     pending: dict,
+    detected_doi: str,
 ) -> dict:
-    """Prepare one staged PDF without holding a database transaction during provider I/O."""
+    """Check one DOI against the current owner's accessible Items."""
+    pdf = pending["_pdf"]
+    batch = await db.get(ImportBatch, batch_id)
+    if batch is None or batch.status != "pending":
+        return {"discarded": True, "object_key": pdf["object_key"]}
+    user = await db.get(User, batch.owner_id)
+    if user is None or not user.active:
+        return {"discarded": True, "object_key": pdf["object_key"]}
+    normalized_doi = detected_doi.casefold()
+    existing = await db.scalar(
+        visible_items_query(user)
+        .with_only_columns(Item.id)
+        .where(func.lower(Item.doi) == normalized_doi)
+        .limit(1)
+    )
+    if existing is not None:
+        return _pdf_import_candidate_error(
+            pending,
+            "existing_doi",
+            BatchConflict("an accessible Item already has this DOI"),
+        )
+    return {"eligible": True, "object_key": pdf["object_key"]}
+
+
+async def lookup_pdf_import_candidate(
+    db: AsyncSession,
+    batch_id: str,
+    pending: dict,
+    detected_doi: str,
+) -> dict:
+    """Retrieve metadata for one extracted DOI without repeating PDF parsing."""
     from quirebase.operations.settings import get_effective_settings_model
 
     pdf = pending["_pdf"]
-    row = int(pending["_row"])
     batch = await db.get(ImportBatch, batch_id)
     if batch is None or batch.status != "pending":
         return {"discarded": True, "object_key": pdf["object_key"]}
@@ -298,31 +362,10 @@ async def prepare_pdf_import_candidate(
     if user is None or not user.active:
         return {"discarded": True, "object_key": pdf["object_key"]}
     effective_settings = await get_effective_settings_model(db)
-    known_dois = {
-        value
-        for provider, value in await get_accessible_item_identifiers(db, user)
-        if provider == "doi"
-    }
     await db.rollback()
-    code = "invalid_pdf"
     try:
-        async with get_object_store().materialize(pdf["object_key"]) as path:
-            detected_doi = await asyncio.to_thread(extract_doi, path)
-        if not detected_doi:
-            code = "missing_doi"
-            raise ValidationFailure("no DOI was found in this PDF")
         normalized_doi = detected_doi.casefold()
-        if normalized_doi in known_dois:
-            code = "existing_doi"
-            raise BatchConflict("an accessible Item already has this DOI")
-        try:
-            record = await lookup_candidate(detected_doi, "doi", effective_settings)
-        except ValidationFailure:
-            code = "invalid_doi"
-            raise
-        except ResourceNotFound:
-            code = "metadata_not_found"
-            raise
+        record = await lookup_candidate(detected_doi, "doi", effective_settings)
         candidate = candidate_record_values(record)
         candidate.setdefault("doi", detected_doi)
         candidate["_pdf"] = {**pdf, "detected_doi": detected_doi}
@@ -335,16 +378,28 @@ async def prepare_pdf_import_candidate(
         # Keep transient provider failures exceptional so the enclosing DBOS
         # step can retry them instead of publishing a permanent diagnostic.
         raise
+    except ValidationFailure as error:
+        return _pdf_import_candidate_error(pending, "invalid_doi", error)
+    except ResourceNotFound as error:
+        return _pdf_import_candidate_error(pending, "metadata_not_found", error)
     except DomainError as error:
-        return {
-            "error": {
-                "row": row,
-                "filename": pdf["original_name"],
-                "code": code,
-                "message": str(error),
-            },
-            "object_key": pdf["object_key"],
-        }
+        return _pdf_import_candidate_error(pending, "invalid_pdf", error)
+
+
+async def prepare_pdf_import_candidate(
+    db: AsyncSession,
+    batch_id: str,
+    pending: dict,
+) -> dict:
+    """Prepare one candidate through the same seams used by the durable workflow."""
+    extracted = await extract_pdf_import_doi(pending)
+    detected_doi = extracted.get("detected_doi")
+    if not isinstance(detected_doi, str):
+        return extracted
+    checked = await check_pdf_import_doi(db, batch_id, pending, detected_doi)
+    if not checked.get("eligible"):
+        return checked
+    return await lookup_pdf_import_candidate(db, batch_id, pending, detected_doi)
 
 
 async def finalize_pdf_import_batch(
@@ -392,8 +447,35 @@ async def get_import_batch_preview(
     batch = await db.get(ImportBatch, batch_id)
     if batch is None or batch.owner_id != user.id:
         raise ResourceUnavailable("import batch not found")
+    if await _converge_pdf_import_batch_status(db, batch):
+        await db.commit()
     records = json.loads(batch.records) if batch.status == "ready" else []
     return batch, records, json.loads(batch.errors)
+
+
+async def _converge_pdf_import_batch_status(db: AsyncSession, batch: ImportBatch) -> bool:
+    """Map a missing or terminal durable preparation back to the retryable business state."""
+    if batch.file_format != "pdf" or batch.status != "pending":
+        return False
+    observed_workflow_id = batch.workflow_id
+    workflow = (
+        await durable_operations().get(observed_workflow_id) if observed_workflow_id else None
+    )
+    if workflow is not None and workflow.state in {"pending", "running"}:
+        return False
+    result = await db.execute(
+        update(ImportBatch)
+        .where(
+            ImportBatch.id == batch.id,
+            ImportBatch.status == "pending",
+            ImportBatch.workflow_id == observed_workflow_id,
+        )
+        .values(status="failed")
+        .execution_options(synchronize_session=False)
+    )
+    changed = getattr(result, "rowcount", 0) == 1
+    await db.refresh(batch)
+    return changed
 
 
 async def retry_pdf_import_batch(db: AsyncSession, user: User, batch_id: str) -> ImportBatch:
@@ -401,6 +483,7 @@ async def retry_pdf_import_batch(db: AsyncSession, user: User, batch_id: str) ->
     batch = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update())
     if batch is None or batch.owner_id != user.id:
         raise ResourceUnavailable("import batch not found")
+    await _converge_pdf_import_batch_status(db, batch)
     if batch.file_format != "pdf" or batch.status != "failed":
         raise BatchConflict("only a failed PDF import batch can be retried")
     pending_records = json.loads(batch.records)

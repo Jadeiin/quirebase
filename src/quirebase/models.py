@@ -408,6 +408,15 @@ class PdfAnnotationSegment(Base):
     annotation: Mapped[PdfAnnotation] = relationship(back_populates="segments")
 
 
+class ExportArtifact(Base):
+    __tablename__ = "export_artifacts"
+    workflow_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    object_key: Mapped[str] = mapped_column(String(500), unique=True)
+    filename: Mapped[str] = mapped_column(String(255))
+    size: Mapped[int] = mapped_column(Integer)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+
 class ImportBatch(Base):
     __tablename__ = "import_batches"
     __table_args__ = (

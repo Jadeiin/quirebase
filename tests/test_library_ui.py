@@ -26,8 +26,11 @@ from quirebase.documents import workflows as document_workflows
 from quirebase.documents.revisions import delete_unreferenced_objects, stage_pdf
 from quirebase.library import workflows as library_workflows
 from quirebase.library.imports import (
+    check_pdf_import_doi,
     discard_import_batch,
+    extract_pdf_import_doi,
     finalize_pdf_import_batch,
+    lookup_pdf_import_candidate,
     prepare_pdf_import_candidate,
     stage_pdf_import_batch,
 )
@@ -59,9 +62,13 @@ def provider_candidate(identifier: str, title: str, *, authors: str | None = Non
 async def finish_pdf_import_preview(db, session_factory, batch: ImportBatch, monkeypatch) -> None:
     pending = json.loads(batch.records)
 
-    async def prepare(batch_id, candidate):
+    async def check(batch_id, candidate, detected_doi):
         async with session_factory() as worker_db:
-            return await prepare_pdf_import_candidate(worker_db, batch_id, candidate)
+            return await check_pdf_import_doi(worker_db, batch_id, candidate, detected_doi)
+
+    async def lookup(batch_id, candidate, detected_doi):
+        async with session_factory() as worker_db:
+            return await lookup_pdf_import_candidate(worker_db, batch_id, candidate, detected_doi)
 
     async def finalize(batch_id, workflow_id, records, errors):
         async with session_factory() as worker_db:
@@ -78,7 +85,9 @@ async def finish_pdf_import_preview(db, session_factory, batch: ImportBatch, mon
             )
         return f"cleanup:{batch.id}"
 
-    monkeypatch.setattr(library_workflows, "prepare_pdf_import_candidate_step", prepare)
+    monkeypatch.setattr(library_workflows, "extract_pdf_import_doi_step", extract_pdf_import_doi)
+    monkeypatch.setattr(library_workflows, "check_pdf_import_doi_step", check)
+    monkeypatch.setattr(library_workflows, "lookup_pdf_import_candidate_step", lookup)
     monkeypatch.setattr(library_workflows, "finalize_pdf_import_batch_step", finalize)
     monkeypatch.setattr(library_workflows, "enqueue_child_workflow", cleanup)
     workflow_body = library_workflows.prepare_pdf_import_workflow.__wrapped__.__wrapped__
@@ -239,6 +248,172 @@ async def test_failed_pdf_import_can_retry_with_a_new_durable_workflow(
         )
         await async_db.refresh(batch)
         assert batch.status == "pending"
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("workflow_state", "raw_status"),
+    [
+        ("cancelled", "CANCELLED"),
+        ("failed", "MAX_RECOVERY_ATTEMPTS_EXCEEDED"),
+        (None, None),
+    ],
+)
+async def test_terminal_or_missing_pdf_import_workflow_can_retry_while_batch_is_pending(
+    async_db,
+    async_session_factory,
+    fake_durable_operations,
+    tmp_path,
+    monkeypatch,
+    workflow_state,
+    raw_status,
+):
+    client, item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    try:
+        stored = await get_object_store().put_object(
+            uuid4(), ObjectSuffix.PDF, b"%PDF-terminal-retry", max_bytes=100
+        )
+        pending = [
+            {
+                "_row": 1,
+                "_pdf": {
+                    "object_key": stored.key,
+                    "size": stored.size,
+                    "original_name": "terminal-retry.pdf",
+                },
+            }
+        ]
+        old_workflow_id = f"prepare-pdf-import:{raw_status or 'missing'}"
+        batch = ImportBatch(
+            owner_id=item.created_by,
+            file_format="pdf",
+            records=json.dumps(pending),
+            errors="[]",
+            status="pending",
+            workflow_id=old_workflow_id,
+        )
+        async_db.add(batch)
+        await async_db.commit()
+        if workflow_state is not None:
+            await fake_durable_operations.enqueue(
+                "library.prepare_pdf_import",
+                queue_name="library.import",
+                workflow_id=old_workflow_id,
+            )
+            workflow = fake_durable_operations.workflows[old_workflow_id]
+            fake_durable_operations.workflows[old_workflow_id] = replace(
+                workflow,
+                state=workflow_state,
+                raw_status=raw_status,
+            )
+
+        preview = await client.get(f"/imports/{batch.id}/preview")
+        assert preview.status_code == 200
+        assert f'action="/imports/{batch.id}/retry"' in preview.text
+        await async_db.refresh(batch)
+        assert batch.status == "failed"
+
+        retried = await client.post(
+            f"/imports/{batch.id}/retry",
+            data={"csrf_token": "test-csrf"},
+            follow_redirects=False,
+        )
+
+        assert retried.status_code == 303
+        await async_db.refresh(batch)
+        assert batch.status == "pending"
+        assert batch.workflow_id != old_workflow_id
+        assert await get_object_store().exists(stored.key)
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_stale_preview_convergence_does_not_overwrite_concurrent_pdf_import_retry(
+    async_db,
+    async_session_factory,
+    fake_durable_operations,
+    tmp_path,
+    monkeypatch,
+):
+    client, item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    try:
+        stored = await get_object_store().put_object(
+            uuid4(), ObjectSuffix.PDF, b"%PDF-concurrent-retry", max_bytes=100
+        )
+        pending = [
+            {
+                "_row": 1,
+                "_pdf": {
+                    "object_key": stored.key,
+                    "size": stored.size,
+                    "original_name": "concurrent-retry.pdf",
+                },
+            }
+        ]
+        old_workflow_id = "prepare-pdf-import:concurrent-old"
+        batch = ImportBatch(
+            owner_id=item.created_by,
+            file_format="pdf",
+            records=json.dumps(pending),
+            errors="[]",
+            status="pending",
+            workflow_id=old_workflow_id,
+        )
+        async_db.add(batch)
+        await async_db.commit()
+        await fake_durable_operations.enqueue(
+            "library.prepare_pdf_import",
+            queue_name="library.import",
+            workflow_id=old_workflow_id,
+        )
+        old_workflow = fake_durable_operations.workflows[old_workflow_id]
+        fake_durable_operations.workflows[old_workflow_id] = replace(
+            old_workflow,
+            state="failed",
+            raw_status="MAX_RECOVERY_ATTEMPTS_EXCEEDED",
+        )
+
+        preview_observed_terminal = asyncio.Event()
+        release_preview = asyncio.Event()
+        original_get = fake_durable_operations.get
+        old_workflow_reads = 0
+
+        async def interleaved_get(workflow_id):
+            nonlocal old_workflow_reads
+            workflow = await original_get(workflow_id)
+            if workflow_id == old_workflow_id:
+                old_workflow_reads += 1
+                if old_workflow_reads == 1:
+                    preview_observed_terminal.set()
+                    await release_preview.wait()
+            return workflow
+
+        monkeypatch.setattr(fake_durable_operations, "get", interleaved_get)
+        preview_task = asyncio.create_task(client.get(f"/imports/{batch.id}/preview"))
+        await preview_observed_terminal.wait()
+
+        retried = await client.post(
+            f"/imports/{batch.id}/retry",
+            data={"csrf_token": "test-csrf"},
+            follow_redirects=False,
+        )
+        release_preview.set()
+        preview = await preview_task
+
+        assert retried.status_code == 303
+        assert preview.status_code == 200
+        await async_db.refresh(batch)
+        assert batch.status == "pending"
+        assert batch.workflow_id != old_workflow_id
     finally:
         await client.aclose()
         get_settings.cache_clear()

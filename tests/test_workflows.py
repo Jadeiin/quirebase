@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -13,7 +13,14 @@ from quirebase.core.storage import ObjectSuffix, get_object_store
 from quirebase.documents import enqueue_object_cleanup
 from quirebase.documents import workflows as document_workflows
 from quirebase.library import workflows as library_workflows
-from quirebase.models import FileRevision, ImportBatch, Item, ObjectIntegrityScan, User
+from quirebase.models import (
+    ExportArtifact,
+    FileRevision,
+    ImportBatch,
+    Item,
+    ObjectIntegrityScan,
+    User,
+)
 from quirebase.operations import health
 from quirebase.operations import workflows as operation_workflows
 
@@ -375,7 +382,7 @@ async def test_periodic_maintenance_workflow_uses_dbos_steps(monkeypatch):
             "checked_status": "ok",
         }
 
-    monkeypatch.setattr(operation_workflows, "cleanup_exports_step", cleanup)
+    monkeypatch.setattr(operation_workflows, "_run_export_cleanup", cleanup)
     monkeypatch.setattr(operation_workflows, "_run_integrity_scan", scan)
 
     workflow_body = operation_workflows.periodic_maintenance_workflow.__wrapped__.__wrapped__
@@ -383,6 +390,119 @@ async def test_periodic_maintenance_workflow_uses_dbos_steps(monkeypatch):
 
     assert result is None
     assert calls == ["cleanup", "scan"]
+
+
+@pytest.mark.anyio
+async def test_export_cleanup_checkpoints_expired_artifacts_in_bounded_batches(monkeypatch):
+    artifacts = [
+        {"workflow_id": f"export-{index:03d}", "object_key": f"aa/bb/{index:03d}.pdf"}
+        for index in range(101)
+    ]
+    listed = 0
+    deleted_batches = []
+    removed_batches = []
+
+    async def get_ttl():
+        await asyncio.sleep(0)
+        return 24
+
+    async def cleanup_local(_ttl_hours):
+        await asyncio.sleep(0)
+        return 0
+
+    async def list_expired(limit):
+        nonlocal listed
+        await asyncio.sleep(0)
+        page = tuple(artifacts[listed : listed + limit])
+        listed += len(page)
+        return page
+
+    async def delete_objects(page):
+        await asyncio.sleep(0)
+        deleted_batches.append(tuple(row["workflow_id"] for row in page))
+        return {
+            "workflow_ids": [row["workflow_id"] for row in page],
+            "removed": len(page),
+        }
+
+    async def delete_records(workflow_ids):
+        await asyncio.sleep(0)
+        removed_batches.append(tuple(workflow_ids))
+        return len(workflow_ids)
+
+    monkeypatch.setattr(operation_workflows, "cleanup_exports_step", cleanup_local)
+    monkeypatch.setattr(operation_workflows, "get_export_ttl_step", get_ttl)
+    monkeypatch.setattr(operation_workflows, "list_expired_export_artifacts_step", list_expired)
+    monkeypatch.setattr(operation_workflows, "delete_export_artifact_objects_step", delete_objects)
+    monkeypatch.setattr(operation_workflows, "delete_export_artifact_records_step", delete_records)
+
+    assert await operation_workflows._run_export_cleanup() == 101
+    assert [len(page) for page in deleted_batches] == [100, 1]
+    assert removed_batches == deleted_batches
+
+
+@pytest.mark.anyio
+async def test_annotation_export_workflow_records_expiring_artifact(monkeypatch):
+    result = {
+        "filename": "artifact.pdf",
+        "object_key": "aa/bb/artifact.pdf",
+        "size_bytes": 42,
+        "revision_id": "revision-id",
+        "project_id": None,
+    }
+    recorded = []
+
+    async def build(*_args):
+        await asyncio.sleep(0)
+        return result
+
+    async def record(workflow_id, artifact):
+        await asyncio.sleep(0)
+        recorded.append((workflow_id, artifact))
+
+    monkeypatch.setattr(document_workflows, "build_annotation_export", build)
+    monkeypatch.setattr(document_workflows, "record_annotation_export_artifact", record)
+    monkeypatch.setattr(document_workflows.DBOS, "workflow_id", "workflow-id")
+    workflow_body = document_workflows.annotation_export_workflow.__wrapped__.__wrapped__
+
+    output = await workflow_body(
+        "owner-id",
+        "revision-id",
+        "00000000-0000-0000-0000-000000000001",
+        None,
+        True,
+        "UTC",
+    )
+
+    assert output == result
+    assert recorded == [("workflow-id", result)]
+
+
+@pytest.mark.anyio
+async def test_annotation_export_artifact_transaction_records_lifetime(async_db, monkeypatch):
+    async def one_hour(*_args, **_kwargs):
+        await asyncio.sleep(0)
+        return 1
+
+    monkeypatch.setattr("quirebase.operations.settings.get_effective_setting", one_hour)
+    before = datetime.now(UTC)
+    await document_workflows.record_annotation_export_artifact(
+        "workflow-id",
+        {
+            "filename": "artifact.pdf",
+            "object_key": "aa/bb/artifact.pdf",
+            "size_bytes": 42,
+            "revision_id": "revision-id",
+            "project_id": None,
+        },
+    )
+
+    artifact = await async_db.get(ExportArtifact, "workflow-id")
+    assert artifact is not None
+    assert artifact.object_key == "aa/bb/artifact.pdf"
+    assert artifact.filename == "artifact.pdf"
+    assert artifact.size == 42
+    assert artifact.expires_at.replace(tzinfo=UTC) >= before + timedelta(minutes=59)
 
 
 @pytest.mark.anyio
@@ -461,6 +581,64 @@ async def test_datasource_step_writes_checkpoint_in_datasource_outputs(async_db,
         assert outputs[0][1] == 1
     finally:
         DBOS.destroy()
+
+
+@pytest.mark.anyio
+async def test_datasource_transaction_default_name_is_fully_qualified(monkeypatch):
+    captured = []
+
+    async def run(options, function, *args, **kwargs):
+        captured.append(options)
+        return await function(*args, **kwargs)
+
+    async def duplicate_step() -> int:
+        await asyncio.sleep(0)
+        return 1
+
+    duplicate_step.__module__ = "quirebase.example"
+    wrapped = workflows.ads.transaction()(duplicate_step)
+    monkeypatch.setattr(workflows.ads, "run_tx_step_async", run)
+
+    assert await wrapped() == 1
+    assert captured == [
+        {
+            "name": "quirebase.example.test_datasource_transaction_default_name_is_fully_qualified.<locals>.duplicate_step",
+            "isolation_level": "SERIALIZABLE",
+        }
+    ]
+
+
+@pytest.mark.anyio
+async def test_read_heavy_datasource_steps_use_read_committed(monkeypatch):
+    captured = []
+
+    async def run(options, _function, *_args, **_kwargs):
+        await asyncio.sleep(0)
+        captured.append(options)
+
+    monkeypatch.setattr(workflows.ads, "run_tx_step_async", run)
+    await operation_workflows.list_reindex_item_ids_step(None, 100)
+    await operation_workflows.record_integrity_scan_step([], {})
+    await operation_workflows.list_items_for_tag_recommendation_step(None, 100)
+    await operation_workflows.get_export_ttl_step()
+    await library_workflows.item_tag_recommendation_is_current_step("item-id", 1, "workflow-id")
+
+    assert {options["isolation_level"] for options in captured} == {"READ COMMITTED"}
+
+
+@pytest.mark.anyio
+async def test_search_projection_writes_use_serializable(monkeypatch):
+    captured = []
+
+    async def run(options, _function, *_args, **_kwargs):
+        await asyncio.sleep(0)
+        captured.append(options)
+
+    monkeypatch.setattr(workflows.ads, "run_tx_step_async", run)
+    await operation_workflows.reindex_items_step(())
+    await library_workflows.apply_file_revision_changed("item-id")
+
+    assert {options["isolation_level"] for options in captured} == {"SERIALIZABLE"}
 
 
 @pytest.mark.anyio
@@ -676,7 +854,21 @@ async def test_pdf_import_workflow_marks_batch_failed_and_preserves_pdf(async_db
         await asyncio.sleep(0)
         raise RuntimeError("provider retries exhausted")
 
-    monkeypatch.setattr(library_workflows, "prepare_pdf_import_candidate_step", exhausted)
+    async def extracted(*_args):
+        await asyncio.sleep(0)
+        return {
+            "detected_doi": "10.1000/retry",
+            "normalized_doi": "10.1000/retry",
+            "object_key": stored.key,
+        }
+
+    async def eligible(*_args):
+        await asyncio.sleep(0)
+        return {"eligible": True, "object_key": stored.key}
+
+    monkeypatch.setattr(library_workflows, "extract_pdf_import_doi_step", extracted)
+    monkeypatch.setattr(library_workflows, "check_pdf_import_doi_step", eligible)
+    monkeypatch.setattr(library_workflows, "lookup_pdf_import_candidate_step", exhausted)
     workflow_body = library_workflows.prepare_pdf_import_workflow.__wrapped__.__wrapped__
 
     with pytest.raises(RuntimeError, match="provider retries exhausted"):
@@ -688,10 +880,65 @@ async def test_pdf_import_workflow_marks_batch_failed_and_preserves_pdf(async_db
 
 
 @pytest.mark.anyio
+async def test_pdf_import_workflow_checkpoints_extract_conflict_and_provider_lookup(monkeypatch):
+    calls = []
+    pending = {
+        "_row": 1,
+        "_pdf": {
+            "object_key": "aa/bb/candidate.pdf",
+            "size": 10,
+            "original_name": "candidate.pdf",
+        },
+    }
+
+    async def extract(candidate):
+        await asyncio.sleep(0)
+        calls.append(("extract", candidate["_row"]))
+        return {
+            "detected_doi": "10.1000/checkpointed",
+            "normalized_doi": "10.1000/checkpointed",
+            "object_key": candidate["_pdf"]["object_key"],
+        }
+
+    async def check(batch_id, candidate, detected_doi):
+        await asyncio.sleep(0)
+        calls.append(("check", batch_id, candidate["_row"], detected_doi))
+        return {"eligible": True, "object_key": candidate["_pdf"]["object_key"]}
+
+    async def lookup(batch_id, candidate, detected_doi):
+        await asyncio.sleep(0)
+        calls.append(("lookup", batch_id, candidate["_row"], detected_doi))
+        return {
+            "record": {"title": "Checkpointed", "_pdf": candidate["_pdf"]},
+            "normalized_doi": detected_doi,
+            "object_key": candidate["_pdf"]["object_key"],
+        }
+
+    async def finalize(*_args):
+        await asyncio.sleep(0)
+        return True
+
+    monkeypatch.setattr(library_workflows, "extract_pdf_import_doi_step", extract)
+    monkeypatch.setattr(library_workflows, "check_pdf_import_doi_step", check)
+    monkeypatch.setattr(library_workflows, "lookup_pdf_import_candidate_step", lookup)
+    monkeypatch.setattr(library_workflows, "finalize_pdf_import_batch_step", finalize)
+    workflow_body = library_workflows.prepare_pdf_import_workflow.__wrapped__.__wrapped__
+
+    result = await workflow_body("batch-id", "workflow-id", [pending])
+
+    assert result == {"candidates": 1, "diagnostics": 0, "discarded": False}
+    assert calls == [
+        ("extract", 1),
+        ("check", "batch-id", 1, "10.1000/checkpointed"),
+        ("lookup", "batch-id", 1, "10.1000/checkpointed"),
+    ]
+
+
+@pytest.mark.anyio
 async def test_recommend_all_uses_one_transaction_per_item(monkeypatch):
     requested = []
 
-    async def list_items():
+    async def list_items(_after_id, _limit):
         await asyncio.sleep(0)
         return ("item-a", "item-b")
 
@@ -711,10 +958,39 @@ async def test_recommend_all_uses_one_transaction_per_item(monkeypatch):
 
 
 @pytest.mark.anyio
+async def test_recommend_all_checkpoints_bounded_keyset_pages(monkeypatch):
+    item_ids = [f"item-{index:03d}" for index in range(101)]
+    requested = []
+    page_sizes = []
+
+    async def list_items(after_id, limit):
+        await asyncio.sleep(0)
+        start = 0 if after_id is None else item_ids.index(after_id) + 1
+        page = tuple(item_ids[start : start + limit])
+        page_sizes.append(len(page))
+        return page
+
+    async def request(item_id, _owner_id):
+        await asyncio.sleep(0)
+        requested.append(item_id)
+        return True
+
+    monkeypatch.setattr(operation_workflows, "list_items_for_tag_recommendation_step", list_items)
+    monkeypatch.setattr(operation_workflows, "request_item_tag_recommendation_step", request)
+    workflow_body = operation_workflows.recommend_tags_all_workflow.__wrapped__.__wrapped__
+
+    result = await workflow_body("workflow-id", "owner-id")
+
+    assert result == {"enqueued_items": 101}
+    assert page_sizes == [100, 1]
+    assert requested == item_ids
+
+
+@pytest.mark.anyio
 async def test_recommend_all_continues_when_snapshot_item_was_deleted(monkeypatch):
     requested = []
 
-    async def list_items():
+    async def list_items(_after_id, _limit):
         await asyncio.sleep(0)
         return ("deleted-item", "live-item")
 
