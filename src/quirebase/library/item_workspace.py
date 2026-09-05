@@ -345,7 +345,6 @@ async def _open_annotations(db: AsyncSession, user: User, item: Item) -> Annotat
         rows = (
             await db.execute(
                 select(PdfAnnotation, FileRevision, User)
-                .options(selectinload(PdfAnnotation.segments))
                 .join(FileRevision, FileRevision.id == PdfAnnotation.file_revision_id)
                 .join(User, User.id == PdfAnnotation.author_id)
                 .where(

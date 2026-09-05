@@ -8,6 +8,7 @@ from quirebase.programmatic.projections import (
     project_detail_view,
 )
 from quirebase.programmatic.views import (
+    AnnotationReplyView,
     AnnotationView,
     CitationView,
     ContributorView,
@@ -26,6 +27,7 @@ from quirebase.programmatic.views import (
 )
 
 __all__ = [
+    "AnnotationReplyView",
     "AnnotationView",
     "CitationView",
     "ContributorView",

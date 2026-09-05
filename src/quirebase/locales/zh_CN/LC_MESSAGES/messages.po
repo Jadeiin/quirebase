@@ -2534,6 +2534,14 @@ msgstr "私有"
 msgid "Unable to open PDF: {message}"
 msgstr "无法打开 PDF：{message}"
 
+#: src/quirebase/templates/pdf.html
+msgid "The PDF could not be loaded."
+msgstr "无法加载 PDF 文件。"
+
+#: src/quirebase/templates/pdf.html
+msgid "PDF loading timed out. Please retry or download the file."
+msgstr "PDF 加载超时，请重试或下载该文件。"
+
 #: src/quirebase/templates/pdf.html:23
 msgid "Previous PDF page"
 msgstr "上一页"
@@ -3188,3 +3196,36 @@ msgstr "CSL XML"
 
 #~ msgid "Durable operation"
 #~ msgstr "持久操作"
+
+msgid "Annotation could not be saved; the server version was restored."
+msgstr "批注无法保存；已恢复服务器版本。"
+
+msgid "Annotation scope"
+msgstr "批注范围"
+
+msgid "Arrow"
+msgstr "箭头"
+
+msgid "Ellipse"
+msgstr "椭圆"
+
+msgid "Free text"
+msgstr "自由文本"
+
+msgid "Ink"
+msgstr "墨迹"
+
+msgid "Line"
+msgstr "直线"
+
+msgid "No annotations yet. Open a PDF to annotate it."
+msgstr "尚无批注。打开 PDF 即可添加批注。"
+
+msgid "PDF viewer"
+msgstr "PDF 阅读器"
+
+msgid "Rectangle"
+msgstr "矩形"
+
+msgid "Strikeout"
+msgstr "删除线"

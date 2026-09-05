@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import select
@@ -162,17 +163,17 @@ async def test_item_workspace_separates_page_responsibilities(
             f"/documents/{item.id}/annotations",
             headers={"X-CSRF-Token": "test-csrf"},
             json={
+                "id": str(uuid4()),
                 "revision_id": revision.id,
+                "page_index": 0,
                 "kind": "highlight",
                 "scope": "private",
-                "color": "yellow",
                 "selected_text": "A useful result",
-                "segments": [
-                    {
-                        "page_index": 0,
-                        "quad_points": [10, 20, 30, 20, 10, 10, 30, 10],
-                    }
-                ],
+                "payload": {
+                    "type": "highlight",
+                    "rect": {"x": 10, "y": 10, "width": 20, "height": 10},
+                    "segment_rects": [{"x": 10, "y": 10, "width": 20, "height": 10}],
+                },
             },
         )
         assert created.status_code == 201
@@ -318,17 +319,28 @@ async def test_item_summary_reports_exact_activity_counts(
             DiscussionMessage(item_id=item.id, author_id=user.id, body="Second"),
             PdfAnnotation(
                 file_revision_id=revision.id,
+                page_index=0,
                 author_id=user.id,
                 kind="highlight",
                 scope="private",
-                color="yellow",
+                payload={
+                    "type": "highlight",
+                    "rect": {"x": 1, "y": 1, "width": 10, "height": 10},
+                    "style": {},
+                    "segment_rects": [{"x": 1, "y": 1, "width": 10, "height": 10}],
+                },
             ),
             PdfAnnotation(
                 file_revision_id=revision.id,
+                page_index=0,
                 author_id=user.id,
                 kind="note",
                 scope="private",
-                color="blue",
+                payload={
+                    "type": "note",
+                    "rect": {"x": 20, "y": 20, "width": 24, "height": 24},
+                    "style": {},
+                },
             ),
         ])
         await db.commit()

@@ -2,9 +2,14 @@ from __future__ import annotations
 
 from quirebase.documents.annotations import (
     DocumentNotReady,
+    create_annotation_reply,
     create_document_annotation,
+    delete_annotation_reply,
     delete_document_annotation,
     list_document_annotations,
+    restore_annotation_reply,
+    restore_document_annotation,
+    update_annotation_reply,
     update_document_annotation,
 )
 from quirebase.documents.bundles import (
@@ -34,21 +39,37 @@ from quirebase.documents.revisions import (
     head_revision_file,
     store_pdf_revision,
 )
-from quirebase.documents.schemas import AnnotationCreate, AnnotationUpdate, SegmentInput
+from quirebase.documents.schemas import (
+    AnnotationCreate,
+    AnnotationPayload,
+    AnnotationReplyCreate,
+    AnnotationReplyUpdate,
+    AnnotationStyle,
+    AnnotationUpdate,
+    Point,
+    Rect,
+)
 
 __all__ = [
     "AnnotationCreate",
+    "AnnotationPayload",
+    "AnnotationReplyCreate",
+    "AnnotationReplyUpdate",
+    "AnnotationStyle",
     "AnnotationUpdate",
     "DocumentNotReady",
     "ItemDownloadBundle",
     "ItemThumbnail",
-    "SegmentInput",
+    "Point",
+    "Rect",
     "UnsupportedMediaType",
     "assemble_document_bundle",
+    "create_annotation_reply",
     "create_attachment",
     "create_document_annotation",
     "create_export_job",
     "create_item_document_bundle",
+    "delete_annotation_reply",
     "delete_attachment",
     "delete_document_annotation",
     "delete_file_revision",
@@ -64,6 +85,9 @@ __all__ = [
     "get_revision_thumbnail",
     "head_revision_file",
     "list_document_annotations",
+    "restore_annotation_reply",
+    "restore_document_annotation",
     "store_pdf_revision",
+    "update_annotation_reply",
     "update_document_annotation",
 ]

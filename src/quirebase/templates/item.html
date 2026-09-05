@@ -3,7 +3,7 @@
 {% from "_workflow_progress.html" import workflow_progress with context %}
 {% block title %}{{ item.title|rich_text_plain }} · Quirebase{% endblock %}
 {% block content %}
-{% set annotation_kind_labels = {'highlight': _('Highlight'), 'underline': _('Underline'), 'note': _('Note')} %}
+{% set annotation_kind_labels = {'highlight': _('Highlight'), 'underline': _('Underline'), 'strikeout': _('Strikeout'), 'note': _('Note'), 'free_text': _('Free text'), 'ink': _('Ink'), 'rectangle': _('Rectangle'), 'ellipse': _('Ellipse'), 'line': _('Line'), 'arrow': _('Arrow')} %}
 <header class="item-header">
   <p class="item-breadcrumb"><a href="/library">{{ _('Library') }}</a> / {{ _('Paper') }}</p>
   <div class="item-title-row">
@@ -409,7 +409,7 @@
 
     {% elif item_section == 'annotations' %}
     <section class="panel page-section-heading"><p class="eyebrow">{{ _('Reading workspace') }}</p><h2>{{ _('Notes and annotations') }}</h2><p>{{ _('Highlights, underlines and margin notes are created in the PDF reader and collected here for review.') }}</p>{% if revisions %}<a class="button-link" href="/items/{{ item.id }}/pdf/{{ revisions[0].id }}">{{ _('Open annotation tools') }}</a>{% endif %}</section>
-    <section class="panel annotation-list"><div class="section-heading"><h2>{{ _('All annotations') }}</h2><span>{{ _('{count} annotation(s)', count=annotations|length) }}</span></div>{% for annotation, revision, author in annotations %}<article><span class="annotation-swatch" style="--annotation-color: {{ annotation.color }}"></span><div><div class="annotation-meta"><strong>{{ annotation_kind_labels[annotation.kind.value] }}</strong><span>{{ author.username }} · {{ _(annotation.scope) }} · {{ revision.original_name }}{% if annotation.segments %} · {{ _('Page {page}', page=annotation.segments[0].page_index + 1) }}{% endif %}</span></div>{% if annotation.selected_text %}<blockquote>{{ annotation.selected_text }}</blockquote>{% endif %}{% if annotation.body %}<p>{{ annotation.body }}</p>{% endif %}</div><a href="/items/{{ item.id }}/pdf/{{ revision.id }}">{{ _('Open') }}</a></article>{% else %}<div class="empty-state">{{ _('No annotations yet. Open a PDF to highlight, underline or add a note.') }}</div>{% endfor %}</section>
+    <section class="panel annotation-list"><div class="section-heading"><h2>{{ _('All annotations') }}</h2><span>{{ _('{count} annotation(s)', count=annotations|length) }}</span></div>{% for annotation, revision, author in annotations %}<article><span class="annotation-swatch" style="--annotation-color: {{ annotation.payload.style.stroke_color or annotation.payload.style.fill_color or '#FFEB33' }}"></span><div><div class="annotation-meta"><strong>{{ annotation_kind_labels[annotation.kind.value] }}</strong><span>{{ author.username }} · {{ _(annotation.scope) }} · {{ revision.original_name }} · {{ _('Page {page}', page=annotation.page_index + 1) }}</span></div>{% if annotation.selected_text %}<blockquote>{{ annotation.selected_text }}</blockquote>{% endif %}{% if annotation.body %}<p>{{ annotation.body }}</p>{% endif %}</div><a href="/items/{{ item.id }}/pdf/{{ revision.id }}">{{ _('Open') }}</a></article>{% else %}<div class="empty-state">{{ _('No annotations yet. Open a PDF to annotate it.') }}</div>{% endfor %}</section>
 
     {% elif item_section == 'discussion' %}
     <section class="panel page-section-heading"><p class="eyebrow">{{ _('Collaboration') }}</p><h2>{{ _('Discussion') }}</h2><p>{{ _('Keep paper-specific questions and decisions with the research record.') }}</p></section>

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from uuid import uuid4
 
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
@@ -16,6 +17,8 @@ from quirebase.models import (
     AuditEvent,
     FileRevision,
     Item,
+    PdfAnnotation,
+    PdfAnnotationReply,
     Project,
     ProjectItem,
     ProjectMember,
@@ -54,6 +57,7 @@ async def test_registered_tools_match_the_server_allowlist():
     assert annotations["discovery.search"].open_world_hint is True
     assert annotations["documents.list"].read_only_hint is True
     assert annotations["annotations.delete"].destructive_hint is True
+    assert annotations["annotation_replies.delete"].destructive_hint is True
 
 
 @pytest.mark.anyio
@@ -366,3 +370,132 @@ async def test_annotation_handler_validation_does_not_create_an_audit_event(
         )
         == 0
     )
+
+
+@pytest.mark.anyio
+async def test_mcp_annotation_tools_use_the_canonical_snapshot_contract(
+    async_db, async_session_factory
+):
+    db = async_db
+    user = User(username="mcp-canonical-annotations", password_hash="unused")
+    db.add(user)
+    await db.flush()
+    item = Item(title="Canonical annotations", created_by=user.id)
+    db.add(item)
+    await db.flush()
+    revision = FileRevision(
+        item_id=item.id,
+        object_key="objects/canonical.pdf",
+        size=10,
+        mime_type="application/pdf",
+        original_name="canonical.pdf",
+        page_count=1,
+        page_geometry="[[0,0,200,300]]",
+        processing_state="ready",
+        created_by=user.id,
+    )
+    db.add(revision)
+    await db.commit()
+    server = _server(async_session_factory, RequestIdentity(user.id, client_id="test-client"))
+    annotation_id = str(uuid4())
+    payload = {
+        "type": "note",
+        "rect": {"x": 10, "y": 20, "width": 24, "height": 24},
+        "style": {"stroke_color": "#3366CC", "opacity": 0.8},
+    }
+
+    created = await _call(
+        server,
+        "annotations.create",
+        {
+            "item_id": item.id,
+            "id": annotation_id,
+            "revision_id": revision.id,
+            "page_index": 0,
+            "kind": "note",
+            "payload": payload,
+            "body": "First comment",
+        },
+    )
+    assert created.structured_content is not None
+    assert created.structured_content["id"] == annotation_id
+    assert created.structured_content["payload"]["type"] == "note"
+    assert created.structured_content["editable"] is True
+
+    listed = await _call(
+        server,
+        "annotations.list",
+        {"item_id": item.id, "revision_id": revision.id},
+    )
+    assert listed.structured_content is not None
+    assert listed.structured_content["result"][0]["id"] == annotation_id
+
+    reply_id = str(uuid4())
+    reply = await _call(
+        server,
+        "annotation_replies.create",
+        {
+            "item_id": item.id,
+            "annotation_id": annotation_id,
+            "id": reply_id,
+            "body": "MCP reply",
+        },
+    )
+    assert reply.structured_content is not None
+    assert reply.structured_content["body"] == "MCP reply"
+    updated_reply = await _call(
+        server,
+        "annotation_replies.update",
+        {
+            "item_id": item.id,
+            "annotation_id": annotation_id,
+            "reply_id": reply_id,
+            "version": 1,
+            "body": "Updated MCP reply",
+        },
+    )
+    assert updated_reply.structured_content is not None
+    assert updated_reply.structured_content["version"] == 2
+    await _call(
+        server,
+        "annotation_replies.delete",
+        {
+            "item_id": item.id,
+            "annotation_id": annotation_id,
+            "reply_id": reply_id,
+            "version": 2,
+        },
+    )
+    reply_record = await db.get(PdfAnnotationReply, reply_id)
+    assert reply_record is not None and reply_record.deleted_at is not None
+
+    updated = await _call(
+        server,
+        "annotations.update",
+        {
+            "item_id": item.id,
+            "annotation_id": annotation_id,
+            "version": 1,
+            "page_index": 0,
+            "kind": "note",
+            "scope": "private",
+            "payload": payload,
+            "body": "Updated comment",
+        },
+    )
+    assert updated.structured_content is not None
+    assert updated.structured_content["version"] == 2
+    assert updated.structured_content["body"] == "Updated comment"
+
+    deleted = await _call(
+        server,
+        "annotations.delete",
+        {"item_id": item.id, "annotation_id": annotation_id, "version": 2},
+    )
+    assert deleted.structured_content == {"ok": True}
+    record = await db.get(PdfAnnotation, annotation_id)
+    assert record is not None and record.deleted_at is not None and record.version == 3
+    actions = set(
+        await db.scalars(select(AuditEvent.action).where(AuditEvent.target_id == annotation_id))
+    )
+    assert actions == {"annotation.create", "annotation.update", "annotation.delete"}

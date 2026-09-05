@@ -27,7 +27,7 @@ The architecture suite keeps this list complete when mappings are added or remov
 | Accounts | `User`, `LoginSession`, `LoginThrottle`, `Invitation` |
 | Library | `Item`, `Author`, `ItemAuthor`, `ItemIdentifier`, `ItemRead`, `Tag`, `ItemTag`, `DiscussionMessage` |
 | Projects | `Project`, `ProjectMember`, `ProjectItem` |
-| Documents | `FileRevision`, `Attachment`, `PdfAnnotation`, `PdfAnnotationSegment` |
+| Documents | `FileRevision`, `Attachment`, `PdfAnnotationObject`, `PdfAnnotation`, `PdfAnnotationReply`, `ExportArtifact` |
 | Discovery | `ImportBatch`, `CitationStyle` |
 | Audit | `AuditEvent` |
 | Operations | `SystemSetting` |

@@ -141,6 +141,13 @@ validation, section query selection and recent-reading persistence remain coordi
 same operation seam. The implementation lives in `library.item_workspace`, which owns reads for
 one opened Item and no Item mutation or bulk behaviour.
 
+Annotation and Annotation Reply CRUD cross the Documents interface through typed create/update
+commands and shared views. Documents owns the canonical per-page geometry and style schema,
+authorization coordination, optimistic versioning, soft deletion, Audit Events and projection to
+PDF export. Web, REST and MCP are inbound Adapters over that Interface; EmbedPDF objects are
+translated only inside the Web asset and never enter Documents persistence or programmatic wire
+contracts.
+
 Tag selection is presented by the Item Workspace and committed through `set_item_tags`. Existing
 Tags may be matched case-insensitively against an Item Tag Recommendation, while candidates absent
 from the taxonomy are returned as suggested names and remain uncommitted until selected by the User. Taxonomy

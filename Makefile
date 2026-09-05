@@ -4,7 +4,7 @@ include Makefile.config
 
 .PHONY: dev init-db doctor \
         i18n-extract i18n-update i18n-compile i18n-init i18n-sync \
-        build-client build-assets test-client-pdfjs \
+        build-client build-assets \
         check-all lint-all lint-python format-python type-check test-all test-oa \
         clean clean-install make-p
 
@@ -48,9 +48,6 @@ build-assets: build-client
 build-client:
 	$(BUN) scripts/build-assets.mjs
 	$(BUN) run build:app
-
-test-client-pdfjs:
-	$(BUN) run test:oa:pdfjs
 
 # --- Code Quality & Verification ---
 check-all: lint-all type-check test-all

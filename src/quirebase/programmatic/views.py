@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from quirebase.documents import SegmentInput  # ruff: ignore[typing-only-first-party-import]
+from quirebase.documents import AnnotationPayload  # ruff: ignore[typing-only-first-party-import]
 from quirebase.library import (  # ruff: ignore[typing-only-first-party-import]
     ItemMetadata,
 )
@@ -89,18 +89,35 @@ class DocumentListView(BaseModel):
     files: list[FileView]
 
 
+class AnnotationReplyView(BaseModel):
+    id: str
+    annotation_id: str
+    body: str
+    version: int
+    author_display_name: str
+    mine: bool
+    editable: bool
+    created_at: str
+    updated_at: str
+
+
 class AnnotationView(BaseModel):
     id: str
     revision_id: str
+    page_index: int
     kind: str
     scope: str
     project_id: str | None
-    color: str
     body: str | None
     selected_text: str | None
+    payload: AnnotationPayload
     version: int
+    author_display_name: str
     mine: bool
-    segments: list[SegmentInput]
+    editable: bool
+    created_at: str
+    updated_at: str
+    replies: list[AnnotationReplyView] = Field(default_factory=list)
 
 
 class TagView(BaseModel):

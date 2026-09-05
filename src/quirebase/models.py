@@ -5,10 +5,10 @@ from datetime import UTC, datetime
 from enum import StrEnum
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     CheckConstraint,
     DateTime,
-    Float,
     ForeignKey,
     Integer,
     String,
@@ -45,12 +45,24 @@ class ProjectRole(StrEnum):
 class AnnotationKind(StrEnum):
     highlight = "highlight"
     underline = "underline"
+    strikeout = "strikeout"
     note = "note"
+    free_text = "free_text"
+    ink = "ink"
+    rectangle = "rectangle"
+    ellipse = "ellipse"
+    line = "line"
+    arrow = "arrow"
 
 
 class AnnotationScope(StrEnum):
     private = "private"
     project = "project"
+
+
+class AnnotationObjectType(StrEnum):
+    annotation = "annotation"
+    reply = "reply"
 
 
 class FileRevisionProcessingState(StrEnum):
@@ -347,11 +359,27 @@ class Attachment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
+class PdfAnnotationObject(Base):
+    __tablename__ = "pdf_annotation_objects"
+    __table_args__ = (
+        CheckConstraint(
+            "object_type IN ('annotation', 'reply')",
+            name="ck_pdf_annotation_objects_type",
+        ),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    object_type: Mapped[AnnotationObjectType] = mapped_column(
+        enum_type(AnnotationObjectType, "annotation_object_type")
+    )
+
+
 class PdfAnnotation(Base):
     __tablename__ = "pdf_annotations"
     __table_args__ = (
         CheckConstraint(
-            "kind IN ('highlight', 'underline', 'note')", name="ck_pdf_annotations_kind"
+            "kind IN ('highlight', 'underline', 'strikeout', 'note', 'free_text', "
+            "'ink', 'rectangle', 'ellipse', 'line', 'arrow')",
+            name="ck_pdf_annotations_kind",
         ),
         CheckConstraint("scope IN ('private', 'project')", name="ck_pdf_annotations_scope"),
         CheckConstraint(
@@ -360,10 +388,19 @@ class PdfAnnotation(Base):
             name="ck_pdf_annotations_project_scope",
         ),
     )
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    id: Mapped[str] = mapped_column(
+        ForeignKey(
+            "pdf_annotation_objects.id",
+            name="fk_pdf_annotations_object_id",
+        ),
+        primary_key=True,
+        default=uid,
+    )
+    object_identity: Mapped[PdfAnnotationObject] = relationship()
     file_revision_id: Mapped[str] = mapped_column(
         ForeignKey("file_revisions.id", ondelete="CASCADE"), index=True
     )
+    page_index: Mapped[int] = mapped_column(Integer)
     author_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     kind: Mapped[AnnotationKind] = mapped_column(enum_type(AnnotationKind, "annotation_kind"))
     scope: Mapped[AnnotationScope] = mapped_column(
@@ -372,40 +409,57 @@ class PdfAnnotation(Base):
     project_id: Mapped[str | None] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), index=True
     )
-    color: Mapped[str] = mapped_column(String(16), default="yellow")
     body: Mapped[str | None] = mapped_column(Text)
     selected_text: Mapped[str | None] = mapped_column(Text)
+    payload: Mapped[dict] = mapped_column(JSON)
     version: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    segments: Mapped[list[PdfAnnotationSegment]] = relationship(
-        back_populates="annotation",
-        cascade="all, delete-orphan",
-        order_by="PdfAnnotationSegment.ordinal",
+
+    def __init__(self, **kwargs):
+        object_id = kwargs.setdefault("id", uid())
+        kwargs.setdefault(
+            "object_identity",
+            PdfAnnotationObject(
+                id=object_id,
+                object_type=AnnotationObjectType.annotation,
+            ),
+        )
+        super().__init__(**kwargs)
+
+
+class PdfAnnotationReply(Base):
+    __tablename__ = "pdf_annotation_replies"
+    id: Mapped[str] = mapped_column(
+        ForeignKey(
+            "pdf_annotation_objects.id",
+            name="fk_pdf_annotation_replies_object_id",
+        ),
+        primary_key=True,
+        default=uid,
     )
-
-
-class PdfAnnotationSegment(Base):
-    __tablename__ = "pdf_annotation_segments"
-    __table_args__ = (UniqueConstraint("annotation_id", "ordinal"),)
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    object_identity: Mapped[PdfAnnotationObject] = relationship()
     annotation_id: Mapped[str] = mapped_column(
         ForeignKey("pdf_annotations.id", ondelete="CASCADE"), index=True
     )
-    page_index: Mapped[int] = mapped_column(Integer)
-    ordinal: Mapped[int] = mapped_column(Integer)
-    x1: Mapped[float | None] = mapped_column(Float)
-    y1: Mapped[float | None] = mapped_column(Float)
-    x2: Mapped[float | None] = mapped_column(Float)
-    y2: Mapped[float | None] = mapped_column(Float)
-    x3: Mapped[float | None] = mapped_column(Float)
-    y3: Mapped[float | None] = mapped_column(Float)
-    x4: Mapped[float | None] = mapped_column(Float)
-    y4: Mapped[float | None] = mapped_column(Float)
-    anchor_x: Mapped[float | None] = mapped_column(Float)
-    anchor_y: Mapped[float | None] = mapped_column(Float)
-    annotation: Mapped[PdfAnnotation] = relationship(back_populates="segments")
+    author_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    body: Mapped[str] = mapped_column(Text)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    def __init__(self, **kwargs):
+        object_id = kwargs.setdefault("id", uid())
+        kwargs.setdefault(
+            "object_identity",
+            PdfAnnotationObject(
+                id=object_id,
+                object_type=AnnotationObjectType.reply,
+            ),
+        )
+        super().__init__(**kwargs)
 
 
 class ExportArtifact(Base):

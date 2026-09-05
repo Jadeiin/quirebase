@@ -9,10 +9,15 @@ from quirebase.core.config import Settings, get_settings
 from quirebase.core.database import get_db
 from quirebase.documents import (
     AnnotationCreate,
+    AnnotationReplyCreate,
+    AnnotationReplyUpdate,
     AnnotationUpdate,
+    create_annotation_reply,
     create_document_annotation,
+    delete_annotation_reply,
     delete_document_annotation,
     list_document_annotations,
+    update_annotation_reply,
     update_document_annotation,
 )
 from quirebase.library import (
@@ -37,6 +42,7 @@ from quirebase.library import (
 )
 from quirebase.models import User
 from quirebase.programmatic import (
+    AnnotationReplyView,
     AnnotationView,
     CitationView,
     DiscussionMessageView,
@@ -254,9 +260,59 @@ async def update_annotation(
 
 @router.delete("/items/{item_id}/annotations/{annotation_id}", response_model=OkView)
 async def delete_annotation(
-    item_id: str, annotation_id: str, user: ApiUser, db: Database
+    item_id: str, annotation_id: str, version: int, user: ApiUser, db: Database
 ) -> OkView:
-    await delete_document_annotation(db, user, item_id, annotation_id)
+    await delete_document_annotation(db, user, item_id, annotation_id, version)
+    return OkView()
+
+
+@router.post(
+    "/items/{item_id}/annotations/{annotation_id}/replies",
+    response_model=AnnotationReplyView,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_reply(
+    item_id: str,
+    annotation_id: str,
+    data: AnnotationReplyCreate,
+    user: ApiUser,
+    db: Database,
+) -> AnnotationReplyView:
+    return AnnotationReplyView.model_validate(
+        await create_annotation_reply(db, user, item_id, annotation_id, data)
+    )
+
+
+@router.patch(
+    "/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}",
+    response_model=AnnotationReplyView,
+)
+async def update_reply(
+    item_id: str,
+    annotation_id: str,
+    reply_id: str,
+    data: AnnotationReplyUpdate,
+    user: ApiUser,
+    db: Database,
+) -> AnnotationReplyView:
+    return AnnotationReplyView.model_validate(
+        await update_annotation_reply(db, user, item_id, annotation_id, reply_id, data)
+    )
+
+
+@router.delete(
+    "/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}",
+    response_model=OkView,
+)
+async def delete_reply(
+    item_id: str,
+    annotation_id: str,
+    reply_id: str,
+    version: int,
+    user: ApiUser,
+    db: Database,
+) -> OkView:
+    await delete_annotation_reply(db, user, item_id, annotation_id, reply_id, version)
     return OkView()
 
 

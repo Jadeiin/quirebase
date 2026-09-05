@@ -22,7 +22,6 @@ from quirebase.models import (
     ImportBatch,
     Item,
     PdfAnnotation,
-    PdfAnnotationSegment,
     Project,
     ProjectItem,
     ProjectMember,
@@ -279,26 +278,25 @@ async def test_item_download_embeds_annotations_in_pdf_without_a_sidecar(
     revision.size = size
     annotation = PdfAnnotation(
         file_revision_id=revision.id,
+        page_index=0,
         author_id=owner.id,
         kind="highlight",
         scope="private",
-        color="yellow",
         selected_text="Result",
+        payload={
+            "type": "highlight",
+            "rect": {"x": 20, "y": 280, "width": 80, "height": 20},
+            "style": {
+                "stroke_color": "#FFEB33",
+                "fill_color": None,
+                "text_color": None,
+                "opacity": 0.35,
+                "stroke_width": 1,
+                "dash_pattern": [],
+            },
+            "segment_rects": [{"x": 20, "y": 280, "width": 80, "height": 20}],
+        },
     )
-    annotation.segments = [
-        PdfAnnotationSegment(
-            page_index=0,
-            ordinal=0,
-            x1=20,
-            y1=300,
-            x2=100,
-            y2=300,
-            x3=20,
-            y3=280,
-            x4=100,
-            y4=280,
-        )
-    ]
     db.add(annotation)
     await db.commit()
 

@@ -91,12 +91,28 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
     try:
         viewer = await client.get(f"/items/{item.id}/pdf/{revision.id}")
         assert viewer.status_code == 200
+        content_security_policy = viewer.headers["content-security-policy"]
+        assert "script-src 'self' 'wasm-unsafe-eval'" in content_security_policy
+        assert "img-src 'self' data: blob:" in content_security_policy
         assert 'lang="zh-CN"' in viewer.text
-        assert "删除所选批注" in viewer.text
+        assert 'data-locale="zh-CN"' in viewer.text
+        assert 'id="embedpdf-viewer"' in viewer.text
         encoded_messages = re.search(r'data-i18n="([^"]+)"', viewer.text)
         assert encoded_messages is not None
         messages = json.loads(unescape(encoded_messages.group(1)))
-        assert messages["selectOwnAnnotation"] == "请选择一条你创建的批注。"
+        assert messages["syncFailed"] == "批注无法保存；已恢复服务器版本。"  # ruff: ignore[ambiguous-unicode-character-string]
+        assert messages["loadTimedOut"] == "PDF 加载超时，请重试或下载该文件。"  # ruff: ignore[ambiguous-unicode-character-string]
+
+        client.cookies.set("quirebase_locale", "en_US")
+        english_viewer = await client.get(f"/items/{item.id}/pdf/{revision.id}")
+        assert 'lang="en-US"' in english_viewer.text
+        assert 'data-locale="en-US"' in english_viewer.text
+        assert "PDF loading timed out. Please retry or download the file." in english_viewer.text
+
+        wasm = await client.get("/static/vendor/pdfium.wasm")
+        assert wasm.status_code == 200
+        assert wasm.headers["content-type"] == "application/wasm"
+        assert wasm.content[:4] == b"\x00asm"
 
         content = await client.get(
             f"/documents/{item.id}/revisions/{revision.id}/content",
@@ -113,22 +129,86 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
             f"/documents/{item.id}/annotations",
             headers={"X-CSRF-Token": "test-csrf"},
             json={
+                "id": str(uuid4()),
                 "revision_id": revision.id,
+                "page_index": 0,
                 "kind": "highlight",
                 "scope": "private",
-                "color": "yellow",
                 "selected_text": "test",
-                "segments": [
-                    {
-                        "page_index": 0,
-                        "quad_points": [10, 20, 30, 20, 10, 10, 30, 10],
-                    }
-                ],
+                "payload": {
+                    "type": "highlight",
+                    "rect": {"x": 10, "y": 10, "width": 20, "height": 10},
+                    "style": {"stroke_color": "#FFEB33", "opacity": 0.35},
+                    "segment_rects": [{"x": 10, "y": 10, "width": 20, "height": 10}],
+                },
             },
         )
         assert created.status_code == 201
         annotation = created.json()
         assert annotation["mine"] is True
+        assert annotation["replies"] == []
+
+        reply_id = str(uuid4())
+        replied = await client.post(
+            f"/documents/{item.id}/annotations/{annotation['id']}/replies",
+            headers={"X-CSRF-Token": "test-csrf"},
+            json={"id": reply_id, "body": "Collaborative reply"},
+        )
+        assert replied.status_code == 201
+        reply = replied.json()
+        assert reply["annotation_id"] == annotation["id"]
+        assert reply["body"] == "Collaborative reply"
+        listed_with_reply = await client.get(
+            f"/documents/{item.id}/annotations",
+            params={"revision_id": revision.id},
+        )
+        listed_reply = listed_with_reply.json()["annotations"][0]["replies"][0]
+        assert listed_reply["id"] == reply["id"]
+        assert listed_reply["body"] == reply["body"]
+        updated_reply = await client.patch(
+            f"/documents/{item.id}/annotations/{annotation['id']}/replies/{reply_id}",
+            headers={"X-CSRF-Token": "test-csrf"},
+            json={"version": reply["version"], "body": "Updated reply"},
+        )
+        assert updated_reply.status_code == 200
+        assert updated_reply.json()["version"] == 2
+        assert updated_reply.json()["body"] == "Updated reply"
+        deleted_reply = await client.delete(
+            f"/documents/{item.id}/annotations/{annotation['id']}/replies/{reply_id}",
+            headers={"X-CSRF-Token": "test-csrf"},
+            params={"version": 2},
+        )
+        assert deleted_reply.status_code == 204
+        restored_reply = await client.post(
+            f"/documents/{item.id}/annotations/{annotation['id']}/replies/{reply_id}/restore",
+            headers={"X-CSRF-Token": "test-csrf"},
+            params={"version": 3},
+        )
+        assert restored_reply.status_code == 200
+        assert restored_reply.json()["version"] == 4
+        deleted_reply_again = await client.delete(
+            f"/documents/{item.id}/annotations/{annotation['id']}/replies/{reply_id}",
+            headers={"X-CSRF-Token": "test-csrf"},
+            params={"version": 4},
+        )
+        assert deleted_reply_again.status_code == 204
+
+        duplicate = await client.post(
+            f"/documents/{item.id}/annotations",
+            headers={"X-CSRF-Token": "test-csrf"},
+            json={
+                "id": annotation["id"],
+                "revision_id": revision.id,
+                "page_index": annotation["page_index"],
+                "kind": annotation["kind"],
+                "scope": annotation["scope"],
+                "project_id": annotation["project_id"],
+                "body": annotation["body"],
+                "selected_text": annotation["selected_text"],
+                "payload": annotation["payload"],
+            },
+        )
+        assert duplicate.status_code == 409
 
         other_item = Item(title="Different paper", created_by=item.created_by)
         db.add(other_item)
@@ -254,40 +334,71 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
             f"/documents/{item.id}/annotations",
             headers={"X-CSRF-Token": "test-csrf"},
             json={
+                "id": str(uuid4()),
                 "revision_id": revision.id,
+                "page_index": 0,
                 "kind": "underline",
                 "scope": "private",
-                "color": "red",
                 "selected_text": "underlined text",
                 "body": "underline comment",
-                "segments": [
-                    {
-                        "page_index": 0,
-                        "quad_points": [10, 20, 30, 20, 10, 10, 30, 10],
-                    }
-                ],
+                "payload": {
+                    "type": "underline",
+                    "rect": {"x": 10, "y": 10, "width": 20, "height": 10},
+                    "style": {"stroke_color": "#FF5959", "opacity": 0.9},
+                    "segment_rects": [{"x": 10, "y": 10, "width": 20, "height": 10}],
+                },
             },
         )
         assert underlined.status_code == 201
         assert underlined.json()["kind"] == "underline"
-        assert underlined.json()["color"] == "red"
+        assert underlined.json()["payload"]["style"]["stroke_color"] == "#FF5959"
 
         conflict = await client.patch(
             f"/documents/{item.id}/annotations/{annotation['id']}",
             headers={"X-CSRF-Token": "test-csrf"},
-            json={"version": 99, "color": "red"},
+            json={
+                "version": 99,
+                "page_index": annotation["page_index"],
+                "kind": annotation["kind"],
+                "scope": annotation["scope"],
+                "project_id": annotation["project_id"],
+                "body": annotation["body"],
+                "selected_text": annotation["selected_text"],
+                "payload": annotation["payload"],
+            },
         )
         assert conflict.status_code == 409
 
         deleted = await client.delete(
             f"/documents/{item.id}/annotations/{annotation['id']}",
             headers={"X-CSRF-Token": "test-csrf"},
+            params={"version": annotation["version"]},
         )
         assert deleted.status_code == 204
         assert deleted.content == b""
+        stale_restore = await client.post(
+            f"/documents/{item.id}/annotations/{annotation['id']}/restore",
+            headers={"X-CSRF-Token": "test-csrf"},
+            params={"version": annotation["version"]},
+        )
+        assert stale_restore.status_code == 409
+        restored = await client.post(
+            f"/documents/{item.id}/annotations/{annotation['id']}/restore",
+            headers={"X-CSRF-Token": "test-csrf"},
+            params={"version": annotation["version"] + 1},
+        )
+        assert restored.status_code == 200
+        assert restored.json()["version"] == annotation["version"] + 2
+        assert restored.json()["replies"] == []
         assert await db.scalar(
             select(AuditEvent).where(
                 AuditEvent.action == "annotation.delete",
+                AuditEvent.target_id == annotation["id"],
+            )
+        )
+        assert await db.scalar(
+            select(AuditEvent).where(
+                AuditEvent.action == "annotation.restore",
                 AuditEvent.target_id == annotation["id"],
             )
         )

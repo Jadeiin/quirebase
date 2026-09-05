@@ -9,6 +9,9 @@ if TYPE_CHECKING:
     from collections.abc import Collection
 
 TOOL_ALLOWLIST = frozenset({
+    "annotation_replies.create",
+    "annotation_replies.delete",
+    "annotation_replies.update",
     "annotations.create",
     "annotations.delete",
     "annotations.list",

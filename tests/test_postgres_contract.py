@@ -36,6 +36,17 @@ def _load_dbos_migration() -> ModuleType:
     return migration
 
 
+def _load_annotation_migration() -> ModuleType:
+    migration_path = (
+        Path(__file__).parents[1] / "migrations" / "versions" / "0025_canonical_pdf_annotations.py"
+    )
+    spec = importlib.util.spec_from_file_location("migration_0025", migration_path)
+    assert spec is not None and spec.loader is not None
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    return migration
+
+
 @pytest.mark.skipif(
     not os.getenv("QUIREBASE_TEST_POSTGRES_URL"), reason="PostgreSQL is not configured"
 )
@@ -101,6 +112,109 @@ def test_postgresql_dbos_migration_drops_reflected_job_foreign_key(monkeypatch):
         with engine.begin() as connection:
             for table_name in table_names:
                 connection.execute(text(f'DROP TABLE IF EXISTS "{table_name}" CASCADE'))
+        engine.dispose()
+
+
+@pytest.mark.skipif(
+    not os.getenv("QUIREBASE_TEST_POSTGRES_URL"), reason="PostgreSQL is not configured"
+)
+def test_postgresql_canonical_annotation_migration(monkeypatch):
+    engine = sa.create_engine(os.environ["QUIREBASE_TEST_POSTGRES_URL"])
+    tables = (
+        "pdf_annotation_segments",
+        "pdf_annotations",
+        "pdf_annotations_v2",
+        "file_revisions",
+        "projects",
+        "users",
+    )
+    try:
+        with engine.begin() as connection:
+            for table in tables:
+                connection.execute(text(f'DROP TABLE IF EXISTS "{table}" CASCADE'))
+            connection.execute(text("CREATE TABLE users (id VARCHAR(36) PRIMARY KEY)"))
+            connection.execute(text("CREATE TABLE projects (id VARCHAR(36) PRIMARY KEY)"))
+            connection.execute(
+                text("CREATE TABLE file_revisions (id VARCHAR(36) PRIMARY KEY, page_geometry TEXT)")
+            )
+            connection.execute(text("INSERT INTO users VALUES ('author')"))
+            connection.execute(text("INSERT INTO projects VALUES ('project')"))
+            connection.execute(
+                text("INSERT INTO file_revisions VALUES ('revision', '[[10,20,210,320]]')")
+            )
+            connection.execute(
+                text(
+                    "CREATE TABLE pdf_annotations ("
+                    "id VARCHAR(36) PRIMARY KEY, file_revision_id VARCHAR(36) NOT NULL, "
+                    "author_id VARCHAR(36) NOT NULL, kind VARCHAR(32) NOT NULL, "
+                    "scope VARCHAR(32) NOT NULL, project_id VARCHAR(36), color VARCHAR(16) NOT NULL, "
+                    "body TEXT, selected_text TEXT, version INTEGER NOT NULL, "
+                    "created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL, "
+                    "deleted_at TIMESTAMPTZ)"
+                )
+            )
+            connection.execute(
+                text(
+                    "CREATE TABLE pdf_annotation_segments ("
+                    "id VARCHAR(36) PRIMARY KEY, annotation_id VARCHAR(36) NOT NULL, "
+                    "page_index INTEGER NOT NULL, ordinal INTEGER NOT NULL, "
+                    "x1 FLOAT, y1 FLOAT, x2 FLOAT, y2 FLOAT, x3 FLOAT, y3 FLOAT, x4 FLOAT, y4 FLOAT, "
+                    "anchor_x FLOAT, anchor_y FLOAT)"
+                )
+            )
+            annotation_id = "00000000-0000-4000-8000-000000000001"
+            connection.execute(
+                text(
+                    "INSERT INTO pdf_annotations VALUES "
+                    "(:id,'revision','author','highlight','private',NULL,'yellow',"
+                    "'Comment','Selected',3,NOW(),NOW(),NULL)"
+                ),
+                {"id": annotation_id},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO pdf_annotation_segments VALUES "
+                    "('segment',:id,0,0,20,300,80,300,20,280,80,280,NULL,NULL)"
+                ),
+                {"id": annotation_id},
+            )
+
+            migration = _load_annotation_migration()
+            monkeypatch.setattr(
+                migration,
+                "op",
+                Operations(MigrationContext.configure(connection)),
+            )
+            migration.upgrade()
+
+            inspector = sa.inspect(connection)
+            assert "pdf_annotation_segments" not in inspector.get_table_names()
+            assert "color" not in {
+                column["name"] for column in inspector.get_columns("pdf_annotations")
+            }
+            assert {
+                constraint["name"]
+                for constraint in inspector.get_check_constraints("pdf_annotations")
+            } == {
+                "ck_pdf_annotations_kind",
+                "ck_pdf_annotations_project_scope",
+                "ck_pdf_annotations_scope",
+            }
+            migrated = (
+                connection
+                .execute(
+                    text("SELECT page_index, payload FROM pdf_annotations WHERE id = :id"),
+                    {"id": annotation_id},
+                )
+                .mappings()
+                .one()
+            )
+            assert migrated["page_index"] == 0
+            assert len(migrated["payload"]["segment_rects"]) == 1
+    finally:
+        with engine.begin() as connection:
+            for table in tables:
+                connection.execute(text(f'DROP TABLE IF EXISTS "{table}" CASCADE'))
         engine.dispose()
 
 

@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING, Any
 import stream_zip
 from inquiro.richtext import convert_rich_text
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
 from quirebase.access.documents import require_revision
 from quirebase.access.items import require_accessible_items
@@ -163,7 +162,6 @@ async def _own_annotations(db: AsyncSession, user: User, revision_id: str) -> li
         (
             await db.scalars(
                 select(PdfAnnotation)
-                .options(selectinload(PdfAnnotation.segments))
                 .where(
                     PdfAnnotation.file_revision_id == revision_id,
                     PdfAnnotation.author_id == user.id,

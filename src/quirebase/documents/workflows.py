@@ -10,7 +10,6 @@ from uuid import UUID
 
 from dbos import DBOS
 from sqlalchemy import and_, or_, select, update
-from sqlalchemy.orm import selectinload
 
 from quirebase.audit import record_event
 from quirebase.core.config import get_settings
@@ -469,9 +468,7 @@ async def build_annotation_export(
             else list(
                 (
                     await db.scalars(
-                        select(PdfAnnotation)
-                        .options(selectinload(PdfAnnotation.segments))
-                        .where(
+                        select(PdfAnnotation).where(
                             PdfAnnotation.file_revision_id == revision.id,
                             PdfAnnotation.deleted_at.is_(None),
                             or_(*scopes),

@@ -72,7 +72,7 @@ non-partitioned queue, and Recommendation inference is isolated from Library Sea
 
 ## Building assets from source
 
-`src/quirebase/static` is a build output directory and is not tracked by git. From a source checkout, run `bun install` and `bun run build`; the script bundles `src/quirebase/assets` (with `pdfjs-dist`, Alpine.js and zxcvbn from the pinned `package.json` dependencies) and copies the handwritten `src/quirebase/assets/styles.css` and the PDF.js vendor files into `static/`. Release wheels are built after this step and therefore ship the assets.
+`src/quirebase/static` is a build output directory and is not tracked by git. From a source checkout, run `bun install` and `bun run build`; the script bundles `src/quirebase/assets` (with EmbedPDF, Alpine.js and zxcvbn from the pinned `package.json` dependencies), copies the handwritten `src/quirebase/assets/styles.css`, and copies EmbedPDF's PDFium WebAssembly binary to `static/vendor/pdfium.wasm`. Release wheels are built after this step and therefore ship the assets.
 
 ## Upgrades
 

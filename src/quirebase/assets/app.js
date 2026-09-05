@@ -664,14 +664,6 @@ Alpine.data("onlineSearch", () => ({
   },
 }));
 
-Alpine.data("pdfToolbar", () => ({
-  annotationOpen: false,
-  downloadOpen: false,
-  toggleAnnotations() {
-    this.annotationOpen = !this.annotationOpen;
-  },
-}));
-
 Alpine.data("itemDownload", () => ({
   includeAnnotations: false,
   includeSupplements: false,

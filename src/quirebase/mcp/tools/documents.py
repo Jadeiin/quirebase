@@ -4,16 +4,26 @@ from typing import TYPE_CHECKING, Literal
 
 from quirebase.documents import (
     AnnotationCreate,
+    AnnotationPayload,
+    AnnotationReplyCreate,
+    AnnotationReplyUpdate,
     AnnotationUpdate,
-    SegmentInput,
+    create_annotation_reply,
     create_document_annotation,
+    delete_annotation_reply,
     delete_document_annotation,
     list_document_annotations,
+    update_annotation_reply,
     update_document_annotation,
 )
 from quirebase.library import FilesWorkspace, WorkspaceSection, open_item_workspace
 from quirebase.mcp.tools.annotations import DESTRUCTIVE, READ_ONLY, WRITE
-from quirebase.programmatic import AnnotationView, DocumentListView, document_list_view
+from quirebase.programmatic import (
+    AnnotationReplyView,
+    AnnotationView,
+    DocumentListView,
+    document_list_view,
+)
 
 if TYPE_CHECKING:
     from mcp.server import MCPServer
@@ -58,23 +68,36 @@ def register_document_tools(server: MCPServer, runtime: McpRuntime) -> None:
     )
     async def annotations_create(
         item_id: str,
+        id: str,
         revision_id: str,
-        kind: Literal["highlight", "underline", "note"],
-        segments: list[SegmentInput],
+        page_index: int,
+        kind: Literal[
+            "highlight",
+            "underline",
+            "strikeout",
+            "note",
+            "free_text",
+            "ink",
+            "rectangle",
+            "ellipse",
+            "line",
+            "arrow",
+        ],
+        payload: AnnotationPayload,
         scope: Literal["private", "project"] = "private",
         project_id: str | None = None,
-        color: Literal["yellow", "green", "blue", "red"] = "yellow",
         body: str | None = None,
         selected_text: str | None = None,
     ) -> AnnotationView:
         async def run(db, user):
             data = AnnotationCreate.model_validate({
+                "id": id,
                 "revision_id": revision_id,
+                "page_index": page_index,
                 "kind": kind,
-                "segments": segments,
+                "payload": payload,
                 "scope": scope,
                 "project_id": project_id,
-                "color": color,
                 "body": body,
                 "selected_text": selected_text,
             })
@@ -97,18 +120,35 @@ def register_document_tools(server: MCPServer, runtime: McpRuntime) -> None:
         item_id: str,
         annotation_id: str,
         version: int,
-        scope: Literal["private", "project"] | None = None,
+        page_index: int,
+        kind: Literal[
+            "highlight",
+            "underline",
+            "strikeout",
+            "note",
+            "free_text",
+            "ink",
+            "rectangle",
+            "ellipse",
+            "line",
+            "arrow",
+        ],
+        payload: AnnotationPayload,
+        scope: Literal["private", "project"],
         project_id: str | None = None,
-        color: Literal["yellow", "green", "blue", "red"] | None = None,
         body: str | None = None,
+        selected_text: str | None = None,
     ) -> AnnotationView:
         async def run(db, user):
             data = AnnotationUpdate.model_validate({
                 "version": version,
+                "page_index": page_index,
+                "kind": kind,
+                "payload": payload,
                 "scope": scope,
                 "project_id": project_id,
-                "color": color,
                 "body": body,
+                "selected_text": selected_text,
             })
             return AnnotationView.model_validate(
                 await update_document_annotation(db, user, item_id, annotation_id, data)
@@ -125,10 +165,65 @@ def register_document_tools(server: MCPServer, runtime: McpRuntime) -> None:
         description="Soft-delete an annotation editable by the authenticated User.",
         annotations=DESTRUCTIVE,
     )
-    async def annotations_delete(item_id: str, annotation_id: str) -> dict[str, bool]:
+    async def annotations_delete(item_id: str, annotation_id: str, version: int) -> dict[str, bool]:
         await runtime.call(
             "annotations.delete",
-            lambda db, user: delete_document_annotation(db, user, item_id, annotation_id),
+            lambda db, user: delete_document_annotation(db, user, item_id, annotation_id, version),
             conceal_resource="annotation not found",
+        )
+        return {"ok": True}
+
+    @server.tool(
+        name="annotation_replies.create",
+        description="Reply to a visible PDF annotation.",
+        annotations=WRITE,
+    )
+    async def annotation_replies_create(
+        item_id: str, annotation_id: str, id: str, body: str
+    ) -> AnnotationReplyView:
+        async def run(db, user):
+            data = AnnotationReplyCreate.model_validate({"id": id, "body": body})
+            return AnnotationReplyView.model_validate(
+                await create_annotation_reply(db, user, item_id, annotation_id, data)
+            )
+
+        return await runtime.call(
+            "annotation_replies.create", run, conceal_resource="annotation not found"
+        )
+
+    @server.tool(
+        name="annotation_replies.update",
+        description="Update an editable Annotation Reply using optimistic version checking.",
+        annotations=WRITE,
+    )
+    async def annotation_replies_update(
+        item_id: str, annotation_id: str, reply_id: str, version: int, body: str
+    ) -> AnnotationReplyView:
+        async def run(db, user):
+            data = AnnotationReplyUpdate.model_validate({"version": version, "body": body})
+            return AnnotationReplyView.model_validate(
+                await update_annotation_reply(
+                    db, user, item_id, annotation_id, reply_id, data
+                )
+            )
+
+        return await runtime.call(
+            "annotation_replies.update", run, conceal_resource="annotation reply not found"
+        )
+
+    @server.tool(
+        name="annotation_replies.delete",
+        description="Soft-delete an editable Annotation Reply.",
+        annotations=DESTRUCTIVE,
+    )
+    async def annotation_replies_delete(
+        item_id: str, annotation_id: str, reply_id: str, version: int
+    ) -> dict[str, bool]:
+        await runtime.call(
+            "annotation_replies.delete",
+            lambda db, user: delete_annotation_reply(
+                db, user, item_id, annotation_id, reply_id, version
+            ),
+            conceal_resource="annotation reply not found",
         )
         return {"ok": True}

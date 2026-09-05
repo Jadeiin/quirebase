@@ -56,9 +56,14 @@ The representative image resolved for display. The current Graphical Abstract is
 otherwise the newest ready File Revision with an available PDF Thumbnail is used.
 
 **Annotation**:
-A user-authored highlight, underline or note anchored to a File Revision and scoped either
-privately or to a Project.
+A user-authored text mark, note, free text, ink stroke or geometric shape anchored to one page of
+a File Revision and scoped either privately or to a Project.
 _Avoid_: Comment
+
+**Annotation Reply**:
+A user-authored conversational response attached to one Annotation. It inherits that Annotation's
+visibility and has no independent PDF geometry or scope.
+_Avoid_: Annotation, Discussion Message
 
 **Annotation Export Artifact**:
 A temporary PDF derived from a File Revision and its visible Annotations for download. It remains
@@ -166,6 +171,7 @@ An immutable record of a security-sensitive or data-changing action.
 - An Item may belong to multiple Projects.
 - A Project has members with an assigned Project Role (owner, editor, or viewer).
 - An Annotation belongs to exactly one File Revision.
+- An Annotation has zero or more Annotation Replies.
 - An Annotation Export Artifact is derived from one File Revision and expires independently of it.
 - A Project-scoped Annotation references exactly one Project containing the Item.
 - Discovery produces Candidate Records; selecting one refetches metadata into Import.

@@ -60,8 +60,9 @@ def create_app(*, mcp_session_factory: SessionFactory = AsyncSessionLocal) -> Fa
         response.headers["Referrer-Policy"] = "same-origin"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data:; connect-src 'self' https: http:; worker-src 'self' blob:; "
+            "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: blob:; connect-src 'self' https: http:; worker-src 'self' blob:; "
             "object-src 'none'; frame-ancestors 'none'"
         )
         return response

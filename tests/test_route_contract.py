@@ -13,6 +13,29 @@ def get_app():
 
 
 EXPECTED_OPERATIONAL_ROUTES = {
+    (
+        "DELETE",
+        "/api/v1/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}",
+    ),
+    (
+        "DELETE",
+        "/documents/{item_id}/annotations/{annotation_id}/replies/{reply_id}",
+    ),
+    (
+        "PATCH",
+        "/api/v1/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}",
+    ),
+    (
+        "PATCH",
+        "/documents/{item_id}/annotations/{annotation_id}/replies/{reply_id}",
+    ),
+    ("POST", "/api/v1/items/{item_id}/annotations/{annotation_id}/replies"),
+    ("POST", "/documents/{item_id}/annotations/{annotation_id}/replies"),
+    ("POST", "/documents/{item_id}/annotations/{annotation_id}/restore"),
+    (
+        "POST",
+        "/documents/{item_id}/annotations/{annotation_id}/replies/{reply_id}/restore",
+    ),
     ("DELETE", "/api/v1/items/{item_id}/annotations/{annotation_id}"),
     ("DELETE", "/api/v1/items/{item_id}/discussions/{message_id}"),
     ("DELETE", "/api/v1/items/{item_id}/tags/{tag_id}"),
@@ -166,7 +189,7 @@ def test_operational_routes_contract():
                 continue
             operational_routes.add((method, route.path))
 
-    assert len(operational_routes) == 125, f"Expected 125 routes, found {len(operational_routes)}"
+    assert len(operational_routes) == 133, f"Expected 133 routes, found {len(operational_routes)}"
     assert operational_routes == EXPECTED_OPERATIONAL_ROUTES
 
 

@@ -277,25 +277,24 @@ def test_citation_copy_reports_request_and_clipboard_failures():
 
 def test_pdf_toolbar_exposes_navigation_search_zoom_and_download():
     template = read("src/quirebase/templates/pdf.html")
-    script = read("src/quirebase/assets/pdf_viewer.js")
-    for control in (
-        "pdf-previous-page",
-        "pdf-next-page",
-        "pdf-zoom-out",
-        "pdf-zoom-in",
-        "pdf-search",
-        "pdf-scale",
+    script = read("src/quirebase/assets/pdf_viewer.js") + read(
+        "src/quirebase/assets/pdf_viewer_schema.js"
+    )
+    for command in (
+        "scroll:previous-page",
+        "scroll:next-page",
+        "zoom:out",
+        "zoom:in",
+        "zoom:fit-width",
+        "panel:toggle-search",
     ):
-        assert f'id="{control}"' in template
-        assert f"#{control}" in script
+        assert f'commandId: "{command}"' in script
     assert "download" in template
-    assert 'eventBus.dispatch("find"' in script
-    assert 'id="annotation-detail"' in template
-    assert "showAnnotation(annotation)" in script
-    assert "status.textContent = node.title" not in script
-    assert 'id="annotation-mark-kind"' in template
-    assert 'value="underline"' in template
-    assert 'class="pdf-download-options citation-panel' in template
+    assert 'id="embedpdf-viewer"' in template
+    assert 'id="annotation-detail"' not in template
+    assert "selectionSegments" not in script
+    assert 'id="pdf-download-options" hidden' in template
+    assert "shadow.append(downloadOptions);" in script
     assert 'id="pdf-download-options-button"' in template
     assert 'id="pdf-download-current"' in template
     assert 'id="pdf-export-annotations"' in template
@@ -310,7 +309,21 @@ def test_pdf_toolbar_exposes_navigation_search_zoom_and_download():
     assert "window.location.assign(`${exportUrl}?${params.toString()}`)" in script
     assert "contentUrl}/export" not in script
     assert "revision_id: revisionId" in script
-    assert 'annotation.kind === "underline"' in script
+    for kind in (
+        "highlight",
+        "underline",
+        "strikeout",
+        "note",
+        "free-text",
+        "ink",
+        "rectangle",
+        "ellipse",
+        "line",
+        "arrow",
+    ):
+        assert f'id: "{kind}"' in script
+    assert "autoCommit: false" in script
+    assert "fontFallback: null" in script
 
 
 def test_document_exports_send_browser_timezone():

@@ -14,14 +14,29 @@ if TYPE_CHECKING:
 
     from quirebase.models import PdfAnnotation
 
-COLORS = {
-    "yellow": (1.0, 0.92, 0.2),
-    "green": (0.35, 0.85, 0.4),
-    "blue": (0.35, 0.65, 1.0),
-    "red": (1.0, 0.35, 0.35),
-}
-
 PDF_DOI_PATTERN = re.compile(r"10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.IGNORECASE)
+
+
+def _pymupdf_integer_constant(name: str) -> int:
+    """Read an integer constant omitted from PyMuPDF's published type interface."""
+    value: object = getattr(pymupdf, name)
+    if not isinstance(value, int):  # pragma: no cover - guards an upstream API change
+        raise TypeError(f"PyMuPDF constant {name} is not an integer")
+    return value
+
+
+LINE_ENDINGS = {
+    "none": _pymupdf_integer_constant("PDF_ANNOT_LE_NONE"),
+    "square": _pymupdf_integer_constant("PDF_ANNOT_LE_SQUARE"),
+    "circle": _pymupdf_integer_constant("PDF_ANNOT_LE_CIRCLE"),
+    "diamond": _pymupdf_integer_constant("PDF_ANNOT_LE_DIAMOND"),
+    "open_arrow": _pymupdf_integer_constant("PDF_ANNOT_LE_OPEN_ARROW"),
+    "closed_arrow": _pymupdf_integer_constant("PDF_ANNOT_LE_CLOSED_ARROW"),
+    "butt": _pymupdf_integer_constant("PDF_ANNOT_LE_BUTT"),
+    "reverse_open_arrow": _pymupdf_integer_constant("PDF_ANNOT_LE_R_OPEN_ARROW"),
+    "reverse_closed_arrow": _pymupdf_integer_constant("PDF_ANNOT_LE_R_CLOSED_ARROW"),
+    "slash": _pymupdf_integer_constant("PDF_ANNOT_LE_SLASH"),
+}
 
 
 def pdf_crop_box(page: pymupdf.Page) -> pymupdf.Rect:
@@ -35,10 +50,53 @@ def pdf_crop_box(page: pymupdf.Page) -> pymupdf.Rect:
     )
 
 
-def pdf_point_to_page(page: pymupdf.Page, point: pymupdf.Point) -> pymupdf.Point:
+def canonical_point_to_page(page: pymupdf.Page, point: dict[str, float]) -> pymupdf.Point:
+    """Map crop-box-local, bottom-left PDF user space into PyMuPDF page space."""
     crop = pdf_crop_box(page)
-    local = pymupdf.Point(point.x - crop.x0, point.y - crop.y0)
-    return local * page.transformation_matrix
+    return pymupdf.Point(point["x"], crop.height - point["y"])
+
+
+def canonical_rect_to_page(page: pymupdf.Page, rect: dict[str, float]) -> pymupdf.Rect:
+    first = canonical_point_to_page(page, {"x": rect["x"], "y": rect["y"]})
+    second = canonical_point_to_page(
+        page,
+        {"x": rect["x"] + rect["width"], "y": rect["y"] + rect["height"]},
+    )
+    return pymupdf.Rect(first, second).normalize()
+
+
+def _color(value: str | None) -> tuple[float, float, float] | None:
+    if value is None:
+        return None
+    return (
+        int(value[1:3], 16) / 255,
+        int(value[3:5], 16) / 255,
+        int(value[5:7], 16) / 255,
+    )
+
+
+def _apply_annotation_style(annotation: pymupdf.Annot, style: dict) -> None:
+    subtype = annotation.type[1]
+    if subtype != "FreeText":
+        annotation.set_colors(
+            stroke=_color(style.get("stroke_color")),
+            fill=_color(style.get("fill_color")),
+        )
+    if subtype in {"Ink", "Square", "Circle", "Line", "FreeText"}:
+        annotation.set_border(
+            width=style.get("stroke_width", 1),
+            dashes=style.get("dash_pattern") or None,
+        )
+    annotation.update(opacity=style.get("opacity", 1))
+
+
+def _set_freetext_border_color(
+    document: pymupdf.Document, annotation: pymupdf.Annot, color: tuple[float, float, float] | None
+) -> None:
+    """PyMuPDF cannot set FreeText colors through Annot.set_colors()."""
+    if color is None:
+        return
+    document.xref_set_key(annotation.xref, "C", "[{} {} {}]".format(*color))
 
 
 def validate_pdf_container(path: Path) -> None:
@@ -130,52 +188,85 @@ def export_annotations(
             raise ValueError("password-protected PDFs cannot be exported")
         for record in annotations:
             author_name = author_names.get(record.author_id, "")
+            payload = record.payload
             info = {
                 "title": author_name,
                 "content": record.body or "",
                 "creationDate": _pdf_date(record.created_at, display_timezone),
                 "modDate": _pdf_date(record.updated_at or record.created_at, display_timezone),
             }
-            if record.kind in ("highlight", "underline"):
-                quads_by_page: dict[int, list[pymupdf.Quad]] = {}
-                for segment in record.segments:
-                    values = [
-                        segment.x1,
-                        segment.y1,
-                        segment.x2,
-                        segment.y2,
-                        segment.x3,
-                        segment.y3,
-                        segment.x4,
-                        segment.y4,
-                    ]
-                    if any(value is None for value in values):
-                        continue
-                    page = document[segment.page_index]
-                    points = [
-                        pdf_point_to_page(page, pymupdf.Point(values[i], values[i + 1]))
-                        for i in range(0, 8, 2)
-                    ]
-                    quad = pymupdf.Quad(*points)
-                    quads_by_page.setdefault(segment.page_index, []).append(quad)
-                for page_index, quads in quads_by_page.items():
-                    page = document[page_index]
-                    annotation = (
-                        page.add_highlight_annot(quads)
-                        if record.kind == "highlight"
-                        else page.add_underline_annot(quads)
+            page = document[record.page_index]
+            style = payload["style"]
+            if record.kind in ("highlight", "underline", "strikeout"):
+                quads = []
+                for rect in payload["segment_rects"]:
+                    upper_left = canonical_point_to_page(
+                        page, {"x": rect["x"], "y": rect["y"] + rect["height"]}
                     )
-                    annotation.set_colors(stroke=COLORS[record.color])
-                    annotation.set_info(**info)
-                    annotation.update(opacity=0.35 if record.kind == "highlight" else 0.9)
-            else:
-                segment = record.segments[0]
-                page = document[segment.page_index]
-                point = pdf_point_to_page(
-                    page, pymupdf.Point(segment.anchor_x or 0, segment.anchor_y or 0)
+                    upper_right = canonical_point_to_page(
+                        page,
+                        {"x": rect["x"] + rect["width"], "y": rect["y"] + rect["height"]},
+                    )
+                    lower_left = canonical_point_to_page(page, {"x": rect["x"], "y": rect["y"]})
+                    lower_right = canonical_point_to_page(
+                        page,
+                        {"x": rect["x"] + rect["width"], "y": rect["y"]},
+                    )
+                    quads.append(pymupdf.Quad(upper_left, upper_right, lower_left, lower_right))
+                factories = {
+                    "highlight": page.add_highlight_annot,
+                    "underline": page.add_underline_annot,
+                    "strikeout": page.add_strikeout_annot,
+                }
+                annotation = factories[record.kind](quads)
+            elif record.kind == "note":
+                rect = payload["rect"]
+                point = canonical_point_to_page(
+                    page, {"x": rect["x"], "y": rect["y"] + rect["height"]}
                 )
                 annotation = page.add_text_annot(point, record.body or "")
-                annotation.set_info(**info)
-                annotation.update()
+            elif record.kind == "free_text":
+                font_names = {"Helvetica": "Helv", "Times-Roman": "TiRo", "Courier": "Cour"}
+                alignments = {"left": 0, "center": 1, "right": 2}
+                annotation = page.add_freetext_annot(
+                    canonical_rect_to_page(page, payload["rect"]),
+                    payload["text"],
+                    fontsize=payload["font_size"],
+                    fontname=font_names[payload["font_family"]],
+                    text_color=_color(style.get("text_color")) or (0, 0, 0),
+                    fill_color=_color(style.get("fill_color")),
+                    border_color=_color(style.get("stroke_color")),
+                    border_width=style.get("stroke_width", 1),
+                    dashes=style.get("dash_pattern") or None,
+                    opacity=style.get("opacity", 1),
+                    richtext=True,
+                    align=alignments[payload["alignment"]],
+                )
+                _set_freetext_border_color(document, annotation, _color(style.get("stroke_color")))
+                info["content"] = payload["text"]
+                if record.body:
+                    info["subject"] = record.body
+            elif record.kind == "ink":
+                paths: list[list[tuple[float, float]]] = []
+                for path in payload["paths"]:
+                    converted = [canonical_point_to_page(page, point) for point in path]
+                    paths.append([(point.x, point.y) for point in converted])
+                annotation = page.add_ink_annot(paths)
+            elif record.kind == "rectangle":
+                annotation = page.add_rect_annot(canonical_rect_to_page(page, payload["rect"]))
+            elif record.kind == "ellipse":
+                annotation = page.add_circle_annot(canonical_rect_to_page(page, payload["rect"]))
+            else:
+                annotation = page.add_line_annot(
+                    canonical_point_to_page(page, payload["start"]),
+                    canonical_point_to_page(page, payload["end"]),
+                )
+                default_end = "closed_arrow" if record.kind == "arrow" else "none"
+                annotation.set_line_ends(
+                    LINE_ENDINGS[payload.get("start_ending", "none")],
+                    LINE_ENDINGS[payload.get("end_ending", default_end)],
+                )
+            annotation.set_info(**info)
+            _apply_annotation_style(annotation, style)
         output.parent.mkdir(parents=True, exist_ok=True)
         document.save(output, garbage=4, deflate=True)

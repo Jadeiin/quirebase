@@ -7,12 +7,22 @@ from fastapi.responses import JSONResponse
 
 from quirebase.core.database import get_db
 from quirebase.documents import (
+    create_annotation_reply,
     create_document_annotation,
+    delete_annotation_reply,
     delete_document_annotation,
     list_document_annotations,
+    restore_annotation_reply,
+    restore_document_annotation,
+    update_annotation_reply,
     update_document_annotation,
 )
-from quirebase.documents.schemas import AnnotationCreate, AnnotationUpdate
+from quirebase.documents.schemas import (
+    AnnotationCreate,
+    AnnotationReplyCreate,
+    AnnotationReplyUpdate,
+    AnnotationUpdate,
+)
 from quirebase.models import User
 from quirebase.web.deps import current_user, protected_router
 
@@ -62,8 +72,69 @@ async def update_annotation(
 async def delete_annotation(
     item_id: str,
     annotation_id: str,
+    version: int,
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await delete_document_annotation(db, user, item_id, annotation_id)
+    await delete_document_annotation(db, user, item_id, annotation_id, version)
     return Response(status_code=204)
+
+
+@router.post("/documents/{item_id}/annotations/{annotation_id}/restore")
+async def restore_annotation(
+    item_id: str,
+    annotation_id: str,
+    version: int,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await restore_document_annotation(db, user, item_id, annotation_id, version)
+
+
+@router.post("/documents/{item_id}/annotations/{annotation_id}/replies")
+async def create_reply(
+    item_id: str,
+    annotation_id: str,
+    data: AnnotationReplyCreate,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await create_annotation_reply(db, user, item_id, annotation_id, data)
+    return JSONResponse(result, status_code=201)
+
+
+@router.patch("/documents/{item_id}/annotations/{annotation_id}/replies/{reply_id}")
+async def update_reply(
+    item_id: str,
+    annotation_id: str,
+    reply_id: str,
+    data: AnnotationReplyUpdate,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await update_annotation_reply(db, user, item_id, annotation_id, reply_id, data)
+
+
+@router.delete("/documents/{item_id}/annotations/{annotation_id}/replies/{reply_id}")
+async def delete_reply(
+    item_id: str,
+    annotation_id: str,
+    reply_id: str,
+    version: int,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await delete_annotation_reply(db, user, item_id, annotation_id, reply_id, version)
+    return Response(status_code=204)
+
+
+@router.post("/documents/{item_id}/annotations/{annotation_id}/replies/{reply_id}/restore")
+async def restore_reply(
+    item_id: str,
+    annotation_id: str,
+    reply_id: str,
+    version: int,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await restore_annotation_reply(db, user, item_id, annotation_id, reply_id, version)

@@ -4,7 +4,8 @@ Quirebase is distributed under AGPL-3.0-only. Binary and source distributions mu
 
 Core PDF components:
 
-- Mozilla PDF.js 6.2.108 — Apache-2.0. The vendored browser files are generated from the pinned `pdfjs-dist` package.
+- EmbedPDF 2.15.0 — MIT, bundled from the pinned `@embedpdf/snippet` package for browser PDF rendering, search, zoom and annotation interaction.
+- PDFium WebAssembly from `@embedpdf/pdfium` 2.15.0 — EmbedPDF's wrapper is MIT; the bundled PDFium binary carries the PDFium BSD-style license and the additional third-party notices distributed in that package.
 - PyMuPDF — AGPL-3.0-only or commercial license. Quirebase uses it under AGPL-3.0-only.
 - bibtexparser 2.x beta — MIT, used for BibTeX/BibLaTeX parsing, native
   serialization, `@string` macros and structured name splitting. The lockfile
