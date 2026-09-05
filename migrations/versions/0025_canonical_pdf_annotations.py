@@ -65,9 +65,7 @@ def _payload(record, segments: list, geometry: str | None) -> tuple[int, dict]:
         size = min(24.0, max(0.01, right - left), max(0.01, top - bottom))
         # Legacy note anchors are top-left points; canonical rectangles use a
         # bottom-left origin, so move down by the note height.
-        anchor_y = (
-            float(bottom if raw_anchor_y is None else raw_anchor_y) - bottom - size
-        )
+        anchor_y = float(bottom if raw_anchor_y is None else raw_anchor_y) - bottom - size
         note_rect = _rect(
             min(max(anchor_x, 0.0), max(0.0, right - left - size)),
             min(max(anchor_y, 0.0), max(0.0, top - bottom - size)),

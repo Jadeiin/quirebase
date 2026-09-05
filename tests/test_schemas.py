@@ -41,16 +41,26 @@ def test_all_canonical_annotation_payloads(kind, extra):
 
 
 def test_line_endings_accept_all_standard_pdf_styles_and_keep_kind_defaults():
-    line = AnnotationCreate.model_validate(base("line", {
-        "start": {"x": 1, "y": 2},
-        "end": {"x": 21, "y": 12},
-        "start_ending": "circle",
-        "end_ending": "reverse_open_arrow",
-    }))
-    arrow = AnnotationCreate.model_validate(base("arrow", {
-        "start": {"x": 1, "y": 2},
-        "end": {"x": 21, "y": 12},
-    }))
+    line = AnnotationCreate.model_validate(
+        base(
+            "line",
+            {
+                "start": {"x": 1, "y": 2},
+                "end": {"x": 21, "y": 12},
+                "start_ending": "circle",
+                "end_ending": "reverse_open_arrow",
+            },
+        )
+    )
+    arrow = AnnotationCreate.model_validate(
+        base(
+            "arrow",
+            {
+                "start": {"x": 1, "y": 2},
+                "end": {"x": 21, "y": 12},
+            },
+        )
+    )
     assert (line.payload.start_ending, line.payload.end_ending) == (
         "circle",
         "reverse_open_arrow",

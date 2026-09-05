@@ -228,13 +228,9 @@ async def _annotation_views(
             )
         ).all()
     )
-    author_ids = {record.author_id for record in records} | {
-        reply.author_id for reply in replies
-    }
+    author_ids = {record.author_id for record in records} | {reply.author_id for reply in replies}
     author_rows = (
-        await db.execute(
-            select(User.id, User.username).where(User.id.in_(author_ids))
-        )
+        await db.execute(select(User.id, User.username).where(User.id.in_(author_ids)))
     ).all()
     authors: dict[str, str] = {row[0]: row[1] for row in author_rows}
     editable_ids = await editable_annotation_ids(db, user, records)
@@ -275,11 +271,13 @@ async def _editable_reply(
         db, user, item_id, annotation_id
     )
     reply = await db.scalar(
-        select(PdfAnnotationReply).where(
+        select(PdfAnnotationReply)
+        .where(
             PdfAnnotationReply.id == reply_id,
             PdfAnnotationReply.annotation_id == annotation_id,
             PdfAnnotationReply.deleted_at.is_(None),
-        ).with_for_update()
+        )
+        .with_for_update()
     )
     if reply is None:
         raise ResourceUnavailable("annotation reply not found or cannot be edited")
@@ -489,9 +487,7 @@ async def create_annotation_reply(
             await db.flush()
     except IntegrityError as error:
         raise VersionConflict(message="annotation object ID already exists") from error
-    record_event(
-        db, locked_user.id, "annotation_reply.create", "pdf_annotation_reply", record.id
-    )
+    record_event(db, locked_user.id, "annotation_reply.create", "pdf_annotation_reply", record.id)
     await db.commit()
     return annotation_reply_json(
         record,
@@ -586,11 +582,13 @@ async def restore_annotation_reply(
         db, user, item_id, annotation_id
     )
     reply = await db.scalar(
-        select(PdfAnnotationReply).where(
+        select(PdfAnnotationReply)
+        .where(
             PdfAnnotationReply.id == reply_id,
             PdfAnnotationReply.annotation_id == annotation_id,
             PdfAnnotationReply.deleted_at.is_not(None),
-        ).with_for_update()
+        )
+        .with_for_update()
     )
     if reply is None:
         raise ResourceUnavailable("annotation reply not found or cannot be restored")

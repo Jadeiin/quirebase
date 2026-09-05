@@ -144,9 +144,7 @@ async def require_visible_annotation_for_reply_mutation(
     annotation_id: str,
 ) -> tuple[User, PdfAnnotation]:
     """Authorize a reply write while locking every row that can revoke access."""
-    locked_user, item, record = await _lock_reply_mutation_context(
-        db, user, item_id, annotation_id
-    )
+    locked_user, item, record = await _lock_reply_mutation_context(db, user, item_id, annotation_id)
     visible_scope = False
     administrator = locked_user.role == SystemRole.administrator.value
     if record.scope is AnnotationScope.private:

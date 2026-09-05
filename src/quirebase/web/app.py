@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
@@ -9,6 +11,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from quirebase.core.config import get_settings
 from quirebase.core.database import AsyncSessionLocal, engine
+from quirebase.core.logging import configure_logging, log_context
 from quirebase.mcp import SessionFactory, create_mcp_http_mount
 from quirebase.web.api.routes import router as api_router
 from quirebase.web.errors import register_error_handlers
@@ -29,6 +32,7 @@ from quirebase.web.views.tools import router as views_tools_router
 from quirebase.web.views.workflows import router as views_workflows_router
 
 PACKAGE_DIR = Path(__file__).resolve().parent.parent
+_REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,64}$")
 
 
 def create_app(*, mcp_session_factory: SessionFactory = AsyncSessionLocal) -> FastAPI:
@@ -41,6 +45,10 @@ def create_app(*, mcp_session_factory: SessionFactory = AsyncSessionLocal) -> Fa
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
+        configure_logging(
+            level=settings.log_level,
+            json_output=settings.log_format == "json",
+        )
         try:
             async with mcp_http.server.session_manager.run():
                 yield
@@ -55,7 +63,15 @@ def create_app(*, mcp_session_factory: SessionFactory = AsyncSessionLocal) -> Fa
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next):
-        response = await call_next(request)
+        supplied_request_id = request.headers.get("X-Request-ID", "")
+        request_id = (
+            supplied_request_id
+            if _REQUEST_ID_PATTERN.fullmatch(supplied_request_id)
+            else uuid4().hex
+        )
+        with log_context(request_id=request_id):
+            response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "same-origin"
         response.headers["X-Frame-Options"] = "DENY"

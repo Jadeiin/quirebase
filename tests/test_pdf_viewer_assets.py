@@ -69,7 +69,9 @@ def test_embedpdf_document_loading_always_converges_to_loaded_or_localized_error
     assert "onDocumentError" in script
     assert "getDocumentState(revisionId)" in script
     assert "target.dataset.loadError" in script
-    assert "'loadTimedOut': _('PDF loading timed out. Please retry or download the file.')" in template
+    assert (
+        "'loadTimedOut': _('PDF loading timed out. Please retry or download the file.')" in template
+    )
     assert "#embedpdf-viewer[data-load-error]::after" in css
 
 
@@ -77,7 +79,9 @@ def test_embedpdf_locale_follows_the_resolved_request_locale():
     template = (ROOT / "src/quirebase/templates/pdf.html").read_text(encoding="utf-8")
     script = viewer_source()
     assert 'data-locale="{{ locale }}"' in template
-    assert 'const embedPdfLocale = root.dataset.locale?.startsWith("zh") ? "zh-CN" : "en";' in script
+    assert (
+        'const embedPdfLocale = root.dataset.locale?.startsWith("zh") ? "zh-CN" : "en";' in script
+    )
     assert "i18n: { defaultLocale: embedPdfLocale }" in script
     assert 'defaultLocale: "zh-CN"' not in script
 
@@ -133,7 +137,9 @@ def test_quirebase_controls_mount_inside_the_embedpdf_toolbar():
     assert "'[data-epdf-i=\"quirebase-toolbar\"]'" in script
     assert "toolbar.append(toolbarControls);" in script
     assert "shadow.append(downloadOptions);" in script
-    assert 'const downloadCurrentButton = document.querySelector("#pdf-download-current");' in script
+    assert (
+        'const downloadCurrentButton = document.querySelector("#pdf-download-current");' in script
+    )
     assert "downloadCurrentButton.addEventListener" in script
     assert "const includeAnnotations = exportAnnotations.checked" in script
 
@@ -175,7 +181,9 @@ def test_embedpdf_history_create_events_restore_soft_deleted_records():
 
 def test_embedpdf_suppresses_reply_deletes_from_a_parent_delete_cascade():
     script = viewer_source()
-    reply_delete = script.index('} else if (event.type === "delete")', script.index("if (parentId)"))
+    reply_delete = script.index(
+        '} else if (event.type === "delete")', script.index("if (parentId)")
+    )
     parent_check = script.index("if (!annotationIsLoaded(parentId)) return;", reply_delete)
     delete_reply = script.index("`${annotationUrl}/${parentId}/replies/${id}", reply_delete)
     assert reply_delete < parent_check < delete_reply

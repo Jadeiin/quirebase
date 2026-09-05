@@ -164,9 +164,7 @@ async def test_annotation_object_ids_are_atomic_across_roots_and_replies(
     assert sum(isinstance(result, VersionConflict) for result in results) == 1
     async with async_session_factory() as db:
         assert await db.get(PdfAnnotationObject, str(shared_id)) is not None
-        roots = await db.scalar(
-            select(PdfAnnotation.id).where(PdfAnnotation.id == str(shared_id))
-        )
+        roots = await db.scalar(select(PdfAnnotation.id).where(PdfAnnotation.id == str(shared_id)))
         replies = await db.scalar(
             select(PdfAnnotationReply.id).where(PdfAnnotationReply.id == str(shared_id))
         )

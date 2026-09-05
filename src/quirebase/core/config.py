@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     object_orphan_retention_hours: int = Field(default=24, ge=1, le=8760)
     workflow_upload_timeout_seconds: int = Field(default=600, ge=1, le=3600)
     workflow_executor_id: str = "quirebase-worker"
+    log_level: str = "INFO"
+    log_format: Literal["text", "json"] = "text"
     allowed_hosts: str = "localhost,127.0.0.1,testserver"
     mcp_allowed_origins: str = ""
     metadata_timeout_seconds: float = Field(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import lru_cache, wraps
@@ -11,6 +12,7 @@ from dbos import DBOS, AsyncSQLAlchemyDatasource, DBOSClient, DBOSConfig, Enqueu
 from quirebase import __version__
 from quirebase.core.config import get_settings
 from quirebase.core.database import async_database_url, engine, is_sqlite_database_url
+from quirebase.core.logging import configure_logging
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Iterable, Sequence
@@ -418,20 +420,33 @@ async def verify_durable_operations() -> None:
 
 
 async def _launch_runtime(executor_id: str) -> None:
-    DBOS(
-        config=DBOSConfig(
-            name="quirebase",
-            application_version=__version__,
-            system_database_url=_sync_database_url(),
-            executor_id=executor_id,
-            use_listen_notify=False,
-            run_admin_server=False,
+    settings = get_settings()
+    configure_logging(level=settings.log_level, json_output=settings.log_format == "json")
+    previous_disable = logging.root.manager.disable
+    logging.disable(logging.INFO)
+    try:
+        DBOS(
+            config=DBOSConfig(
+                name="quirebase",
+                application_version=__version__,
+                system_database_url=_sync_database_url(),
+                executor_id=executor_id,
+                use_listen_notify=False,
+                run_admin_server=False,
+            )
         )
-    )
-    datasource = await AsyncSQLAlchemyDatasource.create(
-        async_database_url(), engine=engine, schema="dbos"
-    )
+    finally:
+        logging.disable(previous_disable)
+    previous_disable = logging.root.manager.disable
+    logging.disable(logging.INFO)
+    try:
+        datasource = await AsyncSQLAlchemyDatasource.create(
+            async_database_url(), engine=engine, schema="dbos"
+        )
+    finally:
+        logging.disable(previous_disable)
     ads.set_instance(datasource)
+    configure_logging(level=settings.log_level, json_output=settings.log_format == "json")
     DBOS.launch()
     await DBOS.register_queue_async(UPLOAD_QUEUE)
     await DBOS.register_queue_async(

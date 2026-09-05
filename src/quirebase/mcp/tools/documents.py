@@ -202,9 +202,7 @@ def register_document_tools(server: MCPServer, runtime: McpRuntime) -> None:
         async def run(db, user):
             data = AnnotationReplyUpdate.model_validate({"version": version, "body": body})
             return AnnotationReplyView.model_validate(
-                await update_annotation_reply(
-                    db, user, item_id, annotation_id, reply_id, data
-                )
+                await update_annotation_reply(db, user, item_id, annotation_id, reply_id, data)
             )
 
         return await runtime.call(

@@ -20,6 +20,7 @@ from .accounts import (
 from .core.config import get_settings
 from .core.crypto import hash_password_async
 from .core.database import AsyncSessionLocal, engine
+from .core.logging import configure_logging
 from .core.storage import get_object_store
 from .core.workflows import (
     initialize_durable_operations,
@@ -45,11 +46,15 @@ def _register_workflows() -> None:
 
 @app.command("serve")
 def serve(host: str = "127.0.0.1", port: int = 9060, reload: bool = False):
-    uvicorn.run("quirebase.web.app:app", host=host, port=port, reload=reload)
+    settings = get_settings()
+    configure_logging(level=settings.log_level, json_output=settings.log_format == "json")
+    uvicorn.run("quirebase.web.app:app", host=host, port=port, reload=reload, log_config=None)
 
 
 @app.command("worker")
 def worker():
+    settings = get_settings()
+    configure_logging(level=settings.log_level, json_output=settings.log_format == "json")
     _register_workflows()
     asyncio.run(_run_worker())
 

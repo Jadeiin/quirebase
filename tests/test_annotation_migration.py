@@ -132,19 +132,14 @@ def test_0027_rejects_existing_cross_table_object_id_collisions(tmp_path: Path, 
     shared_id = "00000000-0000-4000-8000-000000000001"
     with engine.begin() as connection:
         connection.execute(text("CREATE TABLE pdf_annotations (id VARCHAR(36) PRIMARY KEY)"))
-        connection.execute(
-            text("CREATE TABLE pdf_annotation_replies (id VARCHAR(36) PRIMARY KEY)")
-        )
-        connection.execute(
-            text("INSERT INTO pdf_annotations (id) VALUES (:id)"), {"id": shared_id}
-        )
+        connection.execute(text("CREATE TABLE pdf_annotation_replies (id VARCHAR(36) PRIMARY KEY)"))
+        connection.execute(text("INSERT INTO pdf_annotations (id) VALUES (:id)"), {"id": shared_id})
         connection.execute(
             text("INSERT INTO pdf_annotation_replies (id) VALUES (:id)"),
             {"id": shared_id},
         )
         migration_path = (
-            Path(__file__).parents[1]
-            / "migrations/versions/0027_annotation_object_identity.py"
+            Path(__file__).parents[1] / "migrations/versions/0027_annotation_object_identity.py"
         )
         spec = spec_from_file_location("annotation_object_identity_migration", migration_path)
         assert spec is not None and spec.loader is not None

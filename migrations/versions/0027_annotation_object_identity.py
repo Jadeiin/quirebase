@@ -67,7 +67,9 @@ def upgrade() -> None:
 
     inspector = sa.inspect(bind)
     annotation_foreign_keys = inspector.get_foreign_keys("pdf_annotations")
-    if not any(key["referred_table"] == "pdf_annotation_objects" for key in annotation_foreign_keys):
+    if not any(
+        key["referred_table"] == "pdf_annotation_objects" for key in annotation_foreign_keys
+    ):
         with op.batch_alter_table("pdf_annotations") as batch:
             batch.create_foreign_key(
                 "fk_pdf_annotations_object_id",

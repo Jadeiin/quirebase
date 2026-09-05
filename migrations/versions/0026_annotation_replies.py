@@ -43,9 +43,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(
-        op.f("ix_pdf_annotation_replies_author_id"), table_name="pdf_annotation_replies"
-    )
+    op.drop_index(op.f("ix_pdf_annotation_replies_author_id"), table_name="pdf_annotation_replies")
     op.drop_index(
         op.f("ix_pdf_annotation_replies_annotation_id"), table_name="pdf_annotation_replies"
     )
