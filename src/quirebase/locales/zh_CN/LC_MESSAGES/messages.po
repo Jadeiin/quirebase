@@ -3229,3 +3229,17 @@ msgstr "矩形"
 
 msgid "Strikeout"
 msgstr "删除线"
+msgid "Native PDF annotations"
+msgstr "PDF 原生批注"
+
+msgid "Keep as read-only PDF annotations"
+msgstr "保留为只读 PDF 批注"
+
+msgid "Remove native annotations"
+msgstr "移除原生批注"
+
+msgid "Import supported annotations as editable private annotations"
+msgstr "将支持的批注导入为可编辑的私有批注"
+
+msgid "Importing removes embedded annotation objects, but does not remove marks already flattened into page content."
+msgstr "导入会移除 PDF 内嵌的批注对象，但不会移除已经扁平化到页面内容中的标记。"

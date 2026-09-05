@@ -100,6 +100,7 @@ from quirebase.library.workflows import (
     item_ids_for_tag_recommendation,
     request_item_tag_recommendation,
 )
+from quirebase.models import PdfAnnotationMode
 
 __all__ = [
     "DEFAULT_CITATION_KEY_FORMULA",
@@ -121,6 +122,7 @@ __all__ = [
     "JsonValue",
     "MetadataWorkspace",
     "OrganizeWorkspace",
+    "PdfAnnotationMode",
     "ProjectMembership",
     "SummaryWorkspace",
     "TagConflict",

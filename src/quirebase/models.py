@@ -70,6 +70,14 @@ class FileRevisionProcessingState(StrEnum):
     ready = "ready"
 
 
+class PdfAnnotationMode(StrEnum):
+    """How native PDF annotations are handled during PDF Import."""
+
+    preserve = "preserve"
+    strip_ = "strip"
+    import_ = "import"
+
+
 class AttachmentRole(StrEnum):
     graphical_abstract = "graphical_abstract"
 
@@ -486,6 +494,12 @@ class ImportBatch(Base):
     errors: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(16), default="ready")
     workflow_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    # Nullable keeps existing non-PDF and pre-mode batches readable.  A NULL PDF
+    # batch is interpreted as ``preserve`` at the Library boundary.
+    pdf_annotation_mode: Mapped[PdfAnnotationMode | None] = mapped_column(
+        enum_type(PdfAnnotationMode, "pdf_annotation_mode"), nullable=True
+    )
+    max_pdf_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
 
 
