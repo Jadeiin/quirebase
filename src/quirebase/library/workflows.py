@@ -204,6 +204,7 @@ async def prepare_pdf_import_workflow(
     batch_id: str,
     workflow_id: str,
     pending_records: list[dict[str, Any]],
+    pdf_annotation_mode: str = "preserve",
 ) -> dict[str, Any]:
     try:
         records: list[dict[str, Any]] = []

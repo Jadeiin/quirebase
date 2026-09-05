@@ -6,7 +6,7 @@ import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal, TypedDict, cast
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from dbos import DBOS
 from sqlalchemy import and_, or_, select, update
@@ -14,9 +14,15 @@ from sqlalchemy import and_, or_, select, update
 from quirebase.audit import record_event
 from quirebase.core.config import get_settings
 from quirebase.core.database import AsyncSessionLocal
+from quirebase.core.errors import ValidationFailure
 from quirebase.core.storage import ObjectSuffix, get_object_store, object_key
 from quirebase.core.timezones import annotation_export_timezone
-from quirebase.core.workflows import LIBRARY_QUEUE, ads, enqueue_child_workflow
+from quirebase.core.workflows import (
+    DOCUMENT_CLEANUP_QUEUE,
+    LIBRARY_QUEUE,
+    ads,
+    enqueue_child_workflow,
+)
 from quirebase.documents.events import FILE_REVISION_CHANGED_WORKFLOW, OBJECT_CLEANUP_WORKFLOW
 from quirebase.models import (
     AnnotationScope,
@@ -27,12 +33,14 @@ from quirebase.models import (
     FileRevisionProcessingState,
     Item,
     PdfAnnotation,
+    PdfAnnotationMode,
     ProjectItem,
     ProjectMember,
     User,
 )
 
 from .pdf import create_thumbnail, export_annotations, inspect_pdf, validate_pdf_container
+from .schemas import AnnotationCreate
 
 REVISION_UPLOAD_WORKFLOW = "documents.upload_revision"
 ATTACHMENT_UPLOAD_WORKFLOW = "documents.upload_attachment"
@@ -55,6 +63,11 @@ class PdfInspectionData(TypedDict):
     page_count: int
     full_text: str
     page_geometry: str
+    object_key: str
+    source_object_key: str
+    pdf_annotation_mode: str
+    imported_annotations: list[dict[str, Any]]
+    annotation_diagnostics: list[dict[str, Any]]
 
 
 class PdfInspection(PdfInspectionData):
@@ -62,7 +75,7 @@ class PdfInspection(PdfInspectionData):
 
 
 class UploadedPdfInspection(PdfInspection):
-    object_key: str
+    pass
 
 
 class RevisionWorkflowResult(TypedDict):
@@ -70,9 +83,14 @@ class RevisionWorkflowResult(TypedDict):
     item_id: str
 
 
+class ImportedRevisionCommitResult(RevisionWorkflowResult):
+    annotation_diagnostics: list[dict[str, Any]]
+
+
 class ImportedRevisionWorkflowResult(TypedDict):
     revision_id: str
     owner_id: str
+    annotation_diagnostics: list[dict[str, Any]]
 
 
 class ValidatedAttachment(TypedDict):
@@ -134,33 +152,91 @@ async def _inspect_pdf_object(
     thumbnail_object_id: str,
     *,
     expected_size: int | None = None,
+    annotation_mode: PdfAnnotationMode | str = PdfAnnotationMode.preserve,
+    derived_object_id: str | None = None,
+    max_pdf_bytes: int | None = None,
 ) -> PdfInspectionData:
+    annotation_mode = PdfAnnotationMode(annotation_mode)
     metadata = await get_object_store().head(object_key_value)
     if expected_size is not None and metadata.size != expected_size:
         raise ValueError("uploaded object size mismatch")
     thumbnail_key = object_key(UUID(thumbnail_object_id), ObjectSuffix.PNG)
+    imported_annotations: list[dict[str, Any]] = []
+    annotation_diagnostics: list[dict[str, Any]] = []
+    derived_key = object_key_value
+    pdf_size = metadata.size
     async with get_object_store().materialize(object_key_value) as source:
         await asyncio.to_thread(validate_pdf_container, source)
-        page_count, text, geometry = await asyncio.to_thread(inspect_pdf, source)
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temporary:
-            thumbnail_path = Path(temporary.name)
-        try:
-            await asyncio.to_thread(create_thumbnail, source, thumbnail_path)
-            thumbnail = await get_object_store().put_object(
-                UUID(thumbnail_object_id),
-                ObjectSuffix.PNG,
-                thumbnail_path,
-                max_bytes=_MAX_THUMBNAIL_BYTES,
+        if annotation_mode is PdfAnnotationMode.import_:
+            from .pdf import parse_pdf_annotations
+
+            imported_annotations, annotation_diagnostics = await asyncio.to_thread(
+                parse_pdf_annotations, source
             )
-        finally:
-            await asyncio.to_thread(thumbnail_path.unlink, missing_ok=True)
+        if annotation_mode is not PdfAnnotationMode.preserve:
+            from .pdf import strip_native_annotations
+
+            if not derived_object_id:
+                raise ValueError("derived PDF object id is required for annotation stripping")
+            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as derived:
+                derived_path = Path(derived.name)
+            try:
+                await asyncio.to_thread(strip_native_annotations, source, derived_path)
+                stored = await get_object_store().put_object(
+                    UUID(derived_object_id),
+                    ObjectSuffix.PDF,
+                    derived_path,
+                    max_bytes=(
+                        max_pdf_bytes if max_pdf_bytes is not None else get_settings().max_pdf_bytes
+                    ),
+                )
+                derived_key = stored.key
+                pdf_size = stored.size
+            finally:
+                await asyncio.to_thread(derived_path.unlink, missing_ok=True)
+        inspection_source = source
+        if derived_key != object_key_value:
+            async with get_object_store().materialize(derived_key) as derived_source:
+                page_count, text, geometry = await asyncio.to_thread(inspect_pdf, derived_source)
+                inspection_source = derived_source
+                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temporary:
+                    thumbnail_path = Path(temporary.name)
+                try:
+                    await asyncio.to_thread(create_thumbnail, inspection_source, thumbnail_path)
+                    thumbnail = await get_object_store().put_object(
+                        UUID(thumbnail_object_id),
+                        ObjectSuffix.PNG,
+                        thumbnail_path,
+                        max_bytes=_MAX_THUMBNAIL_BYTES,
+                    )
+                finally:
+                    await asyncio.to_thread(thumbnail_path.unlink, missing_ok=True)
+        else:
+            page_count, text, geometry = await asyncio.to_thread(inspect_pdf, source)
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temporary:
+                thumbnail_path = Path(temporary.name)
+            try:
+                await asyncio.to_thread(create_thumbnail, source, thumbnail_path)
+                thumbnail = await get_object_store().put_object(
+                    UUID(thumbnail_object_id),
+                    ObjectSuffix.PNG,
+                    thumbnail_path,
+                    max_bytes=_MAX_THUMBNAIL_BYTES,
+                )
+            finally:
+                await asyncio.to_thread(thumbnail_path.unlink, missing_ok=True)
     return {
         "thumbnail_object_key": thumbnail_key,
         "thumbnail_size": thumbnail.size,
-        "size": metadata.size,
+        "size": pdf_size,
         "page_count": page_count,
         "full_text": text,
         "page_geometry": json.dumps(geometry, separators=(",", ":")),
+        "object_key": derived_key,
+        "source_object_key": object_key_value,
+        "pdf_annotation_mode": annotation_mode.value,
+        "imported_annotations": imported_annotations,
+        "annotation_diagnostics": annotation_diagnostics,
     }
 
 
@@ -272,27 +348,87 @@ async def upload_revision_workflow(
 
 @DBOS.workflow(name=IMPORTED_REVISION_INSPECTION_WORKFLOW)
 async def inspect_imported_revision_workflow(
-    revision_id: str, owner_id: str, object_key_value: str, thumbnail_object_id: str
+    revision_id: str,
+    owner_id: str,
+    object_key_value: str,
+    thumbnail_object_id: str,
+    derived_object_id: str | None = None,
+    annotation_mode: str = PdfAnnotationMode.preserve.value,
+    max_pdf_bytes: int | None = None,
 ) -> ImportedRevisionWorkflowResult:
     thumbnail_key = object_key(UUID(thumbnail_object_id), ObjectSuffix.PNG)
     committed = False
     try:
-        inspected = await inspect_imported_pdf(revision_id, object_key_value, thumbnail_object_id)
-        result = await commit_imported_revision(inspected)
+        if annotation_mode == PdfAnnotationMode.preserve.value and derived_object_id is None:
+            inspected = await inspect_imported_pdf(
+                revision_id, object_key_value, thumbnail_object_id
+            )
+        else:
+            inspected = await inspect_imported_pdf(
+                revision_id,
+                object_key_value,
+                thumbnail_object_id,
+                annotation_mode=annotation_mode,
+                derived_object_id=derived_object_id,
+                max_pdf_bytes=max_pdf_bytes,
+            )
+        if annotation_mode == PdfAnnotationMode.import_.value:
+            result = await commit_imported_revision(inspected, owner_id=owner_id)
+        else:
+            result = await commit_imported_revision(inspected)
         committed = True
+        source_key = inspected.get("source_object_key")
+        committed_key = inspected.get("object_key")
+        if source_key and committed_key and source_key != committed_key:
+            await enqueue_child_workflow(
+                OBJECT_CLEANUP_WORKFLOW,
+                [source_key],
+                DBOS.workflow_id,
+                queue_name=DOCUMENT_CLEANUP_QUEUE,
+                workflow_id=f"inspect-imported-revision-cleanup:{revision_id}",
+                attributes={
+                    "capability": "documents",
+                    "operation": "imported_revision_source_cleanup",
+                    "object_keys": [source_key],
+                    "revision_id": revision_id,
+                },
+            )
         await _enqueue_file_revision_changed(revision_id, result["item_id"], owner_id)
-        return {"revision_id": revision_id, "owner_id": owner_id}
+        return {
+            "revision_id": revision_id,
+            "owner_id": owner_id,
+            "annotation_diagnostics": result.get(
+                "annotation_diagnostics", inspected.get("annotation_diagnostics", [])
+            ),
+        }
     except BaseException:
         if not committed:
             await remove_owned_object(thumbnail_key)
+            derived_key = (
+                object_key(UUID(derived_object_id), ObjectSuffix.PDF) if derived_object_id else None
+            )
+            if derived_key and derived_key != object_key_value:
+                await remove_owned_object(derived_key)
         raise
 
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
 async def inspect_imported_pdf(
-    revision_id: str, object_key_value: str, thumbnail_object_id: str
+    revision_id: str,
+    object_key_value: str,
+    thumbnail_object_id: str,
+    *,
+    annotation_mode: str = PdfAnnotationMode.preserve.value,
+    derived_object_id: str | None = None,
+    max_pdf_bytes: int | None = None,
 ) -> PdfInspection:
-    inspected = await _inspect_pdf_object(object_key_value, thumbnail_object_id)
+    inspected = await _inspect_pdf_object(
+        object_key_value,
+        thumbnail_object_id,
+        annotation_mode=annotation_mode,
+        derived_object_id=derived_object_id,
+        max_pdf_bytes=max_pdf_bytes,
+    )
     return {
         "revision_id": revision_id,
         **inspected,
@@ -300,12 +436,16 @@ async def inspect_imported_pdf(
 
 
 @ads.transaction()
-async def commit_imported_revision(inspected: PdfInspection) -> RevisionWorkflowResult:
+async def commit_imported_revision(
+    inspected: PdfInspection, owner_id: str | None = None
+) -> ImportedRevisionCommitResult:
     db = ads.sql_session()
     revision = await db.get(FileRevision, inspected["revision_id"])
     if revision is None:
         raise ValueError("imported revision no longer exists")
     if revision.processing_state == FileRevisionProcessingState.pending:
+        source_object_key = revision.object_key
+        revision.object_key = inspected.get("object_key", source_object_key)
         revision.thumbnail_object_key = inspected["thumbnail_object_key"]
         revision.thumbnail_size = inspected["thumbnail_size"]
         revision.size = inspected["size"]
@@ -313,7 +453,74 @@ async def commit_imported_revision(inspected: PdfInspection) -> RevisionWorkflow
         revision.full_text = inspected["full_text"]
         revision.page_geometry = inspected["page_geometry"]
         revision.processing_state = FileRevisionProcessingState.ready
-    return {"revision_id": revision.id, "item_id": revision.item_id}
+        if inspected.get("pdf_annotation_mode") == PdfAnnotationMode.import_.value:
+            annotation_rows = inspected.get("imported_annotations", [])
+            valid_rows: list[tuple[AnnotationCreate, dict[str, Any]]] = []
+            annotation_diagnostics = list(inspected.get("annotation_diagnostics", []))
+            from .annotations import validate_payload
+
+            for data in annotation_rows:
+                try:
+                    candidate = AnnotationCreate(
+                        id=uuid4(),
+                        revision_id=revision.id,
+                        page_index=int(data["page_index"]),
+                        kind=data["kind"],
+                        scope=AnnotationScope.private,
+                        body=data.get("body"),
+                        selected_text=data.get("selected_text"),
+                        payload=data["payload"],
+                    )
+                    validate_payload(candidate.page_index, candidate.payload, revision)
+                except (TypeError, ValueError, KeyError, ValidationFailure) as error:
+                    annotation_diagnostics.append({
+                        "page": int(data.get("page_index", -1)) + 1
+                        if isinstance(data, dict) and isinstance(data.get("page_index"), int)
+                        else None,
+                        "subtype": data.get("subtype") if isinstance(data, dict) else None,
+                        "result": "skipped",
+                        "reason": str(error),
+                    })
+                    continue
+                valid_rows.append((candidate, data))
+            for candidate, data in valid_rows:
+                db.add(
+                    PdfAnnotation(
+                        id=str(candidate.id),
+                        file_revision_id=revision.id,
+                        page_index=candidate.page_index,
+                        author_id=owner_id or data.get("author_id", ""),
+                        kind=candidate.kind,
+                        scope=AnnotationScope.private,
+                        body=candidate.body,
+                        selected_text=candidate.selected_text,
+                        payload=candidate.payload.model_dump(mode="json"),
+                    )
+                )
+            if owner_id:
+                record_event(
+                    db,
+                    owner_id,
+                    "pdf.import.annotations",
+                    "file_revision",
+                    revision.id,
+                    detail={
+                        "mode": PdfAnnotationMode.import_.value,
+                        "imported_count": len(valid_rows),
+                        "skipped_count": len(annotation_diagnostics),
+                        "diagnostics": annotation_diagnostics,
+                    },
+                )
+            return {
+                "revision_id": revision.id,
+                "item_id": revision.item_id,
+                "annotation_diagnostics": annotation_diagnostics,
+            }
+    return {
+        "revision_id": revision.id,
+        "item_id": revision.item_id,
+        "annotation_diagnostics": [],
+    }
 
 
 def _is_image_header(header: bytes, content_type: str) -> bool:

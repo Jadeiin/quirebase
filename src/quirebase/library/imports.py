@@ -37,7 +37,7 @@ from quirebase.documents.revisions import (
 from quirebase.library.activity import get_accessible_item_identifiers
 from quirebase.library.citations import format_csl_export, format_standard_export
 from quirebase.library.providers import candidate_record_values, lookup_candidate
-from quirebase.models import ImportBatch, Item, ItemAuthor, User
+from quirebase.models import ImportBatch, Item, ItemAuthor, PdfAnnotationMode, User
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
@@ -182,6 +182,7 @@ async def stage_pdf_import_batch(
     *,
     max_bytes: int | None = None,
     settings: Settings | None = None,
+    pdf_annotation_mode: PdfAnnotationMode | str = PdfAnnotationMode.preserve,
 ) -> tuple[ImportBatch, list[dict], list[dict]]:
     from quirebase.operations.settings import get_effective_setting
 
@@ -189,6 +190,10 @@ async def stage_pdf_import_batch(
         raise ValidationFailure("at least one PDF is required")
     if len(uploads) > MAX_PDF_IMPORT_FILES:
         raise ValidationFailure(f"a PDF import batch is limited to {MAX_PDF_IMPORT_FILES} files")
+    try:
+        annotation_mode = PdfAnnotationMode(pdf_annotation_mode)
+    except ValueError as error:
+        raise ValidationFailure("pdf annotation mode must be preserve, strip, or import") from error
 
     if max_bytes is None:
         max_bytes = (
@@ -238,6 +243,8 @@ async def stage_pdf_import_batch(
             records=json.dumps(pending_records, ensure_ascii=False),
             errors=json.dumps(errors, ensure_ascii=False),
             status="pending",
+            pdf_annotation_mode=annotation_mode,
+            max_pdf_bytes=max_bytes,
         )
         db.add(batch)
         await db.flush()
@@ -249,6 +256,7 @@ async def stage_pdf_import_batch(
             batch.id,
             workflow_id,
             pending_records,
+            annotation_mode.value,
             queue_name=IMPORT_QUEUE,
             workflow_id=workflow_id,
             attributes={
@@ -257,6 +265,7 @@ async def stage_pdf_import_batch(
                 "owner_id": reloaded_user.id,
                 "batch_id": batch.id,
                 "object_keys": [staged.object_key for staged in staged_pdfs],
+                "pdf_annotation_mode": annotation_mode.value,
             },
         )
         record_event(
@@ -502,6 +511,7 @@ async def retry_pdf_import_batch(db: AsyncSession, user: User, batch_id: str) ->
         batch.id,
         workflow_id,
         pending_records,
+        (batch.pdf_annotation_mode or PdfAnnotationMode.preserve).value,
         queue_name=IMPORT_QUEUE,
         workflow_id=workflow_id,
         attributes={
@@ -510,6 +520,7 @@ async def retry_pdf_import_batch(db: AsyncSession, user: User, batch_id: str) ->
             "owner_id": user.id,
             "batch_id": batch.id,
             "object_keys": [record["_pdf"]["object_key"] for record in pending_records],
+            "pdf_annotation_mode": (batch.pdf_annotation_mode or PdfAnnotationMode.preserve).value,
         },
     )
     record_event(db, user.id, "pdf.import.preview.retry", "import_batch", batch.id)
@@ -559,6 +570,8 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
                     pdf["size"],
                     pdf["original_name"],
                 ),
+                annotation_mode=batch.pdf_annotation_mode or PdfAnnotationMode.preserve,
+                max_pdf_bytes=batch.max_pdf_bytes or get_settings().max_pdf_bytes,
             )
         await search_index(db).index_item(db, item.id)
         record_event(
@@ -567,7 +580,15 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
             "pdf.import" if pdf is not None else "bibliography.import",
             "item",
             item.id,
-            detail={"format": batch.file_format, "filename": pdf["original_name"] if pdf else None},
+            detail={
+                "format": batch.file_format,
+                "filename": pdf["original_name"] if pdf else None,
+                "annotation_mode": (
+                    (batch.pdf_annotation_mode or PdfAnnotationMode.preserve).value
+                    if pdf is not None
+                    else None
+                ),
+            },
         )
     await db.delete(batch)
     await db.commit()

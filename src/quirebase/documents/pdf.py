@@ -9,6 +9,7 @@ import pymupdf
 from quirebase.core.timezones import server_timezone
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from datetime import datetime
     from pathlib import Path
 
@@ -37,6 +38,226 @@ LINE_ENDINGS = {
     "reverse_closed_arrow": _pymupdf_integer_constant("PDF_ANNOT_LE_R_CLOSED_ARROW"),
     "slash": _pymupdf_integer_constant("PDF_ANNOT_LE_SLASH"),
 }
+_LINE_ENDING_NAMES = {value: key for key, value in LINE_ENDINGS.items()}
+
+_NATIVE_KIND = {
+    "Highlight": "highlight",
+    "Underline": "underline",
+    "StrikeOut": "strikeout",
+    "Text": "note",
+    "FreeText": "free_text",
+    "Ink": "ink",
+    "Square": "rectangle",
+    "Circle": "ellipse",
+    "Line": "line",
+}
+
+
+def _hex_color(value: object) -> str | None:
+    if not isinstance(value, (tuple, list)) or len(value) < 3:
+        return None
+    try:
+        channels = [max(0, min(255, round(float(channel) * 255))) for channel in value[:3]]
+    except (TypeError, ValueError):
+        return None
+    return f"#{channels[0]:02X}{channels[1]:02X}{channels[2]:02X}"
+
+
+def _annotation_style(annotation: pymupdf.Annot) -> dict:
+    colors = annotation.colors or {}
+    border = annotation.border or {}
+    return {
+        "stroke_color": _hex_color(colors.get("stroke")),
+        "fill_color": _hex_color(colors.get("fill")),
+        "text_color": _hex_color(colors.get("stroke")),
+        "opacity": (
+            float(annotation.opacity)
+            if annotation.opacity is not None and float(annotation.opacity) >= 0
+            else 1.0
+        ),
+        "stroke_width": max(0.0, min(20.0, float(border.get("width") or 1))),
+        "dash_pattern": [
+            max(0.001, min(100.0, float(value)))
+            for value in (border.get("dashes") or ())
+            if isinstance(value, (int, float)) and float(value) > 0
+        ][:10],
+    }
+
+
+def _canonical_rect(page: pymupdf.Page, rect: pymupdf.Rect) -> dict[str, float]:
+    crop = pdf_crop_box(page)
+    normalized = rect.normalize()
+    # Canonical coordinates intentionally follow the viewer's crop-local convention:
+    # x is measured from the crop's left edge and y from its bottom edge.
+    x = normalized.x0 - crop.x0
+    y = crop.height - (normalized.y1 - crop.y0)
+    return {
+        "x": max(0.0, float(x)),
+        "y": max(0.0, float(y)),
+        "width": max(0.001, float(normalized.width)),
+        "height": max(0.001, float(normalized.height)),
+    }
+
+
+def _canonical_point(page: pymupdf.Page, point: object) -> dict[str, float]:
+    crop = pdf_crop_box(page)
+    x, y = float(point[0]), float(point[1])  # type: ignore[index]
+    return {"x": max(-1_000_000.0, x - crop.x0), "y": crop.height - (y - crop.y0)}
+
+
+def _rect_from_points(page: pymupdf.Page, points: Iterable[object]) -> dict[str, float]:
+    values = [_canonical_point(page, point) for point in points]
+    if not values:
+        return _canonical_rect(page, page.rect)
+    left = min(point["x"] for point in values)
+    bottom = min(point["y"] for point in values)
+    right = max(point["x"] for point in values)
+    top = max(point["y"] for point in values)
+    return {
+        "x": max(0.0, left),
+        "y": max(0.0, bottom),
+        "width": max(0.001, right - left),
+        "height": max(0.001, top - bottom),
+    }
+
+
+def parse_native_annotations(path: Path) -> list[dict]:
+    """Parse supported native PDF markup into transport-neutral Annotation values.
+
+    Unsupported objects are deliberately skipped. Callers can still inspect the
+    source with :func:`native_annotation_diagnostics` when they need diagnostics.
+    """
+    parsed, _diagnostics = _parse_native_annotations(path)
+    return parsed
+
+
+def parse_pdf_annotations(path: Path) -> tuple[list[dict], list[dict]]:
+    """Return supported annotations and non-blocking diagnostics."""
+    return _parse_native_annotations(path)
+
+
+def native_annotation_diagnostics(path: Path) -> list[dict]:
+    return _parse_native_annotations(path)[1]
+
+
+def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
+    parsed: list[dict] = []
+    diagnostics: list[dict] = []
+    with pymupdf.open(path) as document:
+        for page_index, page in enumerate(document):
+            for annotation in list(page.annots() or ()):
+                subtype = annotation.type[1]
+                kind = _NATIVE_KIND.get(subtype)
+                if kind is None:
+                    diagnostics.append({
+                        "page": page_index + 1,
+                        "subtype": subtype,
+                        "result": "skipped",
+                        "reason": "unsupported subtype",
+                    })
+                    continue
+                try:
+                    payload: dict = {"type": kind, "style": _annotation_style(annotation)}
+                    rect = _canonical_rect(page, annotation.rect)
+                    selected_text = None
+                    if kind in {"highlight", "underline", "strikeout"}:
+                        vertices = list(annotation.vertices or ())
+                        segment_rects = [
+                            _rect_from_points(page, vertices[index : index + 4])
+                            for index in range(0, len(vertices), 4)
+                            if vertices[index : index + 4]
+                        ]
+                        payload["rect"] = _rect_from_points(page, vertices) if vertices else rect
+                        payload["segment_rects"] = segment_rects or [rect]
+                        selected_text = None
+                    elif kind == "free_text":
+                        text = annotation.info.get("content", "") or ""
+                        payload.update({
+                            "rect": rect,
+                            "text": text,
+                            "font_family": "Helvetica",
+                            "font_size": 12,
+                            "alignment": "left",
+                        })
+                    elif kind == "ink":
+                        raw_paths = annotation.vertices or ()
+                        if (
+                            raw_paths
+                            and isinstance(raw_paths[0], (tuple, list))
+                            and raw_paths[0]
+                            and isinstance(raw_paths[0][0], (tuple, list))
+                        ):
+                            paths = [
+                                [_canonical_point(page, point) for point in path]
+                                for path in raw_paths
+                            ]
+                        else:
+                            paths = (
+                                [[_canonical_point(page, point) for point in raw_paths]]
+                                if raw_paths
+                                else [[{"x": rect["x"], "y": rect["y"]}]]
+                            )
+                        payload.update({"rect": rect, "paths": paths})
+                    elif kind in {"line", "arrow"}:
+                        line = tuple(annotation.vertices or ())
+                        if len(line) < 2:
+                            line = (annotation.rect.tl, annotation.rect.br)
+                        start, end = line[0], line[1]
+                        endings = tuple(annotation.line_ends or (0, 0))
+                        payload.update({
+                            "rect": rect,
+                            "start": _canonical_point(page, start),
+                            "end": _canonical_point(page, end),
+                            "start_ending": _LINE_ENDING_NAMES.get(endings[0], "none"),
+                            "end_ending": _LINE_ENDING_NAMES.get(endings[1], "none"),
+                        })
+                        if any(
+                            ending
+                            in {
+                                LINE_ENDINGS["open_arrow"],
+                                LINE_ENDINGS["closed_arrow"],
+                                LINE_ENDINGS["reverse_open_arrow"],
+                                LINE_ENDINGS["reverse_closed_arrow"],
+                            }
+                            for ending in endings
+                        ):
+                            kind = "arrow"
+                            payload["type"] = kind
+                    else:
+                        payload["rect"] = rect
+                    info = annotation.info
+                    body = info.get("subject") if kind == "free_text" else info.get("content")
+                    parsed.append({
+                        "page_index": page_index,
+                        "kind": kind,
+                        "body": body or None,
+                        "selected_text": selected_text,
+                        "payload": payload,
+                        "subtype": subtype,
+                        "result": "imported",
+                    })
+                except (TypeError, ValueError, IndexError, KeyError) as error:
+                    diagnostics.append({
+                        "page": page_index + 1,
+                        "subtype": subtype,
+                        "result": "skipped",
+                        "reason": str(error),
+                    })
+    return parsed, diagnostics
+
+
+def strip_native_annotations(source: Path, output: Path) -> int:
+    """Write a derived PDF with page markup removed, preserving links/widgets."""
+    with pymupdf.open(source) as document:
+        removed = 0
+        for page in document:
+            annotations = list(page.annots() or ())
+            for annotation in annotations:
+                page.delete_annot(annotation)
+                removed += 1
+        output.parent.mkdir(parents=True, exist_ok=True)
+        document.save(output, garbage=4, deflate=True)
+    return removed
 
 
 def pdf_crop_box(page: pymupdf.Page) -> pymupdf.Rect:
