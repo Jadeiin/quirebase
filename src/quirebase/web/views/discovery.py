@@ -156,12 +156,14 @@ async def preview_pdf_import(
     user: User = Depends(current_user),
     login: LoginSession = Depends(current_login),
     db: AsyncSession = Depends(get_db),
+    pdf_annotation_mode: str = Form("preserve"),
 ):
     batch, _records, _errors = await stage_pdf_import_batch(
         db,
         user,
         [(upload_chunks(pdf), pdf.filename or "") for pdf in pdfs],
         settings=await get_effective_settings_model(db),
+        pdf_annotation_mode=pdf_annotation_mode,
     )
     return RedirectResponse(
         f"/imports/{batch.id}/preview?workflow={batch.workflow_id}", status_code=303

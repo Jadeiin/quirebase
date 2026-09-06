@@ -53,6 +53,7 @@ from quirebase.models import (
     FileRevision,
     ImportBatch,
     Item,
+    PdfAnnotationMode,
     Project,
     ProjectItem,
     ProjectMember,
@@ -192,7 +193,14 @@ async def attach_staged_pdf(
     user: User,
     item: Item,
     staged: tuple[str, int, str],
+    *,
+    annotation_mode: PdfAnnotationMode | str = PdfAnnotationMode.preserve,
+    max_pdf_bytes: int,
 ) -> FileRevision:
+    try:
+        annotation_mode = PdfAnnotationMode(annotation_mode)
+    except ValueError as error:
+        raise ValidationFailure("pdf annotation mode must be preserve, strip, or import") from error
     key, size, original_name = staged
     revision = FileRevision(
         item_id=item.id,
@@ -205,6 +213,10 @@ async def attach_staged_pdf(
     await db.flush()
     thumbnail_object_id = uuid4()
     thumbnail_key = object_key(thumbnail_object_id, ObjectSuffix.PNG)
+    derived_object_id = uuid4() if annotation_mode is not PdfAnnotationMode.preserve else None
+    derived_key = (
+        object_key(derived_object_id, ObjectSuffix.PDF) if derived_object_id is not None else None
+    )
     await durable_operations().enqueue_in_transaction(
         db,
         IMPORTED_REVISION_INSPECTION_WORKFLOW,
@@ -212,6 +224,9 @@ async def attach_staged_pdf(
         user.id,
         key,
         str(thumbnail_object_id),
+        str(derived_object_id) if derived_object_id is not None else None,
+        annotation_mode.value,
+        max_pdf_bytes,
         queue_name=DOCUMENTS_QUEUE,
         workflow_id=f"inspect-imported-revision:{revision.id}",
         partition_key=revision.id,
@@ -222,7 +237,11 @@ async def attach_staged_pdf(
             "item_id": item.id,
             "revision_id": revision.id,
             "object_key": key,
-            "object_keys": [key, thumbnail_key],
+            "object_keys": [key, thumbnail_key, *([derived_key] if derived_key else [])],
+            "source_object_key": key,
+            "derived_object_key": derived_key,
+            "pdf_annotation_mode": annotation_mode.value,
+            "max_pdf_bytes": max_pdf_bytes,
         },
     )
     record_event(db, user.id, "pdf.upload", "file_revision", revision.id)
