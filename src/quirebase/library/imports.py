@@ -15,7 +15,7 @@ from sqlalchemy.orm import selectinload
 
 from quirebase.access.items import require_accessible_items, visible_items_query
 from quirebase.audit import record_event
-from quirebase.core.config import Settings, get_settings
+from quirebase.core.config import MAX_SQL_INTEGER, Settings, get_settings
 from quirebase.core.errors import (
     DomainError,
     ResourceNotFound,
@@ -201,6 +201,12 @@ async def stage_pdf_import_batch(
             if settings is not None
             else await get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes)
         )
+    if (
+        not isinstance(max_bytes, int)
+        or isinstance(max_bytes, bool)
+        or not 1 <= max_bytes <= MAX_SQL_INTEGER
+    ):
+        raise ValidationFailure(f"max_bytes must be between 1 and {MAX_SQL_INTEGER} bytes")
     user_id = user.id
     await db.rollback()
     staged_pdfs: list[StagedPdf] = []

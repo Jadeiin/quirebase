@@ -54,13 +54,26 @@ _NATIVE_KIND = {
 
 
 def _hex_color(value: object) -> str | None:
-    if not isinstance(value, (tuple, list)) or len(value) < 3:
+    if not isinstance(value, (tuple, list)) or not value:
         return None
     try:
-        channels = [max(0, min(255, round(float(channel) * 255))) for channel in value[:3]]
+        channels = [max(0.0, min(1.0, float(channel))) for channel in value]
     except (TypeError, ValueError):
         return None
-    return f"#{channels[0]:02X}{channels[1]:02X}{channels[2]:02X}"
+    if len(channels) == 1:
+        rgb = [channels[0]] * 3
+    elif len(channels) == 3:
+        rgb = channels
+    elif len(channels) == 4:
+        cyan, magenta, yellow, key = channels
+        rgb = [
+            (1 - cyan) * (1 - key),
+            (1 - magenta) * (1 - key),
+            (1 - yellow) * (1 - key),
+        ]
+    else:
+        return None
+    return "#{}{}{}".format(*(f"{round(channel * 255):02X}" for channel in rgb))
 
 
 def _annotation_style(annotation: pymupdf.Annot) -> dict:

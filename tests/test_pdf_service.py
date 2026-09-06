@@ -5,6 +5,7 @@ import pymupdf
 import pytest
 
 from quirebase.documents.pdf import (
+    _hex_color,
     create_thumbnail,
     export_annotations,
     extract_doi,
@@ -109,6 +110,17 @@ def test_parse_native_ink_annotations(tmp_path):
             {"x": 50.0, "y": 380.0},
         ]
     ]
+
+
+@pytest.mark.parametrize(
+    ("components", "expected"),
+    [
+        ((0.5,), "#808080"),
+        ((0.0, 1.0, 1.0, 0.0), "#FF0000"),
+    ],
+)
+def test_annotation_colors_convert_grayscale_and_cmyk(components, expected):
+    assert _hex_color(components) == expected
 
 
 STYLE = {
