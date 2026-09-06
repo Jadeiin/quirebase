@@ -9,6 +9,8 @@ from quirebase.documents.pdf import (
     export_annotations,
     extract_doi,
     inspect_pdf,
+    parse_pdf_annotations,
+    strip_native_annotations,
     validate_pdf_container,
 )
 from quirebase.models import PdfAnnotation
@@ -47,6 +49,45 @@ def test_pymupdf_inspection_and_thumbnail(tmp_path):
     assert text == ""
     assert geometry == [[0.0, 0.0, 300.0, 400.0]]
     assert thumbnail.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_strip_native_annotations_writes_clean_derived_pdf(tmp_path):
+    source = tmp_path / "native.pdf"
+    derived = tmp_path / "stripped.pdf"
+    sample_pdf(source, native_annotation=True)
+
+    assert strip_native_annotations(source, derived) == 1
+    with pymupdf.open(source) as original, pymupdf.open(derived) as clean:
+        assert list(original[0].annots())
+        assert list(clean[0].annots() or ()) == []
+
+
+def test_parse_native_annotations_preserves_freetext_metadata_and_crop_coordinates(tmp_path):
+    source = tmp_path / "native.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        page.set_cropbox(pymupdf.Rect(20, 30, 280, 370))
+        free_text = page.add_freetext_annot(pymupdf.Rect(50, 60, 120, 100), "Visible text")
+        free_text.set_info(subject="Canonical body")
+        free_text.update()
+        page.add_stamp_annot(pymupdf.Rect(140, 160, 180, 200), stamp=0)
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    free_text = next(item for item in parsed if item["kind"] == "free_text")
+    assert free_text["body"] == "Canonical body"
+    assert free_text["payload"]["text"] == "Visible text"
+    assert free_text["payload"]["rect"]["x"] == 50
+    assert free_text["payload"]["rect"]["y"] == 240
+    assert diagnostics == [
+        {
+            "page": 1,
+            "subtype": "Stamp",
+            "result": "skipped",
+            "reason": "unsupported subtype",
+        }
+    ]
 
 
 STYLE = {

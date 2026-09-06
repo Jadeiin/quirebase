@@ -85,6 +85,14 @@ async def test_update_settings_rejects_unwhitelisted_keys(async_db):
 
 
 @pytest.mark.anyio
+async def test_update_settings_rejects_file_size_above_database_integer(async_db):
+    db = async_db
+    admin = await create_test_admin(db, "admin_set_size_upper_bound")
+    with pytest.raises(ValidationFailure, match="must not exceed"):
+        await update_runtime_settings(db, admin, {"max_pdf_bytes": 2_147_483_648})
+
+
+@pytest.mark.anyio
 async def test_non_admin_cannot_update_settings(async_db):
     db = async_db
     member = await create_test_member(db, "member_set_3")

@@ -89,8 +89,8 @@ def _canonical_rect(page: pymupdf.Page, rect: pymupdf.Rect) -> dict[str, float]:
     normalized = rect.normalize()
     # Canonical coordinates intentionally follow the viewer's crop-local convention:
     # x is measured from the crop's left edge and y from its bottom edge.
-    x = normalized.x0 - crop.x0
-    y = crop.height - (normalized.y1 - crop.y0)
+    x = normalized.x0
+    y = crop.height - normalized.y1
     return {
         "x": max(0.0, float(x)),
         "y": max(0.0, float(y)),
@@ -102,7 +102,7 @@ def _canonical_rect(page: pymupdf.Page, rect: pymupdf.Rect) -> dict[str, float]:
 def _canonical_point(page: pymupdf.Page, point: object) -> dict[str, float]:
     crop = pdf_crop_box(page)
     x, y = float(point[0]), float(point[1])  # type: ignore[index]
-    return {"x": max(-1_000_000.0, x - crop.x0), "y": crop.height - (y - crop.y0)}
+    return {"x": max(-1_000_000.0, x), "y": crop.height - y}
 
 
 def _rect_from_points(page: pymupdf.Page, points: Iterable[object]) -> dict[str, float]:
