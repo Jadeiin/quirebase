@@ -90,6 +90,27 @@ def test_parse_native_annotations_preserves_freetext_metadata_and_crop_coordinat
     ]
 
 
+def test_parse_native_ink_annotations(tmp_path):
+    source = tmp_path / "ink.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        ink = page.add_ink_annot([[(10, 20), (30, 40), (50, 20)]])
+        ink.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert diagnostics == []
+    assert parsed[0]["kind"] == "ink"
+    assert parsed[0]["payload"]["paths"] == [
+        [
+            {"x": 10.0, "y": 380.0},
+            {"x": 30.0, "y": 360.0},
+            {"x": 50.0, "y": 380.0},
+        ]
+    ]
+
+
 STYLE = {
     "stroke_color": "#3366CC",
     "fill_color": None,
