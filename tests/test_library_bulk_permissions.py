@@ -28,6 +28,7 @@ from quirebase.models import (
     ProjectState,
     User,
 )
+from quirebase.projects import set_project_state
 
 
 @pytest.mark.anyio
@@ -188,6 +189,44 @@ async def test_bulk_action_rejects_archived_project_assignment(
 
     assert await db.get(ProjectItem, (target_project.id, item.id)) is None
     await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_bulk_action_revalidates_stale_project_state(async_db, async_session_factory):
+    owner = User(username="bulk-project-race-owner", password_hash="unused")
+    async_db.add(owner)
+    await async_db.flush()
+    item = Item(title="Bulk project race", created_by=owner.id)
+    project = Project(name="Bulk project race", created_by=owner.id)
+    async_db.add_all([item, project])
+    await async_db.flush()
+    async_db.add(ProjectMember(project_id=project.id, user_id=owner.id, role="owner"))
+    await async_db.commit()
+
+    async with async_session_factory() as bulk_session:
+        bulk_owner = await bulk_session.get(User, owner.id)
+        assert bulk_owner is not None
+        stale_project = await bulk_session.get(Project, project.id)
+        stale_member = await bulk_session.get(ProjectMember, (project.id, owner.id))
+        assert stale_project is not None and stale_member is not None
+
+        async with async_session_factory() as lifecycle_session:
+            lifecycle_owner = await lifecycle_session.get(User, owner.id)
+            assert lifecycle_owner is not None
+            await set_project_state(
+                lifecycle_session, lifecycle_owner, project.id, ProjectState.archived
+            )
+
+        with pytest.raises(ValidationFailure, match="choose an editable project"):
+            await apply_bulk_item_action(
+                bulk_session,
+                bulk_owner,
+                item_ids=[item.id],
+                action="add_project",
+                project_id=project.id,
+            )
+
+    assert await async_db.get(ProjectItem, (project.id, item.id)) is None
 
 
 @pytest.mark.anyio

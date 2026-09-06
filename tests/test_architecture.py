@@ -36,6 +36,7 @@ ALLOWED_PACKAGE_DEPENDENCIES = {
         "documents",
         "models",
         "operations",
+        "projects",
         "search",
     },
     "mcp": {

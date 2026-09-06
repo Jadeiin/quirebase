@@ -10,10 +10,10 @@ from quirebase.access.items import (
     can_edit_item,
     require_accessible_items,
 )
-from quirebase.access.projects import project_member
 from quirebase.audit import record_event
 from quirebase.core.errors import (
     PermissionDenied,
+    ResourceUnavailable,
     ValidationFailure,
 )
 from quirebase.documents import enqueue_object_cleanup
@@ -26,11 +26,13 @@ from quirebase.models import (
     Attachment,
     FileRevision,
     ItemTag,
-    Project,
     ProjectItem,
+    ProjectMember,
+    ProjectRole,
     ProjectState,
     User,
 )
+from quirebase.projects import require_project_write_gate
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
@@ -55,17 +57,20 @@ async def apply_bulk_item_action(
 
     cleanup_keys: list[str] = []
     if action in ("add_project", "project_add"):
-        project = await db.get(Project, project_id)
-        membership = await project_member(db, user, project_id)
-        if (
-            project is None
-            or project.state != ProjectState.active
-            or membership is None
-            or membership.role not in ("owner", "editor")
-        ):
+        try:
+            await require_project_write_gate(
+                db,
+                project_id,
+                state=ProjectState.active,
+                message="active project not available",
+            )
+        except ResourceUnavailable as error:
+            raise ValidationFailure("choose an editable project") from error
+        membership = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
+        if membership is None or membership.role not in (ProjectRole.owner, ProjectRole.editor):
             raise ValidationFailure("choose an editable project")
         for item in items:
-            if await db.get(ProjectItem, (project_id, item.id)) is None:
+            if await db.get(ProjectItem, (project_id, item.id), populate_existing=True) is None:
                 db.add(ProjectItem(project_id=project_id, item_id=item.id))
                 await search_index(db).index_item(db, item.id)
         audit_action = "library.bulk.add_project"

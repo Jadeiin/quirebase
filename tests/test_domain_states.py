@@ -37,6 +37,7 @@ from quirebase.models import (
     ProjectItem,
     ProjectMember,
     ProjectRole,
+    ProjectState,
     ProjectVisibility,
     SystemRole,
     User,
@@ -44,6 +45,7 @@ from quirebase.models import (
 from quirebase.projects.lifecycle import (
     delete_project,
     rename_project,
+    set_project_state,
     set_project_visibility,
     transfer_project_ownership,
 )
@@ -57,6 +59,7 @@ from quirebase.projects.workspaces import (
     create_project,
     join_project,
     open_project_workspace,
+    remove_item_from_project,
 )
 from quirebase.search import search_index
 
@@ -597,6 +600,87 @@ async def test_join_revalidates_a_stale_public_project_before_inserting_membersh
             await join_project(join_session, joining_user, project.id)
 
     assert await async_db.get(ProjectMember, (project.id, joining_user.id)) is None
+
+
+@pytest.mark.anyio
+async def test_item_assignment_revalidates_stale_project_state(async_db, async_session_factory):
+    owner = User(username="assignment-race-owner", password_hash="unused")
+    async_db.add(owner)
+    await async_db.flush()
+    add_item = Item(title="Add race", created_by=owner.id)
+    remove_item = Item(title="Remove race", created_by=owner.id)
+    async_db.add_all([add_item, remove_item])
+    await async_db.commit()
+    add_project = await create_project(async_db, owner, "Add assignment race")
+    remove_project = await create_project(async_db, owner, "Remove assignment race")
+    await add_item_to_project(async_db, owner, remove_project.id, remove_item.id)
+    add_key = (add_project.id, add_item.id)
+    remove_key = (remove_project.id, remove_item.id)
+
+    async with (
+        async_session_factory() as add_session,
+        async_session_factory() as remove_session,
+    ):
+        add_owner = await add_session.get(User, owner.id)
+        remove_owner = await remove_session.get(User, owner.id)
+        stale_add_project = await add_session.get(Project, add_project.id)
+        stale_add_member = await add_session.get(ProjectMember, (add_project.id, owner.id))
+        stale_remove_project = await remove_session.get(Project, remove_project.id)
+        stale_remove_member = await remove_session.get(ProjectMember, (remove_project.id, owner.id))
+        stale_assignment = await remove_session.get(
+            ProjectItem, (remove_project.id, remove_item.id)
+        )
+        assert add_owner is not None and remove_owner is not None
+        assert stale_add_project is not None and stale_add_member is not None
+        assert stale_remove_project is not None and stale_remove_member is not None
+        assert stale_assignment is not None
+
+        async with async_session_factory() as lifecycle_session:
+            lifecycle_owner = await lifecycle_session.get(User, owner.id)
+            assert lifecycle_owner is not None
+            await set_project_state(
+                lifecycle_session, lifecycle_owner, add_project.id, ProjectState.archived
+            )
+            await set_project_state(
+                lifecycle_session, lifecycle_owner, remove_project.id, ProjectState.archived
+            )
+
+        with pytest.raises(ResourceUnavailable):
+            await add_item_to_project(add_session, add_owner, add_project.id, add_item.id)
+        await add_session.rollback()
+        with pytest.raises(ResourceUnavailable):
+            await remove_item_from_project(
+                remove_session, remove_owner, remove_project.id, remove_item.id
+            )
+
+    async_db.expire_all()
+    assert await async_db.get(ProjectItem, add_key) is None
+    assert await async_db.get(ProjectItem, remove_key) is not None
+
+
+@pytest.mark.anyio
+async def test_lifecycle_mutation_returns_domain_error_after_concurrent_delete(
+    async_db, async_session_factory
+):
+    owner = User(username="lifecycle-delete-race-owner", password_hash="unused")
+    async_db.add(owner)
+    await async_db.commit()
+    project = await create_project(async_db, owner, "Lifecycle delete race")
+
+    async with async_session_factory() as stale_session:
+        stale_owner = await stale_session.get(User, owner.id)
+        assert stale_owner is not None
+        stale_project = await stale_session.get(Project, project.id)
+        stale_member = await stale_session.get(ProjectMember, (project.id, owner.id))
+        assert stale_project is not None and stale_member is not None
+
+        async with async_session_factory() as delete_session:
+            deleting_owner = await delete_session.get(User, owner.id)
+            assert deleting_owner is not None
+            await delete_project(delete_session, deleting_owner, project.id, project.name)
+
+        with pytest.raises(ResourceUnavailable, match="project not found"):
+            await rename_project(stale_session, stale_owner, project.id, "Too late")
 
 
 async def assert_closed_state_constraints(db) -> None:

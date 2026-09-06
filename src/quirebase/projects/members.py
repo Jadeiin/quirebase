@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select
 
-from quirebase.access.projects import project_member
 from quirebase.audit import record_event
 from quirebase.core.errors import (
     DomainError,
@@ -13,6 +12,8 @@ from quirebase.core.errors import (
     ValidationFailure,
 )
 from quirebase.models import ProjectMember, ProjectRole, User
+
+from .write_gate import require_project_write_gate
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,7 +30,8 @@ async def add_project_member(
     username: str,
     role: ProjectRole | str = ProjectRole.viewer,
 ) -> ProjectMember:
-    actor = await project_member(db, user, project_id)
+    await require_project_write_gate(db, project_id)
+    actor = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     if actor is None or actor.role != ProjectRole.owner:
         raise ResourceUnavailable("project not found or owner role required")
     try:
@@ -41,7 +43,7 @@ async def add_project_member(
     )
     if target is None:
         raise ResourceNotFound("user not found")
-    existing = await db.get(ProjectMember, (project_id, target.id))
+    existing = await db.get(ProjectMember, (project_id, target.id), populate_existing=True)
     if existing:
         existing.role = requested_role
         member = existing
@@ -66,8 +68,9 @@ async def remove_project_member(
     project_id: str,
     member_id: str,
 ) -> None:
-    actor = await project_member(db, user, project_id)
-    target = await db.get(ProjectMember, (project_id, member_id))
+    await require_project_write_gate(db, project_id)
+    actor = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
+    target = await db.get(ProjectMember, (project_id, member_id), populate_existing=True)
     if actor is None or actor.role != ProjectRole.owner or target is None:
         raise ResourceUnavailable("project or member not found")
     owner_count = await db.scalar(

@@ -169,6 +169,11 @@ a typed read model containing the Project, the caller's membership, members and 
 Membership authorization and the related queries remain coordinated behind that operation; only
 the Web adapter maps the typed view to template context.
 
+Project-scoped mutations acquire the Projects write gate before revalidating state, visibility
+and Project Role. The conditional write serializes lifecycle, membership and Item-assignment
+changes on SQLite and PostgreSQL; Library bulk assignment crosses this Projects interface while
+retaining ownership of the surrounding bulk-operation transaction and Audit Event.
+
 Administrator Project management crosses the Projects interface through
 `list_projects_for_admin`, which returns a paginated directory with creator and membership/item
 counts. Administrator lifecycle mutations reuse the Projects operations so state changes,
@@ -265,7 +270,7 @@ directions are:
 | `access` | `core`, `models` | Evaluate policies using persisted identities and domain errors |
 | `accounts` | `audit`, `core`, `models` | Authentication persistence and Audit Event recording |
 | `audit` | `core`, `models` | Authorization errors and Audit Event persistence |
-| `library` | `access`, `audit`, `core`, `documents`, `models`, `operations`, `search` | Authorization, persistence and auditing; selected-Item document assembly; runtime Provider/import settings; Library-owned workflows and search-index synchronization |
+| `library` | `access`, `audit`, `core`, `documents`, `models`, `operations`, `projects`, `search` | Authorization, persistence and auditing; selected-Item document assembly; Project-gated bulk assignment; runtime Provider/import settings; Library-owned workflows and search-index synchronization |
 | `projects` | `access`, `audit`, `core`, `models`, `search` | Authorization, Project persistence, audit recording and Item index synchronization |
 | `documents` | `access`, `audit`, `core`, `models`, `operations` | Authorization, owned-object persistence, auditing, runtime settings and Documents workflows |
 | `operations` | `audit`, `core`, `library`, `models`, `search` | Infrastructure access, operational persistence, maintenance workflows, global rebuild coordination and audit recording |

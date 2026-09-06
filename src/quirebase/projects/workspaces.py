@@ -3,11 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access.items import can_read_item
-from quirebase.access.projects import project_member, require_project_member
+from quirebase.access.projects import require_project_member
 from quirebase.audit import record_event
 from quirebase.core.errors import (
     ResourceNotFound,
@@ -25,6 +25,8 @@ from quirebase.models import (
     User,
 )
 from quirebase.search import search_index
+
+from .write_gate import require_project_write_gate
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -107,22 +109,14 @@ async def list_joinable_projects(db: AsyncSession, user: User) -> list[tuple[Pro
 
 
 async def join_project(db: AsyncSession, user: User, project_id: str) -> ProjectMember:
-    # A no-op conditional UPDATE is a portable write gate: it locks the
-    # Project row and validates joinability in the same statement. State and
-    # visibility updates therefore serialize before or after this join.
-    eligible_project_id = await db.scalar(
-        update(Project)
-        .where(
-            Project.id == project_id,
-            Project.visibility == ProjectVisibility.public,
-            Project.state == ProjectState.active,
-        )
-        .values(updated_at=Project.updated_at)
-        .returning(Project.id)
+    await require_project_write_gate(
+        db,
+        project_id,
+        state=ProjectState.active,
+        visibility=ProjectVisibility.public,
+        message="public project not available",
     )
-    if eligible_project_id is None:
-        raise ResourceUnavailable("public project not available")
-    existing = await db.get(ProjectMember, (project_id, user.id))
+    existing = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     if existing:
         await db.commit()
         return existing
@@ -176,18 +170,18 @@ async def open_project_workspace(db: AsyncSession, user: User, project_id: str) 
 
 async def add_item_to_project(db: AsyncSession, user: User, project_id: str, item_id: str) -> None:
     item = await db.get(Item, item_id)
-    project = await db.get(Project, project_id)
-    membership = await project_member(db, user, project_id)
-    if (
-        item is None
-        or project is None
-        or project.state != ProjectState.active
-        or not await can_read_item(db, user, item_id)
-        or membership is None
-        or membership.role not in (ProjectRole.owner, ProjectRole.editor)
-    ):
+    if item is None or not await can_read_item(db, user, item_id):
         raise ResourceUnavailable("item or project not accessible or insufficient permissions")
-    if await db.get(ProjectItem, (project_id, item_id)) is None:
+    await require_project_write_gate(
+        db,
+        project_id,
+        state=ProjectState.active,
+        message="item or project not accessible or insufficient permissions",
+    )
+    membership = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
+    if membership is None or membership.role not in (ProjectRole.owner, ProjectRole.editor):
+        raise ResourceUnavailable("item or project not accessible or insufficient permissions")
+    if await db.get(ProjectItem, (project_id, item_id), populate_existing=True) is None:
         db.add(ProjectItem(project_id=project_id, item_id=item_id))
         await db.flush()
         await search_index(db).index_item(db, item_id)
@@ -199,20 +193,24 @@ async def add_item_to_project(db: AsyncSession, user: User, project_id: str, ite
             item_id,
             detail={"project_id": project_id},
         )
-        await db.commit()
+    await db.commit()
 
 
 async def remove_item_from_project(
     db: AsyncSession, user: User, project_id: str, item_id: str
 ) -> None:
-    membership = await project_member(db, user, project_id)
-    project = await db.get(Project, project_id)
-    assignment = await db.get(ProjectItem, (project_id, item_id))
+    if not await can_read_item(db, user, item_id):
+        raise ResourceUnavailable("item or project not accessible or insufficient permissions")
+    await require_project_write_gate(
+        db,
+        project_id,
+        state=ProjectState.active,
+        message="item or project not accessible or insufficient permissions",
+    )
+    membership = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
+    assignment = await db.get(ProjectItem, (project_id, item_id), populate_existing=True)
     if (
         assignment is None
-        or project is None
-        or project.state != ProjectState.active
-        or not await can_read_item(db, user, item_id)
         or membership is None
         or membership.role not in (ProjectRole.owner, ProjectRole.editor)
     ):
