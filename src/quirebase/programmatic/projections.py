@@ -63,6 +63,9 @@ def project_detail_view(workspace: Any) -> ProjectDetailView:
         name=workspace.project.name,
         role=workspace.membership.role,
         item_count=len(workspace.items),
+        state=workspace.project.state.value,
+        visibility=workspace.project.visibility.value,
+        description=workspace.project.description,
         members=[
             ProjectMemberView(
                 user_id=member.user.id,

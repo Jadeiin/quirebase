@@ -10,7 +10,7 @@ from sqlalchemy import event, select, text
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access.annotations import can_edit_annotation, editable_annotation_reply_ids
-from quirebase.core.errors import ValidationFailure, VersionConflict
+from quirebase.core.errors import ResourceUnavailable, ValidationFailure, VersionConflict
 from quirebase.documents.annotations import (
     _annotation_views,
     create_annotation_reply,
@@ -37,15 +37,28 @@ from quirebase.models import (
     ProjectItem,
     ProjectMember,
     ProjectRole,
+    ProjectVisibility,
     SystemRole,
     User,
+)
+from quirebase.projects.lifecycle import (
+    delete_project,
+    rename_project,
+    set_project_visibility,
+    transfer_project_ownership,
 )
 from quirebase.projects.members import (
     ProjectMemberConflict,
     add_project_member,
     remove_project_member,
 )
-from quirebase.projects.workspaces import create_project, open_project_workspace
+from quirebase.projects.workspaces import (
+    add_item_to_project,
+    create_project,
+    join_project,
+    open_project_workspace,
+)
+from quirebase.search import search_index
 
 
 async def state_records(db):
@@ -503,6 +516,87 @@ async def test_project_membership_preserves_an_owner_and_returns_domain_roles(as
     )
     assert event is not None
     assert json.loads(event.detail) == {"user_id": teammate.id}
+
+
+@pytest.mark.anyio
+async def test_project_ownership_transfer_rejects_inactive_target(async_db):
+    db = async_db
+    owner = User(username="active-transfer-owner", password_hash="unused")
+    inactive = User(username="inactive-transfer-target", password_hash="unused")
+    db.add_all([owner, inactive])
+    await db.commit()
+    project = await create_project(db, owner, "Inactive transfer project")
+    await add_project_member(db, owner, project.id, inactive.username, ProjectRole.editor)
+    inactive.active = False
+    await db.commit()
+
+    with pytest.raises(ValidationFailure, match="target user must be active"):
+        await transfer_project_ownership(db, owner, project.id, inactive.id)
+
+    owner_member = await db.get(ProjectMember, (project.id, owner.id))
+    inactive_member = await db.get(ProjectMember, (project.id, inactive.id))
+    assert owner_member is not None and owner_member.role == ProjectRole.owner
+    assert inactive_member is not None and inactive_member.role == ProjectRole.editor
+
+
+@pytest.mark.anyio
+async def test_project_rename_and_delete_refresh_assigned_item_search(async_db):
+    db = async_db
+    owner = User(username="project-search-owner", password_hash="unused")
+    db.add(owner)
+    await db.flush()
+    item = Item(title="Unrelated title", created_by=owner.id)
+    db.add(item)
+    await db.commit()
+    project = await create_project(db, owner, "OriginalProjectToken")
+    await add_item_to_project(db, owner, project.id, item.id)
+    index = search_index(db)
+
+    assert item.id in await index.search(db, "OriginalProjectToken")
+
+    await rename_project(db, owner, project.id, "RenamedProjectToken")
+
+    assert item.id not in await index.search(db, "OriginalProjectToken")
+    assert item.id in await index.search(db, "RenamedProjectToken")
+
+    await delete_project(db, owner, project.id, "RenamedProjectToken")
+
+    assert item.id not in await index.search(db, "RenamedProjectToken")
+
+
+@pytest.mark.anyio
+async def test_join_revalidates_a_stale_public_project_before_inserting_membership(
+    async_db, async_session_factory
+):
+    owner = User(username="join-race-owner", password_hash="unused")
+    joining_user = User(username="join-race-viewer", password_hash="unused")
+    async_db.add_all([owner, joining_user])
+    await async_db.commit()
+    project = await create_project(
+        async_db,
+        owner,
+        "Join race",
+        visibility=ProjectVisibility.public,
+    )
+
+    async with async_session_factory() as join_session:
+        stale_project = await join_session.get(Project, project.id)
+        assert stale_project is not None and stale_project.visibility == ProjectVisibility.public
+
+        async with async_session_factory() as owner_session:
+            current_owner = await owner_session.get(User, owner.id)
+            assert current_owner is not None
+            await set_project_visibility(
+                owner_session,
+                current_owner,
+                project.id,
+                ProjectVisibility.private,
+            )
+
+        with pytest.raises(ResourceUnavailable, match="public project not available"):
+            await join_project(join_session, joining_user, project.id)
+
+    assert await async_db.get(ProjectMember, (project.id, joining_user.id)) is None
 
 
 async def assert_closed_state_constraints(db) -> None:

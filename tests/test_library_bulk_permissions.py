@@ -12,7 +12,7 @@ from storage_helpers import collect_body, local_object_path, put_pdf_object
 from test_http import authenticated_async_client
 
 from quirebase.core.crypto import hash_password
-from quirebase.core.errors import PermissionDenied
+from quirebase.core.errors import PermissionDenied, ValidationFailure
 from quirebase.core.storage import ObjectMetadata, ObjectResponse
 from quirebase.documents import create_item_document_bundle
 from quirebase.library import apply_bulk_item_action, download_selected_item_documents
@@ -25,6 +25,7 @@ from quirebase.models import (
     Project,
     ProjectItem,
     ProjectMember,
+    ProjectState,
     User,
 )
 
@@ -155,6 +156,37 @@ async def test_bulk_action_records_single_bulk_audit_event(
     )
     assert event is not None
     assert json.loads(event.detail)["item_ids"] == [item.id]
+    await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_bulk_action_rejects_archived_project_assignment(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    owner = await db.get(User, item.created_by)
+    assert owner is not None
+    target_project = Project(
+        name="Archived Project", created_by=owner.id, state=ProjectState.archived
+    )
+    db.add(target_project)
+    await db.flush()
+    db.add(ProjectMember(project_id=target_project.id, user_id=owner.id, role="owner"))
+    await db.commit()
+
+    with pytest.raises(ValidationFailure, match="choose an editable project"):
+        await apply_bulk_item_action(
+            db,
+            owner,
+            item_ids=[item.id],
+            action="add_project",
+            project_id=target_project.id,
+        )
+
+    assert await db.get(ProjectItem, (target_project.id, item.id)) is None
     await client.aclose()
 
 

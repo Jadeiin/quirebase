@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: quirebase VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-09-03 17:42+0800\n"
+"POT-Creation-Date: 2026-09-05 21:20+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -221,12 +221,12 @@ msgid "Create account {username}."
 msgstr ""
 
 #: src/quirebase/templates/accept_invitation.html:2
-#: src/quirebase/templates/admin.html:174 src/quirebase/templates/login.html:9
+#: src/quirebase/templates/admin.html:178 src/quirebase/templates/login.html:9
 msgid "Password"
 msgstr ""
 
 #: src/quirebase/templates/accept_invitation.html:2
-#: src/quirebase/templates/admin.html:168
+#: src/quirebase/templates/admin.html:172
 msgid "Create account"
 msgstr ""
 
@@ -281,21 +281,21 @@ msgid "User profile"
 msgstr ""
 
 #: src/quirebase/templates/account_settings.html:41
-#: src/quirebase/templates/admin.html:173
-#: src/quirebase/templates/admin.html:193 src/quirebase/templates/login.html:8
+#: src/quirebase/templates/admin.html:177
+#: src/quirebase/templates/admin.html:197 src/quirebase/templates/login.html:8
 msgid "Username"
 msgstr ""
 
 #: src/quirebase/templates/account_settings.html:42
-#: src/quirebase/templates/admin.html:140
-#: src/quirebase/templates/admin.html:175
-#: src/quirebase/templates/admin.html:194
+#: src/quirebase/templates/admin.html:144
+#: src/quirebase/templates/admin.html:179
+#: src/quirebase/templates/admin.html:198
 msgid "Role"
 msgstr ""
 
 #: src/quirebase/templates/account_settings.html:43
-#: src/quirebase/templates/admin.html:393
-#: src/quirebase/templates/admin.html:531
+#: src/quirebase/templates/admin.html:451
+#: src/quirebase/templates/admin.html:589
 msgid "Created"
 msgstr ""
 
@@ -330,7 +330,7 @@ msgid "Current password"
 msgstr ""
 
 #: src/quirebase/templates/account_settings.html:83
-#: src/quirebase/templates/admin.html:224
+#: src/quirebase/templates/admin.html:228
 msgid "New password"
 msgstr ""
 
@@ -648,7 +648,7 @@ msgid "Preferences are automatically saved to your browser."
 msgstr ""
 
 #: src/quirebase/templates/account_settings.html:281
-#: src/quirebase/templates/pdf.html:8
+#: src/quirebase/templates/pdf.html:13
 msgid "Saved"
 msgstr ""
 
@@ -710,7 +710,7 @@ msgstr ""
 
 #: src/quirebase/templates/admin.html:11
 msgid ""
-"Manage access, global library items, audit events, durable workflows, "
+"Manage users, projects, library items, audit events, durable workflows, "
 "runtime settings and maintenance."
 msgstr ""
 
@@ -734,7 +734,7 @@ msgstr ""
 msgid "Users & Access"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:27 src/quirebase/templates/admin.html:189
+#: src/quirebase/templates/admin.html:27 src/quirebase/templates/admin.html:193
 msgid "Invite a user"
 msgstr ""
 
@@ -742,260 +742,347 @@ msgstr ""
 msgid "Accounts, roles, and invites"
 msgstr ""
 
+#: src/quirebase/templates/admin.html:31 src/quirebase/templates/base.html:30
+#: src/quirebase/templates/index.html:38 src/quirebase/templates/item.html:355
+#: src/quirebase/templates/project.html:5
+#: src/quirebase/templates/projects.html:3
+#: src/quirebase/templates/projects.html:5
+msgid "Projects"
+msgstr ""
+
 #: src/quirebase/templates/admin.html:31
+msgid "All projects and lifecycle controls"
+msgstr ""
+
+#: src/quirebase/templates/admin.html:35
 msgid "Global Items & Files"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:31
+#: src/quirebase/templates/admin.html:35
 msgid "Library items and storage"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:35
+#: src/quirebase/templates/admin.html:39
 msgid "Audit Log"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:35
+#: src/quirebase/templates/admin.html:39
 msgid "Security and change log"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:39
+#: src/quirebase/templates/admin.html:43
 msgid "Workflows"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:39
+#: src/quirebase/templates/admin.html:43
 msgid "Durable operations"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:43
+#: src/quirebase/templates/admin.html:47
 msgid "Runtime Settings"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:43
+#: src/quirebase/templates/admin.html:47
 msgid "API keys and thresholds"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:47
+#: src/quirebase/templates/admin.html:51
 msgid "Maintenance"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:47
+#: src/quirebase/templates/admin.html:51
 msgid "Reindex, verify, and backups"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:60
+#: src/quirebase/templates/admin.html:64
 msgid "Total users"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:64
+#: src/quirebase/templates/admin.html:68
 msgid "Total items"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:68
+#: src/quirebase/templates/admin.html:72
 msgid "Total storage"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:72
+#: src/quirebase/templates/admin.html:76
 msgid "Failed workflows"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:80
+#: src/quirebase/templates/admin.html:84
 msgid "Storage breakdown"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:81
+#: src/quirebase/templates/admin.html:85
 msgid "File objects"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:87
+#: src/quirebase/templates/admin.html:91
 msgid "PDF Revisions"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:88 src/quirebase/templates/admin.html:94
-#: src/quirebase/templates/admin.html:100
+#: src/quirebase/templates/admin.html:92 src/quirebase/templates/admin.html:98
+#: src/quirebase/templates/admin.html:104
 msgid "files"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:93 src/quirebase/templates/item.html:266
+#: src/quirebase/templates/admin.html:97 src/quirebase/templates/item.html:266
 msgid "Attachments"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:99
+#: src/quirebase/templates/admin.html:103
 msgid "Thumbnails"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:109
+#: src/quirebase/templates/admin.html:113
 msgid "Activity"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:110
+#: src/quirebase/templates/admin.html:114
 msgid "Recent audit events"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:112
+#: src/quirebase/templates/admin.html:116
 msgid "View all"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:123
+#: src/quirebase/templates/admin.html:127
 msgid "No recent audit events."
 msgstr ""
 
-#: src/quirebase/templates/admin.html:136
+#: src/quirebase/templates/admin.html:140
 msgid "Search users"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:137
+#: src/quirebase/templates/admin.html:141
 msgid "Username or ID…"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:142
+#: src/quirebase/templates/admin.html:146
 msgid "All roles"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:143
-#: src/quirebase/templates/admin.html:177
-#: src/quirebase/templates/admin.html:196
+#: src/quirebase/templates/admin.html:147
+#: src/quirebase/templates/admin.html:181
+#: src/quirebase/templates/admin.html:200
 msgid "member"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:144
-#: src/quirebase/templates/admin.html:178
-#: src/quirebase/templates/admin.html:197
+#: src/quirebase/templates/admin.html:148
+#: src/quirebase/templates/admin.html:182
+#: src/quirebase/templates/admin.html:201
 #: src/quirebase/templates/project.html:5
 msgid "administrator"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:148
+#: src/quirebase/templates/admin.html:152
 msgid "Status"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:150
+#: src/quirebase/templates/admin.html:154
 msgid "All statuses"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:151
-#: src/quirebase/templates/admin.html:218
+#: src/quirebase/templates/admin.html:155
+#: src/quirebase/templates/admin.html:222
 msgid "Active"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:152
-#: src/quirebase/templates/admin.html:218
+#: src/quirebase/templates/admin.html:156
+#: src/quirebase/templates/admin.html:222
 msgid "Disabled"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:156
-#: src/quirebase/templates/admin.html:270
-#: src/quirebase/templates/admin.html:324
+#: src/quirebase/templates/admin.html:160
+#: src/quirebase/templates/admin.html:282
+#: src/quirebase/templates/admin.html:328
+#: src/quirebase/templates/admin.html:382
 msgid "Filter"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:158
-#: src/quirebase/templates/admin.html:272
-#: src/quirebase/templates/admin.html:326
+#: src/quirebase/templates/admin.html:162
+#: src/quirebase/templates/admin.html:283
+#: src/quirebase/templates/admin.html:330
+#: src/quirebase/templates/admin.html:384
 #: src/quirebase/templates/library.html:20
 #: src/quirebase/templates/online_search.html:11
 #: src/quirebase/templates/tools.html:35
 msgid "Clear"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:169
+#: src/quirebase/templates/admin.html:173
 msgid "Add user directly"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:181
+#: src/quirebase/templates/admin.html:185
 msgid "Create user"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:188
+#: src/quirebase/templates/admin.html:192
 msgid "Invitations"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:200
+#: src/quirebase/templates/admin.html:204
 msgid "Create invitation"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:208
+#: src/quirebase/templates/admin.html:212
 msgid "Directory"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:209
+#: src/quirebase/templates/admin.html:213
 #, python-brace-format
 msgid "All users ({count})"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:218
+#: src/quirebase/templates/admin.html:222
 msgid "Joined"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:222
+#: src/quirebase/templates/admin.html:226
 msgid "Reset password"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:225
+#: src/quirebase/templates/admin.html:229
 msgid "Update"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:231
+#: src/quirebase/templates/admin.html:235
 msgid "Disable"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:231
+#: src/quirebase/templates/admin.html:235
 msgid "Enable"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:237
+#: src/quirebase/templates/admin.html:241
 msgid "Make Member"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:237
+#: src/quirebase/templates/admin.html:241
 msgid "Make Admin"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:240
+#: src/quirebase/templates/admin.html:244
 msgid "Revoke all login sessions for this user?"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:241
+#: src/quirebase/templates/admin.html:245
 msgid "Revoke sessions"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:246
+#: src/quirebase/templates/admin.html:250
 msgid "No users found."
 msgstr ""
 
-#: src/quirebase/templates/admin.html:258
-msgid "Search all items"
-msgstr ""
-
-#: src/quirebase/templates/admin.html:259
-msgid "Title, author, DOI, or ID…"
-msgstr ""
-
 #: src/quirebase/templates/admin.html:262
-msgid "Has PDF"
+msgid "Search projects"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:264
-msgid "All"
-msgstr ""
-
-#: src/quirebase/templates/admin.html:265
-msgid "With PDF"
+#: src/quirebase/templates/admin.html:263
+msgid "Name, creator, or ID…"
 msgstr ""
 
 #: src/quirebase/templates/admin.html:266
+msgid "State"
+msgstr ""
+
+#: src/quirebase/templates/admin.html:268
+#: src/quirebase/templates/admin.html:426
+msgid "All states"
+msgstr ""
+
+#: src/quirebase/templates/admin.html:269
+msgid "active"
+msgstr ""
+
+#: src/quirebase/templates/admin.html:270
+msgid "archived"
+msgstr ""
+
+#: src/quirebase/templates/admin.html:274
+#: src/quirebase/templates/project.html:13
+#: src/quirebase/templates/projects.html:6
+msgid "Visibility"
+msgstr ""
+
+#: src/quirebase/templates/admin.html:276
+msgid "All visibility"
+msgstr ""
+
+#: src/quirebase/templates/admin.html:277 src/quirebase/templates/pdf.html:25
+#: src/quirebase/templates/project.html:13
+#: src/quirebase/templates/projects.html:6
+msgid "Private"
+msgstr ""
+
+#: src/quirebase/templates/admin.html:278
+#: src/quirebase/templates/project.html:13
+#: src/quirebase/templates/projects.html:6
+#: src/quirebase/templates/projects.html:8
+msgid "Public"
+msgstr ""
+
+#: src/quirebase/templates/admin.html:291
+msgid "Project directory"
+msgstr ""
+
+#: src/quirebase/templates/admin.html:292
+#, python-brace-format
+msgid "All projects ({count})"
+msgstr ""
+
+#: src/quirebase/templates/admin.html:300
+msgid "Creator"
+msgstr ""
+
+#: src/quirebase/templates/admin.html:300
+msgid "members"
+msgstr ""
+
+#: src/quirebase/templates/admin.html:300
+msgid "items"
+msgstr ""
+
+#: src/quirebase/templates/admin.html:304
+msgid "No projects found."
+msgstr ""
+
+#: src/quirebase/templates/admin.html:316
+msgid "Search all items"
+msgstr ""
+
+#: src/quirebase/templates/admin.html:317
+msgid "Title, author, DOI, or ID…"
+msgstr ""
+
+#: src/quirebase/templates/admin.html:320
+msgid "Has PDF"
+msgstr ""
+
+#: src/quirebase/templates/admin.html:322
+msgid "All"
+msgstr ""
+
+#: src/quirebase/templates/admin.html:323
+msgid "With PDF"
+msgstr ""
+
+#: src/quirebase/templates/admin.html:324
 msgid "Without PDF"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:281
+#: src/quirebase/templates/admin.html:339
 msgid "Global inventory"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:282
+#: src/quirebase/templates/admin.html:340
 #, python-brace-format
 msgid "All items ({count})"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:290 src/quirebase/templates/index.html:23
+#: src/quirebase/templates/admin.html:348 src/quirebase/templates/index.html:23
 #: src/quirebase/templates/index.html:32 src/quirebase/templates/item.html:12
 #: src/quirebase/templates/library.html:66
 #: src/quirebase/templates/online_search.html:18
@@ -1003,245 +1090,241 @@ msgstr ""
 msgid "No authors"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:293
+#: src/quirebase/templates/admin.html:351
 msgid "View"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:294
+#: src/quirebase/templates/admin.html:352
 msgid ""
 "Permanently delete this item, all its revisions, annotations, and storage"
 " files?"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:295 src/quirebase/templates/item.html:259
+#: src/quirebase/templates/admin.html:353 src/quirebase/templates/item.html:259
 #: src/quirebase/templates/item.html:267 src/quirebase/templates/item.html:416
-#: src/quirebase/templates/pdf.html:65 src/quirebase/templates/tools.html:105
+#: src/quirebase/templates/tools.html:105
 #: src/quirebase/templates/tools.html:147
 msgid "Delete"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:300
+#: src/quirebase/templates/admin.html:358
 msgid "No items found."
 msgstr ""
 
-#: src/quirebase/templates/admin.html:312
+#: src/quirebase/templates/admin.html:370
 msgid "Search audit trail"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:313
+#: src/quirebase/templates/admin.html:371
 msgid "Action, detail keyword, or target ID…"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:316
+#: src/quirebase/templates/admin.html:374
 msgid "Action"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:320
+#: src/quirebase/templates/admin.html:378
 msgid "Target type"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:335
+#: src/quirebase/templates/admin.html:393
 msgid "Security & Operations Log"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:336
+#: src/quirebase/templates/admin.html:394
 #, python-brace-format
 msgid "Audit events ({count})"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:347
+#: src/quirebase/templates/admin.html:405
 msgid "Target"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:347
+#: src/quirebase/templates/admin.html:405
 msgid "Actor"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:347
+#: src/quirebase/templates/admin.html:405
 msgid "System"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:354
+#: src/quirebase/templates/admin.html:412
 msgid "No audit events found."
 msgstr ""
 
-#: src/quirebase/templates/admin.html:366
+#: src/quirebase/templates/admin.html:424
 msgid "Filter by state"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:368
-msgid "All states"
-msgstr ""
-
-#: src/quirebase/templates/admin.html:369
+#: src/quirebase/templates/admin.html:427
 msgid "Pending"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:370
+#: src/quirebase/templates/admin.html:428
 msgid "Running"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:371
+#: src/quirebase/templates/admin.html:429
 msgid "Succeeded"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:372
+#: src/quirebase/templates/admin.html:430
 msgid "Failed"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:381
+#: src/quirebase/templates/admin.html:439
 msgid "Workflow monitor"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:382
+#: src/quirebase/templates/admin.html:440
 msgid "Recent durable workflows"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:397
-#: src/quirebase/templates/admin.html:535 src/quirebase/templates/item.html:30
+#: src/quirebase/templates/admin.html:455
+#: src/quirebase/templates/admin.html:593 src/quirebase/templates/item.html:30
 #: src/quirebase/templates/item.html:259 src/quirebase/templates/item.html:267
 msgid "Download"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:402
+#: src/quirebase/templates/admin.html:460
 msgid "No durable workflows."
 msgstr ""
 
-#: src/quirebase/templates/admin.html:415
+#: src/quirebase/templates/admin.html:473
 msgid "Scholarly Providers"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:416
+#: src/quirebase/templates/admin.html:474
 msgid "External API Credentials"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:419
+#: src/quirebase/templates/admin.html:477
 msgid "Contact email (for PubMed & Crossref rate-limiting)"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:422
+#: src/quirebase/templates/admin.html:480
 msgid "NCBI API Key (for PubMed / PMC)"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:425
+#: src/quirebase/templates/admin.html:483
 msgid "NASA ADS Token"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:428
+#: src/quirebase/templates/admin.html:486
 msgid "IEEE Xplore API Key"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:431
+#: src/quirebase/templates/admin.html:489
 msgid "OpenAlex API Key (optional)"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:439
+#: src/quirebase/templates/admin.html:497
 msgid "System policies"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:440
+#: src/quirebase/templates/admin.html:498
 msgid "Sessions & Storage"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:443
+#: src/quirebase/templates/admin.html:501
 msgid "Session lifetime (days)"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:446
+#: src/quirebase/templates/admin.html:504
 msgid "Max PDF size (bytes)"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:449
+#: src/quirebase/templates/admin.html:507
 msgid "Max attachment size (bytes)"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:452
+#: src/quirebase/templates/admin.html:510
 msgid "Export cache TTL (hours)"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:456
+#: src/quirebase/templates/admin.html:514
 msgid "Save runtime settings"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:467
+#: src/quirebase/templates/admin.html:525
 msgid "Unable to read maintenance status."
 msgstr ""
 
-#: src/quirebase/templates/admin.html:467
+#: src/quirebase/templates/admin.html:525
 msgid "System maintenance"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:467
+#: src/quirebase/templates/admin.html:525
 msgid "Running maintenance workflow…"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:467
+#: src/quirebase/templates/admin.html:525
 msgid ""
 "The requested maintenance operation is running. This page will update "
 "automatically."
 msgstr ""
 
-#: src/quirebase/templates/admin.html:473
+#: src/quirebase/templates/admin.html:531
 msgid "Full-Text Search Re-index"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:474
+#: src/quirebase/templates/admin.html:532
 msgid ""
 "Rebuild SQLite FTS5 / PostgreSQL tsvector full-text index across all "
 "items and extracted PDF text."
 msgstr ""
 
-#: src/quirebase/templates/admin.html:476
+#: src/quirebase/templates/admin.html:534
 msgid "Dispatch Re-index Workflow"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:484
+#: src/quirebase/templates/admin.html:542
 msgid "Object Store Integrity Check"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:485
+#: src/quirebase/templates/admin.html:543
 msgid ""
 "Verify existence and SHA-256 checksums of all PDF files and attachments "
 "against the database."
 msgstr ""
 
-#: src/quirebase/templates/admin.html:487
+#: src/quirebase/templates/admin.html:545
 msgid "Dispatch Check Workflow"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:495
+#: src/quirebase/templates/admin.html:553
 msgid "Download Full Backup"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:496
+#: src/quirebase/templates/admin.html:554
 msgid ""
 "Generate a complete ZIP archive containing database dump, manifest, and "
 "all storage objects."
 msgstr ""
 
-#: src/quirebase/templates/admin.html:498
+#: src/quirebase/templates/admin.html:556
 msgid "Dispatch Backup Workflow"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:506
+#: src/quirebase/templates/admin.html:564
 msgid "Rebuild Tag Recommendations"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:507
+#: src/quirebase/templates/admin.html:565
 msgid ""
 "Queue fresh recommendations for every Item after an engine or local model"
 " change."
 msgstr ""
 
-#: src/quirebase/templates/admin.html:509
+#: src/quirebase/templates/admin.html:567
 msgid "Dispatch Recommendation Workflows"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:519
+#: src/quirebase/templates/admin.html:577
 msgid "History"
 msgstr ""
 
-#: src/quirebase/templates/admin.html:520
+#: src/quirebase/templates/admin.html:578
 msgid "Recent maintenance workflows"
 msgstr ""
 
@@ -1286,13 +1369,6 @@ msgstr ""
 #: src/quirebase/templates/online_search.html:3
 #: src/quirebase/templates/online_search.html:5
 msgid "Online search"
-msgstr ""
-
-#: src/quirebase/templates/base.html:30 src/quirebase/templates/index.html:38
-#: src/quirebase/templates/item.html:355 src/quirebase/templates/project.html:5
-#: src/quirebase/templates/projects.html:3
-#: src/quirebase/templates/projects.html:5
-msgid "Projects"
 msgstr ""
 
 #: src/quirebase/templates/base.html:31 src/quirebase/templates/tools.html:3
@@ -1568,7 +1644,6 @@ msgid "New project name"
 msgstr ""
 
 #: src/quirebase/templates/index.html:40
-#: src/quirebase/templates/projects.html:6
 msgid "Create"
 msgstr ""
 
@@ -1610,18 +1685,44 @@ msgstr ""
 msgid "Return to administration"
 msgstr ""
 
-#: src/quirebase/templates/item.html:6 src/quirebase/templates/pdf.html:10
-#: src/quirebase/templates/pdf.html:54
+#: src/quirebase/templates/item.html:6
 msgid "Highlight"
 msgstr ""
 
-#: src/quirebase/templates/item.html:6 src/quirebase/templates/pdf.html:11
-#: src/quirebase/templates/pdf.html:54
+#: src/quirebase/templates/item.html:6
 msgid "Underline"
 msgstr ""
 
-#: src/quirebase/templates/item.html:6 src/quirebase/templates/pdf.html:57
+#: src/quirebase/templates/item.html:6
+msgid "Strikeout"
+msgstr ""
+
+#: src/quirebase/templates/item.html:6
 msgid "Note"
+msgstr ""
+
+#: src/quirebase/templates/item.html:6
+msgid "Free text"
+msgstr ""
+
+#: src/quirebase/templates/item.html:6
+msgid "Ink"
+msgstr ""
+
+#: src/quirebase/templates/item.html:6
+msgid "Rectangle"
+msgstr ""
+
+#: src/quirebase/templates/item.html:6
+msgid "Ellipse"
+msgstr ""
+
+#: src/quirebase/templates/item.html:6
+msgid "Line"
+msgstr ""
+
+#: src/quirebase/templates/item.html:6
+msgid "Arrow"
 msgstr ""
 
 #: src/quirebase/templates/item.html:8 src/quirebase/templates/library.html:62
@@ -1633,7 +1734,7 @@ msgid "Read PDF"
 msgstr ""
 
 #: src/quirebase/templates/item.html:18 src/quirebase/templates/item.html:262
-#: src/quirebase/templates/pdf.html:43
+#: src/quirebase/templates/pdf.html:29
 msgid "Download PDF"
 msgstr ""
 
@@ -1802,7 +1903,7 @@ msgid "Manage files"
 msgstr ""
 
 #: src/quirebase/templates/item.html:94 src/quirebase/templates/item.html:259
-#: src/quirebase/templates/pdf.html:18
+#: src/quirebase/templates/pdf.html:17
 #, python-brace-format
 msgid "{count} pages"
 msgstr ""
@@ -2143,7 +2244,8 @@ msgstr ""
 msgid "No tags attached yet."
 msgstr ""
 
-#: src/quirebase/templates/item.html:359 src/quirebase/templates/project.html:8
+#: src/quirebase/templates/item.html:359
+#: src/quirebase/templates/project.html:17
 msgid "Remove"
 msgstr ""
 
@@ -2208,7 +2310,6 @@ msgstr ""
 
 #: src/quirebase/templates/item.html:412
 #: src/quirebase/templates/online_search.html:17
-#: src/quirebase/templates/pdf.html:15
 #, python-brace-format
 msgid "Page {page}"
 msgstr ""
@@ -2218,7 +2319,7 @@ msgid "Open"
 msgstr ""
 
 #: src/quirebase/templates/item.html:412
-msgid "No annotations yet. Open a PDF to highlight, underline or add a note."
+msgid "No annotations yet. Open a PDF to annotate it."
 msgstr ""
 
 #: src/quirebase/templates/item.html:415
@@ -2274,7 +2375,7 @@ msgstr ""
 msgid "All tags"
 msgstr ""
 
-#: src/quirebase/templates/library.html:16 src/quirebase/templates/pdf.html:17
+#: src/quirebase/templates/library.html:16
 msgid "Project"
 msgstr ""
 
@@ -2502,164 +2603,72 @@ msgstr ""
 msgid "Search result pages"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:6
-msgid "Select text first."
-msgstr ""
-
-#: src/quirebase/templates/pdf.html:7
-msgid "Saving…"
-msgstr ""
-
-#: src/quirebase/templates/pdf.html:9 src/quirebase/templates/pdf.html:64
-msgid "Note text"
-msgstr ""
-
-#: src/quirebase/templates/pdf.html:12
-msgid "Click a page to place the note"
-msgstr ""
-
-#: src/quirebase/templates/pdf.html:13
-msgid "Preparing download…"
+#: src/quirebase/templates/pdf.html:12 src/quirebase/templates/pdf.html:30
+msgid "Loading…"
 msgstr ""
 
 #: src/quirebase/templates/pdf.html:14
-msgid "Select one of your annotations."
+msgid "Saving…"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:16 src/quirebase/templates/pdf.html:58
-msgid "Private"
+#: src/quirebase/templates/pdf.html:15
+msgid "Annotation could not be saved; the server version was restored."
+msgstr ""
+
+#: src/quirebase/templates/pdf.html:16
+msgid "Preparing download…"
+msgstr ""
+
+#: src/quirebase/templates/pdf.html:18
+msgid "The PDF could not be loaded."
 msgstr ""
 
 #: src/quirebase/templates/pdf.html:19
+msgid "PDF loading timed out. Please retry or download the file."
+msgstr ""
+
+#: src/quirebase/templates/pdf.html:20
 #, python-brace-format
 msgid "Unable to open PDF: {message}"
 msgstr ""
 
 #: src/quirebase/templates/pdf.html:23
-msgid "Previous PDF page"
+msgid "Annotation scope"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:24
-msgid "Page"
-msgstr ""
-
-#: src/quirebase/templates/pdf.html:26
-msgid "Next PDF page"
-msgstr ""
-
-#: src/quirebase/templates/pdf.html:29
-msgid "Zoom out"
-msgstr ""
-
-#: src/quirebase/templates/pdf.html:30 src/quirebase/templates/pdf.html:33
-msgid "Automatic zoom"
-msgstr ""
-
-#: src/quirebase/templates/pdf.html:31
-msgid "Fit width"
-msgstr ""
-
-#: src/quirebase/templates/pdf.html:32
-msgid "Fit page"
-msgstr ""
-
-#: src/quirebase/templates/pdf.html:35
-msgid "Zoom in"
-msgstr ""
-
-#: src/quirebase/templates/pdf.html:38
-msgid "Search PDF"
-msgstr ""
-
-#: src/quirebase/templates/pdf.html:39
-msgid "Previous result"
-msgstr ""
-
-#: src/quirebase/templates/pdf.html:40
-msgid "Next result"
-msgstr ""
-
-#: src/quirebase/templates/pdf.html:42
-msgid "Annotation tools"
-msgstr ""
-
-#: src/quirebase/templates/pdf.html:44
-msgid "Loading…"
-msgstr ""
-
-#: src/quirebase/templates/pdf.html:47
+#: src/quirebase/templates/pdf.html:33
 msgid "Current PDF"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:48
+#: src/quirebase/templates/pdf.html:34
 msgid "Include annotations"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:49
+#: src/quirebase/templates/pdf.html:35
 msgid "Annotations to include"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:49
+#: src/quirebase/templates/pdf.html:35
 msgid "Private annotations only"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:49
+#: src/quirebase/templates/pdf.html:35
 #, python-brace-format
 msgid "Private annotations and {project}"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:50
+#: src/quirebase/templates/pdf.html:36
 msgid "Download current PDF"
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:51
+#: src/quirebase/templates/pdf.html:37
 msgid ""
 "This download contains only the current PDF revision. Stored files remain"
 " unchanged."
 msgstr ""
 
-#: src/quirebase/templates/pdf.html:54
-msgid "Text annotation type"
-msgstr ""
-
-#: src/quirebase/templates/pdf.html:55
-msgid "Yellow"
-msgstr ""
-
-#: src/quirebase/templates/pdf.html:55
-msgid "Green"
-msgstr ""
-
-#: src/quirebase/templates/pdf.html:56
-msgid "Blue"
-msgstr ""
-
-#: src/quirebase/templates/pdf.html:56
-msgid "Red"
-msgstr ""
-
-#: src/quirebase/templates/pdf.html:57
-msgid "Delete selected"
-msgstr ""
-
-#: src/quirebase/templates/pdf.html:61
-msgid "Annotation details"
-msgstr ""
-
-#: src/quirebase/templates/pdf.html:61
-msgid "Close"
-msgstr ""
-
-#: src/quirebase/templates/pdf.html:62
-msgid "Location"
-msgstr ""
-
-#: src/quirebase/templates/pdf.html:62
-msgid "Visibility"
-msgstr ""
-
-#: src/quirebase/templates/pdf.html:65 src/quirebase/templates/project.html:8
-msgid "Save"
+#: src/quirebase/templates/pdf.html:39
+msgid "PDF viewer"
 msgstr ""
 
 #: src/quirebase/templates/project.html:5
@@ -2667,7 +2676,14 @@ msgid "Project workspace"
 msgstr ""
 
 #: src/quirebase/templates/project.html:5
-msgid "Shared collection for papers, members, and project annotations."
+#: src/quirebase/templates/projects.html:7
+#: src/quirebase/templates/projects.html:8
+msgid "No description yet."
+msgstr ""
+
+#: src/quirebase/templates/project.html:5
+#: src/quirebase/templates/projects.html:7
+msgid "Archived"
 msgstr ""
 
 #: src/quirebase/templates/project.html:7
@@ -2676,6 +2692,7 @@ msgstr ""
 
 #: src/quirebase/templates/project.html:7
 #: src/quirebase/templates/projects.html:7
+#: src/quirebase/templates/projects.html:8
 #: src/quirebase/templates/tools.html:83 src/quirebase/templates/tools.html:95
 #: src/quirebase/templates/tools.html:97
 #, python-brace-format
@@ -2690,32 +2707,116 @@ msgstr ""
 msgid "No items."
 msgstr ""
 
-#: src/quirebase/templates/project.html:8
+#: src/quirebase/templates/project.html:10
+msgid "Workspace controls"
+msgstr ""
+
+#: src/quirebase/templates/project.html:10
+msgid "Project settings"
+msgstr ""
+
+#: src/quirebase/templates/project.html:10
+msgid "Name, description, visibility, and lifecycle"
+msgstr ""
+
+#: src/quirebase/templates/project.html:11
+#: src/quirebase/templates/projects.html:6
+msgid "Project name"
+msgstr ""
+
+#: src/quirebase/templates/project.html:11
+#: src/quirebase/templates/tools.html:100
+msgid "Rename"
+msgstr ""
+
+#: src/quirebase/templates/project.html:12
+#: src/quirebase/templates/projects.html:6
+msgid "Description"
+msgstr ""
+
+#: src/quirebase/templates/project.html:12
+msgid "Save description"
+msgstr ""
+
+#: src/quirebase/templates/project.html:13
+msgid "Save visibility"
+msgstr ""
+
+#: src/quirebase/templates/project.html:14
+msgid "Archive project"
+msgstr ""
+
+#: src/quirebase/templates/project.html:14
+msgid "Restore project"
+msgstr ""
+
+#: src/quirebase/templates/project.html:14
+msgid "Danger zone"
+msgstr ""
+
+#: src/quirebase/templates/project.html:14
+msgid "Type project name to delete"
+msgstr ""
+
+#: src/quirebase/templates/project.html:14
+msgid "Delete project"
+msgstr ""
+
+#: src/quirebase/templates/project.html:17
+#: src/quirebase/templates/project.html:20
 msgid "Members"
 msgstr ""
 
-#: src/quirebase/templates/project.html:8
+#: src/quirebase/templates/project.html:18
+msgid "Transfer ownership"
+msgstr ""
+
+#: src/quirebase/templates/project.html:18
+msgid "Select a member"
+msgstr ""
+
+#: src/quirebase/templates/project.html:18
+msgid "Transfer"
+msgstr ""
+
+#: src/quirebase/templates/project.html:18
+msgid "Leave project"
+msgstr ""
+
+#: src/quirebase/templates/project.html:20
 msgid "Add or update member"
 msgstr ""
 
-#: src/quirebase/templates/project.html:8
+#: src/quirebase/templates/project.html:20
 msgid "Existing username"
 msgstr ""
 
-#: src/quirebase/templates/project.html:8
+#: src/quirebase/templates/project.html:20
 msgid "role"
 msgstr ""
 
-#: src/quirebase/templates/project.html:8
+#: src/quirebase/templates/project.html:20
 msgid "viewer"
 msgstr ""
 
-#: src/quirebase/templates/project.html:8
+#: src/quirebase/templates/project.html:20
 msgid "editor"
 msgstr ""
 
-#: src/quirebase/templates/project.html:8
+#: src/quirebase/templates/project.html:20
 msgid "owner"
+msgstr ""
+
+#: src/quirebase/templates/project.html:20
+msgid "Save"
+msgstr ""
+
+#: src/quirebase/templates/projects.html:5
+msgid "Organize Items into focused collections and collaborate with clear roles."
+msgstr ""
+
+#: src/quirebase/templates/projects.html:6
+msgid "Start a collection"
 msgstr ""
 
 #: src/quirebase/templates/projects.html:6
@@ -2723,7 +2824,37 @@ msgid "Create a project"
 msgstr ""
 
 #: src/quirebase/templates/projects.html:6
-msgid "Group papers and collaborate with members using explicit roles."
+msgid ""
+"Give your Project a name and a short description so members know its "
+"purpose."
+msgstr ""
+
+#: src/quirebase/templates/projects.html:6
+msgid "What is this Project for?"
+msgstr ""
+
+#: src/quirebase/templates/projects.html:6
+msgid "Create project"
+msgstr ""
+
+#: src/quirebase/templates/projects.html:7
+msgid "Your workspace"
+msgstr ""
+
+#: src/quirebase/templates/projects.html:7
+msgid "Your projects"
+msgstr ""
+
+#: src/quirebase/templates/projects.html:8
+msgid "Discover"
+msgstr ""
+
+#: src/quirebase/templates/projects.html:8
+msgid "Projects you can join"
+msgstr ""
+
+#: src/quirebase/templates/projects.html:8
+msgid "Join"
 msgstr ""
 
 #: src/quirebase/templates/sessions.html:3
@@ -2823,10 +2954,6 @@ msgstr ""
 
 #: src/quirebase/templates/tools.html:85
 msgid "Merge Tags"
-msgstr ""
-
-#: src/quirebase/templates/tools.html:100
-msgid "Rename"
 msgstr ""
 
 #: src/quirebase/templates/tools.html:104

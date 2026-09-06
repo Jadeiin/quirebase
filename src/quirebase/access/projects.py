@@ -5,14 +5,14 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 
 from quirebase.core.errors import PermissionDenied, ResourceUnavailable
-from quirebase.models import Project, ProjectMember, ProjectRole, SystemRole, User
+from quirebase.models import Project, ProjectMember, ProjectRole, ProjectState, SystemRole, User
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def visible_projects(db: AsyncSession, user: User) -> list[Project]:
-    query = select(Project).order_by(Project.name)
+    query = select(Project).where(Project.state == ProjectState.active).order_by(Project.name)
     if user.role != SystemRole.administrator.value:
         query = query.join(ProjectMember).where(ProjectMember.user_id == user.id)
     return list((await db.scalars(query)).all())
@@ -25,6 +25,7 @@ async def editable_projects(db: AsyncSession, user: User) -> list[Project]:
                 select(Project)
                 .join(ProjectMember)
                 .where(
+                    Project.state == ProjectState.active,
                     ProjectMember.user_id == user.id,
                     ProjectMember.role.in_([ProjectRole.owner, ProjectRole.editor]),
                 )

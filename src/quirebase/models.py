@@ -42,6 +42,16 @@ class ProjectRole(StrEnum):
     viewer = "viewer"
 
 
+class ProjectState(StrEnum):
+    active = "active"
+    archived = "archived"
+
+
+class ProjectVisibility(StrEnum):
+    private = "private"
+    public = "public"
+
+
 class AnnotationKind(StrEnum):
     highlight = "highlight"
     underline = "underline"
@@ -234,10 +244,22 @@ class ItemRead(Base):
 
 class Project(Base):
     __tablename__ = "projects"
+    __table_args__ = (
+        CheckConstraint("state IN ('active', 'archived')", name="ck_projects_state"),
+        CheckConstraint("visibility IN ('private', 'public')", name="ck_projects_visibility"),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     name: Mapped[str] = mapped_column(String(240))
+    description: Mapped[str] = mapped_column(Text, default="")
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+    state: Mapped[ProjectState] = mapped_column(
+        enum_type(ProjectState, "project_state"), default=ProjectState.active
+    )
+    visibility: Mapped[ProjectVisibility] = mapped_column(
+        enum_type(ProjectVisibility, "project_visibility"), default=ProjectVisibility.private
+    )
 
 
 class ProjectMember(Base):

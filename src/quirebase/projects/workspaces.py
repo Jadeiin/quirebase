@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 
 from quirebase.access.items import can_read_item
 from quirebase.access.projects import project_member, require_project_member
@@ -13,7 +14,16 @@ from quirebase.core.errors import (
     ResourceUnavailable,
     ValidationFailure,
 )
-from quirebase.models import Item, Project, ProjectItem, ProjectMember, ProjectRole, User
+from quirebase.models import (
+    Item,
+    Project,
+    ProjectItem,
+    ProjectMember,
+    ProjectRole,
+    ProjectState,
+    ProjectVisibility,
+    User,
+)
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
@@ -34,11 +44,29 @@ class ProjectWorkspace:
     items: tuple[Item, ...]
 
 
-async def create_project(db: AsyncSession, user: User, name: str) -> Project:
+async def create_project(
+    db: AsyncSession,
+    user: User,
+    name: str,
+    visibility: ProjectVisibility | str = ProjectVisibility.private,
+    description: str = "",
+) -> Project:
     normalized = name.strip()
     if not normalized:
         raise ValidationFailure("project name is required")
-    project = Project(name=normalized, created_by=user.id)
+    try:
+        parsed_visibility = ProjectVisibility(visibility)
+    except ValueError as error:
+        raise ValidationFailure("invalid project visibility") from error
+    normalized_description = description.replace("\r\n", "\n").replace("\r", "\n").strip()
+    if len(normalized_description) > 2000:
+        raise ValidationFailure("project description is too long")
+    project = Project(
+        name=normalized,
+        created_by=user.id,
+        visibility=parsed_visibility,
+        description=normalized_description,
+    )
     db.add(project)
     await db.flush()
     db.add(ProjectMember(project_id=project.id, user_id=user.id, role=ProjectRole.owner))
@@ -59,6 +87,59 @@ async def list_user_projects(db: AsyncSession, user: User) -> list[tuple[Project
         )
     ).all()
     return [(row[0], row[1], row[2]) for row in rows]
+
+
+async def list_joinable_projects(db: AsyncSession, user: User) -> list[tuple[Project, int]]:
+    rows = await db.execute(
+        select(Project, func.count(ProjectItem.item_id))
+        .outerjoin(ProjectItem)
+        .where(
+            Project.visibility == ProjectVisibility.public,
+            Project.state == "active",
+            ~select(ProjectMember.project_id)
+            .where(ProjectMember.project_id == Project.id, ProjectMember.user_id == user.id)
+            .exists(),
+        )
+        .group_by(Project.id)
+        .order_by(Project.name)
+    )
+    return [(row[0], row[1]) for row in rows]
+
+
+async def join_project(db: AsyncSession, user: User, project_id: str) -> ProjectMember:
+    # A no-op conditional UPDATE is a portable write gate: it locks the
+    # Project row and validates joinability in the same statement. State and
+    # visibility updates therefore serialize before or after this join.
+    eligible_project_id = await db.scalar(
+        update(Project)
+        .where(
+            Project.id == project_id,
+            Project.visibility == ProjectVisibility.public,
+            Project.state == ProjectState.active,
+        )
+        .values(updated_at=Project.updated_at)
+        .returning(Project.id)
+    )
+    if eligible_project_id is None:
+        raise ResourceUnavailable("public project not available")
+    existing = await db.get(ProjectMember, (project_id, user.id))
+    if existing:
+        await db.commit()
+        return existing
+    member = ProjectMember(project_id=project_id, user_id=user.id, role=ProjectRole.viewer)
+    db.add(member)
+    record_event(db, user.id, "project.member.join", "project", project_id)
+    try:
+        await db.commit()
+    except IntegrityError:
+        # A concurrent retry may have inserted the same composite key.  The
+        # failed transaction must be rolled back before reloading it.
+        await db.rollback()
+        existing = await db.get(ProjectMember, (project_id, user.id))
+        if existing is None:
+            raise
+        return existing
+    return member
 
 
 async def open_project_workspace(db: AsyncSession, user: User, project_id: str) -> ProjectWorkspace:
@@ -95,9 +176,12 @@ async def open_project_workspace(db: AsyncSession, user: User, project_id: str) 
 
 async def add_item_to_project(db: AsyncSession, user: User, project_id: str, item_id: str) -> None:
     item = await db.get(Item, item_id)
+    project = await db.get(Project, project_id)
     membership = await project_member(db, user, project_id)
     if (
         item is None
+        or project is None
+        or project.state != ProjectState.active
         or not await can_read_item(db, user, item_id)
         or membership is None
         or membership.role not in (ProjectRole.owner, ProjectRole.editor)
@@ -122,9 +206,12 @@ async def remove_item_from_project(
     db: AsyncSession, user: User, project_id: str, item_id: str
 ) -> None:
     membership = await project_member(db, user, project_id)
+    project = await db.get(Project, project_id)
     assignment = await db.get(ProjectItem, (project_id, item_id))
     if (
         assignment is None
+        or project is None
+        or project.state != ProjectState.active
         or not await can_read_item(db, user, item_id)
         or membership is None
         or membership.role not in (ProjectRole.owner, ProjectRole.editor)

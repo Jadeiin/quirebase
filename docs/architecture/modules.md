@@ -169,6 +169,12 @@ a typed read model containing the Project, the caller's membership, members and 
 Membership authorization and the related queries remain coordinated behind that operation; only
 the Web adapter maps the typed view to template context.
 
+Administrator Project management crosses the Projects interface through
+`list_projects_for_admin`, which returns a paginated directory with creator and membership/item
+counts. Administrator lifecycle mutations reuse the Projects operations so state changes,
+visibility changes, renames and their Audit Events remain subject to one business seam; the Web
+administration adapter owns filtering controls and HTML formatting.
+
 `inquiro` presents one asynchronous `ProviderRuntime` as its reusable Provider Interface. Callers
 use `async with` and await its operations; `lookup` and `search` return immutable Candidate Record values, while
 `acquire_document` returns a managed `AcquiredDocument` stream and immutable receipt metadata.

@@ -8,7 +8,7 @@
     <div>
       <p class="eyebrow">{{ _('System workspace') }}</p>
       <h1>{{ _('Administration') }}</h1>
-      <p class="item-byline">{{ _('Manage access, global library items, audit events, durable workflows, runtime settings and maintenance.') }}</p>
+      <p class="item-byline">{{ _('Manage users, projects, library items, audit events, durable workflows, runtime settings and maintenance.') }}</p>
     </div>
     <div class="item-header-actions">
       <a class="button-link secondary-button" href="/metrics">{{ _('Metrics') }}</a>
@@ -25,6 +25,10 @@
     <a href="/admin/users" {% if admin_tab == 'users' %}aria-current="page"{% endif %}>
       <span>👥</span>
       <span><strong>{{ _('Users & Access') }}</strong><small>{{ _('Invite a user') }} · {{ _('Accounts, roles, and invites') }}</small></span>
+    </a>
+    <a href="/admin/projects" {% if admin_tab == 'projects' %}aria-current="page"{% endif %}>
+      <span>◇</span>
+      <span><strong>{{ _('Projects') }}</strong><small>{{ _('All projects and lifecycle controls') }}</small></span>
     </a>
     <a href="/admin/items" {% if admin_tab == 'items' %}aria-current="page"{% endif %}>
       <span>▤</span>
@@ -249,7 +253,68 @@
     </section>
 
     {# ================================================================= #}
-    {# 3. Global Items & Files Tab                                      #}
+    {# 3. Projects Tab                                                  #}
+    {# ================================================================= #}
+    {% elif admin_tab == 'projects' %}
+    <section class="panel filter-panel">
+      <form method="get" action="/admin/projects" class="filter-grid">
+        <label class="search-field">
+          {{ _('Search projects') }}
+          <input name="search" value="{{ search }}" placeholder="{{ _('Name, creator, or ID…') }}">
+        </label>
+        <label>
+          {{ _('State') }}
+          <select name="state">
+            <option value="">{{ _('All states') }}</option>
+            <option value="active" {% if state_filter == 'active' %}selected{% endif %}>{{ _('active') }}</option>
+            <option value="archived" {% if state_filter == 'archived' %}selected{% endif %}>{{ _('archived') }}</option>
+          </select>
+        </label>
+        <label>
+          {{ _('Visibility') }}
+          <select name="visibility">
+            <option value="">{{ _('All visibility') }}</option>
+            <option value="private" {% if visibility_filter == 'private' %}selected{% endif %}>{{ _('Private') }}</option>
+            <option value="public" {% if visibility_filter == 'public' %}selected{% endif %}>{{ _('Public') }}</option>
+          </select>
+        </label>
+        <div class="filter-actions">
+          <button class="compact-button">{{ _('Filter') }}</button>
+          {% if search or state_filter or visibility_filter %}<a href="/admin/projects">{{ _('Clear') }}</a>{% endif %}
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">{{ _('Project directory') }}</p>
+          <h2>{{ _('All projects ({count})', count=total_projects) }}</h2>
+        </div>
+      </div>
+      <div class="admin-list">
+        {% for entry in projects %}
+        <article>
+          <div>
+            <strong><a href="/projects/{{ entry.project.id }}">{{ entry.project.name }}</a></strong>
+            <small>{{ _('Creator') }}: {{ entry.creator.username }} · {{ entry.member_count }} {{ _('members') }} · {{ entry.item_count }} {{ _('items') }} · {{ _(entry.project.state.value) }} · {{ _(entry.project.visibility.value|capitalize) }}</small>
+          </div>
+        </article>
+        {% else %}
+        <div class="empty-state">{{ _('No projects found.') }}</div>
+        {% endfor %}
+      </div>
+      {% if project_pages > 1 %}
+      <nav class="pagination" aria-label="{{ _('Projects') }}">
+        {% if page > 1 %}<a href="/admin/projects?{{ project_filters|urlencode }}&page={{ page - 1 }}">{{ _('Previous') }}</a>{% endif %}
+        <span>{{ _('Page {page} of {pages}', page=page, pages=project_pages) }}</span>
+        {% if page < project_pages %}<a href="/admin/projects?{{ project_filters|urlencode }}&page={{ page + 1 }}">{{ _('Next page') }}</a>{% endif %}
+      </nav>
+      {% endif %}
+    </section>
+
+    {# ================================================================= #}
+    {# 4. Global Items & Files Tab                                      #}
     {# ================================================================= #}
     {% elif admin_tab == 'items' %}
     <section class="panel filter-panel">

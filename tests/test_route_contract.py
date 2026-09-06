@@ -40,7 +40,15 @@ EXPECTED_OPERATIONAL_ROUTES = {
     ("DELETE", "/api/v1/items/{item_id}/discussions/{message_id}"),
     ("DELETE", "/api/v1/items/{item_id}/tags/{tag_id}"),
     ("DELETE", "/api/v1/projects/{project_id}/items/{item_id}"),
+    ("DELETE", "/api/v1/projects/{project_id}"),
     ("DELETE", "/api/v1/projects/{project_id}/members/{user_id}"),
+    ("PATCH", "/api/v1/projects/{project_id}"),
+    ("POST", "/api/v1/projects/{project_id}/description"),
+    ("POST", "/api/v1/projects/{project_id}/archive"),
+    ("POST", "/api/v1/projects/{project_id}/restore"),
+    ("POST", "/api/v1/projects/{project_id}/visibility"),
+    ("POST", "/api/v1/projects/{project_id}/leave"),
+    ("POST", "/api/v1/projects/{project_id}/ownership/{user_id}"),
     ("DELETE", "/documents/{item_id}/annotations/{annotation_id}"),
     ("GET", "/"),
     ("GET", "/accept-invitation/{token}"),
@@ -49,6 +57,7 @@ EXPECTED_OPERATIONAL_ROUTES = {
     ("GET", "/admin"),
     ("GET", "/admin/audit"),
     ("GET", "/admin/items"),
+    ("GET", "/admin/projects"),
     ("GET", "/admin/workflows"),
     ("GET", "/admin/maintenance"),
     ("GET", "/admin/maintenance/backups/{workflow_id}/download"),
@@ -153,6 +162,16 @@ EXPECTED_OPERATIONAL_ROUTES = {
     ("POST", "/projects"),
     ("POST", "/projects/{project_id}/members"),
     ("POST", "/projects/{project_id}/members/{member_id}/remove"),
+    ("POST", "/projects/{project_id}/rename"),
+    ("POST", "/projects/{project_id}/description"),
+    ("POST", "/projects/{project_id}/delete"),
+    ("POST", "/projects/{project_id}/archive"),
+    ("POST", "/projects/{project_id}/restore"),
+    ("POST", "/projects/{project_id}/visibility"),
+    ("POST", "/projects/{project_id}/leave"),
+    ("POST", "/projects/{project_id}/ownership/{user_id}"),
+    ("POST", "/projects/{project_id}/ownership"),
+    ("POST", "/projects/{project_id}/join"),
     ("POST", "/tools/tags/{tag_id}"),
     ("POST", "/tools/tags/{tag_id}/delete"),
     ("POST", "/tools/tags/merge"),
@@ -189,7 +208,7 @@ def test_operational_routes_contract():
                 continue
             operational_routes.add((method, route.path))
 
-    assert len(operational_routes) == 133, f"Expected 133 routes, found {len(operational_routes)}"
+    assert len(operational_routes) == 152, f"Expected 152 routes, found {len(operational_routes)}"
     assert operational_routes == EXPECTED_OPERATIONAL_ROUTES
 
 

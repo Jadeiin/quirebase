@@ -26,7 +26,9 @@ from quirebase.models import (
     Attachment,
     FileRevision,
     ItemTag,
+    Project,
     ProjectItem,
+    ProjectState,
     User,
 )
 from quirebase.search import search_index
@@ -53,8 +55,14 @@ async def apply_bulk_item_action(
 
     cleanup_keys: list[str] = []
     if action in ("add_project", "project_add"):
+        project = await db.get(Project, project_id)
         membership = await project_member(db, user, project_id)
-        if membership is None or membership.role not in ("owner", "editor"):
+        if (
+            project is None
+            or project.state != ProjectState.active
+            or membership is None
+            or membership.role not in ("owner", "editor")
+        ):
             raise ValidationFailure("choose an editable project")
         for item in items:
             if await db.get(ProjectItem, (project_id, item.id)) is None:

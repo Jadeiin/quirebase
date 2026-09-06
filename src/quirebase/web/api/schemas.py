@@ -16,6 +16,24 @@ class NameRequest(BaseModel):
     name: str
 
 
+class ProjectCreateRequest(BaseModel):
+    name: str
+    visibility: Literal["private", "public"] = "private"
+    description: str = Field(default="", max_length=2000)
+
+
+class ProjectVisibilityRequest(BaseModel):
+    visibility: Literal["private", "public"]
+
+
+class ProjectDescriptionRequest(BaseModel):
+    description: str = Field(max_length=2000)
+
+
+class ProjectDeleteRequest(BaseModel):
+    confirmation: str
+
+
 class ProjectMemberRequest(BaseModel):
     username: str
     role: Literal["owner", "editor", "viewer"] = "viewer"

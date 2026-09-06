@@ -40,7 +40,7 @@ from quirebase.library import (
     search_library,
     set_item_tags,
 )
-from quirebase.models import User
+from quirebase.models import ProjectState, User
 from quirebase.programmatic import (
     AnnotationReplyView,
     AnnotationView,
@@ -65,10 +65,17 @@ from quirebase.projects import (
     add_item_to_project,
     add_project_member,
     create_project,
+    delete_project,
+    leave_project,
     list_user_projects,
     open_project_workspace,
     remove_item_from_project,
     remove_project_member,
+    rename_project,
+    set_project_state,
+    set_project_visibility,
+    transfer_project_ownership,
+    update_project_description,
 )
 from quirebase.web.api.auth import current_api_user, http_api_invocation
 from quirebase.web.api.schemas import (
@@ -76,7 +83,11 @@ from quirebase.web.api.schemas import (
     DiscussionRequest,
     ItemUpdateRequest,
     NameRequest,
+    ProjectCreateRequest,
+    ProjectDeleteRequest,
+    ProjectDescriptionRequest,
     ProjectMemberRequest,
+    ProjectVisibilityRequest,
     TagSetRequest,
 )
 
@@ -162,20 +173,88 @@ async def format_item_citation(
 async def list_projects(user: ApiUser, db: Database) -> list[ProjectSummaryView]:
     rows = await list_user_projects(db, user)
     return [
-        ProjectSummaryView(id=project.id, name=project.name, role=role, item_count=count)
+        ProjectSummaryView(
+            id=project.id,
+            name=project.name,
+            role=role,
+            item_count=count,
+            state=project.state.value,
+            visibility=project.visibility.value,
+            description=project.description,
+        )
         for project, role, count in rows
     ]
 
 
 @router.post("/projects", response_model=WriteResult, status_code=status.HTTP_201_CREATED)
-async def create_user_project(data: NameRequest, user: ApiUser, db: Database) -> WriteResult:
-    project = await create_project(db, user, data.name)
+async def create_user_project(
+    data: ProjectCreateRequest, user: ApiUser, db: Database
+) -> WriteResult:
+    project = await create_project(db, user, data.name, data.visibility, data.description)
     return WriteResult(id=project.id)
 
 
 @router.get("/projects/{project_id}", response_model=ProjectDetailView)
 async def get_project(project_id: str, user: ApiUser, db: Database) -> ProjectDetailView:
     return project_detail_view(await open_project_workspace(db, user, project_id))
+
+
+@router.patch("/projects/{project_id}", response_model=WriteResult)
+async def update_project(
+    project_id: str, data: NameRequest, user: ApiUser, db: Database
+) -> WriteResult:
+    project = await rename_project(db, user, project_id, data.name)
+    return WriteResult(id=project.id)
+
+
+@router.post("/projects/{project_id}/description", response_model=WriteResult)
+async def update_project_description_api(
+    project_id: str, data: ProjectDescriptionRequest, user: ApiUser, db: Database
+) -> WriteResult:
+    project = await update_project_description(db, user, project_id, data.description)
+    return WriteResult(id=project.id)
+
+
+@router.delete("/projects/{project_id}", response_model=OkView)
+async def delete_user_project(
+    project_id: str, data: ProjectDeleteRequest, user: ApiUser, db: Database
+) -> OkView:
+    await delete_project(db, user, project_id, data.confirmation)
+    return OkView()
+
+
+@router.post("/projects/{project_id}/archive", response_model=OkView)
+async def archive_project(project_id: str, user: ApiUser, db: Database) -> OkView:
+    await set_project_state(db, user, project_id, ProjectState.archived)
+    return OkView()
+
+
+@router.post("/projects/{project_id}/restore", response_model=OkView)
+async def restore_project(project_id: str, user: ApiUser, db: Database) -> OkView:
+    await set_project_state(db, user, project_id, ProjectState.active)
+    return OkView()
+
+
+@router.post("/projects/{project_id}/visibility", response_model=OkView)
+async def set_project_visibility_api(
+    project_id: str, data: ProjectVisibilityRequest, user: ApiUser, db: Database
+) -> OkView:
+    await set_project_visibility(db, user, project_id, data.visibility)
+    return OkView()
+
+
+@router.post("/projects/{project_id}/leave", response_model=OkView)
+async def leave_user_project(project_id: str, user: ApiUser, db: Database) -> OkView:
+    await leave_project(db, user, project_id)
+    return OkView()
+
+
+@router.post("/projects/{project_id}/ownership/{user_id}", response_model=OkView)
+async def transfer_user_project(
+    project_id: str, user_id: str, user: ApiUser, db: Database
+) -> OkView:
+    await transfer_project_ownership(db, user, project_id, user_id)
+    return OkView()
 
 
 @router.put("/projects/{project_id}/items/{item_id}", response_model=OkView)

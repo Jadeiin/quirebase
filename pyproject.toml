@@ -60,6 +60,9 @@ dev = [
 [project.scripts]
 quirebase = "quirebase.cli:app"
 
+[tool.alembic]
+script_location = "%(here)s/migrations"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/quirebase"]
 artifacts = ["src/quirebase/static"]
