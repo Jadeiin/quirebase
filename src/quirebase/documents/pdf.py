@@ -99,9 +99,23 @@ def _canonical_rect(page: pymupdf.Page, rect: pymupdf.Rect) -> dict[str, float]:
     }
 
 
+def _point_coordinates(point: object) -> tuple[float, float]:
+    if hasattr(point, "x") and hasattr(point, "y"):
+        return float(point.x), float(point.y)
+    return float(point[0]), float(point[1])  # type: ignore[index]
+
+
+def _is_point_like(value: object) -> bool:
+    try:
+        _point_coordinates(value)
+    except (TypeError, ValueError, IndexError, KeyError):
+        return False
+    return True
+
+
 def _canonical_point(page: pymupdf.Page, point: object) -> dict[str, float]:
     crop = pdf_crop_box(page)
-    x, y = float(point[0]), float(point[1])  # type: ignore[index]
+    x, y = _point_coordinates(point)
     return {"x": max(-1_000_000.0, x), "y": crop.height - y}
 
 
@@ -181,12 +195,7 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                         })
                     elif kind == "ink":
                         raw_paths = annotation.vertices or ()
-                        if (
-                            raw_paths
-                            and isinstance(raw_paths[0], (tuple, list))
-                            and raw_paths[0]
-                            and isinstance(raw_paths[0][0], (tuple, list))
-                        ):
+                        if raw_paths and not _is_point_like(raw_paths[0]):
                             paths = [
                                 [_canonical_point(page, point) for point in path]
                                 for path in raw_paths
