@@ -76,14 +76,48 @@ def _hex_color(value: object) -> str | None:
     return "#{}{}{}".format(*(f"{round(channel * 255):02X}" for channel in rgb))
 
 
+def _xref_array_color(annotation: pymupdf.Annot, key: str) -> str | None:
+    value_type, value = annotation.parent.parent.xref_get_key(annotation.xref, key)
+    if value_type != "array":
+        return None
+    try:
+        channels = tuple(float(channel) for channel in value.strip("[]").split())
+    except ValueError:
+        return None
+    return _hex_color(channels)
+
+
+def _default_appearance_color(annotation: pymupdf.Annot) -> str | None:
+    value_type, value = annotation.parent.parent.xref_get_key(annotation.xref, "DA")
+    if value_type != "string":
+        return None
+    channels: tuple[float, ...] | None = None
+    tokens = value.split()
+    operators = {"g": 1, "rg": 3, "k": 4}
+    for index, token in enumerate(tokens):
+        count = operators.get(token)
+        if count is None or index < count:
+            continue
+        try:
+            channels = tuple(float(channel) for channel in tokens[index - count : index])
+        except ValueError:
+            continue
+    return _hex_color(channels)
+
+
 def _annotation_style(annotation: pymupdf.Annot) -> dict:
     colors = annotation.colors or {}
     border = annotation.border or {}
     border_width = border.get("width")
+    stroke_color = _hex_color(colors.get("stroke"))
+    text_color = stroke_color
+    if annotation.type[1] == "FreeText":
+        stroke_color = _xref_array_color(annotation, "C")
+        text_color = _default_appearance_color(annotation)
     return {
-        "stroke_color": _hex_color(colors.get("stroke")),
+        "stroke_color": stroke_color,
         "fill_color": _hex_color(colors.get("fill")),
-        "text_color": _hex_color(colors.get("stroke")),
+        "text_color": text_color,
         "opacity": (
             float(annotation.opacity)
             if annotation.opacity is not None and float(annotation.opacity) >= 0

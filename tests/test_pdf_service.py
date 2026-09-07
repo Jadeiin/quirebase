@@ -73,11 +73,13 @@ def test_parse_native_annotations_preserves_freetext_metadata_and_crop_coordinat
             "Visible text",
             fontsize=18,
             fontname="TiRo",
+            text_color=(1, 0, 0),
             align=2,
             border_width=0,
         )
         free_text.set_info(subject="Canonical body")
         free_text.update()
+        document.xref_set_key(free_text.xref, "C", "[0 0 1]")
         page.add_stamp_annot(pymupdf.Rect(140, 160, 180, 200), stamp=0)
         document.save(source)
 
@@ -92,6 +94,8 @@ def test_parse_native_annotations_preserves_freetext_metadata_and_crop_coordinat
     assert free_text["payload"]["font_size"] == 18
     assert free_text["payload"]["alignment"] == "right"
     assert free_text["payload"]["style"]["stroke_width"] == 0
+    assert free_text["payload"]["style"]["stroke_color"] == "#0000FF"
+    assert free_text["payload"]["style"]["text_color"] == "#FF0000"
     assert diagnostics == [
         {
             "page": 1,
