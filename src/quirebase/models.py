@@ -336,6 +336,7 @@ class FileRevision(Base):
     page_count: Mapped[int | None] = mapped_column(Integer)
     page_geometry: Mapped[str | None] = mapped_column(Text)
     full_text: Mapped[str | None] = mapped_column(Text)
+    annotation_diagnostics: Mapped[str | None] = mapped_column(Text, nullable=True)
     processing_state: Mapped[FileRevisionProcessingState] = mapped_column(
         enum_type(FileRevisionProcessingState, "file_revision_processing_state"),
         default=FileRevisionProcessingState.pending,

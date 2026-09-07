@@ -483,6 +483,11 @@ async def commit_imported_revision(
                     })
                     continue
                 valid_rows.append((candidate, data))
+            revision.annotation_diagnostics = (
+                json.dumps(annotation_diagnostics, ensure_ascii=False)
+                if annotation_diagnostics
+                else None
+            )
             for candidate, data in valid_rows:
                 db.add(
                     PdfAnnotation(
