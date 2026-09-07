@@ -1,4 +1,4 @@
-"""Store the native PDF annotation policy selected for an Import Batch."""
+"""Persist the native PDF annotation policy and size limit for an Import Batch."""
 
 import sqlalchemy as sa
 from alembic import op
@@ -17,6 +17,8 @@ def upgrade() -> None:
     with op.batch_alter_table("import_batches") as batch:
         if "pdf_annotation_mode" not in columns:
             batch.add_column(sa.Column("pdf_annotation_mode", sa.String(length=16), nullable=True))
+        if "max_pdf_bytes" not in columns:
+            batch.add_column(sa.Column("max_pdf_bytes", sa.Integer(), nullable=True))
         batch.create_check_constraint(
             "ck_import_batches_pdf_annotation_mode",
             "pdf_annotation_mode IS NULL OR pdf_annotation_mode IN ('preserve', 'strip', 'import')",
@@ -28,4 +30,5 @@ def downgrade() -> None:
         return
     with op.batch_alter_table("import_batches") as batch:
         batch.drop_constraint("ck_import_batches_pdf_annotation_mode", type_="check")
+        batch.drop_column("max_pdf_bytes")
         batch.drop_column("pdf_annotation_mode")
