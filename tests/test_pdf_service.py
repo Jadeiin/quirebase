@@ -68,7 +68,14 @@ def test_parse_native_annotations_preserves_freetext_metadata_and_crop_coordinat
     with pymupdf.open() as document:
         page = document.new_page(width=300, height=400)
         page.set_cropbox(pymupdf.Rect(20, 30, 280, 370))
-        free_text = page.add_freetext_annot(pymupdf.Rect(50, 60, 120, 100), "Visible text")
+        free_text = page.add_freetext_annot(
+            pymupdf.Rect(50, 60, 120, 100),
+            "Visible text",
+            fontsize=18,
+            fontname="TiRo",
+            align=2,
+            border_width=0,
+        )
         free_text.set_info(subject="Canonical body")
         free_text.update()
         page.add_stamp_annot(pymupdf.Rect(140, 160, 180, 200), stamp=0)
@@ -81,6 +88,10 @@ def test_parse_native_annotations_preserves_freetext_metadata_and_crop_coordinat
     assert free_text["payload"]["text"] == "Visible text"
     assert free_text["payload"]["rect"]["x"] == 50
     assert free_text["payload"]["rect"]["y"] == 240
+    assert free_text["payload"]["font_family"] == "Times-Roman"
+    assert free_text["payload"]["font_size"] == 18
+    assert free_text["payload"]["alignment"] == "right"
+    assert free_text["payload"]["style"]["stroke_width"] == 0
     assert diagnostics == [
         {
             "page": 1,

@@ -79,6 +79,7 @@ def _hex_color(value: object) -> str | None:
 def _annotation_style(annotation: pymupdf.Annot) -> dict:
     colors = annotation.colors or {}
     border = annotation.border or {}
+    border_width = border.get("width")
     return {
         "stroke_color": _hex_color(colors.get("stroke")),
         "fill_color": _hex_color(colors.get("fill")),
@@ -88,12 +89,55 @@ def _annotation_style(annotation: pymupdf.Annot) -> dict:
             if annotation.opacity is not None and float(annotation.opacity) >= 0
             else 1.0
         ),
-        "stroke_width": max(0.0, min(20.0, float(border.get("width") or 1))),
+        "stroke_width": max(
+            0.0,
+            min(20.0, float(1 if border_width is None else border_width)),
+        ),
         "dash_pattern": [
             max(0.001, min(100.0, float(value)))
             for value in (border.get("dashes") or ())
             if isinstance(value, (int, float)) and float(value) > 0
         ][:10],
+    }
+
+
+def _free_text_format(annotation: pymupdf.Annot) -> dict[str, str | float]:
+    font_family = "Helvetica"
+    font_size = 12.0
+    supported_fonts = {
+        "Helvetica": "Helvetica",
+        "Helv": "Helvetica",
+        "Times-Roman": "Times-Roman",
+        "TiRo": "Times-Roman",
+        "Courier": "Courier",
+        "Cour": "Courier",
+    }
+    text = annotation.get_text("dict")
+    for block in text.get("blocks", ()):
+        for line in block.get("lines", ()):
+            for span in line.get("spans", ()):
+                native_font = str(span.get("font", "")).rsplit("+", 1)[-1]
+                if native_font in supported_fonts:
+                    font_family = supported_fonts[native_font]
+                native_size = span.get("size")
+                if isinstance(native_size, (int, float)) and 1 <= native_size <= 144:
+                    font_size = float(native_size)
+                break
+            else:
+                continue
+            break
+        else:
+            continue
+        break
+
+    alignment = "left"
+    value_type, value = annotation.parent.parent.xref_get_key(annotation.xref, "Q")
+    if value_type == "int":
+        alignment = {0: "left", 1: "center", 2: "right"}.get(int(value), "left")
+    return {
+        "font_family": font_family,
+        "font_size": font_size,
+        "alignment": alignment,
     }
 
 
@@ -202,9 +246,7 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                         payload.update({
                             "rect": rect,
                             "text": text,
-                            "font_family": "Helvetica",
-                            "font_size": 12,
-                            "alignment": "left",
+                            **_free_text_format(annotation),
                         })
                     elif kind == "ink":
                         raw_paths = annotation.vertices or ()
