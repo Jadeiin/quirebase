@@ -480,7 +480,10 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                         })
                         return parsed, diagnostics
                     content = annotation.info.get("content", "") or ""
-                    native_text_chars += len(content)
+                    subject = (
+                        annotation.info.get("subject", "") or "" if subtype == "FreeText" else ""
+                    )
+                    native_text_chars += len(content) + len(subject)
                     if native_text_chars > MAX_NATIVE_TEXT_CHARS:
                         diagnostics.append({
                             "page": page_index + 1,
