@@ -67,6 +67,9 @@ async def postgres_sessions(monkeypatch) -> AsyncIterator[async_sessionmaker[Asy
     ads.set_instance(datasource)
     monkeypatch.setattr("quirebase.documents.workflows.AsyncSessionLocal", factory)
     monkeypatch.setattr("quirebase.library.workflows.AsyncSessionLocal", factory)
+    async with factory() as db:
+        await search_index(db).ensure_schema(db)
+        await db.commit()
     try:
         yield factory
     finally:
@@ -221,6 +224,7 @@ async def test_metadata_cas_races_pdf_doi_rescan(postgres_sessions):
                 created_by=user_id,
             )
         )
+        await search_index(db).index_item(db, item_id)
         await db.commit()
 
     async def revise() -> object:
@@ -250,6 +254,9 @@ async def test_metadata_cas_races_pdf_doi_rescan(postgres_sessions):
 
 async def test_tag_delta_races_whole_collection_replacement(postgres_sessions):
     user_id, item_id = await _create_user_and_item(postgres_sessions, title="Tag race")
+    async with postgres_sessions() as db:
+        await search_index(db).index_item(db, item_id)
+        await db.commit()
 
     async def add_delta() -> object:
         async with postgres_sessions() as db:

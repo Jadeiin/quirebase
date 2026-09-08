@@ -14,23 +14,6 @@ if TYPE_CHECKING:
 
 class PostgreSQLSearchIndex:
     async def ensure_schema(self, db: AsyncSession) -> None:
-        await db.execute(
-            text(
-                """
-                CREATE TABLE IF NOT EXISTS item_search (
-                    item_id varchar(36) PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
-                    document tsvector NOT NULL,
-                    source_sequence integer NOT NULL DEFAULT 0
-                )
-                """
-            )
-        )
-        await db.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS ix_item_search_document "
-                "ON item_search USING gin(document)"
-            )
-        )
         columns = {
             row[0]
             for row in (
@@ -42,6 +25,19 @@ class PostgreSQLSearchIndex:
                 )
             ).all()
         }
+        if not columns:
+            await db.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS item_search (
+                        item_id varchar(36) PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+                        document tsvector NOT NULL,
+                        source_sequence integer NOT NULL DEFAULT 0
+                    )
+                    """
+                )
+            )
+            columns = {"item_id", "document", "source_sequence"}
         if "source_sequence" not in columns:
             # The probe avoids re-locking the table on every call; IF NOT
             # EXISTS closes the race between two first requests that both
@@ -50,6 +46,21 @@ class PostgreSQLSearchIndex:
                 text(
                     "ALTER TABLE item_search ADD COLUMN IF NOT EXISTS "
                     "source_sequence integer NOT NULL DEFAULT 0"
+                )
+            )
+        index_exists = await db.scalar(
+            text(
+                "SELECT EXISTS ("
+                "SELECT 1 FROM pg_indexes WHERE schemaname = current_schema() "
+                "AND tablename = 'item_search' AND indexname = 'ix_item_search_document'"
+                ")"
+            )
+        )
+        if not index_exists:
+            await db.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_item_search_document "
+                    "ON item_search USING gin(document)"
                 )
             )
 
