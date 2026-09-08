@@ -181,6 +181,28 @@ def test_parse_native_annotations_skips_replies(tmp_path):
     ]
 
 
+def test_parse_native_annotations_skips_non_default_note_icons(tmp_path):
+    source = tmp_path / "comment-icon.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        note = page.add_text_annot((20, 30), "Comment icon")
+        note.set_name("Comment")
+        note.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics == [
+        {
+            "page": 1,
+            "subtype": "Text",
+            "result": "skipped",
+            "reason": "note icon is unsupported",
+        }
+    ]
+
+
 def test_parse_native_annotations_skips_freetext_callouts(tmp_path):
     source = tmp_path / "callout.pdf"
     with pymupdf.open() as document:
@@ -199,6 +221,51 @@ def test_parse_native_annotations_skips_freetext_callouts(tmp_path):
             "subtype": "FreeText",
             "result": "skipped",
             "reason": "FreeText callouts are unsupported",
+        }
+    ]
+
+
+@pytest.mark.parametrize("dashes", [[3, 0], [1] * 11])
+def test_parse_native_annotations_skips_unrepresentable_dash_patterns(tmp_path, dashes):
+    source = tmp_path / f"unsupported-dashes-{len(dashes)}.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        shape = page.add_rect_annot(pymupdf.Rect(20, 30, 120, 70))
+        shape.set_border(width=2, dashes=dashes)
+        shape.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics == [
+        {
+            "page": 1,
+            "subtype": "Square",
+            "result": "skipped",
+            "reason": "dash pattern is not representable",
+        }
+    ]
+
+
+def test_parse_native_annotations_bounds_text_markup_segments(tmp_path):
+    source = tmp_path / "oversized-highlight.pdf"
+    quad = pymupdf.Quad((10, 10), (20, 10), (10, 20), (20, 20))
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        highlight = page.add_highlight_annot([quad] * 501)
+        highlight.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics == [
+        {
+            "page": 1,
+            "subtype": "Highlight",
+            "result": "skipped",
+            "reason": "text markup annotations support at most 500 segments",
         }
     ]
 
@@ -428,4 +495,25 @@ def test_canonical_export_is_crop_local_and_rotation_independent(tmp_path, rotat
         "y": 20.0,
         "width": 30.0,
         "height": 40.0,
+    }
+
+
+def test_parse_native_shape_uses_asymmetric_rectangle_differences(tmp_path):
+    source = tmp_path / "asymmetric-rd.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        shape = page.add_rect_annot(pymupdf.Rect(10, 20, 50, 80))
+        shape.update()
+        document.xref_set_key(shape.xref, "Rect", "[10 320 50 380]")
+        document.xref_set_key(shape.xref, "RD", "[1 2 3 4]")
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert diagnostics == []
+    assert parsed[0]["payload"]["rect"] == {
+        "x": 11.0,
+        "y": 324.0,
+        "width": 36.0,
+        "height": 54.0,
     }

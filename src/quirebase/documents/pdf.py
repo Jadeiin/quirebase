@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 from datetime import UTC, tzinfo
 from typing import TYPE_CHECKING
@@ -7,7 +8,7 @@ from typing import TYPE_CHECKING
 import pymupdf
 
 from quirebase.core.timezones import server_timezone
-from quirebase.documents.schemas import MAX_INK_PATHS, MAX_INK_POINTS
+from quirebase.documents.schemas import MAX_INK_PATHS, MAX_INK_POINTS, MAX_SEGMENT_RECTS
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -115,6 +116,15 @@ def _annotation_style(annotation: pymupdf.Annot) -> dict:
     colors = annotation.colors or {}
     border = annotation.border or {}
     border_width = border.get("width")
+    dash_pattern = border.get("dashes") or ()
+    if len(dash_pattern) > 10 or any(
+        not isinstance(value, (int, float))
+        or not math.isfinite(float(value))
+        or float(value) <= 0
+        or float(value) > 100
+        for value in dash_pattern
+    ):
+        raise ValueError("dash pattern is not representable")
     stroke_color = _hex_color(colors.get("stroke"))
     text_color = stroke_color
     if annotation.type[1] == "FreeText":
@@ -133,11 +143,7 @@ def _annotation_style(annotation: pymupdf.Annot) -> dict:
             0.0,
             min(20.0, float(1 if border_width is None else border_width)),
         ),
-        "dash_pattern": [
-            max(0.001, min(100.0, float(value)))
-            for value in (border.get("dashes") or ())
-            if isinstance(value, (int, float)) and float(value) > 0
-        ][:10],
+        "dash_pattern": [float(value) for value in dash_pattern],
     }
 
 
@@ -210,7 +216,7 @@ def _canonical_shape_rect(page: pymupdf.Page, annotation: pymupdf.Annot) -> dict
     rect = annotation.rect.normalize()
     differences = _xref_number_array(annotation, "RD")
     if differences is not None and len(differences) == 4:
-        left, bottom, right, top = differences
+        left, top, right, bottom = differences
         if all(component >= 0 for component in differences):
             inner = pymupdf.Rect(
                 rect.x0 + left,
@@ -325,6 +331,15 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                         "reason": "annotation replies are unsupported",
                     })
                     continue
+                icon_type, icon = document.xref_get_key(annotation.xref, "Name")
+                if subtype == "Text" and icon_type == "name" and icon != "/Note":
+                    diagnostics.append({
+                        "page": page_index + 1,
+                        "subtype": subtype,
+                        "result": "skipped",
+                        "reason": "note icon is unsupported",
+                    })
+                    continue
                 intent_type, intent = document.xref_get_key(annotation.xref, "IT")
                 if subtype == "FreeText" and intent_type == "name" and intent == "/FreeTextCallout":
                     diagnostics.append({
@@ -343,7 +358,13 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                     )
                     selected_text = None
                     if kind in {"highlight", "underline", "strikeout"}:
-                        vertices = list(annotation.vertices or ())
+                        vertices = annotation.vertices or ()
+                        segment_count = (len(vertices) + 3) // 4
+                        if segment_count > MAX_SEGMENT_RECTS:
+                            raise ValueError(
+                                "text markup annotations support at most "
+                                f"{MAX_SEGMENT_RECTS} segments"
+                            )
                         segment_rects = [
                             _rect_from_points(page, vertices[index : index + 4])
                             for index in range(0, len(vertices), 4)
