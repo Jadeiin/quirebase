@@ -3229,6 +3229,10 @@ msgstr "矩形"
 
 msgid "Strikeout"
 msgstr "删除线"
+
+msgid "Some native PDF annotations could not be imported and were skipped."
+msgstr "部分 PDF 原生批注无法导入，已跳过。"
+
 msgid "Native PDF annotations"
 msgstr "PDF 原生批注"
 

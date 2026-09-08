@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import pymupdf
 
 from quirebase.core.timezones import server_timezone
+from quirebase.documents.schemas import MAX_INK_PATHS, MAX_INK_POINTS
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -51,6 +52,11 @@ _NATIVE_KIND = {
     "Circle": "ellipse",
     "Line": "line",
 }
+_UNVIEWABLE_ANNOTATION_FLAGS = (
+    _pymupdf_integer_constant("PDF_ANNOT_IS_INVISIBLE")
+    | _pymupdf_integer_constant("PDF_ANNOT_IS_HIDDEN")
+    | _pymupdf_integer_constant("PDF_ANNOT_IS_NO_VIEW")
+)
 
 
 def _hex_color(value: object) -> str | None:
@@ -190,6 +196,33 @@ def _canonical_rect(page: pymupdf.Page, rect: pymupdf.Rect) -> dict[str, float]:
     }
 
 
+def _xref_number_array(annotation: pymupdf.Annot, key: str) -> tuple[float, ...] | None:
+    value_type, value = annotation.parent.parent.xref_get_key(annotation.xref, key)
+    if value_type != "array":
+        return None
+    try:
+        return tuple(float(component) for component in value.strip("[]").split())
+    except ValueError:
+        return None
+
+
+def _canonical_shape_rect(page: pymupdf.Page, annotation: pymupdf.Annot) -> dict[str, float]:
+    rect = annotation.rect.normalize()
+    differences = _xref_number_array(annotation, "RD")
+    if differences is not None and len(differences) == 4:
+        left, bottom, right, top = differences
+        if all(component >= 0 for component in differences):
+            inner = pymupdf.Rect(
+                rect.x0 + left,
+                rect.y0 + top,
+                rect.x1 - right,
+                rect.y1 - bottom,
+            )
+            if not inner.is_empty:
+                rect = inner
+    return _canonical_rect(page, rect)
+
+
 def _point_coordinates(point: object) -> tuple[float, float]:
     if hasattr(point, "x") and hasattr(point, "y"):
         return float(point.x), float(point.y)
@@ -202,6 +235,21 @@ def _is_point_like(value: object) -> bool:
     except (TypeError, ValueError, IndexError, KeyError):
         return False
     return True
+
+
+def _canonical_ink_paths(
+    page: pymupdf.Page, annotation: pymupdf.Annot
+) -> list[list[dict[str, float]]]:
+    raw_paths = annotation.vertices or ()
+    source_paths = (raw_paths,) if raw_paths and _is_point_like(raw_paths[0]) else raw_paths
+    if len(source_paths) > MAX_INK_PATHS:
+        raise ValueError(f"ink annotations support at most {MAX_INK_PATHS} paths")
+    point_count = sum(len(path) for path in source_paths)
+    if point_count > MAX_INK_POINTS:
+        raise ValueError(f"ink annotations support at most {MAX_INK_POINTS} points")
+    if not source_paths or any(not path for path in source_paths):
+        raise ValueError("ink paths cannot be empty")
+    return [[_canonical_point(page, point) for point in path] for path in source_paths]
 
 
 def _canonical_point(page: pymupdf.Page, point: object) -> dict[str, float]:
@@ -261,9 +309,38 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                         "reason": "unsupported subtype",
                     })
                     continue
+                if annotation.flags & _UNVIEWABLE_ANNOTATION_FLAGS:
+                    diagnostics.append({
+                        "page": page_index + 1,
+                        "subtype": subtype,
+                        "result": "skipped",
+                        "reason": "annotation is not viewable",
+                    })
+                    continue
+                if annotation.irt_xref:
+                    diagnostics.append({
+                        "page": page_index + 1,
+                        "subtype": subtype,
+                        "result": "skipped",
+                        "reason": "annotation replies are unsupported",
+                    })
+                    continue
+                intent_type, intent = document.xref_get_key(annotation.xref, "IT")
+                if subtype == "FreeText" and intent_type == "name" and intent == "/FreeTextCallout":
+                    diagnostics.append({
+                        "page": page_index + 1,
+                        "subtype": subtype,
+                        "result": "skipped",
+                        "reason": "FreeText callouts are unsupported",
+                    })
+                    continue
                 try:
                     payload: dict = {"type": kind, "style": _annotation_style(annotation)}
-                    rect = _canonical_rect(page, annotation.rect)
+                    rect = (
+                        _canonical_shape_rect(page, annotation)
+                        if kind in {"rectangle", "ellipse"}
+                        else _canonical_rect(page, annotation.rect)
+                    )
                     selected_text = None
                     if kind in {"highlight", "underline", "strikeout"}:
                         vertices = list(annotation.vertices or ())
@@ -283,19 +360,10 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                             **_free_text_format(annotation),
                         })
                     elif kind == "ink":
-                        raw_paths = annotation.vertices or ()
-                        if raw_paths and not _is_point_like(raw_paths[0]):
-                            paths = [
-                                [_canonical_point(page, point) for point in path]
-                                for path in raw_paths
-                            ]
-                        else:
-                            paths = (
-                                [[_canonical_point(page, point) for point in raw_paths]]
-                                if raw_paths
-                                else [[{"x": rect["x"], "y": rect["y"]}]]
-                            )
-                        payload.update({"rect": rect, "paths": paths})
+                        payload.update({
+                            "rect": rect,
+                            "paths": _canonical_ink_paths(page, annotation),
+                        })
                     elif kind in {"line", "arrow"}:
                         line = tuple(annotation.vertices or ())
                         if len(line) < 2:
