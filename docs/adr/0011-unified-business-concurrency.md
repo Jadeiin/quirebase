@@ -70,8 +70,10 @@ cannot race an assignment's Search refresh and publish the old Tag name after th
 
 Caller-retried creation operations carry an operation ID that is normalized and bounded before
 persistence. Item creation stores the ID under an Item Owner-scoped unique constraint and returns
-the original result on replay. File Revision and Attachment workflows use preallocated UUIDs and
-derive their operation identity from those UUIDs.
+the original result on replay. On SQLite, operation-ID Item creation acquires the User write gate
+before looking up that owner-scoped key, preventing a concurrent winner from turning the losing
+request's read transaction into a busy snapshot. File Revision and Attachment workflows use
+preallocated UUIDs and derive their operation identity from those UUIDs.
 
 Import Batch confirmation stores its commit operation ID and final Item IDs. Per-Item keys are a
 fixed-length SHA-256 derivation of the commit operation ID and record index, so every valid
@@ -87,11 +89,11 @@ ready -> discarded
 ```
 
 The `ready -> committing` transition, Item and File Revision creation, Audit Events, recorded result
-and `committed` transition occur in one transaction. The Import Batch database gate is acquired
-before its state is read, including through a no-op write on SQLite where row-level `FOR UPDATE` is
-unavailable. A retry with the same operation ID returns the recorded Item IDs. A different operation
-ID conflicts, and a committed batch remains as the idempotency record while relinquishing staged-object
-reservations.
+and `committed` transition occur in one transaction. Both confirmation and discard acquire the same
+Import Batch database gate before its state is read, including through a no-op write on SQLite where
+row-level `FOR UPDATE` is unavailable. A retry with the same operation ID returns the recorded Item
+IDs. A different operation ID conflicts, and a committed batch remains as the idempotency record
+while relinquishing staged-object reservations.
 
 ### Fence durable workflow commits and re-authorize them
 

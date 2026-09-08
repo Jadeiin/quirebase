@@ -23,7 +23,7 @@ from quirebase.library.identifiers import (
     set_item_identifiers,
 )
 from quirebase.library.workflows import request_item_tag_recommendation
-from quirebase.models import Item
+from quirebase.models import Item, User
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from quirebase.models import ItemAuthor, ItemIdentifier, User
+    from quirebase.models import ItemAuthor, ItemIdentifier
 
 type JsonValue = str | int | float | bool | tuple[JsonValue, ...] | Mapping[str, JsonValue] | None
 
@@ -288,6 +288,17 @@ async def create_item(
 ) -> ItemWriteResult:
     operation_id = normalize_operation_id(operation_id)
     try:
+        if operation_id and db.get_bind().dialect.name == "sqlite":
+            # SQLite has no row-level operation-key gate. Acquire its writer
+            # lock on the owning User before looking up the scoped key, so a
+            # concurrent winner is visible instead of leaving a stale read
+            # snapshot that fails while being upgraded during Item insertion.
+            await db.execute(
+                update(User)
+                .where(User.id == actor.id)
+                .values(active=User.active)
+                .execution_options(synchronize_session=False)
+            )
         return await _create_item(db, actor, metadata, operation_id)
     except IntegrityError:
         await db.rollback()

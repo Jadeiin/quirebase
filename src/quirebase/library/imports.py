@@ -530,6 +530,26 @@ async def retry_pdf_import_batch(db: AsyncSession, user: User, batch_id: str) ->
     return batch
 
 
+async def _lock_import_batch(db: AsyncSession, batch_id: str, owner_id: str) -> ImportBatch | None:
+    predicates = [ImportBatch.id == batch_id, ImportBatch.created_by == owner_id]
+    if db.get_bind().dialect.name != "sqlite":
+        return await db.scalar(select(ImportBatch).where(*predicates).with_for_update())
+    gated_id = await db.scalar(
+        update(ImportBatch)
+        .where(*predicates)
+        .values(status=ImportBatch.status)
+        .returning(ImportBatch.id)
+        .execution_options(synchronize_session=False)
+    )
+    if gated_id is None:
+        return None
+    return await db.scalar(
+        select(ImportBatch)
+        .where(ImportBatch.id == gated_id)
+        .execution_options(populate_existing=True)
+    )
+
+
 async def commit_import_batch(
     db: AsyncSession,
     user: User,
@@ -545,26 +565,7 @@ async def commit_import_batch(
     tombstone stops reserving object keys — only non-terminal batches may
     reserve staged objects.
     """
-    predicates = [ImportBatch.id == batch_id, ImportBatch.created_by == user.id]
-    if db.get_bind().dialect.name == "sqlite":
-        gated_id = await db.scalar(
-            update(ImportBatch)
-            .where(*predicates)
-            .values(status=ImportBatch.status)
-            .returning(ImportBatch.id)
-            .execution_options(synchronize_session=False)
-        )
-        batch = (
-            await db.scalar(
-                select(ImportBatch)
-                .where(ImportBatch.id == gated_id)
-                .execution_options(populate_existing=True)
-            )
-            if gated_id
-            else None
-        )
-    else:
-        batch = await db.scalar(select(ImportBatch).where(*predicates).with_for_update())
+    batch = await _lock_import_batch(db, batch_id, user.id)
     if batch is None:
         raise ResourceUnavailable("import batch not found")
     requested_operation = normalize_operation_id(commit_operation_id or f"import-commit:{batch.id}")
@@ -671,8 +672,8 @@ async def commit_import_batch(
 
 
 async def discard_import_batch(db: AsyncSession, user: User, batch_id: str) -> None:
-    batch = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update())
-    if batch is None or batch.created_by != user.id:
+    batch = await _lock_import_batch(db, batch_id, user.id)
+    if batch is None:
         raise ResourceUnavailable("import batch not found")
     # The locked read plus the discardable-status check serialize this deletion
     # against the commit transition: a concurrent confirmation either removes

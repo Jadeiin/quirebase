@@ -83,6 +83,60 @@ async def test_item_create_operation_id_returns_the_original_item(async_db):
 
 
 @pytest.mark.anyio
+async def test_sqlite_item_create_waits_for_same_owner_operation_gate(async_session_factory):
+    from sqlalchemy import func, select, update
+
+    from quirebase.library import create_item
+    from quirebase.library.item_metadata import ItemMetadata, ItemWriteResult
+
+    operation_id = "item-create:concurrent-replay"
+    async with async_session_factory() as setup_db:
+        user = User(username="create_operation_race", password_hash="hash")
+        setup_db.add(user)
+        await setup_db.commit()
+        user_id = user.id
+
+    async with async_session_factory() as winner_db:
+        await winner_db.execute(update(User).where(User.id == user_id).values(active=User.active))
+
+        async def create() -> object:
+            async with async_session_factory() as db:
+                user = await db.get(User, user_id)
+                assert user is not None
+                try:
+                    return await create_item(
+                        db,
+                        user,
+                        ItemMetadata(title="Losing duplicate"),
+                        operation_id=operation_id,
+                    )
+                except Exception as error:
+                    return error
+
+        replay = asyncio.create_task(create())
+        await asyncio.sleep(0.05)
+        assert not replay.done()
+        winner = Item(
+            title="Winning Item",
+            created_by=user_id,
+            create_operation_id=operation_id,
+        )
+        winner_db.add(winner)
+        await winner_db.commit()
+
+    result = await replay
+    assert isinstance(result, ItemWriteResult), result
+    assert result.item_id == winner.id
+    async with async_session_factory() as check_db:
+        count = await check_db.scalar(
+            select(func.count())
+            .select_from(Item)
+            .where(Item.created_by == user_id, Item.create_operation_id == operation_id)
+        )
+        assert count == 1
+
+
+@pytest.mark.anyio
 async def test_empty_item_create_operation_id_is_not_persisted(async_db):
     from sqlalchemy import select
 
@@ -846,6 +900,55 @@ async def test_discard_after_commit_preserves_the_idempotency_record(async_db):
 
     replayed = await commit_import_batch(db, user, batch.id)
     assert replayed == committed_ids
+
+
+@pytest.mark.anyio
+async def test_sqlite_discard_waits_for_concurrent_commit_gate(async_session_factory):
+    from sqlalchemy import update
+
+    from quirebase.library.imports import BatchConflict, discard_import_batch
+
+    async with async_session_factory() as setup_db:
+        user = User(username="discard_commit_race", password_hash="hash")
+        setup_db.add(user)
+        await setup_db.flush()
+        batch = ImportBatch(
+            created_by=user.id,
+            file_format="bibtex",
+            status="ready",
+            records=json.dumps([{"title": "Commit wins"}]),
+            errors="[]",
+        )
+        setup_db.add(batch)
+        await setup_db.commit()
+        user_id, batch_id = user.id, batch.id
+
+    async with async_session_factory() as commit_db:
+        await commit_db.execute(
+            update(ImportBatch).where(ImportBatch.id == batch_id).values(status=ImportBatch.status)
+        )
+
+        async def discard() -> object:
+            async with async_session_factory() as db:
+                user = await db.get(User, user_id)
+                assert user is not None
+                try:
+                    await discard_import_batch(db, user, batch_id)
+                except Exception as error:
+                    return error
+                return None
+
+        discard_result = asyncio.create_task(discard())
+        await asyncio.sleep(0.05)
+        assert not discard_result.done()
+        await commit_db.execute(
+            update(ImportBatch)
+            .where(ImportBatch.id == batch_id)
+            .values(status="committed", committed_item_ids="[]")
+        )
+        await commit_db.commit()
+
+    assert isinstance(await discard_result, BatchConflict)
 
 
 @pytest.mark.anyio
