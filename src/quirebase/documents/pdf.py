@@ -12,6 +12,7 @@ from quirebase.documents.schemas import (
     MAX_ANNOTATION_TEXT_LENGTH,
     MAX_INK_PATHS,
     MAX_INK_POINTS,
+    MAX_NATIVE_ANNOTATIONS,
     MAX_SEGMENT_RECTS,
 )
 
@@ -63,6 +64,7 @@ _UNVIEWABLE_ANNOTATION_FLAGS = (
     | _pymupdf_integer_constant("PDF_ANNOT_IS_HIDDEN")
     | _pymupdf_integer_constant("PDF_ANNOT_IS_NO_VIEW")
 )
+_SIGNATURE_WIDGET_TYPE = _pymupdf_integer_constant("PDF_WIDGET_TYPE_SIGNATURE")
 
 
 def _hex_color(value: object) -> str | None:
@@ -152,6 +154,15 @@ def _annotation_style(annotation: pymupdf.Annot) -> dict:
     }
 
 
+def _has_unsupported_border_effects(annotation: pymupdf.Annot) -> bool:
+    border = annotation.border or {}
+    style = border.get("style")
+    if style not in (None, "S", "D"):
+        return True
+    clouds = border.get("clouds")
+    return clouds not in (None, -1)
+
+
 def _free_text_format(annotation: pymupdf.Annot) -> dict[str, str | float]:
     font_family = "Helvetica"
     font_size = 12.0
@@ -199,12 +210,11 @@ def _canonical_rect(page: pymupdf.Page, rect: pymupdf.Rect) -> dict[str, float]:
     # x is measured from the crop's left edge and y from its bottom edge.
     x = normalized.x0
     y = crop.height - normalized.y1
-    return {
-        "x": max(0.0, float(x)),
-        "y": max(0.0, float(y)),
-        "width": max(0.001, float(normalized.width)),
-        "height": max(0.001, float(normalized.height)),
-    }
+    width = max(0.001, float(normalized.width))
+    height = max(0.001, float(normalized.height))
+    if x < 0 or y < 0 or x + width > crop.width or y + height > crop.height:
+        raise ValueError("annotation rectangle lies outside the crop box")
+    return {"x": float(x), "y": float(y), "width": width, "height": height}
 
 
 def _xref_number_array(annotation: pymupdf.Annot, key: str) -> tuple[float, ...] | None:
@@ -323,12 +333,12 @@ def _rect_from_points(page: pymupdf.Page, points: Iterable[object]) -> dict[str,
     bottom = min(point["y"] for point in values)
     right = max(point["x"] for point in values)
     top = max(point["y"] for point in values)
-    return {
-        "x": max(0.0, left),
-        "y": max(0.0, bottom),
-        "width": max(0.001, right - left),
-        "height": max(0.001, top - bottom),
-    }
+    width = max(0.001, right - left)
+    height = max(0.001, top - bottom)
+    crop = pdf_crop_box(page)
+    if left < 0 or bottom < 0 or right > crop.width or top > crop.height:
+        raise ValueError("annotation rectangle lies outside the crop box")
+    return {"x": left, "y": bottom, "width": width, "height": height}
 
 
 def _canonical_text_markup_segments(
@@ -381,8 +391,20 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
     parsed: list[dict] = []
     diagnostics: list[dict] = []
     with pymupdf.open(path) as document:
+        native_annotation_count = 0
         for page_index, page in enumerate(document):
-            for annotation in list(page.annots() or ()):
+            for annotation in page.annots() or ():
+                native_annotation_count += 1
+                if native_annotation_count > MAX_NATIVE_ANNOTATIONS:
+                    diagnostics.append({
+                        "page": page_index + 1,
+                        "subtype": "*",
+                        "result": "skipped",
+                        "reason": (
+                            f"PDF contains more than {MAX_NATIVE_ANNOTATIONS} native annotations"
+                        ),
+                    })
+                    return parsed, diagnostics
                 subtype = annotation.type[1]
                 kind = _NATIVE_KIND.get(subtype)
                 if kind is None:
@@ -428,6 +450,8 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                     })
                     continue
                 try:
+                    if _has_unsupported_border_effects(annotation):
+                        raise ValueError("border style or cloudy effects are unsupported")
                     if subtype == "FreeText" and _has_nonzero_freetext_rotation(
                         document, annotation
                     ):
@@ -435,20 +459,20 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                     if subtype == "Line" and _has_unsupported_line_features(document, annotation):
                         raise ValueError("line measurement or caption features are unsupported")
                     payload: dict = {"type": kind, "style": _annotation_style(annotation)}
-                    rect = (
-                        _canonical_shape_rect(page, annotation)
-                        if kind in {"rectangle", "ellipse"}
-                        else _canonical_rect(page, annotation.rect)
-                    )
+                    rect: dict[str, float] | None = None
                     selected_text = None
                     if kind in {"highlight", "underline", "strikeout"}:
                         enclosing_rect, segment_rects = _canonical_text_markup_segments(
                             page, annotation.vertices or ()
                         )
+                        if not segment_rects:
+                            rect = _canonical_rect(page, annotation.rect)
                         payload["rect"] = enclosing_rect if segment_rects else rect
                         payload["segment_rects"] = segment_rects or [rect]
+                        payload["style"]["fill_color"] = payload["style"]["stroke_color"]
                         selected_text = None
                     elif kind == "free_text":
+                        rect = _canonical_rect(page, annotation.rect)
                         text = annotation.info.get("content", "") or ""
                         if len(text) > MAX_ANNOTATION_TEXT_LENGTH:
                             raise ValueError(
@@ -460,11 +484,14 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                             **_free_text_format(annotation),
                         })
                     elif kind == "ink":
+                        paths = _canonical_ink_paths(page, annotation)
+                        rect = _canonical_rect(page, annotation.rect)
                         payload.update({
                             "rect": rect,
-                            "paths": _canonical_ink_paths(page, annotation),
+                            "paths": paths,
                         })
                     elif kind in {"line", "arrow"}:
+                        rect = _canonical_rect(page, annotation.rect)
                         line = tuple(annotation.vertices or ())
                         if len(line) < 2:
                             line = (annotation.rect.tl, annotation.rect.br)
@@ -477,7 +504,7 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                             "start_ending": _LINE_ENDING_NAMES.get(endings[0], "none"),
                             "end_ending": _LINE_ENDING_NAMES.get(endings[1], "none"),
                         })
-                        if any(
+                        if (intent_type == "name" and intent == "/LineArrow") or any(
                             ending
                             in {
                                 LINE_ENDINGS["open_arrow"],
@@ -490,6 +517,7 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                             kind = "arrow"
                             payload["type"] = kind
                     else:
+                        rect = _canonical_shape_rect(page, annotation)
                         payload["rect"] = rect
                     info = annotation.info
                     body = info.get("subject") if kind == "free_text" else info.get("content")
@@ -519,6 +547,12 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
 def strip_native_annotations(source: Path, output: Path) -> int:
     """Write a derived PDF with page markup removed, preserving links/widgets."""
     with pymupdf.open(source) as document:
+        if any(
+            widget.field_type == _SIGNATURE_WIDGET_TYPE
+            for page in document
+            for widget in page.widgets() or ()
+        ):
+            raise ValueError("signed PDFs cannot be stripped without invalidating signatures")
         removed = 0
         for page in document:
             annotations = list(page.annots() or ())

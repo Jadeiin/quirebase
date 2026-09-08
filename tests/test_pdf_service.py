@@ -545,6 +545,22 @@ def test_export_writes_all_canonical_annotations_without_touching_source(tmp_pat
     assert source.read_bytes() == original
 
 
+def test_parse_native_line_arrow_intent_maps_to_arrow(tmp_path):
+    source = tmp_path / "line-arrow-intent.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        line = page.add_line_annot((20, 30), (120, 70))
+        line.update()
+        document.xref_set_key(line.xref, "IT", "/LineArrow")
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert diagnostics == []
+    assert parsed[0]["kind"] == "arrow"
+    assert parsed[0]["payload"]["type"] == "arrow"
+
+
 def test_geometry_preserves_pdf_crop_box_across_rotation(tmp_path):
     source = tmp_path / "cropped.pdf"
     with pymupdf.open() as document:
