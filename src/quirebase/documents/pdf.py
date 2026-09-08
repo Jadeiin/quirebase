@@ -8,7 +8,12 @@ from typing import TYPE_CHECKING
 import pymupdf
 
 from quirebase.core.timezones import server_timezone
-from quirebase.documents.schemas import MAX_INK_PATHS, MAX_INK_POINTS, MAX_SEGMENT_RECTS
+from quirebase.documents.schemas import (
+    MAX_ANNOTATION_TEXT_LENGTH,
+    MAX_INK_PATHS,
+    MAX_INK_POINTS,
+    MAX_SEGMENT_RECTS,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -229,6 +234,52 @@ def _canonical_shape_rect(page: pymupdf.Page, annotation: pymupdf.Annot) -> dict
     return _canonical_rect(page, rect)
 
 
+def _is_axis_aligned_quad(points: Iterable[object]) -> bool:
+    coordinates = [_point_coordinates(point) for point in points]
+    if len(coordinates) != 4:
+        return False
+    x_values = [x for x, _y in coordinates]
+    y_values = [y for _x, y in coordinates]
+    quad_rect = pymupdf.Rect(min(x_values), min(y_values), max(x_values), max(y_values))
+    expected = sorted([
+        (quad_rect.x0, quad_rect.y0),
+        (quad_rect.x0, quad_rect.y1),
+        (quad_rect.x1, quad_rect.y0),
+        (quad_rect.x1, quad_rect.y1),
+    ])
+    actual = sorted(coordinates)
+    return all(
+        math.isclose(actual_x, expected_x, abs_tol=1e-6)
+        and math.isclose(actual_y, expected_y, abs_tol=1e-6)
+        for (actual_x, actual_y), (expected_x, expected_y) in zip(actual, expected, strict=True)
+    )
+
+
+def _has_unsupported_line_features(document: pymupdf.Document, annotation: pymupdf.Annot) -> bool:
+    intent_type, intent = document.xref_get_key(annotation.xref, "IT")
+    if intent_type != "null" and not (intent_type == "name" and intent == "/LineArrow"):
+        return True
+    caption_type, caption = document.xref_get_key(annotation.xref, "Cap")
+    if caption_type != "null" and not (caption_type == "bool" and caption == "false"):
+        return True
+    return any(
+        document.xref_get_key(annotation.xref, key)[0] != "null"
+        for key in ("LL", "LLE", "LLO", "CP", "CO", "Measure")
+    )
+
+
+def _has_nonzero_freetext_rotation(document: pymupdf.Document, annotation: pymupdf.Annot) -> bool:
+    value_type, value = document.xref_get_key(annotation.xref, "Rotate")
+    if value_type == "null":
+        return False
+    if value_type not in {"int", "real"}:
+        return True
+    try:
+        return not math.isclose(float(value), 0.0, abs_tol=1e-9)
+    except ValueError:
+        return True
+
+
 def _point_coordinates(point: object) -> tuple[float, float]:
     if hasattr(point, "x") and hasattr(point, "y"):
         return float(point.x), float(point.y)
@@ -350,6 +401,12 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                     })
                     continue
                 try:
+                    if subtype == "FreeText" and _has_nonzero_freetext_rotation(
+                        document, annotation
+                    ):
+                        raise ValueError("rotated FreeText annotations are unsupported")
+                    if subtype == "Line" and _has_unsupported_line_features(document, annotation):
+                        raise ValueError("line measurement or caption features are unsupported")
                     payload: dict = {"type": kind, "style": _annotation_style(annotation)}
                     rect = (
                         _canonical_shape_rect(page, annotation)
@@ -365,6 +422,11 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                                 "text markup annotations support at most "
                                 f"{MAX_SEGMENT_RECTS} segments"
                             )
+                        if any(
+                            not _is_axis_aligned_quad(vertices[index : index + 4])
+                            for index in range(0, len(vertices), 4)
+                        ):
+                            raise ValueError("non-rectangular text markup is unsupported")
                         segment_rects = [
                             _rect_from_points(page, vertices[index : index + 4])
                             for index in range(0, len(vertices), 4)
@@ -375,6 +437,10 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                         selected_text = None
                     elif kind == "free_text":
                         text = annotation.info.get("content", "") or ""
+                        if len(text) > MAX_ANNOTATION_TEXT_LENGTH:
+                            raise ValueError(
+                                f"annotation text exceeds {MAX_ANNOTATION_TEXT_LENGTH} characters"
+                            )
                         payload.update({
                             "rect": rect,
                             "text": text,
@@ -414,6 +480,10 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                         payload["rect"] = rect
                     info = annotation.info
                     body = info.get("subject") if kind == "free_text" else info.get("content")
+                    if body and len(body) > MAX_ANNOTATION_TEXT_LENGTH:
+                        raise ValueError(
+                            f"annotation text exceeds {MAX_ANNOTATION_TEXT_LENGTH} characters"
+                        )
                     parsed.append({
                         "page_index": page_index,
                         "kind": kind,

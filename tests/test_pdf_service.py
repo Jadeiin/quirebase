@@ -270,6 +270,102 @@ def test_parse_native_annotations_bounds_text_markup_segments(tmp_path):
     ]
 
 
+def test_parse_native_annotations_skips_non_rectangular_text_markup(tmp_path):
+    source = tmp_path / "skewed-highlight.pdf"
+    skewed_quad = pymupdf.Quad((10, 10), (20, 12), (12, 20), (22, 22))
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        highlight = page.add_highlight_annot(skewed_quad)
+        highlight.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics == [
+        {
+            "page": 1,
+            "subtype": "Highlight",
+            "result": "skipped",
+            "reason": "non-rectangular text markup is unsupported",
+        }
+    ]
+
+
+def test_parse_native_annotations_bounds_freetext_before_returning_payload(tmp_path):
+    source = tmp_path / "oversized-freetext.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        free_text = page.add_freetext_annot(pymupdf.Rect(20, 30, 120, 70), "x" * 20_001)
+        free_text.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics == [
+        {
+            "page": 1,
+            "subtype": "FreeText",
+            "result": "skipped",
+            "reason": "annotation text exceeds 20000 characters",
+        }
+    ]
+
+
+def test_parse_native_annotations_skips_rotated_freetext(tmp_path):
+    source = tmp_path / "rotated-freetext.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        free_text = page.add_freetext_annot(pymupdf.Rect(20, 30, 120, 70), "Rotated")
+        free_text.update()
+        document.xref_set_key(free_text.xref, "Rotate", "90")
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics == [
+        {
+            "page": 1,
+            "subtype": "FreeText",
+            "result": "skipped",
+            "reason": "rotated FreeText annotations are unsupported",
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("IT", "/LineDimension"),
+        ("Cap", "true"),
+        ("LL", "12"),
+        ("LLE", "3"),
+    ],
+)
+def test_parse_native_annotations_skips_line_measurement_and_caption_features(tmp_path, key, value):
+    source = tmp_path / f"line-{key}.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        line = page.add_line_annot((20, 30), (120, 70))
+        line.update()
+        document.xref_set_key(line.xref, key, value)
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics == [
+        {
+            "page": 1,
+            "subtype": "Line",
+            "result": "skipped",
+            "reason": "line measurement or caption features are unsupported",
+        }
+    ]
+
+
 def test_parse_native_annotations_bounds_ink_points_before_returning_payload(tmp_path):
     source = tmp_path / "oversized-ink.pdf"
     points = [(float(index % 250), float(index // 250)) for index in range(10_001)]

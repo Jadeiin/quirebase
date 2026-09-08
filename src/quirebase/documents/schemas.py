@@ -8,6 +8,7 @@ from pydantic import UUID4, BaseModel, ConfigDict, Field, model_validator
 from quirebase.models import AnnotationKind, AnnotationScope
 
 MAX_COORDINATE = 1_000_000.0
+MAX_ANNOTATION_TEXT_LENGTH = 20_000
 MAX_SEGMENT_RECTS = 500
 MAX_INK_PATHS = 100
 MAX_INK_POINTS = 10_000
@@ -74,7 +75,7 @@ class NotePayload(PayloadBase):
 
 class FreeTextPayload(PayloadBase):
     type: Literal["free_text"]
-    text: str = Field(max_length=20_000)
+    text: str = Field(max_length=MAX_ANNOTATION_TEXT_LENGTH)
     font_family: Literal["Helvetica", "Times-Roman", "Courier"] = "Helvetica"
     font_size: float = Field(default=12, ge=1, le=144)
     alignment: Literal["left", "center", "right"] = "left"
@@ -137,7 +138,7 @@ class AnnotationCreate(CanonicalModel):
     kind: AnnotationKind
     scope: AnnotationScope = AnnotationScope.private
     project_id: str | None = Field(default=None, max_length=36)
-    body: str | None = Field(default=None, max_length=20_000)
+    body: str | None = Field(default=None, max_length=MAX_ANNOTATION_TEXT_LENGTH)
     selected_text: str | None = Field(default=None, max_length=50_000)
     payload: AnnotationPayload
 
