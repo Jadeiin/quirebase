@@ -50,10 +50,10 @@ class ProjectMemberRequest(BaseModel):
 class TagSetRequest(BaseModel):
     tag_ids: list[str] = Field(default_factory=list)
     new_names: list[str] = Field(default_factory=list)
-    # The whole-collection replacement is guarded by the Item version the
+    # The whole-collection replacement is guarded by the Tag collection version the
     # selection was based on, so concurrent editors cannot drop each other's
     # assignments silently.
-    expected_version: int = Field(ge=1)
+    expected_collection_version: int = Field(ge=1)
 
 
 class DiscussionRequest(BaseModel):

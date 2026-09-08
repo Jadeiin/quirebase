@@ -184,7 +184,7 @@
                 <span class="text-muted">{{ _('Missing DOI?') }}</span>
               </div>
               <div class="identifier-actions">
-                <form method="post" action="/items/{{ item.id }}/rescan-doi">{{ csrf_field(csrf) }}
+                <form method="post" action="/items/{{ item.id }}/rescan-doi">{{ csrf_field(csrf) }}<input type="hidden" name="version" value="{{ item.version }}">
                   <button class="secondary-button compact-action-btn" type="submit">{{ _('Rescan PDF') }}</button>
                 </form>
               </div>
@@ -301,7 +301,7 @@
           </div>
           {% if can_edit %}
           <form class="metadata-form" method="post" action="/items/{{ item.id }}/tags/matrix">{{ csrf_field(csrf) }}
-            <input type="hidden" name="expected_version" value="{{ item.version }}">
+            <input type="hidden" name="expected_collection_version" value="{{ item.tag_collection_version }}">
             {% if tag_matrix %}
             {% for tid in tag_matrix.assigned_ids %}
             <input type="hidden" name="tag_ids" value="{{ tid }}">
@@ -378,7 +378,7 @@
 
         {% if tag_matrix and tag_matrix.groups %}
         <form method="post" action="/items/{{ item.id }}/tags/matrix">{{ csrf_field(csrf) }}
-          <input type="hidden" name="expected_version" value="{{ item.version }}">
+          <input type="hidden" name="expected_collection_version" value="{{ item.tag_collection_version }}">
           <div class="tag-matrix-scroll">
             {% for group in tag_matrix.groups %}
             <div class="tag-letter-row" x-show="groupMatches({{ group.names|tojson }})">

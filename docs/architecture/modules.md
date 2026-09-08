@@ -59,7 +59,8 @@ Each mechanism remains owned by the Module whose invariant it protects:
 
 | Concern | Owner | Mechanism |
 | --- | --- | --- |
-| Stale Item edits and Tag collection replacement | Library | `expected_version` CAS; every Item Tag mutation advances the token |
+| Stale Item metadata edits | Library | `expected_version` CAS |
+| Stale whole-Tag-collection replacement | Library | `expected_collection_version` CAS; every Item Tag mutation advances `tag_collection_version` |
 | Project lifecycle, membership and assignment | Projects | Project write gate |
 | Item deletion versus durable child creation | Library | Item lifecycle gate and fence |
 | Final workflow authorization | Access with the calling business Module | Canonically ordered Project/Item locks followed by permission revalidation |

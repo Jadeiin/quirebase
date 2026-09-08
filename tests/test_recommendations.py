@@ -55,7 +55,14 @@ async def test_tag_selection_does_not_invalidate_in_flight_recommendation(async_
     record = await request_item_tag_recommendation(db, item.id, owner_id=user.id)
     assert record.workflow_id is not None
     await db.commit()
-    await set_item_tags(db, user, item.id, [], ["Selected"], expected_version=item.version)
+    await set_item_tags(
+        db,
+        user,
+        item.id,
+        [],
+        ["Selected"],
+        expected_collection_version=item.tag_collection_version,
+    )
     await db.refresh(item)
     assert item.aggregate_sequence == 2
     assert item.recommendation_sequence == 1

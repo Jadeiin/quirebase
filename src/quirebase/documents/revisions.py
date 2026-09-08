@@ -689,22 +689,43 @@ async def delete_file_revision(
         attributes={"capability": "library", "item_id": item_id},
     )
     record_event(db, user.id, "pdf.delete", "file_revision", revision.id)
+    await enqueue_object_cleanup(
+        db,
+        (object_key, thumbnail_key or ""),
+        owner_id=user.id,
+        operation="file_revision.delete",
+        target_id=revision.id,
+    )
     await db.commit()
-    if thumbnail_key:
-        await get_object_store().delete(thumbnail_key)
-    await delete_unreferenced_objects(db, (object_key,))
 
 
 async def delete_attachment(db: AsyncSession, user: User, item_id: str, attachment_id: str) -> None:
+    await lock_item_project_gates(db, (item_id,))
+    if await lock_active_item(db, item_id) is None:
+        raise ResourceUnavailable("item not found")
     await require_editable_item(db, user, item_id)
-    attachment = await db.get(Attachment, attachment_id)
+    attachment = await db.scalar(
+        select(Attachment).where(Attachment.id == attachment_id).with_for_update()
+    )
     if attachment is None or attachment.item_id != item_id:
         raise ResourceNotFound("attachment not found")
     object_key = attachment.object_key
     await db.delete(attachment)
+    await db.flush()
+    await db.execute(
+        update(Item)
+        .where(Item.id == item_id, Item.lifecycle_state == "active")
+        .values(aggregate_sequence=Item.aggregate_sequence + 1)
+    )
     record_event(db, user.id, "attachment.delete", "attachment", attachment.id)
+    await enqueue_object_cleanup(
+        db,
+        (object_key,),
+        owner_id=user.id,
+        operation="attachment.delete",
+        target_id=attachment.id,
+    )
     await db.commit()
-    await delete_unreferenced_objects(db, (object_key,))
 
 
 async def get_pdf_viewer_data(

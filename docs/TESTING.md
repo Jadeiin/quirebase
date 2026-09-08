@@ -41,7 +41,7 @@ uv run prek run --all-files
 uv run pytest -q -m "not oa"
 ```
 
-The hooks reject malformed YAML/TOML/JSON, large files, case-conflicting paths, merge markers and private keys; update the uv lock; run strict Ruff checks plus formatting; type-check production modules with mypy; enforce Conventional Commits; and run the fast tests before pushes. This suite is offline and covers schema, permissions, storage, PDF coordinates and annotations, Library Search and Discovery, bibliography interchange, maintenance, migration, security and HTTP behavior. PostgreSQL Library Search runs in CI against PostgreSQL 17 when `QUIREBASE_TEST_POSTGRES_URL` is set.
+The hooks reject malformed YAML/TOML/JSON, large files, case-conflicting paths, merge markers and private keys; update the uv lock; run strict Ruff checks plus formatting; type-check production modules with mypy; enforce Conventional Commits; and run the fast tests before pushes. This suite is offline and covers schema, permissions, storage, PDF coordinates and annotations, Library Search and Discovery, bibliography interchange, maintenance, migration, security and HTTP behavior. PostgreSQL Library Search and two-session concurrency contracts run in CI against PostgreSQL 17 when `QUIREBASE_TEST_POSTGRES_URL` is set. The race suite coordinates independent `AsyncSession` instances with events and covers lifecycle fences, final authorization, independent metadata and Tag CAS tokens, Import confirmation, stale derived writes and atomic login throttling.
 
 ## Real open-access PDF suite
 

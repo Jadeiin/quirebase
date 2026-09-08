@@ -23,16 +23,18 @@ Quirebase uses separate monotonic tokens rather than overloading `Item.version`:
 
 | Mechanism | Owner and purpose | Advances when |
 | --- | --- | --- |
-| `Item.version` | Library optimistic concurrency for a User's stale Item edit or whole-Tag-collection replacement | Bibliographic metadata or any Item Tag assignment changes |
+| `Item.version` | Library optimistic concurrency for a User's stale bibliographic metadata snapshot | Bibliographic metadata changes |
+| `Item.tag_collection_version` | Library optimistic concurrency for a whole-Tag-collection snapshot | Any Item Tag assignment changes |
 | `Item.lifecycle_state` and `Item.lifecycle_fence` | Library lifecycle boundary preventing durable work from committing children to a deleting Item | Item deletion begins; the state changes from `active` to `deleting` and the fence advances |
 | `Item.aggregate_sequence` | Source sequence for Library Search | Any indexed Item aggregate input changes, including metadata, Tags, Projects and ready File Revision text |
 | `Item.recommendation_sequence` | Source sequence for Item Tag Recommendation input | Title, abstract or ready File Revision text changes |
 | Recommendation generation token | Identity of one requested recommendation generation | A generation is explicitly requested or superseded |
 
-Every Item Tag mutation advances the same `Item.version`, including incremental, bulk, delete and
-merge paths. Therefore a stale whole-collection replacement cannot erase a concurrent assignment.
-Tag and Project changes do not advance `recommendation_sequence`, because they are not
-recommendation inputs.
+Every Item Tag mutation advances `Item.tag_collection_version`, including incremental, bulk,
+delete and merge paths. Therefore a stale whole-collection replacement cannot erase a concurrent
+assignment, while a Tag edit cannot create a false conflict for an independent metadata form. Tag
+and Project changes do not advance `recommendation_sequence`, because they are not recommendation
+inputs.
 
 Library Search projections persist `source_sequence` and accept an update only when its sequence is
 at least as new as the stored projection. PostgreSQL enforces this in one conditional upsert;
@@ -123,6 +125,16 @@ must expose the same business result.
 - Multi-aggregate operations must document and test their position in the canonical lock order.
 - Schema migrations preserve database integrity during the cutover, but no dual API, stored-data or
   persisted-workflow compatibility layer is part of this decision.
+
+## Scope and follow-up
+
+This decision establishes the core concurrency foundation; it does not claim that every write path
+has completed the final architecture. Follow-up work will move Library Search writes behind durable
+projection intents, consolidate lifecycle locking under the Library-owned seam, extend commit-time
+authorization to synchronous mutations with minimal grant-path locks, and route Library bulk
+Project assignment through a Projects-owned typed command. Caller retry identities for HTTP/MCP
+uploads and the final Batch-scoping/discard representation for Import commit identities also remain
+explicit follow-up decisions.
 
 ## Rejected alternatives
 

@@ -368,14 +368,29 @@ async def test_set_item_tags_rejects_a_stale_collection_version(async_db):
     db.add(item)
     await db.flush()
 
-    await set_item_tags(db, user, item.id, [], ["Alpha"], expected_version=item.version)
+    await set_item_tags(
+        db,
+        user,
+        item.id,
+        [],
+        ["Alpha"],
+        expected_collection_version=item.tag_collection_version,
+    )
     await db.refresh(item)
-    assert item.version == 2
+    assert item.version == 1
+    assert item.tag_collection_version == 2
 
     with pytest.raises(VersionConflict):
-        await set_item_tags(db, user, item.id, [], ["Beta"], expected_version=1)
+        await set_item_tags(db, user, item.id, [], ["Beta"], expected_collection_version=1)
 
-    await set_item_tags(db, user, item.id, [], ["Beta"], expected_version=item.version)
+    await set_item_tags(
+        db,
+        user,
+        item.id,
+        [],
+        ["Beta"],
+        expected_collection_version=item.tag_collection_version,
+    )
     assigned = list(
         (await db.scalars(select(Tag.name).join(ItemTag).where(ItemTag.item_id == item.id))).all()
     )
@@ -383,8 +398,9 @@ async def test_set_item_tags_rejects_a_stale_collection_version(async_db):
 
 
 @pytest.mark.anyio
-async def test_incremental_tag_edits_invalidate_a_stale_collection_snapshot(async_db):
+async def test_tag_delta_invalidates_only_the_tag_collection_snapshot(async_db):
     from quirebase.core.errors import VersionConflict
+    from quirebase.library.item_metadata import ItemMetadata, revise_item_metadata
     from quirebase.library.tags import add_tag_to_item, remove_tag_from_item, set_item_tags
 
     db = async_db
@@ -398,15 +414,26 @@ async def test_incremental_tag_edits_invalidate_a_stale_collection_snapshot(asyn
     assignment = await add_tag_to_item(db, user, item.id, "Concurrent")
     tag_id = assignment.tag_id
     await db.refresh(item)
-    assert item.version == 2
+    assert item.version == 1
+    assert item.tag_collection_version == 2
     with pytest.raises(VersionConflict):
-        await set_item_tags(db, user, item.id, [], expected_version=1)
+        await set_item_tags(db, user, item.id, [], expected_collection_version=1)
+
+    metadata_result = await revise_item_metadata(
+        db,
+        user,
+        item.id,
+        expected_version=1,
+        metadata=ItemMetadata(title="Metadata remains independently editable"),
+    )
+    assert metadata_result.version == 2
 
     await remove_tag_from_item(db, user, item.id, tag_id)
     await db.refresh(item)
-    assert item.version == 3
+    assert item.version == 2
+    assert item.tag_collection_version == 3
     with pytest.raises(VersionConflict):
-        await set_item_tags(db, user, item.id, [], expected_version=2)
+        await set_item_tags(db, user, item.id, [], expected_collection_version=2)
 
 
 @pytest.mark.anyio
@@ -425,10 +452,11 @@ async def test_bulk_tag_assignment_invalidates_a_stale_collection_snapshot(async
 
     await apply_bulk_item_action(db, user, [item.id], "add_tag", tag_name="Concurrent")
     await db.refresh(item)
-    assert item.version == 2
+    assert item.version == 1
+    assert item.tag_collection_version == 2
 
     with pytest.raises(VersionConflict):
-        await set_item_tags(db, user, item.id, [], expected_version=1)
+        await set_item_tags(db, user, item.id, [], expected_collection_version=1)
 
 
 @pytest.mark.anyio
@@ -890,6 +918,57 @@ async def test_revision_deletion_invalidates_in_flight_recommendation(
         source_sequence=1,
     )
     assert stale == {"stale": True}
-
     await db.refresh(record)
     assert json.loads(record.single_words) == ["fresh"]
+
+
+@pytest.mark.anyio
+async def test_document_deletion_enqueues_durable_object_cleanup(async_db, fake_durable_operations):
+    from quirebase.documents.events import OBJECT_CLEANUP_WORKFLOW
+    from quirebase.documents.revisions import delete_attachment, delete_file_revision
+
+    db = async_db
+    user = User(username="durable_document_delete", password_hash="hash")
+    db.add(user)
+    await db.flush()
+    item = Item(title="Durable document cleanup", created_by=user.id)
+    db.add(item)
+    await db.flush()
+    revision = FileRevision(
+        item_id=item.id,
+        object_key="durable/revision.pdf",
+        thumbnail_object_key="durable/revision.png",
+        size=10,
+        original_name="revision.pdf",
+        created_by=user.id,
+        processing_state=FileRevisionProcessingState.ready,
+    )
+    attachment = Attachment(
+        item_id=item.id,
+        object_key="durable/attachment.bin",
+        size=10,
+        mime_type="application/octet-stream",
+        original_name="attachment.bin",
+        created_by=user.id,
+    )
+    db.add_all([revision, attachment])
+    await db.commit()
+    user_id = user.id
+    item_id = item.id
+    revision_id = revision.id
+    attachment_id = attachment.id
+
+    await delete_file_revision(db, user, item_id, revision_id)
+    user = await db.get(User, user_id)
+    assert user is not None
+    await delete_attachment(db, user, item_id, attachment_id)
+
+    cleanup_requests = [
+        enqueue
+        for enqueue in fake_durable_operations.enqueues
+        if enqueue["workflow_name"] == OBJECT_CLEANUP_WORKFLOW
+    ]
+    assert [set(request["args"][0]) for request in cleanup_requests] == [
+        {"durable/revision.pdf", "durable/revision.png"},
+        {"durable/attachment.bin"},
+    ]

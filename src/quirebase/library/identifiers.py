@@ -136,7 +136,9 @@ def generate_bibtex_key(item: Item) -> str:
     return f"{author_part}{year_part}{title_part}"
 
 
-async def rescan_pdf_doi(db: AsyncSession, user: User, item_id: str) -> str | None:
+async def _rescan_pdf_doi(
+    db: AsyncSession, user: User, item_id: str, expected_version: int
+) -> str | None:
     item = await require_editable_item(db, user, item_id)
 
     revisions = list(
@@ -152,6 +154,21 @@ async def rescan_pdf_doi(db: AsyncSession, user: User, item_id: str) -> str | No
         if rev.full_text:
             found_doi = first_doi_from_text(rev.full_text)
             if found_doi:
+                version = await db.scalar(
+                    update(Item)
+                    .where(Item.id == item_id, Item.version == expected_version)
+                    .values(
+                        updated_by=user.id,
+                        updated_at=datetime.now(UTC),
+                        version=Item.version + 1,
+                        aggregate_sequence=Item.aggregate_sequence + 1,
+                    )
+                    .returning(Item.version)
+                )
+                if version is None:
+                    await db.rollback()
+                    current = await db.scalar(select(Item.version).where(Item.id == item_id))
+                    raise VersionConflict(current)
                 # Update item identifiers
                 existing_pairs = [
                     (ident.provider, ident.value)
@@ -160,16 +177,32 @@ async def rescan_pdf_doi(db: AsyncSession, user: User, item_id: str) -> str | No
                 ]
                 existing_pairs.append(("doi", found_doi))
                 await set_item_identifiers(db, user, item_id, existing_pairs)
-                item.updated_by = user.id
-                item.updated_at = datetime.now(UTC)
-                item.version += 1
-                item.aggregate_sequence += 1
-                await db.flush()
+                await db.refresh(item)
                 await search_index(db).index_item(db, item_id)
-                record_event(db, user.id, "item.rescan_doi", "item", item_id)
+                record_event(
+                    db,
+                    user.id,
+                    "item.rescan_doi",
+                    "item",
+                    item_id,
+                    detail={"version": version},
+                )
                 await db.commit()
                 return found_doi
+    await db.rollback()
     return None
+
+
+async def rescan_pdf_doi(
+    db: AsyncSession, user: User, item_id: str, *, expected_version: int
+) -> str | None:
+    """Rescan ready File Revision text under the Item metadata version CAS."""
+
+    try:
+        return await _rescan_pdf_doi(db, user, item_id, expected_version)
+    except Exception:
+        await db.rollback()
+        raise
 
 
 async def apply_metadata_record(

@@ -34,6 +34,7 @@ class ContributorView(BaseModel):
 
 
 class ItemDetailView(ItemSearchView):
+    tag_collection_version: int
     metadata: ItemMetadata
     abstract_html: str | None
     editors: list[ContributorView]

@@ -50,6 +50,12 @@ def upgrade() -> None:
                         server_default="active",
                     )
                 )
+            if "tag_collection_version" not in item_columns:
+                batch.add_column(
+                    sa.Column(
+                        "tag_collection_version", sa.Integer(), nullable=False, server_default="1"
+                    )
+                )
             if "lifecycle_fence" not in item_columns:
                 batch.add_column(
                     sa.Column("lifecycle_fence", sa.Integer(), nullable=False, server_default="1")
@@ -150,6 +156,7 @@ def upgrade() -> None:
         for table, names in {
             "items": (
                 "lifecycle_state",
+                "tag_collection_version",
                 "lifecycle_fence",
                 "aggregate_sequence",
                 "recommendation_sequence",
@@ -217,6 +224,7 @@ def downgrade() -> None:
                 batch.drop_column("aggregate_sequence")
                 batch.drop_column("lifecycle_fence")
                 batch.drop_column("lifecycle_state")
+                batch.drop_column("tag_collection_version")
     with op.batch_alter_table("item_tag_recommendations") as batch:
         batch.drop_column("source_sequence")
     if sqlite:

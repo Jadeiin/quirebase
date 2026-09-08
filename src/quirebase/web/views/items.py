@@ -412,10 +412,11 @@ async def sync_metadata_route(
 @router.post("/items/{item_id}/rescan-doi")
 async def rescan_doi_route(
     item_id: str,
+    version: int = Form(),
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await rescan_pdf_doi(db, user, item_id)
+    await rescan_pdf_doi(db, user, item_id, expected_version=version)
     return RedirectResponse(f"/items/{item_id}", status_code=303)
 
 
@@ -441,13 +442,18 @@ async def update_tag_matrix_route(
     tag_ids: list[str] = Form(default=[]),
     suggested_tags: list[str] = Form(default=[]),
     new_tags: str = Form(default=""),
-    expected_version: int = Form(...),
+    expected_collection_version: int = Form(...),
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
     new_names = [*suggested_tags, *(line.strip() for line in new_tags.splitlines() if line.strip())]
     await set_item_tags(
-        db, user, item_id, tag_ids, new_names=new_names, expected_version=expected_version
+        db,
+        user,
+        item_id,
+        tag_ids,
+        new_names=new_names,
+        expected_collection_version=expected_collection_version,
     )
     return RedirectResponse(f"/items/{item_id}/organize", status_code=303)
 

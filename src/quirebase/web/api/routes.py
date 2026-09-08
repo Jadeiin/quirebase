@@ -418,7 +418,12 @@ async def set_item_tag_selection(
     item_id: str, data: TagSetRequest, user: ApiUser, db: Database
 ) -> OkView:
     await set_item_tags(
-        db, user, item_id, data.tag_ids, data.new_names, expected_version=data.expected_version
+        db,
+        user,
+        item_id,
+        data.tag_ids,
+        data.new_names,
+        expected_collection_version=data.expected_collection_version,
     )
     return OkView()
 

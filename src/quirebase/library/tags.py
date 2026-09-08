@@ -61,10 +61,10 @@ async def advance_item_tag_collection(db: AsyncSession, user_id: str, item_id: s
         .values(
             updated_by=user_id,
             updated_at=datetime.now(UTC),
-            version=Item.version + 1,
+            tag_collection_version=Item.tag_collection_version + 1,
             aggregate_sequence=Item.aggregate_sequence + 1,
         )
-        .returning(Item.version)
+        .returning(Item.tag_collection_version)
         .execution_options(synchronize_session=False)
     )
     if version is None:
@@ -234,30 +234,34 @@ async def set_item_tags(
     tag_ids: list[str],
     new_names: list[str] | None = None,
     *,
-    expected_version: int,
+    expected_collection_version: int,
 ) -> None:
     """Replace the Item's Tag collection under a whole-collection version CAS.
 
     The replacement is the one destructive collection write, so callers must
-    carry the Item version they based the selection on.  The conditional update
-    advances the aggregate version and sequence together or rejects the write.
+    carry the Tag collection version they based the selection on. The conditional
+    update advances that version and the projection sequence together or rejects
+    the write without creating a metadata version conflict.
     """
 
     if not await can_edit_item(db, user, item_id):
         raise ResourceUnavailable("item not found or cannot be edited")
     version = await db.scalar(
         update(Item)
-        .where(Item.id == item_id, Item.version == expected_version)
+        .where(
+            Item.id == item_id,
+            Item.tag_collection_version == expected_collection_version,
+        )
         .values(
             updated_by=user.id,
             updated_at=datetime.now(UTC),
-            version=Item.version + 1,
+            tag_collection_version=Item.tag_collection_version + 1,
             aggregate_sequence=Item.aggregate_sequence + 1,
         )
-        .returning(Item.version)
+        .returning(Item.tag_collection_version)
     )
     if version is None:
-        current = await db.scalar(select(Item.version).where(Item.id == item_id))
+        current = await db.scalar(select(Item.tag_collection_version).where(Item.id == item_id))
         raise VersionConflict(current)
     tag_ids = list(tag_ids)
     for raw_name in new_names or []:

@@ -165,7 +165,7 @@ async def test_rescan_pdf_doi(async_db):
     initial_version = item.version
     with patch("quirebase.library.identifiers.search_index") as search_index_factory:
         search_index_factory.return_value.index_item = AsyncMock()
-        found_doi = await rescan_pdf_doi(db, user, item.id)
+        found_doi = await rescan_pdf_doi(db, user, item.id, expected_version=initial_version)
     assert found_doi == "10.1038/s41586-020-2649-2"
 
     loaded_item = await db.get(Item, item.id)
@@ -174,6 +174,47 @@ async def test_rescan_pdf_doi(async_db):
     assert loaded_item.version == initial_version + 1
     assert loaded_item.updated_by == user.id
     search_index_factory.return_value.index_item.assert_awaited_once_with(db, item.id)
+
+
+@pytest.mark.anyio
+async def test_rescan_pdf_doi_rejects_a_stale_metadata_snapshot(async_db):
+    from quirebase.core.errors import VersionConflict
+    from quirebase.library.item_metadata import ItemMetadata, revise_item_metadata
+
+    db = async_db
+    user = User(username="stale_pdf_doi_user", password_hash="hash")
+    db.add(user)
+    await db.flush()
+    item = Item(title="Original metadata", created_by=user.id)
+    db.add(item)
+    await db.flush()
+    db.add(
+        FileRevision(
+            item_id=item.id,
+            object_key="stale-rescan-revision",
+            size=1024,
+            original_name="paper.pdf",
+            full_text="doi: 10.1038/s41586-020-2649-2",
+            created_by=user.id,
+        )
+    )
+    await db.commit()
+
+    await revise_item_metadata(
+        db,
+        user,
+        item.id,
+        expected_version=1,
+        metadata=ItemMetadata(title="Concurrent metadata"),
+    )
+
+    with pytest.raises(VersionConflict):
+        await rescan_pdf_doi(db, user, item.id, expected_version=1)
+
+    await db.refresh(item)
+    assert item.title == "Concurrent metadata"
+    assert item.doi is None
+    assert item.version == 2
 
 
 @pytest.mark.anyio

@@ -199,6 +199,7 @@ class Item(Base):
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     version: Mapped[int] = mapped_column(Integer, default=1)
+    tag_collection_version: Mapped[int] = mapped_column(Integer, server_default="1", default=1)
     lifecycle_state: Mapped[ItemLifecycleState] = mapped_column(
         enum_type(ItemLifecycleState, "item_lifecycle_state"),
         server_default=ItemLifecycleState.active.value,
