@@ -88,6 +88,35 @@ assert not any(name.startswith("quirebase.web") for name in sys.modules)
     assert EXPECTED_TABLES | {"alembic_version"} <= tables
 
 
+def test_search_projection_schema_is_owned_by_migrations(tmp_path: Path):
+    database = tmp_path / "search-schema.db"
+    database_url = f"sqlite:///{database}"
+    environment = os.environ.copy()
+    environment["QUIREBASE_DATABASE_URL"] = database_url
+    script = """
+from alembic import command
+from alembic.config import Config
+
+config = Config()
+config.set_main_option("script_location", "migrations")
+command.upgrade(config, "head")
+"""
+    subprocess.run(
+        [sys.executable, "-c", script],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+
+    engine = create_engine(database_url)
+    with engine.connect() as connection:
+        columns = {row[1] for row in connection.exec_driver_sql("PRAGMA table_info(item_search)")}
+    engine.dispose()
+
+    assert columns == {"item_id", "content", "source_sequence"}
+
+
 def test_project_management_migration_upgrades_existing_schema_without_losing_links(
     tmp_path: Path,
 ):

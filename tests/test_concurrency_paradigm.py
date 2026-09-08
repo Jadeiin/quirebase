@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from uuid import uuid4
 
@@ -200,6 +201,42 @@ async def test_import_batch_idempotent_commit_returns_same_item_ids(async_db):
 
 
 @pytest.mark.anyio
+async def test_concurrent_sqlite_import_commit_replays_the_winning_result(
+    async_session_factory,
+):
+    async with async_session_factory() as setup_db:
+        user = User(username="sqlite-import-race", password_hash="hash")
+        setup_db.add(user)
+        await setup_db.flush()
+        batch = ImportBatch(
+            created_by=user.id,
+            file_format="bibtex",
+            status="ready",
+            records=json.dumps([{"title": "Imported once concurrently"}]),
+            errors="[]",
+        )
+        setup_db.add(batch)
+        await setup_db.commit()
+        user_id, batch_id = user.id, batch.id
+
+    start = asyncio.Event()
+
+    async def commit() -> object:
+        async with async_session_factory() as db:
+            user = await db.get(User, user_id)
+            assert user is not None
+            await start.wait()
+            return await commit_import_batch(db, user, batch_id, "same-operation")
+
+    tasks = [asyncio.create_task(commit()), asyncio.create_task(commit())]
+    start.set()
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    assert not any(isinstance(result, BaseException) for result in results), results
+    assert results[0] == results[1]
+
+
+@pytest.mark.anyio
 async def test_import_commit_rejects_operation_id_over_storage_limit(async_db):
     operation_id = "x" * 256
     db = async_db
@@ -350,6 +387,48 @@ async def test_search_index_drops_out_of_order_lower_sequence_updates(async_db):
     await idx.index_item(db, item.id, source_sequence=6)
     assert await idx.search(db, "Quantum") == []
     assert await idx.search(db, "Newtonian") == [item.id]
+
+
+@pytest.mark.anyio
+async def test_concurrent_sqlite_search_commits_keep_the_highest_sequence(
+    async_session_factory,
+):
+    from sqlalchemy import text, update
+
+    async with async_session_factory() as setup_db:
+        user = User(username="sqlite-search-race", password_hash="hash")
+        setup_db.add(user)
+        await setup_db.flush()
+        item = Item(title="Old projection", created_by=user.id)
+        setup_db.add(item)
+        await setup_db.commit()
+        item_id = item.id
+        await search_index(setup_db).index_item(setup_db, item_id, source_sequence=1)
+        await setup_db.commit()
+
+    async def project() -> None:
+        async with async_session_factory() as db:
+            await search_index(db).index_item(db, item_id, source_sequence=2)
+            await db.commit()
+
+    async with async_session_factory() as mutation_db:
+        await mutation_db.execute(
+            update(Item).where(Item.id == item_id).values(title="Newest projection")
+        )
+        projection = asyncio.create_task(project())
+        await asyncio.sleep(0.05)
+        assert not projection.done()
+        await mutation_db.commit()
+        await projection
+
+    async with async_session_factory() as check_db:
+        stored_sequence = await check_db.scalar(
+            text("SELECT source_sequence FROM item_search WHERE item_id = :item_id"),
+            {"item_id": item_id},
+        )
+        assert stored_sequence == 2
+        assert await search_index(check_db).search(check_db, "Newest") == [item_id]
+        assert await search_index(check_db).search(check_db, "Old") == []
 
 
 @pytest.mark.anyio

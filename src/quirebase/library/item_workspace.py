@@ -159,7 +159,8 @@ async def _record_read(db: AsyncSession, user: User, item_id: str) -> None:
     statement = statement.values(user_id=user.id, item_id=item_id, last_read_at=current)
     statement = statement.on_conflict_do_update(
         index_elements=[ItemRead.user_id, ItemRead.item_id],
-        set_={"last_read_at": current},
+        set_={"last_read_at": statement.excluded.last_read_at},
+        where=ItemRead.last_read_at < statement.excluded.last_read_at,
     )
     await db.execute(statement)
 

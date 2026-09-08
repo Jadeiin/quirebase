@@ -60,6 +60,20 @@ async def postgres_sessions(monkeypatch) -> AsyncIterator[async_sessionmaker[Asy
         await connection.execute(text("DROP TABLE IF EXISTS item_search"))
         await connection.run_sync(Base.metadata.drop_all)
         await connection.run_sync(Base.metadata.create_all)
+        await connection.execute(
+            text(
+                """
+                CREATE TABLE item_search (
+                    item_id varchar(36) PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+                    document tsvector NOT NULL,
+                    source_sequence integer NOT NULL
+                )
+                """
+            )
+        )
+        await connection.execute(
+            text("CREATE INDEX ix_item_search_document ON item_search USING gin(document)")
+        )
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     datasource = await AsyncSQLAlchemyDatasource.create(
         async_database_url(database_url), engine=engine
@@ -67,9 +81,6 @@ async def postgres_sessions(monkeypatch) -> AsyncIterator[async_sessionmaker[Asy
     ads.set_instance(datasource)
     monkeypatch.setattr("quirebase.documents.workflows.AsyncSessionLocal", factory)
     monkeypatch.setattr("quirebase.library.workflows.AsyncSessionLocal", factory)
-    async with factory() as db:
-        await search_index(db).ensure_schema(db)
-        await db.commit()
     try:
         yield factory
     finally:

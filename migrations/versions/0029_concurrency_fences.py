@@ -29,6 +29,17 @@ def _columns(bind, table: str) -> set[str]:
     return {column["name"] for column in inspector.get_columns(table)}
 
 
+def _has_named_index(bind, table: str, name: str) -> bool:
+    if bind.dialect.name == "sqlite":
+        return bool(
+            bind.scalar(
+                sa.text("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = :name"),
+                {"name": name},
+            )
+        )
+    return any(index["name"] == name for index in sa.inspect(bind).get_indexes(table))
+
+
 def upgrade() -> None:
     bind = op.get_bind()
     sqlite = bind.dialect.name == "sqlite"
@@ -149,6 +160,28 @@ def upgrade() -> None:
                 "ix_import_batches_commit_operation_id", "import_batches", ["commit_operation_id"]
             )
 
+    if _has_table(bind, "authors"):
+        if sqlite:
+            author_sql = bind.scalar(
+                sa.text("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'authors'")
+            )
+            has_old_author_unique = "uq_authors_name" in (author_sql or "")
+        else:
+            has_old_author_unique = "uq_authors_name" in {
+                constraint.get("name")
+                for constraint in sa.inspect(bind).get_unique_constraints("authors")
+            }
+        if has_old_author_unique:
+            with op.batch_alter_table("authors") as batch:
+                batch.drop_constraint("uq_authors_name", type_="unique")
+        if not _has_named_index(bind, "authors", "uq_authors_normalized_name"):
+            op.create_index(
+                "uq_authors_normalized_name",
+                "authors",
+                [sa.text("lower(last_name)"), sa.text("coalesce(lower(first_name), '')")],
+                unique=True,
+            )
+
     # Server defaults are useful while backfilling old rows but are not part of
     # the application model. PostgreSQL can remove them without a table rebuild;
     # SQLite keeps them to avoid another expensive rebuild.
@@ -177,6 +210,27 @@ def upgrade() -> None:
         if not sqlite:
             op.alter_column("item_tag_recommendations", "source_sequence", server_default=None)
     if sqlite:
+        # FTS5 virtual tables cannot be altered. Library Search is a derived
+        # projection, so replace its schema and let normal indexing repopulate
+        # it from canonical Item state.
+        op.drop_table("item_search")
+        op.execute(
+            """
+            CREATE VIRTUAL TABLE item_search USING fts5(
+                item_id UNINDEXED,
+                content,
+                source_sequence UNINDEXED,
+                tokenize='unicode61 remove_diacritics 2'
+            )
+            """
+        )
+    else:
+        op.add_column(
+            "item_search",
+            sa.Column("source_sequence", sa.Integer(), nullable=False, server_default="0"),
+        )
+        op.alter_column("item_search", "source_sequence", server_default=None)
+    if sqlite:
         bind.execute(sa.text("PRAGMA foreign_keys=ON"))
 
 
@@ -189,6 +243,7 @@ def downgrade() -> None:
         # be dropped before their columns disappear.
         bind.execute(sa.text("PRAGMA foreign_keys=OFF"))
     for index_name, table in (
+        ("uq_authors_normalized_name", "authors"),
         ("ix_import_batches_commit_operation_id", "import_batches"),
         ("ix_file_revisions_operation_id", "file_revisions"),
         ("ix_attachments_operation_id", "attachments"),
@@ -197,6 +252,8 @@ def downgrade() -> None:
             index["name"] for index in sa.inspect(bind).get_indexes(table)
         }:
             op.drop_index(index_name, table_name=table)
+    with op.batch_alter_table("authors") as batch:
+        batch.create_unique_constraint("uq_authors_name", ["last_name", "first_name"])
     for name, table in (
         ("uq_import_batches_commit_operation_id", "import_batches"),
         ("uq_items_owner_create_operation", "items"),
@@ -227,5 +284,18 @@ def downgrade() -> None:
                 batch.drop_column("tag_collection_version")
     with op.batch_alter_table("item_tag_recommendations") as batch:
         batch.drop_column("source_sequence")
+    if sqlite:
+        op.drop_table("item_search")
+        op.execute(
+            """
+            CREATE VIRTUAL TABLE item_search USING fts5(
+                item_id UNINDEXED,
+                content,
+                tokenize='unicode61 remove_diacritics 2'
+            )
+            """
+        )
+    else:
+        op.drop_column("item_search", "source_sequence")
     if sqlite:
         bind.execute(sa.text("PRAGMA foreign_keys=ON"))

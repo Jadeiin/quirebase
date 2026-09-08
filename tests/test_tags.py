@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from quirebase.core.errors import ResourceUnavailable
 from quirebase.library.tags import (
@@ -38,6 +39,93 @@ async def test_remove_tag_from_item_records_the_business_change(async_db):
     )
     assert event is not None
     assert json.loads(event.detail) == {"tag_id": tag_id}
+
+
+@pytest.mark.anyio
+async def test_replayed_tag_remove_does_not_consume_another_collection_version(
+    async_session_factory,
+):
+    async with async_session_factory() as setup_db:
+        user = User(username="tag-remove-replay", password_hash="hash")
+        setup_db.add(user)
+        await setup_db.flush()
+        item = Item(title="Remove once", created_by=user.id)
+        setup_db.add(item)
+        await setup_db.commit()
+        assignment = await add_tag_to_item(setup_db, user, item.id, "Temporary")
+        user_id, item_id, tag_id = user.id, item.id, assignment.tag_id
+
+    async with async_session_factory() as stale_db:
+        stale_user = await stale_db.get(User, user_id)
+        assert stale_user is not None
+        stale_assignment = await stale_db.get(ItemTag, (item_id, tag_id))
+        assert stale_assignment is not None
+        await stale_db.commit()
+
+        async with async_session_factory() as winner_db:
+            winner_user = await winner_db.get(User, user_id)
+            assert winner_user is not None
+            await remove_tag_from_item(winner_db, winner_user, item_id, tag_id)
+
+        await remove_tag_from_item(stale_db, stale_user, item_id, tag_id)
+        assert stale_assignment.tag_id == tag_id
+
+    async with async_session_factory() as check_db:
+        item = await check_db.get(Item, item_id)
+        removals = await check_db.scalar(
+            select(func.count())
+            .select_from(AuditEvent)
+            .where(AuditEvent.action == "tag.remove", AuditEvent.target_id == item_id)
+        )
+        assert item is not None
+        assert item.tag_collection_version == 3
+        assert removals == 1
+
+
+@pytest.mark.anyio
+async def test_concurrent_tag_add_creates_one_assignment_and_one_collection_version(
+    async_session_factory,
+):
+    async with async_session_factory() as setup_db:
+        user = User(username="tag-add-race", password_hash="hash")
+        setup_db.add(user)
+        await setup_db.flush()
+        item = Item(title="Add once", created_by=user.id)
+        tag = Tag(name="Concurrent", created_by=user.id)
+        setup_db.add_all([item, tag])
+        await setup_db.commit()
+        user_id, item_id, tag_id = user.id, item.id, tag.id
+
+    start = asyncio.Event()
+
+    async def add() -> object:
+        async with async_session_factory() as db:
+            user = await db.get(User, user_id)
+            assert user is not None
+            await start.wait()
+            return await add_tag_to_item(db, user, item_id, "Concurrent")
+
+    tasks = [asyncio.create_task(add()), asyncio.create_task(add())]
+    start.set()
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    assert not any(isinstance(result, BaseException) for result in results), results
+    async with async_session_factory() as check_db:
+        item = await check_db.get(Item, item_id)
+        assignments = await check_db.scalar(
+            select(func.count())
+            .select_from(ItemTag)
+            .where(ItemTag.item_id == item_id, ItemTag.tag_id == tag_id)
+        )
+        additions = await check_db.scalar(
+            select(func.count())
+            .select_from(AuditEvent)
+            .where(AuditEvent.action == "tag.add", AuditEvent.target_id == item_id)
+        )
+        assert item is not None
+        assert item.tag_collection_version == 2
+        assert assignments == 1
+        assert additions == 1
 
 
 @pytest.mark.anyio

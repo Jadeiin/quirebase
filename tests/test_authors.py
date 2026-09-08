@@ -4,6 +4,7 @@ import pytest
 from inquiro.bibliography import Contributor as BibliographyContributor
 from inquiro.bibliography import parse_bibliography_records
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from quirebase.library.authors import (
@@ -15,7 +16,7 @@ from quirebase.library.authors import (
     set_item_authors_from_string,
 )
 from quirebase.library.citations import format_standard_export
-from quirebase.models import Item, ItemAuthor, User
+from quirebase.models import Author, Item, ItemAuthor, User
 
 
 def test_parse_author_name():
@@ -23,6 +24,17 @@ def test_parse_author_name():
     assert parse_author_name("Alice Smith") == ("Smith", "Alice")
     assert parse_author_name("Einstein") == ("Einstein", None)
     assert parse_author_name("  Turing,  Alan M. ") == ("Turing", "Alan M.")
+
+
+@pytest.mark.anyio
+async def test_contributor_identity_is_case_insensitive_and_null_safe(async_db):
+    async_db.add_all([
+        Author(last_name="WHO", first_name=None),
+        Author(last_name="who", first_name=None),
+    ])
+
+    with pytest.raises(IntegrityError):
+        await async_db.flush()
 
 
 @pytest.mark.anyio

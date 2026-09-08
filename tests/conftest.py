@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 from dbos import AsyncSQLAlchemyDatasource
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from quirebase.core.config import get_settings
@@ -118,6 +119,18 @@ async def async_session_factory(tmp_path, monkeypatch):
     engine = make_async_engine(f"sqlite:///{tmp_path / 'async-test.db'}")
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
+        await connection.execute(
+            text(
+                """
+                CREATE VIRTUAL TABLE item_search USING fts5(
+                    item_id UNINDEXED,
+                    content,
+                    source_sequence UNINDEXED,
+                    tokenize='unicode61 remove_diacritics 2'
+                )
+                """
+            )
+        )
     ds = await AsyncSQLAlchemyDatasource.create(
         f"sqlite+aiosqlite:///{tmp_path / 'async-test.db'}",
         engine=engine,

@@ -34,12 +34,16 @@ Every Item Tag mutation advances `Item.tag_collection_version`, including increm
 delete and merge paths. Therefore a stale whole-collection replacement cannot erase a concurrent
 assignment, while a Tag edit cannot create a false conflict for an independent metadata form. Tag
 and Project changes do not advance `recommendation_sequence`, because they are not recommendation
-inputs.
+inputs. Replayed incremental add/remove commands that find the requested assignment state already
+present do not advance either the collection token or projection sequence and do not emit a second
+Audit Event.
 
 Library Search projections persist `source_sequence` and accept an update only when its sequence is
 at least as new as the stored projection. PostgreSQL enforces this in one conditional upsert;
-SQLite relies on its serialized writer transaction around the guarded FTS replacement. Library
-Search remains derived state: it does not define whether the business write itself is valid.
+SQLite acquires its writer lock before reading canonical Item state or the stored sequence, then
+performs the guarded FTS replacement. The dialect-native Search schema belongs exclusively to
+Alembic migrations; request and workflow transactions never probe or mutate schema. Library Search
+remains derived state: it does not define whether the business write itself is valid.
 
 ### Serialize aggregate transitions in canonical order
 
@@ -79,9 +83,11 @@ ready -> discarded
 ```
 
 The `ready -> committing` transition, Item and File Revision creation, Audit Events, recorded result
-and `committed` transition occur in one transaction. A retry with the same operation ID returns the
-recorded Item IDs. A different operation ID conflicts, and a committed batch remains as the
-idempotency record while relinquishing staged-object reservations.
+and `committed` transition occur in one transaction. The Import Batch database gate is acquired
+before its state is read, including through a no-op write on SQLite where row-level `FOR UPDATE` is
+unavailable. A retry with the same operation ID returns the recorded Item IDs. A different operation
+ID conflicts, and a committed batch remains as the idempotency record while relinquishing staged-object
+reservations.
 
 ### Fence durable workflow commits and re-authorize them
 
@@ -107,9 +113,10 @@ outside that transaction; workflow finalization uses a new short transaction. He
 unless committing is their declared operation boundary.
 
 Independent uniqueness and counter operations use database atomicity: dialect-appropriate upserts
-record Login Throttle failures and Item reads, while Tag and Contributor get-or-create paths recover
-from uniqueness races inside savepoints. SQLite and PostgreSQL may use different locking syntax but
-must expose the same business result.
+record Login Throttle failures and monotonic Item read timestamps. Contributor identity uses one
+case-insensitive, null-safe database uniqueness rule, while Tag and Contributor get-or-create paths
+recover from uniqueness races inside savepoints. SQLite and PostgreSQL may use different locking
+syntax but must expose the same business result.
 
 ## Consequences
 

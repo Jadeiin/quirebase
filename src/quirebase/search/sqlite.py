@@ -14,42 +14,6 @@ if TYPE_CHECKING:
 
 
 class SQLiteSearchIndex:
-    async def ensure_schema(self, db: AsyncSession) -> None:
-        await db.execute(
-            text(
-                """
-                CREATE VIRTUAL TABLE IF NOT EXISTS item_search USING fts5(
-                    item_id UNINDEXED,
-                    content,
-                    source_sequence UNINDEXED,
-                    tokenize='unicode61 remove_diacritics 2'
-                )
-                """
-            )
-        )
-        # FTS virtual tables cannot be altered with ADD COLUMN. A database
-        # created before source sequencing is rebuilt once on first use.
-        columns = {
-            row[1] for row in (await db.execute(text("PRAGMA table_info(item_search)"))).all()
-        }
-        if "source_sequence" not in columns:
-            await db.execute(text("ALTER TABLE item_search RENAME TO item_search_legacy"))
-            await db.execute(
-                text("""
-                CREATE VIRTUAL TABLE item_search USING fts5(
-                    item_id UNINDEXED, content, source_sequence UNINDEXED,
-                    tokenize='unicode61 remove_diacritics 2'
-                )
-            """)
-            )
-            await db.execute(
-                text(
-                    "INSERT INTO item_search(item_id, content, source_sequence) "
-                    "SELECT item_id, content, 0 FROM item_search_legacy"
-                )
-            )
-            await db.execute(text("DROP TABLE item_search_legacy"))
-
     async def index_item(
         self, db: AsyncSession, item_id: str, source_sequence: int | None = None
     ) -> None:
@@ -57,7 +21,15 @@ class SQLiteSearchIndex:
         # serialize at the database level: this sequence runs inside the
         # caller's write-locked transaction. FTS5 tables cannot carry the
         # ON CONFLICT guard the PostgreSQL adapter uses (item_id is UNINDEXED).
-        await self.ensure_schema(db)
+        # FTS5 cannot express the PostgreSQL conditional upsert. Acquire the
+        # SQLite writer lock before reading either canonical state or the
+        # stored sequence, then perform the guarded replacement atomically.
+        await db.execute(
+            text(
+                "UPDATE item_search SET source_sequence = source_sequence WHERE item_id = :item_id"
+            ),
+            {"item_id": item_id},
+        )
         item = await db.get(Item, item_id, populate_existing=True)
         if item is None:
             await self.remove_item(db, item_id)
@@ -84,13 +56,11 @@ class SQLiteSearchIndex:
         )
 
     async def remove_item(self, db: AsyncSession, item_id: str) -> None:
-        await self.ensure_schema(db)
         await db.execute(
             text("DELETE FROM item_search WHERE item_id = :item_id"), {"item_id": item_id}
         )
 
     async def search(self, db: AsyncSession, query: str, limit: int = 200) -> list[str]:
-        await self.ensure_schema(db)
         tokens = re.findall(r"[^\W_]+", query, flags=re.UNICODE)
         if not tokens:
             return []
@@ -113,7 +83,6 @@ class SQLiteSearchIndex:
 
     async def matching_item_ids(self, db: AsyncSession, query: str) -> SelectBase:
         """Return an unbounded FTS match as a database-side ID query."""
-        await self.ensure_schema(db)
         tokens = re.findall(r"[^\W_]+", query, flags=re.UNICODE)
         if not tokens:
             return select(Item.id).where(false())

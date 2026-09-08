@@ -545,8 +545,27 @@ async def commit_import_batch(
     tombstone stops reserving object keys — only non-terminal batches may
     reserve staged objects.
     """
-    batch = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update())
-    if batch is None or batch.created_by != user.id:
+    predicates = [ImportBatch.id == batch_id, ImportBatch.created_by == user.id]
+    if db.get_bind().dialect.name == "sqlite":
+        gated_id = await db.scalar(
+            update(ImportBatch)
+            .where(*predicates)
+            .values(status=ImportBatch.status)
+            .returning(ImportBatch.id)
+            .execution_options(synchronize_session=False)
+        )
+        batch = (
+            await db.scalar(
+                select(ImportBatch)
+                .where(ImportBatch.id == gated_id)
+                .execution_options(populate_existing=True)
+            )
+            if gated_id
+            else None
+        )
+    else:
+        batch = await db.scalar(select(ImportBatch).where(*predicates).with_for_update())
+    if batch is None:
         raise ResourceUnavailable("import batch not found")
     requested_operation = normalize_operation_id(commit_operation_id or f"import-commit:{batch.id}")
     assert requested_operation is not None

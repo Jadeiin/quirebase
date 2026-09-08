@@ -19,7 +19,10 @@ from quirebase.core.errors import (
     ValidationFailure,
     VersionConflict,
 )
-from quirebase.library.item_lifecycle import bump_item_aggregate_sequence
+from quirebase.library.item_lifecycle import (
+    bump_item_aggregate_sequence,
+    require_item_lifecycle_gate,
+)
 from quirebase.library.tag_recommendations import decoded_candidates
 from quirebase.library.workflows import (
     item_tag_recommendation_status,
@@ -91,8 +94,9 @@ async def get_or_create_tag(db: AsyncSession, user: User, name: str) -> Tag:
 async def add_tag_to_item(db: AsyncSession, user: User, item_id: str, name: str) -> ItemTag:
     if not await can_edit_item(db, user, item_id):
         raise ResourceUnavailable("item not found or cannot be edited")
+    await require_item_lifecycle_gate(db, item_id)
     tag = await get_or_create_tag(db, user, name)
-    assignment = await db.get(ItemTag, (item_id, tag.id))
+    assignment = await db.get(ItemTag, (item_id, tag.id), populate_existing=True)
     if assignment is None:
         await advance_item_tag_collection(db, user.id, item_id)
         assignment = ItemTag(item_id=item_id, tag_id=tag.id)
@@ -107,7 +111,8 @@ async def add_tag_to_item(db: AsyncSession, user: User, item_id: str, name: str)
 async def remove_tag_from_item(db: AsyncSession, user: User, item_id: str, tag_id: str) -> None:
     if not await can_edit_item(db, user, item_id):
         raise ResourceUnavailable("item not found or cannot be edited")
-    assignment = await db.get(ItemTag, (item_id, tag_id))
+    await require_item_lifecycle_gate(db, item_id)
+    assignment = await db.get(ItemTag, (item_id, tag_id), populate_existing=True)
     if assignment:
         await advance_item_tag_collection(db, user.id, item_id)
         await db.delete(assignment)

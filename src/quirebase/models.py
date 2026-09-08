@@ -10,10 +10,12 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
+    func,
 )
 from sqlalchemy import (
     Enum as SqlEnum,
@@ -229,11 +231,18 @@ class Item(Base):
 
 class Author(Base):
     __tablename__ = "authors"
-    __table_args__ = (UniqueConstraint("last_name", "first_name", name="uq_authors_name"),)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     first_name: Mapped[str | None] = mapped_column(String(120))
     last_name: Mapped[str] = mapped_column(String(120), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    __table_args__ = (
+        Index(
+            "uq_authors_normalized_name",
+            func.lower(last_name),
+            func.coalesce(func.lower(first_name), ""),
+            unique=True,
+        ),
+    )
 
 
 class ItemAuthor(Base):

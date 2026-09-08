@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from inquiro.bibliography import Contributor as BibliographyContributor
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
@@ -57,8 +57,8 @@ async def find_or_create_author(
     first = " ".join(first_name.split()) if first_name else None
 
     stmt = select(Author).where(
-        Author.last_name.ilike(last),
-        Author.first_name.ilike(first) if first else Author.first_name.is_(None),
+        func.lower(Author.last_name) == last.lower(),
+        func.coalesce(func.lower(Author.first_name), "") == (first.lower() if first else ""),
     )
     author = await db.scalar(stmt)
     if author is None:

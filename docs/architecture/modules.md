@@ -64,7 +64,7 @@ Each mechanism remains owned by the Module whose invariant it protects:
 | Project lifecycle, membership and assignment | Projects | Project write gate |
 | Item deletion versus durable child creation | Library | Item lifecycle gate and fence |
 | Final workflow authorization | Access with the calling business Module | Canonically ordered Project/Item locks followed by permission revalidation |
-| Library Search ordering | Search adapter, sourced by business Modules | Item aggregate sequence and conditional projection update |
+| Library Search ordering | Search adapter, sourced by business Modules | Migration-owned dialect schema, Item aggregate sequence and conditional projection update |
 | Item Tag Recommendation ordering | Library | Recommendation sequence plus generation token |
 | Retried creates and one-shot confirmation | Owning business Module | Stable operation ID, uniqueness constraint and recorded result/state machine |
 
