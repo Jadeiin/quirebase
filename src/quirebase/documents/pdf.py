@@ -13,6 +13,8 @@ from quirebase.documents.schemas import (
     MAX_INK_PATHS,
     MAX_INK_POINTS,
     MAX_NATIVE_ANNOTATIONS,
+    MAX_NATIVE_GEOMETRY_POINTS,
+    MAX_NATIVE_TEXT_CHARS,
     MAX_SEGMENT_RECTS,
 )
 
@@ -123,6 +125,13 @@ def _annotation_style(annotation: pymupdf.Annot) -> dict:
     colors = annotation.colors or {}
     border = annotation.border or {}
     border_width = border.get("width")
+    if border_width is not None:
+        try:
+            border_width = float(border_width)
+        except (TypeError, ValueError) as error:
+            raise ValueError("border width is not representable") from error
+        if not math.isfinite(border_width) or not 0 <= border_width <= 20:
+            raise ValueError("border width is not representable")
     dash_pattern = border.get("dashes") or ()
     if len(dash_pattern) > 10 or any(
         not isinstance(value, (int, float))
@@ -148,7 +157,7 @@ def _annotation_style(annotation: pymupdf.Annot) -> dict:
         ),
         "stroke_width": max(
             0.0,
-            min(20.0, float(1 if border_width is None else border_width)),
+            float(1 if border_width is None else border_width),
         ),
         "dash_pattern": [float(value) for value in dash_pattern],
     }
@@ -175,6 +184,7 @@ def _free_text_format(annotation: pymupdf.Annot) -> dict[str, str | float]:
         "Cour": "Courier",
     }
     text = annotation.get_text("dict")
+    formats: set[tuple[str, float]] = set()
     for block in text.get("blocks", ()):
         for line in block.get("lines", ()):
             for span in line.get("spans", ()):
@@ -184,13 +194,9 @@ def _free_text_format(annotation: pymupdf.Annot) -> dict[str, str | float]:
                 native_size = span.get("size")
                 if isinstance(native_size, (int, float)) and 1 <= native_size <= 144:
                     font_size = float(native_size)
-                break
-            else:
-                continue
-            break
-        else:
-            continue
-        break
+                formats.add((font_family, font_size))
+    if len(formats) > 1:
+        raise ValueError("mixed FreeText formatting is unsupported")
 
     alignment = "left"
     value_type, value = annotation.parent.parent.xref_get_key(annotation.xref, "Q")
@@ -392,6 +398,8 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
     diagnostics: list[dict] = []
     with pymupdf.open(path) as document:
         native_annotation_count = 0
+        native_geometry_points = 0
+        native_text_chars = 0
         for page_index, page in enumerate(document):
             for annotation in page.annots() or ():
                 native_annotation_count += 1
@@ -450,6 +458,40 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                     })
                     continue
                 try:
+                    raw_vertices = annotation.vertices or ()
+                    if subtype == "Ink":
+                        geometry_cost = (
+                            len(raw_vertices)
+                            if raw_vertices and _is_point_like(raw_vertices[0])
+                            else sum(len(path) for path in raw_vertices)
+                        )
+                    else:
+                        geometry_cost = len(raw_vertices)
+                    native_geometry_points += geometry_cost
+                    if native_geometry_points > MAX_NATIVE_GEOMETRY_POINTS:
+                        diagnostics.append({
+                            "page": page_index + 1,
+                            "subtype": subtype,
+                            "result": "skipped",
+                            "reason": (
+                                "PDF native annotation geometry exceeds "
+                                f"{MAX_NATIVE_GEOMETRY_POINTS} points"
+                            ),
+                        })
+                        return parsed, diagnostics
+                    content = annotation.info.get("content", "") or ""
+                    native_text_chars += len(content)
+                    if native_text_chars > MAX_NATIVE_TEXT_CHARS:
+                        diagnostics.append({
+                            "page": page_index + 1,
+                            "subtype": subtype,
+                            "result": "skipped",
+                            "reason": (
+                                "PDF native annotation text exceeds "
+                                f"{MAX_NATIVE_TEXT_CHARS} characters"
+                            ),
+                        })
+                        return parsed, diagnostics
                     if _has_unsupported_border_effects(annotation):
                         raise ValueError("border style or cloudy effects are unsupported")
                     if subtype == "FreeText" and _has_nonzero_freetext_rotation(
@@ -492,7 +534,7 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                         })
                     elif kind in {"line", "arrow"}:
                         rect = _canonical_rect(page, annotation.rect)
-                        line = tuple(annotation.vertices or ())
+                        line = tuple(raw_vertices)
                         if len(line) < 2:
                             line = (annotation.rect.tl, annotation.rect.br)
                         start, end = line[0], line[1]
@@ -547,12 +589,15 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
 def strip_native_annotations(source: Path, output: Path) -> int:
     """Write a derived PDF with page markup removed, preserving links/widgets."""
     with pymupdf.open(source) as document:
-        if any(
-            widget.field_type == _SIGNATURE_WIDGET_TYPE
-            for page in document
-            for widget in page.widgets() or ()
-        ):
-            raise ValueError("signed PDFs cannot be stripped without invalidating signatures")
+        for page in document:
+            for widget in page.widgets() or ():
+                if widget.field_type != _SIGNATURE_WIDGET_TYPE:
+                    continue
+                value_type, value = document.xref_get_key(widget.xref, "V")
+                if value_type in {"dict", "xref"} and value.strip() not in {"", "null"}:
+                    raise ValueError(
+                        "signed PDFs cannot be stripped without invalidating signatures"
+                    )
         removed = 0
         for page in document:
             annotations = list(page.annots() or ())
