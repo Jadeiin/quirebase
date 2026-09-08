@@ -68,7 +68,9 @@ Each mechanism remains owned by the Module whose invariant it protects:
 | Item Tag Recommendation ordering | Library | Recommendation sequence plus generation token |
 | Retried creates and one-shot confirmation | Owning business Module | Stable operation ID, uniqueness constraint and recorded result/state machine |
 
-Cross-resource locking follows `Project -> Item -> File Revision / Annotation -> association rows`.
+Cross-resource locking follows
+`User -> Project -> Tag -> Item -> File Revision / Annotation -> association rows`; a command skips
+levels it does not need, and multiple aggregates at one level are locked by stable ID order.
 Objects at the same level are acquired in stable ID order. Access can coordinate authorization
 locks but does not own the Project write gate or Item lifecycle transition. Business commands keep
 authorization, the mutation, Audit Event and projection intent in one short transaction; external

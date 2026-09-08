@@ -15,21 +15,28 @@ from quirebase.accounts.throttling import record_login_failure
 from quirebase.core.database import Base, async_database_url, make_async_engine
 from quirebase.core.errors import VersionConflict
 from quirebase.core.workflows import ads
+from quirebase.documents.annotations import create_annotation_reply
+from quirebase.documents.schemas import AnnotationReplyCreate
 from quirebase.documents.workflows import commit_uploaded_attachment, commit_uploaded_revision
 from quirebase.library.imports import commit_import_batch
 from quirebase.library.item_lifecycle import begin_item_deletion
 from quirebase.library.item_metadata import ItemMetadata, revise_item_metadata
-from quirebase.library.tags import add_tag_to_item, set_item_tags
+from quirebase.library.tags import add_tag_to_item, rename_tag, set_item_tags
 from quirebase.library.workflows import (
     commit_item_tag_recommendation_step,
     request_item_tag_recommendation,
 )
 from quirebase.models import (
+    AnnotationKind,
+    AnnotationScope,
+    FileRevision,
+    FileRevisionProcessingState,
     ImportBatch,
     Item,
     ItemTag,
     ItemTagRecommendation,
     LoginThrottle,
+    PdfAnnotation,
     Project,
     ProjectItem,
     ProjectMember,
@@ -217,6 +224,123 @@ async def test_permission_revoke_wins_against_workflow_final_commit(postgres_ses
 
     assert isinstance(result[0], ValueError)
     assert "no longer writable" in str(result[0])
+
+
+async def test_upload_finalizer_and_annotation_reply_share_user_item_lock_order(
+    postgres_sessions,
+):
+    async with postgres_sessions() as db:
+        user = User(username=f"lock-order-{uuid4()}", password_hash="hash")
+        db.add(user)
+        await db.flush()
+        item = Item(title="Lock order", created_by=user.id)
+        db.add(item)
+        await db.flush()
+        revision = FileRevision(
+            item_id=item.id,
+            object_key="race/annotation.pdf",
+            size=20,
+            original_name="annotation.pdf",
+            processing_state=FileRevisionProcessingState.ready,
+            created_by=user.id,
+        )
+        db.add(revision)
+        await db.flush()
+        annotation = PdfAnnotation(
+            file_revision_id=revision.id,
+            page_index=0,
+            author_id=user.id,
+            kind=AnnotationKind.note,
+            scope=AnnotationScope.private,
+            body="root",
+            payload={"type": "note"},
+        )
+        db.add(annotation)
+        await db.commit()
+        user_id, item_id, annotation_id = user.id, item.id, annotation.id
+
+    async with postgres_sessions() as blocker:
+        await blocker.scalar(select(Item).where(Item.id == item_id).with_for_update())
+
+        upload = asyncio.create_task(
+            commit_uploaded_attachment(
+                item_id,
+                user_id,
+                str(uuid4()),
+                "concurrent.bin",
+                "application/octet-stream",
+                None,
+                {"object_key": "race/concurrent.bin", "size": 20},
+                1,
+            )
+        )
+        await asyncio.sleep(0.05)
+        assert not upload.done()
+
+        async def reply() -> object:
+            async with postgres_sessions() as db:
+                user = await db.get(User, user_id)
+                assert user is not None
+                return await create_annotation_reply(
+                    db,
+                    user,
+                    item_id,
+                    annotation_id,
+                    AnnotationReplyCreate(id=uuid4(), body="concurrent reply"),
+                )
+
+        annotation_reply = asyncio.create_task(reply())
+        await asyncio.sleep(0.05)
+        assert not annotation_reply.done()
+        await blocker.commit()
+        results = await asyncio.gather(upload, annotation_reply, return_exceptions=True)
+
+    assert not any(isinstance(result, BaseException) for result in results), results
+
+
+async def test_tag_rename_serializes_with_first_assignment(postgres_sessions):
+    async with postgres_sessions() as db:
+        user = User(username=f"tag-rename-{uuid4()}", password_hash="hash")
+        db.add(user)
+        await db.flush()
+        item = Item(title="Tag rename race", created_by=user.id)
+        tag = Tag(name="Before rename", created_by=user.id)
+        db.add_all([item, tag])
+        await db.flush()
+        await search_index(db).index_item(db, item.id)
+        await db.commit()
+        user_id, item_id, tag_id = user.id, item.id, tag.id
+
+    async with postgres_sessions() as blocker:
+        await blocker.execute(
+            text("UPDATE item_search SET document = document WHERE item_id = :item_id"),
+            {"item_id": item_id},
+        )
+
+        async def assign() -> object:
+            async with postgres_sessions() as db:
+                user = await db.get(User, user_id)
+                assert user is not None
+                return await add_tag_to_item(db, user, item_id, "Before rename")
+
+        async def rename() -> object:
+            async with postgres_sessions() as db:
+                user = await db.get(User, user_id)
+                assert user is not None
+                return await rename_tag(db, user, tag_id, "After rename")
+
+        assignment = asyncio.create_task(assign())
+        await asyncio.sleep(0.05)
+        assert not assignment.done()
+        renamed = asyncio.create_task(rename())
+        await asyncio.sleep(0.05)
+        await blocker.commit()
+        results = await asyncio.gather(assignment, renamed, return_exceptions=True)
+
+    assert not any(isinstance(result, BaseException) for result in results), results
+    async with postgres_sessions() as db:
+        assert await search_index(db).search(db, "After rename") == [item_id]
+        assert await search_index(db).search(db, "Before rename") == []
 
 
 async def test_metadata_cas_races_pdf_doi_rescan(postgres_sessions):

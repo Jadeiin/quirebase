@@ -54,13 +54,17 @@ authorization decision, but it does not own Project or Item business transitions
 Transactions that touch more than one aggregate acquire gates in this order:
 
 ```text
-Project -> Item -> File Revision / Annotation -> association rows
+User -> Project -> Tag -> Item -> File Revision / Annotation -> association rows
 ```
 
 Multiple objects at one level are locked by stable ID order. PostgreSQL uses row locks. SQLite uses
 a conditional no-op update where a write gate is required, acquiring its database writer lock while
 preserving the same business outcome. The implementation does not use process locks or queue-wide
 serialization as a substitute for these invariants.
+
+Only commands whose invariant includes active-account authorization acquire a User gate. Tag
+taxonomy changes and Item Tag assignment changes share the Library-owned Tag gate, so a rename
+cannot race an assignment's Search refresh and publish the old Tag name after the rename commits.
 
 ### Give retried creates a stable operation identity
 

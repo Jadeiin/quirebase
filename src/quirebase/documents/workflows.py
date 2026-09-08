@@ -191,27 +191,30 @@ async def inspect_uploaded_pdf(
     }
 
 
-async def _require_owner_can_still_edit(db: Any, item: Item, owner_id: str) -> None:
-    """Re-authorize the captured owner inside the final upload commit transaction.
-
-    Permissions are granted when the upload starts, but the workflow can finish
-    long after account, membership or lifecycle changes.  The owner row is
-    locked so a concurrent deactivation either lands before this check
-    (rejected) or waits for the upload transaction to commit, and the
-    ProjectMember rows that could grant project-level access are row-locked
-    before the check, so a concurrent membership revocation serializes with
-    this commit instead of racing the authorization read. The relevant Project
-    gates and Item lifecycle row are already locked in canonical Project ->
-    Item order, so authorization and the business write commit together.
-    """
+async def _lock_active_upload_owner(db: Any, owner_id: str) -> User:
+    """Lock and validate the captured User before any Item-related gate."""
 
     owner = await db.get(User, owner_id, with_for_update=True)
     if owner is None or not owner.active:
         raise ValueError("Item is no longer writable by the upload owner")
+    return owner
+
+
+async def _require_owner_can_still_edit(db: Any, item: Item, owner: User) -> None:
+    """Re-authorize the captured owner inside the final upload commit transaction.
+
+    Permissions are granted when the upload starts, but the workflow can finish
+    long after membership or lifecycle changes. The captured User and relevant
+    Project and Item gates are already locked in canonical User -> Project ->
+    Item order. ProjectMember rows that could grant project-level access are
+    then row-locked so revocation serializes with this commit instead of racing
+    the authorization read.
+    """
+
     await db.scalars(
         select(ProjectMember)
         .where(
-            ProjectMember.user_id == owner_id,
+            ProjectMember.user_id == owner.id,
             ProjectMember.project_id.in_(
                 select(ProjectItem.project_id).where(ProjectItem.item_id == item.id)
             ),
@@ -232,10 +235,11 @@ async def commit_uploaded_revision(
     lifecycle_fence: int,
 ) -> RevisionWorkflowResult:
     db = ads.sql_session()
+    owner = await _lock_active_upload_owner(db, owner_id)
     item = await lock_item_edit_scope(db, item_id, lifecycle_fence)
     if item is None:
         raise ValueError("Item lifecycle changed before upload commit")
-    await _require_owner_can_still_edit(db, item, owner_id)
+    await _require_owner_can_still_edit(db, item, owner)
     existing = await db.get(FileRevision, inspected["revision_id"])
     if existing is not None:
         if existing.processing_state == FileRevisionProcessingState.pending:
@@ -431,10 +435,11 @@ async def commit_uploaded_attachment(
     lifecycle_fence: int,
 ) -> AttachmentWorkflowResult:
     db = ads.sql_session()
+    owner = await _lock_active_upload_owner(db, owner_id)
     item = await lock_item_edit_scope(db, item_id, lifecycle_fence)
     if item is None:
         raise ValueError("Item lifecycle changed before attachment commit")
-    await _require_owner_can_still_edit(db, item, owner_id)
+    await _require_owner_can_still_edit(db, item, owner)
     existing = await db.get(Attachment, attachment_id)
     if existing is not None:
         return {"attachment_id": existing.id, "item_id": existing.item_id}
