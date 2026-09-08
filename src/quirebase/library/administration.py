@@ -4,9 +4,11 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import delete, func, or_, select
 
+from quirebase.access.items import lock_item_project_gates
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
 from quirebase.documents import enqueue_object_cleanup
+from quirebase.library.item_lifecycle import begin_item_deletion
 from quirebase.models import Attachment, FileRevision, Item, ObjectIntegrityScan, User
 from quirebase.search import search_index
 
@@ -114,6 +116,15 @@ async def _delete_item(
         raise ResourceNotFound("item not found")
     if not require_admin and item.created_by != actor.id and actor.role != "administrator":
         raise ResourceUnavailable("item owner required")
+
+    # Acquire associated Project gates before the Item aggregate gate. The lifecycle
+    # transition advances the fence so any in-flight workflow that captured the
+    # previous generation fails its final conditional write.
+    await lock_item_project_gates(db, (item_id,))
+    await begin_item_deletion(db, item_id, commit=False)
+    item = await db.get(Item, item_id, populate_existing=True)
+    if item is None:
+        raise ResourceNotFound("item not found")
 
     title = item.title
     # Collect keys to clean up from storage

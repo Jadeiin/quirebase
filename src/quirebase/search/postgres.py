@@ -19,7 +19,8 @@ class PostgreSQLSearchIndex:
                 """
                 CREATE TABLE IF NOT EXISTS item_search (
                     item_id varchar(36) PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
-                    document tsvector NOT NULL
+                    document tsvector NOT NULL,
+                    source_sequence integer NOT NULL DEFAULT 0
                 )
                 """
             )
@@ -30,21 +31,59 @@ class PostgreSQLSearchIndex:
                 "ON item_search USING gin(document)"
             )
         )
-
-    async def index_item(self, db: AsyncSession, item_id: str) -> None:
-        await self.ensure_schema(db)
-        item = await db.get(Item, item_id)
-        await self.remove_item(db, item_id)
-        if item is not None:
+        columns = {
+            row[0]
+            for row in (
+                await db.execute(
+                    text(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_name = 'item_search' AND table_schema = current_schema()"
+                    )
+                )
+            ).all()
+        }
+        if "source_sequence" not in columns:
+            # The probe avoids re-locking the table on every call; IF NOT
+            # EXISTS closes the race between two first requests that both
+            # observe the missing column.
             await db.execute(
                 text(
-                    """
-                    INSERT INTO item_search(item_id, document)
-                    VALUES (:item_id, to_tsvector('simple', :content))
-                    """
-                ),
-                {"item_id": item.id, "content": await search_text_for_item(db, item)},
+                    "ALTER TABLE item_search ADD COLUMN IF NOT EXISTS "
+                    "source_sequence integer NOT NULL DEFAULT 0"
+                )
             )
+
+    async def index_item(
+        self, db: AsyncSession, item_id: str, source_sequence: int | None = None
+    ) -> None:
+        await self.ensure_schema(db)
+        item = await db.get(Item, item_id, populate_existing=True)
+        if item is None:
+            await self.remove_item(db, item_id)
+            return
+        if source_sequence is None:
+            source_sequence = item.aggregate_sequence
+        # One conditional upsert: a concurrent transaction can no longer read
+        # the old sequence and then delete or overwrite a newer projection.
+        # Stale results (lower sequence) lose the comparison inside the same
+        # statement and leave the stored projection untouched.
+        await db.execute(
+            text(
+                """
+                INSERT INTO item_search(item_id, document, source_sequence)
+                VALUES (:item_id, to_tsvector('simple', :content), :source_sequence)
+                ON CONFLICT (item_id) DO UPDATE
+                SET document = EXCLUDED.document,
+                    source_sequence = EXCLUDED.source_sequence
+                WHERE item_search.source_sequence <= EXCLUDED.source_sequence
+                """
+            ),
+            {
+                "item_id": item.id,
+                "content": await search_text_for_item(db, item),
+                "source_sequence": source_sequence or 0,
+            },
+        )
 
     async def remove_item(self, db: AsyncSession, item_id: str) -> None:
         await self.ensure_schema(db)

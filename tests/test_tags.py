@@ -93,7 +93,9 @@ async def test_set_item_tags(async_db):
     db.add(item)
     await db.flush()
 
-    await set_item_tags(db, user, item.id, [], ["AI", "Deep Learning", "Vision"])
+    await set_item_tags(
+        db, user, item.id, [], ["AI", "Deep Learning", "Vision"], expected_version=item.version
+    )
     current_tags = list((await db.scalars(select(Tag.name))).all())
     assert "AI" in current_tags
     assert "Deep Learning" in current_tags
@@ -102,7 +104,10 @@ async def test_set_item_tags(async_db):
     tag_ai = await db.scalar(select(Tag).where(Tag.name == "AI"))
     tag_vision = await db.scalar(select(Tag).where(Tag.name == "Vision"))
     assert tag_ai is not None and tag_vision is not None
-    await set_item_tags(db, user, item.id, [tag_ai.id, tag_vision.id])
+    await db.refresh(item)
+    await set_item_tags(
+        db, user, item.id, [tag_ai.id, tag_vision.id], expected_version=item.version
+    )
     await db.commit()
 
     assigned_tag_ids = list(
@@ -123,7 +128,9 @@ async def test_set_tags_normalizes_names_and_skips_empty_values(async_db):
     db.add(item)
     await db.flush()
 
-    await set_item_tags(db, user, item.id, [], ["  Machine   Learning ", "\t"])
+    await set_item_tags(
+        db, user, item.id, [], ["  Machine   Learning ", "\t"], expected_version=item.version
+    )
     assigned_names = list(
         (
             await db.scalars(

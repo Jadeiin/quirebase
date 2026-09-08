@@ -8,6 +8,8 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import selectinload
 
 from quirebase.access.items import can_delete_item, can_edit_item, require_readable_item
@@ -147,11 +149,19 @@ type ItemWorkspace = (
 
 
 async def _record_read(db: AsyncSession, user: User, item_id: str) -> None:
-    read = await db.get(ItemRead, (user.id, item_id))
-    if read is None:
-        db.add(ItemRead(user_id=user.id, item_id=item_id))
-    else:
-        read.last_read_at = datetime.now(UTC)
+    """Record the latest read atomically across concurrent workspace opens."""
+    current = datetime.now(UTC)
+    statement = (
+        pg_insert(ItemRead)
+        if db.get_bind().dialect.name == "postgresql"
+        else sqlite_insert(ItemRead)
+    )
+    statement = statement.values(user_id=user.id, item_id=item_id, last_read_at=current)
+    statement = statement.on_conflict_do_update(
+        index_elements=[ItemRead.user_id, ItemRead.item_id],
+        set_={"last_read_at": current},
+    )
+    await db.execute(statement)
 
 
 async def _open_summary(db: AsyncSession, user: User, item: Item) -> SummaryWorkspace:

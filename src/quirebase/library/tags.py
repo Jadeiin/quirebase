@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
-from sqlalchemy import and_, delete, func, select
+from sqlalchemy import and_, delete, func, select, update
+from sqlalchemy.exc import IntegrityError
 
 from quirebase.access.items import (
     can_edit_item,
@@ -15,13 +17,15 @@ from quirebase.core.errors import (
     DomainError,
     ResourceUnavailable,
     ValidationFailure,
+    VersionConflict,
 )
+from quirebase.library.item_lifecycle import bump_item_aggregate_sequence
 from quirebase.library.tag_recommendations import decoded_candidates
 from quirebase.library.workflows import (
     item_tag_recommendation_status,
     request_item_tag_recommendation,
 )
-from quirebase.models import Item, ItemTag, ItemTagRecommendation, Tag, User
+from quirebase.models import Item, ItemLifecycleState, ItemTag, ItemTagRecommendation, Tag, User
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
@@ -48,13 +52,39 @@ def normalize_tag_name(name: str) -> str:
     return normalized
 
 
+async def advance_item_tag_collection(db: AsyncSession, user_id: str, item_id: str) -> int:
+    """Lock the Item before changing its Tag assignments and advance their CAS token."""
+
+    version = await db.scalar(
+        update(Item)
+        .where(Item.id == item_id, Item.lifecycle_state == ItemLifecycleState.active)
+        .values(
+            updated_by=user_id,
+            updated_at=datetime.now(UTC),
+            version=Item.version + 1,
+            aggregate_sequence=Item.aggregate_sequence + 1,
+        )
+        .returning(Item.version)
+        .execution_options(synchronize_session=False)
+    )
+    if version is None:
+        raise ResourceUnavailable("item not found")
+    return int(version)
+
+
 async def get_or_create_tag(db: AsyncSession, user: User, name: str) -> Tag:
     normalized = normalize_tag_name(name)
     tag = await db.scalar(select(Tag).where(Tag.name == normalized))
     if tag is None:
         tag = Tag(name=normalized, created_by=user.id)
-        db.add(tag)
-        await db.flush()
+        try:
+            async with db.begin_nested():
+                db.add(tag)
+                await db.flush()
+        except IntegrityError:
+            tag = await db.scalar(select(Tag).where(Tag.name == normalized))
+            if tag is None:
+                raise
     return tag
 
 
@@ -64,6 +94,7 @@ async def add_tag_to_item(db: AsyncSession, user: User, item_id: str, name: str)
     tag = await get_or_create_tag(db, user, name)
     assignment = await db.get(ItemTag, (item_id, tag.id))
     if assignment is None:
+        await advance_item_tag_collection(db, user.id, item_id)
         assignment = ItemTag(item_id=item_id, tag_id=tag.id)
         db.add(assignment)
         await db.flush()
@@ -78,6 +109,7 @@ async def remove_tag_from_item(db: AsyncSession, user: User, item_id: str, tag_i
         raise ResourceUnavailable("item not found or cannot be edited")
     assignment = await db.get(ItemTag, (item_id, tag_id))
     if assignment:
+        await advance_item_tag_collection(db, user.id, item_id)
         await db.delete(assignment)
         await db.flush()
         await search_index(db).index_item(db, item_id)
@@ -100,10 +132,11 @@ async def rename_tag(db: AsyncSession, user: User, tag_id: str, name: str) -> Ta
     if await db.scalar(select(Tag.id).where(Tag.name == normalized, Tag.id != tag.id)):
         raise TagConflict("tag name already exists")
     tag.name = normalized
-    item_ids = list(
+    item_ids = sorted(
         (await db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == tag.id))).all()
     )
     for item_id in item_ids:
+        await bump_item_aggregate_sequence(db, item_id)
         await search_index(db).index_item(db, item_id)
     record_event(db, user.id, "tag.rename", "tag", tag.id)
     await db.commit()
@@ -114,9 +147,11 @@ async def delete_tag(db: AsyncSession, user: User, tag_id: str) -> None:
     tag = await db.get(Tag, tag_id)
     if tag is None or (tag.created_by != user.id and user.role != "administrator"):
         raise ResourceUnavailable("tag not found or cannot be managed")
-    item_ids = list(
+    item_ids = sorted(
         (await db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == tag.id))).all()
     )
+    for item_id in item_ids:
+        await advance_item_tag_collection(db, user.id, item_id)
     await db.delete(tag)
     await db.flush()
     for item_id in item_ids:
@@ -198,9 +233,32 @@ async def set_item_tags(
     item_id: str,
     tag_ids: list[str],
     new_names: list[str] | None = None,
+    *,
+    expected_version: int,
 ) -> None:
+    """Replace the Item's Tag collection under a whole-collection version CAS.
+
+    The replacement is the one destructive collection write, so callers must
+    carry the Item version they based the selection on.  The conditional update
+    advances the aggregate version and sequence together or rejects the write.
+    """
+
     if not await can_edit_item(db, user, item_id):
         raise ResourceUnavailable("item not found or cannot be edited")
+    version = await db.scalar(
+        update(Item)
+        .where(Item.id == item_id, Item.version == expected_version)
+        .values(
+            updated_by=user.id,
+            updated_at=datetime.now(UTC),
+            version=Item.version + 1,
+            aggregate_sequence=Item.aggregate_sequence + 1,
+        )
+        .returning(Item.version)
+    )
+    if version is None:
+        current = await db.scalar(select(Item.version).where(Item.id == item_id))
+        raise VersionConflict(current)
     tag_ids = list(tag_ids)
     for raw_name in new_names or []:
         if raw_name.strip():
@@ -235,13 +293,15 @@ async def merge_tags(db: AsyncSession, user: User, source_tag_id: str, target_ta
     target_item_ids = set(
         (await db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == target_tag.id))).all()
     )
-    for item_id in source_item_ids - target_item_ids:
+    for item_id in sorted(source_item_ids):
+        await advance_item_tag_collection(db, user.id, item_id)
+    for item_id in sorted(source_item_ids - target_item_ids):
         db.add(ItemTag(item_id=item_id, tag_id=target_tag.id))
     await db.execute(delete(ItemTag).where(ItemTag.tag_id == source_tag.id))
     await db.delete(source_tag)
     await db.flush()
 
-    for item_id in source_item_ids:
+    for item_id in sorted(source_item_ids):
         await search_index(db).index_item(db, item_id)
     record_event(
         db,

@@ -24,6 +24,7 @@ from quirebase.library import (
 from quirebase.models import (
     LoginSession,
     User,
+    uid,
 )
 from quirebase.operations.settings import get_effective_settings_model
 from quirebase.web.deps import current_login, current_user, protected_router
@@ -52,6 +53,9 @@ async def import_page(  # ruff: ignore[unused-async]
             "active_page": "import",
             "initial_authors": [],
             "initial_editors": [],
+            # A stable operation identity so a double-submitted create form
+            # returns the original Item instead of duplicating it.
+            "form_operation_id": f"item-create:{uid()}",
         },
     )
 

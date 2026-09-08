@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 
 from quirebase.audit import record_event
 from quirebase.core.errors import PermissionDenied, ResourceUnavailable, ValidationFailure
 from quirebase.models import (
+    Item,
+    ItemLifecycleState,
     Project,
     ProjectItem,
     ProjectMember,
@@ -18,6 +20,24 @@ from quirebase.models import (
 from quirebase.search import search_index
 
 from .write_gate import require_project_write_gate
+
+
+async def _advance_item_sequences(db, item_ids: list[str]) -> None:
+    """Advance each affected Item's aggregate sequence for a project mutation.
+
+    Project names are part of the indexed content.  Without a sequence bump a
+    rename or delete racing an Item mutation can publish a projection that
+    pairs the new project state with the old Item sequence, leaving the index
+    permanently stale.
+    """
+
+    for item_id in item_ids:
+        await db.execute(
+            update(Item)
+            .where(Item.id == item_id, Item.lifecycle_state == ItemLifecycleState.active)
+            .values(aggregate_sequence=Item.aggregate_sequence + 1)
+        )
+
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,11 +64,12 @@ async def rename_project(db: AsyncSession, user: User, project_id: str, name: st
         raise ValidationFailure("project name is too long")
     old_name = project.name
     project.name = normalized
-    item_ids = list(
+    item_ids = sorted(
         await db.scalars(select(ProjectItem.item_id).where(ProjectItem.project_id == project_id))
     )
     await db.flush()
     index = search_index(db)
+    await _advance_item_sequences(db, item_ids)
     for item_id in item_ids:
         await index.index_item(db, item_id)
     record_event(
@@ -88,7 +109,7 @@ async def delete_project(db: AsyncSession, user: User, project_id: str, confirma
         raise ResourceUnavailable("project not found or owner role required")
     if confirmation.strip() != project.name:
         raise ValidationFailure("project name confirmation does not match")
-    item_ids = list(
+    item_ids = sorted(
         await db.scalars(select(ProjectItem.item_id).where(ProjectItem.project_id == project_id))
     )
     record_event(
@@ -106,6 +127,7 @@ async def delete_project(db: AsyncSession, user: User, project_id: str, confirma
     await db.delete(project)
     await db.flush()
     index = search_index(db)
+    await _advance_item_sequences(db, item_ids)
     for item_id in item_ids:
         await index.index_item(db, item_id)
     await db.commit()

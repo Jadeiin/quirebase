@@ -52,6 +52,27 @@ Current standalone workspace packages are:
 - `rubrica`: keyword extraction, keyphrase ranking and Tag Recommendation computation; it
   isolates YAKE and optional local-model dependencies.
 
+## Concurrency control ownership
+
+[ADR 0011](../adr/0011-unified-business-concurrency.md) defines the shared concurrency protocol.
+Each mechanism remains owned by the Module whose invariant it protects:
+
+| Concern | Owner | Mechanism |
+| --- | --- | --- |
+| Stale Item edits and Tag collection replacement | Library | `expected_version` CAS; every Item Tag mutation advances the token |
+| Project lifecycle, membership and assignment | Projects | Project write gate |
+| Item deletion versus durable child creation | Library | Item lifecycle gate and fence |
+| Final workflow authorization | Access with the calling business Module | Canonically ordered Project/Item locks followed by permission revalidation |
+| Library Search ordering | Search adapter, sourced by business Modules | Item aggregate sequence and conditional projection update |
+| Item Tag Recommendation ordering | Library | Recommendation sequence plus generation token |
+| Retried creates and one-shot confirmation | Owning business Module | Stable operation ID, uniqueness constraint and recorded result/state machine |
+
+Cross-resource locking follows `Project -> Item -> File Revision / Annotation -> association rows`.
+Objects at the same level are acquired in stable ID order. Access can coordinate authorization
+locks but does not own the Project write gate or Item lifecycle transition. Business commands keep
+authorization, the mutation, Audit Event and projection intent in one short transaction; external
+I/O and expensive computation run outside it and re-enter through a fenced final transaction.
+
 Each standalone workspace package owns tests of its Interface and internal seams under
 `packages/<name>/tests`. Root `tests/` owns Quirebase behaviour, application-to-package integration
 and cross-workspace architecture and release contracts. The root pytest configuration discovers
@@ -158,7 +179,9 @@ Item Tag Recommendation generation crosses the Library Interface through generat
 workflow operations. Library owns assembly and cleaning of title, abstract and latest ready
 File Revision text, transient recommendation state and stale-workflow guards. A generation token
 supersedes queued work when source data changes; engine and model provenance are not persisted for
-this disposable, reproducible result.
+this disposable, reproducible result. An Item recommendation sequence advances only when those
+inputs change, so Tag and Project mutations cannot invalidate a generation without scheduling a
+replacement.
 Its Implementation calls the reusable `rubrica` Interface for recommendation computation. Model
 files for KeyBERT are local administrator-provided inputs; the Adapter never accepts a remote model
 identifier. Library metadata writes enqueue generation transactionally through Core's DBOS
@@ -219,10 +242,13 @@ marks the owning workflow's batch failed without deleting its staged PDFs. Cance
 workflow recovery and missing workflow records converge a pending batch to failed when it is viewed
 or retried; retry returns it to
 pending with a new workflow identity. Diagnostics for individual PDFs do not block
-confirmation of the remaining candidates. Confirmation creates each Item and
-attaches its staged PDF as a File Revision in one transaction. Confirmation revalidates Candidate
-Record DOIs against currently accessible Items before writing, and cleanup preserves staged files
-still referenced by another pending Import Batch.
+confirmation of the remaining candidates. Confirmation conditionally moves `ready -> committing`,
+creates each Item and attaches its staged PDF as a File Revision, records the resulting Item IDs and
+moves `committing -> committed` in one transaction. Its stable commit operation ID makes a retry
+return the recorded result; deterministic bounded child operation IDs make partial replay safe.
+The committed Import Batch remains as the idempotency record but no longer reserves staged objects.
+Confirmation revalidates Candidate Record DOIs against currently accessible Items before writing,
+and cleanup preserves staged files still referenced by another non-terminal Import Batch.
 
 The Core Infrastructure Module owns one thin `ObjectStore` facade over obstore's Local and S3
 data planes. Business Modules operate on object keys, metadata and asynchronous byte streams;

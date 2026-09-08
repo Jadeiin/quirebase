@@ -230,7 +230,7 @@ async def test_admin_delete_item_preserves_object_referenced_by_pending_pdf_impo
     revision = await store_ready_pdf_revision(db, member, item.id, pdf_bytes(), "shared.pdf")
     object_path = local_object_path(revision.object_key)
     batch = ImportBatch(
-        owner_id=member.id,
+        created_by=member.id,
         file_format="pdf",
         records=json.dumps([
             {

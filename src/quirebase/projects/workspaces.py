@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access.items import can_read_item
@@ -184,6 +184,11 @@ async def add_item_to_project(db: AsyncSession, user: User, project_id: str, ite
     if await db.get(ProjectItem, (project_id, item_id), populate_existing=True) is None:
         db.add(ProjectItem(project_id=project_id, item_id=item_id))
         await db.flush()
+        await db.execute(
+            update(Item)
+            .where(Item.id == item_id)
+            .values(aggregate_sequence=Item.aggregate_sequence + 1)
+        )
         await search_index(db).index_item(db, item_id)
         record_event(
             db,
@@ -217,6 +222,11 @@ async def remove_item_from_project(
         raise ResourceUnavailable("item or project not accessible or insufficient permissions")
     await db.delete(assignment)
     await db.flush()
+    await db.execute(
+        update(Item)
+        .where(Item.id == item_id)
+        .values(aggregate_sequence=Item.aggregate_sequence + 1)
+    )
     await search_index(db).index_item(db, item_id)
     record_event(
         db,

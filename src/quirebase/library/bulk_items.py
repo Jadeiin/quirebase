@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from quirebase.access.items import (
     can_edit_item,
+    lock_item_project_gates,
     require_accessible_items,
 )
 from quirebase.audit import record_event
@@ -21,7 +22,8 @@ from quirebase.documents.bundles import (
     ItemDownloadBundle,
     assemble_document_bundle,
 )
-from quirebase.library.tags import get_or_create_tag
+from quirebase.library.item_lifecycle import begin_item_deletion, bump_item_aggregate_sequence
+from quirebase.library.tags import advance_item_tag_collection, get_or_create_tag
 from quirebase.models import (
     Attachment,
     FileRevision,
@@ -55,6 +57,10 @@ async def apply_bulk_item_action(
         if not await can_edit_item(db, user, item.id):
             raise PermissionDenied("all selected items must be editable")
 
+    # Lock the aggregate rows in stable ID order so concurrent bulk commands
+    # cannot deadlock on PostgreSQL.
+    items = sorted(items, key=lambda item: item.id)
+
     cleanup_keys: list[str] = []
     if action in ("add_project", "project_add"):
         try:
@@ -72,12 +78,14 @@ async def apply_bulk_item_action(
         for item in items:
             if await db.get(ProjectItem, (project_id, item.id), populate_existing=True) is None:
                 db.add(ProjectItem(project_id=project_id, item_id=item.id))
+                await bump_item_aggregate_sequence(db, item.id)
                 await search_index(db).index_item(db, item.id)
         audit_action = "library.bulk.add_project"
     elif action in ("add_tag", "tag"):
         tag_record = await get_or_create_tag(db, user, tag_name)
         for item in items:
             if await db.get(ItemTag, (item.id, tag_record.id)) is None:
+                await advance_item_tag_collection(db, user.id, item.id)
                 db.add(ItemTag(item_id=item.id, tag_id=tag_record.id))
                 await search_index(db).index_item(db, item.id)
         audit_action = "library.bulk.add_tag"
@@ -86,6 +94,15 @@ async def apply_bulk_item_action(
             raise ValidationFailure("confirm deletion of the selected items")
         if user.role != "administrator" and any(item.created_by != user.id for item in items):
             raise PermissionDenied("only item owners can permanently delete items")
+        # Gate Projects first, then every aggregate in stable ID order BEFORE
+        # reading child rows:
+        # writes serialized ahead of this transaction are then covered by the
+        # collected keys, while an upload that validated the previous fence
+        # fails its final write instead of committing into a deleted Item and
+        # leaking its object.
+        await lock_item_project_gates(db, tuple(item.id for item in items))
+        for item in items:
+            await begin_item_deletion(db, item.id, commit=False)
         cleanup_keys = list(
             (
                 await db.scalars(

@@ -52,6 +52,18 @@ class ProjectVisibility(StrEnum):
     public = "public"
 
 
+class ItemLifecycleState(StrEnum):
+    """Logical lifecycle of an Item aggregate.
+
+    ``version`` remains the optimistic-concurrency token for user edits.  The
+    lifecycle fence is a separate token used by work that can outlive an HTTP
+    request (uploads, imports and projections).
+    """
+
+    active = "active"
+    deleting = "deleting"
+
+
 class AnnotationKind(StrEnum):
     highlight = "highlight"
     underline = "underline"
@@ -149,6 +161,17 @@ class Invitation(Base):
 
 class Item(Base):
     __tablename__ = "items"
+    __table_args__ = (
+        CheckConstraint(
+            "lifecycle_state IN ('active', 'deleting')",
+            name="ck_items_lifecycle_state",
+        ),
+        # Idempotency keys are scoped per owner: one User's operation id must
+        # never collide with, or resolve to, another User's Item.
+        UniqueConstraint(
+            "created_by", "create_operation_id", name="uq_items_owner_create_operation"
+        ),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     title: Mapped[str] = mapped_column(Text, index=True)
     abstract: Mapped[str | None] = mapped_column(Text)
@@ -176,6 +199,15 @@ class Item(Base):
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     version: Mapped[int] = mapped_column(Integer, default=1)
+    lifecycle_state: Mapped[ItemLifecycleState] = mapped_column(
+        enum_type(ItemLifecycleState, "item_lifecycle_state"),
+        server_default=ItemLifecycleState.active.value,
+        default=ItemLifecycleState.active,
+    )
+    lifecycle_fence: Mapped[int] = mapped_column(Integer, server_default="1", default=1)
+    aggregate_sequence: Mapped[int] = mapped_column(Integer, server_default="1", default=1)
+    recommendation_sequence: Mapped[int] = mapped_column(Integer, server_default="1", default=1)
+    create_operation_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
     revisions: Mapped[list[FileRevision]] = relationship(
@@ -312,6 +344,7 @@ class ItemTagRecommendation(Base):
         ForeignKey("items.id", ondelete="CASCADE"), unique=True, index=True
     )
     generation_token: Mapped[int] = mapped_column(Integer, default=1)
+    source_sequence: Mapped[int] = mapped_column(Integer, default=1)
     workflow_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     single_words: Mapped[str | None] = mapped_column(Text, nullable=True)
     phrases: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -354,6 +387,8 @@ class FileRevision(Base):
         enum_type(FileRevisionProcessingState, "file_revision_processing_state"),
         default=FileRevisionProcessingState.pending,
     )
+    lifecycle_fence: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    operation_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     item: Mapped[Item] = relationship(back_populates="revisions")
@@ -377,6 +412,8 @@ class Attachment(Base):
     role: Mapped[AttachmentRole | None] = mapped_column(
         enum_type(AttachmentRole, "attachment_role"), nullable=True
     )
+    lifecycle_fence: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    operation_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
@@ -497,17 +534,25 @@ class ImportBatch(Base):
     __tablename__ = "import_batches"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('pending', 'ready', 'failed')",
+            "status IN ('pending', 'ready', 'committing', 'committed', 'failed', 'discarded')",
             name="ck_import_batches_status",
         ),
     )
+    # Terminal batches own nothing: commit strips staged references and discard
+    # deletes the row, so reservation scans exclude them.
+    TERMINAL_STATUSES = ("committed", "discarded")
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    owner_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     file_format: Mapped[str] = mapped_column(String(16))
+    original_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     records: Mapped[str] = mapped_column(Text)
     errors: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(16), default="ready")
     workflow_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    commit_operation_id: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, unique=True, index=True
+    )
+    committed_item_ids: Mapped[str] = mapped_column(Text, default="[]")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
 
 

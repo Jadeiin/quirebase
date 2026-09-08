@@ -21,21 +21,67 @@ class SQLiteSearchIndex:
                 CREATE VIRTUAL TABLE IF NOT EXISTS item_search USING fts5(
                     item_id UNINDEXED,
                     content,
+                    source_sequence UNINDEXED,
                     tokenize='unicode61 remove_diacritics 2'
                 )
                 """
             )
         )
-
-    async def index_item(self, db: AsyncSession, item_id: str) -> None:
-        await self.ensure_schema(db)
-        item = await db.get(Item, item_id)
-        await self.remove_item(db, item_id)
-        if item is not None:
+        # FTS virtual tables cannot be altered with ADD COLUMN. A database
+        # created before source sequencing is rebuilt once on first use.
+        columns = {
+            row[1] for row in (await db.execute(text("PRAGMA table_info(item_search)"))).all()
+        }
+        if "source_sequence" not in columns:
+            await db.execute(text("ALTER TABLE item_search RENAME TO item_search_legacy"))
             await db.execute(
-                text("INSERT INTO item_search(item_id, content) VALUES (:item_id, :content)"),
-                {"item_id": item.id, "content": await search_text_for_item(db, item)},
+                text("""
+                CREATE VIRTUAL TABLE item_search USING fts5(
+                    item_id UNINDEXED, content, source_sequence UNINDEXED,
+                    tokenize='unicode61 remove_diacritics 2'
+                )
+            """)
             )
+            await db.execute(
+                text(
+                    "INSERT INTO item_search(item_id, content, source_sequence) "
+                    "SELECT item_id, content, 0 FROM item_search_legacy"
+                )
+            )
+            await db.execute(text("DROP TABLE item_search_legacy"))
+
+    async def index_item(
+        self, db: AsyncSession, item_id: str, source_sequence: int | None = None
+    ) -> None:
+        # The read-guard plus delete+insert is safe on SQLite because writers
+        # serialize at the database level: this sequence runs inside the
+        # caller's write-locked transaction. FTS5 tables cannot carry the
+        # ON CONFLICT guard the PostgreSQL adapter uses (item_id is UNINDEXED).
+        await self.ensure_schema(db)
+        item = await db.get(Item, item_id, populate_existing=True)
+        if item is None:
+            await self.remove_item(db, item_id)
+            return
+        if source_sequence is None:
+            source_sequence = item.aggregate_sequence
+        source_sequence = source_sequence or 0
+        current = await db.scalar(
+            text("SELECT source_sequence FROM item_search WHERE item_id = :item_id"),
+            {"item_id": item_id},
+        )
+        if current is not None and int(current) > source_sequence:
+            return
+        await self.remove_item(db, item_id)
+        await db.execute(
+            text(
+                "INSERT INTO item_search(item_id, content, source_sequence) VALUES (:item_id, :content, :source_sequence)"
+            ),
+            {
+                "item_id": item.id,
+                "content": await search_text_for_item(db, item),
+                "source_sequence": source_sequence,
+            },
+        )
 
     async def remove_item(self, db: AsyncSession, item_id: str) -> None:
         await self.ensure_schema(db)

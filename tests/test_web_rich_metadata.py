@@ -225,6 +225,7 @@ async def test_web_tag_matrix_batch_and_selection(
             "tag_ids": [tag1.id],
             "suggested_tags": ["Natural Language Processing", "New Research Direction"],
             "new_tags": "Deep Learning",
+            "expected_version": str(item.version),
         },
         follow_redirects=True,
     )

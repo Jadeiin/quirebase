@@ -178,7 +178,13 @@ async def migrate_legacy_objects(db, *, apply: bool = False) -> ObjectMigrationR
             *(await db.scalars(select(FileRevision.object_key))).all(),
             *(await db.scalars(select(Attachment.object_key))).all(),
         }
-        for batch in (await db.scalars(select(ImportBatch.records))).all():
+        for batch in (
+            await db.scalars(
+                select(ImportBatch.records).where(
+                    ImportBatch.status.not_in(ImportBatch.TERMINAL_STATUSES)
+                )
+            )
+        ).all():
             for row in _pdf_rows(batch):
                 if isinstance(row, dict) and isinstance(row.get("_pdf"), dict):
                     key = row["_pdf"].get("object_key")

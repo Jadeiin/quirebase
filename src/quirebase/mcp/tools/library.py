@@ -89,9 +89,12 @@ def register_library_tools(server: MCPServer, runtime: McpRuntime) -> None:
         description="Create a bibliographic Item owned by the authenticated User.",
         annotations=WRITE,
     )
-    async def library_create_item(metadata: ItemMetadata) -> WriteResult:
+    async def library_create_item(
+        metadata: ItemMetadata, operation_id: str | None = None
+    ) -> WriteResult:
         result = await runtime.call(
-            "library.create_item", lambda db, user: create_item(db, user, metadata)
+            "library.create_item",
+            lambda db, user: create_item(db, user, metadata, operation_id=operation_id),
         )
         return WriteResult(id=result.item_id, version=result.version)
 

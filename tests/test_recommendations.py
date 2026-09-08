@@ -9,6 +9,7 @@ from sqlalchemy import select
 from quirebase.core.config import Settings
 from quirebase.library.item_metadata import ItemMetadata, create_item
 from quirebase.library.tag_recommendations import recommend_item_tags
+from quirebase.library.tags import set_item_tags
 from quirebase.library.workflows import (
     commit_item_tag_recommendation_step,
     request_item_tag_recommendation,
@@ -42,6 +43,34 @@ async def test_request_is_idempotent_until_explicitly_superseded(async_db, fake_
 
 
 @pytest.mark.anyio
+async def test_tag_selection_does_not_invalidate_in_flight_recommendation(async_db):
+    db = async_db
+    user = User(username="recommend-tag-editor", password_hash="hash")
+    db.add(user)
+    await db.flush()
+    item = Item(title="Independent recommendation input", created_by=user.id)
+    db.add(item)
+    await db.flush()
+
+    record = await request_item_tag_recommendation(db, item.id, owner_id=user.id)
+    assert record.workflow_id is not None
+    await db.commit()
+    await set_item_tags(db, user, item.id, [], ["Selected"], expected_version=item.version)
+    await db.refresh(item)
+    assert item.aggregate_sequence == 2
+    assert item.recommendation_sequence == 1
+
+    result = await commit_item_tag_recommendation_step(
+        item.id,
+        record.generation_token,
+        record.workflow_id,
+        {"single_words": ["candidate"], "phrases": []},
+        record.source_sequence,
+    )
+    assert result == {"single_words": 1, "phrases": 0}
+
+
+@pytest.mark.anyio
 async def test_item_creation_enqueues_and_worker_persists_yake_results(async_db, monkeypatch):
     db = async_db
     user = User(username="automatic-owner", password_hash="hash")
@@ -72,6 +101,7 @@ async def test_item_creation_enqueues_and_worker_persists_yake_results(async_db,
         record.generation_token,
         record.workflow_id,
         candidates,
+        record.source_sequence,
     )
 
     await db.refresh(record)
@@ -101,6 +131,7 @@ async def test_stale_job_cannot_overwrite_new_generation(async_db):
         1,
         first.workflow_id,
         candidates,
+        1,
     )
 
     current = await db.scalar(
@@ -208,3 +239,51 @@ async def test_generation_result_does_not_include_source_text(async_db, monkeypa
 
     assert candidates == {"single_words": ["compact"], "phrases": ["compact result"]}
     assert "checkpoint sentinel" not in json.dumps(candidates)
+
+
+@pytest.mark.anyio
+async def test_result_is_rejected_when_item_moves_past_the_carried_sequence(
+    async_db, fake_durable_operations
+):
+    db = async_db
+    user = User(username="stale-seq-owner", password_hash="hash")
+    db.add(user)
+    await db.flush()
+
+    item = Item(title="Moving aggregate", created_by=user.id)
+    db.add(item)
+    await db.flush()
+
+    await request_item_tag_recommendation(db, item.id, owner_id=user.id)
+    await db.commit()
+    record = await db.scalar(
+        select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == item.id)
+    )
+    assert record is not None and record.source_sequence == 1
+
+    # While the Item is still at the carried sequence the result lands.
+    result = await commit_item_tag_recommendation_step(
+        item.id,
+        record.generation_token,
+        record.workflow_id,
+        {"single_words": ["fresh"], "phrases": []},
+        source_sequence=1,
+    )
+    assert result == {"single_words": 1, "phrases": 0}
+
+    # A PDF commit advances the aggregate before the follow-up request
+    # refreshes the record; the old generation must no longer be accepted.
+    item.recommendation_sequence = 2
+    await db.commit()
+
+    stale = await commit_item_tag_recommendation_step(
+        item.id,
+        record.generation_token,
+        record.workflow_id,
+        {"single_words": ["stale"], "phrases": []},
+        source_sequence=1,
+    )
+    assert stale == {"stale": True}
+
+    await db.refresh(record)
+    assert json.loads(record.single_words) == ["fresh"]

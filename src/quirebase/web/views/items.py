@@ -304,11 +304,12 @@ async def render_item_workspace(
 
 @router.post("/items")
 async def create_item(
+    operation_id: str = Form(default=""),
     metadata: ItemMetadata = Depends(_item_metadata_from_form),
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await create_item_op(db, user, metadata)
+    result = await create_item_op(db, user, metadata, operation_id=operation_id or None)
     return RedirectResponse(f"/items/{result.item_id}", status_code=303)
 
 
@@ -440,11 +441,14 @@ async def update_tag_matrix_route(
     tag_ids: list[str] = Form(default=[]),
     suggested_tags: list[str] = Form(default=[]),
     new_tags: str = Form(default=""),
+    expected_version: int = Form(...),
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
     new_names = [*suggested_tags, *(line.strip() for line in new_tags.splitlines() if line.strip())]
-    await set_item_tags(db, user, item_id, tag_ids, new_names=new_names)
+    await set_item_tags(
+        db, user, item_id, tag_ids, new_names=new_names, expected_version=expected_version
+    )
     return RedirectResponse(f"/items/{item_id}/organize", status_code=303)
 
 

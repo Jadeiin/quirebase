@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from inquiro.bibliography import Contributor as BibliographyContributor
 from sqlalchemy import delete, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from quirebase.access.items import require_editable_item
@@ -62,8 +63,14 @@ async def find_or_create_author(
     author = await db.scalar(stmt)
     if author is None:
         author = Author(last_name=last, first_name=first)
-        db.add(author)
-        await db.flush()
+        try:
+            async with db.begin_nested():
+                db.add(author)
+                await db.flush()
+        except IntegrityError:
+            author = await db.scalar(stmt)
+            if author is None:
+                raise
     return author
 
 

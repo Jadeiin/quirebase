@@ -9,7 +9,8 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from inquiro.canonical import normalize_reference_type
-from sqlalchemy import update
+from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 
 from quirebase.access.items import require_editable_item
 from quirebase.audit import record_event
@@ -18,6 +19,7 @@ from quirebase.library.authors import set_item_authors
 from quirebase.library.identifiers import (
     clean_identifier_value,
     generate_bibtex_key,
+    normalize_operation_id,
     set_item_identifiers,
 )
 from quirebase.library.workflows import request_item_tag_recommendation
@@ -82,6 +84,7 @@ class ItemMetadata:
 class ItemWriteResult:
     item_id: str
     version: int
+    operation_id: str | None = None
 
 
 def _stored_json_value(value: object) -> JsonValue:
@@ -232,11 +235,24 @@ async def _create_item(
     db: AsyncSession,
     actor: User,
     metadata: ItemMetadata,
+    operation_id: str | None = None,
 ) -> ItemWriteResult:
+    if operation_id:
+        # Keys are scoped per owner: a repeated operation replays this User's
+        # Item and nobody else's, so a leaked or guessed key cannot redirect
+        # the caller to an inaccessible Item.
+        existing = await db.scalar(
+            select(Item).where(
+                Item.created_by == actor.id, Item.create_operation_id == operation_id
+            )
+        )
+        if existing is not None:
+            return ItemWriteResult(existing.id, existing.version, operation_id)
     values = _bibliographic_values(metadata)
     values.update(
         custom_fields=_serialize_custom_fields(metadata.custom_fields),
         created_by=actor.id,
+        create_operation_id=operation_id,
     )
     item = Item(**values)
     db.add(item)
@@ -260,16 +276,30 @@ async def _create_item(
     await request_item_tag_recommendation(db, item.id, owner_id=actor.id)
     record_event(db, actor.id, "item.create", "item", item.id)
     await db.commit()
-    return ItemWriteResult(item_id=item.id, version=item.version)
+    return ItemWriteResult(item_id=item.id, version=item.version, operation_id=operation_id)
 
 
 async def create_item(
     db: AsyncSession,
     actor: User,
     metadata: ItemMetadata,
+    *,
+    operation_id: str | None = None,
 ) -> ItemWriteResult:
+    operation_id = normalize_operation_id(operation_id)
     try:
-        return await _create_item(db, actor, metadata)
+        return await _create_item(db, actor, metadata, operation_id)
+    except IntegrityError:
+        await db.rollback()
+        if operation_id:
+            existing = await db.scalar(
+                select(Item).where(
+                    Item.created_by == actor.id, Item.create_operation_id == operation_id
+                )
+            )
+            if existing is not None:
+                return ItemWriteResult(existing.id, existing.version, operation_id)
+        raise
     except Exception:
         await db.rollback()
         raise
@@ -290,6 +320,8 @@ async def _revise_item_metadata(
         updated_by=actor_id,
         updated_at=datetime.now(UTC),
         version=Item.version + 1,
+        aggregate_sequence=Item.aggregate_sequence + 1,
+        recommendation_sequence=Item.recommendation_sequence + 1,
     )
     version = await db.scalar(
         update(Item)
@@ -366,6 +398,7 @@ async def _regenerate_bibtex_key(
             updated_by=actor_id,
             updated_at=datetime.now(UTC),
             version=Item.version + 1,
+            aggregate_sequence=Item.aggregate_sequence + 1,
         )
         .returning(Item.version)
     )

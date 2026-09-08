@@ -212,7 +212,7 @@ async def test_failed_pdf_import_can_retry_with_a_new_durable_workflow(
             }
         ]
         batch = ImportBatch(
-            owner_id=item.created_by,
+            created_by=item.created_by,
             file_format="pdf",
             records=json.dumps(pending),
             errors="[]",
@@ -290,7 +290,7 @@ async def test_terminal_or_missing_pdf_import_workflow_can_retry_while_batch_is_
         ]
         old_workflow_id = f"prepare-pdf-import:{raw_status or 'missing'}"
         batch = ImportBatch(
-            owner_id=item.created_by,
+            created_by=item.created_by,
             file_format="pdf",
             records=json.dumps(pending),
             errors="[]",
@@ -361,7 +361,7 @@ async def test_stale_preview_convergence_does_not_overwrite_concurrent_pdf_impor
         ]
         old_workflow_id = "prepare-pdf-import:concurrent-old"
         batch = ImportBatch(
-            owner_id=item.created_by,
+            created_by=item.created_by,
             file_format="pdf",
             records=json.dumps(pending),
             errors="[]",
@@ -776,7 +776,9 @@ async def test_pdf_import_batch_previews_before_creating_items(
         assert first is not None and second is not None
         assert first.revisions[0].original_name == "first.pdf"
         assert second.revisions[0].original_name == "second.pdf"
-        assert await db.get(ImportBatch, batch.id) is None
+        committed_batch = await db.get(ImportBatch, batch.id)
+        assert committed_batch is not None
+        assert committed_batch.status == "committed"
     finally:
         await client.aclose()
         get_settings.cache_clear()
@@ -1038,7 +1040,7 @@ async def test_cleanup_preserves_object_referenced_by_an_uncommitted_pdf_import_
     discarded_path = local_object_path(discarded.object_key)
     object_path = local_object_path(in_flight.object_key)
     batch = ImportBatch(
-        owner_id=item.created_by,
+        created_by=item.created_by,
         file_format="pdf",
         records=json.dumps([
             {

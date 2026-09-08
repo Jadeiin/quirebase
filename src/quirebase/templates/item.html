@@ -301,6 +301,7 @@
           </div>
           {% if can_edit %}
           <form class="metadata-form" method="post" action="/items/{{ item.id }}/tags/matrix">{{ csrf_field(csrf) }}
+            <input type="hidden" name="expected_version" value="{{ item.version }}">
             {% if tag_matrix %}
             {% for tid in tag_matrix.assigned_ids %}
             <input type="hidden" name="tag_ids" value="{{ tid }}">
@@ -377,6 +378,7 @@
 
         {% if tag_matrix and tag_matrix.groups %}
         <form method="post" action="/items/{{ item.id }}/tags/matrix">{{ csrf_field(csrf) }}
+          <input type="hidden" name="expected_version" value="{{ item.version }}">
           <div class="tag-matrix-scroll">
             {% for group in tag_matrix.groups %}
             <div class="tag-letter-row" x-show="groupMatches({{ group.names|tojson }})">
