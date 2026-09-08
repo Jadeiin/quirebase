@@ -331,6 +331,33 @@ def _rect_from_points(page: pymupdf.Page, points: Iterable[object]) -> dict[str,
     }
 
 
+def _canonical_text_markup_segments(
+    page: pymupdf.Page, vertices: Iterable[object]
+) -> tuple[dict[str, float], list[dict[str, float]]]:
+    """Convert native text-markup quads while enforcing the canonical segment bound.
+
+    Keep the limit check ahead of any per-quad validation or geometry conversion so
+    malformed PDFs cannot force an oversized durable workflow result.
+    """
+    native_vertices: list[object] = []
+    for point in vertices:
+        # Consume at most one point beyond the representable payload.  This keeps
+        # hostile PDFs from materializing an unbounded vertex list in the worker.
+        if len(native_vertices) >= MAX_SEGMENT_RECTS * 4:
+            raise ValueError(
+                f"text markup annotations support at most {MAX_SEGMENT_RECTS} segments"
+            )
+        native_vertices.append(point)
+    segment_rects: list[dict[str, float]] = []
+    for index in range(0, len(native_vertices), 4):
+        quad = native_vertices[index : index + 4]
+        if not quad or not _is_axis_aligned_quad(quad):
+            raise ValueError("non-rectangular text markup is unsupported")
+        segment_rects.append(_rect_from_points(page, quad))
+    enclosing = _rect_from_points(page, native_vertices)
+    return enclosing, segment_rects
+
+
 def parse_native_annotations(path: Path) -> list[dict]:
     """Parse supported native PDF markup into transport-neutral Annotation values.
 
@@ -415,24 +442,10 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                     )
                     selected_text = None
                     if kind in {"highlight", "underline", "strikeout"}:
-                        vertices = annotation.vertices or ()
-                        segment_count = (len(vertices) + 3) // 4
-                        if segment_count > MAX_SEGMENT_RECTS:
-                            raise ValueError(
-                                "text markup annotations support at most "
-                                f"{MAX_SEGMENT_RECTS} segments"
-                            )
-                        if any(
-                            not _is_axis_aligned_quad(vertices[index : index + 4])
-                            for index in range(0, len(vertices), 4)
-                        ):
-                            raise ValueError("non-rectangular text markup is unsupported")
-                        segment_rects = [
-                            _rect_from_points(page, vertices[index : index + 4])
-                            for index in range(0, len(vertices), 4)
-                            if vertices[index : index + 4]
-                        ]
-                        payload["rect"] = _rect_from_points(page, vertices) if vertices else rect
+                        enclosing_rect, segment_rects = _canonical_text_markup_segments(
+                            page, annotation.vertices or ()
+                        )
+                        payload["rect"] = enclosing_rect if segment_rects else rect
                         payload["segment_rects"] = segment_rects or [rect]
                         selected_text = None
                     elif kind == "free_text":
