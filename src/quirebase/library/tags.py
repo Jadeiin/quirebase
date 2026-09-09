@@ -209,7 +209,13 @@ async def rename_tag(db: AsyncSession, user: User, tag_id: str, name: str) -> Ta
         # Assignment writers take the Tag gate before the Item gate. Reacquire
         # each Item gate and re-read its assignment so a concurrent first
         # assignment is either observed here or indexes itself after commit.
-        await require_item_lifecycle_gate(db, item_id)
+        try:
+            await require_item_lifecycle_gate(db, item_id)
+        except ResourceUnavailable:
+            # Item deletion may win after the assignment snapshot. The Tag
+            # rename remains valid for every surviving Item, so skip this
+            # inactive aggregate instead of aborting the taxonomy command.
+            continue
         if not await db.scalar(
             select(ItemTag.item_id).where(ItemTag.item_id == item_id, ItemTag.tag_id == tag.id)
         ):

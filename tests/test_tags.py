@@ -8,12 +8,14 @@ import pytest
 from sqlalchemy import func, select
 
 from quirebase.core.errors import ResourceUnavailable
+from quirebase.library.item_lifecycle import begin_item_deletion
 from quirebase.library.tags import (
     TagConflict,
     add_tag_to_item,
     get_tag_matrix_for_item,
     merge_tags,
     remove_tag_from_item,
+    rename_tag,
     set_item_tags,
 )
 from quirebase.models import AuditEvent, Item, ItemTag, ItemTagRecommendation, Tag, User
@@ -292,3 +294,28 @@ async def test_merge_tags_requires_source_tag_ownership(async_db):
         await merge_tags(db, other_user, source.id, target.id)
 
     assert await db.get(Tag, source.id) is not None
+
+
+@pytest.mark.anyio
+async def test_tag_rename_skips_item_deleted_after_assignment_snapshot(async_db):
+    db = async_db
+    user = User(username="rename_deleted_item", password_hash="hash")
+    db.add(user)
+    await db.flush()
+    surviving = Item(title="Surviving item", created_by=user.id)
+    deleting = Item(title="Deleting item", created_by=user.id)
+    tag = Tag(name="Before rename", created_by=user.id)
+    db.add_all([surviving, deleting, tag])
+    await db.flush()
+    db.add_all([
+        ItemTag(item_id=surviving.id, tag_id=tag.id),
+        ItemTag(item_id=deleting.id, tag_id=tag.id),
+    ])
+    await db.commit()
+
+    await begin_item_deletion(db, deleting.id)
+
+    renamed = await rename_tag(db, user, tag.id, "After rename")
+
+    assert renamed.name == "After rename"
+    assert await db.get(ItemTag, (surviving.id, tag.id)) is not None
