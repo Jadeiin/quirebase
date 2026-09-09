@@ -66,6 +66,7 @@ _UNVIEWABLE_ANNOTATION_FLAGS = (
     | _pymupdf_integer_constant("PDF_ANNOT_IS_HIDDEN")
     | _pymupdf_integer_constant("PDF_ANNOT_IS_NO_VIEW")
 )
+_PRINT_ANNOTATION_FLAG = _pymupdf_integer_constant("PDF_ANNOT_IS_PRINT")
 _SIGNATURE_WIDGET_TYPE = _pymupdf_integer_constant("PDF_WIDGET_TYPE_SIGNATURE")
 
 
@@ -142,13 +143,18 @@ def _annotation_style(annotation: pymupdf.Annot) -> dict:
     ):
         raise ValueError("dash pattern is not representable")
     stroke_color = _hex_color(colors.get("stroke"))
+    fill_color = _hex_color(colors.get("fill"))
+    if annotation.type[1] == "Text":
+        # PDF note icons store their color in /C, exposed by PyMuPDF as stroke.
+        # The canonical viewer renders note colors from fill_color.
+        fill_color = stroke_color or _xref_array_color(annotation, "C")
     text_color = stroke_color
     if annotation.type[1] == "FreeText":
         stroke_color = _xref_array_color(annotation, "C")
         text_color = _default_appearance_color(annotation)
     return {
         "stroke_color": stroke_color,
-        "fill_color": _hex_color(colors.get("fill")),
+        "fill_color": fill_color,
         "text_color": text_color,
         "opacity": (
             float(annotation.opacity)
@@ -431,6 +437,14 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                         "reason": "annotation is not viewable",
                     })
                     continue
+                if not annotation.flags & _PRINT_ANNOTATION_FLAG:
+                    diagnostics.append({
+                        "page": page_index + 1,
+                        "subtype": subtype,
+                        "result": "skipped",
+                        "reason": "annotation is not printable",
+                    })
+                    continue
                 if annotation.irt_xref:
                     diagnostics.append({
                         "page": page_index + 1,
@@ -589,18 +603,31 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
     return parsed, diagnostics
 
 
+def _reject_signed_document(document: pymupdf.Document) -> None:
+    for page_index in range(document.page_count):
+        page = document[page_index]
+        for widget in page.widgets() or ():
+            if widget.field_type != _SIGNATURE_WIDGET_TYPE:
+                continue
+            value_type, value = document.xref_get_key(widget.xref, "V")
+            if value_type in {"dict", "xref"} and value.strip() not in {"", "null"}:
+                raise ValueError("signed PDFs cannot be stripped without invalidating signatures")
+
+
+def validate_pdf_annotation_mode(path: Path, annotation_mode: str) -> None:
+    """Reject destructive annotation modes before an Import Batch is committed."""
+    if annotation_mode == "preserve":
+        return
+    if annotation_mode not in {"strip", "import"}:
+        raise ValueError(f"unsupported PDF annotation mode: {annotation_mode}")
+    with pymupdf.open(path) as document:
+        _reject_signed_document(document)
+
+
 def strip_native_annotations(source: Path, output: Path) -> int:
     """Write a derived PDF with page markup removed, preserving links/widgets."""
     with pymupdf.open(source) as document:
-        for page in document:
-            for widget in page.widgets() or ():
-                if widget.field_type != _SIGNATURE_WIDGET_TYPE:
-                    continue
-                value_type, value = document.xref_get_key(widget.xref, "V")
-                if value_type in {"dict", "xref"} and value.strip() not in {"", "null"}:
-                    raise ValueError(
-                        "signed PDFs cannot be stripped without invalidating signatures"
-                    )
+        _reject_signed_document(document)
         removed = 0
         for page in document:
             annotations = list(page.annots() or ())

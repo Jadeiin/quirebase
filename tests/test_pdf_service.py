@@ -12,6 +12,7 @@ from quirebase.documents.pdf import (
     inspect_pdf,
     parse_pdf_annotations,
     strip_native_annotations,
+    validate_pdf_annotation_mode,
     validate_pdf_container,
 )
 from quirebase.models import PdfAnnotation
@@ -155,6 +156,64 @@ def test_parse_native_annotations_skips_annotations_that_are_not_viewable(tmp_pa
             "reason": "annotation is not viewable",
         }
     ]
+
+
+def test_parse_native_annotations_skips_non_printing_annotations(tmp_path):
+    source = tmp_path / "non-printing.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        native = page.add_text_annot((20, 30), "Screen only")
+        native.set_flags(native.flags & ~pymupdf.PDF_ANNOT_IS_PRINT)
+        native.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics == [
+        {
+            "page": 1,
+            "subtype": "Text",
+            "result": "skipped",
+            "reason": "annotation is not printable",
+        }
+    ]
+
+
+def test_parse_native_note_color_maps_to_fill_color(tmp_path):
+    source = tmp_path / "colored-note.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        note = page.add_text_annot((20, 30), "Colored")
+        note.set_colors(stroke=(1, 0, 0))
+        note.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert diagnostics == []
+    assert parsed[0]["kind"] == "note"
+    assert parsed[0]["payload"]["style"]["fill_color"] == "#FF0000"
+
+
+def test_destructive_pdf_annotation_modes_reject_signed_documents(tmp_path):
+    source = tmp_path / "signed.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        widget = pymupdf.Widget()
+        widget.field_type = pymupdf.PDF_WIDGET_TYPE_SIGNATURE
+        widget.field_name = "signature"
+        widget.rect = pymupdf.Rect(10, 10, 100, 30)
+        widget = page.add_widget(widget)
+        assert widget is not None
+        widget.update()
+        document.xref_set_key(widget.xref, "V", "<< /Type /Sig /ByteRange [0 0 0 0] >>")
+        document.save(source)
+
+    with pytest.raises(ValueError, match="signed PDFs"):
+        validate_pdf_annotation_mode(source, "strip")
+    with pytest.raises(ValueError, match="signed PDFs"):
+        validate_pdf_annotation_mode(source, "import")
 
 
 def test_parse_native_annotations_skips_replies(tmp_path):

@@ -27,7 +27,7 @@ from quirebase.core.errors import (
 from quirebase.core.storage import ObjectSource, get_object_store
 from quirebase.core.workflows import IMPORT_QUEUE, durable_operations
 from quirebase.documents import enqueue_object_cleanup
-from quirebase.documents.pdf import extract_doi
+from quirebase.documents.pdf import extract_doi, validate_pdf_annotation_mode
 from quirebase.documents.revisions import (
     StagedPdf,
     attach_staged_pdf,
@@ -562,6 +562,25 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
                 raise BatchConflict("another PDF in this batch has the same DOI")
             if normalized_doi:
                 candidate_dois.add(normalized_doi)
+        annotation_mode = PdfAnnotationMode(batch.pdf_annotation_mode or PdfAnnotationMode.preserve)
+        if annotation_mode is not PdfAnnotationMode.preserve:
+            # Validate destructive modes while the Import Batch is still intact.
+            # The asynchronous revision workflow cannot safely surface this error:
+            # by then confirmation has already deleted the batch and created a
+            # pending File Revision.
+            for record in records:
+                pdf = record.get("_pdf") if isinstance(record, dict) else None
+                if not isinstance(pdf, dict) or not isinstance(pdf.get("object_key"), str):
+                    raise BatchConflict("the import batch contains an invalid PDF record")
+                try:
+                    async with get_object_store().materialize(pdf["object_key"]) as source:
+                        await asyncio.to_thread(
+                            validate_pdf_annotation_mode,
+                            source,
+                            annotation_mode.value,
+                        )
+                except ValueError as error:
+                    raise BatchConflict(str(error)) from error
     for record in records:
         candidate = dict(record)
         pdf = candidate.pop("_pdf", None)

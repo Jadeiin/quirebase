@@ -26,7 +26,9 @@ from quirebase.documents import workflows as document_workflows
 from quirebase.documents.revisions import delete_unreferenced_objects, stage_pdf
 from quirebase.library import workflows as library_workflows
 from quirebase.library.imports import (
+    BatchConflict,
     check_pdf_import_doi,
+    commit_import_batch,
     discard_import_batch,
     extract_pdf_import_doi,
     finalize_pdf_import_batch,
@@ -113,6 +115,23 @@ def published_pdf_bytes(doi: str = "10.1000/published") -> bytes:
     document = pymupdf.open()
     page = document.new_page()
     page.insert_text((72, 72), f"https://doi.org/{doi}")
+    contents = document.tobytes()
+    document.close()
+    return contents
+
+
+def signed_published_pdf_bytes(doi: str = "10.1000/signed") -> bytes:
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_text((72, 72), f"https://doi.org/{doi}")
+    widget = pymupdf.Widget()
+    widget.field_type = pymupdf.PDF_WIDGET_TYPE_SIGNATURE
+    widget.field_name = "signature"
+    widget.rect = pymupdf.Rect(10, 10, 100, 30)
+    widget = page.add_widget(widget)
+    assert widget is not None
+    widget.update()
+    document.xref_set_key(widget.xref, "V", "<< /Type /Sig /ByteRange [0 0 0 0] >>")
     contents = document.tobytes()
     document.close()
     return contents
@@ -1169,6 +1188,44 @@ async def test_commit_pdf_import_batch_rechecks_doi_after_stale_preview(
             == 1
         )
         assert await db.get(ImportBatch, batches[1].id) is not None
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_commit_pdf_import_rejects_signed_destructive_mode_before_creating_revision(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    client, item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    try:
+        user = await async_db.get(User, item.created_by)
+        assert user is not None
+        monkeypatch.setattr(
+            "quirebase.library.imports.lookup_candidate",
+            AsyncMock(return_value=provider_candidate("10.1000/signed", "Signed candidate")),
+        )
+        batch, _records, _errors = await stage_pdf_import_batch(
+            async_db,
+            user,
+            [(signed_published_pdf_bytes(), "signed.pdf")],
+            max_bytes=100_000,
+            pdf_annotation_mode="strip",
+        )
+        await finish_pdf_import_preview(async_db, async_session_factory, batch, monkeypatch)
+        await async_db.refresh(batch)
+        assert batch.status == "ready"
+
+        with pytest.raises(BatchConflict, match="signed PDFs"):
+            await commit_import_batch(async_db, user, batch.id)
+
+        assert await async_db.get(ImportBatch, batch.id) is not None
+        assert (
+            await async_db.scalar(select(func.count()).select_from(Item).where(Item.id != item.id))
+            == 0
+        )
     finally:
         await client.aclose()
         get_settings.cache_clear()
