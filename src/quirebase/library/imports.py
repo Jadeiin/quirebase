@@ -564,26 +564,26 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
                 candidate_dois.add(normalized_doi)
         annotation_mode = PdfAnnotationMode(batch.pdf_annotation_mode or PdfAnnotationMode.preserve)
         if annotation_mode is not PdfAnnotationMode.preserve:
-            # Validate destructive modes while the Import Batch is still intact.
-            # The asynchronous revision workflow cannot safely surface this error:
-            # by then confirmation has already deleted the batch and created a
-            # pending File Revision.
             for record in records:
                 pdf = record.get("_pdf") if isinstance(record, dict) else None
                 if not isinstance(pdf, dict) or not isinstance(pdf.get("object_key"), str):
                     raise BatchConflict("the import batch contains an invalid PDF record")
                 try:
                     async with get_object_store().materialize(pdf["object_key"]) as source:
-                        await asyncio.to_thread(
+                        signed = await asyncio.to_thread(
                             validate_pdf_annotation_mode,
                             source,
                             annotation_mode.value,
+                            max_bytes=batch.max_pdf_bytes or get_settings().max_pdf_bytes,
                         )
+                    if signed:
+                        record["_pdf_annotation_mode"] = PdfAnnotationMode.preserve.value
                 except ValueError as error:
                     raise BatchConflict(str(error)) from error
     for record in records:
         candidate = dict(record)
         pdf = candidate.pop("_pdf", None)
+        record_annotation_mode = candidate.pop("_pdf_annotation_mode", None)
         item = await _create_item_from_record(db, user, candidate)
         if pdf is not None:
             await attach_staged_pdf(
@@ -595,7 +595,9 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
                     pdf["size"],
                     pdf["original_name"],
                 ),
-                annotation_mode=batch.pdf_annotation_mode or PdfAnnotationMode.preserve,
+                annotation_mode=record_annotation_mode
+                or batch.pdf_annotation_mode
+                or PdfAnnotationMode.preserve,
                 max_pdf_bytes=batch.max_pdf_bytes or get_settings().max_pdf_bytes,
             )
         await search_index(db).index_item(db, item.id)

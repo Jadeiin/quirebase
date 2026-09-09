@@ -26,7 +26,6 @@ from quirebase.documents import workflows as document_workflows
 from quirebase.documents.revisions import delete_unreferenced_objects, stage_pdf
 from quirebase.library import workflows as library_workflows
 from quirebase.library.imports import (
-    BatchConflict,
     check_pdf_import_doi,
     commit_import_batch,
     discard_import_batch,
@@ -1194,7 +1193,7 @@ async def test_commit_pdf_import_batch_rechecks_doi_after_stale_preview(
 
 
 @pytest.mark.anyio
-async def test_commit_pdf_import_rejects_signed_destructive_mode_before_creating_revision(
+async def test_commit_pdf_import_preserves_signed_destructive_mode_source(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
     client, item, _revision = await authenticated_async_client(
@@ -1218,14 +1217,11 @@ async def test_commit_pdf_import_rejects_signed_destructive_mode_before_creating
         await async_db.refresh(batch)
         assert batch.status == "ready"
 
-        with pytest.raises(BatchConflict, match="signed PDFs"):
-            await commit_import_batch(async_db, user, batch.id)
+        await commit_import_batch(async_db, user, batch.id)
 
-        assert await async_db.get(ImportBatch, batch.id) is not None
-        assert (
-            await async_db.scalar(select(func.count()).select_from(Item).where(Item.id != item.id))
-            == 0
-        )
+        assert await async_db.get(ImportBatch, batch.id) is None
+        created = list(await async_db.scalars(select(Item).where(Item.id != item.id)))
+        assert len(created) == 1
     finally:
         await client.aclose()
         get_settings.cache_clear()

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import math
 import re
+import tempfile
 from datetime import UTC, tzinfo
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pymupdf
@@ -21,7 +23,6 @@ from quirebase.documents.schemas import (
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from datetime import datetime
-    from pathlib import Path
 
     from quirebase.models import PdfAnnotation
 
@@ -66,8 +67,12 @@ _UNVIEWABLE_ANNOTATION_FLAGS = (
     | _pymupdf_integer_constant("PDF_ANNOT_IS_HIDDEN")
     | _pymupdf_integer_constant("PDF_ANNOT_IS_NO_VIEW")
 )
+_UNREPRESENTABLE_ANNOTATION_FLAGS = (
+    _UNVIEWABLE_ANNOTATION_FLAGS
+    | _pymupdf_integer_constant("PDF_ANNOT_IS_NO_ZOOM")
+    | _pymupdf_integer_constant("PDF_ANNOT_IS_NO_ROTATE")
+)
 _PRINT_ANNOTATION_FLAG = _pymupdf_integer_constant("PDF_ANNOT_IS_PRINT")
-_SIGNATURE_WIDGET_TYPE = _pymupdf_integer_constant("PDF_WIDGET_TYPE_SIGNATURE")
 
 
 def _hex_color(value: object) -> str | None:
@@ -195,7 +200,9 @@ def _free_text_format(annotation: pymupdf.Annot) -> dict[str, str | float]:
         for line in block.get("lines", ()):
             for span in line.get("spans", ()):
                 native_font = str(span.get("font", "")).rsplit("+", 1)[-1]
-                if native_font in supported_fonts:
+                if native_font and native_font not in supported_fonts:
+                    raise ValueError("unsupported FreeText font is not representable")
+                if native_font:
                     font_family = supported_fonts[native_font]
                 native_size = span.get("size")
                 if isinstance(native_size, (int, float)) and 1 <= native_size <= 144:
@@ -437,6 +444,16 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                         "reason": "annotation is not viewable",
                     })
                     continue
+                if subtype != "Text" and annotation.flags & (
+                    _UNREPRESENTABLE_ANNOTATION_FLAGS ^ _UNVIEWABLE_ANNOTATION_FLAGS
+                ):
+                    diagnostics.append({
+                        "page": page_index + 1,
+                        "subtype": subtype,
+                        "result": "skipped",
+                        "reason": "annotation has unsupported NoZoom or NoRotate flags",
+                    })
+                    continue
                 if not annotation.flags & _PRINT_ANNOTATION_FLAG:
                     diagnostics.append({
                         "page": page_index + 1,
@@ -603,25 +620,49 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
     return parsed, diagnostics
 
 
+def _document_has_signature(document: pymupdf.Document) -> bool:
+    """Detect signature dictionaries, including values inherited by child widgets."""
+    for xref in range(1, document.xref_length()):
+        try:
+            source = document.xref_object(xref, compressed=False)
+        except (RuntimeError, ValueError):
+            continue
+        if re.search(r"/Type\s*/Sig\b", source):
+            return True
+    return False
+
+
+def pdf_has_signature(path: Path) -> bool:
+    with pymupdf.open(path) as document:
+        return _document_has_signature(document)
+
+
 def _reject_signed_document(document: pymupdf.Document) -> None:
-    for page_index in range(document.page_count):
-        page = document[page_index]
-        for widget in page.widgets() or ():
-            if widget.field_type != _SIGNATURE_WIDGET_TYPE:
-                continue
-            value_type, value = document.xref_get_key(widget.xref, "V")
-            if value_type in {"dict", "xref"} and value.strip() not in {"", "null"}:
-                raise ValueError("signed PDFs cannot be stripped without invalidating signatures")
+    if _document_has_signature(document):
+        raise ValueError("signed PDFs cannot be stripped without invalidating signatures")
 
 
-def validate_pdf_annotation_mode(path: Path, annotation_mode: str) -> None:
-    """Reject destructive annotation modes before an Import Batch is committed."""
+def validate_pdf_annotation_mode(
+    path: Path, annotation_mode: str, *, max_bytes: int | None = None
+) -> bool:
+    """Preflight destructive PDF processing; return whether a signature was found."""
     if annotation_mode == "preserve":
-        return
+        return False
     if annotation_mode not in {"strip", "import"}:
         raise ValueError(f"unsupported PDF annotation mode: {annotation_mode}")
     with pymupdf.open(path) as document:
-        _reject_signed_document(document)
+        if _document_has_signature(document):
+            return True
+    if max_bytes is not None:
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as derived:
+            derived_path = Path(derived.name)
+        try:
+            strip_native_annotations(path, derived_path)
+            if derived_path.stat().st_size > max_bytes:
+                raise ValueError("derived PDF exceeds configured size limit")
+        finally:
+            derived_path.unlink(missing_ok=True)
+    return False
 
 
 def strip_native_annotations(source: Path, output: Path) -> int:
@@ -630,10 +671,13 @@ def strip_native_annotations(source: Path, output: Path) -> int:
         _reject_signed_document(document)
         removed = 0
         for page in document:
-            annotations = list(page.annots() or ())
-            for annotation in annotations:
+            for annotation in page.annots() or ():
                 page.delete_annot(annotation)
                 removed += 1
+                if removed > MAX_NATIVE_ANNOTATIONS:
+                    raise ValueError(
+                        f"PDF contains more than {MAX_NATIVE_ANNOTATIONS} native annotations"
+                    )
         output.parent.mkdir(parents=True, exist_ok=True)
         document.save(output, garbage=4, deflate=True)
     return removed

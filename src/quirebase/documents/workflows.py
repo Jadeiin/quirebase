@@ -167,6 +167,13 @@ async def _inspect_pdf_object(
     pdf_size = metadata.size
     async with get_object_store().materialize(object_key_value) as source:
         await asyncio.to_thread(validate_pdf_container, source)
+        if annotation_mode is not PdfAnnotationMode.preserve:
+            from .pdf import pdf_has_signature
+
+            if await asyncio.to_thread(pdf_has_signature, source):
+                # Signed PDFs are uncommon for literature imports. Preserve the
+                # source and skip native annotation parsing/rewriting entirely.
+                annotation_mode = PdfAnnotationMode.preserve
         if annotation_mode is PdfAnnotationMode.import_:
             from .pdf import parse_pdf_annotations
 

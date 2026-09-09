@@ -180,6 +180,22 @@ def test_parse_native_annotations_skips_non_printing_annotations(tmp_path):
     ]
 
 
+@pytest.mark.parametrize("flag", [pymupdf.PDF_ANNOT_IS_NO_ZOOM, pymupdf.PDF_ANNOT_IS_NO_ROTATE])
+def test_parse_native_annotations_skips_unrepresentable_view_flags(tmp_path, flag):
+    source = tmp_path / f"unrepresentable-{flag}.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        native = page.add_rect_annot(pymupdf.Rect(20, 30, 120, 70))
+        native.set_flags(native.flags | flag)
+        native.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics[0]["reason"] == "annotation has unsupported NoZoom or NoRotate flags"
+
+
 def test_parse_native_note_color_maps_to_fill_color(tmp_path):
     source = tmp_path / "colored-note.pdf"
     with pymupdf.open() as document:
@@ -196,7 +212,7 @@ def test_parse_native_note_color_maps_to_fill_color(tmp_path):
     assert parsed[0]["payload"]["style"]["fill_color"] == "#FF0000"
 
 
-def test_destructive_pdf_annotation_modes_reject_signed_documents(tmp_path):
+def test_destructive_pdf_annotation_modes_detect_signed_documents(tmp_path):
     source = tmp_path / "signed.pdf"
     with pymupdf.open() as document:
         page = document.new_page(width=300, height=400)
@@ -210,10 +226,20 @@ def test_destructive_pdf_annotation_modes_reject_signed_documents(tmp_path):
         document.xref_set_key(widget.xref, "V", "<< /Type /Sig /ByteRange [0 0 0 0] >>")
         document.save(source)
 
-    with pytest.raises(ValueError, match="signed PDFs"):
-        validate_pdf_annotation_mode(source, "strip")
-    with pytest.raises(ValueError, match="signed PDFs"):
-        validate_pdf_annotation_mode(source, "import")
+    assert validate_pdf_annotation_mode(source, "strip") is True
+    assert validate_pdf_annotation_mode(source, "import") is True
+
+
+def test_validate_pdf_annotation_mode_checks_derived_size(tmp_path):
+    source = tmp_path / "derived-too-large.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        note = page.add_text_annot((20, 30), "Source annotation")
+        note.update()
+        document.save(source)
+
+    with pytest.raises(ValueError, match="derived PDF exceeds configured size limit"):
+        validate_pdf_annotation_mode(source, "strip", max_bytes=1)
 
 
 def test_parse_native_annotations_skips_replies(tmp_path):
