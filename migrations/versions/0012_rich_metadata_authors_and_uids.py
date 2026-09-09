@@ -86,6 +86,7 @@ def upgrade() -> None:
         sa.column("id", sa.String),
         sa.column("first_name", sa.String),
         sa.column("last_name", sa.String),
+        sa.column("identity_key", sa.String),
         sa.column("created_at", sa.DateTime),
     )
     item_authors_table = sa.table(
@@ -98,17 +99,19 @@ def upgrade() -> None:
         sa.column("is_corresponding", sa.Boolean),
     )
     from quirebase.library.authors import parse_author_name
+    from quirebase.models import contributor_identity_key
 
     # Preload existing authors keyed like find_or_create_author matches them:
-    # case-insensitive exact match on last/first name (None = no first name).
-    author_ids: dict[tuple[str, str | None], str] = {}
+    # Unicode-normalized, case-insensitive exact match on last/first name.
+    author_ids: dict[str, str] = {}
     for row in bind.execute(
         sa.select(authors_table.c.id, authors_table.c.last_name, authors_table.c.first_name)
     ).fetchall():
-        author_ids[row[1].lower(), row[2].lower() if row[2] else None] = row[0]
+        key = contributor_identity_key(row[1], row[2])
+        author_ids[key] = row[0]
 
     def author_id_for(last_name: str, first_name: str | None) -> str:
-        key = (last_name.lower(), first_name.lower() if first_name else None)
+        key = contributor_identity_key(last_name, first_name)
         author_id = author_ids.get(key)
         if author_id is None:
             author_id = str(uuid.uuid4())
@@ -118,6 +121,7 @@ def upgrade() -> None:
                     id=author_id,
                     last_name=last_name,
                     first_name=first_name,
+                    identity_key=contributor_identity_key(last_name, first_name),
                     created_at=now_utc,
                 )
             )

@@ -38,6 +38,14 @@ async def test_contributor_identity_is_case_insensitive_and_null_safe(async_db):
 
 
 @pytest.mark.anyio
+async def test_contributor_identity_casefolds_unicode_names(async_db):
+    first = await find_or_create_author(async_db, "Ångström")
+    second = await find_or_create_author(async_db, "ångström")
+
+    assert second.id == first.id
+
+
+@pytest.mark.anyio
 async def test_set_and_get_item_authors(async_db):
     db = async_db
     user = User(username="author_test_user", password_hash="hash")

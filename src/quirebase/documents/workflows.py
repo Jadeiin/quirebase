@@ -194,7 +194,21 @@ async def inspect_uploaded_pdf(
 async def _lock_active_upload_owner(db: Any, owner_id: str) -> User:
     """Lock and validate the captured User before any Item-related gate."""
 
-    owner = await db.get(User, owner_id, with_for_update=True)
+    if db.get_bind().dialect.name == "sqlite":
+        owner_row_id = await db.scalar(
+            update(User)
+            .where(User.id == owner_id)
+            .values(active=User.active)
+            .returning(User.id)
+            .execution_options(synchronize_session=False)
+        )
+        owner = (
+            await db.get(User, owner_row_id, populate_existing=True)
+            if owner_row_id is not None
+            else None
+        )
+    else:
+        owner = await db.get(User, owner_id, with_for_update=True)
     if owner is None or not owner.active:
         raise ValueError("Item is no longer writable by the upload owner")
     return owner

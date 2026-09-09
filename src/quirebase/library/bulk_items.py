@@ -23,7 +23,11 @@ from quirebase.documents.bundles import (
     assemble_document_bundle,
 )
 from quirebase.library.item_lifecycle import begin_item_deletion, bump_item_aggregate_sequence
-from quirebase.library.tags import advance_item_tag_collection, get_or_create_tag
+from quirebase.library.tags import (
+    acquire_tag_creation_gate,
+    advance_item_tag_collection,
+    get_or_create_tag,
+)
 from quirebase.models import (
     Attachment,
     FileRevision,
@@ -50,6 +54,9 @@ async def apply_bulk_item_action(
     tag_name: str = "",
     confirm_delete: str = "",
 ) -> list[str]:
+    if action in ("add_tag", "tag"):
+        # Tag creation must serialize before the item permission snapshots.
+        await acquire_tag_creation_gate(db)
     items = await require_accessible_items(db, user, item_ids)
 
     # Fail-closed: All selected items must be editable for mutating bulk actions

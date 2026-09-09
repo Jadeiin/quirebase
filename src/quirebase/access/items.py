@@ -173,6 +173,21 @@ async def lock_item_edit_scope(db: AsyncSession, item_id: str, lifecycle_fence: 
 async def lock_item_project_gates(db: AsyncSession, item_ids: Sequence[str]) -> tuple[str, ...]:
     """Lock Projects associated with Items in canonical Project-ID order."""
 
+    bind = db.get_bind() if hasattr(db, "get_bind") else None
+    if bind is not None and bind.dialect.name == "sqlite":
+        # Enter SQLite's writer transaction before taking the association
+        # snapshot. A concurrent Project mutation otherwise leaves this read
+        # transaction stale before the later Item gate is acquired.
+        await db.execute(
+            update(Project)
+            .where(
+                Project.id.in_(
+                    select(ProjectItem.project_id).where(ProjectItem.item_id.in_(item_ids))
+                )
+            )
+            .values(updated_at=Project.updated_at)
+            .execution_options(synchronize_session=False)
+        )
     project_ids = tuple(
         sorted(
             set(
@@ -183,6 +198,8 @@ async def lock_item_project_gates(db: AsyncSession, item_ids: Sequence[str]) -> 
         )
     )
     for project_id in project_ids:
+        if bind is not None and bind.dialect.name == "sqlite":
+            continue
         await db.scalar(select(Project.id).where(Project.id == project_id).with_for_update())
     return project_ids
 

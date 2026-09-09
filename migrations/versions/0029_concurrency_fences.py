@@ -9,6 +9,8 @@ The migration also renames ``import_batches.owner_id`` to ``created_by`` to matc
 the repository-wide name for the creating user.
 """
 
+import unicodedata
+
 import sqlalchemy as sa
 from alembic import op
 
@@ -38,6 +40,13 @@ def _has_named_index(bind, table: str, name: str) -> bool:
             )
         )
     return any(index["name"] == name for index in sa.inspect(bind).get_indexes(table))
+
+
+def _contributor_identity_key(last_name: str, first_name: str | None) -> str:
+    def normalize(value: str | None) -> str:
+        return unicodedata.normalize("NFKC", " ".join((value or "").split())).casefold()
+
+    return f"{normalize(last_name)}\x1f{normalize(first_name)}"
 
 
 def upgrade() -> None:
@@ -161,6 +170,7 @@ def upgrade() -> None:
             )
 
     if _has_table(bind, "authors"):
+        author_columns = _columns(bind, "authors")
         if sqlite:
             author_sql = bind.scalar(
                 sa.text("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'authors'")
@@ -174,11 +184,46 @@ def upgrade() -> None:
         if has_old_author_unique:
             with op.batch_alter_table("authors") as batch:
                 batch.drop_constraint("uq_authors_name", type_="unique")
-        if not _has_named_index(bind, "authors", "uq_authors_normalized_name"):
+        if _has_named_index(bind, "authors", "uq_authors_normalized_name"):
+            op.drop_index("uq_authors_normalized_name", table_name="authors")
+        if "identity_key" not in author_columns:
+            with op.batch_alter_table("authors") as batch:
+                batch.add_column(sa.Column("identity_key", sa.String(length=300), nullable=True))
+            rows = bind.execute(sa.text("SELECT id, last_name, first_name FROM authors")).mappings()
+            for row in rows:
+                bind.execute(
+                    sa.text("UPDATE authors SET identity_key = :identity_key WHERE id = :id"),
+                    {
+                        "id": row["id"],
+                        "identity_key": _contributor_identity_key(
+                            row["last_name"], row["first_name"]
+                        ),
+                    },
+                )
+            with op.batch_alter_table("authors") as batch:
+                batch.alter_column("identity_key", nullable=False)
+        else:
+            # A partially upgraded schema may already have the column but
+            # contain NULL backfill values; normalize those before enforcing
+            # the current non-null model contract.
+            rows = bind.execute(
+                sa.text("SELECT id, last_name, first_name FROM authors WHERE identity_key IS NULL")
+            ).mappings()
+            for row in rows:
+                bind.execute(
+                    sa.text("UPDATE authors SET identity_key = :identity_key WHERE id = :id"),
+                    {
+                        "id": row["id"],
+                        "identity_key": _contributor_identity_key(
+                            row["last_name"], row["first_name"]
+                        ),
+                    },
+                )
+        if not _has_named_index(bind, "authors", "uq_authors_identity_key"):
             op.create_index(
-                "uq_authors_normalized_name",
+                "uq_authors_identity_key",
                 "authors",
-                [sa.text("lower(last_name)"), sa.text("coalesce(lower(first_name), '')")],
+                ["identity_key"],
                 unique=True,
             )
 
@@ -211,9 +256,24 @@ def upgrade() -> None:
             op.alter_column("item_tag_recommendations", "source_sequence", server_default=None)
     if sqlite:
         # FTS5 virtual tables cannot be altered. Library Search is a derived
-        # projection, so replace its schema and let normal indexing repopulate
-        # it from canonical Item state.
-        op.drop_table("item_search")
+        # projection, so replace its schema while carrying forward rows already
+        # indexed by the previous schema. Existing rows have no source token;
+        # the migration backfill gives them the initial sequence used for
+        # existing Items, allowing the next write to replace them normally.
+        search_backup = "_item_search_0029_backup"
+        if _has_table(bind, "item_search"):
+            bind.execute(
+                sa.text(
+                    f"CREATE TABLE {search_backup} (item_id VARCHAR(36) NOT NULL, content TEXT)"
+                )
+            )
+            bind.execute(
+                sa.text(
+                    f"INSERT INTO {search_backup} (item_id, content) "
+                    "SELECT item_id, content FROM item_search"
+                )
+            )
+            op.drop_table("item_search")
         op.execute(
             """
             CREATE VIRTUAL TABLE item_search USING fts5(
@@ -224,6 +284,14 @@ def upgrade() -> None:
             )
             """
         )
+        if _has_table(bind, search_backup):
+            bind.execute(
+                sa.text(
+                    f"INSERT INTO item_search (item_id, content, source_sequence) "
+                    f"SELECT item_id, content, 1 FROM {search_backup}"
+                )
+            )
+            bind.execute(sa.text(f"DROP TABLE {search_backup}"))
     else:
         op.add_column(
             "item_search",
@@ -243,7 +311,7 @@ def downgrade() -> None:
         # be dropped before their columns disappear.
         bind.execute(sa.text("PRAGMA foreign_keys=OFF"))
     for index_name, table in (
-        ("uq_authors_normalized_name", "authors"),
+        ("uq_authors_identity_key", "authors"),
         ("ix_import_batches_commit_operation_id", "import_batches"),
         ("ix_file_revisions_operation_id", "file_revisions"),
         ("ix_attachments_operation_id", "attachments"),
@@ -254,6 +322,8 @@ def downgrade() -> None:
             op.drop_index(index_name, table_name=table)
     with op.batch_alter_table("authors") as batch:
         batch.create_unique_constraint("uq_authors_name", ["last_name", "first_name"])
+        if "identity_key" in _columns(bind, "authors"):
+            batch.drop_column("identity_key")
     for name, table in (
         ("uq_import_batches_commit_operation_id", "import_batches"),
         ("uq_items_owner_create_operation", "items"),

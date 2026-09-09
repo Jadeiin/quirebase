@@ -126,8 +126,25 @@ async def _find_or_create_tag(db: AsyncSession, user: User, normalized: str) -> 
     return tag
 
 
+async def _acquire_sqlite_tag_creation_gate(db: AsyncSession) -> None:
+    if db.get_bind().dialect.name == "sqlite":
+        # New Tag creation has no known row to lock. A no-op write on the
+        # taxonomy table serializes the lookup/insert pair before a read
+        # snapshot can become stale.
+        await db.execute(
+            update(Tag).values(name=Tag.name).execution_options(synchronize_session=False)
+        )
+
+
+async def acquire_tag_creation_gate(db: AsyncSession) -> None:
+    """Acquire the SQLite taxonomy gate before permission/snapshot reads."""
+
+    await _acquire_sqlite_tag_creation_gate(db)
+
+
 async def get_or_create_tag(db: AsyncSession, user: User, name: str) -> Tag:
     normalized = normalize_tag_name(name)
+    await acquire_tag_creation_gate(db)
     while True:
         candidate = await _find_or_create_tag(db, user, normalized)
         tag = (await _lock_tag_write_gates(db, (candidate.id,))).get(candidate.id)
@@ -136,6 +153,8 @@ async def get_or_create_tag(db: AsyncSession, user: User, name: str) -> Tag:
 
 
 async def add_tag_to_item(db: AsyncSession, user: User, item_id: str, name: str) -> ItemTag:
+    # The permission read below must occur after the SQLite taxonomy gate.
+    await acquire_tag_creation_gate(db)
     if not await can_edit_item(db, user, item_id):
         raise ResourceUnavailable("item not found or cannot be edited")
     tag = await get_or_create_tag(db, user, name)
@@ -303,6 +322,7 @@ async def set_item_tags(
     the write without creating a metadata version conflict.
     """
 
+    await acquire_tag_creation_gate(db)
     if not await can_edit_item(db, user, item_id):
         raise ResourceUnavailable("item not found or cannot be edited")
     selected_ids = list(dict.fromkeys(tag_ids))

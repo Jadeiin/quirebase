@@ -438,6 +438,7 @@ async def _sync_metadata_from_upstream(
             selectinload(Item.identifier_links),
         )
         .where(Item.id == item_id)
+        .execution_options(populate_existing=True)
     )
     return reloaded or item
 

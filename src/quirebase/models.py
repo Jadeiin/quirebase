@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import unicodedata
 import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -15,7 +16,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
-    func,
+    event,
 )
 from sqlalchemy import (
     Enum as SqlEnum,
@@ -31,6 +32,15 @@ def uid() -> str:
 
 def now() -> datetime:
     return datetime.now(UTC)
+
+
+def contributor_identity_key(last_name: str, first_name: str | None = None) -> str:
+    """Return the Unicode-normalized, case-insensitive Contributor identity."""
+
+    def normalize(value: str | None) -> str:
+        return unicodedata.normalize("NFKC", " ".join((value or "").split())).casefold()
+
+    return f"{normalize(last_name)}\x1f{normalize(first_name)}"
 
 
 class SystemRole(StrEnum):
@@ -234,15 +244,21 @@ class Author(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     first_name: Mapped[str | None] = mapped_column(String(120))
     last_name: Mapped[str] = mapped_column(String(120), index=True)
+    identity_key: Mapped[str] = mapped_column(String(300), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     __table_args__ = (
         Index(
-            "uq_authors_normalized_name",
-            func.lower(last_name),
-            func.coalesce(func.lower(first_name), ""),
+            "uq_authors_identity_key",
+            identity_key,
             unique=True,
         ),
     )
+
+
+@event.listens_for(Author, "before_insert")
+@event.listens_for(Author, "before_update")
+def _populate_author_identity_key(_mapper, _connection, target: Author) -> None:
+    target.identity_key = contributor_identity_key(target.last_name, target.first_name)
 
 
 class ItemAuthor(Base):

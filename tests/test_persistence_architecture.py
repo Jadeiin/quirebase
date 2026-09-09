@@ -117,6 +117,45 @@ command.upgrade(config, "head")
     assert columns == {"item_id", "content", "source_sequence"}
 
 
+def test_concurrency_migration_preserves_existing_sqlite_search_rows(tmp_path: Path):
+    database = tmp_path / "search-backfill.db"
+    database_url = f"sqlite:///{database}"
+    environment = os.environ.copy()
+    environment["QUIREBASE_DATABASE_URL"] = database_url
+    script = """
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import create_engine, text
+
+config = Config()
+config.set_main_option("script_location", "migrations")
+command.upgrade(config, "0028_project_management")
+engine = create_engine(__import__("os").environ["QUIREBASE_DATABASE_URL"])
+with engine.begin() as connection:
+    connection.execute(
+        text("INSERT INTO item_search(item_id, content) VALUES ('existing-item', 'legacy content')")
+    )
+engine.dispose()
+command.upgrade(config, "head")
+engine = create_engine(__import__("os").environ["QUIREBASE_DATABASE_URL"])
+with engine.connect() as connection:
+    row = connection.execute(
+        text("SELECT item_id, content, source_sequence FROM item_search")
+    ).one()
+print(row.item_id, row.content, row.source_sequence)
+engine.dispose()
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+
+    assert result.stdout.strip() == "existing-item legacy content 1"
+
+
 def test_project_management_migration_upgrades_existing_schema_without_losing_links(
     tmp_path: Path,
 ):
