@@ -138,7 +138,7 @@ async def test_item_delete_wins_against_upload_finalizer(postgres_sessions, fina
 
     async def delete_item() -> None:
         async with postgres_sessions() as db:
-            await begin_item_deletion(db, item_id, commit=False)
+            await begin_item_deletion(db, item_id)
             deletion_locked.set()
             await finalizer_started.wait()
             await db.commit()
@@ -298,7 +298,7 @@ async def test_upload_finalizer_and_annotation_reply_share_user_item_lock_order(
     assert not any(isinstance(result, BaseException) for result in results), results
 
 
-async def test_tag_rename_serializes_with_first_assignment(postgres_sessions):
+async def test_tag_rename_serializes_on_the_item_gate(postgres_sessions):
     async with postgres_sessions() as db:
         user = User(username=f"tag-rename-{uuid4()}", password_hash="hash")
         db.add(user)
@@ -307,21 +307,19 @@ async def test_tag_rename_serializes_with_first_assignment(postgres_sessions):
         tag = Tag(name="Before rename", created_by=user.id)
         db.add_all([item, tag])
         await db.flush()
-        await search_index(db).index_item(db, item.id)
         await db.commit()
         user_id, item_id, tag_id = user.id, item.id, tag.id
 
+    async with postgres_sessions() as db:
+        user = await db.get(User, user_id)
+        assert user is not None
+        await add_tag_to_item(db, user, item_id, "Before rename")
+
     async with postgres_sessions() as blocker:
         await blocker.execute(
-            text("UPDATE item_search SET document = document WHERE item_id = :item_id"),
+            text("SELECT id FROM items WHERE id = :item_id FOR UPDATE"),
             {"item_id": item_id},
         )
-
-        async def assign() -> object:
-            async with postgres_sessions() as db:
-                user = await db.get(User, user_id)
-                assert user is not None
-                return await add_tag_to_item(db, user, item_id, "Before rename")
 
         async def rename() -> object:
             async with postgres_sessions() as db:
@@ -329,18 +327,21 @@ async def test_tag_rename_serializes_with_first_assignment(postgres_sessions):
                 assert user is not None
                 return await rename_tag(db, user, tag_id, "After rename")
 
-        assignment = asyncio.create_task(assign())
-        await asyncio.sleep(0.05)
-        assert not assignment.done()
         renamed = asyncio.create_task(rename())
         await asyncio.sleep(0.05)
+        assert not renamed.done()
         await blocker.commit()
-        results = await asyncio.gather(assignment, renamed, return_exceptions=True)
+        result = await renamed
 
-    assert not any(isinstance(result, BaseException) for result in results), results
+    assert not isinstance(result, BaseException), result
     async with postgres_sessions() as db:
-        assert await search_index(db).search(db, "After rename") == [item_id]
-        assert await search_index(db).search(db, "Before rename") == []
+        renamed_tag = await db.get(Tag, tag_id)
+        assert renamed_tag is not None
+        assert renamed_tag.name == "After rename"
+        assignment = await db.scalar(
+            select(ItemTag).where(ItemTag.item_id == item_id, ItemTag.tag_id == tag_id)
+        )
+        assert assignment is not None
 
 
 async def test_metadata_cas_races_pdf_doi_rescan(postgres_sessions):

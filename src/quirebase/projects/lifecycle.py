@@ -17,7 +17,7 @@ from quirebase.models import (
     ProjectVisibility,
     User,
 )
-from quirebase.search import search_index
+from quirebase.search import enqueue_search_changed
 
 from .write_gate import require_project_write_gate
 
@@ -50,7 +50,20 @@ def validate_project_state(value: ProjectState | str) -> ProjectState:
         raise ValidationFailure("invalid project state") from error
 
 
+async def _lock_active_user(db: AsyncSession, user: User) -> User:
+    locked = await db.scalar(
+        select(User)
+        .where(User.id == user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if locked is None or not locked.active:
+        raise ResourceUnavailable("user is not active")
+    return locked
+
+
 async def rename_project(db: AsyncSession, user: User, project_id: str, name: str) -> Project:
+    user = await _lock_active_user(db, user)
     project = await require_project_write_gate(db, project_id)
     member = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     if project is None or (
@@ -68,10 +81,9 @@ async def rename_project(db: AsyncSession, user: User, project_id: str, name: st
         await db.scalars(select(ProjectItem.item_id).where(ProjectItem.project_id == project_id))
     )
     await db.flush()
-    index = search_index(db)
     await _advance_item_sequences(db, item_ids)
     for item_id in item_ids:
-        await index.index_item(db, item_id)
+        await enqueue_search_changed(db, item_id)
     record_event(
         db,
         user.id,
@@ -87,6 +99,7 @@ async def rename_project(db: AsyncSession, user: User, project_id: str, name: st
 async def update_project_description(
     db: AsyncSession, user: User, project_id: str, description: str
 ) -> Project:
+    user = await _lock_active_user(db, user)
     project = await require_project_write_gate(db, project_id)
     member = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     if project is None or member is None or member.role != ProjectRole.owner:
@@ -101,6 +114,7 @@ async def update_project_description(
 
 
 async def delete_project(db: AsyncSession, user: User, project_id: str, confirmation: str) -> None:
+    user = await _lock_active_user(db, user)
     project = await require_project_write_gate(db, project_id)
     member = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     if project is None or (
@@ -126,16 +140,16 @@ async def delete_project(db: AsyncSession, user: User, project_id: str, confirma
     await db.execute(delete(ProjectItem).where(ProjectItem.project_id == project_id))
     await db.delete(project)
     await db.flush()
-    index = search_index(db)
     await _advance_item_sequences(db, item_ids)
     for item_id in item_ids:
-        await index.index_item(db, item_id)
+        await enqueue_search_changed(db, item_id)
     await db.commit()
 
 
 async def transfer_project_ownership(
     db: AsyncSession, user: User, project_id: str, target_user_id: str
 ) -> None:
+    user = await _lock_active_user(db, user)
     await require_project_write_gate(db, project_id)
     actor = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     target = await db.get(ProjectMember, (project_id, target_user_id), populate_existing=True)
@@ -160,6 +174,7 @@ async def transfer_project_ownership(
 
 
 async def leave_project(db: AsyncSession, user: User, project_id: str) -> None:
+    user = await _lock_active_user(db, user)
     await require_project_write_gate(db, project_id)
     member = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     if member is None:
@@ -203,6 +218,7 @@ async def set_project_state(
     db: AsyncSession, user: User, project_id: str, state: ProjectState
 ) -> Project:
     state = validate_project_state(state)
+    user = await _lock_active_user(db, user)
     project = await require_project_write_gate(db, project_id)
     member = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     if project is None or (
@@ -218,6 +234,7 @@ async def set_project_state(
 async def set_project_visibility(
     db: AsyncSession, user: User, project_id: str, visibility: ProjectVisibility | str
 ) -> Project:
+    user = await _lock_active_user(db, user)
     try:
         visibility = ProjectVisibility(visibility)
     except ValueError as error:

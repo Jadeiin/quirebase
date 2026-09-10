@@ -397,6 +397,12 @@ class FileRevision(Base):
             "processing_state IN ('pending', 'ready')",
             name="ck_file_revisions_processing_state",
         ),
+        UniqueConstraint(
+            "created_by",
+            "item_id",
+            "operation_id",
+            name="uq_file_revisions_owner_item_operation",
+        ),
     )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     item_id: Mapped[str] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
@@ -428,6 +434,12 @@ class Attachment(Base):
             name="ck_attachments_role",
         ),
         UniqueConstraint("item_id", "role", name="uq_attachments_item_role"),
+        UniqueConstraint(
+            "created_by",
+            "item_id",
+            "operation_id",
+            name="uq_attachments_owner_item_operation",
+        ),
     )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     item_id: Mapped[str] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
@@ -564,8 +576,8 @@ class ImportBatch(Base):
             name="ck_import_batches_status",
         ),
     )
-    # Terminal batches own nothing: commit strips staged references and discard
-    # deletes the row, so reservation scans exclude them.
+    # Terminal batches own nothing: commit/discard strip staged references, so
+    # reservation scans exclude their retained tombstones.
     TERMINAL_STATUSES = ("committed", "discarded")
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
@@ -575,9 +587,7 @@ class ImportBatch(Base):
     errors: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(16), default="ready")
     workflow_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
-    commit_operation_id: Mapped[str | None] = mapped_column(
-        String(255), nullable=True, unique=True, index=True
-    )
+    commit_operation_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     committed_item_ids: Mapped[str] = mapped_column(Text, default="[]")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
 

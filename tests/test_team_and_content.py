@@ -7,6 +7,7 @@ from test_http import authenticated_async_client
 from quirebase.accounts.throttling import check_login_throttle, record_login_failure
 from quirebase.core.config import get_settings
 from quirebase.models import DiscussionMessage, ItemTag, LoginThrottle, Tag
+from quirebase.search import search_index
 
 
 @pytest.mark.anyio
@@ -22,6 +23,7 @@ async def test_tags_discussion_and_search(async_db, async_session_factory, tmp_p
         assert tagged.status_code == 200
         assert await db.scalar(select(func.count()).select_from(Tag)) == 1
         assert await db.scalar(select(func.count()).select_from(ItemTag)) == 1
+        await search_index(db).index_item(db, item.id)
         assert item.title in (await client.get("/?q=optics")).text
 
         posted = await client.post(

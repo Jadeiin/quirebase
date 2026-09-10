@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import json
 from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 from fastapi import Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
@@ -273,7 +274,13 @@ async def render_item_workspace(
                 initial_editors=_initial_structured_people(list(view.editors)),
             )
         case FilesWorkspace():
-            context["attachments"] = view.attachments
+            context.update(
+                attachments=view.attachments,
+                pdf_upload_operation_id=str(uuid4()),
+                remote_pdf_upload_operation_id=str(uuid4()),
+                attachment_upload_operation_id=str(uuid4()),
+                remote_attachment_upload_operation_id=str(uuid4()),
+            )
         case OrganizeWorkspace():
             context.update(
                 tags=view.tags,
@@ -482,6 +489,7 @@ async def upload_attachment(
     item_id: str,
     attachment: UploadFile = File(),
     graphical_abstract: bool = Form(False),
+    operation_id: str | None = Form(None),
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -496,6 +504,7 @@ async def upload_attachment(
             db, "max_attachment_bytes", get_settings().max_attachment_bytes
         ),
         role=AttachmentRole.graphical_abstract if graphical_abstract else None,
+        operation_id=operation_id,
     )
     return RedirectResponse(
         f"/items/{item_id}/files?workflow={workflow.workflow_id}", status_code=303
@@ -600,6 +609,7 @@ async def remove_item_from_project(
 async def upload_pdf(
     item_id: str,
     pdf: UploadFile = File(),
+    operation_id: str | None = Form(None),
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -610,6 +620,7 @@ async def upload_pdf(
         upload_chunks(pdf),
         pdf.filename or "",
         await get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes),
+        operation_id=operation_id,
     )
     return RedirectResponse(
         f"/items/{item_id}/files?workflow={workflow.workflow_id}", status_code=303

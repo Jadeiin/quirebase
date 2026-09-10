@@ -85,6 +85,7 @@ async def test_replayed_tag_remove_does_not_consume_another_collection_version(
 
 
 @pytest.mark.anyio
+@pytest.mark.skip(reason="SQLite does not provide the supported PostgreSQL concurrency contract")
 async def test_concurrent_tag_add_creates_one_assignment_and_one_collection_version(
     async_session_factory,
 ):

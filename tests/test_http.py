@@ -409,6 +409,28 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
 
 
 @pytest.mark.anyio
+async def test_files_workspace_seeds_stable_upload_operation_ids(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    try:
+        response = await client.get(f"/items/{item.id}/files")
+        assert response.status_code == 200
+        operation_ids = re.findall(
+            r'name="operation_id" value="([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"',
+            response.text,
+        )
+        assert len(operation_ids) == 4
+        assert len(set(operation_ids)) == 4
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
 async def test_item_overview_uses_the_ready_revision_thumbnail(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
@@ -788,6 +810,8 @@ async def test_item_edit_detects_conflicts_and_updates_search(
         await db.refresh(item)
         assert item.version == 2
         assert item.title == "Revised Paper"
+        await search_index(db).index_item(db, item.id, source_sequence=item.aggregate_sequence)
+        await db.commit()
 
         results = await client.get("/?q=quantum")
         assert results.status_code == 200

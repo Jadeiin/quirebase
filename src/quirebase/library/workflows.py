@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from dbos import DBOS
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from quirebase.core.database import AsyncSessionLocal
 from quirebase.core.errors import ResourceUnavailable
@@ -18,7 +19,6 @@ from quirebase.core.workflows import (
 )
 from quirebase.documents.events import FILE_REVISION_CHANGED_WORKFLOW, OBJECT_CLEANUP_WORKFLOW
 from quirebase.models import ImportBatch, Item, ItemTagRecommendation
-from quirebase.search import search_index
 
 from .item_lifecycle import require_item_lifecycle_gate
 from .tag_recommendations import (
@@ -35,6 +35,19 @@ PREPARE_PDF_IMPORT_WORKFLOW = "library.prepare_pdf_import"
 
 async def _linked_workflow(record: ItemTagRecommendation):
     return await durable_operations().get(record.workflow_id) if record.workflow_id else None
+
+
+@ads.transaction()
+async def apply_file_revision_changed(item_id: str) -> None:
+    """Legacy event seam retained for recommendation workflows only.
+
+    Canonical revision commits enqueue SearchChanged transactionally; this
+    hook deliberately performs no Search write and exists solely to preserve
+    the event workflow's transaction boundary while recommendation work is
+    requested.
+    """
+    del item_id
+    await asyncio.sleep(0)
 
 
 async def item_tag_recommendation_status(
@@ -59,17 +72,9 @@ async def request_item_tag_recommendation(
 ) -> ItemTagRecommendation:
     """Create an idempotent generation request without committing its caller's transaction."""
     if force:
-        if db.get_bind().dialect.name == "sqlite":
-            locked_item_id = await db.scalar(
-                update(Item)
-                .where(Item.id == item_id)
-                .values(updated_at=Item.updated_at)
-                .returning(Item.id)
-            )
-        else:
-            locked_item_id = await db.scalar(
-                select(Item.id).where(Item.id == item_id).with_for_update()
-            )
+        locked_item_id = await db.scalar(
+            select(Item.id).where(Item.id == item_id).with_for_update()
+        )
         if locked_item_id is None:
             raise ValueError("Item no longer exists")
     elif await db.get(Item, item_id) is None:
@@ -290,12 +295,6 @@ async def prepare_pdf_import_workflow(
         raise
 
 
-@ads.transaction()
-async def apply_file_revision_changed(item_id: str) -> None:
-    db = ads.sql_session()
-    await search_index(db).index_item(db, item_id)
-
-
 @DBOS.step(retries_allowed=True, max_attempts=3)
 async def request_item_tag_recommendation_step(item_id: str, owner_id: str | None) -> None:
     """Retry the idempotent request boundary, including its separate DBOS Client lookup."""
@@ -310,6 +309,8 @@ async def request_item_tag_recommendation_step(item_id: str, owner_id: str | Non
 
 @DBOS.workflow(name=FILE_REVISION_CHANGED_WORKFLOW)
 async def file_revision_changed_workflow(item_id: str, owner_id: str | None) -> None:
+    # Search publication is coupled to the canonical FileRevision transaction
+    # itself. This event workflow retains only the recommendation trigger.
     await apply_file_revision_changed(item_id)
     await request_item_tag_recommendation_step(item_id, owner_id)
 

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import select, update
 
+from quirebase.access.items import validate_item_lifecycle_fence as _validate_item_lifecycle_fence
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
 from quirebase.models import Item, ItemLifecycleState
 
@@ -28,9 +29,9 @@ async def require_item_lifecycle_gate(
 ) -> Item:
     """Acquire the Item write gate and return fresh lifecycle state.
 
-    PostgreSQL obtains a row lock with ``FOR UPDATE``.  SQLite's no-op UPDATE
-    acquires the database writer lock, giving the same business serialization
-    semantics without process-global locks.
+    PostgreSQL obtains a row lock with ``FOR UPDATE``. SQLite accepts the same
+    query for local single-process development but does not provide an
+    equivalent multi-worker concurrency guarantee.
     """
 
     predicates = [Item.id == item_id]
@@ -38,19 +39,7 @@ async def require_item_lifecycle_gate(
         predicates.append(Item.lifecycle_state == ItemLifecycleState.active)
     if expected_fence is not None:
         predicates.append(Item.lifecycle_fence == expected_fence)
-    if db.get_bind().dialect.name == "sqlite":
-        gated_id = await db.scalar(
-            update(Item)
-            .where(*predicates)
-            .values(updated_at=Item.updated_at)
-            .returning(Item.id)
-            .execution_options(synchronize_session=False)
-        )
-        if gated_id is None:
-            raise ResourceUnavailable(message)
-        item = await db.get(Item, gated_id, populate_existing=True)
-    else:
-        item = await db.scalar(select(Item).where(*predicates).with_for_update())
+    item = await db.scalar(select(Item).where(*predicates).with_for_update())
     if item is None:
         raise ResourceUnavailable(message)
     return item
@@ -63,7 +52,7 @@ async def get_item_lifecycle_fence(db: AsyncSession, item_id: str) -> int:
     return int(value)
 
 
-async def begin_item_deletion(db: AsyncSession, item_id: str, *, commit: bool = True) -> int:
+async def begin_item_deletion(db: AsyncSession, item_id: str) -> int:
     """Transition an active Item to ``deleting`` and advance its fence."""
 
     item = await require_item_lifecycle_gate(db, item_id)
@@ -84,12 +73,6 @@ async def begin_item_deletion(db: AsyncSession, item_id: str, *, commit: bool = 
     if new_fence is None:
         raise ResourceUnavailable("item is no longer active")
     await db.flush()
-    # A lifecycle transition is itself a durable state-machine edge. The
-    # standalone interface commits it so independently running workflows can
-    # observe the fence immediately. Commands that also remove children pass
-    # ``commit=False`` and commit the complete deletion transaction together.
-    if commit:
-        await db.commit()
     return int(new_fence)
 
 
@@ -115,12 +98,9 @@ async def validate_item_lifecycle_fence(
     *,
     require_active: bool = True,
 ) -> Item | None:
-    predicates = [Item.id == item_id, Item.lifecycle_fence == lifecycle_fence]
-    if require_active:
-        predicates.append(Item.lifecycle_state == ItemLifecycleState.active)
-    if db.get_bind().dialect.name == "sqlite":
-        return await db.scalar(select(Item).where(*predicates))
-    return await db.scalar(select(Item).where(*predicates).with_for_update())
+    return await _validate_item_lifecycle_fence(
+        db, item_id, lifecycle_fence, require_active=require_active
+    )
 
 
 # Short aliases make the boundary easy to discover for callers and tests.

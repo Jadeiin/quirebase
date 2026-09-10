@@ -26,6 +26,7 @@ from quirebase.models import (
     ObjectIntegrityScan,
     User,
 )
+from quirebase.search import search_index
 
 
 async def create_test_admin(db, username="admin_item_test"):
@@ -84,6 +85,7 @@ async def test_list_global_items_searches_plaintext_across_title_markup(async_db
     admin = await create_test_admin(db, "admin-rich-title-search")
     member = await create_test_member(db, "member-rich-title-search")
     item = await create_item(db, member, title="<i>Alpha</i> Beta", authors="Example")
+    await search_index(db).index_item(db, item.id)
 
     items, total = await list_global_items(db, admin, search="Alpha Beta")
 

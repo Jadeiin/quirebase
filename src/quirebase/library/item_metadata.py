@@ -24,7 +24,7 @@ from quirebase.library.identifiers import (
 )
 from quirebase.library.workflows import request_item_tag_recommendation
 from quirebase.models import Item, User
-from quirebase.search import search_index
+from quirebase.search import enqueue_search_changed
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -272,7 +272,7 @@ async def _create_item(
         _contributor_payload(metadata.editors, editor=True),
         role="editor",
     )
-    await search_index(db).index_item(db, item.id)
+    await enqueue_search_changed(db, item.id)
     await request_item_tag_recommendation(db, item.id, owner_id=actor.id)
     record_event(db, actor.id, "item.create", "item", item.id)
     await db.commit()
@@ -288,17 +288,6 @@ async def create_item(
 ) -> ItemWriteResult:
     operation_id = normalize_operation_id(operation_id)
     try:
-        if operation_id and db.get_bind().dialect.name == "sqlite":
-            # SQLite has no row-level operation-key gate. Acquire its writer
-            # lock on the owning User before looking up the scoped key, so a
-            # concurrent winner is visible instead of leaving a stale read
-            # snapshot that fails while being upgraded during Item insertion.
-            await db.execute(
-                update(User)
-                .where(User.id == actor.id)
-                .values(active=User.active)
-                .execution_options(synchronize_session=False)
-            )
         return await _create_item(db, actor, metadata, operation_id)
     except IntegrityError:
         await db.rollback()
@@ -364,7 +353,7 @@ async def _revise_item_metadata(
     # projection. Refresh only the mutated aggregate; expiring the whole session
     # also expires the caller's User and invites implicit async ORM I/O later.
     await db.refresh(item)
-    await search_index(db).index_item(db, item_id)
+    await enqueue_search_changed(db, item_id)
     await request_item_tag_recommendation(db, item_id, owner_id=actor_id, force=True)
     record_event(
         db,
@@ -418,7 +407,7 @@ async def _regenerate_bibtex_key(
         current = await db.get(Item, item_id)
         raise VersionConflict(current.version if current else None)
     await db.refresh(item)
-    await search_index(db).index_item(db, item_id)
+    await enqueue_search_changed(db, item_id)
     record_event(
         db,
         actor_id,

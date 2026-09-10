@@ -926,7 +926,9 @@ async def test_discard_pdf_import_batch_removes_staged_objects(
         )
         assert discarded.status_code == 303
         assert discarded.headers["location"] == "/bibliography/import"
-        assert await db.get(ImportBatch, batch.id) is None
+        discarded_batch = await db.get(ImportBatch, batch.id)
+        assert discarded_batch is not None
+        assert discarded_batch.status == "discarded"
         fake_durable_operations.workflows.pop(batch.workflow_id)
         await document_workflows.delete_unreferenced_objects_step([pending_key])
         assert set(get_settings().object_dir.rglob("*.pdf")) == objects_before

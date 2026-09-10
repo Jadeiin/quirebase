@@ -24,9 +24,22 @@ from quirebase.models import (
     ProjectVisibility,
     User,
 )
-from quirebase.search import search_index
+from quirebase.search import enqueue_search_changed
 
 from .write_gate import require_project_write_gate
+
+
+async def _lock_active_user(db: AsyncSession, user: User) -> User:
+    locked = await db.scalar(
+        select(User)
+        .where(User.id == user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if locked is None or not locked.active:
+        raise ResourceUnavailable("user is not active")
+    return locked
+
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -109,6 +122,7 @@ async def list_joinable_projects(db: AsyncSession, user: User) -> list[tuple[Pro
 
 
 async def join_project(db: AsyncSession, user: User, project_id: str) -> ProjectMember:
+    user = await _lock_active_user(db, user)
     await require_project_write_gate(
         db,
         project_id,
@@ -169,6 +183,7 @@ async def open_project_workspace(db: AsyncSession, user: User, project_id: str) 
 
 
 async def add_item_to_project(db: AsyncSession, user: User, project_id: str, item_id: str) -> None:
+    user = await _lock_active_user(db, user)
     item = await db.get(Item, item_id)
     if item is None or not await can_read_item(db, user, item_id):
         raise ResourceUnavailable("item or project not accessible or insufficient permissions")
@@ -189,7 +204,7 @@ async def add_item_to_project(db: AsyncSession, user: User, project_id: str, ite
             .where(Item.id == item_id)
             .values(aggregate_sequence=Item.aggregate_sequence + 1)
         )
-        await search_index(db).index_item(db, item_id)
+        await enqueue_search_changed(db, item_id)
         record_event(
             db,
             user.id,
@@ -201,9 +216,43 @@ async def add_item_to_project(db: AsyncSession, user: User, project_id: str, ite
     await db.commit()
 
 
+async def add_items_to_project(
+    db: AsyncSession, user: User, project_id: str, item_ids: list[str]
+) -> tuple[str, ...]:
+    """Projects-owned bulk ProjectItem mutation used by Library commands."""
+
+    user = await _lock_active_user(db, user)
+    await require_project_write_gate(
+        db,
+        project_id,
+        state=ProjectState.active,
+        message="item or project not accessible or insufficient permissions",
+    )
+    membership = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
+    if membership is None or membership.role not in (ProjectRole.owner, ProjectRole.editor):
+        raise ResourceUnavailable("item or project not accessible or insufficient permissions")
+    changed: list[str] = []
+    for item_id in dict.fromkeys(item_ids):
+        item = await db.get(Item, item_id, populate_existing=True)
+        state = getattr(item.lifecycle_state, "value", item.lifecycle_state) if item else None
+        if item is None or state != "active":
+            raise ResourceUnavailable("item or project not accessible or insufficient permissions")
+        if await db.get(ProjectItem, (project_id, item_id), populate_existing=True) is None:
+            db.add(ProjectItem(project_id=project_id, item_id=item_id))
+            await db.execute(
+                update(Item)
+                .where(Item.id == item_id, Item.lifecycle_state == "active")
+                .values(aggregate_sequence=Item.aggregate_sequence + 1)
+            )
+            await enqueue_search_changed(db, item_id)
+            changed.append(item_id)
+    return tuple(changed)
+
+
 async def remove_item_from_project(
     db: AsyncSession, user: User, project_id: str, item_id: str
 ) -> None:
+    user = await _lock_active_user(db, user)
     if not await can_read_item(db, user, item_id):
         raise ResourceUnavailable("item or project not accessible or insufficient permissions")
     await require_project_write_gate(
@@ -227,7 +276,7 @@ async def remove_item_from_project(
         .where(Item.id == item_id)
         .values(aggregate_sequence=Item.aggregate_sequence + 1)
     )
-    await search_index(db).index_item(db, item_id)
+    await enqueue_search_changed(db, item_id)
     record_event(
         db,
         user.id,

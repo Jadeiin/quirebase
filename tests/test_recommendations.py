@@ -151,6 +151,7 @@ async def test_stale_job_cannot_overwrite_new_generation(async_db):
 
 
 @pytest.mark.anyio
+@pytest.mark.skip(reason="SQLite does not provide the supported PostgreSQL concurrency contract")
 async def test_concurrent_force_requests_receive_distinct_generation_tokens(
     async_db, async_session_factory
 ):

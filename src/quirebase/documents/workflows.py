@@ -11,14 +11,11 @@ from uuid import UUID
 from dbos import DBOS
 from sqlalchemy import and_, or_, select, update
 
-from quirebase.access.items import (
-    can_edit_item,
-    lock_item_edit_scope,
-    lock_item_lifecycle_fence,
-)
+from quirebase.access.items import lock_item_edit_authority, validate_item_lifecycle_fence
 from quirebase.audit import record_event
 from quirebase.core.config import get_settings
 from quirebase.core.database import AsyncSessionLocal
+from quirebase.core.errors import ResourceUnavailable
 from quirebase.core.storage import ObjectSuffix, get_object_store, object_key
 from quirebase.core.timezones import annotation_export_timezone
 from quirebase.core.workflows import LIBRARY_QUEUE, ads, enqueue_child_workflow
@@ -36,6 +33,7 @@ from quirebase.models import (
     ProjectMember,
     User,
 )
+from quirebase.search import enqueue_search_changed
 
 from .pdf import create_thumbnail, export_annotations, inspect_pdf, validate_pdf_container
 
@@ -194,50 +192,22 @@ async def inspect_uploaded_pdf(
 async def _lock_active_upload_owner(db: Any, owner_id: str) -> User:
     """Lock and validate the captured User before any Item-related gate."""
 
-    if db.get_bind().dialect.name == "sqlite":
-        owner_row_id = await db.scalar(
-            update(User)
-            .where(User.id == owner_id)
-            .values(active=User.active)
-            .returning(User.id)
-            .execution_options(synchronize_session=False)
-        )
-        owner = (
-            await db.get(User, owner_row_id, populate_existing=True)
-            if owner_row_id is not None
-            else None
-        )
-    else:
-        owner = await db.get(User, owner_id, with_for_update=True)
+    owner = await db.get(User, owner_id, with_for_update=True)
     if owner is None or not owner.active:
         raise ValueError("Item is no longer writable by the upload owner")
     return owner
 
 
-async def _require_owner_can_still_edit(db: Any, item: Item, owner: User) -> None:
-    """Re-authorize the captured owner inside the final upload commit transaction.
+async def _lock_upload_item(db: Any, owner: User, item_id: str, lifecycle_fence: int) -> Item:
+    """Acquire the minimal grant path and distinguish auth from stale fence."""
 
-    Permissions are granted when the upload starts, but the workflow can finish
-    long after membership or lifecycle changes. The captured User and relevant
-    Project and Item gates are already locked in canonical User -> Project ->
-    Item order. ProjectMember rows that could grant project-level access are
-    then row-locked so revocation serializes with this commit instead of racing
-    the authorization read.
-    """
-
-    await db.scalars(
-        select(ProjectMember)
-        .where(
-            ProjectMember.user_id == owner.id,
-            ProjectMember.project_id.in_(
-                select(ProjectItem.project_id).where(ProjectItem.item_id == item.id)
-            ),
-        )
-        .order_by(ProjectMember.project_id)
-        .with_for_update()
-    )
-    if not await can_edit_item(db, owner, item.id):
-        raise ValueError("Item is no longer writable by the upload owner")
+    try:
+        item = await lock_item_edit_authority(db, owner, item_id)
+    except ResourceUnavailable as error:
+        raise ValueError("Item is no longer writable by the upload owner") from error
+    if item.lifecycle_fence != lifecycle_fence:
+        raise ValueError("Item lifecycle changed before upload commit")
+    return item
 
 
 @ads.transaction()
@@ -247,13 +217,11 @@ async def commit_uploaded_revision(
     filename: str,
     inspected: UploadedPdfInspection,
     lifecycle_fence: int,
+    operation_id: str | None = None,
 ) -> RevisionWorkflowResult:
     db = ads.sql_session()
     owner = await _lock_active_upload_owner(db, owner_id)
-    item = await lock_item_edit_scope(db, item_id, lifecycle_fence)
-    if item is None:
-        raise ValueError("Item lifecycle changed before upload commit")
-    await _require_owner_can_still_edit(db, item, owner)
+    await _lock_upload_item(db, owner, item_id, lifecycle_fence)
     existing = await db.get(FileRevision, inspected["revision_id"])
     if existing is not None:
         if existing.processing_state == FileRevisionProcessingState.pending:
@@ -273,6 +241,7 @@ async def commit_uploaded_revision(
                     recommendation_sequence=Item.recommendation_sequence + 1,
                 )
             )
+            await enqueue_search_changed(db, item_id)
         return {"revision_id": existing.id, "item_id": existing.item_id}
     revision = FileRevision(
         id=inspected["revision_id"],
@@ -287,7 +256,7 @@ async def commit_uploaded_revision(
         full_text=inspected["full_text"],
         processing_state=FileRevisionProcessingState.ready,
         lifecycle_fence=lifecycle_fence,
-        operation_id=f"revision:{inspected['revision_id']}",
+        operation_id=operation_id or f"revision:{inspected['revision_id']}",
         created_by=owner_id,
     )
     db.add(revision)
@@ -299,6 +268,7 @@ async def commit_uploaded_revision(
             recommendation_sequence=Item.recommendation_sequence + 1,
         )
     )
+    await enqueue_search_changed(db, item_id)
     record_event(db, owner_id, "pdf.upload", "file_revision", revision.id)
     return {"revision_id": revision.id, "item_id": item_id}
 
@@ -323,6 +293,7 @@ async def upload_revision_workflow(
     object_id: str,
     thumbnail_object_id: str,
     filename: str,
+    operation_id: str,
     lifecycle_fence: int,
 ) -> RevisionWorkflowResult:
     key = object_key(UUID(object_id), ObjectSuffix.PDF)
@@ -337,7 +308,12 @@ async def upload_revision_workflow(
             revision_id, object_id, thumbnail_object_id, completed_receipt
         )
         result = await commit_uploaded_revision(
-            item_id, owner_id, filename, inspected, lifecycle_fence
+            item_id,
+            owner_id,
+            filename,
+            inspected,
+            lifecycle_fence,
+            operation_id=operation_id,
         )
         committed = True
         await _enqueue_file_revision_changed(revision_id, item_id, owner_id)
@@ -387,7 +363,10 @@ async def commit_imported_revision(inspected: PdfInspection) -> RevisionWorkflow
     if revision.processing_state == FileRevisionProcessingState.pending:
         if revision.lifecycle_fence is None:
             raise ValueError("imported revision is missing its lifecycle fence")
-        if await lock_item_lifecycle_fence(db, revision.item_id, revision.lifecycle_fence) is None:
+        if (
+            await validate_item_lifecycle_fence(db, revision.item_id, revision.lifecycle_fence)
+            is None
+        ):
             raise ValueError("Item lifecycle changed before imported revision commit")
         revision.thumbnail_object_key = inspected["thumbnail_object_key"]
         revision.thumbnail_size = inspected["thumbnail_size"]
@@ -404,6 +383,7 @@ async def commit_imported_revision(inspected: PdfInspection) -> RevisionWorkflow
                 recommendation_sequence=Item.recommendation_sequence + 1,
             )
         )
+        await enqueue_search_changed(db, revision.item_id)
     return {"revision_id": revision.id, "item_id": revision.item_id}
 
 
@@ -447,13 +427,11 @@ async def commit_uploaded_attachment(
     role_value: str | None,
     receipt: ValidatedAttachment,
     lifecycle_fence: int,
+    operation_id: str | None = None,
 ) -> AttachmentWorkflowResult:
     db = ads.sql_session()
     owner = await _lock_active_upload_owner(db, owner_id)
-    item = await lock_item_edit_scope(db, item_id, lifecycle_fence)
-    if item is None:
-        raise ValueError("Item lifecycle changed before attachment commit")
-    await _require_owner_can_still_edit(db, item, owner)
+    await _lock_upload_item(db, owner, item_id, lifecycle_fence)
     existing = await db.get(Attachment, attachment_id)
     if existing is not None:
         return {"attachment_id": existing.id, "item_id": existing.item_id}
@@ -474,7 +452,7 @@ async def commit_uploaded_attachment(
         original_name=Path(filename).name[:255],
         role=role,
         lifecycle_fence=lifecycle_fence,
-        operation_id=f"attachment:{attachment_id}",
+        operation_id=operation_id or f"attachment:{attachment_id}",
         created_by=owner_id,
     )
     db.add(attachment)
@@ -483,6 +461,7 @@ async def commit_uploaded_attachment(
         .where(Item.id == item_id, Item.lifecycle_state == "active")
         .values(aggregate_sequence=Item.aggregate_sequence + 1)
     )
+    await enqueue_search_changed(db, item_id)
     record_event(db, owner_id, "attachment.upload", "attachment", attachment.id)
     return {"attachment_id": attachment.id, "item_id": item_id}
 
@@ -496,6 +475,7 @@ async def upload_attachment_workflow(
     filename: str,
     content_type: str,
     role_value: str | None,
+    operation_id: str,
     lifecycle_fence: int,
 ) -> AttachmentWorkflowResult:
     key = object_key(UUID(object_id), ObjectSuffix.BINARY)
@@ -519,6 +499,7 @@ async def upload_attachment_workflow(
             role_value,
             validated,
             lifecycle_fence,
+            operation_id=operation_id,
         )
     except BaseException:
         await remove_owned_object(key)

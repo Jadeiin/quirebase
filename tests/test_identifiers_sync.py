@@ -163,8 +163,9 @@ async def test_rescan_pdf_doi(async_db):
     await db.flush()
 
     initial_version = item.version
-    with patch("quirebase.library.identifiers.search_index") as search_index_factory:
-        search_index_factory.return_value.index_item = AsyncMock()
+    with patch(
+        "quirebase.library.identifiers.enqueue_search_changed", new_callable=AsyncMock
+    ) as enqueue:
         found_doi = await rescan_pdf_doi(db, user, item.id, expected_version=initial_version)
     assert found_doi == "10.1038/s41586-020-2649-2"
 
@@ -173,7 +174,7 @@ async def test_rescan_pdf_doi(async_db):
     assert loaded_item.doi == "10.1038/s41586-020-2649-2"
     assert loaded_item.version == initial_version + 1
     assert loaded_item.updated_by == user.id
-    search_index_factory.return_value.index_item.assert_awaited_once_with(db, item.id)
+    enqueue.assert_awaited_once_with(db, item.id)
 
 
 @pytest.mark.anyio

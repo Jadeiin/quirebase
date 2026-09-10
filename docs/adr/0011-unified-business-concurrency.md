@@ -40,8 +40,9 @@ Audit Event.
 
 Library Search projections persist `source_sequence` and accept an update only when its sequence is
 at least as new as the stored projection. PostgreSQL enforces this in one conditional upsert;
-SQLite acquires its writer lock before reading canonical Item state or the stored sequence, then
-performs the guarded FTS replacement. The dialect-native Search schema belongs exclusively to
+SearchChanged work is transactionally enqueued and rebuilt by DBOS after the canonical commit.
+SQLite retains a functional FTS5 adapter for single-process development only; it has no supported
+multi-worker concurrency guarantee. The dialect-native Search schema belongs exclusively to
 Alembic migrations; request and workflow transactions never probe or mutate schema. Library Search
 remains derived state: it does not define whether the business write itself is valid.
 
@@ -51,16 +52,18 @@ Cross-row invariants use database-backed aggregate gates. Projects owns the Proj
 Library owns the Item lifecycle gate. Access may coordinate the locks required to make a final
 authorization decision, but it does not own Project or Item business transitions.
 
-Transactions that touch more than one aggregate acquire gates in this order:
+Transactions acquire only the gates on the authorization path they actually use:
 
 ```text
-User -> Project -> Tag -> Item -> File Revision / Annotation -> association rows
+owner/admin: User -> Item
+project grant: User -> selected Project -> Item
+then Tag/child rows as required
 ```
 
-Multiple objects at one level are locked by stable ID order. PostgreSQL uses row locks. SQLite uses
-a conditional no-op update where a write gate is required, acquiring its database writer lock while
-preserving the same business outcome. The implementation does not use process locks or queue-wide
-serialization as a substitute for these invariants.
+Multiple objects at one level are locked by stable ID order. PostgreSQL uses row locks. SQLite is
+kept for single-process development only and does not emulate this concurrency contract. The
+implementation does not use process locks or queue-wide serialization as a substitute for these
+invariants.
 
 Only commands whose invariant includes active-account authorization acquire a User gate. Tag
 taxonomy changes and Item Tag assignment changes share the Library-owned Tag gate, so a rename
@@ -75,8 +78,9 @@ before looking up that owner-scoped key, preventing a concurrent winner from tur
 request's read transaction into a busy snapshot. File Revision and Attachment workflows use
 preallocated UUIDs and derive their operation identity from those UUIDs.
 
-Import Batch confirmation stores its commit operation ID and final Item IDs. Per-Item keys are a
-fixed-length SHA-256 derivation of the commit operation ID and record index, so every valid
+Import Batch confirmation stores its commit operation ID and final Item IDs. Identity is scoped to
+the Batch; per-Item keys are a fixed-length SHA-256 derivation of the Batch ID, commit operation ID
+and record index, so every valid
 255-character parent ID produces storage-safe deterministic child IDs. There is one current key
 format; no legacy derivation branch is retained.
 
@@ -93,7 +97,8 @@ and `committed` transition occur in one transaction. Both confirmation and disca
 Import Batch database gate before its state is read, including through a no-op write on SQLite where
 row-level `FOR UPDATE` is unavailable. A retry with the same operation ID returns the recorded Item
 IDs. A different operation ID conflicts, and a committed batch remains as the idempotency record
-while relinquishing staged-object reservations.
+while relinquishing staged-object reservations. Discard retains a terminal tombstone for
+idempotent retries.
 
 ### Fence durable workflow commits and re-authorize them
 
@@ -141,13 +146,11 @@ syntax but must expose the same business result.
 
 ## Scope and follow-up
 
-This decision establishes the core concurrency foundation; it does not claim that every write path
-has completed the final architecture. Follow-up work will move Library Search writes behind durable
-projection intents, consolidate lifecycle locking under the Library-owned seam, extend commit-time
-authorization to synchronous mutations with minimal grant-path locks, and route Library bulk
-Project assignment through a Projects-owned typed command. Caller retry identities for HTTP/MCP
-uploads and the final Batch-scoping/discard representation for Import commit identities also remain
-explicit follow-up decisions.
+This decision establishes the current alpha concurrency architecture. Search writes are behind
+durable projection intents, lifecycle predicates are Library-owned, synchronous mutations use the
+minimal grant-path authorization seam, and Library bulk Project assignment dispatches through a
+Projects-owned typed command. HTTP upload endpoints accept caller operation UUIDs; no compatibility
+translation for older APIs, stored data or workflow checkpoints is provided.
 
 ## Rejected alternatives
 

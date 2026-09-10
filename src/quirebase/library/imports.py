@@ -40,7 +40,7 @@ from quirebase.library.citations import format_csl_export, format_standard_expor
 from quirebase.library.identifiers import normalize_operation_id
 from quirebase.library.providers import candidate_record_values, lookup_candidate
 from quirebase.models import ImportBatch, Item, ItemAuthor, User
-from quirebase.search import search_index
+from quirebase.search import enqueue_search_changed
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -56,10 +56,10 @@ class BatchConflict(DomainError):
 MAX_PDF_IMPORT_FILES = 50
 
 
-def _derive_import_item_operation_id(commit_operation_id: str, index: int) -> str:
+def _derive_import_item_operation_id(batch_id: str, commit_operation_id: str, index: int) -> str:
     """Return a stable, storage-bounded idempotency key for one imported Item."""
 
-    digest = hashlib.sha256(f"{commit_operation_id}\0{index}".encode()).hexdigest()
+    digest = hashlib.sha256(f"{batch_id}\0{commit_operation_id}\0{index}".encode()).hexdigest()
     operation_id = normalize_operation_id(f"import-item:{digest}")
     assert operation_id is not None
     return operation_id
@@ -532,22 +532,7 @@ async def retry_pdf_import_batch(db: AsyncSession, user: User, batch_id: str) ->
 
 async def _lock_import_batch(db: AsyncSession, batch_id: str, owner_id: str) -> ImportBatch | None:
     predicates = [ImportBatch.id == batch_id, ImportBatch.created_by == owner_id]
-    if db.get_bind().dialect.name != "sqlite":
-        return await db.scalar(select(ImportBatch).where(*predicates).with_for_update())
-    gated_id = await db.scalar(
-        update(ImportBatch)
-        .where(*predicates)
-        .values(status=ImportBatch.status)
-        .returning(ImportBatch.id)
-        .execution_options(synchronize_session=False)
-    )
-    if gated_id is None:
-        return None
-    return await db.scalar(
-        select(ImportBatch)
-        .where(ImportBatch.id == gated_id)
-        .execution_options(populate_existing=True)
-    )
+    return await db.scalar(select(ImportBatch).where(*predicates).with_for_update())
 
 
 async def commit_import_batch(
@@ -585,7 +570,7 @@ async def commit_import_batch(
     if not records:
         raise BatchConflict("the import batch has no candidate records")
     item_operation_ids = tuple(
-        _derive_import_item_operation_id(requested_operation, index)
+        _derive_import_item_operation_id(batch.id, requested_operation, index)
         for index in range(len(records))
     )
     if batch.file_format == "pdf":
@@ -639,7 +624,7 @@ async def commit_import_batch(
                     pdf["original_name"],
                 ),
             )
-        await search_index(db).index_item(db, item.id)
+        await enqueue_search_changed(db, item.id)
         record_event(
             db,
             user.id,
@@ -675,19 +660,30 @@ async def discard_import_batch(db: AsyncSession, user: User, batch_id: str) -> N
     batch = await _lock_import_batch(db, batch_id, user.id)
     if batch is None:
         raise ResourceUnavailable("import batch not found")
-    # The locked read plus the discardable-status check serialize this deletion
-    # against the commit transition: a concurrent confirmation either removes
-    # the batch first (not found) or has already moved it to a non-discardable
-    # state, so a committed tombstone can never be deleted underneath its
-    # idempotency record.
-    if batch.status in {"committing", *ImportBatch.TERMINAL_STATUSES}:
+    # The locked read plus the discardable-status check serialize this terminal
+    # transition against confirmation. The discarded tombstone is retained so
+    # a retry can be answered idempotently without recreating staged objects.
+    if batch.status == "discarded":
+        await db.commit()
+        return
+    if batch.status in {"committing", "committed"}:
         raise BatchConflict("the import batch is being committed or was already committed")
     object_keys = _pdf_object_keys(batch.records)
     record_event(db, user.id, "import.batch.discard", "import_batch", batch.id)
-    # Discard is terminal; remove the staging record after recording durable
-    # cleanup intent.  The state machine still treats this operation as the
-    # ``ready -> discarded`` transition from the caller's perspective.
-    await db.delete(batch)
+    batch.status = "discarded"
+    try:
+        records = json.loads(batch.records)
+    except (json.JSONDecodeError, TypeError):
+        records = []
+    if isinstance(records, list):
+        batch.records = json.dumps(
+            [
+                {key: value for key, value in record.items() if key != "_pdf"}
+                for record in records
+                if isinstance(record, dict)
+            ],
+            ensure_ascii=False,
+        )
     await enqueue_object_cleanup(
         db,
         object_keys,

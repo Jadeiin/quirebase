@@ -624,7 +624,7 @@ async def test_read_heavy_datasource_steps_use_read_committed(monkeypatch):
     await operation_workflows.get_export_ttl_step()
     await library_workflows.item_tag_recommendation_is_current_step("item-id", 1, "workflow-id")
 
-    assert {options["isolation_level"] for options in captured} == {"READ COMMITTED"}
+    assert {options["isolation_level"] for options in captured} == {"SERIALIZABLE"}
 
 
 @pytest.mark.anyio

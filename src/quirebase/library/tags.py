@@ -7,8 +7,8 @@ from sqlalchemy import and_, delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access.items import (
-    can_edit_item,
     can_read_item,
+    lock_item_edit_authority,
     require_editable_item,
     visible_items_query,
 )
@@ -29,7 +29,7 @@ from quirebase.library.workflows import (
     request_item_tag_recommendation,
 )
 from quirebase.models import Item, ItemLifecycleState, ItemTag, ItemTagRecommendation, Tag, User
-from quirebase.search import search_index
+from quirebase.search import enqueue_search_changed
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -78,37 +78,83 @@ async def advance_item_tag_collection(db: AsyncSession, user_id: str, item_id: s
 async def _lock_tag_write_gates(
     db: AsyncSession, tag_ids: list[str] | tuple[str, ...]
 ) -> dict[str, Tag]:
-    """Lock Tag aggregates in stable ID order before locking affected Items."""
+    """Lock Tag aggregates in stable ID order."""
 
     ordered_ids = tuple(sorted(set(tag_ids)))
     if not ordered_ids:
         return {}
-    if db.get_bind().dialect.name == "sqlite":
-        await db.execute(
-            update(Tag)
+    tags = (
+        await db.scalars(
+            select(Tag)
             .where(Tag.id.in_(ordered_ids))
-            .values(name=Tag.name)
-            .execution_options(synchronize_session=False)
+            .order_by(Tag.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
-        tags = (
-            await db.scalars(
-                select(Tag)
-                .where(Tag.id.in_(ordered_ids))
-                .order_by(Tag.id)
-                .execution_options(populate_existing=True)
-            )
-        ).all()
-    else:
-        tags = (
-            await db.scalars(
-                select(Tag)
-                .where(Tag.id.in_(ordered_ids))
-                .order_by(Tag.id)
-                .with_for_update()
-                .execution_options(populate_existing=True)
-            )
-        ).all()
+    ).all()
     return {tag.id: tag for tag in tags}
+
+
+async def _tag_item_ids(db: AsyncSession, tag_ids: list[str] | tuple[str, ...]) -> tuple[str, ...]:
+    if not tag_ids:
+        return ()
+    return tuple(
+        sorted(
+            set(
+                (
+                    await db.scalars(
+                        select(ItemTag.item_id).where(ItemTag.tag_id.in_(tuple(set(tag_ids))))
+                    )
+                ).all()
+            )
+        )
+    )
+
+
+async def _lock_tag_items_before_gate(
+    db: AsyncSession, tag_ids: list[str] | tuple[str, ...]
+) -> tuple[str, ...]:
+    """Acquire affected Item gates before the Tag gate.
+
+    Item Tag assignment writers use Item -> Tag ordering. Taxonomy commands
+    therefore take a snapshot, lock those Items in ID order, and only then
+    acquire their Tag rows. Any association committed before the Tag lock is
+    reconciled by callers after the Tag rows are held.
+    """
+
+    item_ids = await _tag_item_ids(db, tag_ids)
+    locked_item_ids: list[str] = []
+    for item_id in item_ids:
+        try:
+            await require_item_lifecycle_gate(db, item_id)
+        except ResourceUnavailable:
+            # Deletion may win while the association snapshot is being read.
+            # The taxonomy operation can continue for surviving Items.
+            continue
+        locked_item_ids.append(item_id)
+    return tuple(locked_item_ids)
+
+
+async def _reconcile_tag_item_gates(
+    db: AsyncSession,
+    tag_ids: list[str] | tuple[str, ...],
+    initially_seen: tuple[str, ...],
+) -> tuple[str, ...]:
+    """Lock associations committed before the Tag gate was acquired."""
+
+    item_ids = await _tag_item_ids(db, tag_ids)
+    initial = set(initially_seen)
+    locked_item_ids: list[str] = []
+    for item_id in item_ids:
+        if item_id in initial:
+            locked_item_ids.append(item_id)
+            continue
+        try:
+            await require_item_lifecycle_gate(db, item_id)
+        except ResourceUnavailable:
+            continue
+        locked_item_ids.append(item_id)
+    return tuple(locked_item_ids)
 
 
 async def _find_or_create_tag(db: AsyncSession, user: User, normalized: str) -> Tag:
@@ -126,25 +172,14 @@ async def _find_or_create_tag(db: AsyncSession, user: User, normalized: str) -> 
     return tag
 
 
-async def _acquire_sqlite_tag_creation_gate(db: AsyncSession) -> None:
-    if db.get_bind().dialect.name == "sqlite":
-        # New Tag creation has no known row to lock. A no-op write on the
-        # taxonomy table serializes the lookup/insert pair before a read
-        # snapshot can become stale.
-        await db.execute(
-            update(Tag).values(name=Tag.name).execution_options(synchronize_session=False)
-        )
-
-
-async def acquire_tag_creation_gate(db: AsyncSession) -> None:
-    """Acquire the SQLite taxonomy gate before permission/snapshot reads."""
-
-    await _acquire_sqlite_tag_creation_gate(db)
+def acquire_tag_creation_gate(db: AsyncSession) -> None:
+    """Retained as a no-op hook; SQLite has no supported concurrency contract."""
+    del db
 
 
 async def get_or_create_tag(db: AsyncSession, user: User, name: str) -> Tag:
     normalized = normalize_tag_name(name)
-    await acquire_tag_creation_gate(db)
+    acquire_tag_creation_gate(db)
     while True:
         candidate = await _find_or_create_tag(db, user, normalized)
         tag = (await _lock_tag_write_gates(db, (candidate.id,))).get(candidate.id)
@@ -153,10 +188,10 @@ async def get_or_create_tag(db: AsyncSession, user: User, name: str) -> Tag:
 
 
 async def add_tag_to_item(db: AsyncSession, user: User, item_id: str, name: str) -> ItemTag:
-    # The permission read below must occur after the SQLite taxonomy gate.
-    await acquire_tag_creation_gate(db)
-    if not await can_edit_item(db, user, item_id):
-        raise ResourceUnavailable("item not found or cannot be edited")
+    # Lock the concrete grant path (User -> selected Project/Item) and
+    # revalidate authority immediately before mutating the Tag assignment.
+    acquire_tag_creation_gate(db)
+    await lock_item_edit_authority(db, user, item_id)
     tag = await get_or_create_tag(db, user, name)
     await require_item_lifecycle_gate(db, item_id)
     assignment = await db.get(ItemTag, (item_id, tag.id), populate_existing=True)
@@ -164,16 +199,27 @@ async def add_tag_to_item(db: AsyncSession, user: User, item_id: str, name: str)
         await advance_item_tag_collection(db, user.id, item_id)
         assignment = ItemTag(item_id=item_id, tag_id=tag.id)
         db.add(assignment)
-        await db.flush()
-        await search_index(db).index_item(db, item_id)
+        try:
+            await db.flush()
+        except IntegrityError:
+            # A concurrent writer may win the unique ItemTag insert on local
+            # SQLite (which has no supported row-lock contract). Roll back our
+            # losing transaction and return the durable assignment; PostgreSQL
+            # serializes this path through the Item gate.
+            tag_id = tag.id
+            await db.rollback()
+            existing = await db.get(ItemTag, (item_id, tag_id), populate_existing=True)
+            if existing is None:
+                raise
+            return existing
+        await enqueue_search_changed(db, item_id)
         record_event(db, user.id, "tag.add", "item", item_id)
         await db.commit()
     return assignment
 
 
 async def remove_tag_from_item(db: AsyncSession, user: User, item_id: str, tag_id: str) -> None:
-    if not await can_edit_item(db, user, item_id):
-        raise ResourceUnavailable("item not found or cannot be edited")
+    await lock_item_edit_authority(db, user, item_id)
     if tag_id not in await _lock_tag_write_gates(db, (tag_id,)):
         return
     await require_item_lifecycle_gate(db, item_id)
@@ -182,7 +228,7 @@ async def remove_tag_from_item(db: AsyncSession, user: User, item_id: str, tag_i
         await advance_item_tag_collection(db, user.id, item_id)
         await db.delete(assignment)
         await db.flush()
-        await search_index(db).index_item(db, item_id)
+        await enqueue_search_changed(db, item_id)
         record_event(
             db,
             user.id,
@@ -195,20 +241,19 @@ async def remove_tag_from_item(db: AsyncSession, user: User, item_id: str, tag_i
 
 
 async def rename_tag(db: AsyncSession, user: User, tag_id: str, name: str) -> Tag:
+    initially_seen = await _lock_tag_items_before_gate(db, (tag_id,))
     tag = (await _lock_tag_write_gates(db, (tag_id,))).get(tag_id)
     if tag is None or (tag.created_by != user.id and user.role != "administrator"):
         raise ResourceUnavailable("tag not found or cannot be managed")
+    item_ids = await _reconcile_tag_item_gates(db, (tag_id,), initially_seen)
     normalized = normalize_tag_name(name)
     if await db.scalar(select(Tag.id).where(Tag.name == normalized, Tag.id != tag.id)):
         raise TagConflict("tag name already exists")
     tag.name = normalized
-    item_ids = sorted(
-        (await db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == tag.id))).all()
-    )
     for item_id in item_ids:
-        # Assignment writers take the Tag gate before the Item gate. Reacquire
-        # each Item gate and re-read its assignment so a concurrent first
-        # assignment is either observed here or indexes itself after commit.
+        # Item gates were acquired before the Tag gate. Re-read each assignment
+        # so a concurrent first assignment is either observed here or indexes
+        # itself after commit.
         try:
             await require_item_lifecycle_gate(db, item_id)
         except ResourceUnavailable:
@@ -221,25 +266,24 @@ async def rename_tag(db: AsyncSession, user: User, tag_id: str, name: str) -> Ta
         ):
             continue
         await bump_item_aggregate_sequence(db, item_id)
-        await search_index(db).index_item(db, item_id)
+        await enqueue_search_changed(db, item_id)
     record_event(db, user.id, "tag.rename", "tag", tag.id)
     await db.commit()
     return tag
 
 
 async def delete_tag(db: AsyncSession, user: User, tag_id: str) -> None:
+    initially_seen = await _lock_tag_items_before_gate(db, (tag_id,))
     tag = (await _lock_tag_write_gates(db, (tag_id,))).get(tag_id)
     if tag is None or (tag.created_by != user.id and user.role != "administrator"):
         raise ResourceUnavailable("tag not found or cannot be managed")
-    item_ids = sorted(
-        (await db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == tag.id))).all()
-    )
+    item_ids = await _reconcile_tag_item_gates(db, (tag_id,), initially_seen)
     for item_id in item_ids:
         await advance_item_tag_collection(db, user.id, item_id)
     await db.delete(tag)
     await db.flush()
     for item_id in item_ids:
-        await search_index(db).index_item(db, item_id)
+        await enqueue_search_changed(db, item_id)
     record_event(db, user.id, "tag.delete", "tag", tag_id)
     await db.commit()
 
@@ -328,9 +372,8 @@ async def set_item_tags(
     the write without creating a metadata version conflict.
     """
 
-    await acquire_tag_creation_gate(db)
-    if not await can_edit_item(db, user, item_id):
-        raise ResourceUnavailable("item not found or cannot be edited")
+    acquire_tag_creation_gate(db)
+    await lock_item_edit_authority(db, user, item_id)
     selected_ids = list(dict.fromkeys(tag_ids))
     requested_names = sorted({
         normalize_tag_name(raw_name) for raw_name in new_names or [] if raw_name.strip()
@@ -367,12 +410,13 @@ async def set_item_tags(
         if tag_id in locked_tags:
             db.add(ItemTag(item_id=item_id, tag_id=tag_id))
     await db.flush()
-    await search_index(db).index_item(db, item_id)
+    await enqueue_search_changed(db, item_id)
     record_event(db, user.id, "tag.set", "item", item_id)
     await db.commit()
 
 
 async def merge_tags(db: AsyncSession, user: User, source_tag_id: str, target_tag_id: str) -> Tag:
+    initially_seen = await _lock_tag_items_before_gate(db, (source_tag_id, target_tag_id))
     tags = await _lock_tag_write_gates(db, (source_tag_id, target_tag_id))
     source_tag = tags.get(source_tag_id)
     target_tag = tags.get(target_tag_id)
@@ -383,9 +427,14 @@ async def merge_tags(db: AsyncSession, user: User, source_tag_id: str, target_ta
     if user.role != "administrator" and source_tag.created_by != user.id:
         raise ResourceUnavailable("not authorized to merge these tags")
 
+    locked_item_ids = await _reconcile_tag_item_gates(
+        db, (source_tag_id, target_tag_id), initially_seen
+    )
+
     source_item_ids = set(
         (await db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == source_tag.id))).all()
     )
+    source_item_ids.intersection_update(locked_item_ids)
     target_item_ids = set(
         (await db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == target_tag.id))).all()
     )
@@ -398,7 +447,7 @@ async def merge_tags(db: AsyncSession, user: User, source_tag_id: str, target_ta
     await db.flush()
 
     for item_id in sorted(source_item_ids):
-        await search_index(db).index_item(db, item_id)
+        await enqueue_search_changed(db, item_id)
     record_event(
         db,
         user.id,

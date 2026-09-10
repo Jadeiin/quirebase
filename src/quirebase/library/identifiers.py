@@ -21,7 +21,7 @@ from quirebase.library.authors import parse_author_name, set_item_authors_from_s
 from quirebase.library.providers import candidate_record_values, lookup_candidate
 from quirebase.library.workflows import request_item_tag_recommendation
 from quirebase.models import FileRevision, Item, ItemAuthor, ItemIdentifier, User
-from quirebase.search import search_index
+from quirebase.search import enqueue_search_changed
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -178,7 +178,7 @@ async def _rescan_pdf_doi(
                 existing_pairs.append(("doi", found_doi))
                 await set_item_identifiers(db, user, item_id, existing_pairs)
                 await db.refresh(item)
-                await search_index(db).index_item(db, item_id)
+                await enqueue_search_changed(db, item_id)
                 record_event(
                     db,
                     user.id,
@@ -412,7 +412,7 @@ async def _sync_metadata_from_upstream(
 
     await db.flush()
 
-    await search_index(db).index_item(db, item_id)
+    await enqueue_search_changed(db, item_id)
     await request_item_tag_recommendation(db, item_id, owner_id=user.id, force=True)
     record_event(
         db,

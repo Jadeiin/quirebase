@@ -18,6 +18,7 @@ from quirebase.library import (
     search_library,
 )
 from quirebase.models import Author, Item, ItemAuthor, ItemIdentifier, User
+from quirebase.search import search_index
 
 
 @pytest.mark.anyio
@@ -150,6 +151,8 @@ async def test_revise_item_metadata_replaces_contributors_in_order(async_db):
     ]
     assert [link.position for link in workspace.authors] == [1, 2]
     assert workspace.authors[0].is_corresponding
+    await search_index(db).index_item(db, item_id)
+    await db.commit()
     matches, total, _, _ = await search_library(db, owner, q="Contributor replacement")
     assert total == 1
     assert matches[0].id == item_id

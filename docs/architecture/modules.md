@@ -17,7 +17,7 @@ Planned deepening work is ordered in `docs/architecture/deep-module-roadmap.md`.
 | `projects` | Business Module | Projects, Project membership and Item assignment |
 | `documents` | Business Module | File Revisions, Attachments, Annotations, uploads, PDF inspection, thumbnails, annotation-export workflows and Annotation Export Artifacts |
 | `operations` | Business Module | Runtime settings, health, backup, reconciliation and maintenance workflows |
-| `search` | Outbound adapter Module | The Library Search port plus SQLite and PostgreSQL adapters |
+| `search` | Derived projection Module | The Library Search port, dialect adapters and durable SearchChanged workflow |
 | `web` | Inbound adapter Module | HTTP parsing, authentication dependencies and response formatting |
 | `mcp` | Inbound adapter Module | MCP tool registration, API Token adaptation and protocol conversion |
 | `programmatic` | Application Interface Module | Shared response contracts and pure projections used by the HTTP API and MCP adapters |
@@ -68,9 +68,10 @@ Each mechanism remains owned by the Module whose invariant it protects:
 | Item Tag Recommendation ordering | Library | Recommendation sequence plus generation token |
 | Retried creates and one-shot confirmation | Owning business Module | Stable operation ID, uniqueness constraint and recorded result/state machine |
 
-Cross-resource locking follows
-`User -> Project -> Tag -> Item -> File Revision / Annotation -> association rows`; a command skips
-levels it does not need, and multiple aggregates at one level are locked by stable ID order.
+Cross-resource locking follows the minimal authorization path: owner/admin writes use
+`User -> Item`; Project-granted writes use `User -> selected Project -> Item`. Tag and child
+association rows are locked only after the grant path is established, and multiple aggregates at
+one level are locked by stable ID order. A command skips levels it does not need.
 Objects at the same level are acquired in stable ID order. Access can coordinate authorization
 locks but does not own the Project write gate or Item lifecycle transition. Business commands keep
 authorization, the mutation, Audit Event and projection intent in one short transaction; external
@@ -196,9 +197,10 @@ Membership authorization and the related queries remain coordinated behind that 
 the Web adapter maps the typed view to template context.
 
 Project-scoped mutations acquire the Projects write gate before revalidating state, visibility
-and Project Role. The conditional write serializes lifecycle, membership and Item-assignment
-changes on SQLite and PostgreSQL; Library bulk assignment crosses this Projects interface while
-retaining ownership of the surrounding bulk-operation transaction and Audit Event.
+and Project Role. PostgreSQL is the supported multi-worker concurrency target; SQLite remains a
+single-process development profile without a concurrency guarantee. Library bulk assignment
+crosses this Projects interface while retaining ownership of the surrounding bulk-operation
+transaction and Audit Event.
 
 Administrator Project management crosses the Projects interface through
 `list_projects_for_admin`, which returns a paginated directory with creator and membership/item
@@ -301,9 +303,9 @@ directions are:
 | `audit` | `core`, `models` | Authorization errors and Audit Event persistence |
 | `library` | `access`, `audit`, `core`, `documents`, `models`, `operations`, `projects`, `search` | Authorization, persistence and auditing; selected-Item document assembly; Project-gated bulk assignment; runtime Provider/import settings; Library-owned workflows and search-index synchronization |
 | `projects` | `access`, `audit`, `core`, `models`, `search` | Authorization, Project persistence, audit recording and Item index synchronization |
-| `documents` | `access`, `audit`, `core`, `models`, `operations` | Authorization, owned-object persistence, auditing, runtime settings and Documents workflows |
+| `documents` | `access`, `audit`, `core`, `models`, `operations`, `search` | Authorization, owned-object persistence, auditing, runtime settings, Search intents and Documents workflows |
 | `operations` | `audit`, `core`, `library`, `models`, `search` | Infrastructure access, operational persistence, maintenance workflows, global rebuild coordination and audit recording |
-| `search` | `models` | Build and query the derived search representation |
+| `search` | `core`, `models` | Build/query the derived search representation and enqueue durable projection work |
 | `web` | Business Modules, `access`, `core`, `mcp`, `models`, `programmatic` | Invoke use cases, expose the Bearer-authenticated HTTP API with API Token provenance, format views and compose the MCP HTTP mount into the application |
 | `mcp` | `accounts`, `audit`, `core`, `documents`, `library`, `programmatic`, `projects` | Resolve a verified token subject, bind invocation provenance for business Audit Events, manage request persistence lifetime, invoke ordinary User use cases and format protocol results without owning their authorization or transactions |
 | `programmatic` | `documents`, `library` | Define shared programmatic response contracts and pure projections without owning authentication, transactions or business authorization |
