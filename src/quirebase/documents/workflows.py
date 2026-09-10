@@ -28,6 +28,7 @@ from quirebase.models import (
     FileRevision,
     FileRevisionProcessingState,
     Item,
+    ItemLifecycleState,
     PdfAnnotation,
     ProjectItem,
     ProjectMember,
@@ -204,13 +205,27 @@ async def _lock_upload_item(db: Any, owner: User, item_id: str, lifecycle_fence:
     try:
         item = await lock_item_edit_authority(db, owner, item_id)
     except ResourceUnavailable as error:
+        # ``lock_item_edit_authority`` uses the same ResourceUnavailable
+        # sentinel for a revoked project grant and for an Item that has
+        # entered deletion.  Re-read the Item after the gate attempt so the
+        # durable upload workflow reports the stale lifecycle fence distinctly
+        # (and callers can safely discard its uploaded objects).
+        state_and_fence = await db.execute(
+            select(Item.lifecycle_state, Item.lifecycle_fence).where(Item.id == item_id)
+        )
+        current = state_and_fence.one_or_none()
+        if current is not None and (
+            current.lifecycle_state != ItemLifecycleState.active
+            or current.lifecycle_fence != lifecycle_fence
+        ):
+            raise ValueError("Item lifecycle changed before upload commit") from error
         raise ValueError("Item is no longer writable by the upload owner") from error
     if item.lifecycle_fence != lifecycle_fence:
         raise ValueError("Item lifecycle changed before upload commit")
     return item
 
 
-@ads.transaction()
+@ads.transaction(isolation_level="READ COMMITTED")
 async def commit_uploaded_revision(
     item_id: str,
     owner_id: str,
@@ -417,7 +432,7 @@ async def validate_attachment_upload(
     return {"object_key": key, "size": metadata.size}
 
 
-@ads.transaction()
+@ads.transaction(isolation_level="READ COMMITTED")
 async def commit_uploaded_attachment(
     item_id: str,
     owner_id: str,
