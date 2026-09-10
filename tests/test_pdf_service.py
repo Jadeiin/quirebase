@@ -11,6 +11,7 @@ from quirebase.documents.pdf import (
     extract_doi,
     inspect_pdf,
     parse_pdf_annotations,
+    pdf_has_signature,
     strip_native_annotations,
     validate_pdf_annotation_mode,
     validate_pdf_container,
@@ -61,6 +62,21 @@ def test_strip_native_annotations_writes_clean_derived_pdf(tmp_path):
     assert strip_native_annotations(source, derived) == 1
     with pymupdf.open(source) as original, pymupdf.open(derived) as clean:
         assert list(original[0].annots())
+        assert list(clean[0].annots() or ()) == []
+
+
+def test_strip_native_annotations_deletes_all_annotations_without_live_iterator_skips(tmp_path):
+    source = tmp_path / "multiple-native.pdf"
+    derived = tmp_path / "multiple-stripped.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        for index in range(3):
+            note = page.add_text_annot((20 + index * 30, 30), f"Note {index}")
+            note.update()
+        document.save(source)
+
+    assert strip_native_annotations(source, derived) == 3
+    with pymupdf.open(derived) as clean:
         assert list(clean[0].annots() or ()) == []
 
 
@@ -180,6 +196,38 @@ def test_parse_native_annotations_skips_non_printing_annotations(tmp_path):
     ]
 
 
+@pytest.mark.parametrize("fontsize", [0.5, 145])
+def test_parse_native_annotations_skips_unrepresentable_freetext_sizes(tmp_path, fontsize):
+    source = tmp_path / f"freetext-size-{fontsize}.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        free_text = page.add_freetext_annot(
+            pymupdf.Rect(20, 30, 120, 70), "Sized", fontsize=fontsize
+        )
+        free_text.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics[0]["reason"] == "FreeText font size is not representable"
+
+
+def test_parse_native_annotations_skips_open_note_popups(tmp_path):
+    source = tmp_path / "open-note.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        note = page.add_text_annot((20, 30), "Open")
+        note.update()
+        document.xref_set_key(note.xref, "Open", "true")
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics[0]["reason"] == "open note popups are unsupported"
+
+
 @pytest.mark.parametrize("flag", [pymupdf.PDF_ANNOT_IS_NO_ZOOM, pymupdf.PDF_ANNOT_IS_NO_ROTATE])
 def test_parse_native_annotations_skips_unrepresentable_view_flags(tmp_path, flag):
     source = tmp_path / f"unrepresentable-{flag}.pdf"
@@ -228,6 +276,30 @@ def test_destructive_pdf_annotation_modes_detect_signed_documents(tmp_path):
 
     assert validate_pdf_annotation_mode(source, "strip") is True
     assert validate_pdf_annotation_mode(source, "import") is True
+
+
+def test_pdf_signature_detection_finds_inherited_signature_values(tmp_path):
+    source = tmp_path / "inherited-signed.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        widget = pymupdf.Widget()
+        widget.field_type = pymupdf.PDF_WIDGET_TYPE_SIGNATURE
+        widget.field_name = "signature"
+        widget.rect = pymupdf.Rect(10, 10, 100, 30)
+        widget = page.add_widget(widget)
+        assert widget is not None
+        widget.update()
+        parent = document.get_new_xref()
+        document.update_object(
+            parent,
+            f"<< /FT /Sig /T (signature) /V << /Type /Sig /ByteRange [0 0 0 0] >>"
+            f" /Kids [{widget.xref} 0 R] >>",
+        )
+        document.xref_set_key(widget.xref, "Parent", f"{parent} 0 R")
+        document.xref_set_key(widget.xref, "V", "null")
+        document.save(source)
+
+    assert pdf_has_signature(source) is True
 
 
 def test_validate_pdf_annotation_mode_checks_derived_size(tmp_path):
@@ -331,6 +403,21 @@ def test_parse_native_annotations_skips_unrepresentable_dash_patterns(tmp_path, 
             "reason": "dash pattern is not representable",
         }
     ]
+
+
+def test_parse_native_annotations_rejects_dashed_border_without_explicit_pattern(tmp_path):
+    source = tmp_path / "default-dashes.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        shape = page.add_rect_annot(pymupdf.Rect(20, 30, 120, 70))
+        shape.update()
+        document.xref_set_key(shape.xref, "BS", "<< /S /D /W 2 >>")
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics[0]["reason"] == "border style or cloudy effects are unsupported"
 
 
 def test_parse_native_annotations_bounds_text_markup_segments(tmp_path):

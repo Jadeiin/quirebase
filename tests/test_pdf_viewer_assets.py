@@ -94,6 +94,7 @@ def test_embedpdf_adapter_normalizes_transparent_colors_for_canonical_payloads()
     )
     assert "fill_color: canonicalColor(object.color || object.backgroundColor)" in script
     assert 'color: style.fill_color ?? "transparent"' in script
+    assert 'base.flags.push("noZoom", "noRotate")' in script
 
 
 def test_embedpdf_toolbar_exposes_the_annotation_color_and_style_panel():

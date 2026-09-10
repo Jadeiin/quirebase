@@ -601,6 +601,9 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
                 max_pdf_bytes=batch.max_pdf_bytes or get_settings().max_pdf_bytes,
             )
         await search_index(db).index_item(db, item.id)
+        effective_annotation_mode = (
+            record_annotation_mode or batch.pdf_annotation_mode or PdfAnnotationMode.preserve
+        )
         record_event(
             db,
             user.id,
@@ -611,9 +614,7 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
                 "format": batch.file_format,
                 "filename": pdf["original_name"] if pdf else None,
                 "annotation_mode": (
-                    (batch.pdf_annotation_mode or PdfAnnotationMode.preserve).value
-                    if pdf is not None
-                    else None
+                    PdfAnnotationMode(effective_annotation_mode).value if pdf is not None else None
                 ),
             },
         )

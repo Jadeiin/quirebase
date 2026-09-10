@@ -1222,6 +1222,13 @@ async def test_commit_pdf_import_preserves_signed_destructive_mode_source(
         assert await async_db.get(ImportBatch, batch.id) is None
         created = list(await async_db.scalars(select(Item).where(Item.id != item.id)))
         assert len(created) == 1
+        event = await async_db.scalar(
+            select(AuditEvent)
+            .where(AuditEvent.action == "pdf.import", AuditEvent.target_id == created[0].id)
+            .order_by(AuditEvent.created_at.desc())
+        )
+        assert event is not None
+        assert json.loads(event.detail or "{}")["annotation_mode"] == "preserve"
     finally:
         await client.aclose()
         get_settings.cache_clear()

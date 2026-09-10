@@ -67,11 +67,9 @@ _UNVIEWABLE_ANNOTATION_FLAGS = (
     | _pymupdf_integer_constant("PDF_ANNOT_IS_HIDDEN")
     | _pymupdf_integer_constant("PDF_ANNOT_IS_NO_VIEW")
 )
-_UNREPRESENTABLE_ANNOTATION_FLAGS = (
-    _UNVIEWABLE_ANNOTATION_FLAGS
-    | _pymupdf_integer_constant("PDF_ANNOT_IS_NO_ZOOM")
-    | _pymupdf_integer_constant("PDF_ANNOT_IS_NO_ROTATE")
-)
+_UNREPRESENTABLE_ANNOTATION_FLAGS = _pymupdf_integer_constant(
+    "PDF_ANNOT_IS_NO_ZOOM"
+) | _pymupdf_integer_constant("PDF_ANNOT_IS_NO_ROTATE")
 _PRINT_ANNOTATION_FLAG = _pymupdf_integer_constant("PDF_ANNOT_IS_PRINT")
 
 
@@ -179,6 +177,8 @@ def _has_unsupported_border_effects(annotation: pymupdf.Annot) -> bool:
     style = border.get("style")
     if style not in (None, "S", "D"):
         return True
+    if style == "D" and not border.get("dashes"):
+        return True
     clouds = border.get("clouds")
     return clouds not in (None, -1)
 
@@ -205,8 +205,13 @@ def _free_text_format(annotation: pymupdf.Annot) -> dict[str, str | float]:
                 if native_font:
                     font_family = supported_fonts[native_font]
                 native_size = span.get("size")
-                if isinstance(native_size, (int, float)) and 1 <= native_size <= 144:
-                    font_size = float(native_size)
+                if (
+                    not isinstance(native_size, (int, float))
+                    or not math.isfinite(float(native_size))
+                    or not 1 <= native_size <= 144
+                ):
+                    raise ValueError("FreeText font size is not representable")
+                font_size = float(native_size)
                 formats.add((font_family, font_size))
     if len(formats) > 1:
         raise ValueError("mixed FreeText formatting is unsupported")
@@ -444,9 +449,7 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                         "reason": "annotation is not viewable",
                     })
                     continue
-                if subtype != "Text" and annotation.flags & (
-                    _UNREPRESENTABLE_ANNOTATION_FLAGS ^ _UNVIEWABLE_ANNOTATION_FLAGS
-                ):
+                if subtype != "Text" and annotation.flags & _UNREPRESENTABLE_ANNOTATION_FLAGS:
                     diagnostics.append({
                         "page": page_index + 1,
                         "subtype": subtype,
@@ -479,6 +482,16 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                         "reason": "note icon is unsupported",
                     })
                     continue
+                if subtype == "Text":
+                    open_type, open_value = document.xref_get_key(annotation.xref, "Open")
+                    if open_type == "bool" and open_value == "true":
+                        diagnostics.append({
+                            "page": page_index + 1,
+                            "subtype": subtype,
+                            "result": "skipped",
+                            "reason": "open note popups are unsupported",
+                        })
+                        continue
                 intent_type, intent = document.xref_get_key(annotation.xref, "IT")
                 if subtype == "FreeText" and intent_type == "name" and intent == "/FreeTextCallout":
                     diagnostics.append({
@@ -671,13 +684,16 @@ def strip_native_annotations(source: Path, output: Path) -> int:
         _reject_signed_document(document)
         removed = 0
         for page in document:
-            for annotation in page.annots() or ():
+            annotation = page.first_annot
+            while annotation is not None:
+                next_annotation = annotation.next
                 page.delete_annot(annotation)
                 removed += 1
                 if removed > MAX_NATIVE_ANNOTATIONS:
                     raise ValueError(
                         f"PDF contains more than {MAX_NATIVE_ANNOTATIONS} native annotations"
                     )
+                annotation = next_annotation
         output.parent.mkdir(parents=True, exist_ok=True)
         document.save(output, garbage=4, deflate=True)
     return removed
