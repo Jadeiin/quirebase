@@ -176,20 +176,21 @@ class AsyncSQLAlchemyDatasourceProxy:
             f: Callable[..., Coroutine[Any, Any, Any]],
         ) -> Callable[..., Coroutine[Any, Any, Any]]:
             step_name = name or f"{f.__module__}.{f.__qualname__}"
-            # SQLite does not implement PostgreSQL's READ COMMITTED/REPEATABLE
-            # READ levels. Keep local development workflows runnable by
-            # mapping those requests to SERIALIZABLE; PostgreSQL remains the
-            # supported concurrency contract (ADR 0012).
-            effective_isolation: IsolationLevel = isolation_level
-            if is_sqlite_database_url(async_database_url()) and isolation_level != "SERIALIZABLE":
-                effective_isolation = "SERIALIZABLE"
-            ds_options: DatasourceOptions = {
-                "isolation_level": effective_isolation,
-                "name": step_name,
-            }
 
             @wraps(f)
             async def wrapper(*args: Any, **kwargs: Any) -> Any:
+                datasource = await self.get_instance_async()
+                # The proxy may be rebound to a test or worker datasource that
+                # differs from the application settings used at import time.
+                # Select the isolation level from the datasource that will
+                # actually execute this transaction.
+                effective_isolation: IsolationLevel = isolation_level
+                if datasource.engine.dialect.name == "sqlite" and isolation_level != "SERIALIZABLE":
+                    effective_isolation = "SERIALIZABLE"
+                ds_options: DatasourceOptions = {
+                    "isolation_level": effective_isolation,
+                    "name": step_name,
+                }
                 return await self.run_tx_step_async(ds_options, f, *args, **kwargs)
 
             return wrapper

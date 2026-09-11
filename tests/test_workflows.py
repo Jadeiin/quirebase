@@ -610,6 +610,39 @@ async def test_datasource_transaction_default_name_is_fully_qualified(monkeypatc
 
 
 @pytest.mark.anyio
+async def test_datasource_transaction_uses_bound_dialect_for_isolation(monkeypatch):
+    captured = []
+
+    class BoundPostgres:
+        class Engine:
+            class Dialect:
+                name = "postgresql"
+
+            dialect = Dialect()
+
+        engine = Engine()
+
+    async def get_instance():
+        await asyncio.sleep(0)
+        return BoundPostgres()
+
+    async def run(options, function, *args, **kwargs):
+        captured.append(options)
+        return await function(*args, **kwargs)
+
+    @workflows.ads.transaction(isolation_level="READ COMMITTED")
+    async def sample_step() -> None:
+        pass
+
+    monkeypatch.setattr(workflows.ads, "get_instance_async", get_instance)
+    monkeypatch.setattr(workflows.ads, "run_tx_step_async", run)
+
+    await sample_step()
+
+    assert captured[0]["isolation_level"] == "READ COMMITTED"
+
+
+@pytest.mark.anyio
 async def test_read_heavy_datasource_steps_use_read_committed(monkeypatch):
     captured = []
 
