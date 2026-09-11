@@ -23,7 +23,7 @@ from quirebase.library.identifiers import (
     set_item_identifiers,
 )
 from quirebase.library.workflows import request_item_tag_recommendation
-from quirebase.models import Item, User
+from quirebase.models import Item, User, contributor_identity_key
 from quirebase.search import enqueue_search_changed
 
 if TYPE_CHECKING:
@@ -199,7 +199,7 @@ def _identifier_pairs(metadata: ItemMetadata) -> list[tuple[str, str]]:
 
 def _contributor_payload(contributors: tuple[Contributor, ...], *, editor: bool) -> list[dict]:
     payload: list[dict] = []
-    seen: set[tuple[str, str | None]] = set()
+    seen: set[str] = set()
     for contributor in contributors:
         last_name = contributor.last_name.strip()
         first_name = _optional_text(contributor.first_name)
@@ -207,7 +207,7 @@ def _contributor_payload(contributors: tuple[Contributor, ...], *, editor: bool)
             raise ValidationFailure("contributor last name is required")
         if editor and contributor.is_corresponding:
             raise ValidationFailure("editors cannot be corresponding authors")
-        identity = (last_name.casefold(), first_name.casefold() if first_name else None)
+        identity = contributor_identity_key(last_name, first_name)
         if identity in seen:
             raise ValidationFailure("contributors must be unique within a role")
         seen.add(identity)

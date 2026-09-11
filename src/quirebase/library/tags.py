@@ -118,13 +118,18 @@ async def _lock_tag_items_before_gate(
 
     Item Tag assignment writers use Item -> Tag ordering. Taxonomy commands
     therefore take a snapshot, lock those Items in ID order, and only then
-    acquire their Tag rows. Any association committed before the Tag lock is
-    reconciled by callers after the Tag rows are held.
+    acquire their Tag rows. A bounded second snapshot closes the ordinary race
+    without ever acquiring an Item after a Tag.
     """
 
-    item_ids = await _tag_item_ids(db, tag_ids)
+    # Take a bounded second snapshot before acquiring any Item row.  Unioning
+    # both snapshots and sorting once preserves the stable Item lock order.
+    item_ids: set[str] = set()
+    for _ in range(2):
+        item_ids.update(await _tag_item_ids(db, tag_ids))
+
     locked_item_ids: list[str] = []
-    for item_id in item_ids:
+    for item_id in sorted(item_ids):
         try:
             await require_item_lifecycle_gate(db, item_id)
         except ResourceUnavailable:
@@ -135,26 +140,23 @@ async def _lock_tag_items_before_gate(
     return tuple(locked_item_ids)
 
 
-async def _reconcile_tag_item_gates(
+def _reconcile_tag_item_gates(
     db: AsyncSession,
     tag_ids: list[str] | tuple[str, ...],
     initially_seen: tuple[str, ...],
 ) -> tuple[str, ...]:
-    """Lock associations committed before the Tag gate was acquired."""
+    """Return Item gates acquired before the Tag gate.
 
-    item_ids = await _tag_item_ids(db, tag_ids)
-    initial = set(initially_seen)
-    locked_item_ids: list[str] = []
-    for item_id in item_ids:
-        if item_id in initial:
-            locked_item_ids.append(item_id)
-            continue
-        try:
-            await require_item_lifecycle_gate(db, item_id)
-        except ResourceUnavailable:
-            continue
-        locked_item_ids.append(item_id)
-    return tuple(locked_item_ids)
+    Item Tag writers use Item -> Tag ordering.  Once a Tag row is locked this
+    helper must never acquire a previously unseen Item row, or a concurrent
+    assignment can hold that Item while waiting for the Tag and deadlock the
+    taxonomy transaction.  Associations that appear after the Item snapshot
+    are finalized by their own Item writer and projection enqueue; only the
+    pre-gated Item set is eligible for this Tag mutation's aggregate bump.
+    """
+
+    del db, tag_ids
+    return tuple(sorted(set(initially_seen)))
 
 
 async def _find_or_create_tag(db: AsyncSession, user: User, normalized: str) -> Tag:
@@ -245,7 +247,7 @@ async def rename_tag(db: AsyncSession, user: User, tag_id: str, name: str) -> Ta
     tag = (await _lock_tag_write_gates(db, (tag_id,))).get(tag_id)
     if tag is None or (tag.created_by != user.id and user.role != "administrator"):
         raise ResourceUnavailable("tag not found or cannot be managed")
-    item_ids = await _reconcile_tag_item_gates(db, (tag_id,), initially_seen)
+    item_ids = _reconcile_tag_item_gates(db, (tag_id,), initially_seen)
     normalized = normalize_tag_name(name)
     if await db.scalar(select(Tag.id).where(Tag.name == normalized, Tag.id != tag.id)):
         raise TagConflict("tag name already exists")
@@ -277,7 +279,7 @@ async def delete_tag(db: AsyncSession, user: User, tag_id: str) -> None:
     tag = (await _lock_tag_write_gates(db, (tag_id,))).get(tag_id)
     if tag is None or (tag.created_by != user.id and user.role != "administrator"):
         raise ResourceUnavailable("tag not found or cannot be managed")
-    item_ids = await _reconcile_tag_item_gates(db, (tag_id,), initially_seen)
+    item_ids = _reconcile_tag_item_gates(db, (tag_id,), initially_seen)
     for item_id in item_ids:
         await advance_item_tag_collection(db, user.id, item_id)
     await db.delete(tag)
@@ -427,9 +429,7 @@ async def merge_tags(db: AsyncSession, user: User, source_tag_id: str, target_ta
     if user.role != "administrator" and source_tag.created_by != user.id:
         raise ResourceUnavailable("not authorized to merge these tags")
 
-    locked_item_ids = await _reconcile_tag_item_gates(
-        db, (source_tag_id, target_tag_id), initially_seen
-    )
+    locked_item_ids = _reconcile_tag_item_gates(db, (source_tag_id, target_tag_id), initially_seen)
 
     source_item_ids = set(
         (await db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == source_tag.id))).all()

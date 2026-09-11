@@ -81,14 +81,20 @@ def upgrade() -> None:
         bind.execute(identifiers_table.insert(), doi_rows)
 
     # Backfill existing authors into authors and item_authors tables
-    authors_table = sa.table(
-        "authors",
+    # This migration predates Contributor.identity_key.  Some development
+    # databases may have been bootstrapped from the current ORM metadata and
+    # already contain that future column, so include it only when it actually
+    # exists.  The canonical backfill and constraint belong to 0029.
+    author_column_names = {column["name"] for column in sa.inspect(bind).get_columns("authors")}
+    author_columns = [
         sa.column("id", sa.String),
         sa.column("first_name", sa.String),
         sa.column("last_name", sa.String),
-        sa.column("identity_key", sa.String),
-        sa.column("created_at", sa.DateTime),
-    )
+    ]
+    if "identity_key" in author_column_names:
+        author_columns.append(sa.column("identity_key", sa.String))
+    author_columns.append(sa.column("created_at", sa.DateTime))
+    authors_table = sa.table("authors", *author_columns)
     item_authors_table = sa.table(
         "item_authors",
         sa.column("id", sa.String),
@@ -116,15 +122,15 @@ def upgrade() -> None:
         if author_id is None:
             author_id = str(uuid.uuid4())
             author_ids[key] = author_id
-            bind.execute(
-                authors_table.insert().values(
-                    id=author_id,
-                    last_name=last_name,
-                    first_name=first_name,
-                    identity_key=contributor_identity_key(last_name, first_name),
-                    created_at=now_utc,
-                )
-            )
+            values = {
+                "id": author_id,
+                "last_name": last_name,
+                "first_name": first_name,
+                "created_at": now_utc,
+            }
+            if "identity_key" in author_column_names:
+                values["identity_key"] = key
+            bind.execute(authors_table.insert().values(**values))
         return author_id
 
     items_with_authors = bind.execute(

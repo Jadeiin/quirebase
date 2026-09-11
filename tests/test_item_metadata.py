@@ -159,6 +159,32 @@ async def test_revise_item_metadata_replaces_contributors_in_order(async_db):
 
 
 @pytest.mark.anyio
+async def test_revise_item_metadata_rejects_unicode_equivalent_duplicate_contributors(async_db):
+    db = async_db
+    owner = User(username="unicode-contributor-owner", password_hash="unused")
+    db.add(owner)
+    await db.flush()
+    item = Item(title="Unicode contributors", created_by=owner.id)
+    db.add(item)
+    await db.commit()
+
+    with pytest.raises(ValidationFailure, match="contributors must be unique"):
+        await revise_item_metadata(
+            db,
+            owner,
+            item.id,
+            item.version,
+            ItemMetadata(
+                title=item.title,
+                authors=(
+                    Contributor("Smith", "John"),
+                    Contributor("\uff33\uff4d\uff49\uff54\uff48", "\uff2a\uff4f\uff48\uff4e"),
+                ),
+            ),
+        )
+
+
+@pytest.mark.anyio
 async def test_create_item_accepts_typed_metadata_and_returns_a_mutation_result(async_db):
     db = async_db
     owner = User(username="create-item-owner", password_hash="unused")
