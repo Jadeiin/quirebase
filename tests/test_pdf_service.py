@@ -1,10 +1,13 @@
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 import pymupdf
 import pytest
 
+import quirebase.documents.pdf as pdf_module
 from quirebase.documents.pdf import (
+    _free_text_format,
     _hex_color,
     create_thumbnail,
     export_annotations,
@@ -228,6 +231,26 @@ def test_parse_native_annotations_skips_open_note_popups(tmp_path):
     assert diagnostics[0]["reason"] == "open note popups are unsupported"
 
 
+def test_parse_native_annotations_skips_open_associated_popup(tmp_path):
+    source = tmp_path / "open-popup.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        note = page.add_text_annot((20, 30), "Open")
+        note.update()
+        popup = document.get_new_xref()
+        document.update_object(
+            popup,
+            "<< /Type /Annot /Subtype /Popup /Rect [20 30 100 80] /Open true >>",
+        )
+        document.xref_set_key(note.xref, "Popup", f"{popup} 0 R")
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics[0]["reason"] == "open note popups are unsupported"
+
+
 @pytest.mark.parametrize("flag", [pymupdf.PDF_ANNOT_IS_NO_ZOOM, pymupdf.PDF_ANNOT_IS_NO_ROTATE])
 def test_parse_native_annotations_skips_unrepresentable_view_flags(tmp_path, flag):
     source = tmp_path / f"unrepresentable-{flag}.pdf"
@@ -292,7 +315,7 @@ def test_pdf_signature_detection_finds_inherited_signature_values(tmp_path):
         parent = document.get_new_xref()
         document.update_object(
             parent,
-            f"<< /FT /Sig /T (signature) /V << /Type /Sig /ByteRange [0 0 0 0] >>"
+            f"<< /FT /Sig /T (signature) /V << /ByteRange [0 0 0 0] >>"
             f" /Kids [{widget.xref} 0 R] >>",
         )
         document.xref_set_key(widget.xref, "Parent", f"{parent} 0 R")
@@ -300,6 +323,95 @@ def test_pdf_signature_detection_finds_inherited_signature_values(tmp_path):
         document.save(source)
 
     assert pdf_has_signature(source) is True
+
+
+def test_free_text_format_rejects_mixed_span_colors():
+    fake = SimpleNamespace(
+        get_text=lambda _kind: {
+            "blocks": [
+                {
+                    "lines": [
+                        {
+                            "spans": [
+                                {"font": "Helvetica", "size": 12, "color": 0x000000},
+                                {"font": "Helvetica", "size": 12, "color": 0xFF0000},
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        parent=SimpleNamespace(
+            parent=SimpleNamespace(xref_get_key=lambda _xref, _key: ("null", "null"))
+        ),
+        xref=1,
+    )
+    with pytest.raises(ValueError, match="mixed FreeText formatting"):
+        _free_text_format(fake)
+
+
+def test_parse_native_annotations_skips_optional_content(tmp_path):
+    source = tmp_path / "optional-content.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        note = page.add_text_annot((20, 30), "Layered")
+        note.update()
+        ocg = document.get_new_xref()
+        document.update_object(ocg, "<< /Type /OCG /Name (Layer) >>")
+        document.xref_set_key(note.xref, "OC", f"{ocg} 0 R")
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics[0]["reason"] == "optional-content annotations are unsupported"
+
+
+def test_parse_native_annotations_skips_freetext_rectangle_differences(tmp_path):
+    source = tmp_path / "freetext-rd.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        free_text = page.add_freetext_annot(pymupdf.Rect(20, 30, 120, 70), "Inset")
+        free_text.update()
+        document.xref_set_key(free_text.xref, "RD", "[1 0 0 0]")
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics[0]["reason"] == "FreeText rectangle differences are unsupported"
+
+
+def test_parse_native_annotations_skips_non_normal_blend_mode(tmp_path):
+    source = tmp_path / "blend-mode.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        rectangle = page.add_rect_annot(pymupdf.Rect(20, 30, 120, 70))
+        rectangle.set_blendmode("Multiply")
+        rectangle.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics[0]["reason"] == "annotation blend mode is unsupported"
+
+
+def test_parse_native_annotations_reports_all_annotations_after_text_budget(monkeypatch, tmp_path):
+    source = tmp_path / "text-budget.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        for index in range(3):
+            note = page.add_text_annot((20 + index * 30, 30), "abc")
+            note.update()
+        document.save(source)
+
+    monkeypatch.setattr(pdf_module, "MAX_NATIVE_TEXT_CHARS", 5)
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert len(parsed) == 1
+    assert diagnostics[-1]["reason"].startswith("PDF native annotation text exceeds")
+    assert diagnostics[-1]["skipped_count"] == 2
 
 
 def test_validate_pdf_annotation_mode_checks_derived_size(tmp_path):

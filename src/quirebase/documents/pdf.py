@@ -195,7 +195,7 @@ def _free_text_format(annotation: pymupdf.Annot) -> dict[str, str | float]:
         "Cour": "Courier",
     }
     text = annotation.get_text("dict")
-    formats: set[tuple[str, float]] = set()
+    formats: set[tuple[str, float, int | None]] = set()
     for block in text.get("blocks", ()):
         for line in block.get("lines", ()):
             for span in line.get("spans", ()):
@@ -212,7 +212,9 @@ def _free_text_format(annotation: pymupdf.Annot) -> dict[str, str | float]:
                 ):
                     raise ValueError("FreeText font size is not representable")
                 font_size = float(native_size)
-                formats.add((font_family, font_size))
+                native_color = span.get("color")
+                color = native_color if isinstance(native_color, int) else None
+                formats.add((font_family, font_size, color))
     if len(formats) > 1:
         raise ValueError("mixed FreeText formatting is unsupported")
 
@@ -312,6 +314,35 @@ def _has_nonzero_freetext_rotation(document: pymupdf.Document, annotation: pymup
         return not math.isclose(float(value), 0.0, abs_tol=1e-9)
     except ValueError:
         return True
+
+
+def _has_nonzero_freetext_inset(document: pymupdf.Document, annotation: pymupdf.Annot) -> bool:
+    value_type, _value = document.xref_get_key(annotation.xref, "RD")
+    if value_type == "null":
+        return False
+    differences = _xref_number_array(annotation, "RD")
+    return (
+        differences is None
+        or len(differences) != 4
+        or any(not math.isclose(component, 0.0, abs_tol=1e-9) for component in differences)
+    )
+
+
+def _xref_id(value: str) -> int | None:
+    match = re.fullmatch(r"\s*(\d+)\s+\d+\s+R\s*", value)
+    return int(match.group(1)) if match else None
+
+
+def _note_popup_is_open(document: pymupdf.Document, annotation: pymupdf.Annot) -> bool:
+    open_type, open_value = document.xref_get_key(annotation.xref, "Open")
+    if open_type == "bool" and open_value == "true":
+        return True
+    popup_type, popup_value = document.xref_get_key(annotation.xref, "Popup")
+    popup_xref = _xref_id(popup_value) if popup_type == "xref" else None
+    if popup_xref is None:
+        return False
+    open_type, open_value = document.xref_get_key(popup_xref, "Open")
+    return open_type == "bool" and open_value == "true"
 
 
 def _point_coordinates(point: object) -> tuple[float, float]:
@@ -418,6 +449,8 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
         native_annotation_count = 0
         native_geometry_points = 0
         native_text_chars = 0
+        budget_diagnostic: dict | None = None
+        budget_skipped_count = 0
         for page_index, page in enumerate(document):
             for annotation in page.annots() or ():
                 native_annotation_count += 1
@@ -431,6 +464,9 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                         ),
                     })
                     return parsed, diagnostics
+                if budget_diagnostic is not None:
+                    budget_skipped_count += 1
+                    continue
                 subtype = annotation.type[1]
                 kind = _NATIVE_KIND.get(subtype)
                 if kind is None:
@@ -482,16 +518,23 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                         "reason": "note icon is unsupported",
                     })
                     continue
-                if subtype == "Text":
-                    open_type, open_value = document.xref_get_key(annotation.xref, "Open")
-                    if open_type == "bool" and open_value == "true":
-                        diagnostics.append({
-                            "page": page_index + 1,
-                            "subtype": subtype,
-                            "result": "skipped",
-                            "reason": "open note popups are unsupported",
-                        })
-                        continue
+                if subtype == "Text" and _note_popup_is_open(document, annotation):
+                    diagnostics.append({
+                        "page": page_index + 1,
+                        "subtype": subtype,
+                        "result": "skipped",
+                        "reason": "open note popups are unsupported",
+                    })
+                    continue
+                oc_type, _oc_value = document.xref_get_key(annotation.xref, "OC")
+                if oc_type != "null":
+                    diagnostics.append({
+                        "page": page_index + 1,
+                        "subtype": subtype,
+                        "result": "skipped",
+                        "reason": "optional-content annotations are unsupported",
+                    })
+                    continue
                 intent_type, intent = document.xref_get_key(annotation.xref, "IT")
                 if subtype == "FreeText" and intent_type == "name" and intent == "/FreeTextCallout":
                     diagnostics.append({
@@ -502,6 +545,11 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                     })
                     continue
                 try:
+                    if annotation.blendmode not in (None, "Normal") and not (
+                        subtype in {"Highlight", "Underline", "StrikeOut"}
+                        and annotation.blendmode == "Multiply"
+                    ):
+                        raise ValueError("annotation blend mode is unsupported")
                     raw_vertices = annotation.vertices or ()
                     if subtype == "Ink":
                         geometry_cost = (
@@ -513,7 +561,7 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                         geometry_cost = len(raw_vertices)
                     native_geometry_points += geometry_cost
                     if native_geometry_points > MAX_NATIVE_GEOMETRY_POINTS:
-                        diagnostics.append({
+                        budget_diagnostic = {
                             "page": page_index + 1,
                             "subtype": subtype,
                             "result": "skipped",
@@ -521,15 +569,18 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                                 "PDF native annotation geometry exceeds "
                                 f"{MAX_NATIVE_GEOMETRY_POINTS} points"
                             ),
-                        })
-                        return parsed, diagnostics
+                            "skipped_count": 1,
+                        }
+                        diagnostics.append(budget_diagnostic)
+                        budget_skipped_count = 1
+                        continue
                     content = annotation.info.get("content", "") or ""
                     subject = (
                         annotation.info.get("subject", "") or "" if subtype == "FreeText" else ""
                     )
                     native_text_chars += len(content) + len(subject)
                     if native_text_chars > MAX_NATIVE_TEXT_CHARS:
-                        diagnostics.append({
+                        budget_diagnostic = {
                             "page": page_index + 1,
                             "subtype": subtype,
                             "result": "skipped",
@@ -537,14 +588,19 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                                 "PDF native annotation text exceeds "
                                 f"{MAX_NATIVE_TEXT_CHARS} characters"
                             ),
-                        })
-                        return parsed, diagnostics
+                            "skipped_count": 1,
+                        }
+                        diagnostics.append(budget_diagnostic)
+                        budget_skipped_count = 1
+                        continue
                     if _has_unsupported_border_effects(annotation):
                         raise ValueError("border style or cloudy effects are unsupported")
                     if subtype == "FreeText" and _has_nonzero_freetext_rotation(
                         document, annotation
                     ):
                         raise ValueError("rotated FreeText annotations are unsupported")
+                    if subtype == "FreeText" and _has_nonzero_freetext_inset(document, annotation):
+                        raise ValueError("FreeText rectangle differences are unsupported")
                     if subtype == "Line" and _has_unsupported_line_features(document, annotation):
                         raise ValueError("line measurement or caption features are unsupported")
                     payload: dict = {"type": kind, "style": _annotation_style(annotation)}
@@ -630,17 +686,33 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                         "result": "skipped",
                         "reason": str(error),
                     })
+        if budget_diagnostic is not None:
+            budget_diagnostic["skipped_count"] = budget_skipped_count
     return parsed, diagnostics
 
 
 def _document_has_signature(document: pymupdf.Document) -> bool:
-    """Detect signature dictionaries, including values inherited by child widgets."""
+    """Detect populated signature fields, including inherited field values."""
     for xref in range(1, document.xref_length()):
-        try:
-            source = document.xref_object(xref, compressed=False)
-        except (RuntimeError, ValueError):
-            continue
-        if re.search(r"/Type\s*/Sig\b", source):
+        current = xref
+        seen: set[int] = set()
+        is_signature_field = False
+        value_type = "null"
+        while current and current not in seen:
+            seen.add(current)
+            try:
+                field_type, field_value = document.xref_get_key(current, "FT")
+                if field_type == "name" and field_value == "/Sig":
+                    is_signature_field = True
+                candidate_type, _candidate_value = document.xref_get_key(current, "V")
+                if value_type == "null" and candidate_type != "null":
+                    value_type = candidate_type
+                parent_type, parent_value = document.xref_get_key(current, "Parent")
+            except (RuntimeError, ValueError):
+                break
+            parent_xref = _xref_id(parent_value) if parent_type == "xref" else None
+            current = parent_xref or 0
+        if is_signature_field and value_type in {"dict", "xref"}:
             return True
     return False
 

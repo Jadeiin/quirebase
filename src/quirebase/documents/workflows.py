@@ -510,6 +510,11 @@ async def commit_imported_revision(
                     )
                 )
             if owner_id:
+                skipped_count = sum(
+                    int(diagnostic.get("skipped_count", 1))
+                    for diagnostic in annotation_diagnostics
+                    if isinstance(diagnostic, dict)
+                )
                 record_event(
                     db,
                     owner_id,
@@ -519,7 +524,7 @@ async def commit_imported_revision(
                     detail={
                         "mode": PdfAnnotationMode.import_.value,
                         "imported_count": len(valid_rows),
-                        "skipped_count": len(annotation_diagnostics),
+                        "skipped_count": skipped_count,
                         "diagnostics": annotation_diagnostics,
                     },
                 )
