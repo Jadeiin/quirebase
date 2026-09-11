@@ -234,12 +234,22 @@ def _canonical_rect(page: pymupdf.Page, rect: pymupdf.Rect) -> dict[str, float]:
     normalized = rect.normalize()
     # Canonical coordinates intentionally follow the viewer's crop-local convention:
     # x is measured from the crop's left edge and y from its bottom edge.
-    x = normalized.x0
-    y = crop.height - normalized.y1
-    width = max(0.001, float(normalized.width))
-    height = max(0.001, float(normalized.height))
-    if x < 0 or y < 0 or x + width > crop.width or y + height > crop.height:
+    x0 = normalized.x0
+    y0 = normalized.y0
+    x1 = normalized.x1
+    y1 = normalized.y1
+    # Native annotation bounds may include a stroke half-width outside the page.
+    # Clamp those tiny overhangs while retaining the actual annotation geometry.
+    x0 = max(0.0, x0)
+    y0 = max(0.0, y0)
+    x1 = min(crop.width, x1)
+    y1 = min(crop.height, y1)
+    if x1 <= x0 or y1 <= y0:
         raise ValueError("annotation rectangle lies outside the crop box")
+    x = x0
+    y = crop.height - y1
+    width = max(0.001, float(x1 - x0))
+    height = max(0.001, float(y1 - y0))
     return {"x": float(x), "y": float(y), "width": width, "height": height}
 
 

@@ -147,6 +147,23 @@ def test_parse_native_ink_annotations(tmp_path):
     ]
 
 
+def test_parse_native_annotations_keeps_page_edge_geometry(tmp_path):
+    source = tmp_path / "edge-annotations.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        page.add_text_annot((0, 0), "Edge note").update()
+        line = page.add_line_annot((0, 0), (30, 30))
+        line.update()
+        ink = page.add_ink_annot([[(0, 0), (10, 10)]])
+        ink.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert diagnostics == []
+    assert {item["kind"] for item in parsed} == {"note", "line", "ink"}
+
+
 @pytest.mark.parametrize(
     "flag",
     [
