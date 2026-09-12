@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
-from quirebase.access.items import can_read_item
+from quirebase.access.items import can_read_item, lock_active_item
 from quirebase.access.projects import require_project_member
 from quirebase.audit import record_event
 from quirebase.core.errors import (
@@ -184,15 +184,17 @@ async def open_project_workspace(db: AsyncSession, user: User, project_id: str) 
 
 async def add_item_to_project(db: AsyncSession, user: User, project_id: str, item_id: str) -> None:
     user = await _lock_active_user(db, user)
-    item = await db.get(Item, item_id)
-    if item is None or not await can_read_item(db, user, item_id):
-        raise ResourceUnavailable("item or project not accessible or insufficient permissions")
     await require_project_write_gate(
         db,
         project_id,
         state=ProjectState.active,
         message="item or project not accessible or insufficient permissions",
     )
+    await lock_active_item(
+        db, item_id, message="item or project not accessible or insufficient permissions"
+    )
+    if not await can_read_item(db, user, item_id):
+        raise ResourceUnavailable("item or project not accessible or insufficient permissions")
     membership = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     if membership is None or membership.role not in (ProjectRole.owner, ProjectRole.editor):
         raise ResourceUnavailable("item or project not accessible or insufficient permissions")
@@ -253,14 +255,17 @@ async def remove_item_from_project(
     db: AsyncSession, user: User, project_id: str, item_id: str
 ) -> None:
     user = await _lock_active_user(db, user)
-    if not await can_read_item(db, user, item_id):
-        raise ResourceUnavailable("item or project not accessible or insufficient permissions")
     await require_project_write_gate(
         db,
         project_id,
         state=ProjectState.active,
         message="item or project not accessible or insufficient permissions",
     )
+    await lock_active_item(
+        db, item_id, message="item or project not accessible or insufficient permissions"
+    )
+    if not await can_read_item(db, user, item_id):
+        raise ResourceUnavailable("item or project not accessible or insufficient permissions")
     membership = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     assignment = await db.get(ProjectItem, (project_id, item_id), populate_existing=True)
     if (

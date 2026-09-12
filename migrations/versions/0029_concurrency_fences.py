@@ -219,6 +219,62 @@ def upgrade() -> None:
                         ),
                     },
                 )
+        # Legacy databases may contain separate Author rows that collapse to
+        # the same canonical identity (case, whitespace or Unicode variants).
+        # Resolve those rows before adding the unique identity index.  Keep the
+        # lowest UUID as the canonical row and repoint ItemAuthor links while
+        # removing collisions on (item, role).
+        duplicate_keys = (
+            bind
+            .execute(
+                sa.text(
+                    "SELECT identity_key FROM authors "
+                    "GROUP BY identity_key HAVING COUNT(*) > 1 ORDER BY identity_key"
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for identity_key in duplicate_keys:
+            author_ids = [
+                row[0]
+                for row in bind.execute(
+                    sa.text(
+                        "SELECT id FROM authors WHERE identity_key = :identity_key ORDER BY id"
+                    ),
+                    {"identity_key": identity_key},
+                ).all()
+            ]
+            canonical_id, duplicate_ids = author_ids[0], author_ids[1:]
+            for duplicate_id in duplicate_ids:
+                links = bind.execute(
+                    sa.text(
+                        "SELECT id, item_id, role FROM item_authors "
+                        "WHERE author_id = :author_id ORDER BY id"
+                    ),
+                    {"author_id": duplicate_id},
+                ).all()
+                for link_id, item_id, role in links:
+                    existing_link = bind.scalar(
+                        sa.text(
+                            "SELECT id FROM item_authors "
+                            "WHERE item_id = :item_id AND author_id = :author_id AND role = :role"
+                        ),
+                        {"item_id": item_id, "author_id": canonical_id, "role": role},
+                    )
+                    if existing_link is None:
+                        bind.execute(
+                            sa.text(
+                                "UPDATE item_authors SET author_id = :author_id WHERE id = :id"
+                            ),
+                            {"author_id": canonical_id, "id": link_id},
+                        )
+                    else:
+                        bind.execute(
+                            sa.text("DELETE FROM item_authors WHERE id = :id"),
+                            {"id": link_id},
+                        )
+                bind.execute(sa.text("DELETE FROM authors WHERE id = :id"), {"id": duplicate_id})
         if not _has_named_index(bind, "authors", "uq_authors_identity_key"):
             op.create_index(
                 "uq_authors_identity_key",

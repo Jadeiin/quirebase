@@ -78,6 +78,36 @@ async def can_edit_item(db: AsyncSession, user: User, item_id: str) -> bool:
     return bool(await db.scalar(select(editable)))
 
 
+async def lock_user_write_gate(db: AsyncSession, user: User) -> User:
+    """Lock and refresh a User row before owner-scoped write coordination."""
+
+    locked_user = await db.scalar(
+        select(User)
+        .where(User.id == user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if locked_user is None or not locked_user.active:
+        raise ResourceUnavailable("user not found or inactive")
+    return locked_user
+
+
+async def lock_active_item(
+    db: AsyncSession, item_id: str, *, message: str = "item not found"
+) -> Item:
+    """Acquire an active Item lifecycle gate without making an access decision."""
+
+    item = await db.scalar(
+        select(Item)
+        .where(Item.id == item_id, Item.lifecycle_state == ItemLifecycleState.active)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if item is None:
+        raise ResourceUnavailable(message)
+    return item
+
+
 async def validate_item_lifecycle_fence(
     db: AsyncSession,
     item_id: str,
