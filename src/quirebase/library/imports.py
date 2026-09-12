@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -52,6 +53,7 @@ class BatchConflict(DomainError):
 
 
 MAX_PDF_IMPORT_FILES = 50
+PDF_IMPORT_CLAIM_TIMEOUT = timedelta(hours=1)
 
 
 def _consume_current_cancellation() -> None:
@@ -96,6 +98,19 @@ def _pdf_object_keys(records_json: str) -> set[str]:
         and isinstance((pdf := record.get("_pdf")), dict)
         and isinstance(pdf.get("object_key"), str)
     }
+
+
+def _pdf_import_claim_is_stale(workflow_id: str | None) -> bool:
+    if not workflow_id or not workflow_id.startswith("commit-pdf-import:"):
+        return False
+    parts = workflow_id.split(":")
+    if len(parts) != 4:
+        return False
+    try:
+        claimed_at = datetime.fromtimestamp(float(parts[3]), UTC)
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return datetime.now(UTC) - claimed_at >= PDF_IMPORT_CLAIM_TIMEOUT
 
 
 def _record_to_item_payload(record: BibliographyRecord) -> dict[str, str | None]:
@@ -617,9 +632,13 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
         annotation_mode = PdfAnnotationMode(batch.pdf_annotation_mode or PdfAnnotationMode.preserve)
         max_pdf_bytes = batch.max_pdf_bytes or get_settings().max_pdf_bytes
         previous_workflow_id = batch.workflow_id
-        if previous_workflow_id and previous_workflow_id.startswith("commit-pdf-import:"):
+        if (
+            previous_workflow_id
+            and previous_workflow_id.startswith("commit-pdf-import:")
+            and not (_pdf_import_claim_is_stale(previous_workflow_id))
+        ):
             raise BatchConflict("the import batch is already being confirmed")
-        claim_id = f"commit-pdf-import:{batch.id}:{uuid4()}"
+        claim_id = f"commit-pdf-import:{batch.id}:{uuid4()}:{datetime.now(UTC).timestamp()}"
         claimed = await db.execute(
             update(ImportBatch)
             .where(
@@ -694,10 +713,22 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
                 await _release_pdf_import_claim(db, batch_id, claim_id, previous_workflow_id)
             raise
     try:
+        cleanup_source_keys: set[str] = set()
         for record in records:
             candidate = dict(record)
             pdf = candidate.pop("_pdf", None)
             record_annotation_mode = candidate.pop("_pdf_annotation_mode", None)
+            effective_annotation_mode = (
+                PdfAnnotationMode(
+                    record_annotation_mode
+                    or batch.pdf_annotation_mode
+                    or PdfAnnotationMode.preserve
+                )
+                if pdf is not None
+                else PdfAnnotationMode.preserve
+            )
+            if pdf is not None and effective_annotation_mode is not PdfAnnotationMode.preserve:
+                cleanup_source_keys.add(pdf["object_key"])
             item = await _create_item_from_record(db, user, candidate)
             if pdf is not None:
                 await attach_staged_pdf(
@@ -709,15 +740,10 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
                         pdf["size"],
                         pdf["original_name"],
                     ),
-                    annotation_mode=record_annotation_mode
-                    or batch.pdf_annotation_mode
-                    or PdfAnnotationMode.preserve,
+                    annotation_mode=effective_annotation_mode,
                     max_pdf_bytes=batch.max_pdf_bytes or get_settings().max_pdf_bytes,
                 )
             await search_index(db).index_item(db, item.id)
-            effective_annotation_mode = (
-                record_annotation_mode or batch.pdf_annotation_mode or PdfAnnotationMode.preserve
-            )
             record_event(
                 db,
                 user.id,
@@ -735,6 +761,14 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
                 },
             )
         await db.delete(batch)
+        if cleanup_source_keys:
+            await enqueue_object_cleanup(
+                db,
+                cleanup_source_keys,
+                owner_id=user.id,
+                operation="pdf_import_source_cleanup",
+                target_id=batch_id,
+            )
         await db.commit()
     except BaseException:
         if claim_id is not None:
@@ -747,17 +781,24 @@ async def discard_import_batch(db: AsyncSession, user: User, batch_id: str) -> N
     batch = await db.get(ImportBatch, batch_id)
     if batch is None or batch.owner_id != user.id:
         raise ResourceUnavailable("import batch not found")
-    if batch.workflow_id and batch.workflow_id.startswith("commit-pdf-import:"):
+    if (
+        batch.workflow_id
+        and batch.workflow_id.startswith("commit-pdf-import:")
+        and not (_pdf_import_claim_is_stale(batch.workflow_id))
+    ):
         raise BatchConflict("the PDF import batch is being confirmed")
     object_keys = _pdf_object_keys(batch.records)
+    workflow_predicate = or_(
+        ImportBatch.workflow_id.is_(None),
+        ~ImportBatch.workflow_id.like("commit-pdf-import:%"),
+    )
+    if _pdf_import_claim_is_stale(batch.workflow_id):
+        workflow_predicate = or_(workflow_predicate, ImportBatch.workflow_id == batch.workflow_id)
     deleted = await db.execute(
         delete(ImportBatch).where(
             ImportBatch.id == batch.id,
             ImportBatch.owner_id == user.id,
-            or_(
-                ImportBatch.workflow_id.is_(None),
-                ~ImportBatch.workflow_id.like("commit-pdf-import:%"),
-            ),
+            workflow_predicate,
         )
     )
     if getattr(deleted, "rowcount", 0) != 1:

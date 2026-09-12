@@ -21,6 +21,7 @@ from quirebase.core.workflows import (
     DOCUMENT_CLEANUP_QUEUE,
     LIBRARY_QUEUE,
     ads,
+    durable_operations,
     enqueue_child_workflow,
 )
 from quirebase.documents.events import FILE_REVISION_CHANGED_WORKFLOW, OBJECT_CLEANUP_WORKFLOW
@@ -140,11 +141,28 @@ async def delete_unreferenced_objects_step(
         )
 
 
+@DBOS.step(retries_allowed=True, max_attempts=3)
+async def cleanup_objects_once_step(
+    object_keys: list[str], ignore_workflow_id: str | None = None
+) -> list[str]:
+    """Delete unreferenced objects and return keys that still physically exist."""
+    from quirebase.documents.revisions import delete_unreferenced_objects
+
+    async with AsyncSessionLocal() as db:
+        await delete_unreferenced_objects(db, object_keys, ignore_workflow_id=ignore_workflow_id)
+    return [key for key in object_keys if await get_object_store().exists(key)]
+
+
 @DBOS.workflow(name=OBJECT_CLEANUP_WORKFLOW)
 async def cleanup_objects_workflow(
     object_keys: list[str], ignore_workflow_id: str | None = None
 ) -> list[str]:
-    return await delete_unreferenced_objects_step(object_keys, ignore_workflow_id)
+    pending = list(dict.fromkeys(object_keys))
+    while pending:
+        pending = await cleanup_objects_once_step(pending, ignore_workflow_id)
+        if pending:
+            await DBOS.sleep_async(1)
+    return object_keys
 
 
 async def _inspect_pdf_object(
@@ -384,22 +402,6 @@ async def inspect_imported_revision_workflow(
         else:
             result = await commit_imported_revision(inspected)
         committed = True
-        source_key = inspected.get("source_object_key")
-        committed_key = inspected.get("object_key")
-        if source_key and committed_key and source_key != committed_key:
-            await enqueue_child_workflow(
-                OBJECT_CLEANUP_WORKFLOW,
-                [source_key],
-                DBOS.workflow_id,
-                queue_name=DOCUMENT_CLEANUP_QUEUE,
-                workflow_id=f"inspect-imported-revision-cleanup:{revision_id}",
-                attributes={
-                    "capability": "documents",
-                    "operation": "imported_revision_source_cleanup",
-                    "object_keys": [source_key],
-                    "revision_id": revision_id,
-                },
-            )
         await _enqueue_file_revision_changed(revision_id, result["item_id"], owner_id)
         return {
             "revision_id": revision_id,
@@ -454,6 +456,8 @@ async def commit_imported_revision(
     revision = await db.get(FileRevision, inspected["revision_id"])
     if revision is None:
         raise ValueError("imported revision no longer exists")
+    source_object_key: str | None = None
+    annotation_diagnostics: list[dict[str, Any]] = []
     if revision.processing_state == FileRevisionProcessingState.pending:
         source_object_key = revision.object_key
         revision.object_key = inspected.get("object_key", source_object_key)
@@ -532,15 +536,24 @@ async def commit_imported_revision(
                         "diagnostics": annotation_diagnostics,
                     },
                 )
-            return {
+    if source_object_key and source_object_key != revision.object_key:
+        await durable_operations().enqueue_in_transaction(
+            db,
+            OBJECT_CLEANUP_WORKFLOW,
+            [source_object_key],
+            queue_name=DOCUMENT_CLEANUP_QUEUE,
+            workflow_id=f"inspect-imported-revision-cleanup:{revision.id}",
+            attributes={
+                "capability": "documents",
+                "operation": "imported_revision_source_cleanup",
+                "object_keys": [source_object_key],
                 "revision_id": revision.id,
-                "item_id": revision.item_id,
-                "annotation_diagnostics": annotation_diagnostics,
-            }
+            },
+        )
     return {
         "revision_id": revision.id,
         "item_id": revision.item_id,
-        "annotation_diagnostics": [],
+        "annotation_diagnostics": annotation_diagnostics,
     }
 
 
