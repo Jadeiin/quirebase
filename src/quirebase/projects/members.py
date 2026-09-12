@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select
 
+from quirebase.access.items import lock_user_write_gate
 from quirebase.audit import record_event
 from quirebase.core.errors import (
     DomainError,
@@ -30,6 +31,7 @@ async def add_project_member(
     username: str,
     role: ProjectRole | str = ProjectRole.viewer,
 ) -> ProjectMember:
+    user = await lock_user_write_gate(db, user, message="user is not active")
     await require_project_write_gate(db, project_id)
     actor = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     if actor is None or actor.role != ProjectRole.owner:
@@ -68,6 +70,7 @@ async def remove_project_member(
     project_id: str,
     member_id: str,
 ) -> None:
+    user = await lock_user_write_gate(db, user, message="user is not active")
     await require_project_write_gate(db, project_id)
     actor = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     target = await db.get(ProjectMember, (project_id, member_id), populate_existing=True)

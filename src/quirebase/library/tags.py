@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from quirebase.access.items import (
     can_read_item,
     lock_item_edit_authority,
+    lock_user_write_gate,
     require_editable_item,
     visible_items_query,
 )
@@ -282,16 +283,15 @@ async def _rename_tag_once(db: AsyncSession, user: User, tag_id: str, name: str)
 
 
 async def rename_tag(db: AsyncSession, user: User, tag_id: str, name: str) -> Tag:
-    user_id = user.id
+    user = await lock_user_write_gate(db, user, message="tag not found or cannot be managed")
     for _ in range(5):
         try:
             return await _rename_tag_once(db, user, tag_id, name)
         except _TagItemGateRace:
             await db.rollback()
-            refreshed_user = await db.get(User, user_id, populate_existing=True)
-            if refreshed_user is None:
-                raise ResourceUnavailable("tag not found or cannot be managed")
-            user = refreshed_user
+            user = await lock_user_write_gate(
+                db, user, message="tag not found or cannot be managed"
+            )
     raise TagConflict("tag assignments changed while the tag was being updated")
 
 
@@ -312,16 +312,15 @@ async def _delete_tag_once(db: AsyncSession, user: User, tag_id: str) -> None:
 
 
 async def delete_tag(db: AsyncSession, user: User, tag_id: str) -> None:
-    user_id = user.id
+    user = await lock_user_write_gate(db, user, message="tag not found or cannot be managed")
     for _ in range(5):
         try:
             return await _delete_tag_once(db, user, tag_id)
         except _TagItemGateRace:
             await db.rollback()
-            refreshed_user = await db.get(User, user_id, populate_existing=True)
-            if refreshed_user is None:
-                raise ResourceUnavailable("tag not found or cannot be managed")
-            user = refreshed_user
+            user = await lock_user_write_gate(
+                db, user, message="tag not found or cannot be managed"
+            )
     raise TagConflict("tag assignments changed while the tag was being updated")
 
 
@@ -499,14 +498,11 @@ async def _merge_tags_once(
 
 
 async def merge_tags(db: AsyncSession, user: User, source_tag_id: str, target_tag_id: str) -> Tag:
-    user_id = user.id
+    user = await lock_user_write_gate(db, user, message="tags not found")
     for _ in range(5):
         try:
             return await _merge_tags_once(db, user, source_tag_id, target_tag_id)
         except _TagItemGateRace:
             await db.rollback()
-            refreshed_user = await db.get(User, user_id, populate_existing=True)
-            if refreshed_user is None:
-                raise ResourceUnavailable("tags not found")
-            user = refreshed_user
+            user = await lock_user_write_gate(db, user, message="tags not found")
     raise TagConflict("tag assignments changed while the tags were being merged")
