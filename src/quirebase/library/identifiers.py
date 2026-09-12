@@ -20,7 +20,14 @@ from quirebase.documents.pdf import first_doi_from_text
 from quirebase.library.authors import parse_author_name, set_item_authors_from_string
 from quirebase.library.providers import candidate_record_values, lookup_candidate
 from quirebase.library.workflows import request_item_tag_recommendation
-from quirebase.models import FileRevision, Item, ItemAuthor, ItemIdentifier, User
+from quirebase.models import (
+    FileRevision,
+    Item,
+    ItemAuthor,
+    ItemCreateTombstone,
+    ItemIdentifier,
+    User,
+)
 from quirebase.search import enqueue_search_changed
 
 if TYPE_CHECKING:
@@ -328,6 +335,14 @@ async def create_item_from_metadata_record(
     """Create an imported Item and enqueue its initial Tag recommendation."""
     operation_id = normalize_operation_id(operation_id)
     if operation_id:
+        tombstone = await db.scalar(
+            select(ItemCreateTombstone).where(
+                ItemCreateTombstone.created_by == user.id,
+                ItemCreateTombstone.operation_id == operation_id,
+            )
+        )
+        if tombstone is not None:
+            raise ValidationFailure("item creation operation was already used")
         existing = await db.scalar(
             select(Item).where(Item.created_by == user.id, Item.create_operation_id == operation_id)
         )

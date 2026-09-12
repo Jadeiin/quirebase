@@ -80,9 +80,22 @@ async def rename_project(db: AsyncSession, user: User, project_id: str, name: st
     item_ids = sorted(
         await db.scalars(select(ProjectItem.item_id).where(ProjectItem.project_id == project_id))
     )
-    await db.flush()
-    await _advance_item_sequences(db, item_ids)
+    # Keep the canonical User -> Project -> Item lock order. Items already in
+    # durable deletion are intentionally skipped; their lifecycle path owns
+    # the remaining cleanup and must not be resurrected by this mutation.
+    locked_item_ids: list[str] = []
     for item_id in item_ids:
+        locked = await db.scalar(
+            select(Item)
+            .where(Item.id == item_id, Item.lifecycle_state == ItemLifecycleState.active)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if locked is not None:
+            locked_item_ids.append(item_id)
+    await db.flush()
+    await _advance_item_sequences(db, locked_item_ids)
+    for item_id in locked_item_ids:
         await enqueue_search_changed(db, item_id)
     record_event(
         db,
@@ -126,6 +139,16 @@ async def delete_project(db: AsyncSession, user: User, project_id: str, confirma
     item_ids = sorted(
         await db.scalars(select(ProjectItem.item_id).where(ProjectItem.project_id == project_id))
     )
+    locked_item_ids: list[str] = []
+    for item_id in item_ids:
+        locked = await db.scalar(
+            select(Item)
+            .where(Item.id == item_id, Item.lifecycle_state == ItemLifecycleState.active)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if locked is not None:
+            locked_item_ids.append(item_id)
     record_event(
         db,
         user.id,
@@ -140,8 +163,8 @@ async def delete_project(db: AsyncSession, user: User, project_id: str, confirma
     await db.execute(delete(ProjectItem).where(ProjectItem.project_id == project_id))
     await db.delete(project)
     await db.flush()
-    await _advance_item_sequences(db, item_ids)
-    for item_id in item_ids:
+    await _advance_item_sequences(db, locked_item_ids)
+    for item_id in locked_item_ids:
         await enqueue_search_changed(db, item_id)
     await db.commit()
 

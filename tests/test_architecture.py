@@ -100,6 +100,7 @@ ORM_MODEL_OWNERS = {
     "FileRevision": "documents",
     "ExportArtifact": "documents",
     "ImportBatch": "library",
+    "ItemCreateTombstone": "library",
     "ObjectIntegrityScan": "operations",
     "Invitation": "accounts",
     "Item": "library",

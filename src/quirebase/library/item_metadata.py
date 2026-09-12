@@ -23,7 +23,7 @@ from quirebase.library.identifiers import (
     set_item_identifiers,
 )
 from quirebase.library.workflows import request_item_tag_recommendation
-from quirebase.models import Item, User, contributor_identity_key
+from quirebase.models import Item, ItemCreateTombstone, User, contributor_identity_key
 from quirebase.search import enqueue_search_changed
 
 if TYPE_CHECKING:
@@ -238,6 +238,14 @@ async def _create_item(
     operation_id: str | None = None,
 ) -> ItemWriteResult:
     if operation_id:
+        tombstone = await db.scalar(
+            select(ItemCreateTombstone).where(
+                ItemCreateTombstone.created_by == actor.id,
+                ItemCreateTombstone.operation_id == operation_id,
+            )
+        )
+        if tombstone is not None:
+            raise ValidationFailure("item creation operation was already used")
         # Keys are scoped per owner: a repeated operation replays this User's
         # Item and nobody else's, so a leaked or guessed key cannot redirect
         # the caller to an inaccessible Item.

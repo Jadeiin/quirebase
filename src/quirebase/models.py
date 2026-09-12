@@ -239,12 +239,28 @@ class Item(Base):
     updater: Mapped[User | None] = relationship(foreign_keys=[updated_by])
 
 
+class ItemCreateTombstone(Base):
+    """Durable record that an Item create operation has been consumed.
+
+    The Item row may be permanently deleted, but its owner-scoped operation
+    identity must remain reserved so a delayed retry cannot recreate it.
+    """
+
+    __tablename__ = "item_create_tombstones"
+    created_by: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    operation_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    item_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
 class Author(Base):
     __tablename__ = "authors"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     first_name: Mapped[str | None] = mapped_column(String(120))
     last_name: Mapped[str] = mapped_column(String(120), index=True)
-    identity_key: Mapped[str] = mapped_column(String(300), nullable=False)
+    identity_key: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     __table_args__ = (
         Index(

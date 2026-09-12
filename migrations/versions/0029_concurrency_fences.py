@@ -220,7 +220,7 @@ def upgrade() -> None:
             op.drop_index("uq_authors_normalized_name", table_name="authors")
         if "identity_key" not in author_columns:
             with op.batch_alter_table("authors") as batch:
-                batch.add_column(sa.Column("identity_key", sa.String(length=300), nullable=True))
+                batch.add_column(sa.Column("identity_key", sa.Text(), nullable=True))
             rows = bind.execute(sa.text("SELECT id, last_name, first_name FROM authors")).mappings()
             for row in rows:
                 bind.execute(
@@ -251,6 +251,8 @@ def upgrade() -> None:
                         ),
                     },
                 )
+            with op.batch_alter_table("authors") as batch:
+                batch.alter_column("identity_key", type_=sa.Text(), nullable=False)
         # Legacy databases may contain separate Author rows that collapse to
         # the same canonical identity (case, whitespace or Unicode variants).
         # Resolve those rows before adding the unique identity index.  Keep the
@@ -281,19 +283,19 @@ def upgrade() -> None:
             for duplicate_id in duplicate_ids:
                 links = bind.execute(
                     sa.text(
-                        "SELECT id, item_id, role FROM item_authors "
+                        "SELECT id, item_id, role, position, is_corresponding FROM item_authors "
                         "WHERE author_id = :author_id ORDER BY id"
                     ),
                     {"author_id": duplicate_id},
                 ).all()
-                for link_id, item_id, role in links:
-                    existing_link = bind.scalar(
+                for link_id, item_id, role, position, is_corresponding in links:
+                    existing_link = bind.execute(
                         sa.text(
-                            "SELECT id FROM item_authors "
+                            "SELECT id, position, is_corresponding FROM item_authors "
                             "WHERE item_id = :item_id AND author_id = :author_id AND role = :role"
                         ),
                         {"item_id": item_id, "author_id": canonical_id, "role": role},
-                    )
+                    ).first()
                     if existing_link is None:
                         bind.execute(
                             sa.text(
@@ -302,6 +304,20 @@ def upgrade() -> None:
                             {"author_id": canonical_id, "id": link_id},
                         )
                     else:
+                        existing_id, existing_position, existing_corresponding = existing_link
+                        bind.execute(
+                            sa.text(
+                                "UPDATE item_authors SET position = :position, "
+                                "is_corresponding = :is_corresponding WHERE id = :id"
+                            ),
+                            {
+                                "id": existing_id,
+                                "position": min(existing_position, position),
+                                "is_corresponding": bool(
+                                    existing_corresponding or is_corresponding
+                                ),
+                            },
+                        )
                         bind.execute(
                             sa.text("DELETE FROM item_authors WHERE id = :id"),
                             {"id": link_id},

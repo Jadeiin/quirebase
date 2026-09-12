@@ -29,6 +29,7 @@ from quirebase.library.tags import (
 from quirebase.models import (
     Attachment,
     FileRevision,
+    ItemCreateTombstone,
     ItemTag,
     User,
 )
@@ -116,6 +117,14 @@ async def apply_bulk_item_action(
             if key
         )
         for item in items:
+            if item.create_operation_id:
+                db.add(
+                    ItemCreateTombstone(
+                        created_by=item.created_by,
+                        operation_id=item.create_operation_id,
+                        item_id=item.id,
+                    )
+                )
             await db.delete(item)
         audit_action = "library.bulk.delete_items"
     else:

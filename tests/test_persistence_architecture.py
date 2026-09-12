@@ -19,6 +19,7 @@ EXPECTED_TABLES = {
     "export_artifacts",
     "file_revisions",
     "import_batches",
+    "item_create_tombstones",
     "invitations",
     "item_authors",
     "item_identifiers",

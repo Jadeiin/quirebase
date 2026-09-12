@@ -9,7 +9,14 @@ from quirebase.audit import record_event
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
 from quirebase.documents import enqueue_object_cleanup
 from quirebase.library.item_lifecycle import begin_item_deletion
-from quirebase.models import Attachment, FileRevision, Item, ObjectIntegrityScan, User
+from quirebase.models import (
+    Attachment,
+    FileRevision,
+    Item,
+    ItemCreateTombstone,
+    ObjectIntegrityScan,
+    User,
+)
 from quirebase.search import enqueue_search_changed, search_index
 
 if TYPE_CHECKING:
@@ -153,6 +160,14 @@ async def _delete_item(
     await db.execute(delete(Attachment).where(Attachment.item_id == item.id))
 
     # Delete entity from database
+    if item.create_operation_id:
+        db.add(
+            ItemCreateTombstone(
+                created_by=item.created_by,
+                operation_id=item.create_operation_id,
+                item_id=item.id,
+            )
+        )
     await db.delete(item)
 
     # Record audit event before commit
