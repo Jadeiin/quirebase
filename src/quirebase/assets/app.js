@@ -508,6 +508,7 @@ Alpine.data("remotePdfUpload", () => ({
       const blob = await download.blob();
       const form = new FormData();
       form.append("pdf", new File([blob], remotePdfFilename(this.url), { type: blob.type }));
+      form.append("operation_id", this.$root.elements.operation_id.value);
       const upload = await csrfFetch(this.$root.action, { method: "POST", body: form });
       if (!upload.ok) throw new Error("PDF upload failed");
       window.location.assign(upload.url);
@@ -541,6 +542,7 @@ Alpine.data("remoteAttachmentUpload", () => ({
         "attachment",
         new File([blob], remoteAttachmentFilename(this.url), { type: blob.type }),
       );
+      form.append("operation_id", this.$root.elements.operation_id.value);
       if (this.graphicalAbstract) form.append("graphical_abstract", "true");
       const upload = await csrfFetch(this.$root.action, { method: "POST", body: form });
       if (!upload.ok) throw new Error("Attachment upload failed");

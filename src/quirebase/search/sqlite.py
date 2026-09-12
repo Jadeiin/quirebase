@@ -14,37 +14,45 @@ if TYPE_CHECKING:
 
 
 class SQLiteSearchIndex:
-    async def ensure_schema(self, db: AsyncSession) -> None:
+    async def index_item(
+        self, db: AsyncSession, item_id: str, source_sequence: int | None = None
+    ) -> None:
+        # FTS5 cannot express the PostgreSQL conditional upsert because
+        # ``item_id`` is UNINDEXED. SQLite is a single-process development
+        # profile without a supported multi-worker concurrency guarantee, so
+        # this adapter performs the functional sequence check without trying
+        # to emulate a database writer lock.
+        item = await db.get(Item, item_id, populate_existing=True)
+        if item is None:
+            await self.remove_item(db, item_id)
+            return
+        if source_sequence is None:
+            source_sequence = item.aggregate_sequence
+        source_sequence = source_sequence or 0
+        current = await db.scalar(
+            text("SELECT source_sequence FROM item_search WHERE item_id = :item_id"),
+            {"item_id": item_id},
+        )
+        if current is not None and int(current) > source_sequence:
+            return
+        await self.remove_item(db, item_id)
         await db.execute(
             text(
-                """
-                CREATE VIRTUAL TABLE IF NOT EXISTS item_search USING fts5(
-                    item_id UNINDEXED,
-                    content,
-                    tokenize='unicode61 remove_diacritics 2'
-                )
-                """
-            )
+                "INSERT INTO item_search(item_id, content, source_sequence) VALUES (:item_id, :content, :source_sequence)"
+            ),
+            {
+                "item_id": item.id,
+                "content": await search_text_for_item(db, item),
+                "source_sequence": source_sequence,
+            },
         )
 
-    async def index_item(self, db: AsyncSession, item_id: str) -> None:
-        await self.ensure_schema(db)
-        item = await db.get(Item, item_id)
-        await self.remove_item(db, item_id)
-        if item is not None:
-            await db.execute(
-                text("INSERT INTO item_search(item_id, content) VALUES (:item_id, :content)"),
-                {"item_id": item.id, "content": await search_text_for_item(db, item)},
-            )
-
     async def remove_item(self, db: AsyncSession, item_id: str) -> None:
-        await self.ensure_schema(db)
         await db.execute(
             text("DELETE FROM item_search WHERE item_id = :item_id"), {"item_id": item_id}
         )
 
     async def search(self, db: AsyncSession, query: str, limit: int = 200) -> list[str]:
-        await self.ensure_schema(db)
         tokens = re.findall(r"[^\W_]+", query, flags=re.UNICODE)
         if not tokens:
             return []
@@ -67,7 +75,6 @@ class SQLiteSearchIndex:
 
     async def matching_item_ids(self, db: AsyncSession, query: str) -> SelectBase:
         """Return an unbounded FTS match as a database-side ID query."""
-        await self.ensure_schema(db)
         tokens = re.findall(r"[^\W_]+", query, flags=re.UNICODE)
         if not tokens:
             return select(Item.id).where(false())

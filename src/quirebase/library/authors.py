@@ -4,11 +4,12 @@ from typing import TYPE_CHECKING
 
 from inquiro.bibliography import Contributor as BibliographyContributor
 from sqlalchemy import delete, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from quirebase.access.items import require_editable_item
 from quirebase.core.errors import ValidationFailure
-from quirebase.models import Author, Item, ItemAuthor, User
+from quirebase.models import Author, Item, ItemAuthor, User, contributor_identity_key
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,15 +56,19 @@ async def find_or_create_author(
         raise ValidationFailure("author last name is required")
     first = " ".join(first_name.split()) if first_name else None
 
-    stmt = select(Author).where(
-        Author.last_name.ilike(last),
-        Author.first_name.ilike(first) if first else Author.first_name.is_(None),
-    )
+    identity_key = contributor_identity_key(last, first)
+    stmt = select(Author).where(Author.identity_key == identity_key)
     author = await db.scalar(stmt)
     if author is None:
-        author = Author(last_name=last, first_name=first)
-        db.add(author)
-        await db.flush()
+        author = Author(last_name=last, first_name=first, identity_key=identity_key)
+        try:
+            async with db.begin_nested():
+                db.add(author)
+                await db.flush()
+        except IntegrityError:
+            author = await db.scalar(stmt)
+            if author is None:
+                raise
     return author
 
 

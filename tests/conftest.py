@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 from dbos import AsyncSQLAlchemyDatasource
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from quirebase.core.config import get_settings
@@ -27,6 +28,8 @@ class InMemoryDurableOperations:
         queue_name: str,
         workflow_id: str,
         partition_key: str | None = None,
+        deduplication_id: str | None = None,
+        duplication_policy: str = "reject",
         attributes: dict[str, object] | None = None,
     ) -> str:
         self.enqueues.append({
@@ -35,6 +38,8 @@ class InMemoryDurableOperations:
             "queue_name": queue_name,
             "workflow_id": workflow_id,
             "partition_key": partition_key,
+            "deduplication_id": deduplication_id,
+            "duplication_policy": duplication_policy,
             "attributes": attributes,
         })
         now = datetime.now(UTC)
@@ -66,6 +71,8 @@ class InMemoryDurableOperations:
         topic: str,
         idempotency_key: str,
     ) -> None:
+        if any(existing[3] == idempotency_key for existing in self.messages):
+            return
         self.messages.append((workflow_id, message, topic, idempotency_key))
 
     async def get(self, workflow_id: str) -> WorkflowSummary | None:
@@ -118,6 +125,18 @@ async def async_session_factory(tmp_path, monkeypatch):
     engine = make_async_engine(f"sqlite:///{tmp_path / 'async-test.db'}")
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
+        await connection.execute(
+            text(
+                """
+                CREATE VIRTUAL TABLE item_search USING fts5(
+                    item_id UNINDEXED,
+                    content,
+                    source_sequence UNINDEXED,
+                    tokenize='unicode61 remove_diacritics 2'
+                )
+                """
+            )
+        )
     ds = await AsyncSQLAlchemyDatasource.create(
         f"sqlite+aiosqlite:///{tmp_path / 'async-test.db'}",
         engine=engine,

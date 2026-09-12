@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import update
+from sqlalchemy import select
 
 from quirebase.core.errors import ResourceUnavailable
 from quirebase.models import Project, ProjectState, ProjectVisibility
@@ -25,16 +25,12 @@ async def require_project_write_gate(
         predicates.append(Project.state == state)
     if visibility is not None:
         predicates.append(Project.visibility == visibility)
-    gated_id = await db.scalar(
-        update(Project)
+    project = await db.scalar(
+        select(Project)
         .where(*predicates)
-        .values(updated_at=Project.updated_at)
-        .returning(Project.id)
-        .execution_options(synchronize_session=False)
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
-    if gated_id is None:
-        raise ResourceUnavailable(message)
-    project = await db.get(Project, gated_id, populate_existing=True)
     if project is None:
         raise ResourceUnavailable(message)
     return project

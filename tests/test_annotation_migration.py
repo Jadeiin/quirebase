@@ -26,6 +26,11 @@ engine = create_engine("sqlite:///" + os.environ["MIGRATION_DATABASE"])
 with engine.begin() as connection:
     connection.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(64) PRIMARY KEY)"))
     connection.execute(text("INSERT INTO alembic_version VALUES ('0024_export_artifacts')"))
+    connection.execute(text("""
+        CREATE VIRTUAL TABLE item_search USING fts5(
+          item_id UNINDEXED, content, tokenize='unicode61 remove_diacritics 2'
+        )
+    """))
     connection.execute(text("CREATE TABLE file_revisions (id VARCHAR(36) PRIMARY KEY, page_geometry TEXT)"))
     connection.execute(text("INSERT INTO file_revisions VALUES ('revision', '[[10,20,210,320],[0,0,200,300],[-10,-20,190,280]]')"))
     connection.execute(text("CREATE TABLE users (id VARCHAR(36) PRIMARY KEY)"))

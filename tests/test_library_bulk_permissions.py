@@ -242,7 +242,7 @@ async def test_bulk_delete_preserves_object_referenced_by_pending_pdf_import(
     object_path = local_object_path(revision.object_key)
     db.add(
         ImportBatch(
-            owner_id=owner.id,
+            created_by=owner.id,
             file_format="pdf",
             records=json.dumps([{"_pdf": {"object_key": revision.object_key}}]),
             errors="[]",

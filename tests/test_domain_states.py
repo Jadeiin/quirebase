@@ -554,15 +554,18 @@ async def test_project_rename_and_delete_refresh_assigned_item_search(async_db):
     project = await create_project(db, owner, "OriginalProjectToken")
     await add_item_to_project(db, owner, project.id, item.id)
     index = search_index(db)
+    await index.index_item(db, item.id)
 
     assert item.id in await index.search(db, "OriginalProjectToken")
 
     await rename_project(db, owner, project.id, "RenamedProjectToken")
+    await index.index_item(db, item.id)
 
     assert item.id not in await index.search(db, "OriginalProjectToken")
     assert item.id in await index.search(db, "RenamedProjectToken")
 
     await delete_project(db, owner, project.id, "RenamedProjectToken")
+    await index.index_item(db, item.id)
 
     assert item.id not in await index.search(db, "RenamedProjectToken")
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import unicodedata
 import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -10,10 +11,12 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
+    event,
 )
 from sqlalchemy import (
     Enum as SqlEnum,
@@ -29,6 +32,15 @@ def uid() -> str:
 
 def now() -> datetime:
     return datetime.now(UTC)
+
+
+def contributor_identity_key(last_name: str, first_name: str | None = None) -> str:
+    """Return the Unicode-normalized, case-insensitive Contributor identity."""
+
+    def normalize(value: str | None) -> str:
+        return unicodedata.normalize("NFKC", " ".join((value or "").split())).casefold()
+
+    return f"{normalize(last_name)}\x1f{normalize(first_name)}"
 
 
 class SystemRole(StrEnum):
@@ -50,6 +62,18 @@ class ProjectState(StrEnum):
 class ProjectVisibility(StrEnum):
     private = "private"
     public = "public"
+
+
+class ItemLifecycleState(StrEnum):
+    """Logical lifecycle of an Item aggregate.
+
+    ``version`` remains the optimistic-concurrency token for user edits.  The
+    lifecycle fence is a separate token used by work that can outlive an HTTP
+    request (uploads, imports and projections).
+    """
+
+    active = "active"
+    deleting = "deleting"
 
 
 class AnnotationKind(StrEnum):
@@ -149,6 +173,17 @@ class Invitation(Base):
 
 class Item(Base):
     __tablename__ = "items"
+    __table_args__ = (
+        CheckConstraint(
+            "lifecycle_state IN ('active', 'deleting')",
+            name="ck_items_lifecycle_state",
+        ),
+        # Idempotency keys are scoped per owner: one User's operation id must
+        # never collide with, or resolve to, another User's Item.
+        UniqueConstraint(
+            "created_by", "create_operation_id", name="uq_items_owner_create_operation"
+        ),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     title: Mapped[str] = mapped_column(Text, index=True)
     abstract: Mapped[str | None] = mapped_column(Text)
@@ -176,6 +211,16 @@ class Item(Base):
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     version: Mapped[int] = mapped_column(Integer, default=1)
+    tag_collection_version: Mapped[int] = mapped_column(Integer, server_default="1", default=1)
+    lifecycle_state: Mapped[ItemLifecycleState] = mapped_column(
+        enum_type(ItemLifecycleState, "item_lifecycle_state"),
+        server_default=ItemLifecycleState.active.value,
+        default=ItemLifecycleState.active,
+    )
+    lifecycle_fence: Mapped[int] = mapped_column(Integer, server_default="1", default=1)
+    aggregate_sequence: Mapped[int] = mapped_column(Integer, server_default="1", default=1)
+    recommendation_sequence: Mapped[int] = mapped_column(Integer, server_default="1", default=1)
+    create_operation_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
     revisions: Mapped[list[FileRevision]] = relationship(
@@ -194,13 +239,51 @@ class Item(Base):
     updater: Mapped[User | None] = relationship(foreign_keys=[updated_by])
 
 
+class ItemCreateTombstone(Base):
+    """Durable record that an Item create operation has been consumed.
+
+    The Item row may be permanently deleted, but its owner-scoped operation
+    identity must remain reserved so a delayed retry cannot recreate it.
+    """
+
+    __tablename__ = "item_create_tombstones"
+    created_by: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    operation_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    item_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class SearchProjectionState(Base):
+    """Search-owned generation state for one Item's derived projection."""
+
+    __tablename__ = "search_projection_state"
+    item_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    requested_generation: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
 class Author(Base):
     __tablename__ = "authors"
-    __table_args__ = (UniqueConstraint("last_name", "first_name", name="uq_authors_name"),)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     first_name: Mapped[str | None] = mapped_column(String(120))
     last_name: Mapped[str] = mapped_column(String(120), index=True)
+    identity_key: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    __table_args__ = (
+        Index(
+            "uq_authors_identity_key",
+            identity_key,
+            unique=True,
+        ),
+    )
+
+
+@event.listens_for(Author, "before_insert")
+@event.listens_for(Author, "before_update")
+def _populate_author_identity_key(_mapper, _connection, target: Author) -> None:
+    target.identity_key = contributor_identity_key(target.last_name, target.first_name)
 
 
 class ItemAuthor(Base):
@@ -312,6 +395,7 @@ class ItemTagRecommendation(Base):
         ForeignKey("items.id", ondelete="CASCADE"), unique=True, index=True
     )
     generation_token: Mapped[int] = mapped_column(Integer, default=1)
+    source_sequence: Mapped[int] = mapped_column(Integer, default=1)
     workflow_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     single_words: Mapped[str | None] = mapped_column(Text, nullable=True)
     phrases: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -338,6 +422,12 @@ class FileRevision(Base):
             "processing_state IN ('pending', 'ready')",
             name="ck_file_revisions_processing_state",
         ),
+        UniqueConstraint(
+            "created_by",
+            "item_id",
+            "operation_id",
+            name="uq_file_revisions_owner_item_operation",
+        ),
     )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     item_id: Mapped[str] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
@@ -354,6 +444,8 @@ class FileRevision(Base):
         enum_type(FileRevisionProcessingState, "file_revision_processing_state"),
         default=FileRevisionProcessingState.pending,
     )
+    lifecycle_fence: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    operation_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     item: Mapped[Item] = relationship(back_populates="revisions")
@@ -367,6 +459,12 @@ class Attachment(Base):
             name="ck_attachments_role",
         ),
         UniqueConstraint("item_id", "role", name="uq_attachments_item_role"),
+        UniqueConstraint(
+            "created_by",
+            "item_id",
+            "operation_id",
+            name="uq_attachments_owner_item_operation",
+        ),
     )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     item_id: Mapped[str] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
@@ -377,6 +475,8 @@ class Attachment(Base):
     role: Mapped[AttachmentRole | None] = mapped_column(
         enum_type(AttachmentRole, "attachment_role"), nullable=True
     )
+    lifecycle_fence: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    operation_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
@@ -497,17 +597,23 @@ class ImportBatch(Base):
     __tablename__ = "import_batches"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('pending', 'ready', 'failed')",
+            "status IN ('pending', 'ready', 'committing', 'committed', 'failed', 'discarded')",
             name="ck_import_batches_status",
         ),
     )
+    # Terminal batches own nothing: commit/discard strip staged references, so
+    # reservation scans exclude their retained tombstones.
+    TERMINAL_STATUSES = ("committed", "discarded")
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    owner_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     file_format: Mapped[str] = mapped_column(String(16))
+    original_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     records: Mapped[str] = mapped_column(Text)
     errors: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(16), default="ready")
     workflow_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    commit_operation_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    committed_item_ids: Mapped[str] = mapped_column(Text, default="[]")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
 
 

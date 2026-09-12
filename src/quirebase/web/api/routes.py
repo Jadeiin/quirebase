@@ -24,7 +24,6 @@ from quirebase.library import (
     CandidatePageView,
     DiscussionWorkspace,
     FilesWorkspace,
-    ItemMetadata,
     MetadataWorkspace,
     WorkspaceSection,
     add_discussion_message,
@@ -81,6 +80,7 @@ from quirebase.web.api.auth import current_api_user, http_api_invocation
 from quirebase.web.api.schemas import (
     DiscoverySearchRequest,
     DiscussionRequest,
+    ItemCreateRequest,
     ItemUpdateRequest,
     NameRequest,
     ProjectCreateRequest,
@@ -134,8 +134,8 @@ async def search_items(
 
 
 @router.post("/items", response_model=WriteResult, status_code=status.HTTP_201_CREATED)
-async def create_library_item(metadata: ItemMetadata, user: ApiUser, db: Database) -> WriteResult:
-    result = await create_item(db, user, metadata)
+async def create_library_item(data: ItemCreateRequest, user: ApiUser, db: Database) -> WriteResult:
+    result = await create_item(db, user, data, operation_id=data.operation_id)
     return WriteResult(id=result.item_id, version=result.version)
 
 
@@ -417,7 +417,14 @@ async def remove_item_tag(item_id: str, tag_id: str, user: ApiUser, db: Database
 async def set_item_tag_selection(
     item_id: str, data: TagSetRequest, user: ApiUser, db: Database
 ) -> OkView:
-    await set_item_tags(db, user, item_id, data.tag_ids, data.new_names)
+    await set_item_tags(
+        db,
+        user,
+        item_id,
+        data.tag_ids,
+        data.new_names,
+        expected_collection_version=data.expected_collection_version,
+    )
     return OkView()
 
 

@@ -1,6 +1,7 @@
 {% from "_forms.html" import csrf_field %}
 <form class="metadata-form" method="post" action="{{ form_action }}">{{ csrf_field(csrf) }}
   {% if form_version is defined and form_version is not none %}<input type="hidden" name="version" value="{{ form_version }}">{% endif %}
+  {% if form_operation_id is defined and form_operation_id %}<input type="hidden" name="operation_id" value="{{ form_operation_id }}">{% endif %}
   <label class="span-2">{{ _('Title') }} <input name="title" value="{{ form_item.title or '' }}" required></label>
 
   <div class="span-2 author-editor-container" x-data="authorEditor" data-initial-authors='{{ initial_authors|tojson }}'>

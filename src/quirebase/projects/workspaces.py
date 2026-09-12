@@ -3,10 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
-from quirebase.access.items import can_read_item
+from quirebase.access.items import can_read_item, lock_active_item, lock_user_write_gate
 from quirebase.access.projects import require_project_member
 from quirebase.audit import record_event
 from quirebase.core.errors import (
@@ -24,7 +24,7 @@ from quirebase.models import (
     ProjectVisibility,
     User,
 )
-from quirebase.search import search_index
+from quirebase.search import enqueue_search_changed
 
 from .write_gate import require_project_write_gate
 
@@ -109,6 +109,7 @@ async def list_joinable_projects(db: AsyncSession, user: User) -> list[tuple[Pro
 
 
 async def join_project(db: AsyncSession, user: User, project_id: str) -> ProjectMember:
+    user = await lock_user_write_gate(db, user, message="user is not active")
     await require_project_write_gate(
         db,
         project_id,
@@ -169,22 +170,30 @@ async def open_project_workspace(db: AsyncSession, user: User, project_id: str) 
 
 
 async def add_item_to_project(db: AsyncSession, user: User, project_id: str, item_id: str) -> None:
-    item = await db.get(Item, item_id)
-    if item is None or not await can_read_item(db, user, item_id):
-        raise ResourceUnavailable("item or project not accessible or insufficient permissions")
+    user = await lock_user_write_gate(db, user, message="user is not active")
     await require_project_write_gate(
         db,
         project_id,
         state=ProjectState.active,
         message="item or project not accessible or insufficient permissions",
     )
+    await lock_active_item(
+        db, item_id, message="item or project not accessible or insufficient permissions"
+    )
+    if not await can_read_item(db, user, item_id):
+        raise ResourceUnavailable("item or project not accessible or insufficient permissions")
     membership = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     if membership is None or membership.role not in (ProjectRole.owner, ProjectRole.editor):
         raise ResourceUnavailable("item or project not accessible or insufficient permissions")
     if await db.get(ProjectItem, (project_id, item_id), populate_existing=True) is None:
         db.add(ProjectItem(project_id=project_id, item_id=item_id))
         await db.flush()
-        await search_index(db).index_item(db, item_id)
+        await db.execute(
+            update(Item)
+            .where(Item.id == item_id)
+            .values(aggregate_sequence=Item.aggregate_sequence + 1)
+        )
+        await enqueue_search_changed(db, item_id)
         record_event(
             db,
             user.id,
@@ -196,17 +205,54 @@ async def add_item_to_project(db: AsyncSession, user: User, project_id: str, ite
     await db.commit()
 
 
-async def remove_item_from_project(
-    db: AsyncSession, user: User, project_id: str, item_id: str
-) -> None:
-    if not await can_read_item(db, user, item_id):
-        raise ResourceUnavailable("item or project not accessible or insufficient permissions")
+async def add_items_to_project(
+    db: AsyncSession, user: User, project_id: str, item_ids: list[str]
+) -> tuple[str, ...]:
+    """Projects-owned bulk ProjectItem mutation used by Library commands."""
+
+    user = await lock_user_write_gate(db, user, message="user is not active")
     await require_project_write_gate(
         db,
         project_id,
         state=ProjectState.active,
         message="item or project not accessible or insufficient permissions",
     )
+    membership = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
+    if membership is None or membership.role not in (ProjectRole.owner, ProjectRole.editor):
+        raise ResourceUnavailable("item or project not accessible or insufficient permissions")
+    changed: list[str] = []
+    for item_id in dict.fromkeys(item_ids):
+        item = await db.get(Item, item_id, populate_existing=True)
+        state = getattr(item.lifecycle_state, "value", item.lifecycle_state) if item else None
+        if item is None or state != "active":
+            raise ResourceUnavailable("item or project not accessible or insufficient permissions")
+        if await db.get(ProjectItem, (project_id, item_id), populate_existing=True) is None:
+            db.add(ProjectItem(project_id=project_id, item_id=item_id))
+            await db.execute(
+                update(Item)
+                .where(Item.id == item_id, Item.lifecycle_state == "active")
+                .values(aggregate_sequence=Item.aggregate_sequence + 1)
+            )
+            await enqueue_search_changed(db, item_id)
+            changed.append(item_id)
+    return tuple(changed)
+
+
+async def remove_item_from_project(
+    db: AsyncSession, user: User, project_id: str, item_id: str
+) -> None:
+    user = await lock_user_write_gate(db, user, message="user is not active")
+    await require_project_write_gate(
+        db,
+        project_id,
+        state=ProjectState.active,
+        message="item or project not accessible or insufficient permissions",
+    )
+    await lock_active_item(
+        db, item_id, message="item or project not accessible or insufficient permissions"
+    )
+    if not await can_read_item(db, user, item_id):
+        raise ResourceUnavailable("item or project not accessible or insufficient permissions")
     membership = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     assignment = await db.get(ProjectItem, (project_id, item_id), populate_existing=True)
     if (
@@ -217,7 +263,12 @@ async def remove_item_from_project(
         raise ResourceUnavailable("item or project not accessible or insufficient permissions")
     await db.delete(assignment)
     await db.flush()
-    await search_index(db).index_item(db, item_id)
+    await db.execute(
+        update(Item)
+        .where(Item.id == item_id)
+        .values(aggregate_sequence=Item.aggregate_sequence + 1)
+    )
+    await enqueue_search_changed(db, item_id)
     record_event(
         db,
         user.id,

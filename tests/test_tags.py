@@ -1,18 +1,21 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from quirebase.core.errors import ResourceUnavailable
+from quirebase.library.item_lifecycle import begin_item_deletion
 from quirebase.library.tags import (
     TagConflict,
     add_tag_to_item,
     get_tag_matrix_for_item,
     merge_tags,
     remove_tag_from_item,
+    rename_tag,
     set_item_tags,
 )
 from quirebase.models import AuditEvent, Item, ItemTag, ItemTagRecommendation, Tag, User
@@ -38,6 +41,94 @@ async def test_remove_tag_from_item_records_the_business_change(async_db):
     )
     assert event is not None
     assert json.loads(event.detail) == {"tag_id": tag_id}
+
+
+@pytest.mark.anyio
+async def test_replayed_tag_remove_does_not_consume_another_collection_version(
+    async_session_factory,
+):
+    async with async_session_factory() as setup_db:
+        user = User(username="tag-remove-replay", password_hash="hash")
+        setup_db.add(user)
+        await setup_db.flush()
+        item = Item(title="Remove once", created_by=user.id)
+        setup_db.add(item)
+        await setup_db.commit()
+        assignment = await add_tag_to_item(setup_db, user, item.id, "Temporary")
+        user_id, item_id, tag_id = user.id, item.id, assignment.tag_id
+
+    async with async_session_factory() as stale_db:
+        stale_user = await stale_db.get(User, user_id)
+        assert stale_user is not None
+        stale_assignment = await stale_db.get(ItemTag, (item_id, tag_id))
+        assert stale_assignment is not None
+        await stale_db.commit()
+
+        async with async_session_factory() as winner_db:
+            winner_user = await winner_db.get(User, user_id)
+            assert winner_user is not None
+            await remove_tag_from_item(winner_db, winner_user, item_id, tag_id)
+
+        await remove_tag_from_item(stale_db, stale_user, item_id, tag_id)
+        assert stale_assignment.tag_id == tag_id
+
+    async with async_session_factory() as check_db:
+        item = await check_db.get(Item, item_id)
+        removals = await check_db.scalar(
+            select(func.count())
+            .select_from(AuditEvent)
+            .where(AuditEvent.action == "tag.remove", AuditEvent.target_id == item_id)
+        )
+        assert item is not None
+        assert item.tag_collection_version == 3
+        assert removals == 1
+
+
+@pytest.mark.anyio
+@pytest.mark.skip(reason="SQLite does not provide the supported PostgreSQL concurrency contract")
+async def test_concurrent_tag_add_creates_one_assignment_and_one_collection_version(
+    async_session_factory,
+):
+    async with async_session_factory() as setup_db:
+        user = User(username="tag-add-race", password_hash="hash")
+        setup_db.add(user)
+        await setup_db.flush()
+        item = Item(title="Add once", created_by=user.id)
+        tag = Tag(name="Concurrent", created_by=user.id)
+        setup_db.add_all([item, tag])
+        await setup_db.commit()
+        user_id, item_id, tag_id = user.id, item.id, tag.id
+
+    start = asyncio.Event()
+
+    async def add() -> object:
+        async with async_session_factory() as db:
+            user = await db.get(User, user_id)
+            assert user is not None
+            await start.wait()
+            return await add_tag_to_item(db, user, item_id, "Concurrent")
+
+    tasks = [asyncio.create_task(add()), asyncio.create_task(add())]
+    start.set()
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    assert not any(isinstance(result, BaseException) for result in results), results
+    async with async_session_factory() as check_db:
+        item = await check_db.get(Item, item_id)
+        assignments = await check_db.scalar(
+            select(func.count())
+            .select_from(ItemTag)
+            .where(ItemTag.item_id == item_id, ItemTag.tag_id == tag_id)
+        )
+        additions = await check_db.scalar(
+            select(func.count())
+            .select_from(AuditEvent)
+            .where(AuditEvent.action == "tag.add", AuditEvent.target_id == item_id)
+        )
+        assert item is not None
+        assert item.tag_collection_version == 2
+        assert assignments == 1
+        assert additions == 1
 
 
 @pytest.mark.anyio
@@ -93,7 +184,14 @@ async def test_set_item_tags(async_db):
     db.add(item)
     await db.flush()
 
-    await set_item_tags(db, user, item.id, [], ["AI", "Deep Learning", "Vision"])
+    await set_item_tags(
+        db,
+        user,
+        item.id,
+        [],
+        ["AI", "Deep Learning", "Vision"],
+        expected_collection_version=item.tag_collection_version,
+    )
     current_tags = list((await db.scalars(select(Tag.name))).all())
     assert "AI" in current_tags
     assert "Deep Learning" in current_tags
@@ -102,7 +200,14 @@ async def test_set_item_tags(async_db):
     tag_ai = await db.scalar(select(Tag).where(Tag.name == "AI"))
     tag_vision = await db.scalar(select(Tag).where(Tag.name == "Vision"))
     assert tag_ai is not None and tag_vision is not None
-    await set_item_tags(db, user, item.id, [tag_ai.id, tag_vision.id])
+    await db.refresh(item)
+    await set_item_tags(
+        db,
+        user,
+        item.id,
+        [tag_ai.id, tag_vision.id],
+        expected_collection_version=item.tag_collection_version,
+    )
     await db.commit()
 
     assigned_tag_ids = list(
@@ -123,7 +228,14 @@ async def test_set_tags_normalizes_names_and_skips_empty_values(async_db):
     db.add(item)
     await db.flush()
 
-    await set_item_tags(db, user, item.id, [], ["  Machine   Learning ", "\t"])
+    await set_item_tags(
+        db,
+        user,
+        item.id,
+        [],
+        ["  Machine   Learning ", "\t"],
+        expected_collection_version=item.tag_collection_version,
+    )
     assigned_names = list(
         (
             await db.scalars(
@@ -183,3 +295,28 @@ async def test_merge_tags_requires_source_tag_ownership(async_db):
         await merge_tags(db, other_user, source.id, target.id)
 
     assert await db.get(Tag, source.id) is not None
+
+
+@pytest.mark.anyio
+async def test_tag_rename_skips_item_deleted_after_assignment_snapshot(async_db):
+    db = async_db
+    user = User(username="rename_deleted_item", password_hash="hash")
+    db.add(user)
+    await db.flush()
+    surviving = Item(title="Surviving item", created_by=user.id)
+    deleting = Item(title="Deleting item", created_by=user.id)
+    tag = Tag(name="Before rename", created_by=user.id)
+    db.add_all([surviving, deleting, tag])
+    await db.flush()
+    db.add_all([
+        ItemTag(item_id=surviving.id, tag_id=tag.id),
+        ItemTag(item_id=deleting.id, tag_id=tag.id),
+    ])
+    await db.commit()
+
+    await begin_item_deletion(db, deleting.id)
+
+    renamed = await rename_tag(db, user, tag.id, "After rename")
+
+    assert renamed.name == "After rename"
+    assert await db.get(ItemTag, (surviving.id, tag.id)) is not None

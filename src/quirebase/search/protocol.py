@@ -8,7 +8,9 @@ if TYPE_CHECKING:
 
 
 class SearchIndex(Protocol):
-    async def index_item(self, db: AsyncSession, item_id: str) -> None: ...
+    async def index_item(
+        self, db: AsyncSession, item_id: str, source_sequence: int | None = None
+    ) -> None: ...
 
     async def remove_item(self, db: AsyncSession, item_id: str) -> None: ...
 

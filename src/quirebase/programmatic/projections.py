@@ -30,6 +30,7 @@ def item_detail_view(workspace: Any) -> ItemDetailView:
     item = workspace.item
     return ItemDetailView(
         **item_search_view(item).model_dump(),
+        tag_collection_version=item.tag_collection_version,
         metadata=workspace.metadata,
         abstract_html=item.abstract,
         editors=[

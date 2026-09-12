@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 
 from quirebase.access.items import (
-    can_edit_item,
+    lock_items_edit_authority,
     require_accessible_items,
 )
 from quirebase.audit import record_event
@@ -21,19 +21,20 @@ from quirebase.documents.bundles import (
     ItemDownloadBundle,
     assemble_document_bundle,
 )
-from quirebase.library.tags import get_or_create_tag
+from quirebase.library.item_lifecycle import begin_item_deletion
+from quirebase.library.tags import (
+    advance_item_tag_collection,
+    get_or_create_tag,
+)
 from quirebase.models import (
     Attachment,
     FileRevision,
+    ItemCreateTombstone,
     ItemTag,
-    ProjectItem,
-    ProjectMember,
-    ProjectRole,
-    ProjectState,
     User,
 )
-from quirebase.projects import require_project_write_gate
-from quirebase.search import search_index
+from quirebase.projects import add_items_to_project
+from quirebase.search import enqueue_search_changed
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,42 +51,42 @@ async def apply_bulk_item_action(
 ) -> list[str]:
     items = await require_accessible_items(db, user, item_ids)
 
-    # Fail-closed: All selected items must be editable for mutating bulk actions
-    for item in items:
-        if not await can_edit_item(db, user, item.id):
-            raise PermissionDenied("all selected items must be editable")
+    # Lock the complete authorization path in stable User/Project/Item order.
+    # The target Project is included before any Item locks for bulk assignment.
+    additional_projects = (project_id,) if action in ("add_project", "project_add") else ()
+    try:
+        items = await lock_items_edit_authority(
+            db,
+            user,
+            [item.id for item in items],
+            additional_project_ids=additional_projects,
+        )
+    except ResourceUnavailable as error:
+        raise PermissionDenied("all selected items must be editable") from error
 
     cleanup_keys: list[str] = []
     if action in ("add_project", "project_add"):
         try:
-            await require_project_write_gate(
-                db,
-                project_id,
-                state=ProjectState.active,
-                message="active project not available",
-            )
+            await add_items_to_project(db, user, project_id, [item.id for item in items])
         except ResourceUnavailable as error:
             raise ValidationFailure("choose an editable project") from error
-        membership = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
-        if membership is None or membership.role not in (ProjectRole.owner, ProjectRole.editor):
-            raise ValidationFailure("choose an editable project")
-        for item in items:
-            if await db.get(ProjectItem, (project_id, item.id), populate_existing=True) is None:
-                db.add(ProjectItem(project_id=project_id, item_id=item.id))
-                await search_index(db).index_item(db, item.id)
         audit_action = "library.bulk.add_project"
     elif action in ("add_tag", "tag"):
         tag_record = await get_or_create_tag(db, user, tag_name)
         for item in items:
             if await db.get(ItemTag, (item.id, tag_record.id)) is None:
+                await advance_item_tag_collection(db, user.id, item.id)
                 db.add(ItemTag(item_id=item.id, tag_id=tag_record.id))
-                await search_index(db).index_item(db, item.id)
+                await enqueue_search_changed(db, item.id)
         audit_action = "library.bulk.add_tag"
     elif action in ("delete_items", "delete"):
         if confirm_delete != "delete":
             raise ValidationFailure("confirm deletion of the selected items")
         if user.role != "administrator" and any(item.created_by != user.id for item in items):
             raise PermissionDenied("only item owners can permanently delete items")
+        for item in items:
+            await begin_item_deletion(db, item.id)
+            await enqueue_search_changed(db, item.id)
         cleanup_keys = list(
             (
                 await db.scalars(
@@ -116,7 +117,14 @@ async def apply_bulk_item_action(
             if key
         )
         for item in items:
-            await search_index(db).remove_item(db, item.id)
+            if item.create_operation_id:
+                db.add(
+                    ItemCreateTombstone(
+                        created_by=item.created_by,
+                        operation_id=item.create_operation_id,
+                        item_id=item.id,
+                    )
+                )
             await db.delete(item)
         audit_action = "library.bulk.delete_items"
     else:

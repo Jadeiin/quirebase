@@ -17,6 +17,7 @@ from quirebase.core.errors import VersionConflict
 from quirebase.core.storage import ObjectMetadata, ObjectResponse, ObjectSuffix, get_object_store
 from quirebase.documents import create_attachment
 from quirebase.documents.bundles import export_revision_pdf
+from quirebase.documents.workflows import delete_unreferenced_objects_step
 from quirebase.library import ItemMetadata, request_item_tag_recommendation, revise_item_metadata
 from quirebase.models import (
     Attachment,
@@ -408,6 +409,28 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
 
 
 @pytest.mark.anyio
+async def test_files_workspace_seeds_stable_upload_operation_ids(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    try:
+        response = await client.get(f"/items/{item.id}/files")
+        assert response.status_code == 200
+        operation_ids = re.findall(
+            r'name="operation_id" value="([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"',
+            response.text,
+        )
+        assert len(operation_ids) == 4
+        assert len(set(operation_ids)) == 4
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
 async def test_item_overview_uses_the_ready_revision_thumbnail(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
@@ -507,6 +530,9 @@ async def test_deleting_latest_pdf_revision_removes_its_files_and_falls_back_thu
         assert deleted.status_code == 303
         assert deleted.headers["location"] == f"/items/{item_id}/files"
         assert await db.get(FileRevision, new_revision_id) is None
+        assert new_object.exists()
+        assert local_object_path(new_thumbnail.key).exists()
+        await delete_unreferenced_objects_step([key, new_thumbnail.key])
         assert not new_object.exists()
         assert not local_object_path(new_thumbnail.key).exists()
         assert (await client.get(thumbnail_url)).content == b"old-thumbnail"
@@ -784,6 +810,8 @@ async def test_item_edit_detects_conflicts_and_updates_search(
         await db.refresh(item)
         assert item.version == 2
         assert item.title == "Revised Paper"
+        await search_index(db).index_item(db, item.id, source_sequence=item.aggregate_sequence)
+        await db.commit()
 
         results = await client.get("/?q=quantum")
         assert results.status_code == 200

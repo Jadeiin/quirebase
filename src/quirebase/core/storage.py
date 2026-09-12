@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 import anyio
+from obstore.exceptions import AlreadyExistsError
 from obstore.exceptions import BaseError as ObstoreError
 from obstore.store import LocalStore, S3Store
 
@@ -153,6 +154,7 @@ class ObjectStore:
         *,
         max_bytes: int,
         required_prefix: bytes | None = None,
+        overwrite: bool = True,
     ) -> StoredObject:
         """Stream bytes directly to a preallocated owned key."""
         key = object_key(object_id, suffix)
@@ -170,10 +172,18 @@ class ObjectStore:
                 yield chunk
 
         try:
-            await self._store.put_async(key, checked_chunks(), mode="overwrite")
+            await self._store.put_async(
+                key, checked_chunks(), mode="overwrite" if overwrite else "create"
+            )
             if required_prefix is not None and bytes(prefix) != required_prefix:
                 raise ValueError("file content does not match the required format")
             return StoredObject(key=key, size=size)
+        except FileExistsError:
+            raise
+        except AlreadyExistsError as error:
+            if not overwrite:
+                raise FileExistsError(key) from error
+            raise
         except BaseException:
             with suppress(Exception):
                 await self._store.delete_async(key)

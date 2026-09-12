@@ -58,6 +58,37 @@ async def test_open_summary_workspace_returns_a_typed_view_and_records_reading(a
     assert await db.get(ItemRead, (user.id, item.id)) is not None
 
 
+@pytest.mark.anyio
+async def test_open_item_workspace_never_regresses_latest_read_time(async_db, monkeypatch):
+    import quirebase.library.item_workspace as workspace_module
+
+    db = async_db
+    user = User(username="workspace-monotonic-reader", password_hash="unused")
+    db.add(user)
+    await db.flush()
+    item = Item(title="Monotonic workspace read", created_by=user.id)
+    db.add(item)
+    await db.commit()
+
+    newer = datetime(2026, 9, 8, 12, tzinfo=UTC)
+    older = datetime(2026, 9, 8, 11, tzinfo=UTC)
+    timestamps = iter((newer, older))
+
+    class ControlledDatetime:
+        @classmethod
+        def now(cls, timezone):
+            assert timezone is UTC
+            return next(timestamps)
+
+    monkeypatch.setattr(workspace_module, "datetime", ControlledDatetime)
+    await open_item_workspace(db, user, item.id, WorkspaceSection.summary)
+    await open_item_workspace(db, user, item.id, WorkspaceSection.summary)
+
+    read = await db.get(ItemRead, (user.id, item.id), populate_existing=True)
+    assert read is not None
+    assert read.last_read_at.replace(tzinfo=UTC) == newer
+
+
 def test_workspace_section_rejects_unknown_names_before_query_branching():
     with pytest.raises(ResourceNotFound, match="unknown item section"):
         WorkspaceSection.parse("unknown")

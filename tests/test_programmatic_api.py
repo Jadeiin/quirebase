@@ -29,6 +29,7 @@ from quirebase.programmatic import (
     LibrarySearchView,
     ProjectDetailView,
 )
+from quirebase.search import search_index
 from quirebase.web.api.routes import router as programmatic_api_router
 from quirebase.web.app import create_app
 
@@ -173,6 +174,8 @@ async def test_http_api_library_project_tag_and_discussion_lifecycle(
         )
         assert created.status_code == 201
         item_id = created.json()["id"]
+        await search_index(db).index_item(db, item_id)
+        await db.commit()
         event = await db.scalar(
             select(AuditEvent).where(
                 AuditEvent.action == "item.create", AuditEvent.target_id == item_id

@@ -47,6 +47,49 @@ def _load_annotation_migration() -> ModuleType:
     return migration
 
 
+def _load_concurrency_migration() -> ModuleType:
+    migration_path = (
+        Path(__file__).parents[1] / "migrations" / "versions" / "0029_concurrency_fences.py"
+    )
+    spec = importlib.util.spec_from_file_location("migration_0029", migration_path)
+    assert spec is not None and spec.loader is not None
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    return migration
+
+
+@pytest.mark.skipif(
+    not os.getenv("QUIREBASE_TEST_POSTGRES_URL"), reason="PostgreSQL is not configured"
+)
+def test_postgresql_concurrency_migration_owns_search_sequence(monkeypatch):
+    engine = sa.create_engine(os.environ["QUIREBASE_TEST_POSTGRES_URL"])
+    try:
+        with engine.begin() as connection:
+            connection.execute(text("DROP TABLE IF EXISTS item_search"))
+            connection.execute(
+                text(
+                    "CREATE TABLE item_search ("
+                    "item_id VARCHAR(36) PRIMARY KEY, document TSVECTOR NOT NULL)"
+                )
+            )
+            migration = _load_concurrency_migration()
+            monkeypatch.setattr(
+                migration,
+                "op",
+                Operations(MigrationContext.configure(connection)),
+            )
+            migration.upgrade()
+
+            columns = {
+                column["name"] for column in sa.inspect(connection).get_columns("item_search")
+            }
+            assert columns == {"item_id", "document", "source_sequence"}
+    finally:
+        with engine.begin() as connection:
+            connection.execute(text("DROP TABLE IF EXISTS item_search"))
+        engine.dispose()
+
+
 @pytest.mark.skipif(
     not os.getenv("QUIREBASE_TEST_POSTGRES_URL"), reason="PostgreSQL is not configured"
 )
@@ -226,6 +269,20 @@ async def test_postgresql_search_contract():
     engine = make_async_engine(os.environ["QUIREBASE_TEST_POSTGRES_URL"])
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
+        await connection.execute(
+            text(
+                """
+                CREATE TABLE item_search (
+                    item_id varchar(36) PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+                    document tsvector NOT NULL,
+                    source_sequence integer NOT NULL
+                )
+                """
+            )
+        )
+        await connection.execute(
+            text("CREATE INDEX ix_item_search_document ON item_search USING gin(document)")
+        )
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     username = f"contract-{uuid.uuid4()}"
     try:

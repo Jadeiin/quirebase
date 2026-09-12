@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
+
+from pydantic import Field
 
 from quirebase.library import (
     DiscussionWorkspace,
@@ -76,14 +78,27 @@ def register_organization_tools(server: MCPServer, runtime: McpRuntime) -> None:
 
     @server.tool(
         name="tags.set_for_item",
-        description="Replace all Tags for an editable Item.",
+        description=(
+            "Replace all Tags for an editable Item. Pass the Tag collection version the "
+            "selection was based on; the write is rejected when that version changed."
+        ),
         annotations=DESTRUCTIVE,
     )
     async def tags_set_for_item(
-        item_id: str, tag_ids: list[str], new_names: list[str] | None = None
+        item_id: str,
+        tag_ids: list[str],
+        expected_collection_version: Annotated[int, Field(ge=1)],
+        new_names: list[str] | None = None,
     ) -> dict[str, bool]:
         async def run(db, user):
-            await set_item_tags(db, user, item_id, tag_ids, new_names)
+            await set_item_tags(
+                db,
+                user,
+                item_id,
+                tag_ids,
+                new_names,
+                expected_collection_version=expected_collection_version,
+            )
 
         await runtime.call(
             "tags.set_for_item",

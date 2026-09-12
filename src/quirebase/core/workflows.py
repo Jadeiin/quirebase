@@ -28,6 +28,7 @@ DOCUMENTS_QUEUE = "documents.revision"
 DOCUMENT_CLEANUP_QUEUE = "documents.cleanup"
 LIBRARY_QUEUE = "library"
 RECOMMENDATION_QUEUE = "library.recommendation"
+SEARCH_QUEUE = "library.search"
 IMPORT_QUEUE = "library.import"
 OPERATIONS_QUEUE = "operations"
 UPLOAD_COMPLETE_TOPIC = "upload-complete"
@@ -67,6 +68,8 @@ class DurableOperations(Protocol):
         queue_name: str,
         workflow_id: str,
         partition_key: str | None = None,
+        deduplication_id: str | None = None,
+        duplication_policy: Literal["reject", "return-existing"] = "reject",
         attributes: dict[str, Any] | None = None,
     ) -> str: ...
 
@@ -143,14 +146,7 @@ class AsyncSQLAlchemyDatasourceProxy:
         **kwargs: Any,
     ) -> Any:
         ds = await self.get_instance_async()
-        effective_options = ds_options
-        if (
-            ds_options is not None
-            and ds_options.get("isolation_level") == "READ COMMITTED"
-            and ds.engine.dialect.name == "sqlite"
-        ):
-            effective_options = {**ds_options, "isolation_level": "SERIALIZABLE"}
-        return await ds.run_tx_step_async(effective_options, func, *args, **kwargs)
+        return await ds.run_tx_step_async(ds_options, func, *args, **kwargs)
 
     @overload
     def transaction(
@@ -180,13 +176,21 @@ class AsyncSQLAlchemyDatasourceProxy:
             f: Callable[..., Coroutine[Any, Any, Any]],
         ) -> Callable[..., Coroutine[Any, Any, Any]]:
             step_name = name or f"{f.__module__}.{f.__qualname__}"
-            ds_options: DatasourceOptions = {
-                "isolation_level": isolation_level,
-                "name": step_name,
-            }
 
             @wraps(f)
             async def wrapper(*args: Any, **kwargs: Any) -> Any:
+                datasource = await self.get_instance_async()
+                # The proxy may be rebound to a test or worker datasource that
+                # differs from the application settings used at import time.
+                # Select the isolation level from the datasource that will
+                # actually execute this transaction.
+                effective_isolation: IsolationLevel = isolation_level
+                if datasource.engine.dialect.name == "sqlite" and isolation_level != "SERIALIZABLE":
+                    effective_isolation = "SERIALIZABLE"
+                ds_options: DatasourceOptions = {
+                    "isolation_level": effective_isolation,
+                    "name": step_name,
+                }
                 return await self.run_tx_step_async(ds_options, f, *args, **kwargs)
 
             return wrapper
@@ -205,6 +209,9 @@ def _options(
     workflow_id: str,
     partition_key: str | None,
     attributes: dict[str, Any] | None,
+    *,
+    deduplication_id: str | None = None,
+    duplication_policy: Literal["reject", "return-existing"] = "reject",
 ) -> EnqueueOptions:
     options: dict[str, Any] = {
         "workflow_name": workflow_name,
@@ -214,6 +221,9 @@ def _options(
     }
     if partition_key is not None:
         options["queue_partition_key"] = partition_key
+    if deduplication_id is not None:
+        options["deduplication_id"] = deduplication_id
+        options["duplication_policy"] = duplication_policy
     if attributes:
         options["attributes"] = attributes
     return cast("EnqueueOptions", options)
@@ -281,10 +291,21 @@ class DBOSAdapter:
         queue_name: str,
         workflow_id: str,
         partition_key: str | None = None,
+        deduplication_id: str | None = None,
+        duplication_policy: Literal["reject", "return-existing"] = "reject",
         attributes: dict[str, Any] | None = None,
     ) -> str:
         handle: Any = await self._client.enqueue_async(
-            _options(workflow_name, queue_name, workflow_id, partition_key, attributes), *args
+            _options(
+                workflow_name,
+                queue_name,
+                workflow_id,
+                partition_key,
+                attributes,
+                deduplication_id=deduplication_id,
+                duplication_policy=duplication_policy,
+            ),
+            *args,
         )
         return handle.get_workflow_id()
 
@@ -441,7 +462,9 @@ async def _launch_runtime(executor_id: str) -> None:
     logging.disable(logging.INFO)
     try:
         datasource = await AsyncSQLAlchemyDatasource.create(
-            async_database_url(), engine=engine, schema="dbos"
+            async_database_url(),
+            engine=engine,
+            schema=None if is_sqlite_database_url(async_database_url()) else "dbos",
         )
     finally:
         logging.disable(previous_disable)
@@ -458,6 +481,12 @@ async def _launch_runtime(executor_id: str) -> None:
     await DBOS.register_queue_async(DOCUMENT_CLEANUP_QUEUE, worker_concurrency=2)
     await DBOS.register_queue_async(LIBRARY_QUEUE, global_concurrency=1)
     await DBOS.register_queue_async(RECOMMENDATION_QUEUE, global_concurrency=1)
+    await DBOS.register_queue_async(
+        SEARCH_QUEUE,
+        worker_concurrency=4,
+        global_concurrency=8,
+        partition_concurrency=1,
+    )
     await DBOS.register_queue_async(IMPORT_QUEUE, global_concurrency=2)
     await DBOS.register_queue_async(OPERATIONS_QUEUE, global_concurrency=1)
 

@@ -42,6 +42,7 @@ def _register_workflows() -> None:
     import quirebase.documents.workflows  # ruff: ignore[unused-import]
     import quirebase.library.workflows  # ruff: ignore[unused-import]
     import quirebase.operations.workflows  # ruff: ignore[unused-import]
+    import quirebase.search.workflows  # ruff: ignore[unused-import]
 
 
 @app.command("serve")

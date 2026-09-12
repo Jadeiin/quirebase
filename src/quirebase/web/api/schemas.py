@@ -1,10 +1,18 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from quirebase.library import DiscoveryClause, ItemMetadata
+
+
+@dataclass(frozen=True)
+class ItemCreateRequest(ItemMetadata):
+    # Optional stable operation identity; repeating a create request with the
+    # same value returns the original Item instead of creating a duplicate.
+    operation_id: str | None = None
 
 
 class ItemUpdateRequest(BaseModel):
@@ -42,6 +50,10 @@ class ProjectMemberRequest(BaseModel):
 class TagSetRequest(BaseModel):
     tag_ids: list[str] = Field(default_factory=list)
     new_names: list[str] = Field(default_factory=list)
+    # The whole-collection replacement is guarded by the Tag collection version the
+    # selection was based on, so concurrent editors cannot drop each other's
+    # assignments silently.
+    expected_collection_version: int = Field(ge=1)
 
 
 class DiscussionRequest(BaseModel):

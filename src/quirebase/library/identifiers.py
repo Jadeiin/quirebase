@@ -11,21 +11,47 @@ from inquiro.canonical import clean_markup, clean_rich_markup, normalize_referen
 from inquiro.identifiers import DOI_PATTERN, normalize_doi
 from inquiro.models import CandidateRecord
 from sqlalchemy import delete, select, update
+from sqlalchemy.orm import selectinload
 
 from quirebase.access.items import require_editable_item
 from quirebase.audit import record_event
-from quirebase.core.errors import ResourceUnavailable, VersionConflict
+from quirebase.core.errors import ResourceUnavailable, ValidationFailure, VersionConflict
 from quirebase.documents.pdf import first_doi_from_text
 from quirebase.library.authors import parse_author_name, set_item_authors_from_string
 from quirebase.library.providers import candidate_record_values, lookup_candidate
 from quirebase.library.workflows import request_item_tag_recommendation
-from quirebase.models import FileRevision, Item, ItemIdentifier, User
-from quirebase.search import search_index
+from quirebase.models import (
+    FileRevision,
+    Item,
+    ItemAuthor,
+    ItemCreateTombstone,
+    ItemIdentifier,
+    User,
+)
+from quirebase.search import enqueue_search_changed
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from quirebase.core.config import Settings
+
+
+MAX_OPERATION_ID_LENGTH = 255
+
+
+def normalize_operation_id(operation_id: str | None) -> str | None:
+    """Normalize and validate an operation id before persistence.
+
+    Enforcing the storage limit inside the shared business operation keeps every
+    adapter on the same validation failure instead of a PostgreSQL data
+    truncation error that SQLite silently accepts.  An empty transport value is
+    the absence of an idempotency key and must never occupy a unique-key slot.
+    """
+
+    operation_id = operation_id or None
+    if operation_id is not None and len(operation_id) > MAX_OPERATION_ID_LENGTH:
+        raise ValidationFailure("operation id is too long")
+    return operation_id
 
 
 STOP_WORDS = {
@@ -117,7 +143,9 @@ def generate_bibtex_key(item: Item) -> str:
     return f"{author_part}{year_part}{title_part}"
 
 
-async def rescan_pdf_doi(db: AsyncSession, user: User, item_id: str) -> str | None:
+async def _rescan_pdf_doi(
+    db: AsyncSession, user: User, item_id: str, expected_version: int
+) -> str | None:
     item = await require_editable_item(db, user, item_id)
 
     revisions = list(
@@ -133,6 +161,25 @@ async def rescan_pdf_doi(db: AsyncSession, user: User, item_id: str) -> str | No
         if rev.full_text:
             found_doi = first_doi_from_text(rev.full_text)
             if found_doi:
+                version = await db.scalar(
+                    update(Item)
+                    .where(
+                        Item.id == item_id,
+                        Item.version == expected_version,
+                        Item.lifecycle_state == "active",
+                    )
+                    .values(
+                        updated_by=user.id,
+                        updated_at=datetime.now(UTC),
+                        version=Item.version + 1,
+                        aggregate_sequence=Item.aggregate_sequence + 1,
+                    )
+                    .returning(Item.version)
+                )
+                if version is None:
+                    await db.rollback()
+                    current = await db.scalar(select(Item.version).where(Item.id == item_id))
+                    raise VersionConflict(current)
                 # Update item identifiers
                 existing_pairs = [
                     (ident.provider, ident.value)
@@ -141,15 +188,32 @@ async def rescan_pdf_doi(db: AsyncSession, user: User, item_id: str) -> str | No
                 ]
                 existing_pairs.append(("doi", found_doi))
                 await set_item_identifiers(db, user, item_id, existing_pairs)
-                item.updated_by = user.id
-                item.updated_at = datetime.now(UTC)
-                item.version += 1
-                await db.flush()
-                await search_index(db).index_item(db, item_id)
-                record_event(db, user.id, "item.rescan_doi", "item", item_id)
+                await db.refresh(item)
+                await enqueue_search_changed(db, item_id)
+                record_event(
+                    db,
+                    user.id,
+                    "item.rescan_doi",
+                    "item",
+                    item_id,
+                    detail={"version": version},
+                )
                 await db.commit()
                 return found_doi
+    await db.rollback()
     return None
+
+
+async def rescan_pdf_doi(
+    db: AsyncSession, user: User, item_id: str, *, expected_version: int
+) -> str | None:
+    """Rescan ready File Revision text under the Item metadata version CAS."""
+
+    try:
+        return await _rescan_pdf_doi(db, user, item_id, expected_version)
+    except Exception:
+        await db.rollback()
+        raise
 
 
 async def apply_metadata_record(
@@ -269,9 +333,26 @@ async def create_item_from_metadata_record(
     db: AsyncSession,
     user: User,
     record: CandidateRecord | dict,
+    *,
+    operation_id: str | None = None,
 ) -> Item:
     """Create an imported Item and enqueue its initial Tag recommendation."""
-    item = Item(title="Untitled", created_by=user.id)
+    operation_id = normalize_operation_id(operation_id)
+    if operation_id:
+        tombstone = await db.scalar(
+            select(ItemCreateTombstone).where(
+                ItemCreateTombstone.created_by == user.id,
+                ItemCreateTombstone.operation_id == operation_id,
+            )
+        )
+        if tombstone is not None:
+            raise ValidationFailure("item creation operation was already used")
+        existing = await db.scalar(
+            select(Item).where(Item.created_by == user.id, Item.create_operation_id == operation_id)
+        )
+        if existing is not None:
+            return existing
+    item = Item(title="Untitled", created_by=user.id, create_operation_id=operation_id)
     db.add(item)
     await db.flush()
     await apply_metadata_record(db, user, item, record)
@@ -308,11 +389,17 @@ async def _sync_metadata_from_upstream(
     item = await require_editable_item(db, user, item_id)
     version = await db.scalar(
         update(Item)
-        .where(Item.id == item_id, Item.version == expected_version)
+        .where(
+            Item.id == item_id,
+            Item.version == expected_version,
+            Item.lifecycle_state == "active",
+        )
         .values(
             updated_by=user.id,
             updated_at=datetime.now(UTC),
             version=Item.version + 1,
+            aggregate_sequence=Item.aggregate_sequence + 1,
+            recommendation_sequence=Item.recommendation_sequence + 1,
         )
         .returning(Item.version)
     )
@@ -338,13 +425,6 @@ async def _sync_metadata_from_upstream(
         merge=True,
         forced_identifiers=forced_identifiers,
     )
-    # The item was eagerly loaded before its link rows were replaced. Reload
-    # those collections explicitly so callers never observe the stale identity-
-    # map snapshot or trigger lazy I/O after this async operation returns.
-    await db.refresh(item, ["author_links", "identifier_links"])
-    for link in item.author_links:
-        await db.refresh(link, ["author"])
-
     # Upstream changes commonly alter the title, first author or year. Keep a
     # key that was generated from the previous metadata in sync, while leaving
     # an explicitly edited key untouched.
@@ -355,7 +435,7 @@ async def _sync_metadata_from_upstream(
 
     await db.flush()
 
-    await search_index(db).index_item(db, item_id)
+    await enqueue_search_changed(db, item_id)
     await request_item_tag_recommendation(db, item_id, owner_id=user.id, force=True)
     record_event(
         db,
@@ -374,7 +454,16 @@ async def _sync_metadata_from_upstream(
         },
     )
     await db.commit()
-    return item
+    reloaded = await db.scalar(
+        select(Item)
+        .options(
+            selectinload(Item.author_links).selectinload(ItemAuthor.author),
+            selectinload(Item.identifier_links),
+        )
+        .where(Item.id == item_id)
+        .execution_options(populate_existing=True)
+    )
+    return reloaded or item
 
 
 async def sync_metadata_from_upstream(

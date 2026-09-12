@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 from typing import TYPE_CHECKING
 from uuid import uuid4
@@ -13,7 +14,11 @@ from inquiro.bibliography import (
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import selectinload
 
-from quirebase.access.items import require_accessible_items, visible_items_query
+from quirebase.access.items import (
+    lock_user_write_gate,
+    require_accessible_items,
+    visible_items_query,
+)
 from quirebase.audit import record_event
 from quirebase.core.config import Settings, get_settings
 from quirebase.core.errors import (
@@ -36,9 +41,10 @@ from quirebase.documents.revisions import (
 )
 from quirebase.library.activity import get_accessible_item_identifiers
 from quirebase.library.citations import format_csl_export, format_standard_export
+from quirebase.library.identifiers import normalize_operation_id
 from quirebase.library.providers import candidate_record_values, lookup_candidate
 from quirebase.models import ImportBatch, Item, ItemAuthor, User
-from quirebase.search import search_index
+from quirebase.search import enqueue_search_changed
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -52,6 +58,15 @@ class BatchConflict(DomainError):
 
 
 MAX_PDF_IMPORT_FILES = 50
+
+
+def _derive_import_item_operation_id(batch_id: str, commit_operation_id: str, index: int) -> str:
+    """Return a stable, storage-bounded idempotency key for one imported Item."""
+
+    digest = hashlib.sha256(f"{batch_id}\0{commit_operation_id}\0{index}".encode()).hexdigest()
+    operation_id = normalize_operation_id(f"import-item:{digest}")
+    assert operation_id is not None
+    return operation_id
 
 
 def _consume_current_cancellation() -> None:
@@ -126,7 +141,7 @@ async def stage_import_batch(
     typed_records, errors = parse_bibliography_records(contents, file_format)
     records = [_record_to_item_payload(record) for record in typed_records]
     batch = ImportBatch(
-        owner_id=user.id,
+        created_by=user.id,
         file_format=file_format,
         records=json.dumps(records, ensure_ascii=False),
         errors=json.dumps(errors, ensure_ascii=False),
@@ -156,7 +171,7 @@ async def stage_identifier_import_batch(
     user = reloaded_user
     rec_dict = candidate_record_values(record)
     batch = ImportBatch(
-        owner_id=user.id,
+        created_by=user.id,
         file_format=f"metadata:{record.identifier.provider}",
         records=json.dumps([rec_dict], ensure_ascii=False),
         errors="[]",
@@ -233,7 +248,7 @@ async def stage_pdf_import_batch(
         if reloaded_user is None or not reloaded_user.active:
             raise ResourceUnavailable("user not available")
         batch = ImportBatch(
-            owner_id=reloaded_user.id,
+            created_by=reloaded_user.id,
             file_format="pdf",
             records=json.dumps(pending_records, ensure_ascii=False),
             errors=json.dumps(errors, ensure_ascii=False),
@@ -326,7 +341,7 @@ async def check_pdf_import_doi(
     batch = await db.get(ImportBatch, batch_id)
     if batch is None or batch.status != "pending":
         return {"discarded": True, "object_key": pdf["object_key"]}
-    user = await db.get(User, batch.owner_id)
+    user = await db.get(User, batch.created_by)
     if user is None or not user.active:
         return {"discarded": True, "object_key": pdf["object_key"]}
     normalized_doi = detected_doi.casefold()
@@ -358,7 +373,7 @@ async def lookup_pdf_import_candidate(
     batch = await db.get(ImportBatch, batch_id)
     if batch is None or batch.status != "pending":
         return {"discarded": True, "object_key": pdf["object_key"]}
-    user = await db.get(User, batch.owner_id)
+    user = await db.get(User, batch.created_by)
     if user is None or not user.active:
         return {"discarded": True, "object_key": pdf["object_key"]}
     effective_settings = await get_effective_settings_model(db)
@@ -412,7 +427,7 @@ async def finalize_pdf_import_batch(
     batch = await db.get(ImportBatch, batch_id)
     if batch is None or batch.status != "pending" or batch.workflow_id != workflow_id:
         return False
-    owner = await db.get(User, batch.owner_id)
+    owner = await db.get(User, batch.created_by)
     if owner is None or not owner.active:
         batch.records = "[]"
         batch.errors = json.dumps([
@@ -426,7 +441,7 @@ async def finalize_pdf_import_batch(
     batch.status = "ready"
     record_event(
         db,
-        batch.owner_id,
+        batch.created_by,
         "pdf.import.preview",
         "import_batch",
         batch.id,
@@ -435,17 +450,19 @@ async def finalize_pdf_import_batch(
     return True
 
 
-async def _create_item_from_record(db: AsyncSession, user: User, record: dict) -> Item:
+async def _create_item_from_record(
+    db: AsyncSession, user: User, record: dict, *, operation_id: str | None = None
+) -> Item:
     from quirebase.library import create_item_from_metadata_record
 
-    return await create_item_from_metadata_record(db, user, record)
+    return await create_item_from_metadata_record(db, user, record, operation_id=operation_id)
 
 
 async def get_import_batch_preview(
     db: AsyncSession, user: User, batch_id: str
 ) -> tuple[ImportBatch, list[dict], list[dict]]:
     batch = await db.get(ImportBatch, batch_id)
-    if batch is None or batch.owner_id != user.id:
+    if batch is None or batch.created_by != user.id:
         raise ResourceUnavailable("import batch not found")
     if await _converge_pdf_import_batch_status(db, batch):
         await db.commit()
@@ -481,7 +498,7 @@ async def _converge_pdf_import_batch_status(db: AsyncSession, batch: ImportBatch
 async def retry_pdf_import_batch(db: AsyncSession, user: User, batch_id: str) -> ImportBatch:
     """Retry a failed PDF Import Batch without relinquishing its staged objects."""
     batch = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update())
-    if batch is None or batch.owner_id != user.id:
+    if batch is None or batch.created_by != user.id:
         raise ResourceUnavailable("import batch not found")
     await _converge_pdf_import_batch_status(db, batch)
     if batch.file_format != "pdf" or batch.status != "failed":
@@ -517,11 +534,39 @@ async def retry_pdf_import_batch(db: AsyncSession, user: User, batch_id: str) ->
     return batch
 
 
-async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> None:
-    batch = await db.get(ImportBatch, batch_id)
-    if batch is None or batch.owner_id != user.id:
+async def _lock_import_batch(db: AsyncSession, batch_id: str, owner_id: str) -> ImportBatch | None:
+    predicates = [ImportBatch.id == batch_id, ImportBatch.created_by == owner_id]
+    return await db.scalar(select(ImportBatch).where(*predicates).with_for_update())
+
+
+async def commit_import_batch(
+    db: AsyncSession,
+    user: User,
+    batch_id: str,
+    commit_operation_id: str | None = None,
+) -> tuple[str, ...]:
+    """Atomically confirm an Import Batch and return its stable Item IDs.
+
+    ``ready -> committing -> committed`` is guarded by a conditional update so
+    two HTTP retries cannot create duplicate Items.  The committed row is kept
+    as the idempotency record; callers repeating the same operation receive the
+    original result.  Staged PDF references are stripped at confirmation so the
+    tombstone stops reserving object keys — only non-terminal batches may
+    reserve staged objects.
+    """
+    await lock_user_write_gate(db, user)
+    batch = await _lock_import_batch(db, batch_id, user.id)
+    if batch is None:
         raise ResourceUnavailable("import batch not found")
-    if batch.status != "ready":
+    requested_operation = normalize_operation_id(commit_operation_id or f"import-commit:{batch.id}")
+    assert requested_operation is not None
+    if batch.status == "committed":
+        if batch.commit_operation_id not in (None, requested_operation):
+            raise BatchConflict("the import batch was committed by another operation")
+        return tuple(json.loads(batch.committed_item_ids or "[]"))
+    if batch.status in {"discarded", "failed", "pending"}:
+        if batch.status == "failed":
+            raise BatchConflict("the import batch is not ready to commit")
         raise BatchConflict("the import batch is still being prepared")
     errors = json.loads(batch.errors)
     if errors and batch.file_format != "pdf":
@@ -529,6 +574,10 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
     records = json.loads(batch.records)
     if not records:
         raise BatchConflict("the import batch has no candidate records")
+    item_operation_ids = tuple(
+        _derive_import_item_operation_id(batch.id, requested_operation, index)
+        for index in range(len(records))
+    )
     if batch.file_format == "pdf":
         known_dois = {
             value
@@ -545,10 +594,30 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
                 raise BatchConflict("another PDF in this batch has the same DOI")
             if normalized_doi:
                 candidate_dois.add(normalized_doi)
-    for record in records:
+    if batch.status == "committing":
+        if batch.commit_operation_id != requested_operation:
+            raise BatchConflict("the import batch is already being committed")
+    else:
+        result = await db.execute(
+            update(ImportBatch)
+            .where(ImportBatch.id == batch.id, ImportBatch.status == "ready")
+            .values(status="committing", commit_operation_id=requested_operation)
+        )
+        if getattr(result, "rowcount", 0) != 1:
+            await db.rollback()
+            raise BatchConflict("the import batch is already being committed")
+        await db.flush()
+        await db.refresh(batch)
+    committed_item_ids: list[str] = []
+    for record, item_operation_id in zip(records, item_operation_ids, strict=True):
         candidate = dict(record)
         pdf = candidate.pop("_pdf", None)
-        item = await _create_item_from_record(db, user, candidate)
+        item = await _create_item_from_record(
+            db,
+            user,
+            candidate,
+            operation_id=item_operation_id,
+        )
         if pdf is not None:
             await attach_staged_pdf(
                 db,
@@ -560,7 +629,7 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
                     pdf["original_name"],
                 ),
             )
-        await search_index(db).index_item(db, item.id)
+        await enqueue_search_changed(db, item.id)
         record_event(
             db,
             user.id,
@@ -569,17 +638,57 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
             item.id,
             detail={"format": batch.file_format, "filename": pdf["original_name"] if pdf else None},
         )
-    await db.delete(batch)
+        committed_item_ids.append(item.id)
+    batch.status = "committed"
+    batch.commit_operation_id = requested_operation
+    batch.committed_item_ids = json.dumps(committed_item_ids)
+    # The tombstone keeps the bibliographic payload for audit but drops every
+    # staged ``_pdf`` entry: a committed batch must not keep reserving object
+    # keys after the Items own the files.
+    batch.records = json.dumps(
+        [{key: value for key, value in record.items() if key != "_pdf"} for record in records],
+        ensure_ascii=False,
+    )
+    record_event(
+        db,
+        user.id,
+        "import.batch.commit",
+        "import_batch",
+        batch.id,
+        detail={"items": len(committed_item_ids), "operation_id": requested_operation},
+    )
     await db.commit()
+    return tuple(committed_item_ids)
 
 
 async def discard_import_batch(db: AsyncSession, user: User, batch_id: str) -> None:
-    batch = await db.get(ImportBatch, batch_id)
-    if batch is None or batch.owner_id != user.id:
+    batch = await _lock_import_batch(db, batch_id, user.id)
+    if batch is None:
         raise ResourceUnavailable("import batch not found")
+    # The locked read plus the discardable-status check serialize this terminal
+    # transition against confirmation. The discarded tombstone is retained so
+    # a retry can be answered idempotently without recreating staged objects.
+    if batch.status == "discarded":
+        await db.commit()
+        return
+    if batch.status in {"committing", "committed"}:
+        raise BatchConflict("the import batch is being committed or was already committed")
     object_keys = _pdf_object_keys(batch.records)
     record_event(db, user.id, "import.batch.discard", "import_batch", batch.id)
-    await db.delete(batch)
+    batch.status = "discarded"
+    try:
+        records = json.loads(batch.records)
+    except (json.JSONDecodeError, TypeError):
+        records = []
+    if isinstance(records, list):
+        batch.records = json.dumps(
+            [
+                {key: value for key, value in record.items() if key != "_pdf"}
+                for record in records
+                if isinstance(record, dict)
+            ],
+            ensure_ascii=False,
+        )
     await enqueue_object_cleanup(
         db,
         object_keys,

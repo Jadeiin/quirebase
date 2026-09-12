@@ -332,7 +332,13 @@ async def scan_objects(
         | {attachment.object_key for attachment in attachments}
         | export_keys
     )
-    for records in (await db.scalars(select(ImportBatch.records))).all():
+    for records in (
+        await db.scalars(
+            select(ImportBatch.records).where(
+                ImportBatch.status.not_in(ImportBatch.TERMINAL_STATUSES)
+            )
+        )
+    ).all():
         referenced.update(_import_object_keys(records))
     await db.rollback()
     active = await list_active_workflows()
@@ -399,7 +405,13 @@ async def _referenced_object_keys(db: AsyncSession) -> set[str]:
         key for key in (await db.scalars(select(FileRevision.thumbnail_object_key))).all() if key
     )
     keys.update((await db.scalars(select(Attachment.object_key))).all())
-    for records in (await db.scalars(select(ImportBatch.records))).all():
+    for records in (
+        await db.scalars(
+            select(ImportBatch.records).where(
+                ImportBatch.status.not_in(ImportBatch.TERMINAL_STATUSES)
+            )
+        )
+    ).all():
         keys.update(_import_object_keys(records))
     return keys
 

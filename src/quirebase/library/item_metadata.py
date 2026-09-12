@@ -9,7 +9,8 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from inquiro.canonical import normalize_reference_type
-from sqlalchemy import update
+from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 
 from quirebase.access.items import require_editable_item
 from quirebase.audit import record_event
@@ -18,18 +19,19 @@ from quirebase.library.authors import set_item_authors
 from quirebase.library.identifiers import (
     clean_identifier_value,
     generate_bibtex_key,
+    normalize_operation_id,
     set_item_identifiers,
 )
 from quirebase.library.workflows import request_item_tag_recommendation
-from quirebase.models import Item
-from quirebase.search import search_index
+from quirebase.models import Item, ItemCreateTombstone, User, contributor_identity_key
+from quirebase.search import enqueue_search_changed
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from quirebase.models import ItemAuthor, ItemIdentifier, User
+    from quirebase.models import ItemAuthor, ItemIdentifier
 
 type JsonValue = str | int | float | bool | tuple[JsonValue, ...] | Mapping[str, JsonValue] | None
 
@@ -82,6 +84,7 @@ class ItemMetadata:
 class ItemWriteResult:
     item_id: str
     version: int
+    operation_id: str | None = None
 
 
 def _stored_json_value(value: object) -> JsonValue:
@@ -196,7 +199,7 @@ def _identifier_pairs(metadata: ItemMetadata) -> list[tuple[str, str]]:
 
 def _contributor_payload(contributors: tuple[Contributor, ...], *, editor: bool) -> list[dict]:
     payload: list[dict] = []
-    seen: set[tuple[str, str | None]] = set()
+    seen: set[str] = set()
     for contributor in contributors:
         last_name = contributor.last_name.strip()
         first_name = _optional_text(contributor.first_name)
@@ -204,7 +207,7 @@ def _contributor_payload(contributors: tuple[Contributor, ...], *, editor: bool)
             raise ValidationFailure("contributor last name is required")
         if editor and contributor.is_corresponding:
             raise ValidationFailure("editors cannot be corresponding authors")
-        identity = (last_name.casefold(), first_name.casefold() if first_name else None)
+        identity = contributor_identity_key(last_name, first_name)
         if identity in seen:
             raise ValidationFailure("contributors must be unique within a role")
         seen.add(identity)
@@ -232,11 +235,32 @@ async def _create_item(
     db: AsyncSession,
     actor: User,
     metadata: ItemMetadata,
+    operation_id: str | None = None,
 ) -> ItemWriteResult:
+    if operation_id:
+        tombstone = await db.scalar(
+            select(ItemCreateTombstone).where(
+                ItemCreateTombstone.created_by == actor.id,
+                ItemCreateTombstone.operation_id == operation_id,
+            )
+        )
+        if tombstone is not None:
+            raise ValidationFailure("item creation operation was already used")
+        # Keys are scoped per owner: a repeated operation replays this User's
+        # Item and nobody else's, so a leaked or guessed key cannot redirect
+        # the caller to an inaccessible Item.
+        existing = await db.scalar(
+            select(Item).where(
+                Item.created_by == actor.id, Item.create_operation_id == operation_id
+            )
+        )
+        if existing is not None:
+            return ItemWriteResult(existing.id, existing.version, operation_id)
     values = _bibliographic_values(metadata)
     values.update(
         custom_fields=_serialize_custom_fields(metadata.custom_fields),
         created_by=actor.id,
+        create_operation_id=operation_id,
     )
     item = Item(**values)
     db.add(item)
@@ -256,20 +280,34 @@ async def _create_item(
         _contributor_payload(metadata.editors, editor=True),
         role="editor",
     )
-    await search_index(db).index_item(db, item.id)
+    await enqueue_search_changed(db, item.id)
     await request_item_tag_recommendation(db, item.id, owner_id=actor.id)
     record_event(db, actor.id, "item.create", "item", item.id)
     await db.commit()
-    return ItemWriteResult(item_id=item.id, version=item.version)
+    return ItemWriteResult(item_id=item.id, version=item.version, operation_id=operation_id)
 
 
 async def create_item(
     db: AsyncSession,
     actor: User,
     metadata: ItemMetadata,
+    *,
+    operation_id: str | None = None,
 ) -> ItemWriteResult:
+    operation_id = normalize_operation_id(operation_id)
     try:
-        return await _create_item(db, actor, metadata)
+        return await _create_item(db, actor, metadata, operation_id)
+    except IntegrityError:
+        await db.rollback()
+        if operation_id:
+            existing = await db.scalar(
+                select(Item).where(
+                    Item.created_by == actor.id, Item.create_operation_id == operation_id
+                )
+            )
+            if existing is not None:
+                return ItemWriteResult(existing.id, existing.version, operation_id)
+        raise
     except Exception:
         await db.rollback()
         raise
@@ -290,10 +328,16 @@ async def _revise_item_metadata(
         updated_by=actor_id,
         updated_at=datetime.now(UTC),
         version=Item.version + 1,
+        aggregate_sequence=Item.aggregate_sequence + 1,
+        recommendation_sequence=Item.recommendation_sequence + 1,
     )
     version = await db.scalar(
         update(Item)
-        .where(Item.id == item_id, Item.version == expected_version)
+        .where(
+            Item.id == item_id,
+            Item.version == expected_version,
+            Item.lifecycle_state == "active",
+        )
         .values(**values)
         .returning(Item.version)
     )
@@ -321,7 +365,7 @@ async def _revise_item_metadata(
     # projection. Refresh only the mutated aggregate; expiring the whole session
     # also expires the caller's User and invites implicit async ORM I/O later.
     await db.refresh(item)
-    await search_index(db).index_item(db, item_id)
+    await enqueue_search_changed(db, item_id)
     await request_item_tag_recommendation(db, item_id, owner_id=actor_id, force=True)
     record_event(
         db,
@@ -360,12 +404,17 @@ async def _regenerate_bibtex_key(
     key = generate_bibtex_key(item)
     version = await db.scalar(
         update(Item)
-        .where(Item.id == item_id, Item.version == expected_version)
+        .where(
+            Item.id == item_id,
+            Item.version == expected_version,
+            Item.lifecycle_state == "active",
+        )
         .values(
             bibtex_id=key,
             updated_by=actor_id,
             updated_at=datetime.now(UTC),
             version=Item.version + 1,
+            aggregate_sequence=Item.aggregate_sequence + 1,
         )
         .returning(Item.version)
     )
@@ -374,7 +423,7 @@ async def _regenerate_bibtex_key(
         current = await db.get(Item, item_id)
         raise VersionConflict(current.version if current else None)
     await db.refresh(item)
-    await search_index(db).index_item(db, item_id)
+    await enqueue_search_changed(db, item_id)
     record_event(
         db,
         actor_id,

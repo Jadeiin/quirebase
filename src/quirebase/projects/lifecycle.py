@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 
 from quirebase.audit import record_event
 from quirebase.core.errors import PermissionDenied, ResourceUnavailable, ValidationFailure
 from quirebase.models import (
+    Item,
+    ItemLifecycleState,
     Project,
     ProjectItem,
     ProjectMember,
@@ -15,9 +17,27 @@ from quirebase.models import (
     ProjectVisibility,
     User,
 )
-from quirebase.search import search_index
+from quirebase.search import enqueue_search_changed
 
 from .write_gate import require_project_write_gate
+
+
+async def _advance_item_sequences(db, item_ids: list[str]) -> None:
+    """Advance each affected Item's aggregate sequence for a project mutation.
+
+    Project names are part of the indexed content.  Without a sequence bump a
+    rename or delete racing an Item mutation can publish a projection that
+    pairs the new project state with the old Item sequence, leaving the index
+    permanently stale.
+    """
+
+    for item_id in item_ids:
+        await db.execute(
+            update(Item)
+            .where(Item.id == item_id, Item.lifecycle_state == ItemLifecycleState.active)
+            .values(aggregate_sequence=Item.aggregate_sequence + 1)
+        )
+
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,7 +50,20 @@ def validate_project_state(value: ProjectState | str) -> ProjectState:
         raise ValidationFailure("invalid project state") from error
 
 
+async def _lock_active_user(db: AsyncSession, user: User) -> User:
+    locked = await db.scalar(
+        select(User)
+        .where(User.id == user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if locked is None or not locked.active:
+        raise ResourceUnavailable("user is not active")
+    return locked
+
+
 async def rename_project(db: AsyncSession, user: User, project_id: str, name: str) -> Project:
+    user = await _lock_active_user(db, user)
     project = await require_project_write_gate(db, project_id)
     member = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     if project is None or (
@@ -44,13 +77,26 @@ async def rename_project(db: AsyncSession, user: User, project_id: str, name: st
         raise ValidationFailure("project name is too long")
     old_name = project.name
     project.name = normalized
-    item_ids = list(
+    item_ids = sorted(
         await db.scalars(select(ProjectItem.item_id).where(ProjectItem.project_id == project_id))
     )
-    await db.flush()
-    index = search_index(db)
+    # Keep the canonical User -> Project -> Item lock order. Items already in
+    # durable deletion are intentionally skipped; their lifecycle path owns
+    # the remaining cleanup and must not be resurrected by this mutation.
+    locked_item_ids: list[str] = []
     for item_id in item_ids:
-        await index.index_item(db, item_id)
+        locked = await db.scalar(
+            select(Item)
+            .where(Item.id == item_id, Item.lifecycle_state == ItemLifecycleState.active)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if locked is not None:
+            locked_item_ids.append(item_id)
+    await db.flush()
+    await _advance_item_sequences(db, locked_item_ids)
+    for item_id in locked_item_ids:
+        await enqueue_search_changed(db, item_id)
     record_event(
         db,
         user.id,
@@ -66,6 +112,7 @@ async def rename_project(db: AsyncSession, user: User, project_id: str, name: st
 async def update_project_description(
     db: AsyncSession, user: User, project_id: str, description: str
 ) -> Project:
+    user = await _lock_active_user(db, user)
     project = await require_project_write_gate(db, project_id)
     member = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     if project is None or member is None or member.role != ProjectRole.owner:
@@ -80,6 +127,7 @@ async def update_project_description(
 
 
 async def delete_project(db: AsyncSession, user: User, project_id: str, confirmation: str) -> None:
+    user = await _lock_active_user(db, user)
     project = await require_project_write_gate(db, project_id)
     member = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     if project is None or (
@@ -88,9 +136,19 @@ async def delete_project(db: AsyncSession, user: User, project_id: str, confirma
         raise ResourceUnavailable("project not found or owner role required")
     if confirmation.strip() != project.name:
         raise ValidationFailure("project name confirmation does not match")
-    item_ids = list(
+    item_ids = sorted(
         await db.scalars(select(ProjectItem.item_id).where(ProjectItem.project_id == project_id))
     )
+    locked_item_ids: list[str] = []
+    for item_id in item_ids:
+        locked = await db.scalar(
+            select(Item)
+            .where(Item.id == item_id, Item.lifecycle_state == ItemLifecycleState.active)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if locked is not None:
+            locked_item_ids.append(item_id)
     record_event(
         db,
         user.id,
@@ -105,15 +163,16 @@ async def delete_project(db: AsyncSession, user: User, project_id: str, confirma
     await db.execute(delete(ProjectItem).where(ProjectItem.project_id == project_id))
     await db.delete(project)
     await db.flush()
-    index = search_index(db)
-    for item_id in item_ids:
-        await index.index_item(db, item_id)
+    await _advance_item_sequences(db, locked_item_ids)
+    for item_id in locked_item_ids:
+        await enqueue_search_changed(db, item_id)
     await db.commit()
 
 
 async def transfer_project_ownership(
     db: AsyncSession, user: User, project_id: str, target_user_id: str
 ) -> None:
+    user = await _lock_active_user(db, user)
     await require_project_write_gate(db, project_id)
     actor = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     target = await db.get(ProjectMember, (project_id, target_user_id), populate_existing=True)
@@ -138,6 +197,7 @@ async def transfer_project_ownership(
 
 
 async def leave_project(db: AsyncSession, user: User, project_id: str) -> None:
+    user = await _lock_active_user(db, user)
     await require_project_write_gate(db, project_id)
     member = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     if member is None:
@@ -181,6 +241,7 @@ async def set_project_state(
     db: AsyncSession, user: User, project_id: str, state: ProjectState
 ) -> Project:
     state = validate_project_state(state)
+    user = await _lock_active_user(db, user)
     project = await require_project_write_gate(db, project_id)
     member = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     if project is None or (
@@ -196,6 +257,7 @@ async def set_project_state(
 async def set_project_visibility(
     db: AsyncSession, user: User, project_id: str, visibility: ProjectVisibility | str
 ) -> Project:
+    user = await _lock_active_user(db, user)
     try:
         visibility = ProjectVisibility(visibility)
     except ValueError as error:

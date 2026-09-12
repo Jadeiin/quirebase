@@ -4,11 +4,20 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import delete, func, or_, select
 
+from quirebase.access.items import lock_item_edit_authority
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
 from quirebase.documents import enqueue_object_cleanup
-from quirebase.models import Attachment, FileRevision, Item, ObjectIntegrityScan, User
-from quirebase.search import search_index
+from quirebase.library.item_lifecycle import begin_item_deletion
+from quirebase.models import (
+    Attachment,
+    FileRevision,
+    Item,
+    ItemCreateTombstone,
+    ObjectIntegrityScan,
+    User,
+)
+from quirebase.search import enqueue_search_changed, search_index
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -115,6 +124,15 @@ async def _delete_item(
     if not require_admin and item.created_by != actor.id and actor.role != "administrator":
         raise ResourceUnavailable("item owner required")
 
+    # Lock the concrete authorization path and Item lifecycle gate. The
+    # transition advances the fence so in-flight workflows fail closed.
+    await lock_item_edit_authority(db, actor, item_id)
+    await begin_item_deletion(db, item_id)
+    await enqueue_search_changed(db, item_id)
+    item = await db.get(Item, item_id, populate_existing=True)
+    if item is None:
+        raise ResourceNotFound("item not found")
+
     title = item.title
     # Collect keys to clean up from storage
     cleanup_keys = list(
@@ -137,13 +155,19 @@ async def _delete_item(
     )
 
     # Remove from search index
-    await search_index(db).remove_item(db, item.id)
-
     # Explicitly delete child relations for cross-dialect foreign key safety
     await db.execute(delete(FileRevision).where(FileRevision.item_id == item.id))
     await db.execute(delete(Attachment).where(Attachment.item_id == item.id))
 
     # Delete entity from database
+    if item.create_operation_id:
+        db.add(
+            ItemCreateTombstone(
+                created_by=item.created_by,
+                operation_id=item.create_operation_id,
+                item_id=item.id,
+            )
+        )
     await db.delete(item)
 
     # Record audit event before commit
