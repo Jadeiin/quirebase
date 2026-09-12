@@ -42,6 +42,34 @@ def _has_named_index(bind, table: str, name: str) -> bool:
     return any(index["name"] == name for index in sa.inspect(bind).get_indexes(table))
 
 
+def _set_sqlite_foreign_keys(bind, enabled: bool) -> None:
+    """Toggle SQLite FK enforcement while no transaction is active.
+
+    Alembic normally owns a migration transaction, in which case its
+    autocommit block safely commits before changing the pragma.  Some tests
+    and embedding callers invoke a revision directly with an already-open
+    SQLAlchemy transaction; handle that shape explicitly so the pragma is
+    still effective instead of silently leaving enforcement enabled.
+    """
+
+    statement = sa.text(f"PRAGMA foreign_keys={'ON' if enabled else 'OFF'}")
+    context = op.get_context()
+    if getattr(context, "_transaction", None) is not None:
+        with context.autocommit_block():
+            op.execute(statement)
+        return
+    if bind.in_transaction():
+        # A direct revision caller may have wrapped the connection in an
+        # outer SQLAlchemy transaction context.  Commit the underlying DBAPI
+        # transaction so the context object remains usable after the pragma
+        # change (calling ``bind.commit()`` would close that outer context).
+        driver = bind.connection.driver_connection
+        driver.commit()
+        driver.execute(str(statement))
+    else:
+        bind.execute(statement)
+
+
 def _contributor_identity_key(last_name: str, first_name: str | None) -> str:
     def normalize(value: str | None) -> str:
         return unicodedata.normalize("NFKC", " ".join((value or "").split())).casefold()
@@ -56,7 +84,11 @@ def upgrade() -> None:
         # The items rebuild below drops and recreates a parent table; with
         # enforcement on, SQLite would cascade that drop into every child row
         # (file revisions, attachments, tag and project links).
-        bind.execute(sa.text("PRAGMA foreign_keys=OFF"))
+        # SQLite only honors this pragma outside a transaction.  Alembic's
+        # migration transaction is already active by the time this revision
+        # runs, so use an explicit autocommit block to disable enforcement
+        # before any batch rebuild starts.
+        _set_sqlite_foreign_keys(bind, enabled=False)
 
     if _has_table(bind, "items"):
         item_columns = _columns(bind, "items")
@@ -355,7 +387,10 @@ def upgrade() -> None:
         )
         op.alter_column("item_search", "source_sequence", server_default=None)
     if sqlite:
-        bind.execute(sa.text("PRAGMA foreign_keys=ON"))
+        # Re-enable enforcement outside the migration transaction; otherwise
+        # SQLite silently ignores the pragma and leaves the connection with
+        # foreign-key checks disabled for subsequent work.
+        _set_sqlite_foreign_keys(bind, enabled=True)
 
 
 def downgrade() -> None:

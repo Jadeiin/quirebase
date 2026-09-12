@@ -159,7 +159,22 @@ async def _reconcile_tag_item_gates(
     pre-gated Item set is eligible for this Tag mutation's aggregate bump.
     """
 
-    item_ids = set(await _tag_item_ids(db, tag_ids))
+    # Deleting Items are intentionally skipped by the pre-gate lock helper.
+    # Ignore their persisted ItemTag rows here as well; otherwise every
+    # taxonomy attempt would mistake a deleting Item for a newly-added race,
+    # retry until the bound, and potentially roll back the deletion transition.
+    item_ids = set(
+        (
+            await db.scalars(
+                select(ItemTag.item_id)
+                .join(Item, Item.id == ItemTag.item_id)
+                .where(
+                    ItemTag.tag_id.in_(tuple(set(tag_ids))),
+                    Item.lifecycle_state == ItemLifecycleState.active,
+                )
+            )
+        ).all()
+    )
     initially_seen_ids = set(initially_seen)
     if item_ids - initially_seen_ids:
         # The Tag row is already locked, so acquiring one of these new Item
