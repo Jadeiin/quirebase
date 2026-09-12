@@ -617,6 +617,8 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
         annotation_mode = PdfAnnotationMode(batch.pdf_annotation_mode or PdfAnnotationMode.preserve)
         max_pdf_bytes = batch.max_pdf_bytes or get_settings().max_pdf_bytes
         previous_workflow_id = batch.workflow_id
+        if previous_workflow_id and previous_workflow_id.startswith("commit-pdf-import:"):
+            raise BatchConflict("the import batch is already being confirmed")
         claim_id = f"commit-pdf-import:{batch.id}:{uuid4()}"
         claimed = await db.execute(
             update(ImportBatch)
@@ -736,6 +738,7 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
         await db.commit()
     except BaseException:
         if claim_id is not None:
+            await db.rollback()
             await _release_pdf_import_claim(db, batch_id, claim_id, previous_workflow_id)
         raise
 

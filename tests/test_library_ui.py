@@ -1261,6 +1261,103 @@ async def test_destructive_pdf_preflight_claim_blocks_concurrent_discard(
 
 
 @pytest.mark.anyio
+async def test_pdf_import_confirmation_rejects_an_active_claim(async_db):
+    user = User(username="active-claim-owner", password_hash="unused")
+    async_db.add(user)
+    await async_db.flush()
+    batch = ImportBatch(
+        owner_id=user.id,
+        file_format="pdf",
+        records=json.dumps([
+            {
+                "title": "Already claimed",
+                "_pdf": {
+                    "object_key": "aa/bb/claimed.pdf",
+                    "size": 10,
+                    "original_name": "claimed.pdf",
+                },
+            }
+        ]),
+        errors="[]",
+        status="ready",
+        workflow_id="commit-pdf-import:batch:other-request",
+        pdf_annotation_mode=PdfAnnotationMode.preserve,
+        max_pdf_bytes=100,
+    )
+    async_db.add(batch)
+    await async_db.commit()
+
+    with pytest.raises(BatchConflict, match="already being confirmed"):
+        await commit_import_batch(async_db, user, batch.id)
+
+
+@pytest.mark.anyio
+async def test_pdf_import_confirmation_rolls_back_partial_records(async_db, monkeypatch):
+    user = User(username="partial-import-owner", password_hash="unused")
+    async_db.add(user)
+    await async_db.flush()
+    batch = ImportBatch(
+        owner_id=user.id,
+        file_format="pdf",
+        records=json.dumps([
+            {
+                "title": "First partial",
+                "_pdf": {
+                    "object_key": "aa/bb/first.pdf",
+                    "size": 10,
+                    "original_name": "first.pdf",
+                },
+            },
+            {
+                "title": "Second partial",
+                "_pdf": {
+                    "object_key": "aa/bb/second.pdf",
+                    "size": 10,
+                    "original_name": "second.pdf",
+                },
+            },
+        ]),
+        errors="[]",
+        status="ready",
+        workflow_id="prepare-pdf-import:completed",
+        pdf_annotation_mode=PdfAnnotationMode.preserve,
+        max_pdf_bytes=100,
+    )
+    async_db.add(batch)
+    await async_db.commit()
+    batch_id = batch.id
+
+    class SearchIndex:
+        async def index_item(self, _db, _item_id):
+            return None
+
+    monkeypatch.setattr("quirebase.library.imports.search_index", lambda _db: SearchIndex())
+    attach_calls = 0
+
+    async def attach(_db, _user, _item, _staged, **_kwargs):
+        nonlocal attach_calls
+        attach_calls += 1
+        await asyncio.sleep(0)
+        if attach_calls == 2:
+            raise RuntimeError("stop after first record")
+
+    monkeypatch.setattr("quirebase.library.imports.attach_staged_pdf", attach)
+
+    with pytest.raises(RuntimeError, match="stop after first record"):
+        await commit_import_batch(async_db, user, batch_id)
+
+    assert (
+        await async_db.scalar(
+            select(func.count()).select_from(Item).where(Item.title.like("%partial%"))
+        )
+        == 0
+    )
+    restored = await async_db.get(ImportBatch, batch_id)
+    assert restored is not None
+    assert restored.workflow_id == "prepare-pdf-import:completed"
+
+
+@pytest.mark.anyio
 async def test_commit_pdf_import_preserves_signed_destructive_mode_source(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
