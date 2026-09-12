@@ -255,6 +255,15 @@ class ItemCreateTombstone(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
+class SearchProjectionState(Base):
+    """Search-owned generation state for one Item's derived projection."""
+
+    __tablename__ = "search_projection_state"
+    item_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    requested_generation: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
 class Author(Base):
     __tablename__ = "authors"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)

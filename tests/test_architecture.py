@@ -118,6 +118,7 @@ ORM_MODEL_OWNERS = {
     "ProjectItem": "projects",
     "ProjectMember": "projects",
     "SystemSetting": "operations",
+    "SearchProjectionState": "search",
     "Tag": "library",
     "User": "accounts",
 }

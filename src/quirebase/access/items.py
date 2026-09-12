@@ -286,7 +286,16 @@ async def require_readable_item(db: AsyncSession, user: User, item_id: str) -> I
 
 
 async def require_editable_item(db: AsyncSession, user: User, item_id: str) -> Item:
-    await lock_item_edit_authority(db, user, item_id)
+    """Authorize a short synchronous Item command at its entry point.
+
+    Long-running workflows use ``lock_item_edit_authority`` again in their
+    final transaction.  Short commands deliberately linearize authorization
+    at this read instead of taking the complete User/Project/Item lock path.
+    """
+
+    active = await db.scalar(select(User.active).where(User.id == user.id))
+    if not active or not await can_edit_item(db, user, item_id):
+        raise ResourceUnavailable("item not found")
     item = await db.scalar(
         select(Item)
         .options(

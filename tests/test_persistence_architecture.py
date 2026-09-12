@@ -36,6 +36,7 @@ EXPECTED_TABLES = {
     "project_items",
     "project_members",
     "projects",
+    "search_projection_state",
     "system_settings",
     "tags",
     "users",

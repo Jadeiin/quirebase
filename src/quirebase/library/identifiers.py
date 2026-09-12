@@ -163,7 +163,11 @@ async def _rescan_pdf_doi(
             if found_doi:
                 version = await db.scalar(
                     update(Item)
-                    .where(Item.id == item_id, Item.version == expected_version)
+                    .where(
+                        Item.id == item_id,
+                        Item.version == expected_version,
+                        Item.lifecycle_state == "active",
+                    )
                     .values(
                         updated_by=user.id,
                         updated_at=datetime.now(UTC),
@@ -385,7 +389,11 @@ async def _sync_metadata_from_upstream(
     item = await require_editable_item(db, user, item_id)
     version = await db.scalar(
         update(Item)
-        .where(Item.id == item_id, Item.version == expected_version)
+        .where(
+            Item.id == item_id,
+            Item.version == expected_version,
+            Item.lifecycle_state == "active",
+        )
         .values(
             updated_by=user.id,
             updated_at=datetime.now(UTC),

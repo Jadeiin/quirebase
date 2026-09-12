@@ -36,7 +36,7 @@ Quirebase uses separate monotonic tokens rather than overloading `Item.version`:
 | `Item.version` | Library optimistic concurrency for a User's stale bibliographic metadata snapshot | Bibliographic metadata changes |
 | `Item.tag_collection_version` | Library optimistic concurrency for a whole-Tag-collection snapshot | Any Item Tag assignment changes |
 | `Item.lifecycle_state` and `Item.lifecycle_fence` | Library lifecycle boundary preventing durable work from committing children to a deleting Item | Item deletion begins; the state changes from `active` to `deleting` and the fence advances |
-| `Item.aggregate_sequence` | Source sequence for Library Search | Any indexed Item aggregate input changes, including metadata, Tags, Projects and ready File Revision text |
+| `SearchProjectionState.requested_generation` | Source generation for Library Search | Any indexed Item aggregate input changes, including metadata, Tags, Projects and ready File Revision text |
 | `Item.recommendation_sequence` | Source sequence for Item Tag Recommendation input | Title, abstract or ready File Revision text changes |
 | Recommendation generation token | Identity of one requested recommendation generation | A generation is explicitly requested or superseded |
 
@@ -48,8 +48,10 @@ inputs. Replayed incremental add/remove commands that find the requested assignm
 present do not advance either the collection token or projection sequence and do not emit a second
 Audit Event.
 
-Library Search projections persist `source_sequence` and accept an update only when its sequence is
-at least as new as the stored projection. PostgreSQL enforces this in one conditional upsert;
+Search owns a requested generation for each Item in `SearchProjectionState`. Business commands
+transactionally advance that generation when they enqueue a rebuild. Library Search projections
+persist `source_sequence` and accept an update only when its generation is at least as new as the
+stored projection. PostgreSQL enforces this in one conditional upsert;
 SearchChanged work is transactionally enqueued and rebuilt by DBOS after the canonical commit.
 SQLite's FTS5 adapter preserves the same functional sequence check without emulating a writer lock.
 The dialect-native Search schema belongs exclusively to Alembic migrations; request and workflow
@@ -62,7 +64,7 @@ Cross-row invariants use database-backed aggregate gates. Projects owns the Proj
 Library owns the Item lifecycle gate. Access may coordinate the locks required to make a final
 authorization decision, but it does not own Project or Item business transitions.
 
-Transactions acquire only the gates on the authorization path they actually use:
+Long-running workflows acquire only the gates on the authorization path they actually use:
 
 ```text
 owner/admin: User -> Item
@@ -70,10 +72,12 @@ project grant: User -> selected Project -> Item
 then Tag/child rows as required
 ```
 
-Multiple objects at one level are locked by stable ID order. PostgreSQL uses row locks. SQLite is
-kept for single-process development only and does not emulate this concurrency contract. The
-implementation does not use process locks or queue-wide serialization as a substitute for these
-invariants.
+Multiple objects at one level are locked by stable ID order. PostgreSQL uses row locks. Short
+synchronous commands authorize at their command-entry read and rely on CAS/lifecycle predicates
+for the mutation; only workflow finalizers and aggregate transitions require the complete lock
+path. SQLite is kept for single-process development only and does not emulate this concurrency
+contract. The implementation does not use process locks or queue-wide serialization as a
+substitute for these invariants.
 
 Only commands whose invariant includes active-account authorization acquire a User gate. Tag
 taxonomy changes and Item Tag assignment changes share the Library-owned Tag gate, so a rename
@@ -157,7 +161,7 @@ multi-worker concurrency result.
 ## Scope and follow-up
 
 This decision establishes the current alpha concurrency architecture. Search writes are behind
-durable projection intents, lifecycle predicates are Library-owned, synchronous mutations use the
+durable projection intents and Search-owned generations, lifecycle predicates are Library-owned, synchronous mutations use the
 minimal grant-path authorization seam, and Library bulk Project assignment dispatches through a
 Projects-owned typed command. HTTP upload endpoints accept caller operation UUIDs; no compatibility
 translation for older APIs, stored data or workflow checkpoints is provided.

@@ -333,7 +333,11 @@ async def _revise_item_metadata(
     )
     version = await db.scalar(
         update(Item)
-        .where(Item.id == item_id, Item.version == expected_version)
+        .where(
+            Item.id == item_id,
+            Item.version == expected_version,
+            Item.lifecycle_state == "active",
+        )
         .values(**values)
         .returning(Item.version)
     )
@@ -400,7 +404,11 @@ async def _regenerate_bibtex_key(
     key = generate_bibtex_key(item)
     version = await db.scalar(
         update(Item)
-        .where(Item.id == item_id, Item.version == expected_version)
+        .where(
+            Item.id == item_id,
+            Item.version == expected_version,
+            Item.lifecycle_state == "active",
+        )
         .values(
             bibtex_id=key,
             updated_by=actor_id,

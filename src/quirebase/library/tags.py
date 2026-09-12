@@ -21,7 +21,6 @@ from quirebase.core.errors import (
     VersionConflict,
 )
 from quirebase.library.item_lifecycle import (
-    bump_item_aggregate_sequence,
     require_item_lifecycle_gate,
 )
 from quirebase.library.tag_recommendations import decoded_candidates
@@ -251,31 +250,30 @@ async def remove_tag_from_item(db: AsyncSession, user: User, item_id: str, tag_i
 
 
 async def _rename_tag_once(db: AsyncSession, user: User, tag_id: str, name: str) -> Tag:
-    initially_seen = await _lock_tag_items_before_gate(db, (tag_id,))
     tag = (await _lock_tag_write_gates(db, (tag_id,))).get(tag_id)
     if tag is None or (tag.created_by != user.id and user.role != "administrator"):
         raise ResourceUnavailable("tag not found or cannot be managed")
-    item_ids = await _reconcile_tag_item_gates(db, (tag_id,), initially_seen)
+    item_ids = tuple(
+        sorted(
+            set(
+                (
+                    await db.scalars(
+                        select(ItemTag.item_id)
+                        .join(Item, Item.id == ItemTag.item_id)
+                        .where(
+                            ItemTag.tag_id == tag.id,
+                            Item.lifecycle_state == ItemLifecycleState.active,
+                        )
+                    )
+                ).all()
+            )
+        )
+    )
     normalized = normalize_tag_name(name)
     if await db.scalar(select(Tag.id).where(Tag.name == normalized, Tag.id != tag.id)):
         raise TagConflict("tag name already exists")
     tag.name = normalized
     for item_id in item_ids:
-        # Item gates were acquired before the Tag gate. Re-read each assignment
-        # so a concurrent first assignment is either observed here or indexes
-        # itself after commit.
-        try:
-            await require_item_lifecycle_gate(db, item_id)
-        except ResourceUnavailable:
-            # Item deletion may win after the assignment snapshot. The Tag
-            # rename remains valid for every surviving Item, so skip this
-            # inactive aggregate instead of aborting the taxonomy command.
-            continue
-        if not await db.scalar(
-            select(ItemTag.item_id).where(ItemTag.item_id == item_id, ItemTag.tag_id == tag.id)
-        ):
-            continue
-        await bump_item_aggregate_sequence(db, item_id)
         await enqueue_search_changed(db, item_id)
     record_event(db, user.id, "tag.rename", "tag", tag.id)
     await db.commit()

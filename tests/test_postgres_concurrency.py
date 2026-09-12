@@ -298,7 +298,7 @@ async def test_upload_finalizer_and_annotation_reply_share_user_item_lock_order(
     assert not any(isinstance(result, BaseException) for result in results), results
 
 
-async def test_tag_rename_serializes_on_the_item_gate(postgres_sessions):
+async def test_tag_rename_does_not_wait_on_item_gate(postgres_sessions):
     async with postgres_sessions() as db:
         user = User(username=f"tag-rename-{uuid4()}", password_hash="hash")
         db.add(user)
@@ -329,7 +329,7 @@ async def test_tag_rename_serializes_on_the_item_gate(postgres_sessions):
 
         renamed = asyncio.create_task(rename())
         await asyncio.sleep(0.05)
-        assert not renamed.done()
+        assert renamed.done()
         await blocker.commit()
         result = await renamed
 

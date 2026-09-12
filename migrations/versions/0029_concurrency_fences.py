@@ -1,5 +1,10 @@
 """Add aggregate lifecycle fences, idempotency keys and import commit state.
 
+This is the single forward-only migration for the concurrency PR.  The
+follow-up schema changes (scoped upload identities, Item-create tombstones,
+and Search projection generations) are intentionally folded into this
+revision so a fresh deployment has one atomic upgrade boundary.
+
 The fields in this migration deliberately live alongside the existing optimistic
 ``Item.version`` token. Version detects stale editor pages; lifecycle_fence,
 aggregate_sequence and recommendation_sequence protect work that can finish
@@ -186,20 +191,29 @@ def upgrade() -> None:
                 "ck_import_batches_status",
                 "status IN ('pending', 'ready', 'committing', 'committed', 'failed', 'discarded')",
             )
-            uniques = {
-                constraint.get("name")
-                for constraint in sa.inspect(bind).get_unique_constraints("import_batches")
-            }
-            if "uq_import_batches_commit_operation_id" not in uniques:
-                batch.create_unique_constraint(
-                    "uq_import_batches_commit_operation_id", ["commit_operation_id"]
-                )
         if "ix_import_batches_commit_operation_id" not in {
             index["name"] for index in sa.inspect(bind).get_indexes("import_batches")
         }:
             op.create_index(
                 "ix_import_batches_commit_operation_id", "import_batches", ["commit_operation_id"]
             )
+
+    # Upload operation identities are scoped to their owner and Item.  Keep
+    # the uniqueness boundary on the concrete object tables; import commit
+    # identities are intentionally replayable across batches.
+    for table, name in (
+        ("file_revisions", "uq_file_revisions_owner_item_operation"),
+        ("attachments", "uq_attachments_owner_item_operation"),
+    ):
+        if not _has_table(bind, table):
+            continue
+        columns = _columns(bind, table)
+        uniques = {
+            constraint.get("name") for constraint in sa.inspect(bind).get_unique_constraints(table)
+        }
+        if {"created_by", "item_id", "operation_id"} <= columns and name not in uniques:
+            with op.batch_alter_table(table) as batch:
+                batch.create_unique_constraint(name, ["created_by", "item_id", "operation_id"])
 
     if _has_table(bind, "authors"):
         author_columns = _columns(bind, "authors")
@@ -358,6 +372,34 @@ def upgrade() -> None:
                 )
         if not sqlite:
             op.alter_column("item_tag_recommendations", "source_sequence", server_default=None)
+
+    if _has_table(bind, "users") and not _has_table(bind, "item_create_tombstones"):
+        op.create_table(
+            "item_create_tombstones",
+            sa.Column("created_by", sa.String(length=36), nullable=False),
+            sa.Column("operation_id", sa.String(length=255), nullable=False),
+            sa.Column("item_id", sa.String(length=36), nullable=False),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+            sa.ForeignKeyConstraint(["created_by"], ["users.id"], ondelete="CASCADE"),
+            sa.PrimaryKeyConstraint("created_by", "operation_id"),
+        )
+
+    if not _has_table(bind, "search_projection_state"):
+        op.create_table(
+            "search_projection_state",
+            sa.Column("item_id", sa.String(length=36), nullable=False),
+            sa.Column("requested_generation", sa.Integer(), nullable=False, server_default="1"),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+            sa.PrimaryKeyConstraint("item_id"),
+        )
+    if _has_table(bind, "items"):
+        bind.execute(
+            sa.text(
+                "INSERT INTO search_projection_state(item_id, requested_generation, created_at) "
+                "SELECT id, COALESCE(aggregate_sequence, 1), CURRENT_TIMESTAMP FROM items "
+                "WHERE id NOT IN (SELECT item_id FROM search_projection_state)"
+            )
+        )
     if sqlite:
         # FTS5 virtual tables cannot be altered. Library Search is a derived
         # projection, so replace its schema while carrying forward rows already
