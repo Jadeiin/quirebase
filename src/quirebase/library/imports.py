@@ -309,6 +309,34 @@ def _pdf_import_candidate_error(pending: dict, code: str, error: DomainError) ->
     }
 
 
+async def _preflight_pdf_annotation_modes(
+    records: list[dict], annotation_mode: PdfAnnotationMode, max_pdf_bytes: int
+) -> dict[str, str]:
+    """Validate destructive PDF processing without holding a database transaction."""
+    effective_modes: dict[str, str] = {}
+    for record in records:
+        pdf = record.get("_pdf") if isinstance(record, dict) else None
+        if not isinstance(pdf, dict) or not isinstance(pdf.get("object_key"), str):
+            raise BatchConflict("the import batch contains an invalid PDF record")
+        object_key = pdf["object_key"]
+        try:
+            async with get_object_store().materialize(object_key) as source:
+                signed = await asyncio.to_thread(
+                    validate_pdf_annotation_mode,
+                    source,
+                    annotation_mode.value,
+                    max_bytes=max_pdf_bytes,
+                )
+        except ValueError as error:
+            raise BatchConflict(str(error)) from error
+        except FileNotFoundError as error:
+            raise BatchConflict("a staged PDF is no longer available") from error
+        effective_modes[object_key] = (
+            PdfAnnotationMode.preserve.value if signed else annotation_mode.value
+        )
+    return effective_modes
+
+
 async def extract_pdf_import_doi(pending: dict) -> dict:
     """Materialize one staged PDF and extract its DOI without database access."""
     pdf = pending["_pdf"]
@@ -535,8 +563,9 @@ async def retry_pdf_import_batch(db: AsyncSession, user: User, batch_id: str) ->
 
 
 async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> None:
+    user_id = user.id
     batch = await db.get(ImportBatch, batch_id)
-    if batch is None or batch.owner_id != user.id:
+    if batch is None or batch.owner_id != user_id:
         raise ResourceUnavailable("import batch not found")
     if batch.status != "ready":
         raise BatchConflict("the import batch is still being prepared")
@@ -547,6 +576,40 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
     if not records:
         raise BatchConflict("the import batch has no candidate records")
     if batch.file_format == "pdf":
+        annotation_mode = PdfAnnotationMode(batch.pdf_annotation_mode or PdfAnnotationMode.preserve)
+        if annotation_mode is not PdfAnnotationMode.preserve:
+            max_pdf_bytes = batch.max_pdf_bytes or get_settings().max_pdf_bytes
+            # Release the session's transaction before materializing and rewriting PDFs.
+            await db.rollback()
+            effective_modes = await _preflight_pdf_annotation_modes(
+                records, annotation_mode, max_pdf_bytes
+            )
+            batch = await db.get(ImportBatch, batch_id)
+            if (
+                batch is None
+                or batch.owner_id != user_id
+                or batch.status != "ready"
+                or batch.file_format != "pdf"
+            ):
+                raise BatchConflict("the import batch changed during PDF preflight")
+            current_records = json.loads(batch.records)
+            current_keys = {
+                record.get("_pdf", {}).get("object_key")
+                for record in current_records
+                if isinstance(record, dict) and isinstance(record.get("_pdf"), dict)
+            }
+            if current_keys != set(effective_modes):
+                raise BatchConflict("the import batch changed during PDF preflight")
+            records = current_records
+            for record in records:
+                pdf = record["_pdf"]
+                record["_pdf_annotation_mode"] = effective_modes[pdf["object_key"]]
+
+            reloaded_user = await db.get(User, user_id)
+            if reloaded_user is None or not reloaded_user.active:
+                raise ResourceUnavailable("user not available")
+            user = reloaded_user
+
         known_dois = {
             value
             for provider, value in await get_accessible_item_identifiers(db, user)
@@ -562,24 +625,6 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
                 raise BatchConflict("another PDF in this batch has the same DOI")
             if normalized_doi:
                 candidate_dois.add(normalized_doi)
-        annotation_mode = PdfAnnotationMode(batch.pdf_annotation_mode or PdfAnnotationMode.preserve)
-        if annotation_mode is not PdfAnnotationMode.preserve:
-            for record in records:
-                pdf = record.get("_pdf") if isinstance(record, dict) else None
-                if not isinstance(pdf, dict) or not isinstance(pdf.get("object_key"), str):
-                    raise BatchConflict("the import batch contains an invalid PDF record")
-                try:
-                    async with get_object_store().materialize(pdf["object_key"]) as source:
-                        signed = await asyncio.to_thread(
-                            validate_pdf_annotation_mode,
-                            source,
-                            annotation_mode.value,
-                            max_bytes=batch.max_pdf_bytes or get_settings().max_pdf_bytes,
-                        )
-                    if signed:
-                        record["_pdf_annotation_mode"] = PdfAnnotationMode.preserve.value
-                except ValueError as error:
-                    raise BatchConflict(str(error)) from error
     for record in records:
         candidate = dict(record)
         pdf = candidate.pop("_pdf", None)

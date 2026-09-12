@@ -4,6 +4,7 @@ import asyncio
 import io
 import json
 import zipfile
+from contextlib import asynccontextmanager
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
@@ -26,6 +27,8 @@ from quirebase.documents import workflows as document_workflows
 from quirebase.documents.revisions import delete_unreferenced_objects, stage_pdf
 from quirebase.library import workflows as library_workflows
 from quirebase.library.imports import (
+    BatchConflict,
+    _preflight_pdf_annotation_modes,
     check_pdf_import_doi,
     commit_import_batch,
     discard_import_batch,
@@ -41,6 +44,7 @@ from quirebase.models import (
     Item,
     ItemRead,
     ItemTag,
+    PdfAnnotationMode,
     Project,
     ProjectItem,
     ProjectMember,
@@ -1190,6 +1194,24 @@ async def test_commit_pdf_import_batch_rechecks_doi_after_stale_preview(
     finally:
         await client.aclose()
         get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_pdf_annotation_preflight_reports_missing_staged_object(monkeypatch):
+    class MissingStore:
+        @asynccontextmanager
+        async def materialize(self, _object_key):
+            raise FileNotFoundError("missing staged object")
+            yield  # pragma: no cover
+
+    monkeypatch.setattr("quirebase.library.imports.get_object_store", lambda: MissingStore())
+
+    with pytest.raises(BatchConflict, match="staged PDF is no longer available"):
+        await _preflight_pdf_annotation_modes(
+            [{"_pdf": {"object_key": "aa/bb/missing.pdf"}}],
+            PdfAnnotationMode.strip,
+            100,
+        )
 
 
 @pytest.mark.anyio

@@ -410,12 +410,16 @@ async def inspect_imported_revision_workflow(
         }
     except BaseException:
         if not committed:
-            await remove_owned_object(thumbnail_key)
             derived_key = (
                 object_key(UUID(derived_object_id), ObjectSuffix.PDF) if derived_object_id else None
             )
+            cleanup_keys = [thumbnail_key]
             if derived_key and derived_key != object_key_value:
-                await remove_owned_object(derived_key)
+                cleanup_keys.append(derived_key)
+            await delete_unreferenced_objects_step(
+                cleanup_keys,
+                ignore_workflow_id=DBOS.workflow_id,
+            )
         raise
 
 

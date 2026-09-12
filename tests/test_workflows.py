@@ -365,6 +365,44 @@ async def test_imported_revision_keeps_thumbnail_after_database_commit(monkeypat
 
 
 @pytest.mark.anyio
+async def test_imported_revision_failure_uses_reference_aware_cleanup(monkeypatch):
+    cleaned = []
+
+    async def inspect(*_args, **_kwargs):
+        await asyncio.sleep(0)
+        return {"revision_id": "revision-id"}
+
+    async def fail_commit(_inspected):
+        await asyncio.sleep(0)
+        raise RuntimeError("commit failed")
+
+    async def cleanup(keys, *, ignore_workflow_id=None):
+        await asyncio.sleep(0)
+        cleaned.append((keys, ignore_workflow_id))
+
+    monkeypatch.setattr(document_workflows, "inspect_imported_pdf", inspect)
+    monkeypatch.setattr(document_workflows, "commit_imported_revision", fail_commit)
+    monkeypatch.setattr(document_workflows, "delete_unreferenced_objects_step", cleanup)
+    workflow_body = document_workflows.inspect_imported_revision_workflow.__wrapped__.__wrapped__
+
+    with pytest.raises(RuntimeError, match="commit failed"):
+        await workflow_body(
+            "revision-id",
+            "owner-id",
+            "aa/bb/source.pdf",
+            "00000000-0000-0000-0000-000000000001",
+            derived_object_id="00000000-0000-0000-0000-000000000002",
+            annotation_mode="strip",
+        )
+
+    assert len(cleaned) == 1
+    keys, ignore_workflow_id = cleaned[0]
+    assert keys[0].endswith("000000000001.png")
+    assert keys[1].endswith("000000000002.pdf")
+    assert ignore_workflow_id == document_workflows.DBOS.workflow_id
+
+
+@pytest.mark.anyio
 async def test_periodic_maintenance_workflow_uses_dbos_steps(monkeypatch):
     calls = []
 
