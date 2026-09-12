@@ -39,6 +39,10 @@ class TagConflict(DomainError):
     pass
 
 
+class _TagItemGateRace(Exception):
+    """An ItemTag appeared while a taxonomy command acquired its Tag gate."""
+
+
 async def regenerate_item_tag_recommendation(db: AsyncSession, user: User, item_id: str) -> str:
     await require_editable_item(db, user, item_id)
     recommendation = await request_item_tag_recommendation(
@@ -140,7 +144,7 @@ async def _lock_tag_items_before_gate(
     return tuple(locked_item_ids)
 
 
-def _reconcile_tag_item_gates(
+async def _reconcile_tag_item_gates(
     db: AsyncSession,
     tag_ids: list[str] | tuple[str, ...],
     initially_seen: tuple[str, ...],
@@ -155,8 +159,15 @@ def _reconcile_tag_item_gates(
     pre-gated Item set is eligible for this Tag mutation's aggregate bump.
     """
 
-    del db, tag_ids
-    return tuple(sorted(set(initially_seen)))
+    item_ids = set(await _tag_item_ids(db, tag_ids))
+    initially_seen_ids = set(initially_seen)
+    if item_ids - initially_seen_ids:
+        # The Tag row is already locked, so acquiring one of these new Item
+        # rows would invert Item -> Tag and deadlock with an assignment writer.
+        # Rollback-and-retry lets the next attempt snapshot and lock the full
+        # Item set before taking the Tag gate.
+        raise _TagItemGateRace
+    return tuple(sorted(item_ids & initially_seen_ids))
 
 
 async def _find_or_create_tag(db: AsyncSession, user: User, normalized: str) -> Tag:
@@ -242,12 +253,12 @@ async def remove_tag_from_item(db: AsyncSession, user: User, item_id: str, tag_i
         await db.commit()
 
 
-async def rename_tag(db: AsyncSession, user: User, tag_id: str, name: str) -> Tag:
+async def _rename_tag_once(db: AsyncSession, user: User, tag_id: str, name: str) -> Tag:
     initially_seen = await _lock_tag_items_before_gate(db, (tag_id,))
     tag = (await _lock_tag_write_gates(db, (tag_id,))).get(tag_id)
     if tag is None or (tag.created_by != user.id and user.role != "administrator"):
         raise ResourceUnavailable("tag not found or cannot be managed")
-    item_ids = _reconcile_tag_item_gates(db, (tag_id,), initially_seen)
+    item_ids = await _reconcile_tag_item_gates(db, (tag_id,), initially_seen)
     normalized = normalize_tag_name(name)
     if await db.scalar(select(Tag.id).where(Tag.name == normalized, Tag.id != tag.id)):
         raise TagConflict("tag name already exists")
@@ -274,12 +285,26 @@ async def rename_tag(db: AsyncSession, user: User, tag_id: str, name: str) -> Ta
     return tag
 
 
-async def delete_tag(db: AsyncSession, user: User, tag_id: str) -> None:
+async def rename_tag(db: AsyncSession, user: User, tag_id: str, name: str) -> Tag:
+    user_id = user.id
+    for _ in range(5):
+        try:
+            return await _rename_tag_once(db, user, tag_id, name)
+        except _TagItemGateRace:
+            await db.rollback()
+            refreshed_user = await db.get(User, user_id, populate_existing=True)
+            if refreshed_user is None:
+                raise ResourceUnavailable("tag not found or cannot be managed")
+            user = refreshed_user
+    raise TagConflict("tag assignments changed while the tag was being updated")
+
+
+async def _delete_tag_once(db: AsyncSession, user: User, tag_id: str) -> None:
     initially_seen = await _lock_tag_items_before_gate(db, (tag_id,))
     tag = (await _lock_tag_write_gates(db, (tag_id,))).get(tag_id)
     if tag is None or (tag.created_by != user.id and user.role != "administrator"):
         raise ResourceUnavailable("tag not found or cannot be managed")
-    item_ids = _reconcile_tag_item_gates(db, (tag_id,), initially_seen)
+    item_ids = await _reconcile_tag_item_gates(db, (tag_id,), initially_seen)
     for item_id in item_ids:
         await advance_item_tag_collection(db, user.id, item_id)
     await db.delete(tag)
@@ -288,6 +313,20 @@ async def delete_tag(db: AsyncSession, user: User, tag_id: str) -> None:
         await enqueue_search_changed(db, item_id)
     record_event(db, user.id, "tag.delete", "tag", tag_id)
     await db.commit()
+
+
+async def delete_tag(db: AsyncSession, user: User, tag_id: str) -> None:
+    user_id = user.id
+    for _ in range(5):
+        try:
+            return await _delete_tag_once(db, user, tag_id)
+        except _TagItemGateRace:
+            await db.rollback()
+            refreshed_user = await db.get(User, user_id, populate_existing=True)
+            if refreshed_user is None:
+                raise ResourceUnavailable("tag not found or cannot be managed")
+            user = refreshed_user
+    raise TagConflict("tag assignments changed while the tag was being updated")
 
 
 async def list_accessible_tags_with_counts(db: AsyncSession, user: User) -> list[tuple[Tag, int]]:
@@ -417,7 +456,9 @@ async def set_item_tags(
     await db.commit()
 
 
-async def merge_tags(db: AsyncSession, user: User, source_tag_id: str, target_tag_id: str) -> Tag:
+async def _merge_tags_once(
+    db: AsyncSession, user: User, source_tag_id: str, target_tag_id: str
+) -> Tag:
     initially_seen = await _lock_tag_items_before_gate(db, (source_tag_id, target_tag_id))
     tags = await _lock_tag_write_gates(db, (source_tag_id, target_tag_id))
     source_tag = tags.get(source_tag_id)
@@ -429,7 +470,9 @@ async def merge_tags(db: AsyncSession, user: User, source_tag_id: str, target_ta
     if user.role != "administrator" and source_tag.created_by != user.id:
         raise ResourceUnavailable("not authorized to merge these tags")
 
-    locked_item_ids = _reconcile_tag_item_gates(db, (source_tag_id, target_tag_id), initially_seen)
+    locked_item_ids = await _reconcile_tag_item_gates(
+        db, (source_tag_id, target_tag_id), initially_seen
+    )
 
     source_item_ids = set(
         (await db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == source_tag.id))).all()
@@ -458,3 +501,17 @@ async def merge_tags(db: AsyncSession, user: User, source_tag_id: str, target_ta
     )
     await db.commit()
     return target_tag
+
+
+async def merge_tags(db: AsyncSession, user: User, source_tag_id: str, target_tag_id: str) -> Tag:
+    user_id = user.id
+    for _ in range(5):
+        try:
+            return await _merge_tags_once(db, user, source_tag_id, target_tag_id)
+        except _TagItemGateRace:
+            await db.rollback()
+            refreshed_user = await db.get(User, user_id, populate_existing=True)
+            if refreshed_user is None:
+                raise ResourceUnavailable("tags not found")
+            user = refreshed_user
+    raise TagConflict("tag assignments changed while the tags were being merged")

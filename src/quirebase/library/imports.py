@@ -14,7 +14,11 @@ from inquiro.bibliography import (
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import selectinload
 
-from quirebase.access.items import require_accessible_items, visible_items_query
+from quirebase.access.items import (
+    lock_user_write_gate,
+    require_accessible_items,
+    visible_items_query,
+)
 from quirebase.audit import record_event
 from quirebase.core.config import Settings, get_settings
 from quirebase.core.errors import (
@@ -550,6 +554,7 @@ async def commit_import_batch(
     tombstone stops reserving object keys — only non-terminal batches may
     reserve staged objects.
     """
+    await lock_user_write_gate(db, user)
     batch = await _lock_import_batch(db, batch_id, user.id)
     if batch is None:
         raise ResourceUnavailable("import batch not found")
