@@ -78,7 +78,9 @@ async def can_edit_item(db: AsyncSession, user: User, item_id: str) -> bool:
     return bool(await db.scalar(select(editable)))
 
 
-async def lock_user_write_gate(db: AsyncSession, user: User) -> User:
+async def lock_user_write_gate(
+    db: AsyncSession, user: User, *, message: str = "user not found or inactive"
+) -> User:
     """Lock and refresh a User row before owner-scoped write coordination."""
 
     locked_user = await db.scalar(
@@ -88,7 +90,7 @@ async def lock_user_write_gate(db: AsyncSession, user: User) -> User:
         .execution_options(populate_existing=True)
     )
     if locked_user is None or not locked_user.active:
-        raise ResourceUnavailable("user not found or inactive")
+        raise ResourceUnavailable(message)
     return locked_user
 
 

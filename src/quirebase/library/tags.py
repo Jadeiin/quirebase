@@ -220,19 +220,7 @@ async def add_tag_to_item(db: AsyncSession, user: User, item_id: str, name: str)
         await advance_item_tag_collection(db, user.id, item_id)
         assignment = ItemTag(item_id=item_id, tag_id=tag.id)
         db.add(assignment)
-        try:
-            await db.flush()
-        except IntegrityError:
-            # A concurrent writer may win the unique ItemTag insert on local
-            # SQLite (which has no supported row-lock contract). Roll back our
-            # losing transaction and return the durable assignment; PostgreSQL
-            # serializes this path through the Item gate.
-            tag_id = tag.id
-            await db.rollback()
-            existing = await db.get(ItemTag, (item_id, tag_id), populate_existing=True)
-            if existing is None:
-                raise
-            return existing
+        await db.flush()
         await enqueue_search_changed(db, item_id)
         record_event(db, user.id, "tag.add", "item", item_id)
         await db.commit()

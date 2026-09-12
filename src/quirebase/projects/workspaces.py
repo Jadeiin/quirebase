@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
-from quirebase.access.items import can_read_item, lock_active_item
+from quirebase.access.items import can_read_item, lock_active_item, lock_user_write_gate
 from quirebase.access.projects import require_project_member
 from quirebase.audit import record_event
 from quirebase.core.errors import (
@@ -27,19 +27,6 @@ from quirebase.models import (
 from quirebase.search import enqueue_search_changed
 
 from .write_gate import require_project_write_gate
-
-
-async def _lock_active_user(db: AsyncSession, user: User) -> User:
-    locked = await db.scalar(
-        select(User)
-        .where(User.id == user.id)
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    )
-    if locked is None or not locked.active:
-        raise ResourceUnavailable("user is not active")
-    return locked
-
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -122,7 +109,7 @@ async def list_joinable_projects(db: AsyncSession, user: User) -> list[tuple[Pro
 
 
 async def join_project(db: AsyncSession, user: User, project_id: str) -> ProjectMember:
-    user = await _lock_active_user(db, user)
+    user = await lock_user_write_gate(db, user, message="user is not active")
     await require_project_write_gate(
         db,
         project_id,
@@ -183,7 +170,7 @@ async def open_project_workspace(db: AsyncSession, user: User, project_id: str) 
 
 
 async def add_item_to_project(db: AsyncSession, user: User, project_id: str, item_id: str) -> None:
-    user = await _lock_active_user(db, user)
+    user = await lock_user_write_gate(db, user, message="user is not active")
     await require_project_write_gate(
         db,
         project_id,
@@ -223,7 +210,7 @@ async def add_items_to_project(
 ) -> tuple[str, ...]:
     """Projects-owned bulk ProjectItem mutation used by Library commands."""
 
-    user = await _lock_active_user(db, user)
+    user = await lock_user_write_gate(db, user, message="user is not active")
     await require_project_write_gate(
         db,
         project_id,
@@ -254,7 +241,7 @@ async def add_items_to_project(
 async def remove_item_from_project(
     db: AsyncSession, user: User, project_id: str, item_id: str
 ) -> None:
-    user = await _lock_active_user(db, user)
+    user = await lock_user_write_gate(db, user, message="user is not active")
     await require_project_write_gate(
         db,
         project_id,
