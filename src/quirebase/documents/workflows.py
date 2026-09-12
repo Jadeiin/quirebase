@@ -113,6 +113,28 @@ class AnnotationExportResult(TypedDict):
     project_id: str | None
 
 
+def _consume_current_cancellation() -> None:
+    task = asyncio.current_task()
+    if task is not None:
+        task.uncancel()
+
+
+async def _run_pdf_thread(awaitable: Any) -> Any:
+    """Finish PyMuPDF work before materialized paths are allowed to disappear."""
+    task = asyncio.create_task(awaitable)
+    cancelled = False
+    while True:
+        try:
+            result = await asyncio.shield(task)
+            break
+        except asyncio.CancelledError:
+            cancelled = True
+            _consume_current_cancellation()
+    if cancelled:
+        raise asyncio.CancelledError
+    return result
+
+
 def _require_upload_receipt(value: Any, *, description: str) -> UploadReceipt:
     if not isinstance(value, dict) or value.get("status") != "complete":
         raise TimeoutError(f"{description} upload did not complete")
@@ -187,19 +209,19 @@ async def _inspect_pdf_object(
     derived_key = object_key_value
     pdf_size = metadata.size
     async with get_object_store().materialize(object_key_value) as source:
-        await asyncio.to_thread(validate_pdf_container, source)
+        await _run_pdf_thread(asyncio.to_thread(validate_pdf_container, source))
         if annotation_mode is not PdfAnnotationMode.preserve:
             from .pdf import pdf_has_signature
 
-            if await asyncio.to_thread(pdf_has_signature, source):
+            if await _run_pdf_thread(asyncio.to_thread(pdf_has_signature, source)):
                 # Signed PDFs are uncommon for literature imports. Preserve the
                 # source and skip native annotation parsing/rewriting entirely.
                 annotation_mode = PdfAnnotationMode.preserve
         if annotation_mode is PdfAnnotationMode.import_:
             from .pdf import parse_pdf_annotations
 
-            imported_annotations, annotation_diagnostics = await asyncio.to_thread(
-                parse_pdf_annotations, source
+            imported_annotations, annotation_diagnostics = await _run_pdf_thread(
+                asyncio.to_thread(parse_pdf_annotations, source)
             )
         if annotation_mode is not PdfAnnotationMode.preserve:
             from .pdf import strip_native_annotations
@@ -209,7 +231,9 @@ async def _inspect_pdf_object(
             with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as derived:
                 derived_path = Path(derived.name)
             try:
-                await asyncio.to_thread(strip_native_annotations, source, derived_path)
+                await _run_pdf_thread(
+                    asyncio.to_thread(strip_native_annotations, source, derived_path)
+                )
                 stored = await get_object_store().put_object(
                     UUID(derived_object_id),
                     ObjectSuffix.PDF,
@@ -221,16 +245,20 @@ async def _inspect_pdf_object(
                 derived_key = stored.key
                 pdf_size = stored.size
             finally:
-                await asyncio.to_thread(derived_path.unlink, missing_ok=True)
+                await _run_pdf_thread(asyncio.to_thread(derived_path.unlink, missing_ok=True))
         inspection_source = source
         if derived_key != object_key_value:
             async with get_object_store().materialize(derived_key) as derived_source:
-                page_count, text, geometry = await asyncio.to_thread(inspect_pdf, derived_source)
+                page_count, text, geometry = await _run_pdf_thread(
+                    asyncio.to_thread(inspect_pdf, derived_source)
+                )
                 inspection_source = derived_source
                 with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temporary:
                     thumbnail_path = Path(temporary.name)
                 try:
-                    await asyncio.to_thread(create_thumbnail, inspection_source, thumbnail_path)
+                    await _run_pdf_thread(
+                        asyncio.to_thread(create_thumbnail, inspection_source, thumbnail_path)
+                    )
                     thumbnail = await get_object_store().put_object(
                         UUID(thumbnail_object_id),
                         ObjectSuffix.PNG,
@@ -238,13 +266,15 @@ async def _inspect_pdf_object(
                         max_bytes=_MAX_THUMBNAIL_BYTES,
                     )
                 finally:
-                    await asyncio.to_thread(thumbnail_path.unlink, missing_ok=True)
+                    await _run_pdf_thread(asyncio.to_thread(thumbnail_path.unlink, missing_ok=True))
         else:
-            page_count, text, geometry = await asyncio.to_thread(inspect_pdf, source)
+            page_count, text, geometry = await _run_pdf_thread(
+                asyncio.to_thread(inspect_pdf, source)
+            )
             with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temporary:
                 thumbnail_path = Path(temporary.name)
             try:
-                await asyncio.to_thread(create_thumbnail, source, thumbnail_path)
+                await _run_pdf_thread(asyncio.to_thread(create_thumbnail, source, thumbnail_path))
                 thumbnail = await get_object_store().put_object(
                     UUID(thumbnail_object_id),
                     ObjectSuffix.PNG,
@@ -252,7 +282,7 @@ async def _inspect_pdf_object(
                     max_bytes=_MAX_THUMBNAIL_BYTES,
                 )
             finally:
-                await asyncio.to_thread(thumbnail_path.unlink, missing_ok=True)
+                await _run_pdf_thread(asyncio.to_thread(thumbnail_path.unlink, missing_ok=True))
     return {
         "thumbnail_object_key": thumbnail_key,
         "thumbnail_size": thumbnail.size,
