@@ -10,7 +10,7 @@ from inquiro.bibliography import (
     BibliographyRecord,
     parse_bibliography_records,
 )
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import selectinload
 
 from quirebase.access.items import require_accessible_items, visible_items_query
@@ -337,6 +337,21 @@ async def _preflight_pdf_annotation_modes(
     return effective_modes
 
 
+async def _release_pdf_import_claim(
+    db: AsyncSession,
+    batch_id: str,
+    claim_id: str,
+    previous_workflow_id: str | None,
+) -> None:
+    await db.rollback()
+    await db.execute(
+        update(ImportBatch)
+        .where(ImportBatch.id == batch_id, ImportBatch.workflow_id == claim_id)
+        .values(workflow_id=previous_workflow_id)
+    )
+    await db.commit()
+
+
 async def extract_pdf_import_doi(pending: dict) -> dict:
     """Materialize one staged PDF and extract its DOI without database access."""
     pdf = pending["_pdf"]
@@ -564,6 +579,8 @@ async def retry_pdf_import_batch(db: AsyncSession, user: User, batch_id: str) ->
 
 async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> None:
     user_id = user.id
+    claim_id: str | None = None
+    previous_workflow_id: str | None = None
     batch = await db.get(ImportBatch, batch_id)
     if batch is None or batch.owner_id != user_id:
         raise ResourceUnavailable("import batch not found")
@@ -579,101 +596,149 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
         annotation_mode = PdfAnnotationMode(batch.pdf_annotation_mode or PdfAnnotationMode.preserve)
         if annotation_mode is not PdfAnnotationMode.preserve:
             max_pdf_bytes = batch.max_pdf_bytes or get_settings().max_pdf_bytes
-            # Release the session's transaction before materializing and rewriting PDFs.
-            await db.rollback()
-            effective_modes = await _preflight_pdf_annotation_modes(
-                records, annotation_mode, max_pdf_bytes
+            previous_workflow_id = batch.workflow_id
+            claim_id = f"commit-pdf-import:{batch.id}:{uuid4()}"
+            claimed = await db.execute(
+                update(ImportBatch)
+                .where(
+                    ImportBatch.id == batch.id,
+                    ImportBatch.owner_id == user_id,
+                    ImportBatch.status == "ready",
+                    ImportBatch.workflow_id == previous_workflow_id,
+                )
+                .values(workflow_id=claim_id)
+                .execution_options(synchronize_session=False)
             )
-            batch = await db.get(ImportBatch, batch_id)
-            if (
-                batch is None
-                or batch.owner_id != user_id
-                or batch.status != "ready"
-                or batch.file_format != "pdf"
-            ):
-                raise BatchConflict("the import batch changed during PDF preflight")
-            current_records = json.loads(batch.records)
-            current_keys = {
-                record.get("_pdf", {}).get("object_key")
-                for record in current_records
-                if isinstance(record, dict) and isinstance(record.get("_pdf"), dict)
+            if getattr(claimed, "rowcount", 0) != 1:
+                await db.rollback()
+                raise BatchConflict("the import batch is already being confirmed")
+            await db.commit()
+            try:
+                effective_modes = await _preflight_pdf_annotation_modes(
+                    records, annotation_mode, max_pdf_bytes
+                )
+                batch = await db.get(ImportBatch, batch_id)
+                if batch is not None:
+                    await db.refresh(batch)
+                if (
+                    batch is None
+                    or batch.owner_id != user_id
+                    or batch.status != "ready"
+                    or batch.file_format != "pdf"
+                    or batch.workflow_id != claim_id
+                ):
+                    raise BatchConflict("the import batch changed during PDF preflight")
+                current_records = json.loads(batch.records)
+                current_keys = {
+                    record.get("_pdf", {}).get("object_key")
+                    for record in current_records
+                    if isinstance(record, dict) and isinstance(record.get("_pdf"), dict)
+                }
+                if current_keys != set(effective_modes):
+                    raise BatchConflict("the import batch changed during PDF preflight")
+                records = current_records
+                for record in records:
+                    pdf = record["_pdf"]
+                    record["_pdf_annotation_mode"] = effective_modes[pdf["object_key"]]
+
+                reloaded_user = await db.get(User, user_id)
+                if reloaded_user is None or not reloaded_user.active:
+                    raise ResourceUnavailable("user not available")
+                user = reloaded_user
+            except BaseException:
+                await _release_pdf_import_claim(db, batch_id, claim_id, previous_workflow_id)
+                raise
+
+        try:
+            known_dois = {
+                value
+                for provider, value in await get_accessible_item_identifiers(db, user)
+                if provider == "doi"
             }
-            if current_keys != set(effective_modes):
-                raise BatchConflict("the import batch changed during PDF preflight")
-            records = current_records
+            candidate_dois: set[str] = set()
             for record in records:
-                pdf = record["_pdf"]
-                record["_pdf_annotation_mode"] = effective_modes[pdf["object_key"]]
-
-            reloaded_user = await db.get(User, user_id)
-            if reloaded_user is None or not reloaded_user.active:
-                raise ResourceUnavailable("user not available")
-            user = reloaded_user
-
-        known_dois = {
-            value
-            for provider, value in await get_accessible_item_identifiers(db, user)
-            if provider == "doi"
-        }
-        candidate_dois: set[str] = set()
+                doi = record.get("doi") if isinstance(record, dict) else None
+                normalized_doi = doi.strip().casefold() if isinstance(doi, str) else ""
+                if normalized_doi in known_dois:
+                    raise BatchConflict("an accessible Item already has this DOI")
+                if normalized_doi and normalized_doi in candidate_dois:
+                    raise BatchConflict("another PDF in this batch has the same DOI")
+                if normalized_doi:
+                    candidate_dois.add(normalized_doi)
+        except BaseException:
+            if claim_id is not None:
+                await _release_pdf_import_claim(db, batch_id, claim_id, previous_workflow_id)
+            raise
+    try:
         for record in records:
-            doi = record.get("doi") if isinstance(record, dict) else None
-            normalized_doi = doi.strip().casefold() if isinstance(doi, str) else ""
-            if normalized_doi in known_dois:
-                raise BatchConflict("an accessible Item already has this DOI")
-            if normalized_doi and normalized_doi in candidate_dois:
-                raise BatchConflict("another PDF in this batch has the same DOI")
-            if normalized_doi:
-                candidate_dois.add(normalized_doi)
-    for record in records:
-        candidate = dict(record)
-        pdf = candidate.pop("_pdf", None)
-        record_annotation_mode = candidate.pop("_pdf_annotation_mode", None)
-        item = await _create_item_from_record(db, user, candidate)
-        if pdf is not None:
-            await attach_staged_pdf(
-                db,
-                user,
-                item,
-                (
-                    pdf["object_key"],
-                    pdf["size"],
-                    pdf["original_name"],
-                ),
-                annotation_mode=record_annotation_mode
-                or batch.pdf_annotation_mode
-                or PdfAnnotationMode.preserve,
-                max_pdf_bytes=batch.max_pdf_bytes or get_settings().max_pdf_bytes,
+            candidate = dict(record)
+            pdf = candidate.pop("_pdf", None)
+            record_annotation_mode = candidate.pop("_pdf_annotation_mode", None)
+            item = await _create_item_from_record(db, user, candidate)
+            if pdf is not None:
+                await attach_staged_pdf(
+                    db,
+                    user,
+                    item,
+                    (
+                        pdf["object_key"],
+                        pdf["size"],
+                        pdf["original_name"],
+                    ),
+                    annotation_mode=record_annotation_mode
+                    or batch.pdf_annotation_mode
+                    or PdfAnnotationMode.preserve,
+                    max_pdf_bytes=batch.max_pdf_bytes or get_settings().max_pdf_bytes,
+                )
+            await search_index(db).index_item(db, item.id)
+            effective_annotation_mode = (
+                record_annotation_mode or batch.pdf_annotation_mode or PdfAnnotationMode.preserve
             )
-        await search_index(db).index_item(db, item.id)
-        effective_annotation_mode = (
-            record_annotation_mode or batch.pdf_annotation_mode or PdfAnnotationMode.preserve
-        )
-        record_event(
-            db,
-            user.id,
-            "pdf.import" if pdf is not None else "bibliography.import",
-            "item",
-            item.id,
-            detail={
-                "format": batch.file_format,
-                "filename": pdf["original_name"] if pdf else None,
-                "annotation_mode": (
-                    PdfAnnotationMode(effective_annotation_mode).value if pdf is not None else None
-                ),
-            },
-        )
-    await db.delete(batch)
-    await db.commit()
+            record_event(
+                db,
+                user.id,
+                "pdf.import" if pdf is not None else "bibliography.import",
+                "item",
+                item.id,
+                detail={
+                    "format": batch.file_format,
+                    "filename": pdf["original_name"] if pdf else None,
+                    "annotation_mode": (
+                        PdfAnnotationMode(effective_annotation_mode).value
+                        if pdf is not None
+                        else None
+                    ),
+                },
+            )
+        await db.delete(batch)
+        await db.commit()
+    except BaseException:
+        if claim_id is not None:
+            await _release_pdf_import_claim(db, batch_id, claim_id, previous_workflow_id)
+        raise
 
 
 async def discard_import_batch(db: AsyncSession, user: User, batch_id: str) -> None:
     batch = await db.get(ImportBatch, batch_id)
     if batch is None or batch.owner_id != user.id:
         raise ResourceUnavailable("import batch not found")
+    if batch.workflow_id and batch.workflow_id.startswith("commit-pdf-import:"):
+        raise BatchConflict("the PDF import batch is being confirmed")
     object_keys = _pdf_object_keys(batch.records)
+    deleted = await db.execute(
+        delete(ImportBatch).where(
+            ImportBatch.id == batch.id,
+            ImportBatch.owner_id == user.id,
+            or_(
+                ImportBatch.workflow_id.is_(None),
+                ~ImportBatch.workflow_id.like("commit-pdf-import:%"),
+            ),
+        )
+    )
+    if getattr(deleted, "rowcount", 0) != 1:
+        await db.rollback()
+        raise BatchConflict("the PDF import batch is being confirmed")
     record_event(db, user.id, "import.batch.discard", "import_batch", batch.id)
-    await db.delete(batch)
     await enqueue_object_cleanup(
         db,
         object_keys,
