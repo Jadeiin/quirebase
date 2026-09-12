@@ -367,6 +367,26 @@ def test_free_text_format_rejects_mixed_span_colors():
         _free_text_format(fake)
 
 
+def test_free_text_format_rejects_span_color_that_differs_from_default_appearance():
+    fake = SimpleNamespace(
+        get_text=lambda _kind: {
+            "blocks": [
+                {"lines": [{"spans": [{"font": "Helvetica", "size": 12, "color": 0xFF0000}]}]}
+            ]
+        },
+        parent=SimpleNamespace(
+            parent=SimpleNamespace(
+                xref_get_key=lambda _xref, key: (
+                    ("string", "0 0 1 rg /Helv 12 Tf") if key == "DA" else ("null", "null")
+                )
+            )
+        ),
+        xref=1,
+    )
+    with pytest.raises(ValueError, match="FreeText span color differs from /DA"):
+        _free_text_format(fake)
+
+
 def test_parse_native_annotations_skips_optional_content(tmp_path):
     source = tmp_path / "optional-content.pdf"
     with pymupdf.open() as document:

@@ -217,6 +217,15 @@ def _free_text_format(annotation: pymupdf.Annot) -> dict[str, str | float]:
                 formats.add((font_family, font_size, color))
     if len(formats) > 1:
         raise ValueError("mixed FreeText formatting is unsupported")
+    span_colors = {color for _font, _size, color in formats if color is not None}
+    if span_colors:
+        span_color = next(iter(span_colors))
+        if not 0 <= span_color <= 0xFFFFFF:
+            raise ValueError("FreeText span color is not representable")
+        span_color_hex = f"#{span_color:06X}"
+        appearance_color = _default_appearance_color(annotation)
+        if appearance_color is not None and span_color_hex != appearance_color:
+            raise ValueError("FreeText span color differs from /DA")
 
     alignment = "left"
     value_type, value = annotation.parent.parent.xref_get_key(annotation.xref, "Q")

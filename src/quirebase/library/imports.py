@@ -69,6 +69,21 @@ async def _finish_cleanup_despite_cancellation(task: asyncio.Task[None]) -> None
             _consume_current_cancellation()
 
 
+async def _await_thread_despite_cancellation(task: asyncio.Task[bool]) -> bool:
+    """Let a PyMuPDF worker finish before its materialized source is cleaned up."""
+    cancelled = False
+    while True:
+        try:
+            result = await asyncio.shield(task)
+            break
+        except asyncio.CancelledError:
+            cancelled = True
+            _consume_current_cancellation()
+    if cancelled:
+        raise asyncio.CancelledError
+    return result
+
+
 def _pdf_object_keys(records_json: str) -> set[str]:
     try:
         records = json.loads(records_json)
@@ -321,12 +336,15 @@ async def _preflight_pdf_annotation_modes(
         object_key = pdf["object_key"]
         try:
             async with get_object_store().materialize(object_key) as source:
-                signed = await asyncio.to_thread(
-                    validate_pdf_annotation_mode,
-                    source,
-                    annotation_mode.value,
-                    max_bytes=max_pdf_bytes,
+                validation_task = asyncio.create_task(
+                    asyncio.to_thread(
+                        validate_pdf_annotation_mode,
+                        source,
+                        annotation_mode.value,
+                        max_bytes=max_pdf_bytes,
+                    )
                 )
+                signed = await _await_thread_despite_cancellation(validation_task)
         except ValueError as error:
             raise BatchConflict(str(error)) from error
         except FileNotFoundError as error:
@@ -343,13 +361,16 @@ async def _release_pdf_import_claim(
     claim_id: str,
     previous_workflow_id: str | None,
 ) -> None:
-    await db.rollback()
-    await db.execute(
-        update(ImportBatch)
-        .where(ImportBatch.id == batch_id, ImportBatch.workflow_id == claim_id)
-        .values(workflow_id=previous_workflow_id)
-    )
-    await db.commit()
+    try:
+        await db.execute(
+            update(ImportBatch)
+            .where(ImportBatch.id == batch_id, ImportBatch.workflow_id == claim_id)
+            .values(workflow_id=previous_workflow_id)
+        )
+        await db.commit()
+    except BaseException:
+        await db.rollback()
+        raise
 
 
 async def extract_pdf_import_doi(pending: dict) -> dict:
@@ -594,26 +615,26 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
         raise BatchConflict("the import batch has no candidate records")
     if batch.file_format == "pdf":
         annotation_mode = PdfAnnotationMode(batch.pdf_annotation_mode or PdfAnnotationMode.preserve)
-        if annotation_mode is not PdfAnnotationMode.preserve:
-            max_pdf_bytes = batch.max_pdf_bytes or get_settings().max_pdf_bytes
-            previous_workflow_id = batch.workflow_id
-            claim_id = f"commit-pdf-import:{batch.id}:{uuid4()}"
-            claimed = await db.execute(
-                update(ImportBatch)
-                .where(
-                    ImportBatch.id == batch.id,
-                    ImportBatch.owner_id == user_id,
-                    ImportBatch.status == "ready",
-                    ImportBatch.workflow_id == previous_workflow_id,
-                )
-                .values(workflow_id=claim_id)
-                .execution_options(synchronize_session=False)
+        max_pdf_bytes = batch.max_pdf_bytes or get_settings().max_pdf_bytes
+        previous_workflow_id = batch.workflow_id
+        claim_id = f"commit-pdf-import:{batch.id}:{uuid4()}"
+        claimed = await db.execute(
+            update(ImportBatch)
+            .where(
+                ImportBatch.id == batch.id,
+                ImportBatch.owner_id == user_id,
+                ImportBatch.status == "ready",
+                ImportBatch.workflow_id == previous_workflow_id,
             )
-            if getattr(claimed, "rowcount", 0) != 1:
-                await db.rollback()
-                raise BatchConflict("the import batch is already being confirmed")
-            await db.commit()
-            try:
+            .values(workflow_id=claim_id)
+            .execution_options(synchronize_session=False)
+        )
+        if getattr(claimed, "rowcount", 0) != 1:
+            await db.rollback()
+            raise BatchConflict("the import batch is already being confirmed")
+        await db.commit()
+        try:
+            if annotation_mode is not PdfAnnotationMode.preserve:
                 effective_modes = await _preflight_pdf_annotation_modes(
                     records, annotation_mode, max_pdf_bytes
                 )
@@ -645,9 +666,10 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
                 if reloaded_user is None or not reloaded_user.active:
                     raise ResourceUnavailable("user not available")
                 user = reloaded_user
-            except BaseException:
-                await _release_pdf_import_claim(db, batch_id, claim_id, previous_workflow_id)
-                raise
+
+        except BaseException:
+            await _release_pdf_import_claim(db, batch_id, claim_id, previous_workflow_id)
+            raise
 
         try:
             known_dois = {
