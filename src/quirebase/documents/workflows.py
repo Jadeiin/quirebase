@@ -49,6 +49,7 @@ ANNOTATION_EXPORT_WORKFLOW = "documents.export_annotations"
 IMPORTED_REVISION_INSPECTION_WORKFLOW = "documents.inspect_imported_revision"
 
 _MAX_THUMBNAIL_BYTES = 32 * 1024 * 1024
+_MAX_OBJECT_CLEANUP_ATTEMPTS = 60
 
 
 class UploadReceipt(TypedDict):
@@ -158,11 +159,13 @@ async def cleanup_objects_workflow(
     object_keys: list[str], ignore_workflow_id: str | None = None
 ) -> list[str]:
     pending = list(dict.fromkeys(object_keys))
-    while pending:
+    for _attempt in range(_MAX_OBJECT_CLEANUP_ATTEMPTS):
+        if not pending:
+            return object_keys
         pending = await cleanup_objects_once_step(pending, ignore_workflow_id)
         if pending:
             await DBOS.sleep_async(1)
-    return object_keys
+    raise TimeoutError("object cleanup remained referenced after bounded retries")
 
 
 async def _inspect_pdf_object(

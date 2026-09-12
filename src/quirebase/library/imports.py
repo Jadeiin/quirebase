@@ -17,6 +17,7 @@ from sqlalchemy.orm import selectinload
 from quirebase.access.items import require_accessible_items, visible_items_query
 from quirebase.audit import record_event
 from quirebase.core.config import MAX_SQL_INTEGER, Settings, get_settings
+from quirebase.core.database import AsyncSessionLocal
 from quirebase.core.errors import (
     DomainError,
     ResourceNotFound,
@@ -54,6 +55,7 @@ class BatchConflict(DomainError):
 
 MAX_PDF_IMPORT_FILES = 50
 PDF_IMPORT_CLAIM_TIMEOUT = timedelta(hours=1)
+PDF_IMPORT_CLAIM_HEARTBEAT_SECONDS = 30.0
 
 
 def _consume_current_cancellation() -> None:
@@ -111,6 +113,44 @@ def _pdf_import_claim_is_stale(workflow_id: str | None) -> bool:
     except (TypeError, ValueError, OverflowError):
         return False
     return datetime.now(UTC) - claimed_at >= PDF_IMPORT_CLAIM_TIMEOUT
+
+
+def _pdf_import_claim_id(batch_id: str, token: str) -> str:
+    return f"commit-pdf-import:{batch_id}:{token}:{datetime.now(UTC).timestamp()}"
+
+
+async def _pdf_import_claim_heartbeat(
+    batch_id: str, claim_ref: list[str], stop: asyncio.Event
+) -> None:
+    while True:
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=PDF_IMPORT_CLAIM_HEARTBEAT_SECONDS)
+            return
+        except TimeoutError:
+            pass
+        current_claim = claim_ref[0]
+        next_claim = _pdf_import_claim_id(batch_id, current_claim.split(":")[2])
+        async with AsyncSessionLocal() as heartbeat_db:
+            refreshed = await heartbeat_db.execute(
+                update(ImportBatch)
+                .where(ImportBatch.id == batch_id, ImportBatch.workflow_id == current_claim)
+                .values(workflow_id=next_claim)
+                .execution_options(synchronize_session=False)
+            )
+            if getattr(refreshed, "rowcount", 0) != 1:
+                await heartbeat_db.rollback()
+                return
+            await heartbeat_db.commit()
+        claim_ref[0] = next_claim
+
+
+async def _stop_pdf_import_claim_heartbeat(
+    task: asyncio.Task[None] | None, stop: asyncio.Event | None
+) -> None:
+    if task is None or stop is None:
+        return
+    stop.set()
+    await _finish_cleanup_despite_cancellation(task)
 
 
 def _record_to_item_payload(record: BibliographyRecord) -> dict[str, str | None]:
@@ -617,6 +657,9 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
     user_id = user.id
     claim_id: str | None = None
     previous_workflow_id: str | None = None
+    claim_heartbeat_task: asyncio.Task[None] | None = None
+    claim_heartbeat_stop: asyncio.Event | None = None
+    claim_ref: list[str] | None = None
     batch = await db.get(ImportBatch, batch_id)
     if batch is None or batch.owner_id != user_id:
         raise ResourceUnavailable("import batch not found")
@@ -638,7 +681,7 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
             and not (_pdf_import_claim_is_stale(previous_workflow_id))
         ):
             raise BatchConflict("the import batch is already being confirmed")
-        claim_id = f"commit-pdf-import:{batch.id}:{uuid4()}:{datetime.now(UTC).timestamp()}"
+        claim_id = _pdf_import_claim_id(batch.id, str(uuid4()))
         claimed = await db.execute(
             update(ImportBatch)
             .where(
@@ -654,6 +697,11 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
             await db.rollback()
             raise BatchConflict("the import batch is already being confirmed")
         await db.commit()
+        claim_ref = [claim_id]
+        claim_heartbeat_stop = asyncio.Event()
+        claim_heartbeat_task = asyncio.create_task(
+            _pdf_import_claim_heartbeat(batch.id, claim_ref, claim_heartbeat_stop)
+        )
         try:
             if annotation_mode is not PdfAnnotationMode.preserve:
                 effective_modes = await _preflight_pdf_annotation_modes(
@@ -667,7 +715,7 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
                     or batch.owner_id != user_id
                     or batch.status != "ready"
                     or batch.file_format != "pdf"
-                    or batch.workflow_id != claim_id
+                    or batch.workflow_id != claim_ref[0]
                 ):
                     raise BatchConflict("the import batch changed during PDF preflight")
                 current_records = json.loads(batch.records)
@@ -689,7 +737,8 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
                 user = reloaded_user
 
         except BaseException:
-            await _release_pdf_import_claim(db, batch_id, claim_id, previous_workflow_id)
+            await _stop_pdf_import_claim_heartbeat(claim_heartbeat_task, claim_heartbeat_stop)
+            await _release_pdf_import_claim(db, batch_id, claim_ref[0], previous_workflow_id)
             raise
 
         try:
@@ -710,7 +759,8 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
                     candidate_dois.add(normalized_doi)
         except BaseException:
             if claim_id is not None:
-                await _release_pdf_import_claim(db, batch_id, claim_id, previous_workflow_id)
+                await _stop_pdf_import_claim_heartbeat(claim_heartbeat_task, claim_heartbeat_stop)
+                await _release_pdf_import_claim(db, batch_id, claim_ref[0], previous_workflow_id)
             raise
     try:
         cleanup_source_keys: set[str] = set()
@@ -760,7 +810,20 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
                     ),
                 },
             )
-        await db.delete(batch)
+        await _stop_pdf_import_claim_heartbeat(claim_heartbeat_task, claim_heartbeat_stop)
+        if claim_ref is not None:
+            deleted = await db.execute(
+                delete(ImportBatch).where(
+                    ImportBatch.id == batch_id,
+                    ImportBatch.owner_id == user_id,
+                    ImportBatch.workflow_id == claim_ref[0],
+                )
+            )
+            if getattr(deleted, "rowcount", 0) != 1:
+                raise BatchConflict("the import batch claim was lost")
+            db.expunge(batch)
+        else:
+            await db.delete(batch)
         if cleanup_source_keys:
             await enqueue_object_cleanup(
                 db,
@@ -772,8 +835,10 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
         await db.commit()
     except BaseException:
         if claim_id is not None:
+            await _stop_pdf_import_claim_heartbeat(claim_heartbeat_task, claim_heartbeat_stop)
             await db.rollback()
-            await _release_pdf_import_claim(db, batch_id, claim_id, previous_workflow_id)
+            assert claim_ref is not None
+            await _release_pdf_import_claim(db, batch_id, claim_ref[0], previous_workflow_id)
         raise
 
 
