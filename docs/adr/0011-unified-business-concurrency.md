@@ -15,6 +15,16 @@ ADR 0006 already requires short database transactions and final revalidation aft
 ADR 0008 and ADR 0009 establish durable workflows and stable UUID object ownership. This decision
 defines the database-visible concurrency protocol used by those operations.
 
+PostgreSQL is the only deployment target with a supported multi-worker concurrency guarantee. Its
+row locks, DBOS projection workers, authorization ordering and race-condition acceptance tests
+define the supported concurrency profile. SQLite remains a single-process, low-traffic development
+and demo database: it retains migrations, backups and the SQLite FTS5 Search adapter, but SQLite
+writer-lock emulation and concurrent business-result guarantees are out of scope. SQLite tests
+cover functional smoke paths; PostgreSQL owns concurrency tests. SQLite-specific code is limited to
+URL and dialect selection, DBOS schema/isolation adaptation, maintenance backup/restore, and
+database-native FTS/upsert syntax. No business authorization, lifecycle, Tag, Project or import
+path depends on a SQLite-only writer gate.
+
 ## Decision
 
 ### Match the token to the conflict
@@ -41,10 +51,10 @@ Audit Event.
 Library Search projections persist `source_sequence` and accept an update only when its sequence is
 at least as new as the stored projection. PostgreSQL enforces this in one conditional upsert;
 SearchChanged work is transactionally enqueued and rebuilt by DBOS after the canonical commit.
-SQLite retains a functional FTS5 adapter for single-process development only; it has no supported
-multi-worker concurrency guarantee. The dialect-native Search schema belongs exclusively to
-Alembic migrations; request and workflow transactions never probe or mutate schema. Library Search
-remains derived state: it does not define whether the business write itself is valid.
+SQLite's FTS5 adapter preserves the same functional sequence check without emulating a writer lock.
+The dialect-native Search schema belongs exclusively to Alembic migrations; request and workflow
+transactions never probe or mutate schema. Library Search remains derived state: it does not define
+whether the business write itself is valid.
 
 ### Serialize aggregate transitions in canonical order
 
@@ -73,10 +83,8 @@ cannot race an assignment's Search refresh and publish the old Tag name after th
 
 Caller-retried creation operations carry an operation ID that is normalized and bounded before
 persistence. Item creation stores the ID under an Item Owner-scoped unique constraint and returns
-the original result on replay. On SQLite, operation-ID Item creation acquires the User write gate
-before looking up that owner-scoped key, preventing a concurrent winner from turning the losing
-request's read transaction into a busy snapshot. File Revision and Attachment workflows use
-preallocated UUIDs and derive their operation identity from those UUIDs.
+the original result on replay. File Revision and Attachment workflows use preallocated UUIDs and
+derive their operation identity from those UUIDs.
 
 Import Batch confirmation stores its commit operation ID and final Item IDs. Identity is scoped to
 the Batch; per-Item keys are a fixed-length SHA-256 derivation of the Batch ID, commit operation ID
@@ -94,11 +102,10 @@ ready -> discarded
 
 The `ready -> committing` transition, Item and File Revision creation, Audit Events, recorded result
 and `committed` transition occur in one transaction. Both confirmation and discard acquire the same
-Import Batch database gate before its state is read, including through a no-op write on SQLite where
-row-level `FOR UPDATE` is unavailable. A retry with the same operation ID returns the recorded Item
-IDs. A different operation ID conflicts, and a committed batch remains as the idempotency record
-while relinquishing staged-object reservations. Discard retains a terminal tombstone for
-idempotent retries.
+Import Batch database gate before its state is read. A retry with the same operation ID returns the
+recorded Item IDs. A different operation ID conflicts, and a committed batch remains as the
+idempotency record while relinquishing staged-object reservations. Discard retains a terminal
+tombstone for idempotent retries.
 
 ### Fence durable workflow commits and re-authorize them
 
@@ -126,8 +133,9 @@ unless committing is their declared operation boundary.
 Independent uniqueness and counter operations use database atomicity: dialect-appropriate upserts
 record Login Throttle failures and monotonic Item read timestamps. Contributor identity uses one
 case-insensitive, null-safe database uniqueness rule, while Tag and Contributor get-or-create paths
-recover from uniqueness races inside savepoints. SQLite and PostgreSQL may use different locking
-syntax but must expose the same business result.
+recover from uniqueness races inside savepoints. SQLite and PostgreSQL may use different SQL syntax,
+but single-request business semantics remain the same; only PostgreSQL provides the supported
+multi-worker concurrency result.
 
 ## Consequences
 
@@ -140,6 +148,8 @@ syntax but must expose the same business result.
 - Out-of-order Library Search and Item Tag Recommendation work cannot overwrite newer derived
   state.
 - Permission changes are effective at durable workflow commit time.
+- PostgreSQL is the supported multi-worker concurrency profile; SQLite is a functional
+  single-process development profile without a concurrent business-result guarantee.
 - Multi-aggregate operations must document and test their position in the canonical lock order.
 - Schema migrations preserve database integrity during the cutover, but no dual API, stored-data or
   persisted-workflow compatibility layer is part of this decision.

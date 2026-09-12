@@ -200,14 +200,8 @@ async def _find_or_create_tag(db: AsyncSession, user: User, normalized: str) -> 
     return tag
 
 
-def acquire_tag_creation_gate(db: AsyncSession) -> None:
-    """Retained as a no-op hook; SQLite has no supported concurrency contract."""
-    del db
-
-
 async def get_or_create_tag(db: AsyncSession, user: User, name: str) -> Tag:
     normalized = normalize_tag_name(name)
-    acquire_tag_creation_gate(db)
     while True:
         candidate = await _find_or_create_tag(db, user, normalized)
         tag = (await _lock_tag_write_gates(db, (candidate.id,))).get(candidate.id)
@@ -218,7 +212,6 @@ async def get_or_create_tag(db: AsyncSession, user: User, name: str) -> Tag:
 async def add_tag_to_item(db: AsyncSession, user: User, item_id: str, name: str) -> ItemTag:
     # Lock the concrete grant path (User -> selected Project/Item) and
     # revalidate authority immediately before mutating the Tag assignment.
-    acquire_tag_creation_gate(db)
     await lock_item_edit_authority(db, user, item_id)
     tag = await get_or_create_tag(db, user, name)
     await require_item_lifecycle_gate(db, item_id)
@@ -428,7 +421,6 @@ async def set_item_tags(
     the write without creating a metadata version conflict.
     """
 
-    acquire_tag_creation_gate(db)
     await lock_item_edit_authority(db, user, item_id)
     selected_ids = list(dict.fromkeys(tag_ids))
     requested_names = sorted({

@@ -12,7 +12,7 @@ from inquiro.canonical import normalize_reference_type
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
-from quirebase.access.items import lock_user_write_gate, require_editable_item
+from quirebase.access.items import require_editable_item
 from quirebase.audit import record_event
 from quirebase.core.errors import ValidationFailure, VersionConflict
 from quirebase.library.authors import set_item_authors
@@ -238,8 +238,6 @@ async def _create_item(
     operation_id: str | None = None,
 ) -> ItemWriteResult:
     if operation_id:
-        if db.get_bind().dialect.name == "sqlite":
-            await lock_user_write_gate(db, actor)
         # Keys are scoped per owner: a repeated operation replays this User's
         # Item and nobody else's, so a leaked or guessed key cannot redirect
         # the caller to an inaccessible Item.

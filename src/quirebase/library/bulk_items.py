@@ -23,7 +23,6 @@ from quirebase.documents.bundles import (
 )
 from quirebase.library.item_lifecycle import begin_item_deletion
 from quirebase.library.tags import (
-    acquire_tag_creation_gate,
     advance_item_tag_collection,
     get_or_create_tag,
 )
@@ -49,9 +48,6 @@ async def apply_bulk_item_action(
     tag_name: str = "",
     confirm_delete: str = "",
 ) -> list[str]:
-    if action in ("add_tag", "tag"):
-        # Tag creation must serialize before the item permission snapshots.
-        acquire_tag_creation_gate(db)
     items = await require_accessible_items(db, user, item_ids)
 
     # Lock the complete authorization path in stable User/Project/Item order.

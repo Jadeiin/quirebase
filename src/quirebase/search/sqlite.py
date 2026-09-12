@@ -17,19 +17,11 @@ class SQLiteSearchIndex:
     async def index_item(
         self, db: AsyncSession, item_id: str, source_sequence: int | None = None
     ) -> None:
-        # The read-guard plus delete+insert is safe on SQLite because writers
-        # serialize at the database level: this sequence runs inside the
-        # caller's write-locked transaction. FTS5 tables cannot carry the
-        # ON CONFLICT guard the PostgreSQL adapter uses (item_id is UNINDEXED).
-        # FTS5 cannot express the PostgreSQL conditional upsert. Acquire the
-        # SQLite writer lock before reading either canonical state or the
-        # stored sequence, then perform the guarded replacement atomically.
-        await db.execute(
-            text(
-                "UPDATE item_search SET source_sequence = source_sequence WHERE item_id = :item_id"
-            ),
-            {"item_id": item_id},
-        )
+        # FTS5 cannot express the PostgreSQL conditional upsert because
+        # ``item_id`` is UNINDEXED. SQLite is a single-process development
+        # profile without a supported multi-worker concurrency guarantee, so
+        # this adapter performs the functional sequence check without trying
+        # to emulate a database writer lock.
         item = await db.get(Item, item_id, populate_existing=True)
         if item is None:
             await self.remove_item(db, item_id)
