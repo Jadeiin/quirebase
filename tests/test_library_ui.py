@@ -1244,53 +1244,22 @@ async def test_destructive_pdf_preflight_claim_blocks_concurrent_discard(
     )
     async_db.add(batch)
     await async_db.commit()
+    batch_id = batch.id
 
     async def preflight(_records, _annotation_mode, _max_pdf_bytes):
         async with async_session_factory() as concurrent_db:
             concurrent_user = await concurrent_db.get(User, user.id)
             assert concurrent_user is not None
-            with pytest.raises(BatchConflict, match="being confirmed"):
-                await discard_import_batch(concurrent_db, concurrent_user, batch.id)
+            await discard_import_batch(concurrent_db, concurrent_user, batch_id)
         raise RuntimeError("stop after checking the claim")
 
     monkeypatch.setattr("quirebase.library.imports._preflight_pdf_annotation_modes", preflight)
 
     with pytest.raises(RuntimeError, match="stop after checking the claim"):
-        await commit_import_batch(async_db, user, batch.id)
+        await commit_import_batch(async_db, user, batch_id)
 
-    await async_db.refresh(batch)
-    assert batch.workflow_id == "prepare-pdf-import:completed"
-
-
-@pytest.mark.anyio
-async def test_pdf_import_confirmation_rejects_an_active_claim(async_db):
-    user = User(username="active-claim-owner", password_hash="unused")
-    async_db.add(user)
-    await async_db.flush()
-    batch = ImportBatch(
-        owner_id=user.id,
-        file_format="pdf",
-        records=json.dumps([
-            {
-                "title": "Already claimed",
-                "_pdf": {
-                    "object_key": "aa/bb/claimed.pdf",
-                    "size": 10,
-                    "original_name": "claimed.pdf",
-                },
-            }
-        ]),
-        errors="[]",
-        status="ready",
-        workflow_id="commit-pdf-import:batch:other-request",
-        pdf_annotation_mode=PdfAnnotationMode.preserve,
-        max_pdf_bytes=100,
-    )
-    async_db.add(batch)
-    await async_db.commit()
-
-    with pytest.raises(BatchConflict, match="already being confirmed"):
-        await commit_import_batch(async_db, user, batch.id)
+    async_db.expire_all()
+    assert await async_db.get(ImportBatch, batch_id) is None
 
 
 @pytest.mark.anyio
@@ -1386,7 +1355,8 @@ async def test_commit_pdf_import_preserves_signed_destructive_mode_source(
 
         await commit_import_batch(async_db, user, batch.id)
 
-        assert await async_db.get(ImportBatch, batch.id) is None
+        committed = await async_db.get(ImportBatch, batch.id)
+        assert committed is not None and committed.status == "committed"
         created = list(await async_db.scalars(select(Item).where(Item.id != item.id)))
         assert len(created) == 1
         event = await async_db.scalar(

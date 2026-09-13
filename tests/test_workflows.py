@@ -335,7 +335,7 @@ async def test_imported_revision_keeps_thumbnail_after_database_commit(monkeypat
         await asyncio.sleep(0)
         return {"revision_id": "revision-id"}
 
-    async def commit(_inspected):
+    async def commit(_inspected, **_kwargs):
         await asyncio.sleep(0)
         return {"revision_id": "revision-id", "item_id": "item-id"}
 
@@ -372,7 +372,7 @@ async def test_imported_revision_failure_uses_reference_aware_cleanup(monkeypatc
         await asyncio.sleep(0)
         return {"revision_id": "revision-id"}
 
-    async def fail_commit(_inspected):
+    async def fail_commit(_inspected, **_kwargs):
         await asyncio.sleep(0)
         raise RuntimeError("commit failed")
 
