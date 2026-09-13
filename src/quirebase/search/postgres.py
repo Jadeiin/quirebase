@@ -33,9 +33,6 @@ class PostgreSQLSearchIndex:
         await db.execute(
             text("DELETE FROM item_search WHERE item_id = :item_id"), {"item_id": item_id}
         )
-        await db.execute(
-            text("DELETE FROM revision_search WHERE item_id = :item_id"), {"item_id": item_id}
-        )
 
     async def index_revision(self, db: AsyncSession, revision_id: str) -> None:
         revision = await db.scalar(

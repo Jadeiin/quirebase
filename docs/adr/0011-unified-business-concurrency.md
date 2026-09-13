@@ -96,9 +96,10 @@ replacing the projection; generation counters are not required when rebuilds ser
 canonical writes.
 
 The supported schema-upgrade command is `quirebase init-db`, which runs the forward migration and
-then rebuilds both projections before the application is served. Running Alembic directly is an
-advanced maintenance operation; after a schema-only upgrade, operators must run the equivalent
-full reindex before relying on Search results.
+initializes infrastructure before the application is served. The schema cutover migration performs
+its required projection backfill. Running Alembic directly is an advanced maintenance operation;
+after a schema-only upgrade, operators should run the explicit batched Search reindex before
+relying on Search results.
 
 ## Project ownership
 

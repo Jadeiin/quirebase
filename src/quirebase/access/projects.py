@@ -47,21 +47,7 @@ async def project_member(
 ) -> ProjectMember | None:
     if project_id is None:
         return None
-    project = await db.get(Project, project_id)
-    member = await db.get(ProjectMember, (project_id, user.id))
-    if project is None:
-        return None
-    if project.owner_id == user.id:
-        if member is not None and member.role == ProjectRole.owner:
-            return member
-        return ProjectMember(project_id=project_id, user_id=user.id, role=ProjectRole.owner)
-    if member is None:
-        return None
-    # ``owner`` is only authoritative when it matches Project.owner_id. Treat
-    # a stale mirror as an ordinary read membership rather than an owner grant.
-    if member.role == ProjectRole.owner:
-        return ProjectMember(project_id=project_id, user_id=user.id, role=ProjectRole.viewer)
-    return member
+    return await db.get(ProjectMember, (project_id, user.id))
 
 
 async def require_project_member(

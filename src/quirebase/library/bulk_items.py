@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
@@ -130,6 +130,8 @@ async def apply_bulk_item_action(
             if key
         )
         for item in items:
+            await db.execute(delete(FileRevision).where(FileRevision.item_id == item.id))
+            await db.execute(delete(Attachment).where(Attachment.item_id == item.id))
             await search_index(db).remove_item(db, item.id)
             await db.delete(item)
         audit_action = "library.bulk.delete_items"
