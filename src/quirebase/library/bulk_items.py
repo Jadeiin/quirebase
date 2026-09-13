@@ -11,6 +11,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from quirebase.access.items import (
     can_edit_item,
     require_accessible_items,
+    require_editable_item_for_mutation,
 )
 from quirebase.audit import record_event
 from quirebase.core.errors import (
@@ -61,6 +62,11 @@ async def apply_bulk_item_action(
             raise ValidationFailure("choose an editable project") from error
         audit_action = "library.bulk.add_project"
     elif action in ("add_tag", "tag"):
+        # Hold each active Project grant while adding associations so an
+        # archive cannot race the authorization check.  Stable Item ordering
+        # keeps concurrent bulk requests from acquiring grant locks differently.
+        for item in sorted(items, key=lambda candidate: candidate.id):
+            await require_editable_item_for_mutation(db, user, item.id)
         tag_record = await get_or_create_tag(db, user, tag_name)
         dialect = db.get_bind().dialect.name
         insert = pg_insert(ItemTag) if dialect == "postgresql" else sqlite_insert(ItemTag)
