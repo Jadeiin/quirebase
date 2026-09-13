@@ -35,6 +35,19 @@ async def lock_project_root(
     return project
 
 
+async def lock_project_delete(
+    db: AsyncSession,
+    project_id: str,
+    *,
+    message: str = "project not found",
+) -> Project:
+    """Lock a Project that is about to be deleted with a full UPDATE lock."""
+    project = await db.scalar(select(Project).where(Project.id == project_id).with_for_update())
+    if project is None:
+        raise ResourceUnavailable(message)
+    return project
+
+
 async def guard_project(
     db: AsyncSession,
     project_id: str,

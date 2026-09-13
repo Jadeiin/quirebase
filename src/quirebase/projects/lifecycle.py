@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 from quirebase.audit import record_event
 from quirebase.core.errors import PermissionDenied, ResourceUnavailable, ValidationFailure
@@ -16,7 +16,7 @@ from quirebase.models import (
     User,
 )
 
-from ._locking import lock_project_root
+from ._locking import lock_project_delete, lock_project_root
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -68,7 +68,7 @@ async def update_project_description(
 
 
 async def delete_project(db: AsyncSession, user: User, project_id: str, confirmation: str) -> None:
-    project = await lock_project_root(db, project_id)
+    project = await lock_project_delete(db, project_id)
     if project is None or (user.role != "administrator" and user.id != project.owner_id):
         raise ResourceUnavailable("project not found or owner role required")
     if confirmation.strip() != project.name:
@@ -100,7 +100,9 @@ async def transfer_project_ownership(
         raise ResourceUnavailable("project or target member not found")
     if target.user_id == user.id:
         raise ValidationFailure("target must be another member")
-    target_user = await db.get(User, target.user_id)
+    target_user = await db.scalar(
+        select(User).where(User.id == target.user_id).with_for_update(read=True)
+    )
     if target_user is None or not target_user.active:
         raise ValidationFailure("target user must be active")
     actor.role = ProjectRole.editor

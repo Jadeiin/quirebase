@@ -133,7 +133,11 @@ async def rename_tag(db: AsyncSession, user: User, tag_id: str, name: str) -> Ta
         raise TagConflict("tag name already exists")
     tag.name = normalized
     record_event(db, user.id, "tag.rename", "tag", tag.id)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as error:
+        await db.rollback()
+        raise TagConflict("tag name already exists") from error
     return tag
 
 

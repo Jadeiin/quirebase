@@ -54,6 +54,11 @@ async def create_project(
     visibility: ProjectVisibility | str = ProjectVisibility.private,
     description: str = "",
 ) -> Project:
+    creator = await db.scalar(
+        select(User).where(User.id == user.id, User.active.is_(True)).with_for_update(read=True)
+    )
+    if creator is None:
+        raise ResourceUnavailable("active user required")
     normalized = name.strip()
     if not normalized:
         raise ValidationFailure("project name is required")
@@ -66,15 +71,15 @@ async def create_project(
         raise ValidationFailure("project description is too long")
     project = Project(
         name=normalized,
-        created_by=user.id,
-        owner_id=user.id,
+        created_by=creator.id,
+        owner_id=creator.id,
         visibility=parsed_visibility,
         description=normalized_description,
     )
     db.add(project)
     await db.flush()
-    db.add(ProjectMember(project_id=project.id, user_id=user.id, role=ProjectRole.owner))
-    record_event(db, user.id, "project.create", "project", project.id)
+    db.add(ProjectMember(project_id=project.id, user_id=creator.id, role=ProjectRole.owner))
+    record_event(db, creator.id, "project.create", "project", project.id)
     await db.commit()
     return project
 
