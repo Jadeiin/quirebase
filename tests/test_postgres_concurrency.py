@@ -161,7 +161,6 @@ async def test_item_delete_wins_against_upload_finalizer(postgres_sessions, fina
                     "full_text": "race",
                     "page_geometry": "[]",
                 },
-                1,
             )
         return await commit_uploaded_attachment(
             item_id,
@@ -171,13 +170,12 @@ async def test_item_delete_wins_against_upload_finalizer(postgres_sessions, fina
             "application/octet-stream",
             None,
             {"object_key": "race/attachment.bin", "size": 20},
-            1,
         )
 
     results = await asyncio.gather(delete_item(), finish_upload(), return_exceptions=True)
     assert results[0] is None
     assert isinstance(results[1], ValueError)
-    assert "lifecycle changed" in str(results[1])
+    assert "no longer writable" in str(results[1])
 
 
 async def test_permission_revoke_wins_against_workflow_final_commit(postgres_sessions):
@@ -213,7 +211,6 @@ async def test_permission_revoke_wins_against_workflow_final_commit(postgres_ses
                 "application/octet-stream",
                 None,
                 {"object_key": "race/revoked.bin", "size": 20},
-                1,
             )
 
         task = asyncio.create_task(finish_upload())
@@ -270,7 +267,6 @@ async def test_upload_finalizer_and_annotation_reply_share_user_item_lock_order(
                 "application/octet-stream",
                 None,
                 {"object_key": "race/concurrent.bin", "size": 20},
-                1,
             )
         )
         await asyncio.sleep(0.05)
@@ -374,7 +370,7 @@ async def test_metadata_cas_races_pdf_doi_rescan(postgres_sessions):
         async with postgres_sessions() as db:
             user = await db.get(User, user_id)
             assert user is not None
-            return await rescan_pdf_doi(db, user, item_id, expected_version=1)
+            return await rescan_pdf_doi(db, user, item_id)
 
     results = await _start_together(revise, rescan)
     assert sum(isinstance(result, VersionConflict) for result in results) == 1
