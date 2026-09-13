@@ -489,7 +489,7 @@ async def test_deleting_latest_pdf_revision_removes_its_files_and_falls_back_thu
     new_object = local_object_path(key)
     thumbnail_url = f"/documents/{item_id}/thumbnail"
     index = search_index(db)
-    await index.index_item(db, item_id)
+    await index.index_revision(db, new_revision.id)
     recommendation = await request_item_tag_recommendation(db, item_id, owner_id=item.created_by)
     previous_generation = recommendation.generation_token
     await db.commit()
@@ -510,8 +510,7 @@ async def test_deleting_latest_pdf_revision_removes_its_files_and_falls_back_thu
         assert not new_object.exists()
         assert not local_object_path(new_thumbnail.key).exists()
         assert (await client.get(thumbnail_url)).content == b"old-thumbnail"
-        # Library projections update when the durable FileRevisionChanged workflow runs.
-        assert await index.search(db, "deletedsearchtoken") == [item_id]
+        assert await index.search(db, "deletedsearchtoken") == []
         refreshed = await db.scalar(
             select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == item_id)
         )

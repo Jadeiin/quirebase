@@ -263,9 +263,9 @@ async def prepare_pdf_import_workflow(
 
 
 @ads.transaction()
-async def apply_file_revision_changed(item_id: str) -> None:
+async def apply_file_revision_changed(revision_id: str) -> None:
     db = ads.sql_session()
-    await search_index(db).index_item(db, item_id)
+    await search_index(db).index_revision(db, revision_id)
 
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
@@ -281,8 +281,10 @@ async def request_item_tag_recommendation_step(item_id: str, owner_id: str | Non
 
 
 @DBOS.workflow(name=FILE_REVISION_CHANGED_WORKFLOW)
-async def file_revision_changed_workflow(item_id: str, owner_id: str | None) -> None:
-    await apply_file_revision_changed(item_id)
+async def file_revision_changed_workflow(
+    revision_id: str, item_id: str, owner_id: str | None
+) -> None:
+    await apply_file_revision_changed(revision_id)
     await request_item_tag_recommendation_step(item_id, owner_id)
 
 

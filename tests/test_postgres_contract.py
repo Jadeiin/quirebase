@@ -243,6 +243,7 @@ async def test_postgresql_search_contract():
             await db.rollback()
     finally:
         async with engine.begin() as connection:
+            await connection.execute(text("DROP TABLE IF EXISTS revision_search"))
             await connection.execute(text("DROP TABLE IF EXISTS item_search"))
             await connection.run_sync(Base.metadata.drop_all)
         await engine.dispose()

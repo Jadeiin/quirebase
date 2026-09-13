@@ -72,14 +72,12 @@ async def apply_bulk_item_action(
         for item in items:
             if await db.get(ProjectItem, (project_id, item.id), populate_existing=True) is None:
                 db.add(ProjectItem(project_id=project_id, item_id=item.id))
-                await search_index(db).index_item(db, item.id)
         audit_action = "library.bulk.add_project"
     elif action in ("add_tag", "tag"):
         tag_record = await get_or_create_tag(db, user, tag_name)
         for item in items:
             if await db.get(ItemTag, (item.id, tag_record.id)) is None:
                 db.add(ItemTag(item_id=item.id, tag_id=tag_record.id))
-                await search_index(db).index_item(db, item.id)
         audit_action = "library.bulk.add_tag"
     elif action in ("delete_items", "delete"):
         if confirm_delete != "delete":

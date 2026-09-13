@@ -109,7 +109,7 @@ async def _delete_item(
 ) -> None:
     if require_admin and actor.role != "administrator":
         raise ResourceUnavailable("administrator required")
-    item = await db.get(Item, item_id)
+    item = await db.scalar(select(Item).where(Item.id == item_id).with_for_update())
     if item is None:
         raise ResourceNotFound("item not found")
     if not require_admin and item.created_by != actor.id and actor.role != "administrator":

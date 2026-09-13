@@ -22,7 +22,6 @@ from quirebase.library.workflows import (
     request_item_tag_recommendation,
 )
 from quirebase.models import Item, ItemTag, ItemTagRecommendation, Tag, User
-from quirebase.search import search_index
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -67,7 +66,6 @@ async def add_tag_to_item(db: AsyncSession, user: User, item_id: str, name: str)
         assignment = ItemTag(item_id=item_id, tag_id=tag.id)
         db.add(assignment)
         await db.flush()
-        await search_index(db).index_item(db, item_id)
         record_event(db, user.id, "tag.add", "item", item_id)
         await db.commit()
     return assignment
@@ -80,7 +78,6 @@ async def remove_tag_from_item(db: AsyncSession, user: User, item_id: str, tag_i
     if assignment:
         await db.delete(assignment)
         await db.flush()
-        await search_index(db).index_item(db, item_id)
         record_event(
             db,
             user.id,
@@ -100,11 +97,6 @@ async def rename_tag(db: AsyncSession, user: User, tag_id: str, name: str) -> Ta
     if await db.scalar(select(Tag.id).where(Tag.name == normalized, Tag.id != tag.id)):
         raise TagConflict("tag name already exists")
     tag.name = normalized
-    item_ids = list(
-        (await db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == tag.id))).all()
-    )
-    for item_id in item_ids:
-        await search_index(db).index_item(db, item_id)
     record_event(db, user.id, "tag.rename", "tag", tag.id)
     await db.commit()
     return tag
@@ -114,13 +106,8 @@ async def delete_tag(db: AsyncSession, user: User, tag_id: str) -> None:
     tag = await db.get(Tag, tag_id)
     if tag is None or (tag.created_by != user.id and user.role != "administrator"):
         raise ResourceUnavailable("tag not found or cannot be managed")
-    item_ids = list(
-        (await db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == tag.id))).all()
-    )
     await db.delete(tag)
     await db.flush()
-    for item_id in item_ids:
-        await search_index(db).index_item(db, item_id)
     record_event(db, user.id, "tag.delete", "tag", tag_id)
     await db.commit()
 
@@ -214,7 +201,6 @@ async def set_item_tags(
         if tag_id in valid_ids:
             db.add(ItemTag(item_id=item_id, tag_id=tag_id))
     await db.flush()
-    await search_index(db).index_item(db, item_id)
     record_event(db, user.id, "tag.set", "item", item_id)
     await db.commit()
 
@@ -241,8 +227,6 @@ async def merge_tags(db: AsyncSession, user: User, source_tag_id: str, target_ta
     await db.delete(source_tag)
     await db.flush()
 
-    for item_id in source_item_ids:
-        await search_index(db).index_item(db, item_id)
     record_event(
         db,
         user.id,

@@ -4,8 +4,8 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import String, false, select, text
 
-from quirebase.models import Item
-from quirebase.search.content import search_text_for_item
+from quirebase.models import FileRevision, Item
+from quirebase.search.content import search_text_for_item, search_text_for_revision
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,6 +30,23 @@ class PostgreSQLSearchIndex:
                 "ON item_search USING gin(document)"
             )
         )
+        await db.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS revision_search (
+                    revision_id varchar(36) PRIMARY KEY REFERENCES file_revisions(id) ON DELETE CASCADE,
+                    item_id varchar(36) NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+                    document tsvector NOT NULL
+                )
+                """
+            )
+        )
+        await db.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_revision_search_document "
+                "ON revision_search USING gin(document)"
+            )
+        )
 
     async def index_item(self, db: AsyncSession, item_id: str) -> None:
         await self.ensure_schema(db)
@@ -43,13 +60,42 @@ class PostgreSQLSearchIndex:
                     VALUES (:item_id, to_tsvector('simple', :content))
                     """
                 ),
-                {"item_id": item.id, "content": await search_text_for_item(db, item)},
+                {"item_id": item.id, "content": search_text_for_item(item)},
             )
 
     async def remove_item(self, db: AsyncSession, item_id: str) -> None:
         await self.ensure_schema(db)
         await db.execute(
             text("DELETE FROM item_search WHERE item_id = :item_id"), {"item_id": item_id}
+        )
+        await db.execute(
+            text("DELETE FROM revision_search WHERE item_id = :item_id"), {"item_id": item_id}
+        )
+
+    async def index_revision(self, db: AsyncSession, revision_id: str) -> None:
+        await self.ensure_schema(db)
+        revision = await db.get(FileRevision, revision_id)
+        await self.remove_revision(db, revision_id)
+        if revision is not None and revision.full_text:
+            await db.execute(
+                text(
+                    """
+                    INSERT INTO revision_search(revision_id, item_id, document)
+                    VALUES (:revision_id, :item_id, to_tsvector('simple', :content))
+                    """
+                ),
+                {
+                    "revision_id": revision.id,
+                    "item_id": revision.item_id,
+                    "content": search_text_for_revision(revision),
+                },
+            )
+
+    async def remove_revision(self, db: AsyncSession, revision_id: str) -> None:
+        await self.ensure_schema(db)
+        await db.execute(
+            text("DELETE FROM revision_search WHERE revision_id = :revision_id"),
+            {"revision_id": revision_id},
         )
 
     async def search(self, db: AsyncSession, query: str, limit: int = 200) -> list[str]:
@@ -61,9 +107,19 @@ class PostgreSQLSearchIndex:
                 await db.scalars(
                     text(
                         """
-                    SELECT item_id FROM item_search
-                    WHERE document @@ websearch_to_tsquery('simple', :query)
-                    ORDER BY ts_rank(document, websearch_to_tsquery('simple', :query)) DESC
+                    SELECT item_id FROM (
+                        SELECT item_id,
+                               ts_rank(document, websearch_to_tsquery('simple', :query)) AS rank
+                        FROM item_search
+                        WHERE document @@ websearch_to_tsquery('simple', :query)
+                        UNION ALL
+                        SELECT item_id,
+                               ts_rank(document, websearch_to_tsquery('simple', :query)) AS rank
+                        FROM revision_search
+                        WHERE document @@ websearch_to_tsquery('simple', :query)
+                    ) matches
+                    GROUP BY item_id
+                    ORDER BY MAX(rank) DESC
                     LIMIT :limit
                     """
                     ),
@@ -81,6 +137,9 @@ class PostgreSQLSearchIndex:
             text(
                 """
                 SELECT item_id FROM item_search
+                WHERE document @@ websearch_to_tsquery('simple', :query)
+                UNION
+                SELECT item_id FROM revision_search
                 WHERE document @@ websearch_to_tsquery('simple', :query)
                 """
             )

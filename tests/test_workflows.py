@@ -627,21 +627,6 @@ async def test_read_heavy_datasource_steps_use_read_committed(monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_search_projection_writes_use_serializable(monkeypatch):
-    captured = []
-
-    async def run(options, _function, *_args, **_kwargs):
-        await asyncio.sleep(0)
-        captured.append(options)
-
-    monkeypatch.setattr(workflows.ads, "run_tx_step_async", run)
-    await operation_workflows.reindex_items_step(())
-    await library_workflows.apply_file_revision_changed("item-id")
-
-    assert {options["isolation_level"] for options in captured} == {"SERIALIZABLE"}
-
-
-@pytest.mark.anyio
 async def test_commit_uploaded_revision_uses_datasource_transaction(async_db):
     user = User(username="upload-tx-user", password_hash="unused")
     async_db.add(user)

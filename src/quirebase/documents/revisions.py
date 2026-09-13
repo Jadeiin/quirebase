@@ -58,6 +58,7 @@ from quirebase.models import (
     ProjectMember,
     User,
 )
+from quirebase.search import search_index
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -636,6 +637,8 @@ async def delete_file_revision(
     db: AsyncSession, user: User, item_id: str, revision_id: str
 ) -> None:
     await require_editable_item(db, user, item_id)
+    if await db.scalar(select(Item.id).where(Item.id == item_id).with_for_update()) is None:
+        raise ResourceNotFound("item not found")
     revision = await db.scalar(
         select(FileRevision).where(FileRevision.id == revision_id).with_for_update()
     )
@@ -643,12 +646,14 @@ async def delete_file_revision(
         raise ResourceNotFound("file revision not found")
     object_key = revision.object_key
     thumbnail_key = revision.thumbnail_object_key
+    await search_index(db).remove_revision(db, revision.id)
     await db.delete(revision)
     await db.flush()
     event_workflow_id = f"file-revision-deleted:{revision_id}"
     await durable_operations().enqueue_in_transaction(
         db,
         FILE_REVISION_CHANGED_WORKFLOW,
+        revision_id,
         item_id,
         user.id,
         queue_name=LIBRARY_QUEUE,
@@ -664,6 +669,8 @@ async def delete_file_revision(
 
 async def delete_attachment(db: AsyncSession, user: User, item_id: str, attachment_id: str) -> None:
     await require_editable_item(db, user, item_id)
+    if await db.scalar(select(Item.id).where(Item.id == item_id).with_for_update()) is None:
+        raise ResourceNotFound("item not found")
     attachment = await db.get(Attachment, attachment_id)
     if attachment is None or attachment.item_id != item_id:
         raise ResourceNotFound("attachment not found")

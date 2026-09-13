@@ -31,6 +31,7 @@ from quirebase.models import (
     ProjectMember,
     User,
 )
+from quirebase.search import search_index
 
 from .pdf import create_thumbnail, export_annotations, inspect_pdf, validate_pdf_container
 
@@ -194,6 +195,9 @@ async def commit_uploaded_revision(
     inspected: UploadedPdfInspection,
 ) -> RevisionWorkflowResult:
     db = ads.sql_session()
+    item_exists = await db.scalar(select(Item.id).where(Item.id == item_id).with_for_update())
+    if item_exists is None:
+        raise ValueError("Item no longer exists")
     existing = await db.get(FileRevision, inspected["revision_id"])
     if existing is not None:
         if existing.processing_state == FileRevisionProcessingState.pending:
@@ -205,9 +209,8 @@ async def commit_uploaded_revision(
             existing.page_geometry = inspected["page_geometry"]
             existing.full_text = inspected["full_text"]
             existing.processing_state = FileRevisionProcessingState.ready
+            await search_index(db).index_revision(db, existing.id)
         return {"revision_id": existing.id, "item_id": existing.item_id}
-    if await db.get(Item, item_id) is None:
-        raise ValueError("Item no longer exists")
     revision = FileRevision(
         id=inspected["revision_id"],
         item_id=item_id,
@@ -223,6 +226,8 @@ async def commit_uploaded_revision(
         created_by=owner_id,
     )
     db.add(revision)
+    await db.flush()
+    await search_index(db).index_revision(db, revision.id)
     record_event(db, owner_id, "pdf.upload", "file_revision", revision.id)
     return {"revision_id": revision.id, "item_id": item_id}
 
@@ -232,6 +237,7 @@ async def _enqueue_file_revision_changed(
 ) -> str:
     return await enqueue_child_workflow(
         FILE_REVISION_CHANGED_WORKFLOW,
+        revision_id,
         item_id,
         owner_id,
         queue_name=LIBRARY_QUEUE,
@@ -305,6 +311,14 @@ async def commit_imported_revision(inspected: PdfInspection) -> RevisionWorkflow
     revision = await db.get(FileRevision, inspected["revision_id"])
     if revision is None:
         raise ValueError("imported revision no longer exists")
+    item_exists = await db.scalar(
+        select(Item.id).where(Item.id == revision.item_id).with_for_update()
+    )
+    if item_exists is None:
+        raise ValueError("Item no longer exists")
+    revision = await db.get(FileRevision, inspected["revision_id"], populate_existing=True)
+    if revision is None:
+        raise ValueError("imported revision no longer exists")
     if revision.processing_state == FileRevisionProcessingState.pending:
         revision.thumbnail_object_key = inspected["thumbnail_object_key"]
         revision.thumbnail_size = inspected["thumbnail_size"]
@@ -313,6 +327,7 @@ async def commit_imported_revision(inspected: PdfInspection) -> RevisionWorkflow
         revision.full_text = inspected["full_text"]
         revision.page_geometry = inspected["page_geometry"]
         revision.processing_state = FileRevisionProcessingState.ready
+        await search_index(db).index_revision(db, revision.id)
     return {"revision_id": revision.id, "item_id": revision.item_id}
 
 

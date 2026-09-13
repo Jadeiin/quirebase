@@ -24,7 +24,6 @@ from quirebase.models import (
     ProjectVisibility,
     User,
 )
-from quirebase.search import search_index
 
 from .write_gate import require_project_write_gate
 
@@ -184,7 +183,6 @@ async def add_item_to_project(db: AsyncSession, user: User, project_id: str, ite
     if await db.get(ProjectItem, (project_id, item_id), populate_existing=True) is None:
         db.add(ProjectItem(project_id=project_id, item_id=item_id))
         await db.flush()
-        await search_index(db).index_item(db, item_id)
         record_event(
             db,
             user.id,
@@ -217,7 +215,6 @@ async def remove_item_from_project(
         raise ResourceUnavailable("item or project not accessible or insufficient permissions")
     await db.delete(assignment)
     await db.flush()
-    await search_index(db).index_item(db, item_id)
     record_event(
         db,
         user.id,

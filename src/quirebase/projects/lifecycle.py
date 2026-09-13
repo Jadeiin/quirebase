@@ -15,7 +15,6 @@ from quirebase.models import (
     ProjectVisibility,
     User,
 )
-from quirebase.search import search_index
 
 from .write_gate import require_project_write_gate
 
@@ -44,13 +43,6 @@ async def rename_project(db: AsyncSession, user: User, project_id: str, name: st
         raise ValidationFailure("project name is too long")
     old_name = project.name
     project.name = normalized
-    item_ids = list(
-        await db.scalars(select(ProjectItem.item_id).where(ProjectItem.project_id == project_id))
-    )
-    await db.flush()
-    index = search_index(db)
-    for item_id in item_ids:
-        await index.index_item(db, item_id)
     record_event(
         db,
         user.id,
@@ -88,9 +80,6 @@ async def delete_project(db: AsyncSession, user: User, project_id: str, confirma
         raise ResourceUnavailable("project not found or owner role required")
     if confirmation.strip() != project.name:
         raise ValidationFailure("project name confirmation does not match")
-    item_ids = list(
-        await db.scalars(select(ProjectItem.item_id).where(ProjectItem.project_id == project_id))
-    )
     record_event(
         db,
         user.id,
@@ -104,10 +93,6 @@ async def delete_project(db: AsyncSession, user: User, project_id: str, confirma
     await db.execute(delete(ProjectMember).where(ProjectMember.project_id == project_id))
     await db.execute(delete(ProjectItem).where(ProjectItem.project_id == project_id))
     await db.delete(project)
-    await db.flush()
-    index = search_index(db)
-    for item_id in item_ids:
-        await index.index_item(db, item_id)
     await db.commit()
 
 

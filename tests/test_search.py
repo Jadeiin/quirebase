@@ -34,7 +34,7 @@ async def test_sqlite_search_indexes_metadata_and_pdf_text(async_db):
     extracted = await add_item(db, user, title="Untitled paper", full_text="Quasiparticle dynamics")
     await add_item(db, user, title="Unrelated")
 
-    assert await reindex_all(db) == 3
+    assert await reindex_all(db) == 4
     index = search_index(db)
 
     assert await index.search(db, "neural") == [metadata.id]

@@ -22,7 +22,7 @@ async def test_tags_discussion_and_search(async_db, async_session_factory, tmp_p
         assert tagged.status_code == 200
         assert await db.scalar(select(func.count()).select_from(Tag)) == 1
         assert await db.scalar(select(func.count()).select_from(ItemTag)) == 1
-        assert item.title in (await client.get("/?q=optics")).text
+        assert item.title not in (await client.get("/?q=optics")).text
 
         posted = await client.post(
             f"/items/{item.id}/discussion", data={"csrf_token": "test-csrf", "body": "Looks useful"}
