@@ -810,7 +810,7 @@ async def test_item_edit_detects_conflicts_and_updates_search(
         await db.refresh(item)
         assert item.version == 2
         assert item.title == "Revised Paper"
-        await search_index(db).index_item(db, item.id, source_sequence=item.aggregate_sequence)
+        await search_index(db).index_item(db, item.id)
         await db.commit()
 
         results = await client.get("/?q=quantum")

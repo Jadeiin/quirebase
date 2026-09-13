@@ -8,11 +8,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from quirebase.access.documents import require_attachment, require_revision
 from quirebase.access.items import (
-    lock_item_edit_authority,
+    lock_active_item,
     require_editable_item,
     require_readable_item,
 )
@@ -261,7 +261,6 @@ async def attach_staged_pdf(
         size=size,
         original_name=original_name,
         created_by=user.id,
-        lifecycle_fence=item.lifecycle_fence,
     )
     db.add(revision)
     await db.flush()
@@ -440,8 +439,7 @@ async def store_pdf_revision(
 ) -> UploadWorkflow:
     from quirebase.operations.settings import get_effective_setting
 
-    item = await require_editable_item(db, user, item_id)
-    lifecycle_fence = item.lifecycle_fence
+    await require_editable_item(db, user, item_id)
     if not filename or not filename.lower().endswith(".pdf"):
         raise UnsupportedMediaType("a PDF file is required")
     if max_bytes is None:
@@ -463,7 +461,6 @@ async def store_pdf_revision(
         "item_id": item_id,
         "revision_id": str(revision_id),
         "original_name": original_name,
-        "lifecycle_fence": lifecycle_fence,
         "object_key": revision_key,
         "object_keys": [revision_key, thumbnail_key],
     }
@@ -486,7 +483,6 @@ async def store_pdf_revision(
                 str(thumbnail_object_id),
                 original_name,
                 upload_operation_id,
-                lifecycle_fence,
                 queue_name=UPLOAD_QUEUE,
                 workflow_id=workflow_id,
                 deduplication_id=workflow_id,
@@ -586,8 +582,7 @@ async def create_attachment(
 
     if not filename:
         raise ResourceUnavailable("item not accessible or filename missing")
-    item = await require_editable_item(db, user, item_id)
-    lifecycle_fence = item.lifecycle_fence
+    await require_editable_item(db, user, item_id)
     if max_bytes is None:
         max_bytes = await get_effective_setting(
             db, "max_attachment_bytes", get_settings().max_attachment_bytes
@@ -611,7 +606,6 @@ async def create_attachment(
         "original_name": original_name,
         "content_type": content_type,
         "role": role.value if role else None,
-        "lifecycle_fence": lifecycle_fence,
         "object_key": attachment_key,
         "object_keys": [attachment_key],
     }
@@ -635,7 +629,6 @@ async def create_attachment(
                 content_type,
                 role.value if role else None,
                 upload_operation_id,
-                lifecycle_fence,
                 queue_name=UPLOAD_QUEUE,
                 workflow_id=workflow_id,
                 deduplication_id=workflow_id,
@@ -800,7 +793,8 @@ async def get_item_thumbnail(db: AsyncSession, user: User, item_id: str) -> Item
 async def delete_file_revision(
     db: AsyncSession, user: User, item_id: str, revision_id: str
 ) -> None:
-    await lock_item_edit_authority(db, user, item_id)
+    await require_editable_item(db, user, item_id)
+    await lock_active_item(db, item_id)
     revision = await db.scalar(
         select(FileRevision).where(FileRevision.id == revision_id).with_for_update()
     )
@@ -810,18 +804,6 @@ async def delete_file_revision(
     thumbnail_key = revision.thumbnail_object_key
     await db.delete(revision)
     await db.flush()
-    # Deleting a revision changes the Item's indexed and recommended content.
-    # Advance both source sequences in the same transaction so an in-flight
-    # recommendation generated from the deleted PDF fails its sequence check
-    # instead of publishing candidates for content that no longer exists.
-    await db.execute(
-        update(Item)
-        .where(Item.id == item_id, Item.lifecycle_state == "active")
-        .values(
-            aggregate_sequence=Item.aggregate_sequence + 1,
-            recommendation_sequence=Item.recommendation_sequence + 1,
-        )
-    )
     await enqueue_search_changed(db, item_id)
     event_workflow_id = f"file-revision-deleted:{revision_id}"
     await durable_operations().enqueue_in_transaction(
@@ -845,7 +827,8 @@ async def delete_file_revision(
 
 
 async def delete_attachment(db: AsyncSession, user: User, item_id: str, attachment_id: str) -> None:
-    await lock_item_edit_authority(db, user, item_id)
+    await require_editable_item(db, user, item_id)
+    await lock_active_item(db, item_id)
     attachment = await db.scalar(
         select(Attachment).where(Attachment.id == attachment_id).with_for_update()
     )
@@ -854,11 +837,6 @@ async def delete_attachment(db: AsyncSession, user: User, item_id: str, attachme
     object_key = attachment.object_key
     await db.delete(attachment)
     await db.flush()
-    await db.execute(
-        update(Item)
-        .where(Item.id == item_id, Item.lifecycle_state == "active")
-        .values(aggregate_sequence=Item.aggregate_sequence + 1)
-    )
     await enqueue_search_changed(db, item_id)
     record_event(db, user.id, "attachment.delete", "attachment", attachment.id)
     await enqueue_object_cleanup(

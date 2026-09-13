@@ -12,11 +12,11 @@ from quirebase.library.item_lifecycle import begin_item_deletion
 from quirebase.library.tags import (
     TagConflict,
     add_tag_to_item,
+    add_tags_to_item,
     get_tag_matrix_for_item,
     merge_tags,
     remove_tag_from_item,
     rename_tag,
-    set_item_tags,
 )
 from quirebase.models import AuditEvent, Item, ItemTag, ItemTagRecommendation, Tag, User
 
@@ -80,7 +80,6 @@ async def test_replayed_tag_remove_does_not_consume_another_collection_version(
             .where(AuditEvent.action == "tag.remove", AuditEvent.target_id == item_id)
         )
         assert item is not None
-        assert item.tag_collection_version == 3
         assert removals == 1
 
 
@@ -126,7 +125,6 @@ async def test_concurrent_tag_add_creates_one_assignment_and_one_collection_vers
             .where(AuditEvent.action == "tag.add", AuditEvent.target_id == item_id)
         )
         assert item is not None
-        assert item.tag_collection_version == 2
         assert assignments == 1
         assert additions == 1
 
@@ -174,7 +172,7 @@ async def test_get_tag_matrix_for_item(async_db):
 
 
 @pytest.mark.anyio
-async def test_set_item_tags(async_db):
+async def test_add_tags_to_item(async_db):
     db = async_db
     user = User(username="batch_tag_user", password_hash="hash")
     db.add(user)
@@ -184,36 +182,23 @@ async def test_set_item_tags(async_db):
     db.add(item)
     await db.flush()
 
-    await set_item_tags(
-        db,
-        user,
-        item.id,
-        [],
-        ["AI", "Deep Learning", "Vision"],
-        expected_collection_version=item.tag_collection_version,
-    )
+    await add_tags_to_item(db, user, item.id, [], ["AI", "Deep Learning", "Vision"])
     current_tags = list((await db.scalars(select(Tag.name))).all())
     assert "AI" in current_tags
     assert "Deep Learning" in current_tags
 
-    # Test set_item_tags to only AI and Vision
+    # Additive updates retain existing tags.
     tag_ai = await db.scalar(select(Tag).where(Tag.name == "AI"))
     tag_vision = await db.scalar(select(Tag).where(Tag.name == "Vision"))
     assert tag_ai is not None and tag_vision is not None
     await db.refresh(item)
-    await set_item_tags(
-        db,
-        user,
-        item.id,
-        [tag_ai.id, tag_vision.id],
-        expected_collection_version=item.tag_collection_version,
-    )
+    await add_tags_to_item(db, user, item.id, [tag_ai.id, tag_vision.id])
     await db.commit()
 
     assigned_tag_ids = list(
         (await db.scalars(select(ItemTag.tag_id).where(ItemTag.item_id == item.id))).all()
     )
-    assert len(assigned_tag_ids) == 2
+    assert len(assigned_tag_ids) == 3
     assert tag_ai.id in assigned_tag_ids
     assert tag_vision.id in assigned_tag_ids
 
@@ -228,14 +213,7 @@ async def test_set_tags_normalizes_names_and_skips_empty_values(async_db):
     db.add(item)
     await db.flush()
 
-    await set_item_tags(
-        db,
-        user,
-        item.id,
-        [],
-        ["  Machine   Learning ", "\t"],
-        expected_collection_version=item.tag_collection_version,
-    )
+    await add_tags_to_item(db, user, item.id, [], ["  Machine   Learning ", "\t"])
     assigned_names = list(
         (
             await db.scalars(

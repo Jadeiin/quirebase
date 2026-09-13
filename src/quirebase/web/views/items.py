@@ -37,6 +37,7 @@ from quirebase.library import (
     SummaryWorkspace,
     WorkspaceSection,
     add_tag_to_item,
+    add_tags_to_item,
     open_item_workspace,
     parse_author_list_string,
     regenerate_bibtex_key,
@@ -45,7 +46,6 @@ from quirebase.library import (
     rescan_pdf_doi,
     revise_item_metadata,
     search_authors_typeahead,
-    set_item_tags,
     sync_metadata_from_upstream,
 )
 from quirebase.library import (
@@ -419,18 +419,16 @@ async def sync_metadata_route(
 @router.post("/items/{item_id}/rescan-doi")
 async def rescan_doi_route(
     item_id: str,
-    version: int = Form(),
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await rescan_pdf_doi(db, user, item_id, expected_version=version)
+    await rescan_pdf_doi(db, user, item_id)
     return RedirectResponse(f"/items/{item_id}", status_code=303)
 
 
 @router.post("/items/{item_id}/update-bibtex-key")
 async def update_bibtex_key_route(
     item_id: str,
-    version: int = Form(),
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -438,7 +436,6 @@ async def update_bibtex_key_route(
         db,
         user,
         item_id,
-        version,
     )
     return RedirectResponse(f"/items/{item_id}", status_code=303)
 
@@ -449,19 +446,11 @@ async def update_tag_matrix_route(
     tag_ids: list[str] = Form(default=[]),
     suggested_tags: list[str] = Form(default=[]),
     new_tags: str = Form(default=""),
-    expected_collection_version: int = Form(...),
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
     new_names = [*suggested_tags, *(line.strip() for line in new_tags.splitlines() if line.strip())]
-    await set_item_tags(
-        db,
-        user,
-        item_id,
-        tag_ids,
-        new_names=new_names,
-        expected_collection_version=expected_collection_version,
-    )
+    await add_tags_to_item(db, user, item_id, tag_ids, new_names)
     return RedirectResponse(f"/items/{item_id}/organize", status_code=303)
 
 

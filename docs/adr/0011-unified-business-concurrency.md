@@ -34,19 +34,13 @@ Quirebase uses separate monotonic tokens rather than overloading `Item.version`:
 | Mechanism | Owner and purpose | Advances when |
 | --- | --- | --- |
 | `Item.version` | Library optimistic concurrency for a User's stale bibliographic metadata snapshot | Bibliographic metadata changes |
-| `Item.tag_collection_version` | Library optimistic concurrency for a whole-Tag-collection snapshot | Any Item Tag assignment changes |
-| `Item.lifecycle_state` and `Item.lifecycle_fence` | Library lifecycle boundary preventing durable work from committing children to a deleting Item | Item deletion begins; the state changes from `active` to `deleting` and the fence advances |
-| `SearchProjectionState.requested_generation` | Source generation for Library Search | Any indexed Item aggregate input changes, including metadata, Tags, Projects and ready File Revision text |
-| `Item.recommendation_sequence` | Source sequence for Item Tag Recommendation input | Title, abstract or ready File Revision text changes |
+| `Item.lifecycle_state` | Library lifecycle boundary preventing durable work from committing children to a deleting Item | Item deletion begins; finalizers lock and re-read the Item row |
+| `SearchProjectionState.requested_generation` | Source generation for Library Search | Any indexed Item input changes, including metadata and ready File Revision text |
 | Recommendation generation token | Identity of one requested recommendation generation | A generation is explicitly requested or superseded |
 
-Every Item Tag mutation advances `Item.tag_collection_version`, including incremental, bulk,
-delete and merge paths. Therefore a stale whole-collection replacement cannot erase a concurrent
-assignment, while a Tag edit cannot create a false conflict for an independent metadata form. Tag
-and Project changes do not advance `recommendation_sequence`, because they are not recommendation
-inputs. Replayed incremental add/remove commands that find the requested assignment state already
-present do not advance either the collection token or projection sequence and do not emit a second
-Audit Event.
+Tag assignment is additive and idempotent; the `(item_id, tag_id)` primary key and database
+upserts reject duplicate links. Removal is an independent delete command. Tag taxonomy and Project
+mutations are independent relational updates and do not touch Item rows or Search ordering.
 
 Search owns a requested generation for each Item in `SearchProjectionState`. Business commands
 transactionally advance that generation when they enqueue a rebuild. Library Search projections
@@ -60,9 +54,9 @@ whether the business write itself is valid.
 
 ### Serialize aggregate transitions in canonical order
 
-Cross-row invariants use database-backed aggregate gates. Projects owns the Project write gate;
-Library owns the Item lifecycle gate. Access may coordinate the locks required to make a final
-authorization decision, but it does not own Project or Item business transitions.
+Cross-row invariants use database constraints and narrow row locks at command boundaries. Projects
+does not expose a separate write gate; Library owns the Item lifecycle gate. Access may coordinate
+the locks required to make a final authorization decision, but it does not own Project transitions.
 
 Long-running workflows acquire only the gates on the authorization path they actually use:
 
@@ -79,9 +73,9 @@ path. SQLite is kept for single-process development only and does not emulate th
 contract. The implementation does not use process locks or queue-wide serialization as a
 substitute for these invariants.
 
-Only commands whose invariant includes active-account authorization acquire a User gate. Tag
-taxonomy changes and Item Tag assignment changes share the Library-owned Tag gate, so a rename
-cannot race an assignment's Search refresh and publish the old Tag name after the rename commits.
+Only commands whose invariant includes active-account authorization acquire a User gate. Tags and
+Projects are relational filters rather than Library Search content, so their taxonomy and
+assignment changes do not participate in Search projection ordering.
 
 ### Give retried creates a stable operation identity
 
@@ -111,20 +105,18 @@ recorded Item IDs. A different operation ID conflicts, and a committed batch rem
 idempotency record while relinquishing staged-object reservations. Discard retains a terminal
 tombstone for idempotent retries.
 
-### Fence durable workflow commits and re-authorize them
+### Revalidate durable workflow commits and re-authorize them
 
 Uploads, imported File Revision inspection and Import Batch preparation perform Object Store, PDF
-or Provider work outside business transactions. Upload and imported File Revision finalization
-validate the Item identity and captured lifecycle fence before writing. Upload commits also lock
-and re-read the captured User and relevant Project membership, then re-evaluate Item edit authority.
+or Provider work outside business transactions. Finalization locks and re-reads the Item row before
+writing; Item UUIDs are never reused, so the row itself is the lifecycle boundary. Upload commits
+also lock and re-read the captured User and relevant Project membership, then re-evaluate Item edit authority.
 Permission revocation and Item deletion therefore serialize with the final write rather than racing
 a stale request-time decision. Import Batch preparation instead publishes only to the still-pending
 batch whose workflow identity it carries.
 
-Recommendation results carry their workflow ID, generation token and recommendation source
-sequence. A result is published only if all still match under the Item gate. File Revision changes
-advance the source sequence before enqueueing replacement work, so stale output is discarded and a
-new generation can converge. Durable function parameters required by this protocol are mandatory;
+Recommendation results carry only their workflow ID and generation token; the latest valid
+generation may replace an older result. Durable function parameters required by this protocol are mandatory;
 the alpha cutover provides no replay shim for checkpoints created against the earlier signature.
 
 ### Keep one command in one short transaction
@@ -143,14 +135,14 @@ multi-worker concurrency result.
 
 ## Consequences
 
-- Stale editor and Tag matrix submissions fail explicitly instead of silently replacing newer
-  state.
+- Stale metadata editor submissions fail explicitly; tag add/remove commands are additive and
+  idempotent.
 - Deletion has a deterministic winner against in-flight uploads and imported File Revision
   inspection.
 - Repeated Item creation and Import Batch confirmation return stable results without duplicate
   business objects.
-- Out-of-order Library Search and Item Tag Recommendation work cannot overwrite newer derived
-  state.
+- Out-of-order Library Search work cannot overwrite newer derived state; recommendation output is
+  deliberately lower consistency and may be replaced by a later generation.
 - Permission changes are effective at durable workflow commit time.
 - PostgreSQL is the supported multi-worker concurrency profile; SQLite is a functional
   single-process development profile without a concurrent business-result guarantee.
@@ -169,7 +161,7 @@ translation for older APIs, stored data or workflow checkpoints is provided.
 ## Rejected alternatives
 
 - One universal Item version was rejected because Tag and Project changes would unnecessarily
-  invalidate recommendations, while lifecycle changes require a stronger fence than an editor CAS.
+  invalidate recommendations; lifecycle is represented by the locked Item row instead.
 - Process-local locks were rejected because they do not coordinate Web and worker processes.
 - Global queue concurrency of one was rejected because it hides missing aggregate rules and
   serializes unrelated work.

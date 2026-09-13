@@ -21,39 +21,39 @@ SEARCH_CHANGED_WORKFLOW = "search.changed"
 async def enqueue_search_changed(
     db: AsyncSession,
     item_id: str,
-    source_sequence: int | None = None,
 ) -> str | None:
     """Transactionally enqueue a rebuild of one Item's derived Search view."""
 
-    if source_sequence is None:
-        state = await db.scalar(
-            select(SearchProjectionState)
-            .where(SearchProjectionState.item_id == item_id)
-            .with_for_update()
-        )
-        if state is None:
-            # Search state is deliberately independent of Item lifecycle so a
-            # deletion intent can still remove an already-indexed Item.
-            state = SearchProjectionState(item_id=item_id, requested_generation=1)
-            try:
-                async with db.begin_nested():
-                    db.add(state)
-                    await db.flush()
-            except IntegrityError:
-                state = await db.scalar(
-                    select(SearchProjectionState)
-                    .where(SearchProjectionState.item_id == item_id)
-                    .with_for_update()
-                )
-                if state is None:
-                    raise
-            else:
-                source_sequence = 1
-        if source_sequence is None:
-            state.requested_generation += 1
-            await db.flush()
-            source_sequence = state.requested_generation
-    source_sequence = int(source_sequence)
+    state = await db.scalar(
+        select(SearchProjectionState)
+        .where(SearchProjectionState.item_id == item_id)
+        .with_for_update()
+    )
+    created = False
+    if state is None:
+        # Search state is deliberately independent of Item lifecycle so a
+        # deletion intent can still remove an already-indexed Item.
+        state = SearchProjectionState(item_id=item_id, requested_generation=1)
+        try:
+            async with db.begin_nested():
+                db.add(state)
+                await db.flush()
+        except IntegrityError:
+            state = await db.scalar(
+                select(SearchProjectionState)
+                .where(SearchProjectionState.item_id == item_id)
+                .with_for_update()
+            )
+            if state is None:
+                raise
+        else:
+            created = True
+    if created:
+        source_sequence = 1
+    else:
+        state.requested_generation += 1
+        await db.flush()
+        source_sequence = state.requested_generation
     workflow_id = f"search-changed:{item_id}:{source_sequence}"
     await durable_operations().enqueue_in_transaction(
         db,

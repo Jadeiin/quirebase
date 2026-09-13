@@ -297,7 +297,6 @@ async def test_imported_revision_inspection_enqueues_derived_state_sync(
         object_key=stored.key,
         size=stored.size,
         original_name="imported.pdf",
-        lifecycle_fence=item.lifecycle_fence,
         created_by=user.id,
     )
     async_db.add(revision)
@@ -696,7 +695,7 @@ async def test_commit_uploaded_revision_uses_datasource_transaction(async_db):
         "page_geometry": "[]",
     }
     result = await document_workflows.commit_uploaded_revision(
-        item.id, user.id, "my_doc.pdf", inspected, item.lifecycle_fence
+        item.id, user.id, "my_doc.pdf", inspected
     )
     assert result == {"revision_id": rev_id, "item_id": item.id}
 
@@ -728,7 +727,6 @@ async def test_commit_uploaded_attachment_uses_datasource_transaction(async_db):
         "application/octet-stream",
         None,
         receipt,
-        item.lifecycle_fence,
     )
     assert result == {"attachment_id": att_id, "item_id": item.id}
 
@@ -814,7 +812,7 @@ async def test_recommendation_workflow_computes_outside_datasource_transaction(m
         calls.append("generate")
         return candidates
 
-    async def commit(item_id, generation_token, workflow_id, result, source_sequence):
+    async def commit(item_id, generation_token, workflow_id, result):
         await asyncio.sleep(0)
         calls.append(("commit", item_id, generation_token, workflow_id, result))
         return {"single_words": 1, "phrases": 1}
@@ -829,7 +827,7 @@ async def test_recommendation_workflow_computes_outside_datasource_transaction(m
     monkeypatch.setattr(library_workflows, "commit_item_tag_recommendation_step", commit)
 
     workflow_body = library_workflows.recommend_tags_workflow.__wrapped__.__wrapped__
-    result = await workflow_body("item-id", 2, "workflow-id", 1)
+    result = await workflow_body("item-id", 2, "workflow-id")
 
     assert result == {"single_words": 1, "phrases": 1}
     assert calls == [
@@ -861,7 +859,7 @@ async def test_stale_recommendation_workflow_skips_inference(monkeypatch):
     )
 
     workflow_body = library_workflows.recommend_tags_workflow.__wrapped__.__wrapped__
-    assert await workflow_body("item-id", 1, "workflow-id", 1) == {"stale": True}
+    assert await workflow_body("item-id", 1, "workflow-id") == {"stale": True}
 
 
 @pytest.mark.anyio

@@ -211,15 +211,11 @@ class Item(Base):
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     version: Mapped[int] = mapped_column(Integer, default=1)
-    tag_collection_version: Mapped[int] = mapped_column(Integer, server_default="1", default=1)
     lifecycle_state: Mapped[ItemLifecycleState] = mapped_column(
         enum_type(ItemLifecycleState, "item_lifecycle_state"),
         server_default=ItemLifecycleState.active.value,
         default=ItemLifecycleState.active,
     )
-    lifecycle_fence: Mapped[int] = mapped_column(Integer, server_default="1", default=1)
-    aggregate_sequence: Mapped[int] = mapped_column(Integer, server_default="1", default=1)
-    recommendation_sequence: Mapped[int] = mapped_column(Integer, server_default="1", default=1)
     create_operation_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
@@ -395,7 +391,6 @@ class ItemTagRecommendation(Base):
         ForeignKey("items.id", ondelete="CASCADE"), unique=True, index=True
     )
     generation_token: Mapped[int] = mapped_column(Integer, default=1)
-    source_sequence: Mapped[int] = mapped_column(Integer, default=1)
     workflow_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     single_words: Mapped[str | None] = mapped_column(Text, nullable=True)
     phrases: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -444,7 +439,6 @@ class FileRevision(Base):
         enum_type(FileRevisionProcessingState, "file_revision_processing_state"),
         default=FileRevisionProcessingState.pending,
     )
-    lifecycle_fence: Mapped[int | None] = mapped_column(Integer, nullable=True)
     operation_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
@@ -475,7 +469,6 @@ class Attachment(Base):
     role: Mapped[AttachmentRole | None] = mapped_column(
         enum_type(AttachmentRole, "attachment_role"), nullable=True
     )
-    lifecycle_fence: Mapped[int | None] = mapped_column(Integer, nullable=True)
     operation_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

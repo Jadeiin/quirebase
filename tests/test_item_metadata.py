@@ -43,14 +43,7 @@ async def test_regenerate_bibtex_key_is_a_narrow_atomic_item_mutation(async_db):
     await db.commit()
     owner_id = owner.id
     item_id = item.id
-    item_version = item.version
-
-    result = await regenerate_bibtex_key(
-        db,
-        owner,
-        item_id,
-        item_version,
-    )
+    result = await regenerate_bibtex_key(db, owner, item_id)
 
     workspace = await open_item_workspace(db, owner, item_id, WorkspaceSection.metadata)
     assert isinstance(workspace, MetadataWorkspace)

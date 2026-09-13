@@ -5,10 +5,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from quirebase.access.items import (
-    lock_items_edit_authority,
     require_accessible_items,
+    require_editable_item,
 )
 from quirebase.audit import record_event
 from quirebase.core.errors import (
@@ -21,11 +22,8 @@ from quirebase.documents.bundles import (
     ItemDownloadBundle,
     assemble_document_bundle,
 )
-from quirebase.library.item_lifecycle import begin_item_deletion
-from quirebase.library.tags import (
-    advance_item_tag_collection,
-    get_or_create_tag,
-)
+from quirebase.library.item_lifecycle import begin_item_deletion, require_item_lifecycle_gate
+from quirebase.library.tags import get_or_create_tag
 from quirebase.models import (
     Attachment,
     FileRevision,
@@ -49,18 +47,12 @@ async def apply_bulk_item_action(
     tag_name: str = "",
     confirm_delete: str = "",
 ) -> list[str]:
-    items = await require_accessible_items(db, user, item_ids)
-
-    # Lock the complete authorization path in stable User/Project/Item order.
-    # The target Project is included before any Item locks for bulk assignment.
-    additional_projects = (project_id,) if action in ("add_project", "project_add") else ()
+    if not item_ids:
+        raise ValidationFailure("select at least one Item")
     try:
-        items = await lock_items_edit_authority(
-            db,
-            user,
-            [item.id for item in items],
-            additional_project_ids=additional_projects,
-        )
+        items = [
+            await require_editable_item(db, user, item_id) for item_id in dict.fromkeys(item_ids)
+        ]
     except ResourceUnavailable as error:
         raise PermissionDenied("all selected items must be editable") from error
 
@@ -72,12 +64,20 @@ async def apply_bulk_item_action(
             raise ValidationFailure("choose an editable project") from error
         audit_action = "library.bulk.add_project"
     elif action in ("add_tag", "tag"):
+        # Keep the canonical Item -> Tag lock order shared with single-item
+        # tag commands.  Items are acquired in stable order before taxonomy
+        # rows are touched.
+        for item in sorted(items, key=lambda candidate: candidate.id):
+            await require_item_lifecycle_gate(db, item.id)
         tag_record = await get_or_create_tag(db, user, tag_name)
         for item in items:
             if await db.get(ItemTag, (item.id, tag_record.id)) is None:
-                await advance_item_tag_collection(db, user.id, item.id)
-                db.add(ItemTag(item_id=item.id, tag_id=tag_record.id))
-                await enqueue_search_changed(db, item.id)
+                try:
+                    async with db.begin_nested():
+                        db.add(ItemTag(item_id=item.id, tag_id=tag_record.id))
+                        await db.flush()
+                except IntegrityError:
+                    continue
         audit_action = "library.bulk.add_tag"
     elif action in ("delete_items", "delete"):
         if confirm_delete != "delete":

@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import String, false, select, text
 
-from quirebase.models import Item
+from quirebase.models import Item, SearchProjectionState
 from quirebase.search.content import search_text_for_item
 
 if TYPE_CHECKING:
@@ -21,7 +21,13 @@ class PostgreSQLSearchIndex:
             await self.remove_item(db, item_id)
             return
         if source_sequence is None:
-            source_sequence = item.aggregate_sequence
+            source_sequence = await db.scalar(
+                select(SearchProjectionState.requested_generation).where(
+                    SearchProjectionState.item_id == item_id
+                )
+            )
+        if source_sequence is None:
+            source_sequence = 1
         # One conditional upsert: a concurrent transaction can no longer read
         # the old sequence and then delete or overwrite a newer projection.
         # Stale results (lower sequence) lose the comparison inside the same

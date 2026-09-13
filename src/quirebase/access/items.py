@@ -110,30 +110,7 @@ async def lock_active_item(
     return item
 
 
-async def validate_item_lifecycle_fence(
-    db: AsyncSession,
-    item_id: str,
-    lifecycle_fence: int,
-    *,
-    require_active: bool = True,
-) -> Item | None:
-    """Validate a captured Item lifecycle fence through the Access seam.
-
-    This is a row-locking coordination read for final workflow writes. The
-    Library module remains the owner of lifecycle transitions and fence bumps.
-    """
-
-    predicates = [Item.id == item_id, Item.lifecycle_fence == lifecycle_fence]
-    if require_active:
-        predicates.append(Item.lifecycle_state == ItemLifecycleState.active)
-    return await db.scalar(
-        select(Item).where(*predicates).with_for_update().execution_options(populate_existing=True)
-    )
-
-
-async def lock_item_edit_authority(
-    db: AsyncSession, user: User, item_id: str, *, expected_fence: int | None = None
-) -> Item:
+async def lock_item_edit_authority(db: AsyncSession, user: User, item_id: str) -> Item:
     """Lock the concrete grant path used to authorize an Item mutation.
 
     The User gate is always acquired first. Owners and administrators then
@@ -141,11 +118,6 @@ async def lock_item_edit_authority(
     Item and are revalidated after both rows are locked.
     """
 
-    if expected_fence is not None:
-        # A fence is meaningful only for the single-item workflow seam.
-        return (
-            await lock_items_edit_authority(db, user, (item_id,), expected_fence=expected_fence)
-        )[0]
     return (await lock_items_edit_authority(db, user, (item_id,)))[0]
 
 
@@ -155,7 +127,6 @@ async def lock_items_edit_authority(
     item_ids: Sequence[str],
     *,
     additional_project_ids: Sequence[str] = (),
-    expected_fence: int | None = None,
 ) -> list[Item]:
     """Lock a complete authorization path in canonical User/Project/Item order.
 
@@ -168,8 +139,6 @@ async def lock_items_edit_authority(
     ordered_ids = tuple(sorted(dict.fromkeys(item_ids)))
     if not ordered_ids:
         raise ResourceUnavailable("item not found")
-    if expected_fence is not None and len(ordered_ids) != 1:
-        raise ValueError("expected_fence requires exactly one item")
 
     locked_user = await db.scalar(
         select(User)
@@ -219,8 +188,6 @@ async def lock_items_edit_authority(
         )
 
     predicates = [Item.id.in_(ordered_ids), Item.lifecycle_state == ItemLifecycleState.active]
-    if expected_fence is not None:
-        predicates.append(Item.lifecycle_fence == expected_fence)
     items = list(
         (
             await db.scalars(

@@ -1,4 +1,4 @@
-"""Add aggregate lifecycle fences, idempotency keys and import commit state.
+"""Add lifecycle state, idempotency keys and import commit state.
 
 This is the single forward-only migration for the concurrency PR.  The
 follow-up schema changes (scoped upload identities, Item-create tombstones,
@@ -6,9 +6,9 @@ and Search projection generations) are intentionally folded into this
 revision so a fresh deployment has one atomic upgrade boundary.
 
 The fields in this migration deliberately live alongside the existing optimistic
-``Item.version`` token. Version detects stale editor pages; lifecycle_fence,
-aggregate_sequence and recommendation_sequence protect work that can finish
-after the request that started it.
+``Item.version`` token. Version detects stale editor pages; lifecycle state protects
+durable work that can finish after the request that started it. Search ordering is
+owned by ``search_projection_state`` below.
 
 The migration also renames ``import_batches.owner_id`` to ``created_by`` to match
 the repository-wide name for the creating user.
@@ -107,31 +107,6 @@ def upgrade() -> None:
                         server_default="active",
                     )
                 )
-            if "tag_collection_version" not in item_columns:
-                batch.add_column(
-                    sa.Column(
-                        "tag_collection_version", sa.Integer(), nullable=False, server_default="1"
-                    )
-                )
-            if "lifecycle_fence" not in item_columns:
-                batch.add_column(
-                    sa.Column("lifecycle_fence", sa.Integer(), nullable=False, server_default="1")
-                )
-            if "aggregate_sequence" not in item_columns:
-                batch.add_column(
-                    sa.Column(
-                        "aggregate_sequence", sa.Integer(), nullable=False, server_default="1"
-                    )
-                )
-            if "recommendation_sequence" not in item_columns:
-                batch.add_column(
-                    sa.Column(
-                        "recommendation_sequence",
-                        sa.Integer(),
-                        nullable=False,
-                        server_default="1",
-                    )
-                )
             if "create_operation_id" not in item_columns:
                 batch.add_column(
                     sa.Column("create_operation_id", sa.String(length=255), nullable=True)
@@ -157,8 +132,6 @@ def upgrade() -> None:
             continue
         columns = _columns(bind, table)
         with op.batch_alter_table(table) as batch:
-            if "lifecycle_fence" not in columns:
-                batch.add_column(sa.Column("lifecycle_fence", sa.Integer(), nullable=True))
             if "operation_id" not in columns:
                 batch.add_column(sa.Column("operation_id", sa.String(length=255), nullable=True))
         index_name = f"ix_{table}_operation_id"
@@ -350,28 +323,12 @@ def upgrade() -> None:
     # SQLite keeps them to avoid another expensive rebuild.
     if not sqlite:
         for table, names in {
-            "items": (
-                "lifecycle_state",
-                "tag_collection_version",
-                "lifecycle_fence",
-                "aggregate_sequence",
-                "recommendation_sequence",
-            ),
+            "items": ("lifecycle_state",),
             "import_batches": ("committed_item_ids",),
         }.items():
             if _has_table(bind, table):
                 for name in names:
                     op.alter_column(table, name, server_default=None)
-
-    if _has_table(bind, "item_tag_recommendations"):
-        rec_columns = _columns(bind, "item_tag_recommendations")
-        with op.batch_alter_table("item_tag_recommendations") as batch:
-            if "source_sequence" not in rec_columns:
-                batch.add_column(
-                    sa.Column("source_sequence", sa.Integer(), nullable=False, server_default="1")
-                )
-        if not sqlite:
-            op.alter_column("item_tag_recommendations", "source_sequence", server_default=None)
 
     if _has_table(bind, "users") and not _has_table(bind, "item_create_tombstones"):
         op.create_table(
@@ -396,7 +353,7 @@ def upgrade() -> None:
         bind.execute(
             sa.text(
                 "INSERT INTO search_projection_state(item_id, requested_generation, created_at) "
-                "SELECT id, COALESCE(aggregate_sequence, 1), CURRENT_TIMESTAMP FROM items "
+                "SELECT id, 1, CURRENT_TIMESTAMP FROM items "
                 "WHERE id NOT IN (SELECT item_id FROM search_projection_state)"
             )
         )

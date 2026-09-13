@@ -9,7 +9,7 @@ from sqlalchemy import select
 from quirebase.core.config import Settings
 from quirebase.library.item_metadata import ItemMetadata, create_item
 from quirebase.library.tag_recommendations import recommend_item_tags
-from quirebase.library.tags import set_item_tags
+from quirebase.library.tags import add_tags_to_item
 from quirebase.library.workflows import (
     commit_item_tag_recommendation_step,
     request_item_tag_recommendation,
@@ -55,24 +55,13 @@ async def test_tag_selection_does_not_invalidate_in_flight_recommendation(async_
     record = await request_item_tag_recommendation(db, item.id, owner_id=user.id)
     assert record.workflow_id is not None
     await db.commit()
-    await set_item_tags(
-        db,
-        user,
-        item.id,
-        [],
-        ["Selected"],
-        expected_collection_version=item.tag_collection_version,
-    )
-    await db.refresh(item)
-    assert item.aggregate_sequence == 2
-    assert item.recommendation_sequence == 1
+    await add_tags_to_item(db, user, item.id, [], ["Selected"])
 
     result = await commit_item_tag_recommendation_step(
         item.id,
         record.generation_token,
         record.workflow_id,
         {"single_words": ["candidate"], "phrases": []},
-        record.source_sequence,
     )
     assert result == {"single_words": 1, "phrases": 0}
 
@@ -108,7 +97,6 @@ async def test_item_creation_enqueues_and_worker_persists_yake_results(async_db,
         record.generation_token,
         record.workflow_id,
         candidates,
-        record.source_sequence,
     )
 
     await db.refresh(record)
@@ -138,7 +126,6 @@ async def test_stale_job_cannot_overwrite_new_generation(async_db):
         1,
         first.workflow_id,
         candidates,
-        1,
     )
 
     current = await db.scalar(
@@ -250,9 +237,7 @@ async def test_generation_result_does_not_include_source_text(async_db, monkeypa
 
 
 @pytest.mark.anyio
-async def test_result_is_rejected_when_item_moves_past_the_carried_sequence(
-    async_db, fake_durable_operations
-):
+async def test_result_uses_generation_token_only(async_db, fake_durable_operations):
     db = async_db
     user = User(username="stale-seq-owner", password_hash="hash")
     db.add(user)
@@ -267,7 +252,7 @@ async def test_result_is_rejected_when_item_moves_past_the_carried_sequence(
     record = await db.scalar(
         select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == item.id)
     )
-    assert record is not None and record.source_sequence == 1
+    assert record is not None
 
     # While the Item is still at the carried sequence the result lands.
     result = await commit_item_tag_recommendation_step(
@@ -275,23 +260,16 @@ async def test_result_is_rejected_when_item_moves_past_the_carried_sequence(
         record.generation_token,
         record.workflow_id,
         {"single_words": ["fresh"], "phrases": []},
-        source_sequence=1,
     )
     assert result == {"single_words": 1, "phrases": 0}
 
-    # A PDF commit advances the aggregate before the follow-up request
-    # refreshes the record; the old generation must no longer be accepted.
-    item.recommendation_sequence = 2
-    await db.commit()
-
-    stale = await commit_item_tag_recommendation_step(
+    latest = await commit_item_tag_recommendation_step(
         item.id,
         record.generation_token,
         record.workflow_id,
-        {"single_words": ["stale"], "phrases": []},
-        source_sequence=1,
+        {"single_words": ["latest"], "phrases": []},
     )
-    assert stale == {"stale": True}
+    assert latest == {"single_words": 1, "phrases": 0}
 
     await db.refresh(record)
-    assert json.loads(record.single_words) == ["fresh"]
+    assert json.loads(record.single_words) == ["latest"]

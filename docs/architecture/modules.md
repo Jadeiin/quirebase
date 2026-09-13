@@ -60,12 +60,12 @@ Each mechanism remains owned by the Module whose invariant it protects:
 | Concern | Owner | Mechanism |
 | --- | --- | --- |
 | Stale Item metadata edits | Library | `expected_version` CAS |
-| Stale whole-Tag-collection replacement | Library | `expected_collection_version` CAS; every Item Tag mutation advances `tag_collection_version` |
-| Project lifecycle, membership and assignment | Projects | Project write gate |
-| Item deletion versus durable child creation | Library | Item lifecycle gate and fence |
+| Tag assignment | Library | Additive commands backed by `(item_id, tag_id)` uniqueness and idempotent upsert/delete |
+| Project lifecycle, membership and assignment | Projects | Conditional row updates and relational constraints; no cross-aggregate gate |
+| Item deletion versus durable child creation | Library | Item lifecycle state and finalizer Item-row lock |
 | Final workflow authorization | Access with the calling business Module | Canonically ordered Project/Item locks followed by permission revalidation |
-| Library Search ordering | Search adapter, sourced by business Modules | Migration-owned dialect schema, Search-owned projection generation and conditional projection update |
-| Item Tag Recommendation ordering | Library | Recommendation sequence plus generation token |
+| Library Search ordering | Search adapter, sourced by business Modules | Migration-owned dialect schema, Search-owned projection generation and conditional projection update; Tags and Projects are relational filters, not indexed content |
+| Item Tag Recommendation ordering | Library | Generation token; latest valid result may replace older output |
 | Retried creates and one-shot confirmation | Owning business Module | Stable operation ID, uniqueness constraint and recorded result/state machine |
 
 Cross-resource locking follows the minimal authorization path: owner/admin writes use
@@ -73,9 +73,10 @@ Cross-resource locking follows the minimal authorization path: owner/admin write
 association rows are locked only after the grant path is established, and multiple aggregates at
 one level are locked by stable ID order. A command skips levels it does not need.
 Objects at the same level are acquired in stable ID order. Access can coordinate authorization
-locks but does not own the Project write gate or Item lifecycle transition. Business commands keep
+locks but does not own Project transitions or the Item lifecycle state. Business commands keep
 authorization, the mutation, Audit Event and projection intent in one short transaction; external
-I/O and expensive computation run outside it and re-enter through a fenced final transaction.
+I/O and expensive computation run outside it and re-enter through a final transaction that
+re-reads the owning rows.
 
 Each standalone workspace package owns tests of its Interface and internal seams under
 `packages/<name>/tests`. Root `tests/` owns Quirebase behaviour, application-to-package integration
@@ -173,19 +174,19 @@ PDF export. Web, REST and MCP are inbound Adapters over that Interface; EmbedPDF
 translated only inside the Web asset and never enter Documents persistence or programmatic wire
 contracts.
 
-Tag selection is presented by the Item Workspace and committed through `set_item_tags`. Existing
+Tag selection is presented by the Item Workspace and committed through additive `add_tags_to_item`.
+Existing
 Tags may be matched case-insensitively against an Item Tag Recommendation, while candidates absent
 from the taxonomy are returned as suggested names and remain uncommitted until selected by the User. Taxonomy
 maintenance crosses the Library interface through rename, delete and `merge_tags`; merging moves
-Item associations, refreshes Library Search and deletes the source Tag atomically.
+Item associations and deletes the source Tag atomically. Tags are filtered through relational
+joins and are not part of Library Search's derived text.
 
 Item Tag Recommendation generation crosses the Library Interface through generation-request and
 workflow operations. Library owns assembly and cleaning of title, abstract and latest ready
 File Revision text, transient recommendation state and stale-workflow guards. A generation token
-supersedes queued work when source data changes; engine and model provenance are not persisted for
-this disposable, reproducible result. An Item recommendation sequence advances only when those
-inputs change, so Tag and Project mutations cannot invalidate a generation without scheduling a
-replacement.
+supersedes queued work; engine and model provenance are not persisted for this disposable,
+reproducible result.
 Its Implementation calls the reusable `rubrica` Interface for recommendation computation. Model
 files for KeyBERT are local administrator-provided inputs; the Adapter never accepts a remote model
 identifier. Library metadata writes enqueue generation transactionally through Core's DBOS
@@ -196,8 +197,8 @@ a typed read model containing the Project, the caller's membership, members and 
 Membership authorization and the related queries remain coordinated behind that operation; only
 the Web adapter maps the typed view to template context.
 
-Project-scoped mutations acquire the Projects write gate before revalidating state, visibility
-and Project Role. PostgreSQL is the supported multi-worker concurrency target; SQLite remains a
+Project-scoped mutations revalidate state, visibility and Project Role at command entry. PostgreSQL
+is the supported multi-worker concurrency target; SQLite remains a
 single-process development profile without a concurrency guarantee. Library bulk assignment
 crosses this Projects interface while retaining ownership of the surrounding bulk-operation
 transaction and Audit Event.
@@ -301,8 +302,8 @@ directions are:
 | `access` | `core`, `models` | Evaluate policies using persisted identities and domain errors |
 | `accounts` | `audit`, `core`, `models` | Authentication persistence and Audit Event recording |
 | `audit` | `core`, `models` | Authorization errors and Audit Event persistence |
-| `library` | `access`, `audit`, `core`, `documents`, `models`, `operations`, `projects`, `search` | Authorization, persistence and auditing; selected-Item document assembly; Project-gated bulk assignment; runtime Provider/import settings; Library-owned workflows and search-index synchronization |
-| `projects` | `access`, `audit`, `core`, `models`, `search` | Authorization, Project persistence, audit recording and Item index synchronization |
+| `library` | `access`, `audit`, `core`, `documents`, `models`, `operations`, `projects`, `search` | Authorization, persistence and auditing; selected-Item document assembly; Project-gated bulk assignment; runtime Provider/import settings; Library-owned workflows and Search intents for Item content |
+| `projects` | `access`, `audit`, `core`, `models` | Authorization, Project persistence and audit recording |
 | `documents` | `access`, `audit`, `core`, `models`, `operations`, `search` | Authorization, owned-object persistence, auditing, runtime settings, Search intents and Documents workflows |
 | `operations` | `audit`, `core`, `library`, `models`, `search` | Infrastructure access, operational persistence, maintenance workflows, global rebuild coordination and audit recording |
 | `search` | `core`, `models` | Build/query the derived search representation and enqueue durable projection work |
@@ -317,7 +318,7 @@ Dependencies on standalone workspace packages are also explicit:
 | --- | --- | --- |
 | `documents` | `inquiro` | Render canonical scholarly Rich Text as plaintext for archive filenames and manifests |
 | `library` | `inquiro`, `rubrica` | Adapt reusable metadata, bibliography, citation and recommendation computation to Library business operations and typed domain errors |
-| `search` | `inquiro` | Project canonical scholarly Rich Text into the plaintext derived search representation |
+| `search` | `inquiro` | Canonical Item metadata and scholarly Rich Text into the plaintext derived search representation |
 | `web` | `inquiro` | Sanitize and render canonical scholarly Rich Text at the HTML output Adapter |
 
 The `documents`, `search` and `web` edges are restricted to `inquiro.richtext`; they do not permit

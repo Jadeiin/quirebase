@@ -13,7 +13,7 @@ from inquiro.models import CandidateRecord
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import selectinload
 
-from quirebase.access.items import require_editable_item
+from quirebase.access.items import lock_active_item, require_editable_item
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceUnavailable, ValidationFailure, VersionConflict
 from quirebase.documents.pdf import first_doi_from_text
@@ -143,10 +143,8 @@ def generate_bibtex_key(item: Item) -> str:
     return f"{author_part}{year_part}{title_part}"
 
 
-async def _rescan_pdf_doi(
-    db: AsyncSession, user: User, item_id: str, expected_version: int
-) -> str | None:
-    item = await require_editable_item(db, user, item_id)
+async def _rescan_pdf_doi(db: AsyncSession, user: User, item_id: str) -> str | None:
+    await require_editable_item(db, user, item_id)
 
     revisions = list(
         (
@@ -161,25 +159,8 @@ async def _rescan_pdf_doi(
         if rev.full_text:
             found_doi = first_doi_from_text(rev.full_text)
             if found_doi:
-                version = await db.scalar(
-                    update(Item)
-                    .where(
-                        Item.id == item_id,
-                        Item.version == expected_version,
-                        Item.lifecycle_state == "active",
-                    )
-                    .values(
-                        updated_by=user.id,
-                        updated_at=datetime.now(UTC),
-                        version=Item.version + 1,
-                        aggregate_sequence=Item.aggregate_sequence + 1,
-                    )
-                    .returning(Item.version)
-                )
-                if version is None:
-                    await db.rollback()
-                    current = await db.scalar(select(Item.version).where(Item.id == item_id))
-                    raise VersionConflict(current)
+                await require_editable_item(db, user, item_id)
+                item = await lock_active_item(db, item_id)
                 # Update item identifiers
                 existing_pairs = [
                     (ident.provider, ident.value)
@@ -188,7 +169,10 @@ async def _rescan_pdf_doi(
                 ]
                 existing_pairs.append(("doi", found_doi))
                 await set_item_identifiers(db, user, item_id, existing_pairs)
-                await db.refresh(item)
+                item.updated_by = user.id
+                item.updated_at = datetime.now(UTC)
+                item.version += 1
+                version = item.version
                 await enqueue_search_changed(db, item_id)
                 record_event(
                     db,
@@ -196,7 +180,7 @@ async def _rescan_pdf_doi(
                     "item.rescan_doi",
                     "item",
                     item_id,
-                    detail={"version": version},
+                    detail={"doi": found_doi, "version": version},
                 )
                 await db.commit()
                 return found_doi
@@ -204,13 +188,11 @@ async def _rescan_pdf_doi(
     return None
 
 
-async def rescan_pdf_doi(
-    db: AsyncSession, user: User, item_id: str, *, expected_version: int
-) -> str | None:
-    """Rescan ready File Revision text under the Item metadata version CAS."""
+async def rescan_pdf_doi(db: AsyncSession, user: User, item_id: str) -> str | None:
+    """Rescan ready File Revision text as a server-side command."""
 
     try:
-        return await _rescan_pdf_doi(db, user, item_id, expected_version)
+        return await _rescan_pdf_doi(db, user, item_id)
     except Exception:
         await db.rollback()
         raise
@@ -398,8 +380,6 @@ async def _sync_metadata_from_upstream(
             updated_by=user.id,
             updated_at=datetime.now(UTC),
             version=Item.version + 1,
-            aggregate_sequence=Item.aggregate_sequence + 1,
-            recommendation_sequence=Item.recommendation_sequence + 1,
         )
         .returning(Item.version)
     )

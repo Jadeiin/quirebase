@@ -28,6 +28,7 @@ from quirebase.library import (
     WorkspaceSection,
     add_discussion_message,
     add_tag_to_item,
+    add_tags_to_item,
     create_item,
     delete_discussion_message,
     get_item_citation_text_response,
@@ -37,7 +38,6 @@ from quirebase.library import (
     revise_item_metadata,
     search_candidate_records,
     search_library,
-    set_item_tags,
 )
 from quirebase.models import ProjectState, User
 from quirebase.programmatic import (
@@ -88,7 +88,7 @@ from quirebase.web.api.schemas import (
     ProjectDescriptionRequest,
     ProjectMemberRequest,
     ProjectVisibilityRequest,
-    TagSetRequest,
+    TagAddRequest,
 )
 
 router = APIRouter(
@@ -414,17 +414,10 @@ async def remove_item_tag(item_id: str, tag_id: str, user: ApiUser, db: Database
 
 
 @router.put("/items/{item_id}/tags", response_model=OkView)
-async def set_item_tag_selection(
-    item_id: str, data: TagSetRequest, user: ApiUser, db: Database
+async def add_item_tag_selection(
+    item_id: str, data: TagAddRequest, user: ApiUser, db: Database
 ) -> OkView:
-    await set_item_tags(
-        db,
-        user,
-        item_id,
-        data.tag_ids,
-        data.new_names,
-        expected_collection_version=data.expected_collection_version,
-    )
+    await add_tags_to_item(db, user, item_id, data.tag_ids, data.new_names)
     return OkView()
 
 

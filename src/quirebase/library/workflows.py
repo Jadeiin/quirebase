@@ -9,7 +9,6 @@ from dbos import DBOS
 from sqlalchemy import select
 
 from quirebase.core.database import AsyncSessionLocal
-from quirebase.core.errors import ResourceUnavailable
 from quirebase.core.workflows import (
     DOCUMENT_CLEANUP_QUEUE,
     RECOMMENDATION_QUEUE,
@@ -20,7 +19,6 @@ from quirebase.core.workflows import (
 from quirebase.documents.events import FILE_REVISION_CHANGED_WORKFLOW, OBJECT_CLEANUP_WORKFLOW
 from quirebase.models import ImportBatch, Item, ItemTagRecommendation
 
-from .item_lifecycle import require_item_lifecycle_gate
 from .tag_recommendations import (
     RecommendationCandidates,
     recommend_item_tags,
@@ -71,20 +69,16 @@ async def request_item_tag_recommendation(
     force: bool = False,
 ) -> ItemTagRecommendation:
     """Create an idempotent generation request without committing its caller's transaction."""
-    if force:
-        locked_item_id = await db.scalar(
-            select(Item.id).where(Item.id == item_id).with_for_update()
-        )
-        if locked_item_id is None:
-            raise ValueError("Item no longer exists")
-    elif await db.get(Item, item_id) is None:
+    # Lock the parent Item so the first recommendation row insert is
+    # serialized even when the child query is empty.
+    item_exists = await db.scalar(select(Item.id).where(Item.id == item_id).with_for_update())
+    if item_exists is None:
         raise ValueError("Item no longer exists")
     record = await db.scalar(
-        select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == item_id)
+        select(ItemTagRecommendation)
+        .where(ItemTagRecommendation.item_id == item_id)
+        .with_for_update()
     )
-    item = await db.get(Item, item_id, populate_existing=True)
-    if item is None:
-        raise ValueError("Item no longer exists")
     if record is not None and not force:
         workflow = await _linked_workflow(record)
         if record.generated_at is not None or (
@@ -97,12 +91,10 @@ async def request_item_tag_recommendation(
         record = ItemTagRecommendation(
             item_id=item_id,
             generation_token=token,
-            source_sequence=item.recommendation_sequence,
         )
         db.add(record)
     else:
         record.generation_token = token
-        record.source_sequence = item.recommendation_sequence
         record.single_words = None
         record.phrases = None
         record.generated_at = None
@@ -114,14 +106,12 @@ async def request_item_tag_recommendation(
         item_id,
         token,
         workflow_id,
-        item.recommendation_sequence,
         queue_name=RECOMMENDATION_QUEUE,
         workflow_id=workflow_id,
         attributes={
             "capability": "library",
             "owner_id": owner_id,
             "item_id": item_id,
-            "recommendation_sequence": item.recommendation_sequence,
         },
     )
     record.workflow_id = workflow_id
@@ -135,29 +125,19 @@ async def _store_item_tag_recommendation(
     generation_token: int,
     workflow_id: str,
     candidates: RecommendationCandidates,
-    source_sequence: int,
 ) -> dict[str, Any]:
-    # Hold the Item write gate through this transaction.  Every mutation that
-    # advances recommendation_sequence updates the same row, so it cannot slip
-    # between the sequence check and publication of these candidates.
-    try:
-        item = await require_item_lifecycle_gate(db, item_id)
-    except ResourceUnavailable:
+    item_state = await db.scalar(select(Item.lifecycle_state).where(Item.id == item_id))
+    if item_state is None or getattr(item_state, "value", item_state) != "active":
         return {"stale": True}
     record = await db.scalar(
-        select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == item_id)
+        select(ItemTagRecommendation)
+        .where(ItemTagRecommendation.item_id == item_id)
+        .with_for_update()
     )
-    # The record alone is not a sufficient fence: the Item can move on after
-    # generation started but before the follow-up request refreshes the record
-    # (a PDF commit advances recommendation_sequence ahead of the file-change
-    # workflow).  A result may only land while the Item is still at the
-    # sequence the workflow carries.
     if (
         record is None
         or record.generation_token != generation_token
         or record.workflow_id != workflow_id
-        or record.source_sequence != source_sequence
-        or item.recommendation_sequence != source_sequence
     ):
         return {"stale": True}
     record.single_words = json.dumps(candidates["single_words"], ensure_ascii=False)
@@ -351,11 +331,10 @@ async def commit_item_tag_recommendation_step(
     generation_token: int,
     workflow_id: str,
     candidates: RecommendationCandidates,
-    source_sequence: int,
 ) -> dict[str, Any]:
     db = ads.sql_session()
     return await _store_item_tag_recommendation(
-        db, item_id, generation_token, workflow_id, candidates, source_sequence
+        db, item_id, generation_token, workflow_id, candidates
     )
 
 
@@ -364,7 +343,6 @@ async def recommend_tags_workflow(
     item_id: str,
     generation_token: int,
     workflow_id: str,
-    source_sequence: int,
 ) -> dict[str, Any]:
     if not await item_tag_recommendation_is_current_step(item_id, generation_token, workflow_id):
         return {"stale": True}
@@ -372,5 +350,5 @@ async def recommend_tags_workflow(
     if candidates is None:
         return {"deleted": True}
     return await commit_item_tag_recommendation_step(
-        item_id, generation_token, workflow_id, candidates, source_sequence
+        item_id, generation_token, workflow_id, candidates
     )

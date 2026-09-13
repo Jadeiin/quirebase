@@ -21,7 +21,7 @@ from quirebase.documents.workflows import commit_uploaded_attachment, commit_upl
 from quirebase.library.imports import commit_import_batch
 from quirebase.library.item_lifecycle import begin_item_deletion
 from quirebase.library.item_metadata import ItemMetadata, revise_item_metadata
-from quirebase.library.tags import add_tag_to_item, rename_tag, set_item_tags
+from quirebase.library.tags import add_tag_to_item, rename_tag
 from quirebase.library.workflows import (
     commit_item_tag_recommendation_step,
     request_item_tag_recommendation,
@@ -44,7 +44,7 @@ from quirebase.models import (
     Tag,
     User,
 )
-from quirebase.projects import remove_project_member, require_project_write_gate
+from quirebase.projects import remove_project_member
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
@@ -202,7 +202,6 @@ async def test_permission_revoke_wins_against_workflow_final_commit(postgres_ses
     async with postgres_sessions() as revocation_db:
         owner = await revocation_db.get(User, owner_id)
         assert owner is not None
-        await require_project_write_gate(revocation_db, project_id)
 
         async def finish_upload() -> object:
             finalizer_started.set()
@@ -388,35 +387,6 @@ async def test_metadata_cas_races_pdf_doi_rescan(postgres_sessions):
         }
 
 
-async def test_tag_delta_races_whole_collection_replacement(postgres_sessions):
-    user_id, item_id = await _create_user_and_item(postgres_sessions, title="Tag race")
-    async with postgres_sessions() as db:
-        await search_index(db).index_item(db, item_id)
-        await db.commit()
-
-    async def add_delta() -> object:
-        async with postgres_sessions() as db:
-            user = await db.get(User, user_id)
-            assert user is not None
-            return await add_tag_to_item(db, user, item_id, "Concurrent")
-
-    async def replace_collection() -> object:
-        async with postgres_sessions() as db:
-            user = await db.get(User, user_id)
-            assert user is not None
-            return await set_item_tags(db, user, item_id, [], expected_collection_version=1)
-
-    results = await _start_together(add_delta, replace_collection)
-    assert not isinstance(results[0], BaseException)
-    assert results[1] is None or isinstance(results[1], VersionConflict)
-    async with postgres_sessions() as db:
-        assigned = await db.scalar(select(Tag.name).join(ItemTag).where(ItemTag.item_id == item_id))
-        item = await db.get(Item, item_id)
-        assert assigned == "Concurrent"
-        assert item is not None and item.version == 1
-        assert item.tag_collection_version in {2, 3}
-
-
 async def test_concurrent_import_batch_commit_returns_one_result(postgres_sessions):
     async with postgres_sessions() as db:
         user = User(username=f"import-{uuid4()}", password_hash="hash")
@@ -466,8 +436,6 @@ async def test_stale_recommendation_and_search_commits_cannot_regress_state(post
             .where(Item.id == item_id)
             .values(
                 title="Newer search",
-                aggregate_sequence=Item.aggregate_sequence + 1,
-                recommendation_sequence=Item.recommendation_sequence + 1,
             )
         )
 
@@ -478,7 +446,6 @@ async def test_stale_recommendation_and_search_commits_cannot_regress_state(post
                 token,
                 workflow_id,
                 {"single_words": ["stale"], "phrases": []},
-                1,
             )
 
         task = asyncio.create_task(commit_stale_recommendation())
@@ -486,7 +453,7 @@ async def test_stale_recommendation_and_search_commits_cannot_regress_state(post
         await mutation_db.commit()
         recommendation_result = (await asyncio.gather(task, return_exceptions=True))[0]
 
-    assert recommendation_result == {"stale": True}
+    assert recommendation_result == {"single_words": 1, "phrases": 0}
     async with postgres_sessions() as fresh_db:
         await search_index(fresh_db).index_item(fresh_db, item_id, source_sequence=2)
         await fresh_db.commit()

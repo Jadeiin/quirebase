@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import delete, func, or_, select
 
-from quirebase.access.items import lock_item_edit_authority
+from quirebase.access.items import require_editable_item
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
 from quirebase.documents import enqueue_object_cleanup
@@ -126,7 +126,7 @@ async def _delete_item(
 
     # Lock the concrete authorization path and Item lifecycle gate. The
     # transition advances the fence so in-flight workflows fail closed.
-    await lock_item_edit_authority(db, actor, item_id)
+    await require_editable_item(db, actor, item_id)
     await begin_item_deletion(db, item_id)
     await enqueue_search_changed(db, item_id)
     item = await db.get(Item, item_id, populate_existing=True)

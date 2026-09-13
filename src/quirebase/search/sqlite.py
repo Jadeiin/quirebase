@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import String, false, select, text
 
-from quirebase.models import Item
+from quirebase.models import Item, SearchProjectionState
 from quirebase.search.content import search_text_for_item
 
 if TYPE_CHECKING:
@@ -27,7 +27,13 @@ class SQLiteSearchIndex:
             await self.remove_item(db, item_id)
             return
         if source_sequence is None:
-            source_sequence = item.aggregate_sequence
+            source_sequence = await db.scalar(
+                select(SearchProjectionState.requested_generation).where(
+                    SearchProjectionState.item_id == item_id
+                )
+            )
+        if source_sequence is None:
+            source_sequence = 1
         source_sequence = source_sequence or 0
         current = await db.scalar(
             text("SELECT source_sequence FROM item_search WHERE item_id = :item_id"),
