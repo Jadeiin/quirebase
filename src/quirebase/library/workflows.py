@@ -75,7 +75,7 @@ async def request_item_tag_recommendation(
     record = await db.scalar(
         select(ItemTagRecommendation)
         .where(ItemTagRecommendation.item_id == item_id)
-        .with_for_update()
+        .with_for_update(key_share=True)
     )
     if record is not None and not force:
         workflow = await _linked_workflow(record)
@@ -123,7 +123,7 @@ async def _store_item_tag_recommendation(
     record = await db.scalar(
         select(ItemTagRecommendation)
         .where(ItemTagRecommendation.item_id == item_id)
-        .with_for_update()
+        .with_for_update(key_share=True)
     )
     if (
         record is None

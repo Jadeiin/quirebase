@@ -54,13 +54,21 @@ transaction that mutates canonical state:
 - A read that must remain present while a related row is inspected uses PostgreSQL `FOR SHARE`
   (`SQLAlchemy.with_for_update(read=True)`). This is the default for non-mutating authorization
   or existence checks that must serialize with a delete.
-- A root row that will be mutated, or whose transition must be linearized, uses `FOR UPDATE`
-  (`with_for_update()`).
+- A root row that will be mutated without deleting it or changing an FK-referenced key uses
+  PostgreSQL `FOR NO KEY UPDATE` (`with_for_update(key_share=True)`). This serializes writers
+  while allowing FK checks and child inserts to proceed.
+- A root row that may be deleted, or whose FK-referenced key is changing, uses the stronger
+  `FOR UPDATE` (`with_for_update()`). Call sites using this stronger lock must document why the
+  weaker no-key lock is insufficient.
 - A shared lock is never a substitute for a write lock: it protects a read set while allowing
-  other readers to proceed, but the owning command must still take `FOR UPDATE` before changing
-  that root row.
+  other readers to proceed, but the owning command must still take `FOR NO KEY UPDATE` or
+  `FOR UPDATE` before changing that root row.
 - Multiple rows of one aggregate are acquired in stable ID order. No command acquires a child
   row and then goes back to lock its parent.
+
+Queries that include joins must scope the lock to the owning table (SQLAlchemy's `of=` option)
+unless locking the joined row is itself part of the invariant. Transactions stay short after a
+lock is acquired; external I/O and expensive computation never run while holding a database lock.
 
 SQLite may map these calls to its ordinary transaction semantics; no SQLite-only writer gate or
 process lock is required.

@@ -25,7 +25,7 @@ from quirebase.models import (
     User,
 )
 
-from .write_gate import require_project_write_gate
+from ._locking import lock_project_root
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -109,7 +109,7 @@ async def list_joinable_projects(db: AsyncSession, user: User) -> list[tuple[Pro
 
 
 async def join_project(db: AsyncSession, user: User, project_id: str) -> ProjectMember:
-    await require_project_write_gate(
+    await lock_project_root(
         db,
         project_id,
         state=ProjectState.active,
@@ -169,7 +169,7 @@ async def open_project_workspace(db: AsyncSession, user: User, project_id: str) 
 
 
 async def add_item_to_project(db: AsyncSession, user: User, project_id: str, item_id: str) -> None:
-    await require_project_write_gate(
+    await lock_project_root(
         db,
         project_id,
         state=ProjectState.active,
@@ -208,7 +208,7 @@ async def add_item_to_project(db: AsyncSession, user: User, project_id: str, ite
 async def remove_item_from_project(
     db: AsyncSession, user: User, project_id: str, item_id: str
 ) -> None:
-    await require_project_write_gate(
+    await lock_project_root(
         db,
         project_id,
         state=ProjectState.active,

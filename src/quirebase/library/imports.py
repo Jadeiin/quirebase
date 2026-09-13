@@ -482,7 +482,9 @@ async def _converge_pdf_import_batch_status(db: AsyncSession, batch: ImportBatch
 
 async def retry_pdf_import_batch(db: AsyncSession, user: User, batch_id: str) -> ImportBatch:
     """Retry a failed PDF Import Batch without relinquishing its staged objects."""
-    batch = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update())
+    batch = await db.scalar(
+        select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update(key_share=True)
+    )
     if batch is None or batch.owner_id != user.id:
         raise ResourceUnavailable("import batch not found")
     await _converge_pdf_import_batch_status(db, batch)
@@ -527,7 +529,9 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> li
     )
     if owner is None:
         raise ResourceUnavailable("user not available")
-    batch = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update())
+    batch = await db.scalar(
+        select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update(key_share=True)
+    )
     if batch is None or batch.owner_id != owner.id:
         raise ResourceUnavailable("import batch not found")
     if batch.status == "committed":

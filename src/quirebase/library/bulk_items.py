@@ -32,7 +32,7 @@ from quirebase.models import (
     ProjectState,
     User,
 )
-from quirebase.projects import require_project_write_gate
+from quirebase.projects._locking import lock_project_root
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
@@ -58,7 +58,7 @@ async def apply_bulk_item_action(
     cleanup_keys: list[str] = []
     if action in ("add_project", "project_add"):
         try:
-            await require_project_write_gate(
+            await lock_project_root(
                 db,
                 project_id,
                 state=ProjectState.active,

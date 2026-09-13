@@ -13,7 +13,7 @@ from quirebase.core.errors import (
 )
 from quirebase.models import Project, ProjectMember, ProjectRole, User
 
-from .write_gate import require_project_write_gate
+from ._locking import lock_project_root
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,7 +30,7 @@ async def add_project_member(
     username: str,
     role: ProjectRole | str = ProjectRole.viewer,
 ) -> ProjectMember:
-    await require_project_write_gate(db, project_id)
+    await lock_project_root(db, project_id)
     project = await db.get(Project, project_id, populate_existing=True)
     actor = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     if project is None or actor is None or user.id != project.owner_id:
@@ -73,7 +73,7 @@ async def remove_project_member(
     project_id: str,
     member_id: str,
 ) -> None:
-    await require_project_write_gate(db, project_id)
+    await lock_project_root(db, project_id)
     project = await db.get(Project, project_id, populate_existing=True)
     actor = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     target = await db.get(ProjectMember, (project_id, member_id), populate_existing=True)

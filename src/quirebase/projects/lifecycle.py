@@ -16,7 +16,7 @@ from quirebase.models import (
     User,
 )
 
-from .write_gate import require_project_write_gate
+from ._locking import lock_project_root
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,7 +30,7 @@ def validate_project_state(value: ProjectState | str) -> ProjectState:
 
 
 async def rename_project(db: AsyncSession, user: User, project_id: str, name: str) -> Project:
-    project = await require_project_write_gate(db, project_id)
+    project = await lock_project_root(db, project_id)
     if project is None or (user.id != project.owner_id and user.role != "administrator"):
         raise ResourceUnavailable("project not found or owner role required")
     normalized = name.strip()
@@ -55,7 +55,7 @@ async def rename_project(db: AsyncSession, user: User, project_id: str, name: st
 async def update_project_description(
     db: AsyncSession, user: User, project_id: str, description: str
 ) -> Project:
-    project = await require_project_write_gate(db, project_id)
+    project = await lock_project_root(db, project_id)
     if project is None or user.id != project.owner_id:
         raise ResourceUnavailable("project not found or owner role required")
     normalized = description.replace("\r\n", "\n").replace("\r", "\n").strip()
@@ -68,7 +68,7 @@ async def update_project_description(
 
 
 async def delete_project(db: AsyncSession, user: User, project_id: str, confirmation: str) -> None:
-    project = await require_project_write_gate(db, project_id)
+    project = await lock_project_root(db, project_id)
     if project is None or (user.role != "administrator" and user.id != project.owner_id):
         raise ResourceUnavailable("project not found or owner role required")
     if confirmation.strip() != project.name:
@@ -92,7 +92,7 @@ async def delete_project(db: AsyncSession, user: User, project_id: str, confirma
 async def transfer_project_ownership(
     db: AsyncSession, user: User, project_id: str, target_user_id: str
 ) -> None:
-    await require_project_write_gate(db, project_id)
+    await lock_project_root(db, project_id)
     actor = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     target = await db.get(ProjectMember, (project_id, target_user_id), populate_existing=True)
     project = await db.get(Project, project_id, populate_existing=True)
@@ -118,7 +118,7 @@ async def transfer_project_ownership(
 
 
 async def leave_project(db: AsyncSession, user: User, project_id: str) -> None:
-    await require_project_write_gate(db, project_id)
+    await lock_project_root(db, project_id)
     project = await db.get(Project, project_id, populate_existing=True)
     member = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     if project is None or member is None:
@@ -134,7 +134,7 @@ async def set_project_state(
     db: AsyncSession, user: User, project_id: str, state: ProjectState
 ) -> Project:
     state = validate_project_state(state)
-    project = await require_project_write_gate(db, project_id)
+    project = await lock_project_root(db, project_id)
     if project is None or (user.id != project.owner_id and user.role != "administrator"):
         raise ResourceUnavailable("project not found or owner role required")
     project.state = state
@@ -150,7 +150,7 @@ async def set_project_visibility(
         visibility = ProjectVisibility(visibility)
     except ValueError as error:
         raise ValidationFailure("invalid project visibility") from error
-    project = await require_project_write_gate(db, project_id)
+    project = await lock_project_root(db, project_id)
     if project is None or (user.id != project.owner_id and user.role != "administrator"):
         raise ResourceUnavailable("project not found or owner role required")
     project.visibility = visibility
