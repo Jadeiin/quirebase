@@ -50,7 +50,7 @@ ALLOWED_PACKAGE_DEPENDENCIES = {
     },
     "operations": {"audit", "core", "library", "models", "search"},
     "programmatic": {"documents", "library"},
-    "projects": {"access", "audit", "core", "models", "search"},
+    "projects": {"access", "audit", "core", "models"},
     "search": {"models"},
     "web": {
         "access",
