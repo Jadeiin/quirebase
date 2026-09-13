@@ -79,16 +79,16 @@ async def create_user_admin(
         active=True,
     )
     db.add(user)
-    await db.flush()
-    record_event(
-        db,
-        admin.id,
-        "admin.user.create",
-        "user",
-        user.id,
-        detail={"username": user.username, "role": user.role},
-    )
     try:
+        await db.flush()
+        record_event(
+            db,
+            admin.id,
+            "admin.user.create",
+            "user",
+            user.id,
+            detail={"username": user.username, "role": user.role},
+        )
         await db.commit()
     except IntegrityError as error:
         await db.rollback()

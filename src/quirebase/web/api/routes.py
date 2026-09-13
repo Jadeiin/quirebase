@@ -28,8 +28,8 @@ from quirebase.library import (
     MetadataWorkspace,
     WorkspaceSection,
     add_discussion_message,
-    add_existing_tag_to_item,
     add_tag_to_item,
+    apply_item_tag_selection,
     create_item,
     delete_discussion_message,
     get_item_citation_text_response,
@@ -417,12 +417,14 @@ async def remove_item_tag(item_id: str, tag_id: str, user: ApiUser, db: Database
 async def set_item_tag_selection(
     item_id: str, data: TagSetRequest, user: ApiUser, db: Database
 ) -> OkView:
-    for tag_id in data.remove_tag_ids:
-        await remove_tag_from_item(db, user, item_id, tag_id)
-    for tag_id in data.tag_ids:
-        await add_existing_tag_to_item(db, user, item_id, tag_id)
-    for name in data.new_names or []:
-        await add_tag_to_item(db, user, item_id, name)
+    await apply_item_tag_selection(
+        db,
+        user,
+        item_id,
+        remove_tag_ids=data.remove_tag_ids,
+        tag_ids=data.tag_ids,
+        new_names=data.new_names,
+    )
     return OkView()
 
 

@@ -35,8 +35,8 @@ from quirebase.library import (
     OrganizeWorkspace,
     SummaryWorkspace,
     WorkspaceSection,
-    add_existing_tag_to_item,
     add_tag_to_item,
+    apply_item_tag_selection,
     open_item_workspace,
     parse_author_list_string,
     regenerate_bibtex_key,
@@ -444,13 +444,15 @@ async def update_tag_matrix_route(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    for tag_id in remove_tag_ids:
-        await remove_tag_from_item(db, user, item_id, tag_id)
     new_names = [*suggested_tags, *(line.strip() for line in new_tags.splitlines() if line.strip())]
-    for tag_id in tag_ids:
-        await add_existing_tag_to_item(db, user, item_id, tag_id)
-    for name in new_names:
-        await add_tag_to_item(db, user, item_id, name)
+    await apply_item_tag_selection(
+        db,
+        user,
+        item_id,
+        remove_tag_ids=remove_tag_ids,
+        tag_ids=tag_ids,
+        new_names=new_names,
+    )
     return RedirectResponse(f"/items/{item_id}/organize", status_code=303)
 
 

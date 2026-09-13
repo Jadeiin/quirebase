@@ -6,8 +6,8 @@ from quirebase.library import (
     DiscussionWorkspace,
     WorkspaceSection,
     add_discussion_message,
-    add_existing_tag_to_item,
     add_tag_to_item,
+    apply_item_tag_selection,
     delete_discussion_message,
     list_accessible_tags_with_counts,
     open_item_workspace,
@@ -83,10 +83,13 @@ def register_organization_tools(server: MCPServer, runtime: McpRuntime) -> None:
         item_id: str, tag_ids: list[str], new_names: list[str] | None = None
     ) -> dict[str, bool]:
         async def run(db, user):
-            for tag_id in tag_ids:
-                await add_existing_tag_to_item(db, user, item_id, tag_id)
-            for name in new_names or []:
-                await add_tag_to_item(db, user, item_id, name)
+            await apply_item_tag_selection(
+                db,
+                user,
+                item_id,
+                tag_ids=tag_ids,
+                new_names=new_names,
+            )
 
         await runtime.call(
             "tags.add_many_to_item",

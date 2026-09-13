@@ -10,6 +10,7 @@ from quirebase.core.errors import ResourceUnavailable
 from quirebase.library.tags import (
     TagConflict,
     add_tag_to_item,
+    apply_item_tag_selection,
     get_tag_matrix_for_item,
     merge_tags,
     remove_tag_from_item,
@@ -37,6 +38,31 @@ async def test_remove_tag_from_item_records_the_business_change(async_db):
     )
     assert event is not None
     assert json.loads(event.detail) == {"tag_id": tag_id}
+
+
+@pytest.mark.anyio
+async def test_tag_selection_rolls_back_when_a_later_change_is_invalid(async_db):
+    db = async_db
+    user = User(username="tag-selection-atomic", password_hash="hash")
+    db.add(user)
+    await db.flush()
+    item = Item(title="Atomic Tag Selection", created_by=user.id)
+    db.add(item)
+    await db.flush()
+    assignment = await add_tag_to_item(db, user, item.id, "Keep Me")
+    item_id = item.id
+    tag_id = assignment.tag_id
+
+    with pytest.raises(ResourceUnavailable, match="tag not found"):
+        await apply_item_tag_selection(
+            db,
+            user,
+            item_id,
+            remove_tag_ids=[tag_id],
+            tag_ids=["missing-tag"],
+        )
+
+    assert await db.get(ItemTag, (item_id, tag_id)) is not None
 
 
 @pytest.mark.anyio

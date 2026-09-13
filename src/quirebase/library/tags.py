@@ -73,7 +73,14 @@ async def add_tag_to_item(db: AsyncSession, user: User, item_id: str, name: str)
     return await _add_tag_id_to_item(db, user, item_id, tag.id)
 
 
-async def _add_tag_id_to_item(db: AsyncSession, user: User, item_id: str, tag_id: str) -> ItemTag:
+async def _add_tag_id_to_item(
+    db: AsyncSession,
+    user: User,
+    item_id: str,
+    tag_id: str,
+    *,
+    commit: bool = True,
+) -> ItemTag:
     assignment = await db.get(ItemTag, (item_id, tag_id))
     created = False
     if assignment is None:
@@ -89,7 +96,8 @@ async def _add_tag_id_to_item(db: AsyncSession, user: User, item_id: str, tag_id
                 raise
     if created:
         record_event(db, user.id, "tag.add", "item", item_id)
-    await db.commit()
+    if commit:
+        await db.commit()
     return assignment
 
 
@@ -109,6 +117,12 @@ async def add_existing_tag_to_item(
 async def remove_tag_from_item(db: AsyncSession, user: User, item_id: str, tag_id: str) -> None:
     if not await can_edit_item(db, user, item_id):
         raise ResourceUnavailable("item not found or cannot be edited")
+    await _remove_tag_from_item(db, user, item_id, tag_id)
+
+
+async def _remove_tag_from_item(
+    db: AsyncSession, user: User, item_id: str, tag_id: str, *, commit: bool = True
+) -> None:
     result = await db.execute(
         delete(ItemTag).where(ItemTag.item_id == item_id, ItemTag.tag_id == tag_id)
     )
@@ -121,7 +135,52 @@ async def remove_tag_from_item(db: AsyncSession, user: User, item_id: str, tag_i
             item_id,
             detail={"tag_id": tag_id},
         )
-    await db.commit()
+    if commit:
+        await db.commit()
+
+
+async def apply_item_tag_selection(
+    db: AsyncSession,
+    user: User,
+    item_id: str,
+    *,
+    remove_tag_ids: list[str] | None = None,
+    tag_ids: list[str] | None = None,
+    new_names: list[str] | None = None,
+) -> None:
+    """Apply a mixed Tag selection atomically.
+
+    The individual association commands remain useful for single mutations and retain their
+    historical commit-by-default behaviour. Batch callers use this operation so all removals,
+    existing Tag additions and new Tag additions share one transaction.
+    """
+    if not await can_edit_item(db, user, item_id):
+        raise ResourceUnavailable("item not found or cannot be edited")
+    try:
+        remove_ids = set(remove_tag_ids or [])
+        add_ids = set(tag_ids or [])
+        for name in new_names or []:
+            tag = await get_or_create_tag(db, user, name)
+            add_ids.add(tag.id)
+
+        # Validate all requested existing Tags before changing any ItemTag rows. The association
+        # mutations themselves then follow one deterministic key order across concurrent calls.
+        for tag_id in sorted(add_ids):
+            if await db.get(Tag, tag_id) is None:
+                raise ResourceUnavailable("tag not found")
+
+        for tag_id in sorted(remove_ids | add_ids):
+            if tag_id in remove_ids:
+                await _remove_tag_from_item(db, user, item_id, tag_id, commit=False)
+            if tag_id in add_ids:
+                try:
+                    await _add_tag_id_to_item(db, user, item_id, tag_id, commit=False)
+                except IntegrityError as error:
+                    raise ResourceUnavailable("tag is no longer available") from error
+        await db.commit()
+    except BaseException:
+        await db.rollback()
+        raise
 
 
 async def rename_tag(db: AsyncSession, user: User, tag_id: str, name: str) -> Tag:
