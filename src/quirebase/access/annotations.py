@@ -13,9 +13,9 @@ from quirebase.models import (
     Item,
     PdfAnnotation,
     PdfAnnotationReply,
+    Project,
     ProjectItem,
     ProjectMember,
-    ProjectRole,
     SystemRole,
     User,
 )
@@ -48,9 +48,10 @@ async def editable_annotation_ids(
     owned_project_ids = set(
         (
             await db.scalars(
-                select(ProjectMember.project_id).where(
-                    ProjectMember.user_id == user.id,
-                    ProjectMember.role == ProjectRole.owner,
+                select(ProjectMember.project_id)
+                .join(Project, Project.id == ProjectMember.project_id)
+                .where(
+                    Project.owner_id == user.id,
                     ProjectMember.project_id.in_(project_ids),
                 )
             )
@@ -88,9 +89,10 @@ async def editable_annotation_reply_ids(
     owned_project_ids = set(
         (
             await db.scalars(
-                select(ProjectMember.project_id).where(
-                    ProjectMember.user_id == user.id,
-                    ProjectMember.role == ProjectRole.owner,
+                select(ProjectMember.project_id)
+                .join(Project, Project.id == ProjectMember.project_id)
+                .where(
+                    Project.owner_id == user.id,
                     ProjectMember.project_id.in_(project_ids),
                 )
             )
@@ -118,13 +120,13 @@ async def _lock_reply_mutation_context(
         select(User)
         .where(User.id == user.id)
         .execution_options(populate_existing=True)
-        .with_for_update()
+        .with_for_update(read=True)
     )
-    item = await db.scalar(select(Item).where(Item.id == item_id).with_for_update())
+    item = await db.scalar(select(Item).where(Item.id == item_id).with_for_update(read=True))
     if locked_user is None or not locked_user.active or item is None:
         raise ResourceUnavailable("annotation not found or cannot be viewed")
     record = await db.scalar(
-        select(PdfAnnotation).where(PdfAnnotation.id == annotation_id).with_for_update()
+        select(PdfAnnotation).where(PdfAnnotation.id == annotation_id).with_for_update(read=True)
     )
     revision = await db.get(FileRevision, record.file_revision_id) if record else None
     if (
@@ -162,7 +164,7 @@ async def require_visible_annotation_for_reply_mutation(
                 )
                 .order_by(ProjectMember.project_id)
                 .limit(1)
-                .with_for_update()
+                .with_for_update(read=True)
             )
             visible_scope = access_grant is not None
     elif record.project_id:
@@ -172,7 +174,7 @@ async def require_visible_annotation_for_reply_mutation(
                 ProjectItem.project_id == record.project_id,
                 ProjectItem.item_id == item_id,
             )
-            .with_for_update()
+            .with_for_update(read=True)
         )
         if administrator:
             visible_scope = project_item is not None
@@ -183,7 +185,7 @@ async def require_visible_annotation_for_reply_mutation(
                     ProjectMember.project_id == record.project_id,
                     ProjectMember.user_id == locked_user.id,
                 )
-                .with_for_update()
+                .with_for_update(read=True)
             )
             visible_scope = project_item is not None and membership is not None
     if not visible_scope:

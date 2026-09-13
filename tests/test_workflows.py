@@ -627,21 +627,6 @@ async def test_read_heavy_datasource_steps_use_read_committed(monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_search_projection_writes_use_serializable(monkeypatch):
-    captured = []
-
-    async def run(options, _function, *_args, **_kwargs):
-        await asyncio.sleep(0)
-        captured.append(options)
-
-    monkeypatch.setattr(workflows.ads, "run_tx_step_async", run)
-    await operation_workflows.reindex_items_step(())
-    await library_workflows.apply_file_revision_changed("item-id")
-
-    assert {options["isolation_level"] for options in captured} == {"SERIALIZABLE"}
-
-
-@pytest.mark.anyio
 async def test_commit_uploaded_revision_uses_datasource_transaction(async_db):
     user = User(username="upload-tx-user", password_hash="unused")
     async_db.add(user)
@@ -711,8 +696,6 @@ async def test_operations_and_library_transaction_steps(async_db):
     )
     assert reindex_res["reindexed_items"] >= 1
 
-    await library_workflows.apply_file_revision_changed(item.id)
-
 
 @pytest.mark.anyio
 async def test_reindex_workflow_checkpoints_bounded_database_batches(monkeypatch):
@@ -731,11 +714,17 @@ async def test_reindex_workflow_checkpoints_bounded_database_batches(monkeypatch
 
     monkeypatch.setattr(operation_workflows, "list_reindex_item_ids_step", list_ids)
     monkeypatch.setattr(operation_workflows, "reindex_items_step", index_ids)
+
+    async def no_revisions(after_id, limit):
+        await asyncio.sleep(0)
+        return ()
+
+    monkeypatch.setattr(operation_workflows, "list_reindex_revision_ids_step", no_revisions)
     workflow_body = operation_workflows.reindex_all_workflow.__wrapped__.__wrapped__
 
     result = await workflow_body("workflow-id", "owner-id")
 
-    assert result == {"reindexed_items": 101}
+    assert result == {"reindexed_items": 101, "reindexed_revisions": 0}
     assert [len(batch) for batch in indexed_batches] == [100, 1]
 
 
@@ -743,24 +732,16 @@ async def test_reindex_workflow_checkpoints_bounded_database_batches(monkeypatch
 async def test_file_revision_change_retries_only_the_recommendation_request(monkeypatch):
     calls = []
 
-    async def index(item_id):
-        await asyncio.sleep(0)
-        calls.append(("index", item_id))
-
     async def request(item_id, owner_id):
         await asyncio.sleep(0)
         calls.append(("request", item_id, owner_id))
 
-    monkeypatch.setattr(library_workflows, "apply_file_revision_changed", index)
     monkeypatch.setattr(library_workflows, "request_item_tag_recommendation_step", request)
 
     workflow_body = library_workflows.file_revision_changed_workflow.__wrapped__.__wrapped__
-    await workflow_body("item-id", "owner-id")
+    await workflow_body("revision-id", "item-id", "owner-id")
 
-    assert calls == [
-        ("index", "item-id"),
-        ("request", "item-id", "owner-id"),
-    ]
+    assert calls == [("request", "item-id", "owner-id")]
 
 
 @pytest.mark.anyio

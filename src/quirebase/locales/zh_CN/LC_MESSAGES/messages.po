@@ -1514,6 +1514,9 @@ msgstr "无需机构凭据的数据源现已可用；需要凭据的数据源将
 msgid "Import preview"
 msgstr "导入预览"
 
+msgid "This import batch has already been committed. Submitting it again will replay the recorded result."
+msgstr "此导入批次已提交。再次提交将重放已记录的结果。"
+
 #: src/quirebase/templates/import_preview.html:9
 msgid "PDF import preparation failed. The staged PDFs are still available."
 msgstr "PDF 导入准备失败，暂存的 PDF 仍然可用。"

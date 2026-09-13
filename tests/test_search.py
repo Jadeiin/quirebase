@@ -1,4 +1,5 @@
 import pytest
+from sqlalchemy import select
 
 from quirebase.models import FileRevision, Item, User
 from quirebase.search import reindex_all, search_index
@@ -34,7 +35,7 @@ async def test_sqlite_search_indexes_metadata_and_pdf_text(async_db):
     extracted = await add_item(db, user, title="Untitled paper", full_text="Quasiparticle dynamics")
     await add_item(db, user, title="Unrelated")
 
-    assert await reindex_all(db) == 3
+    assert await reindex_all(db) == 4
     index = search_index(db)
 
     assert await index.search(db, "neural") == [metadata.id]
@@ -56,3 +57,20 @@ async def test_reindex_replaces_stale_content(async_db):
 
     assert await index.search(db, "old") == []
     assert await index.search(db, "vocabulary") == [item.id]
+
+
+@pytest.mark.anyio
+async def test_metadata_reindex_preserves_revision_projection(async_db):
+    user = User(username="search-revision-editor", password_hash="unused")
+    async_db.add(user)
+    await async_db.flush()
+    item = await add_item(
+        async_db, user, title="Original title", full_text="Distinctive PDF phrase"
+    )
+    index = search_index(async_db)
+    revision = await async_db.scalar(select(FileRevision).where(FileRevision.item_id == item.id))
+    await index.index_revision(async_db, revision.id)
+    item.title = "Updated title"
+    await index.index_item(async_db, item.id)
+
+    assert await index.search(async_db, "phrase") == [item.id]

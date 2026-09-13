@@ -28,7 +28,7 @@ ALLOWED_PACKAGE_DEPENDENCIES = {
     "accounts": {"audit", "core", "models"},
     "audit": {"core", "models"},
     "core": set(),
-    "documents": {"access", "audit", "core", "models", "operations"},
+    "documents": {"access", "audit", "core", "models", "operations", "search"},
     "library": {
         "access",
         "audit",
@@ -50,7 +50,7 @@ ALLOWED_PACKAGE_DEPENDENCIES = {
     },
     "operations": {"audit", "core", "library", "models", "search"},
     "programmatic": {"documents", "library"},
-    "projects": {"access", "audit", "core", "models", "search"},
+    "projects": {"access", "audit", "core", "models"},
     "search": {"models"},
     "web": {
         "access",

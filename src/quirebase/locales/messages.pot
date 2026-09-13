@@ -1505,6 +1505,9 @@ msgstr ""
 msgid "Import preview"
 msgstr ""
 
+msgid "This import batch has already been committed. Submitting it again will replay the recorded result."
+msgstr ""
+
 #: src/quirebase/templates/import_preview.html:9
 msgid "PDF import preparation failed. The staged PDFs are still available."
 msgstr ""

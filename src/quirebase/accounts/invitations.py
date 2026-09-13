@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from quirebase.core.crypto import generate_token, token_hash
 from quirebase.core.errors import DomainError, ResourceUnavailable, ValidationFailure
@@ -56,5 +57,9 @@ async def create_invitation(
         expires_at=datetime.now(UTC) + timedelta(days=expires_days),
     )
     db.add(invitation)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as error:
+        await db.rollback()
+        raise InvitationConflict("username already exists or is invited") from error
     return invitation, raw

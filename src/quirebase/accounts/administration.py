@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sqlalchemy import delete, func, or_, select
+from sqlalchemy.exc import IntegrityError
 
 from quirebase.audit import record_event
 from quirebase.core.crypto import hash_password_async
@@ -12,7 +13,7 @@ from quirebase.core.errors import (
     ResourceUnavailable,
     ValidationFailure,
 )
-from quirebase.models import Invitation, LoginSession, SystemRole, User
+from quirebase.models import Invitation, LoginSession, Project, SystemRole, User
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -78,27 +79,33 @@ async def create_user_admin(
         active=True,
     )
     db.add(user)
-    await db.flush()
-    record_event(
-        db,
-        admin.id,
-        "admin.user.create",
-        "user",
-        user.id,
-        detail={"username": user.username, "role": user.role},
-    )
-    await db.commit()
+    try:
+        await db.flush()
+        record_event(
+            db,
+            admin.id,
+            "admin.user.create",
+            "user",
+            user.id,
+            detail={"username": user.username, "role": user.role},
+        )
+        await db.commit()
+    except IntegrityError as error:
+        await db.rollback()
+        raise ValidationFailure(f"username '{cleaned_name}' is already taken") from error
     return user
 
 
 async def update_user_status(db: AsyncSession, admin: User, user_id: str, active: bool) -> User:
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")
-    user = await db.get(User, user_id)
+    user = await db.scalar(select(User).where(User.id == user_id).with_for_update(key_share=True))
     if user is None:
         raise ResourceNotFound("user not found")
     if user.id == admin.id and not active:
         raise PermissionDenied("administrators cannot deactivate their own account")
+    if not active and await db.scalar(select(Project.id).where(Project.owner_id == user.id)):
+        raise PermissionDenied("transfer project ownership before deactivating this account")
     user.active = active
     if not active:
         # Revoke all active sessions upon deactivation
@@ -120,7 +127,7 @@ async def change_user_role(db: AsyncSession, admin: User, user_id: str, new_role
         raise ResourceUnavailable("administrator required")
     if new_role not in (SystemRole.administrator.value, SystemRole.member.value):
         raise ValidationFailure("invalid user role")
-    user = await db.get(User, user_id)
+    user = await db.scalar(select(User).where(User.id == user_id).with_for_update(key_share=True))
     if user is None:
         raise ResourceNotFound("user not found")
     if user.id == admin.id and new_role != SystemRole.administrator.value:
@@ -145,10 +152,11 @@ async def reset_user_password(
         raise ResourceUnavailable("administrator required")
     if len(new_password) < 12:
         raise ValidationFailure("password must contain at least 12 characters")
-    user = await db.get(User, user_id)
+    password_hash = await hash_password_async(new_password)
+    user = await db.scalar(select(User).where(User.id == user_id).with_for_update(key_share=True))
     if user is None:
         raise ResourceNotFound("user not found")
-    user.password_hash = await hash_password_async(new_password)
+    user.password_hash = password_hash
     # Revoke sessions after password reset
     await db.execute(delete(LoginSession).where(LoginSession.user_id == user.id))
     record_event(

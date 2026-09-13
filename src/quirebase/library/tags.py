@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-from sqlalchemy import and_, delete, func, select
+from sqlalchemy import and_, delete, func, literal, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.exc import IntegrityError
 
 from quirebase.access.items import (
-    can_edit_item,
     can_read_item,
-    require_editable_item,
+    require_editable_item_for_mutation,
     visible_items_query,
 )
 from quirebase.audit import record_event
@@ -22,7 +24,6 @@ from quirebase.library.workflows import (
     request_item_tag_recommendation,
 )
 from quirebase.models import Item, ItemTag, ItemTagRecommendation, Tag, User
-from quirebase.search import search_index
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,7 +34,7 @@ class TagConflict(DomainError):
 
 
 async def regenerate_item_tag_recommendation(db: AsyncSession, user: User, item_id: str) -> str:
-    await require_editable_item(db, user, item_id)
+    await require_editable_item_for_mutation(db, user, item_id)
     recommendation = await request_item_tag_recommendation(
         db, item_id, owner_id=user.id, force=True
     )
@@ -52,35 +53,76 @@ async def get_or_create_tag(db: AsyncSession, user: User, name: str) -> Tag:
     normalized = normalize_tag_name(name)
     tag = await db.scalar(select(Tag).where(Tag.name == normalized))
     if tag is None:
-        tag = Tag(name=normalized, created_by=user.id)
-        db.add(tag)
-        await db.flush()
+        try:
+            async with db.begin_nested():
+                tag = Tag(name=normalized, created_by=user.id)
+                db.add(tag)
+                await db.flush()
+        except IntegrityError:
+            tag = await db.scalar(select(Tag).where(Tag.name == normalized))
+            if tag is None:  # pragma: no cover - constraint unrelated to Tag identity
+                raise
     return tag
 
 
 async def add_tag_to_item(db: AsyncSession, user: User, item_id: str, name: str) -> ItemTag:
-    if not await can_edit_item(db, user, item_id):
-        raise ResourceUnavailable("item not found or cannot be edited")
+    await require_editable_item_for_mutation(db, user, item_id)
     tag = await get_or_create_tag(db, user, name)
-    assignment = await db.get(ItemTag, (item_id, tag.id))
+    return await _add_tag_id_to_item(db, user, item_id, tag.id)
+
+
+async def _add_tag_id_to_item(
+    db: AsyncSession,
+    user: User,
+    item_id: str,
+    tag_id: str,
+    *,
+    commit: bool = True,
+) -> ItemTag:
+    assignment = await db.get(ItemTag, (item_id, tag_id))
+    created = False
     if assignment is None:
-        assignment = ItemTag(item_id=item_id, tag_id=tag.id)
-        db.add(assignment)
-        await db.flush()
-        await search_index(db).index_item(db, item_id)
+        try:
+            async with db.begin_nested():
+                assignment = ItemTag(item_id=item_id, tag_id=tag_id)
+                db.add(assignment)
+                await db.flush()
+                created = True
+        except IntegrityError:
+            assignment = await db.get(ItemTag, (item_id, tag_id), populate_existing=True)
+            if assignment is None:  # pragma: no cover - constraint unrelated to association PK
+                raise
+    if created:
         record_event(db, user.id, "tag.add", "item", item_id)
+    if commit:
         await db.commit()
     return assignment
 
 
+async def add_existing_tag_to_item(
+    db: AsyncSession, user: User, item_id: str, tag_id: str
+) -> ItemTag:
+    await require_editable_item_for_mutation(db, user, item_id)
+    if await db.get(Tag, tag_id) is None:
+        raise ResourceUnavailable("tag not found")
+    try:
+        return await _add_tag_id_to_item(db, user, item_id, tag_id)
+    except IntegrityError as error:
+        raise ResourceUnavailable("tag is no longer available") from error
+
+
 async def remove_tag_from_item(db: AsyncSession, user: User, item_id: str, tag_id: str) -> None:
-    if not await can_edit_item(db, user, item_id):
-        raise ResourceUnavailable("item not found or cannot be edited")
-    assignment = await db.get(ItemTag, (item_id, tag_id))
-    if assignment:
-        await db.delete(assignment)
-        await db.flush()
-        await search_index(db).index_item(db, item_id)
+    await require_editable_item_for_mutation(db, user, item_id)
+    await _remove_tag_from_item(db, user, item_id, tag_id)
+
+
+async def _remove_tag_from_item(
+    db: AsyncSession, user: User, item_id: str, tag_id: str, *, commit: bool = True
+) -> None:
+    result = await db.execute(
+        delete(ItemTag).where(ItemTag.item_id == item_id, ItemTag.tag_id == tag_id)
+    )
+    if getattr(result, "rowcount", 0):
         record_event(
             db,
             user.id,
@@ -89,38 +131,77 @@ async def remove_tag_from_item(db: AsyncSession, user: User, item_id: str, tag_i
             item_id,
             detail={"tag_id": tag_id},
         )
+    if commit:
         await db.commit()
 
 
+async def apply_item_tag_selection(
+    db: AsyncSession,
+    user: User,
+    item_id: str,
+    *,
+    remove_tag_ids: list[str] | None = None,
+    tag_ids: list[str] | None = None,
+    new_names: list[str] | None = None,
+) -> None:
+    """Apply a mixed Tag selection atomically.
+
+    The individual association commands remain useful for single mutations and retain their
+    historical commit-by-default behaviour. Batch callers use this operation so all removals,
+    existing Tag additions and new Tag additions share one transaction.
+    """
+    await require_editable_item_for_mutation(db, user, item_id)
+    try:
+        remove_ids = set(remove_tag_ids or [])
+        add_ids = set(tag_ids or [])
+        for name in new_names or []:
+            tag = await get_or_create_tag(db, user, name)
+            add_ids.add(tag.id)
+
+        # Validate all requested existing Tags before changing any ItemTag rows. The association
+        # mutations themselves then follow one deterministic key order across concurrent calls.
+        for tag_id in sorted(add_ids):
+            if await db.get(Tag, tag_id) is None:
+                raise ResourceUnavailable("tag not found")
+
+        for tag_id in sorted(remove_ids | add_ids):
+            if tag_id in remove_ids:
+                await _remove_tag_from_item(db, user, item_id, tag_id, commit=False)
+            if tag_id in add_ids:
+                try:
+                    await _add_tag_id_to_item(db, user, item_id, tag_id, commit=False)
+                except IntegrityError as error:
+                    raise ResourceUnavailable("tag is no longer available") from error
+        await db.commit()
+    except BaseException:
+        await db.rollback()
+        raise
+
+
 async def rename_tag(db: AsyncSession, user: User, tag_id: str, name: str) -> Tag:
-    tag = await db.get(Tag, tag_id)
+    tag = await db.scalar(select(Tag).where(Tag.id == tag_id).with_for_update(key_share=True))
     if tag is None or (tag.created_by != user.id and user.role != "administrator"):
         raise ResourceUnavailable("tag not found or cannot be managed")
     normalized = normalize_tag_name(name)
     if await db.scalar(select(Tag.id).where(Tag.name == normalized, Tag.id != tag.id)):
         raise TagConflict("tag name already exists")
     tag.name = normalized
-    item_ids = list(
-        (await db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == tag.id))).all()
-    )
-    for item_id in item_ids:
-        await search_index(db).index_item(db, item_id)
     record_event(db, user.id, "tag.rename", "tag", tag.id)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as error:
+        await db.rollback()
+        raise TagConflict("tag name already exists") from error
     return tag
 
 
 async def delete_tag(db: AsyncSession, user: User, tag_id: str) -> None:
-    tag = await db.get(Tag, tag_id)
+    # Deleting a taxonomy root must block FK association inserts until commit.
+    tag = await db.scalar(select(Tag).where(Tag.id == tag_id).with_for_update())
     if tag is None or (tag.created_by != user.id and user.role != "administrator"):
         raise ResourceUnavailable("tag not found or cannot be managed")
-    item_ids = list(
-        (await db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == tag.id))).all()
-    )
     await db.delete(tag)
     await db.flush()
-    for item_id in item_ids:
-        await search_index(db).index_item(db, item_id)
     record_event(db, user.id, "tag.delete", "tag", tag_id)
     await db.commit()
 
@@ -192,57 +273,36 @@ async def get_tag_matrix_for_item(db: AsyncSession, user: User, item_id: str) ->
     }
 
 
-async def set_item_tags(
-    db: AsyncSession,
-    user: User,
-    item_id: str,
-    tag_ids: list[str],
-    new_names: list[str] | None = None,
-) -> None:
-    if not await can_edit_item(db, user, item_id):
-        raise ResourceUnavailable("item not found or cannot be edited")
-    tag_ids = list(tag_ids)
-    for raw_name in new_names or []:
-        if raw_name.strip():
-            tag = await get_or_create_tag(db, user, raw_name)
-            if tag.id not in tag_ids:
-                tag_ids.append(tag.id)
-    await db.execute(delete(ItemTag).where(ItemTag.item_id == item_id))
-    await db.flush()
-    valid_ids = set((await db.scalars(select(Tag.id).where(Tag.id.in_(tag_ids)))).all())
-    for tag_id in tag_ids:
-        if tag_id in valid_ids:
-            db.add(ItemTag(item_id=item_id, tag_id=tag_id))
-    await db.flush()
-    await search_index(db).index_item(db, item_id)
-    record_event(db, user.id, "tag.set", "item", item_id)
-    await db.commit()
-
-
 async def merge_tags(db: AsyncSession, user: User, source_tag_id: str, target_tag_id: str) -> Tag:
-    source_tag = await db.get(Tag, source_tag_id)
-    target_tag = await db.get(Tag, target_tag_id)
+    if source_tag_id == target_tag_id:
+        raise TagConflict("source and target tags must be different")
+    locked_tags: dict[str, Tag | None] = {}
+    for tag_id in sorted((source_tag_id, target_tag_id)):
+        query = select(Tag).where(Tag.id == tag_id)
+        if tag_id == source_tag_id:
+            query = query.with_for_update()
+        else:
+            query = query.with_for_update(key_share=True)
+        locked_tags[tag_id] = await db.scalar(query)
+    source_tag = locked_tags[source_tag_id]
+    target_tag = locked_tags[target_tag_id]
     if source_tag is None or target_tag is None:
         raise ResourceUnavailable("tags not found")
-    if source_tag.id == target_tag.id:
-        raise TagConflict("source and target tags must be different")
     if user.role != "administrator" and source_tag.created_by != user.id:
         raise ResourceUnavailable("not authorized to merge these tags")
 
-    source_item_ids = set(
-        (await db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == source_tag.id))).all()
+    dialect = db.get_bind().dialect.name
+    insert = pg_insert(ItemTag) if dialect == "postgresql" else sqlite_insert(ItemTag)
+    await db.execute(
+        insert.from_select(
+            ["item_id", "tag_id"],
+            select(ItemTag.item_id, literal(target_tag.id)).where(ItemTag.tag_id == source_tag.id),
+        ).on_conflict_do_nothing(index_elements=["item_id", "tag_id"])
     )
-    target_item_ids = set(
-        (await db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == target_tag.id))).all()
-    )
-    for item_id in source_item_ids - target_item_ids:
-        db.add(ItemTag(item_id=item_id, tag_id=target_tag.id))
     await db.execute(delete(ItemTag).where(ItemTag.tag_id == source_tag.id))
     await db.delete(source_tag)
     await db.flush()
 
-    for item_id in source_item_ids:
-        await search_index(db).index_item(db, item_id)
     record_event(
         db,
         user.id,

@@ -20,6 +20,7 @@ from quirebase.projects.workspaces import (
     ProjectWorkspace,
     ProjectWorkspaceMember,
     add_item_to_project,
+    add_items_to_project,
     create_project,
     join_project,
     list_joinable_projects,
@@ -27,7 +28,6 @@ from quirebase.projects.workspaces import (
     open_project_workspace,
     remove_item_from_project,
 )
-from quirebase.projects.write_gate import require_project_write_gate
 
 __all__ = [
     "ProjectAdminSummary",
@@ -35,6 +35,7 @@ __all__ = [
     "ProjectWorkspace",
     "ProjectWorkspaceMember",
     "add_item_to_project",
+    "add_items_to_project",
     "add_project_member",
     "create_project",
     "delete_project",
@@ -47,7 +48,6 @@ __all__ = [
     "remove_item_from_project",
     "remove_project_member",
     "rename_project",
-    "require_project_write_gate",
     "set_project_state",
     "set_project_visibility",
     "transfer_project_ownership",

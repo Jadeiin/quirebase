@@ -15,7 +15,7 @@ from quirebase.library.authors import (
     set_item_authors_from_string,
 )
 from quirebase.library.citations import format_standard_export
-from quirebase.models import Item, ItemAuthor, User
+from quirebase.models import Author, Item, ItemAuthor, User
 
 
 def test_parse_author_name():
@@ -154,3 +154,15 @@ async def test_search_authors_typeahead(async_db):
     assert len(results) == 2
     assert any(r["last_name"] == "Shannon" for r in results)
     assert any(r["last_name"] == "Shaw" for r in results)
+
+
+@pytest.mark.anyio
+async def test_find_or_create_author_uses_casefolded_null_safe_identity(async_db):
+    first = await find_or_create_author(async_db, last_name=" Smith ", first_name=None)
+    second = await find_or_create_author(async_db, last_name="smith", first_name="")
+    assert first.id == second.id
+
+    direct = Author(last_name="  World  Health ", first_name=" Organization ")
+    async_db.add(direct)
+    await async_db.flush()
+    assert direct.identity_key == "world health\x1forganization"
