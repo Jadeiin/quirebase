@@ -28,6 +28,7 @@ from quirebase.library import (
     MetadataWorkspace,
     WorkspaceSection,
     add_discussion_message,
+    add_existing_tag_to_item,
     add_tag_to_item,
     create_item,
     delete_discussion_message,
@@ -38,7 +39,6 @@ from quirebase.library import (
     revise_item_metadata,
     search_candidate_records,
     search_library,
-    set_item_tags,
 )
 from quirebase.models import ProjectState, User
 from quirebase.programmatic import (
@@ -417,7 +417,10 @@ async def remove_item_tag(item_id: str, tag_id: str, user: ApiUser, db: Database
 async def set_item_tag_selection(
     item_id: str, data: TagSetRequest, user: ApiUser, db: Database
 ) -> OkView:
-    await set_item_tags(db, user, item_id, data.tag_ids, data.new_names)
+    for tag_id in data.tag_ids:
+        await add_existing_tag_to_item(db, user, item_id, tag_id)
+    for name in data.new_names or []:
+        await add_tag_to_item(db, user, item_id, name)
     return OkView()
 
 

@@ -68,23 +68,40 @@ async def add_tag_to_item(db: AsyncSession, user: User, item_id: str, name: str)
     if not await can_edit_item(db, user, item_id):
         raise ResourceUnavailable("item not found or cannot be edited")
     tag = await get_or_create_tag(db, user, name)
-    assignment = await db.get(ItemTag, (item_id, tag.id))
+    return await _add_tag_id_to_item(db, user, item_id, tag.id)
+
+
+async def _add_tag_id_to_item(db: AsyncSession, user: User, item_id: str, tag_id: str) -> ItemTag:
+    assignment = await db.get(ItemTag, (item_id, tag_id))
     created = False
     if assignment is None:
         try:
             async with db.begin_nested():
-                assignment = ItemTag(item_id=item_id, tag_id=tag.id)
+                assignment = ItemTag(item_id=item_id, tag_id=tag_id)
                 db.add(assignment)
                 await db.flush()
                 created = True
         except IntegrityError:
-            assignment = await db.get(ItemTag, (item_id, tag.id), populate_existing=True)
+            assignment = await db.get(ItemTag, (item_id, tag_id), populate_existing=True)
             if assignment is None:  # pragma: no cover - constraint unrelated to association PK
                 raise
     if created:
         record_event(db, user.id, "tag.add", "item", item_id)
     await db.commit()
     return assignment
+
+
+async def add_existing_tag_to_item(
+    db: AsyncSession, user: User, item_id: str, tag_id: str
+) -> ItemTag:
+    if not await can_edit_item(db, user, item_id):
+        raise ResourceUnavailable("item not found or cannot be edited")
+    if await db.get(Tag, tag_id) is None:
+        raise ResourceUnavailable("tag not found")
+    try:
+        return await _add_tag_id_to_item(db, user, item_id, tag_id)
+    except IntegrityError as error:
+        raise ResourceUnavailable("tag is no longer available") from error
 
 
 async def remove_tag_from_item(db: AsyncSession, user: User, item_id: str, tag_id: str) -> None:
@@ -193,32 +210,6 @@ async def get_tag_matrix_for_item(db: AsyncSession, user: User, item_id: str) ->
         "recommendation_state": state,
         "recommendation_error": recommendation_error,
     }
-
-
-async def set_item_tags(
-    db: AsyncSession,
-    user: User,
-    item_id: str,
-    tag_ids: list[str],
-    new_names: list[str] | None = None,
-) -> None:
-    if not await can_edit_item(db, user, item_id):
-        raise ResourceUnavailable("item not found or cannot be edited")
-    tag_ids = list(tag_ids)
-    for raw_name in new_names or []:
-        if raw_name.strip():
-            tag = await get_or_create_tag(db, user, raw_name)
-            if tag.id not in tag_ids:
-                tag_ids.append(tag.id)
-    await db.execute(delete(ItemTag).where(ItemTag.item_id == item_id))
-    await db.flush()
-    valid_ids = set((await db.scalars(select(Tag.id).where(Tag.id.in_(tag_ids)))).all())
-    for tag_id in tag_ids:
-        if tag_id in valid_ids:
-            db.add(ItemTag(item_id=item_id, tag_id=tag_id))
-    await db.flush()
-    record_event(db, user.id, "tag.set", "item", item_id)
-    await db.commit()
 
 
 async def merge_tags(db: AsyncSession, user: User, source_tag_id: str, target_tag_id: str) -> Tag:

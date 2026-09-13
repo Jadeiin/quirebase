@@ -6,12 +6,12 @@ from quirebase.library import (
     DiscussionWorkspace,
     WorkspaceSection,
     add_discussion_message,
+    add_existing_tag_to_item,
     add_tag_to_item,
     delete_discussion_message,
     list_accessible_tags_with_counts,
     open_item_workspace,
     remove_tag_from_item,
-    set_item_tags,
 )
 from quirebase.mcp.tools.annotations import DESTRUCTIVE, READ_ONLY, WRITE
 from quirebase.programmatic import (
@@ -75,18 +75,21 @@ def register_organization_tools(server: MCPServer, runtime: McpRuntime) -> None:
         return {"ok": True}
 
     @server.tool(
-        name="tags.set_for_item",
-        description="Replace all Tags for an editable Item.",
+        name="tags.add_many_to_item",
+        description="Add existing Tags to an editable Item.",
         annotations=DESTRUCTIVE,
     )
-    async def tags_set_for_item(
+    async def tags_add_many_to_item(
         item_id: str, tag_ids: list[str], new_names: list[str] | None = None
     ) -> dict[str, bool]:
         async def run(db, user):
-            await set_item_tags(db, user, item_id, tag_ids, new_names)
+            for tag_id in tag_ids:
+                await add_existing_tag_to_item(db, user, item_id, tag_id)
+            for name in new_names or []:
+                await add_tag_to_item(db, user, item_id, name)
 
         await runtime.call(
-            "tags.set_for_item",
+            "tags.add_many_to_item",
             run,
             conceal_resource="item not found",
         )

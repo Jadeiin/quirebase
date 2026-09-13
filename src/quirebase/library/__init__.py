@@ -87,6 +87,7 @@ from quirebase.library.item_workspace import (
 )
 from quirebase.library.tags import (
     TagConflict,
+    add_existing_tag_to_item,
     add_tag_to_item,
     delete_tag,
     list_accessible_tags_with_counts,
@@ -94,7 +95,6 @@ from quirebase.library.tags import (
     regenerate_item_tag_recommendation,
     remove_tag_from_item,
     rename_tag,
-    set_item_tags,
 )
 from quirebase.library.workflows import (
     item_ids_for_tag_recommendation,
@@ -130,6 +130,7 @@ __all__ = [
     "WorkspaceSection",
     "WorkspaceView",
     "add_discussion_message",
+    "add_existing_tag_to_item",
     "add_tag_to_item",
     "admin_delete_item",
     "apply_bulk_item_action",
@@ -176,7 +177,6 @@ __all__ = [
     "search_candidate_records",
     "search_library",
     "select_builtin_citation_styles",
-    "set_item_tags",
     "stage_identifier_import_batch",
     "stage_import_batch",
     "stage_pdf_import_batch",
