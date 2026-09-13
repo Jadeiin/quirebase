@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 from inquiro.canonical import normalize_reference_type
 from sqlalchemy import select, update
 
-from quirebase.access.items import can_edit_item, require_editable_item
+from quirebase.access.items import require_editable_item_for_mutation
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceUnavailable, ValidationFailure, VersionConflict
 from quirebase.library.authors import set_item_authors
@@ -283,7 +283,7 @@ async def _revise_item_metadata(
     metadata: ItemMetadata,
 ) -> ItemWriteResult:
     actor_id = actor.id
-    item = await require_editable_item(db, actor, item_id)
+    item = await require_editable_item_for_mutation(db, actor, item_id)
     values = _bibliographic_values(metadata)
     values.update(
         custom_fields=_serialize_custom_fields(metadata.custom_fields),
@@ -356,8 +356,9 @@ async def _regenerate_bibtex_key(
 ) -> ItemWriteResult:
     actor_id = actor.id
     item = await db.scalar(select(Item).where(Item.id == item_id).with_for_update(key_share=True))
-    if item is None or not await can_edit_item(db, actor, item_id):
+    if item is None:
         raise ResourceUnavailable("item not found")
+    await require_editable_item_for_mutation(db, actor, item_id)
     key = generate_bibtex_key(item)
     item.bibtex_id = key
     item.updated_by = actor_id

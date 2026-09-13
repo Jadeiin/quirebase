@@ -7,7 +7,7 @@ from sqlalchemy import delete, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
-from quirebase.access.items import require_editable_item
+from quirebase.access.items import require_editable_item_for_mutation
 from quirebase.core.errors import ValidationFailure
 from quirebase.models import Author, Item, ItemAuthor, User
 
@@ -81,7 +81,7 @@ async def set_item_authors(
     authors_data: list[dict],
     role: str = "author",
 ) -> list[ItemAuthor]:
-    item = await require_editable_item(db, user, item_id)
+    item = await require_editable_item_for_mutation(db, user, item_id)
 
     await db.execute(
         delete(ItemAuthor).where(ItemAuthor.item_id == item_id, ItemAuthor.role == role)

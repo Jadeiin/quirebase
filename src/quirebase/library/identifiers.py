@@ -12,7 +12,7 @@ from inquiro.identifiers import DOI_PATTERN, normalize_doi
 from inquiro.models import CandidateRecord
 from sqlalchemy import delete, select, update
 
-from quirebase.access.items import can_edit_item, require_editable_item
+from quirebase.access.items import require_editable_item, require_editable_item_for_mutation
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceUnavailable, VersionConflict
 from quirebase.documents.pdf import first_doi_from_text
@@ -59,7 +59,7 @@ async def set_item_identifiers(
     item_id: str,
     id_pairs: list[tuple[str, str]],
 ) -> list[ItemIdentifier]:
-    item = await require_editable_item(db, user, item_id)
+    item = await require_editable_item_for_mutation(db, user, item_id)
     return await _set_item_identifiers_for_item(db, user, item, id_pairs)
 
 
@@ -147,8 +147,7 @@ async def rescan_pdf_doi(db: AsyncSession, user: User, item_id: str) -> str | No
                 item = await db.scalar(
                     select(Item).where(Item.id == item_id).with_for_update(key_share=True)
                 )
-                if item is None or not await can_edit_item(db, user, item_id):
-                    raise ResourceUnavailable("item not found")
+                item = await require_editable_item_for_mutation(db, user, item_id)
                 # A manually supplied DOI takes precedence over scanner output.
                 if item.doi:
                     return item.doi
@@ -323,7 +322,7 @@ async def _sync_metadata_from_upstream(
     if reloaded_user is None or not reloaded_user.active:
         raise ResourceUnavailable("user not available")
     user = reloaded_user
-    item = await require_editable_item(db, user, item_id)
+    item = await require_editable_item_for_mutation(db, user, item_id)
     version = await db.scalar(
         update(Item)
         .where(Item.id == item_id, Item.version == expected_version)

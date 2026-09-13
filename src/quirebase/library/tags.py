@@ -8,9 +8,8 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access.items import (
-    can_edit_item,
     can_read_item,
-    require_editable_item,
+    require_editable_item_for_mutation,
     visible_items_query,
 )
 from quirebase.audit import record_event
@@ -35,7 +34,7 @@ class TagConflict(DomainError):
 
 
 async def regenerate_item_tag_recommendation(db: AsyncSession, user: User, item_id: str) -> str:
-    await require_editable_item(db, user, item_id)
+    await require_editable_item_for_mutation(db, user, item_id)
     recommendation = await request_item_tag_recommendation(
         db, item_id, owner_id=user.id, force=True
     )
@@ -67,8 +66,7 @@ async def get_or_create_tag(db: AsyncSession, user: User, name: str) -> Tag:
 
 
 async def add_tag_to_item(db: AsyncSession, user: User, item_id: str, name: str) -> ItemTag:
-    if not await can_edit_item(db, user, item_id):
-        raise ResourceUnavailable("item not found or cannot be edited")
+    await require_editable_item_for_mutation(db, user, item_id)
     tag = await get_or_create_tag(db, user, name)
     return await _add_tag_id_to_item(db, user, item_id, tag.id)
 
@@ -104,8 +102,7 @@ async def _add_tag_id_to_item(
 async def add_existing_tag_to_item(
     db: AsyncSession, user: User, item_id: str, tag_id: str
 ) -> ItemTag:
-    if not await can_edit_item(db, user, item_id):
-        raise ResourceUnavailable("item not found or cannot be edited")
+    await require_editable_item_for_mutation(db, user, item_id)
     if await db.get(Tag, tag_id) is None:
         raise ResourceUnavailable("tag not found")
     try:
@@ -115,8 +112,7 @@ async def add_existing_tag_to_item(
 
 
 async def remove_tag_from_item(db: AsyncSession, user: User, item_id: str, tag_id: str) -> None:
-    if not await can_edit_item(db, user, item_id):
-        raise ResourceUnavailable("item not found or cannot be edited")
+    await require_editable_item_for_mutation(db, user, item_id)
     await _remove_tag_from_item(db, user, item_id, tag_id)
 
 
@@ -154,8 +150,7 @@ async def apply_item_tag_selection(
     historical commit-by-default behaviour. Batch callers use this operation so all removals,
     existing Tag additions and new Tag additions share one transaction.
     """
-    if not await can_edit_item(db, user, item_id):
-        raise ResourceUnavailable("item not found or cannot be edited")
+    await require_editable_item_for_mutation(db, user, item_id)
     try:
         remove_ids = set(remove_tag_ids or [])
         add_ids = set(tag_ids or [])
@@ -193,8 +188,7 @@ async def replace_item_tag_selection(
     new_names: list[str] | None = None,
 ) -> None:
     """Replace an Item's Tag selection while preserving explicit removals."""
-    if not await can_edit_item(db, user, item_id):
-        raise ResourceUnavailable("item not found or cannot be edited")
+    await require_editable_item_for_mutation(db, user, item_id)
     try:
         resolved_names = [await get_or_create_tag(db, user, name) for name in (new_names or [])]
         current_ids = set(

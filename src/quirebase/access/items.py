@@ -77,13 +77,45 @@ async def require_readable_item(db: AsyncSession, user: User, item_id: str) -> I
         .where(Item.id == item_id)
     )
     if item is None:
-        raise ResourceNotFound("item not found")
+        raise ResourceUnavailable("item not found")
     return item
 
 
 async def require_editable_item(db: AsyncSession, user: User, item_id: str) -> Item:
-    if not await can_edit_item(db, user, item_id):
+    item = await db.scalar(
+        select(Item)
+        .options(
+            selectinload(Item.author_links).selectinload(ItemAuthor.author),
+            selectinload(Item.identifier_links),
+        )
+        .where(Item.id == item_id)
+    )
+    if item is None:
         raise ResourceUnavailable("item not found")
+    if user.role == SystemRole.administrator.value or item.created_by == user.id:
+        return item
+    editable = exists().where(
+        ProjectItem.item_id == item_id,
+        ProjectMember.project_id == ProjectItem.project_id,
+        Project.state == "active",
+        Project.id == ProjectItem.project_id,
+        ProjectMember.user_id == user.id,
+        ProjectMember.role.in_([ProjectRole.owner, ProjectRole.editor]),
+    )
+    if not await db.scalar(select(editable)):
+        raise ResourceUnavailable("item not found")
+    return item
+
+
+async def require_editable_item_for_mutation(db: AsyncSession, user: User, item_id: str) -> Item:
+    """Authorize an Item mutation while holding its active Project grant.
+
+    Project archival takes a no-key-update lock on the Project root.  Locking
+    the granting Project with ``FOR SHARE`` here makes authorization and the
+    subsequent Item/child mutation one linearization point.  Item owners and
+    administrators do not depend on Project state and therefore need no
+    additional root lock.
+    """
     item = await db.scalar(
         select(Item)
         .options(
@@ -94,6 +126,23 @@ async def require_editable_item(db: AsyncSession, user: User, item_id: str) -> I
     )
     if item is None:
         raise ResourceNotFound("item not found")
+    if user.role == SystemRole.administrator.value or item.created_by == user.id:
+        return item
+    project = await db.scalar(
+        select(Project)
+        .join(ProjectItem, ProjectItem.project_id == Project.id)
+        .join(ProjectMember, ProjectMember.project_id == Project.id)
+        .where(
+            ProjectItem.item_id == item_id,
+            ProjectMember.user_id == user.id,
+            ProjectMember.role.in_([ProjectRole.owner, ProjectRole.editor]),
+            Project.state == "active",
+        )
+        .order_by(Project.id)
+        .with_for_update(read=True, of=Project)
+    )
+    if project is None:
+        raise ResourceUnavailable("item not found")
     return item
 
 

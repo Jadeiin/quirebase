@@ -267,7 +267,16 @@ async def add_items_to_project(
     rows = [{"project_id": project_id, "item_id": item_id} for item_id in accessible]
     dialect = db.get_bind().dialect.name
     insert = pg_insert(ProjectItem) if dialect == "postgresql" else sqlite_insert(ProjectItem)
-    result = await db.execute(
-        insert.values(rows).on_conflict_do_nothing(index_elements=["project_id", "item_id"])
-    )
+    try:
+        async with db.begin_nested():
+            result = await db.execute(
+                insert.values(rows).on_conflict_do_nothing(index_elements=["project_id", "item_id"])
+            )
+    except IntegrityError as error:
+        # An Item may disappear after the accessibility check but before the
+        # association insert.  Treat the FK race as a normal rejected
+        # assignment rather than leaking a failed transaction to the caller.
+        raise ResourceUnavailable(
+            "item or project not accessible or insufficient permissions"
+        ) from error
     return int(getattr(result, "rowcount", 0) or 0)

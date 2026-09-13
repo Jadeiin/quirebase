@@ -483,7 +483,10 @@ async def _converge_pdf_import_batch_status(db: AsyncSession, batch: ImportBatch
 async def retry_pdf_import_batch(db: AsyncSession, user: User, batch_id: str) -> ImportBatch:
     """Retry a failed PDF Import Batch without relinquishing its staged objects."""
     batch = await db.scalar(
-        select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update(key_share=True)
+        # Confirmation/retry mutate the Import Batch root.  A full UPDATE lock
+        # serializes concurrent callers before either can create child Items or
+        # transition the batch status.
+        select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update()
     )
     if batch is None or batch.owner_id != user.id:
         raise ResourceUnavailable("import batch not found")
@@ -529,9 +532,10 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> li
     )
     if owner is None:
         raise ResourceUnavailable("user not available")
-    batch = await db.scalar(
-        select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update(key_share=True)
-    )
+    # Confirmation mutates the Import Batch root and creates child Items.  A
+    # full UPDATE lock serializes concurrent confirmations before either caller
+    # can observe ``ready`` and create duplicate Items.
+    batch = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update())
     if batch is None or batch.owner_id != owner.id:
         raise ResourceUnavailable("import batch not found")
     if batch.status == "committed":

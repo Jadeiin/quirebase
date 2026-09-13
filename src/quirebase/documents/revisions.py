@@ -11,7 +11,12 @@ from uuid import UUID, uuid4
 from sqlalchemy import select, update
 
 from quirebase.access.documents import require_attachment, require_revision
-from quirebase.access.items import can_edit_item, require_editable_item, require_readable_item
+from quirebase.access.items import (
+    can_edit_item,
+    require_editable_item,
+    require_editable_item_for_mutation,
+    require_readable_item,
+)
 from quirebase.audit import record_event
 from quirebase.core.config import get_settings
 from quirebase.core.errors import (
@@ -638,7 +643,7 @@ async def get_item_thumbnail(db: AsyncSession, user: User, item_id: str) -> Item
 async def delete_file_revision(
     db: AsyncSession, user: User, item_id: str, revision_id: str
 ) -> None:
-    await require_editable_item(db, user, item_id)
+    await require_editable_item_for_mutation(db, user, item_id)
     if await db.scalar(select(Item.id).where(Item.id == item_id).with_for_update()) is None:
         raise ResourceNotFound("item not found")
     revision = await db.scalar(
@@ -670,7 +675,7 @@ async def delete_file_revision(
 
 
 async def delete_attachment(db: AsyncSession, user: User, item_id: str, attachment_id: str) -> None:
-    await require_editable_item(db, user, item_id)
+    await require_editable_item_for_mutation(db, user, item_id)
     if await db.scalar(select(Item.id).where(Item.id == item_id).with_for_update()) is None:
         raise ResourceNotFound("item not found")
     attachment = await db.get(Attachment, attachment_id)
