@@ -41,13 +41,15 @@ async def test_concurrent_import_confirmation_has_one_identity():
     try:
         async with factory() as db:
             user = User(username="pg-import-race", password_hash="unused")
+            db.add(user)
+            await db.flush()
             batch = ImportBatch(
                 owner_id=user.id,
                 file_format="bibtex",
                 records=json.dumps([{"title": "one identity"}]),
                 errors="[]",
             )
-            db.add_all([user, batch])
+            db.add(batch)
             await db.commit()
             batch_id = batch.id
 
