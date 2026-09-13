@@ -12,7 +12,7 @@ from storage_helpers import collect_body, local_object_path, put_pdf_object
 from test_http import authenticated_async_client
 
 from quirebase.core.crypto import hash_password
-from quirebase.core.errors import PermissionDenied
+from quirebase.core.errors import PermissionDenied, ValidationFailure
 from quirebase.core.storage import ObjectMetadata, ObjectResponse
 from quirebase.documents import create_item_document_bundle
 from quirebase.library import apply_bulk_item_action, download_selected_item_documents
@@ -25,8 +25,10 @@ from quirebase.models import (
     Project,
     ProjectItem,
     ProjectMember,
+    ProjectState,
     User,
 )
+from quirebase.projects import set_project_state
 
 
 @pytest.mark.anyio
@@ -156,6 +158,75 @@ async def test_bulk_action_records_single_bulk_audit_event(
     assert event is not None
     assert json.loads(event.detail)["item_ids"] == [item.id]
     await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_bulk_action_rejects_archived_project_assignment(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    owner = await db.get(User, item.created_by)
+    assert owner is not None
+    target_project = Project(
+        name="Archived Project", created_by=owner.id, state=ProjectState.archived
+    )
+    db.add(target_project)
+    await db.flush()
+    db.add(ProjectMember(project_id=target_project.id, user_id=owner.id, role="owner"))
+    await db.commit()
+
+    with pytest.raises(ValidationFailure, match="choose an editable project"):
+        await apply_bulk_item_action(
+            db,
+            owner,
+            item_ids=[item.id],
+            action="add_project",
+            project_id=target_project.id,
+        )
+
+    assert await db.get(ProjectItem, (target_project.id, item.id)) is None
+    await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_bulk_action_revalidates_stale_project_state(async_db, async_session_factory):
+    owner = User(username="bulk-project-race-owner", password_hash="unused")
+    async_db.add(owner)
+    await async_db.flush()
+    item = Item(title="Bulk project race", created_by=owner.id)
+    project = Project(name="Bulk project race", created_by=owner.id)
+    async_db.add_all([item, project])
+    await async_db.flush()
+    async_db.add(ProjectMember(project_id=project.id, user_id=owner.id, role="owner"))
+    await async_db.commit()
+
+    async with async_session_factory() as bulk_session:
+        bulk_owner = await bulk_session.get(User, owner.id)
+        assert bulk_owner is not None
+        stale_project = await bulk_session.get(Project, project.id)
+        stale_member = await bulk_session.get(ProjectMember, (project.id, owner.id))
+        assert stale_project is not None and stale_member is not None
+
+        async with async_session_factory() as lifecycle_session:
+            lifecycle_owner = await lifecycle_session.get(User, owner.id)
+            assert lifecycle_owner is not None
+            await set_project_state(
+                lifecycle_session, lifecycle_owner, project.id, ProjectState.archived
+            )
+
+        with pytest.raises(ValidationFailure, match="choose an editable project"):
+            await apply_bulk_item_action(
+                bulk_session,
+                bulk_owner,
+                item_ids=[item.id],
+                action="add_project",
+                project_id=project.id,
+            )
+
+    assert await async_db.get(ProjectItem, (project.id, item.id)) is None
 
 
 @pytest.mark.anyio

@@ -5,6 +5,9 @@
 {% block content %}
 <section class="panel">
   <h1>{{ _('Import preview') }}</h1>
+  {% if batch.status == 'committed' %}
+    <p class="success-message">{{ _('This import batch has already been committed. Submitting it again will replay the recorded result.') }}</p>
+  {% endif %}
   {% if batch.status == 'failed' %}
     <p class="error-message">{{ _('PDF import preparation failed. The staged PDFs are still available.') }}</p>
     <form method="post" action="/imports/{{ batch.id }}/retry">{{ csrf_field(csrf) }}
@@ -22,14 +25,16 @@
     </li>{% endfor %}</ul>
     {% if batch.file_format != 'pdf' %}<p>{{ _('Fix the source file and {try_again}. No records were imported.', try_again='<a href="/bibliography/import">' ~ _('try again') ~ '</a>')|safe }}</p>{% endif %}
   {% endif %}
-  {% if records and (not errors or batch.file_format == 'pdf') %}
+  {% if batch.status != 'committed' and records and (not errors or batch.file_format == 'pdf') %}
     <form method="post" action="/bibliography/import/{{ batch.id }}">{{ csrf_field(csrf) }}
       <button>{{ _('Import all records') }}</button>
     </form>
   {% endif %}
-  <form method="post" action="/bibliography/import/{{ batch.id }}/discard">{{ csrf_field(csrf) }}
-    <button class="secondary-button">{{ _('Discard import batch') }}</button>
-  </form>
+  {% if batch.status != 'committed' %}
+    <form method="post" action="/bibliography/import/{{ batch.id }}/discard">{{ csrf_field(csrf) }}
+      <button class="secondary-button">{{ _('Discard import batch') }}</button>
+    </form>
+  {% endif %}
   <ol>
     {% for record in records %}
       <li><strong>{% if record.title %}{{ record.title|rich_text|safe }}{% else %}{{ _('(missing title)') }}{% endif %}</strong> — {{ record.authors or '' }}{% if record._pdf %}<small> · {{ record._pdf.original_name }} · {{ record._pdf.detected_doi }}</small>{% endif %}</li>

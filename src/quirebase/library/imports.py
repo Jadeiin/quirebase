@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -11,13 +10,12 @@ from inquiro.bibliography import (
     BibliographyRecord,
     parse_bibliography_records,
 )
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import selectinload
 
 from quirebase.access.items import require_accessible_items, visible_items_query
 from quirebase.audit import record_event
 from quirebase.core.config import MAX_SQL_INTEGER, Settings, get_settings
-from quirebase.core.database import AsyncSessionLocal
 from quirebase.core.errors import (
     DomainError,
     ResourceNotFound,
@@ -54,8 +52,7 @@ class BatchConflict(DomainError):
 
 
 MAX_PDF_IMPORT_FILES = 50
-PDF_IMPORT_CLAIM_TIMEOUT = timedelta(hours=1)
-PDF_IMPORT_CLAIM_HEARTBEAT_SECONDS = 30.0
+_WORKFLOW_NOT_LOOKED_UP = object()
 
 
 def _consume_current_cancellation() -> None:
@@ -100,57 +97,6 @@ def _pdf_object_keys(records_json: str) -> set[str]:
         and isinstance((pdf := record.get("_pdf")), dict)
         and isinstance(pdf.get("object_key"), str)
     }
-
-
-def _pdf_import_claim_is_stale(workflow_id: str | None) -> bool:
-    if not workflow_id or not workflow_id.startswith("commit-pdf-import:"):
-        return False
-    parts = workflow_id.split(":")
-    if len(parts) != 4:
-        return False
-    try:
-        claimed_at = datetime.fromtimestamp(float(parts[3]), UTC)
-    except (TypeError, ValueError, OverflowError):
-        return False
-    return datetime.now(UTC) - claimed_at >= PDF_IMPORT_CLAIM_TIMEOUT
-
-
-def _pdf_import_claim_id(batch_id: str, token: str) -> str:
-    return f"commit-pdf-import:{batch_id}:{token}:{datetime.now(UTC).timestamp()}"
-
-
-async def _pdf_import_claim_heartbeat(
-    batch_id: str, claim_ref: list[str], stop: asyncio.Event
-) -> None:
-    while True:
-        try:
-            await asyncio.wait_for(stop.wait(), timeout=PDF_IMPORT_CLAIM_HEARTBEAT_SECONDS)
-            return
-        except TimeoutError:
-            pass
-        current_claim = claim_ref[0]
-        next_claim = _pdf_import_claim_id(batch_id, current_claim.split(":")[2])
-        async with AsyncSessionLocal() as heartbeat_db:
-            refreshed = await heartbeat_db.execute(
-                update(ImportBatch)
-                .where(ImportBatch.id == batch_id, ImportBatch.workflow_id == current_claim)
-                .values(workflow_id=next_claim)
-                .execution_options(synchronize_session=False)
-            )
-            if getattr(refreshed, "rowcount", 0) != 1:
-                await heartbeat_db.rollback()
-                return
-            await heartbeat_db.commit()
-        claim_ref[0] = next_claim
-
-
-async def _stop_pdf_import_claim_heartbeat(
-    task: asyncio.Task[None] | None, stop: asyncio.Event | None
-) -> None:
-    if task is None or stop is None:
-        return
-    stop.set()
-    await _finish_cleanup_despite_cancellation(task)
 
 
 def _record_to_item_payload(record: BibliographyRecord) -> dict[str, str | None]:
@@ -410,24 +356,6 @@ async def _preflight_pdf_annotation_modes(
     return effective_modes
 
 
-async def _release_pdf_import_claim(
-    db: AsyncSession,
-    batch_id: str,
-    claim_id: str,
-    previous_workflow_id: str | None,
-) -> None:
-    try:
-        await db.execute(
-            update(ImportBatch)
-            .where(ImportBatch.id == batch_id, ImportBatch.workflow_id == claim_id)
-            .values(workflow_id=previous_workflow_id)
-        )
-        await db.commit()
-    except BaseException:
-        await db.rollback()
-        raise
-
-
 async def extract_pdf_import_doi(pending: dict) -> dict:
     """Materialize one staged PDF and extract its DOI without database access."""
     pdf = pending["_pdf"]
@@ -578,23 +506,42 @@ async def _create_item_from_record(db: AsyncSession, user: User, record: dict) -
 async def get_import_batch_preview(
     db: AsyncSession, user: User, batch_id: str
 ) -> tuple[ImportBatch, list[dict], list[dict]]:
-    batch = await db.get(ImportBatch, batch_id)
+    observed = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id))
+    if observed is None or observed.owner_id != user.id:
+        raise ResourceUnavailable("import batch not found")
+    observed_workflow_id = observed.workflow_id
+    workflow = None
+    if observed.status == "pending" and observed.file_format == "pdf":
+        workflow = (
+            await durable_operations().get(observed.workflow_id) if observed.workflow_id else None
+        )
+    batch = await db.scalar(
+        select(ImportBatch)
+        .where(ImportBatch.id == batch_id)
+        .execution_options(populate_existing=True)
+        .with_for_update(key_share=True)
+    )
     if batch is None or batch.owner_id != user.id:
         raise ResourceUnavailable("import batch not found")
-    if await _converge_pdf_import_batch_status(db, batch):
+    if batch.workflow_id == observed_workflow_id and await _converge_pdf_import_batch_status(
+        db, batch, workflow
+    ):
         await db.commit()
-    records = json.loads(batch.records) if batch.status == "ready" else []
+    records = json.loads(batch.records) if batch.status in {"ready", "committed"} else []
     return batch, records, json.loads(batch.errors)
 
 
-async def _converge_pdf_import_batch_status(db: AsyncSession, batch: ImportBatch) -> bool:
+async def _converge_pdf_import_batch_status(
+    db: AsyncSession, batch: ImportBatch, workflow=_WORKFLOW_NOT_LOOKED_UP
+) -> bool:
     """Map a missing or terminal durable preparation back to the retryable business state."""
     if batch.file_format != "pdf" or batch.status != "pending":
         return False
     observed_workflow_id = batch.workflow_id
-    workflow = (
-        await durable_operations().get(observed_workflow_id) if observed_workflow_id else None
-    )
+    if workflow is _WORKFLOW_NOT_LOOKED_UP:
+        workflow = (
+            await durable_operations().get(observed_workflow_id) if observed_workflow_id else None
+        )
     if workflow is not None and workflow.state in {"pending", "running"}:
         return False
     result = await db.execute(
@@ -614,10 +561,28 @@ async def _converge_pdf_import_batch_status(db: AsyncSession, batch: ImportBatch
 
 async def retry_pdf_import_batch(db: AsyncSession, user: User, batch_id: str) -> ImportBatch:
     """Retry a failed PDF Import Batch without relinquishing its staged objects."""
-    batch = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update())
+    observed = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id))
+    if observed is None or observed.owner_id != user.id:
+        raise ResourceUnavailable("import batch not found")
+    observed_workflow_id = observed.workflow_id
+    workflow = None
+    if observed.file_format == "pdf" and observed.status == "pending":
+        workflow = (
+            await durable_operations().get(observed.workflow_id) if observed.workflow_id else None
+        )
+    batch = await db.scalar(
+        # Confirmation/retry mutate the Import Batch root.  A full UPDATE lock
+        # serializes concurrent callers before either can create child Items or
+        # transition the batch status.
+        select(ImportBatch)
+        .where(ImportBatch.id == batch_id)
+        .execution_options(populate_existing=True)
+        .with_for_update()
+    )
     if batch is None or batch.owner_id != user.id:
         raise ResourceUnavailable("import batch not found")
-    await _converge_pdf_import_batch_status(db, batch)
+    if batch.workflow_id == observed_workflow_id:
+        await _converge_pdf_import_batch_status(db, batch, workflow)
     if batch.file_format != "pdf" or batch.status != "failed":
         raise BatchConflict("only a failed PDF import batch can be retried")
     pending_records = json.loads(batch.records)
@@ -653,16 +618,48 @@ async def retry_pdf_import_batch(db: AsyncSession, user: User, batch_id: str) ->
     return batch
 
 
-async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> None:
-    user_id = user.id
-    claim_id: str | None = None
-    previous_workflow_id: str | None = None
-    claim_heartbeat_task: asyncio.Task[None] | None = None
-    claim_heartbeat_stop: asyncio.Event | None = None
-    claim_ref: list[str] | None = None
-    batch = await db.get(ImportBatch, batch_id)
-    if batch is None or batch.owner_id != user_id:
+async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> list[str]:
+    # Destructive annotation preflight performs external I/O and must not hold
+    # the ImportBatch root lock.  The final transaction below re-reads the
+    # batch and verifies that the staged records did not change meanwhile.
+    observed = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id))
+    if observed is None or observed.owner_id != user.id:
         raise ResourceUnavailable("import batch not found")
+    preflight_modes: dict[str, str] = {}
+    observed_records = json.loads(observed.records)
+    if observed.status == "ready" and observed.file_format == "pdf":
+        annotation_mode = PdfAnnotationMode(
+            observed.pdf_annotation_mode or PdfAnnotationMode.preserve
+        )
+        if annotation_mode is not PdfAnnotationMode.preserve:
+            preflight_modes = await _preflight_pdf_annotation_modes(
+                observed_records,
+                annotation_mode,
+                observed.max_pdf_bytes or get_settings().max_pdf_bytes,
+            )
+
+    owner = await db.scalar(
+        select(User).where(User.id == user.id, User.active.is_(True)).with_for_update(read=True)
+    )
+    if owner is None:
+        raise ResourceUnavailable("user not available")
+    # Confirmation mutates the Import Batch root and creates child Items.  A
+    # full UPDATE lock serializes concurrent confirmations before either caller
+    # can observe ``ready`` and create duplicate Items.
+    batch = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update())
+    if batch is None or batch.owner_id != owner.id:
+        raise ResourceUnavailable("import batch not found")
+    if batch.status == "committed":
+        try:
+            committed_ids = json.loads(batch.committed_item_ids or "[]")
+        except (TypeError, json.JSONDecodeError) as error:
+            raise BatchConflict("the committed batch has invalid results") from error
+        if not isinstance(committed_ids, list) or not all(
+            isinstance(item_id, str) for item_id in committed_ids
+        ):
+            raise BatchConflict("the committed batch has invalid results")
+        await db.commit()
+        return committed_ids
     if batch.status != "ready":
         raise BatchConflict("the import batch is still being prepared")
     errors = json.loads(batch.errors)
@@ -672,99 +669,36 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
     if not records:
         raise BatchConflict("the import batch has no candidate records")
     if batch.file_format == "pdf":
-        annotation_mode = PdfAnnotationMode(batch.pdf_annotation_mode or PdfAnnotationMode.preserve)
-        max_pdf_bytes = batch.max_pdf_bytes or get_settings().max_pdf_bytes
-        previous_workflow_id = batch.workflow_id
-        if (
-            previous_workflow_id
-            and previous_workflow_id.startswith("commit-pdf-import:")
-            and not (_pdf_import_claim_is_stale(previous_workflow_id))
-        ):
-            raise BatchConflict("the import batch is already being confirmed")
-        claim_id = _pdf_import_claim_id(batch.id, str(uuid4()))
-        claimed = await db.execute(
-            update(ImportBatch)
-            .where(
-                ImportBatch.id == batch.id,
-                ImportBatch.owner_id == user_id,
-                ImportBatch.status == "ready",
-                ImportBatch.workflow_id == previous_workflow_id,
-            )
-            .values(workflow_id=claim_id)
-            .execution_options(synchronize_session=False)
-        )
-        if getattr(claimed, "rowcount", 0) != 1:
-            await db.rollback()
-            raise BatchConflict("the import batch is already being confirmed")
-        await db.commit()
-        claim_ref = [claim_id]
-        claim_heartbeat_stop = asyncio.Event()
-        claim_heartbeat_task = asyncio.create_task(
-            _pdf_import_claim_heartbeat(batch.id, claim_ref, claim_heartbeat_stop)
-        )
-        try:
-            if annotation_mode is not PdfAnnotationMode.preserve:
-                effective_modes = await _preflight_pdf_annotation_modes(
-                    records, annotation_mode, max_pdf_bytes
-                )
-                batch = await db.get(ImportBatch, batch_id)
-                if batch is not None:
-                    await db.refresh(batch)
-                if (
-                    batch is None
-                    or batch.owner_id != user_id
-                    or batch.status != "ready"
-                    or batch.file_format != "pdf"
-                    or batch.workflow_id != claim_ref[0]
-                ):
-                    raise BatchConflict("the import batch changed during PDF preflight")
-                current_records = json.loads(batch.records)
-                current_keys = {
-                    record.get("_pdf", {}).get("object_key")
-                    for record in current_records
-                    if isinstance(record, dict) and isinstance(record.get("_pdf"), dict)
-                }
-                if current_keys != set(effective_modes):
-                    raise BatchConflict("the import batch changed during PDF preflight")
-                records = current_records
-                for record in records:
-                    pdf = record["_pdf"]
-                    record["_pdf_annotation_mode"] = effective_modes[pdf["object_key"]]
-
-                reloaded_user = await db.get(User, user_id)
-                if reloaded_user is None or not reloaded_user.active:
-                    raise ResourceUnavailable("user not available")
-                user = reloaded_user
-
-        except BaseException:
-            await _stop_pdf_import_claim_heartbeat(claim_heartbeat_task, claim_heartbeat_stop)
-            await _release_pdf_import_claim(db, batch_id, claim_ref[0], previous_workflow_id)
-            raise
-
-        try:
-            known_dois = {
-                value
-                for provider, value in await get_accessible_item_identifiers(db, user)
-                if provider == "doi"
-            }
-            candidate_dois: set[str] = set()
-            for record in records:
-                doi = record.get("doi") if isinstance(record, dict) else None
-                normalized_doi = doi.strip().casefold() if isinstance(doi, str) else ""
-                if normalized_doi in known_dois:
-                    raise BatchConflict("an accessible Item already has this DOI")
-                if normalized_doi and normalized_doi in candidate_dois:
-                    raise BatchConflict("another PDF in this batch has the same DOI")
-                if normalized_doi:
-                    candidate_dois.add(normalized_doi)
-        except BaseException:
-            if claim_id is not None:
-                await _stop_pdf_import_claim_heartbeat(claim_heartbeat_task, claim_heartbeat_stop)
-                await _release_pdf_import_claim(db, batch_id, claim_ref[0], previous_workflow_id)
-            raise
-    try:
-        cleanup_source_keys: set[str] = set()
+        current_keys = {
+            record.get("_pdf", {}).get("object_key")
+            for record in records
+            if isinstance(record, dict) and isinstance(record.get("_pdf"), dict)
+        }
+        if preflight_modes and current_keys != set(preflight_modes):
+            raise BatchConflict("the import batch changed during PDF preflight")
         for record in records:
+            pdf = record.get("_pdf") if isinstance(record, dict) else None
+            if isinstance(pdf, dict) and pdf.get("object_key") in preflight_modes:
+                record["_pdf_annotation_mode"] = preflight_modes[pdf["object_key"]]
+        known_dois = {
+            value
+            for provider, value in await get_accessible_item_identifiers(db, owner)
+            if provider == "doi"
+        }
+        candidate_dois: set[str] = set()
+        for record in records:
+            doi = record.get("doi") if isinstance(record, dict) else None
+            normalized_doi = doi.strip().casefold() if isinstance(doi, str) else ""
+            if normalized_doi in known_dois:
+                raise BatchConflict("an accessible Item already has this DOI")
+            if normalized_doi and normalized_doi in candidate_dois:
+                raise BatchConflict("another PDF in this batch has the same DOI")
+            if normalized_doi:
+                candidate_dois.add(normalized_doi)
+    cleanup_source_keys: set[str] = set()
+    committed_item_ids: list[str] = []
+    for record in records:
+        try:
             candidate = dict(record)
             pdf = candidate.pop("_pdf", None)
             record_annotation_mode = candidate.pop("_pdf_annotation_mode", None)
@@ -779,11 +713,11 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
             )
             if pdf is not None and effective_annotation_mode is not PdfAnnotationMode.preserve:
                 cleanup_source_keys.add(pdf["object_key"])
-            item = await _create_item_from_record(db, user, candidate)
+            item = await _create_item_from_record(db, owner, candidate)
             if pdf is not None:
                 await attach_staged_pdf(
                     db,
-                    user,
+                    owner,
                     item,
                     (
                         pdf["object_key"],
@@ -796,7 +730,7 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
             await search_index(db).index_item(db, item.id)
             record_event(
                 db,
-                user.id,
+                owner.id,
                 "pdf.import" if pdf is not None else "bibliography.import",
                 "item",
                 item.id,
@@ -804,72 +738,40 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
                     "format": batch.file_format,
                     "filename": pdf["original_name"] if pdf else None,
                     "annotation_mode": (
-                        PdfAnnotationMode(effective_annotation_mode).value
-                        if pdf is not None
-                        else None
+                        effective_annotation_mode.value if pdf is not None else None
                     ),
                 },
             )
-        await _stop_pdf_import_claim_heartbeat(claim_heartbeat_task, claim_heartbeat_stop)
-        if claim_ref is not None:
-            deleted = await db.execute(
-                delete(ImportBatch).where(
-                    ImportBatch.id == batch_id,
-                    ImportBatch.owner_id == user_id,
-                    ImportBatch.workflow_id == claim_ref[0],
-                )
-            )
-            if getattr(deleted, "rowcount", 0) != 1:
-                raise BatchConflict("the import batch claim was lost")
-            db.expunge(batch)
-        else:
-            await db.delete(batch)
-        if cleanup_source_keys:
-            await enqueue_object_cleanup(
-                db,
-                cleanup_source_keys,
-                owner_id=user.id,
-                operation="pdf_import_source_cleanup",
-                target_id=batch_id,
-            )
+            committed_item_ids.append(item.id)
+        except BaseException:
+            await db.rollback()
+            raise
+    batch.committed_item_ids = json.dumps(committed_item_ids)
+    # A committed batch no longer owns staged upload objects.  Drop the PDF
+    # staging payload so cleanup cannot mistake it for a live reservation.
+    batch.records = json.dumps([
+        {key: value for key, value in record.items() if key != "_pdf"}
+        for record in records
+        if isinstance(record, dict)
+    ])
+    batch.status = "committed"
+    try:
         await db.commit()
     except BaseException:
-        if claim_id is not None:
-            await _stop_pdf_import_claim_heartbeat(claim_heartbeat_task, claim_heartbeat_stop)
-            await db.rollback()
-            assert claim_ref is not None
-            await _release_pdf_import_claim(db, batch_id, claim_ref[0], previous_workflow_id)
+        await db.rollback()
         raise
+    return committed_item_ids
 
 
 async def discard_import_batch(db: AsyncSession, user: User, batch_id: str) -> None:
-    batch = await db.get(ImportBatch, batch_id)
+    batch = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update())
     if batch is None or batch.owner_id != user.id:
         raise ResourceUnavailable("import batch not found")
-    if (
-        batch.workflow_id
-        and batch.workflow_id.startswith("commit-pdf-import:")
-        and not (_pdf_import_claim_is_stale(batch.workflow_id))
-    ):
-        raise BatchConflict("the PDF import batch is being confirmed")
+    if batch.status == "committed":
+        raise BatchConflict("a committed import batch cannot be discarded")
     object_keys = _pdf_object_keys(batch.records)
-    workflow_predicate = or_(
-        ImportBatch.workflow_id.is_(None),
-        ~ImportBatch.workflow_id.like("commit-pdf-import:%"),
-    )
-    if _pdf_import_claim_is_stale(batch.workflow_id):
-        workflow_predicate = or_(workflow_predicate, ImportBatch.workflow_id == batch.workflow_id)
-    deleted = await db.execute(
-        delete(ImportBatch).where(
-            ImportBatch.id == batch.id,
-            ImportBatch.owner_id == user.id,
-            workflow_predicate,
-        )
-    )
-    if getattr(deleted, "rowcount", 0) != 1:
-        await db.rollback()
-        raise BatchConflict("the PDF import batch is being confirmed")
     record_event(db, user.id, "import.batch.discard", "import_batch", batch.id)
+    await db.delete(batch)
     await enqueue_object_cleanup(
         db,
         object_keys,

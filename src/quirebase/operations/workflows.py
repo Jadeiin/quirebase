@@ -91,6 +91,24 @@ async def reindex_items_step(item_ids: tuple[str, ...]) -> int:
     return len(item_ids)
 
 
+@ads.transaction(isolation_level="READ COMMITTED")
+async def list_reindex_revision_ids_step(after_id: str | None, limit: int) -> tuple[str, ...]:
+    db = ads.sql_session()
+    query = select(FileRevision.id).order_by(FileRevision.id).limit(limit)
+    if after_id is not None:
+        query = query.where(FileRevision.id > after_id)
+    return tuple((await db.scalars(query)).all())
+
+
+@ads.transaction()
+async def reindex_revisions_step(revision_ids: tuple[str, ...]) -> int:
+    db = ads.sql_session()
+    index = search_index(db)
+    for revision_id in revision_ids:
+        await index.index_revision(db, revision_id)
+    return len(revision_ids)
+
+
 @DBOS.workflow(name=REINDEX_WORKFLOW)
 async def reindex_all_workflow(_workflow_id: str, _owner_id: str) -> dict[str, Any]:
     total = 0
@@ -103,7 +121,17 @@ async def reindex_all_workflow(_workflow_id: str, _owner_id: str) -> dict[str, A
         if len(item_ids) < _REINDEX_BATCH_SIZE:
             break
         after_id = item_ids[-1]
-    return {"reindexed_items": total}
+    revision_total = 0
+    after_revision_id: str | None = None
+    while True:
+        revision_ids = await list_reindex_revision_ids_step(after_revision_id, _REINDEX_BATCH_SIZE)
+        if not revision_ids:
+            break
+        revision_total += await reindex_revisions_step(revision_ids)
+        if len(revision_ids) < _REINDEX_BATCH_SIZE:
+            break
+        after_revision_id = revision_ids[-1]
+    return {"reindexed_items": total, "reindexed_revisions": revision_total}
 
 
 @DBOS.step(retries_allowed=True, max_attempts=3)

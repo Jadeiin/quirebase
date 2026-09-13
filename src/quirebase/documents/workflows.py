@@ -9,7 +9,7 @@ from typing import Any, Literal, TypedDict, cast
 from uuid import UUID, uuid4
 
 from dbos import DBOS
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import and_, or_, select
 
 from quirebase.audit import record_event
 from quirebase.core.config import get_settings
@@ -35,10 +35,13 @@ from quirebase.models import (
     Item,
     PdfAnnotation,
     PdfAnnotationMode,
+    Project,
     ProjectItem,
     ProjectMember,
+    ProjectRole,
     User,
 )
+from quirebase.search import search_index
 
 from .pdf import create_thumbnail, export_annotations, inspect_pdf, validate_pdf_container
 from .schemas import AnnotationCreate
@@ -50,6 +53,71 @@ IMPORTED_REVISION_INSPECTION_WORKFLOW = "documents.inspect_imported_revision"
 
 _MAX_THUMBNAIL_BYTES = 32 * 1024 * 1024
 _MAX_OBJECT_CLEANUP_ATTEMPTS = 60
+
+
+async def _lock_upload_authority(
+    db, item_id: str, owner_id: str, *, role: AttachmentRole | None = None
+) -> tuple[User, Item]:
+    owner = await db.scalar(
+        select(User).where(User.id == owner_id, User.active.is_(True)).with_for_update(read=True)
+    )
+    lock = select(Item).where(Item.id == item_id).execution_options(populate_existing=True)
+    if role is AttachmentRole.graphical_abstract:
+        lock = lock.with_for_update(key_share=True)
+    else:
+        lock = lock.with_for_update(read=True, key_share=True)
+    item = await db.scalar(lock)
+    if owner is None or item is None:
+        raise ValueError("Item is no longer writable")
+    if owner.role != "administrator" and item.created_by != owner.id:
+        project_id = await db.scalar(
+            select(Project.id)
+            .join(ProjectItem, ProjectItem.project_id == Project.id)
+            .outerjoin(
+                ProjectMember,
+                (ProjectMember.project_id == Project.id) & (ProjectMember.user_id == owner.id),
+            )
+            .where(
+                ProjectItem.item_id == item_id,
+                Project.state == "active",
+                (Project.owner_id == owner.id)
+                | (
+                    (ProjectMember.user_id == owner.id) & (ProjectMember.role == ProjectRole.editor)
+                ),
+            )
+            .order_by(Project.id)
+            .limit(1)
+        )
+        if project_id is None:
+            raise ValueError("Item is no longer writable")
+        project = await db.scalar(
+            select(Project)
+            .where(Project.id == project_id, Project.state == "active")
+            .execution_options(populate_existing=True)
+            .with_for_update(read=True)
+        )
+        project_item = await db.scalar(
+            select(ProjectItem)
+            .where(ProjectItem.project_id == project_id, ProjectItem.item_id == item_id)
+            .execution_options(populate_existing=True)
+            .with_for_update(read=True)
+        )
+        member = await db.scalar(
+            select(ProjectMember)
+            .where(ProjectMember.project_id == project_id, ProjectMember.user_id == owner.id)
+            .execution_options(populate_existing=True)
+            .with_for_update(read=True)
+        )
+        if (
+            project is None
+            or project_item is None
+            or (
+                project.owner_id != owner.id
+                and (member is None or member.role != ProjectRole.editor)
+            )
+        ):
+            raise ValueError("Item is no longer writable")
+    return owner, item
 
 
 class UploadReceipt(TypedDict):
@@ -328,6 +396,7 @@ async def commit_uploaded_revision(
     inspected: UploadedPdfInspection,
 ) -> RevisionWorkflowResult:
     db = ads.sql_session()
+    _owner, _item = await _lock_upload_authority(db, item_id, owner_id)
     existing = await db.get(FileRevision, inspected["revision_id"])
     if existing is not None:
         if existing.processing_state == FileRevisionProcessingState.pending:
@@ -339,9 +408,8 @@ async def commit_uploaded_revision(
             existing.page_geometry = inspected["page_geometry"]
             existing.full_text = inspected["full_text"]
             existing.processing_state = FileRevisionProcessingState.ready
+            await search_index(db).index_revision(db, existing.id)
         return {"revision_id": existing.id, "item_id": existing.item_id}
-    if await db.get(Item, item_id) is None:
-        raise ValueError("Item no longer exists")
     revision = FileRevision(
         id=inspected["revision_id"],
         item_id=item_id,
@@ -357,6 +425,8 @@ async def commit_uploaded_revision(
         created_by=owner_id,
     )
     db.add(revision)
+    await db.flush()
+    await search_index(db).index_revision(db, revision.id)
     record_event(db, owner_id, "pdf.upload", "file_revision", revision.id)
     return {"revision_id": revision.id, "item_id": item_id}
 
@@ -366,6 +436,7 @@ async def _enqueue_file_revision_changed(
 ) -> str:
     return await enqueue_child_workflow(
         FILE_REVISION_CHANGED_WORKFLOW,
+        revision_id,
         item_id,
         owner_id,
         queue_name=LIBRARY_QUEUE,
@@ -430,10 +501,7 @@ async def inspect_imported_revision_workflow(
                 derived_object_id=derived_object_id,
                 max_pdf_bytes=max_pdf_bytes,
             )
-        if annotation_mode == PdfAnnotationMode.import_.value:
-            result = await commit_imported_revision(inspected, owner_id=owner_id)
-        else:
-            result = await commit_imported_revision(inspected)
+        result = await commit_imported_revision(inspected, owner_id=owner_id)
         committed = True
         await _enqueue_file_revision_changed(revision_id, result["item_id"], owner_id)
         return {
@@ -491,6 +559,19 @@ async def commit_imported_revision(
         raise ValueError("imported revision no longer exists")
     source_object_key: str | None = None
     annotation_diagnostics: list[dict[str, Any]] = []
+    if owner_id is not None:
+        await _lock_upload_authority(db, revision.item_id, owner_id)
+    else:
+        item_exists = await db.scalar(
+            select(Item.id)
+            .where(Item.id == revision.item_id)
+            .with_for_update(read=True, key_share=True)
+        )
+        if item_exists is None:
+            raise ValueError("Item no longer exists")
+    revision = await db.get(FileRevision, inspected["revision_id"], populate_existing=True)
+    if revision is None:
+        raise ValueError("imported revision no longer exists")
     if revision.processing_state == FileRevisionProcessingState.pending:
         source_object_key = revision.object_key
         revision.object_key = inspected.get("object_key", source_object_key)
@@ -569,6 +650,7 @@ async def commit_imported_revision(
                         "diagnostics": annotation_diagnostics,
                     },
                 )
+        await search_index(db).index_revision(db, revision.id)
     if source_object_key and source_object_key != revision.object_key:
         await durable_operations().enqueue_in_transaction(
             db,
@@ -631,21 +713,11 @@ async def commit_uploaded_attachment(
     receipt: ValidatedAttachment,
 ) -> AttachmentWorkflowResult:
     db = ads.sql_session()
+    role = AttachmentRole(role_value) if role_value else None
+    _owner, _item = await _lock_upload_authority(db, item_id, owner_id, role=role)
     existing = await db.get(Attachment, attachment_id)
     if existing is not None:
         return {"attachment_id": existing.id, "item_id": existing.item_id}
-    if db.get_bind().dialect.name == "sqlite":
-        locked = await db.scalar(
-            update(Item)
-            .where(Item.id == item_id)
-            .values(updated_at=Item.updated_at)
-            .returning(Item.id)
-        )
-    else:
-        locked = await db.scalar(select(Item.id).where(Item.id == item_id).with_for_update())
-    if locked is None:
-        raise ValueError("Item no longer exists")
-    role = AttachmentRole(role_value) if role_value else None
     if role is not None:
         current = await db.scalar(
             select(Attachment).where(Attachment.item_id == item_id, Attachment.role == role)

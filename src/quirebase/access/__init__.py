@@ -8,6 +8,7 @@ from quirebase.access.items import (
     can_read_item,
     require_accessible_items,
     require_editable_item,
+    require_editable_item_for_mutation,
     require_readable_item,
     visible_items_query,
 )
@@ -29,6 +30,7 @@ __all__ = [
     "require_attachment",
     "require_editable_annotation",
     "require_editable_item",
+    "require_editable_item_for_mutation",
     "require_project_member",
     "require_readable_item",
     "require_revision",

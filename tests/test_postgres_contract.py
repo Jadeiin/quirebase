@@ -226,6 +226,30 @@ async def test_postgresql_search_contract():
     engine = make_async_engine(os.environ["QUIREBASE_TEST_POSTGRES_URL"])
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
+        await connection.execute(
+            text(
+                "CREATE TABLE item_search ("
+                "item_id varchar(36) PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,"
+                "document tsvector NOT NULL)"
+            )
+        )
+        await connection.execute(
+            text("CREATE INDEX ix_item_search_document ON item_search USING gin(document)")
+        )
+        await connection.execute(
+            text(
+                "CREATE TABLE revision_search ("
+                "revision_id varchar(36) PRIMARY KEY REFERENCES file_revisions(id) ON DELETE CASCADE,"
+                "item_id varchar(36) NOT NULL,"
+                "document tsvector NOT NULL)"
+            )
+        )
+        await connection.execute(
+            text("CREATE INDEX ix_revision_search_document ON revision_search USING gin(document)")
+        )
+        await connection.execute(
+            text("CREATE INDEX ix_revision_search_item_id ON revision_search(item_id)")
+        )
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     username = f"contract-{uuid.uuid4()}"
     try:
@@ -243,6 +267,7 @@ async def test_postgresql_search_contract():
             await db.rollback()
     finally:
         async with engine.begin() as connection:
+            await connection.execute(text("DROP TABLE IF EXISTS revision_search"))
             await connection.execute(text("DROP TABLE IF EXISTS item_search"))
             await connection.run_sync(Base.metadata.drop_all)
         await engine.dispose()

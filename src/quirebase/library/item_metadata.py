@@ -9,11 +9,11 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from inquiro.canonical import normalize_reference_type
-from sqlalchemy import update
+from sqlalchemy import select, update
 
-from quirebase.access.items import require_editable_item
+from quirebase.access.items import require_editable_item_for_mutation
 from quirebase.audit import record_event
-from quirebase.core.errors import ValidationFailure, VersionConflict
+from quirebase.core.errors import ResourceUnavailable, ValidationFailure, VersionConflict
 from quirebase.library.authors import set_item_authors
 from quirebase.library.identifiers import (
     clean_identifier_value,
@@ -21,7 +21,7 @@ from quirebase.library.identifiers import (
     set_item_identifiers,
 )
 from quirebase.library.workflows import request_item_tag_recommendation
-from quirebase.models import Item
+from quirebase.models import Item, normalize_author_identity
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
@@ -196,7 +196,7 @@ def _identifier_pairs(metadata: ItemMetadata) -> list[tuple[str, str]]:
 
 def _contributor_payload(contributors: tuple[Contributor, ...], *, editor: bool) -> list[dict]:
     payload: list[dict] = []
-    seen: set[tuple[str, str | None]] = set()
+    seen: set[str] = set()
     for contributor in contributors:
         last_name = contributor.last_name.strip()
         first_name = _optional_text(contributor.first_name)
@@ -204,7 +204,7 @@ def _contributor_payload(contributors: tuple[Contributor, ...], *, editor: bool)
             raise ValidationFailure("contributor last name is required")
         if editor and contributor.is_corresponding:
             raise ValidationFailure("editors cannot be corresponding authors")
-        identity = (last_name.casefold(), first_name.casefold() if first_name else None)
+        identity = normalize_author_identity(last_name, first_name)
         if identity in seen:
             raise ValidationFailure("contributors must be unique within a role")
         seen.add(identity)
@@ -283,7 +283,7 @@ async def _revise_item_metadata(
     metadata: ItemMetadata,
 ) -> ItemWriteResult:
     actor_id = actor.id
-    item = await require_editable_item(db, actor, item_id)
+    item = await require_editable_item_for_mutation(db, actor, item_id)
     values = _bibliographic_values(metadata)
     values.update(
         custom_fields=_serialize_custom_fields(metadata.custom_fields),
@@ -353,27 +353,24 @@ async def _regenerate_bibtex_key(
     db: AsyncSession,
     actor: User,
     item_id: str,
-    expected_version: int,
 ) -> ItemWriteResult:
     actor_id = actor.id
-    item = await require_editable_item(db, actor, item_id)
-    key = generate_bibtex_key(item)
-    version = await db.scalar(
-        update(Item)
-        .where(Item.id == item_id, Item.version == expected_version)
-        .values(
-            bibtex_id=key,
-            updated_by=actor_id,
-            updated_at=datetime.now(UTC),
-            version=Item.version + 1,
-        )
-        .returning(Item.version)
+    await require_editable_item_for_mutation(db, actor, item_id)
+    item = await db.scalar(
+        select(Item)
+        .where(Item.id == item_id)
+        .execution_options(populate_existing=True)
+        .with_for_update(key_share=True)
     )
-    if version is None:
-        await db.rollback()
-        current = await db.get(Item, item_id)
-        raise VersionConflict(current.version if current else None)
-    await db.refresh(item)
+    if item is None:
+        raise ResourceUnavailable("item not found")
+    key = generate_bibtex_key(item)
+    item.bibtex_id = key
+    item.updated_by = actor_id
+    item.updated_at = datetime.now(UTC)
+    item.version += 1
+    version = item.version
+    await db.flush()
     await search_index(db).index_item(db, item_id)
     record_event(
         db,
@@ -391,10 +388,9 @@ async def regenerate_bibtex_key(
     db: AsyncSession,
     actor: User,
     item_id: str,
-    expected_version: int,
 ) -> ItemWriteResult:
     try:
-        return await _regenerate_bibtex_key(db, actor, item_id, expected_version)
+        return await _regenerate_bibtex_key(db, actor, item_id)
     except Exception:
         await db.rollback()
         raise

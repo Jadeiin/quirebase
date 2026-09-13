@@ -12,7 +12,7 @@ from inquiro.identifiers import DOI_PATTERN, normalize_doi
 from inquiro.models import CandidateRecord
 from sqlalchemy import delete, select, update
 
-from quirebase.access.items import require_editable_item
+from quirebase.access.items import require_editable_item, require_editable_item_for_mutation
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceUnavailable, VersionConflict
 from quirebase.documents.pdf import first_doi_from_text
@@ -59,7 +59,17 @@ async def set_item_identifiers(
     item_id: str,
     id_pairs: list[tuple[str, str]],
 ) -> list[ItemIdentifier]:
-    item = await require_editable_item(db, user, item_id)
+    item = await require_editable_item_for_mutation(db, user, item_id)
+    return await _set_item_identifiers_for_item(db, user, item, id_pairs)
+
+
+async def _set_item_identifiers_for_item(
+    db: AsyncSession,
+    user: User,
+    item: Item,
+    id_pairs: list[tuple[str, str]],
+) -> list[ItemIdentifier]:
+    item_id = item.id
 
     await db.execute(delete(ItemIdentifier).where(ItemIdentifier.item_id == item_id))
     await db.flush()
@@ -118,8 +128,9 @@ def generate_bibtex_key(item: Item) -> str:
 
 
 async def rescan_pdf_doi(db: AsyncSession, user: User, item_id: str) -> str | None:
-    item = await require_editable_item(db, user, item_id)
-
+    # Scan the immutable extracted text without holding an Item lock. Re-authorize and lock the
+    # canonical Item only after a DOI candidate is found, immediately before mutating identifiers.
+    await require_editable_item(db, user, item_id)
     revisions = list(
         (
             await db.scalars(
@@ -133,14 +144,25 @@ async def rescan_pdf_doi(db: AsyncSession, user: User, item_id: str) -> str | No
         if rev.full_text:
             found_doi = first_doi_from_text(rev.full_text)
             if found_doi:
-                # Update item identifiers
+                await require_editable_item_for_mutation(db, user, item_id)
+                item = await db.scalar(
+                    select(Item)
+                    .where(Item.id == item_id)
+                    .execution_options(populate_existing=True)
+                    .with_for_update(key_share=True)
+                )
+                if item is None:
+                    raise ResourceUnavailable("item not found")
+                # A manually supplied DOI takes precedence over scanner output.
+                if item.doi:
+                    return item.doi
                 existing_pairs = [
                     (ident.provider, ident.value)
                     for ident in await get_item_identifiers(db, item_id)
                     if ident.provider != "doi"
                 ]
                 existing_pairs.append(("doi", found_doi))
-                await set_item_identifiers(db, user, item_id, existing_pairs)
+                await _set_item_identifiers_for_item(db, user, item, existing_pairs)
                 item.updated_by = user.id
                 item.updated_at = datetime.now(UTC)
                 item.version += 1
@@ -305,7 +327,7 @@ async def _sync_metadata_from_upstream(
     if reloaded_user is None or not reloaded_user.active:
         raise ResourceUnavailable("user not available")
     user = reloaded_user
-    item = await require_editable_item(db, user, item_id)
+    item = await require_editable_item_for_mutation(db, user, item_id)
     version = await db.scalar(
         update(Item)
         .where(Item.id == item_id, Item.version == expected_version)

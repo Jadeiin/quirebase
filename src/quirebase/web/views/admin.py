@@ -34,6 +34,7 @@ from quirebase.operations import (
     get_runtime_settings,
     update_runtime_settings,
 )
+from quirebase.projects import list_projects_for_admin
 from quirebase.web.deps import current_login, current_user, protected_router, require_admin
 from quirebase.web.templates import templates
 
@@ -118,6 +119,56 @@ async def admin_users_page(
             "role": role,
             "active_filter": active,
             "invitations": invitations,
+            "csrf": login_session.csrf_token,
+            "active_page": "admin",
+        },
+    )
+
+
+# =========================================================================
+# 2. Projects
+# =========================================================================
+
+
+@router.get("/admin/projects", response_class=HTMLResponse)
+async def admin_projects_page(
+    request: Request,
+    search: str = Query(default=""),
+    state: str = Query(default=""),
+    visibility: str = Query(default=""),
+    page: int = Query(default=1, ge=1),
+    user: User = Depends(current_user),
+    login_session: LoginSession = Depends(current_login),
+    db: AsyncSession = Depends(get_db),
+):
+    projects, total_projects = await list_projects_for_admin(
+        db,
+        user,
+        search=search,
+        state=state,
+        visibility=visibility,
+        page=page,
+        page_size=20,
+    )
+    project_pages = max(1, (total_projects + 19) // 20)
+    return templates.TemplateResponse(
+        request,
+        "admin.html",
+        {
+            "user": user,
+            "admin_tab": "projects",
+            "projects": projects,
+            "total_projects": total_projects,
+            "page": page,
+            "project_pages": project_pages,
+            "project_filters": {
+                "search": search,
+                "state": state,
+                "visibility": visibility,
+            },
+            "search": search,
+            "state_filter": state,
+            "visibility_filter": visibility,
             "csrf": login_session.csrf_token,
             "active_page": "admin",
         },

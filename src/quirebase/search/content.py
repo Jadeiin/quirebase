@@ -3,35 +3,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from inquiro.richtext import convert_rich_text
-from sqlalchemy import select
-
-from quirebase.models import FileRevision, Item, ItemTag, Project, ProjectItem, Tag
 
 if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
+    from quirebase.models import FileRevision, Item
 
 
-async def search_text_for_item(db: AsyncSession, item: Item) -> str:
-    full_text = await db.scalar(
-        select(FileRevision.full_text)
-        .where(FileRevision.item_id == item.id, FileRevision.full_text.is_not(None))
-        .order_by(FileRevision.created_at.desc())
-        .limit(1)
-    )
-    tags = (
-        await db.scalars(
-            select(Tag.name)
-            .join(ItemTag, ItemTag.tag_id == Tag.id)
-            .where(ItemTag.item_id == item.id)
-        )
-    ).all()
-    projects = (
-        await db.scalars(
-            select(Project.name)
-            .join(ProjectItem, ProjectItem.project_id == Project.id)
-            .where(ProjectItem.item_id == item.id)
-        )
-    ).all()
+def search_text_for_item(item: Item) -> str:
+    """Return only bibliographic metadata for the Item projection."""
     return "\n".join(
         value
         for value in (
@@ -42,9 +20,12 @@ async def search_text_for_item(db: AsyncSession, item: Item) -> str:
             item.keywords,
             item.custom_fields,
             item.identifiers,
-            full_text,
-            " ".join(tags),
-            " ".join(projects),
         )
         if value
     )
+
+
+def search_text_for_revision(revision: FileRevision) -> str:
+    """Return extracted PDF text for the revision-owned projection."""
+
+    return revision.full_text or ""

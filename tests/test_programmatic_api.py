@@ -17,6 +17,7 @@ from quirebase.models import (
     AuditEvent,
     FileRevision,
     Item,
+    ItemTag,
     PdfAnnotation,
     Project,
     ProjectItem,
@@ -93,6 +94,14 @@ async def test_http_api_exposes_the_same_ordinary_user_capability_set_as_mcp(
         ("GET", "/api/v1/projects"),
         ("POST", "/api/v1/projects"),
         ("GET", "/api/v1/projects/{project_id}"),
+        ("PATCH", "/api/v1/projects/{project_id}"),
+        ("POST", "/api/v1/projects/{project_id}/description"),
+        ("DELETE", "/api/v1/projects/{project_id}"),
+        ("POST", "/api/v1/projects/{project_id}/archive"),
+        ("POST", "/api/v1/projects/{project_id}/restore"),
+        ("POST", "/api/v1/projects/{project_id}/visibility"),
+        ("POST", "/api/v1/projects/{project_id}/leave"),
+        ("POST", "/api/v1/projects/{project_id}/ownership/{user_id}"),
         ("PUT", "/api/v1/projects/{project_id}/items/{item_id}"),
         ("DELETE", "/api/v1/projects/{project_id}/items/{item_id}"),
         ("PUT", "/api/v1/projects/{project_id}/members"),
@@ -210,6 +219,13 @@ async def test_http_api_library_project_tag_and_discussion_lifecycle(
         )
         assert tag.status_code == 200
         assert (await client.get("/api/v1/tags", headers=headers)).json()[0]["name"] == "Reviewed"
+        cleared = await client.put(
+            f"/api/v1/items/{item_id}/tags",
+            headers=headers,
+            json={"add_tag_ids": [], "remove_tag_ids": [tag.json()["id"]], "new_names": []},
+        )
+        assert cleared.status_code == 200
+        assert await db.get(ItemTag, (item_id, tag.json()["id"])) is None
 
         discussion = await client.post(
             f"/api/v1/items/{item_id}/discussions",

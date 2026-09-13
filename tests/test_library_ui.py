@@ -798,7 +798,9 @@ async def test_pdf_import_batch_previews_before_creating_items(
         assert first is not None and second is not None
         assert first.revisions[0].original_name == "first.pdf"
         assert second.revisions[0].original_name == "second.pdf"
-        assert await db.get(ImportBatch, batch.id) is None
+        committed_batch = await db.get(ImportBatch, batch.id)
+        assert committed_batch is not None
+        assert committed_batch.status == "committed"
     finally:
         await client.aclose()
         get_settings.cache_clear()

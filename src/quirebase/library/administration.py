@@ -109,7 +109,7 @@ async def _delete_item(
 ) -> None:
     if require_admin and actor.role != "administrator":
         raise ResourceUnavailable("administrator required")
-    item = await db.get(Item, item_id)
+    item = await db.scalar(select(Item).where(Item.id == item_id).with_for_update())
     if item is None:
         raise ResourceNotFound("item not found")
     if not require_admin and item.created_by != actor.id and actor.role != "administrator":
@@ -136,12 +136,13 @@ async def _delete_item(
         if key
     )
 
-    # Remove from search index
-    await search_index(db).remove_item(db, item.id)
-
     # Explicitly delete child relations for cross-dialect foreign key safety
     await db.execute(delete(FileRevision).where(FileRevision.item_id == item.id))
     await db.execute(delete(Attachment).where(Attachment.item_id == item.id))
+
+    # Revision projections are owned by FileRevision and cascade on PostgreSQL;
+    # the SQLite adapter clears them explicitly.
+    await search_index(db).remove_item(db, item.id)
 
     # Delete entity from database
     await db.delete(item)

@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from dbos import DBOS
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from quirebase.core.database import AsyncSessionLocal
 from quirebase.core.workflows import (
@@ -17,7 +17,6 @@ from quirebase.core.workflows import (
 )
 from quirebase.documents.events import FILE_REVISION_CHANGED_WORKFLOW, OBJECT_CLEANUP_WORKFLOW
 from quirebase.models import ImportBatch, Item, ItemTagRecommendation
-from quirebase.search import search_index
 
 from .tag_recommendations import (
     RecommendationCandidates,
@@ -56,31 +55,47 @@ async def request_item_tag_recommendation(
     force: bool = False,
 ) -> ItemTagRecommendation:
     """Create an idempotent generation request without committing its caller's transaction."""
-    if force:
-        if db.get_bind().dialect.name == "sqlite":
-            locked_item_id = await db.scalar(
-                update(Item)
-                .where(Item.id == item_id)
-                .values(updated_at=Item.updated_at)
-                .returning(Item.id)
-            )
-        else:
-            locked_item_id = await db.scalar(
-                select(Item.id).where(Item.id == item_id).with_for_update()
-            )
-        if locked_item_id is None:
-            raise ValueError("Item no longer exists")
-    elif await db.get(Item, item_id) is None:
-        raise ValueError("Item no longer exists")
-    record = await db.scalar(
+    # Inspect the durable workflow before taking the recommendation row lock.  A slow DBOS
+    # lookup must not block other recommendation requests or Item mutations.
+    observed_record = await db.scalar(
         select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == item_id)
     )
-    if record is not None and not force:
-        workflow = await _linked_workflow(record)
-        if record.generated_at is not None or (
-            workflow is not None and workflow.state in {"pending", "running", "succeeded"}
-        ):
-            return record
+    observed_workflow_id = observed_record.workflow_id if observed_record else None
+    workflow = await _linked_workflow(observed_record) if observed_record and not force else None
+    if db.get_bind().dialect.name == "postgresql":
+        item_lock = select(Item.id).where(Item.id == item_id)
+        # An absent recommendation row cannot be locked. Serialize its creation
+        # on the Item root; existing generations serialize on their own row.
+        item_lock = (
+            item_lock.with_for_update(key_share=True)
+            if observed_record is None
+            else item_lock.with_for_update(read=True, key_share=True)
+        )
+        locked_item_id = await db.scalar(item_lock)
+    else:
+        locked_item_id = await db.scalar(select(Item.id).where(Item.id == item_id))
+    if locked_item_id is None:
+        raise ValueError("Item no longer exists")
+    record = await db.scalar(
+        select(ItemTagRecommendation)
+        .where(ItemTagRecommendation.item_id == item_id)
+        .execution_options(populate_existing=True)
+        .with_for_update(key_share=True)
+    )
+    if (
+        record is not None
+        and not force
+        and (
+            observed_record is None
+            or record.generated_at is not None
+            or (
+                record.workflow_id == observed_workflow_id
+                and workflow is not None
+                and workflow.state in {"pending", "running", "succeeded"}
+            )
+        )
+    ):
+        return record
 
     token = (record.generation_token + 1) if record else 1
     if record is None:
@@ -119,7 +134,9 @@ async def _store_item_tag_recommendation(
     candidates: RecommendationCandidates,
 ) -> dict[str, Any]:
     record = await db.scalar(
-        select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == item_id)
+        select(ItemTagRecommendation)
+        .where(ItemTagRecommendation.item_id == item_id)
+        .with_for_update(key_share=True)
     )
     if (
         record is None
@@ -263,12 +280,6 @@ async def prepare_pdf_import_workflow(
         raise
 
 
-@ads.transaction()
-async def apply_file_revision_changed(item_id: str) -> None:
-    db = ads.sql_session()
-    await search_index(db).index_item(db, item_id)
-
-
 @DBOS.step(retries_allowed=True, max_attempts=3)
 async def request_item_tag_recommendation_step(item_id: str, owner_id: str | None) -> None:
     """Retry the idempotent request boundary, including its separate DBOS Client lookup."""
@@ -282,8 +293,9 @@ async def request_item_tag_recommendation_step(item_id: str, owner_id: str | Non
 
 
 @DBOS.workflow(name=FILE_REVISION_CHANGED_WORKFLOW)
-async def file_revision_changed_workflow(item_id: str, owner_id: str | None) -> None:
-    await apply_file_revision_changed(item_id)
+async def file_revision_changed_workflow(
+    revision_id: str, item_id: str, owner_id: str | None
+) -> None:
     await request_item_tag_recommendation_step(item_id, owner_id)
 
 

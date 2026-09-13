@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 
-from quirebase.access.projects import project_member
 from quirebase.audit import record_event
 from quirebase.core.errors import (
     DomainError,
@@ -12,7 +11,9 @@ from quirebase.core.errors import (
     ResourceUnavailable,
     ValidationFailure,
 )
-from quirebase.models import ProjectMember, ProjectRole, User
+from quirebase.models import Project, ProjectMember, ProjectRole, User
+
+from ._locking import lock_project_root
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,19 +30,24 @@ async def add_project_member(
     username: str,
     role: ProjectRole | str = ProjectRole.viewer,
 ) -> ProjectMember:
-    actor = await project_member(db, user, project_id)
-    if actor is None or actor.role != ProjectRole.owner:
+    await lock_project_root(db, project_id)
+    project = await db.get(Project, project_id, populate_existing=True)
+    if project is None or user.id != project.owner_id:
         raise ResourceUnavailable("project not found or owner role required")
     try:
         requested_role = ProjectRole(role)
     except ValueError as error:
         raise ValidationFailure("invalid project role") from error
+    if requested_role is ProjectRole.owner:
+        raise ValidationFailure("use ownership transfer to assign the owner role")
     target = await db.scalar(
         select(User).where(User.username == username.strip(), User.active.is_(True))
     )
     if target is None:
         raise ResourceNotFound("user not found")
-    existing = await db.get(ProjectMember, (project_id, target.id))
+    if target.id == project.owner_id:
+        raise ProjectMemberConflict("the owner role can only change through ownership transfer")
+    existing = await db.get(ProjectMember, (project_id, target.id), populate_existing=True)
     if existing:
         existing.role = requested_role
         member = existing
@@ -66,16 +72,12 @@ async def remove_project_member(
     project_id: str,
     member_id: str,
 ) -> None:
-    actor = await project_member(db, user, project_id)
-    target = await db.get(ProjectMember, (project_id, member_id))
-    if actor is None or actor.role != ProjectRole.owner or target is None:
+    await lock_project_root(db, project_id)
+    project = await db.get(Project, project_id, populate_existing=True)
+    target = await db.get(ProjectMember, (project_id, member_id), populate_existing=True)
+    if project is None or user.id != project.owner_id or target is None:
         raise ResourceUnavailable("project or member not found")
-    owner_count = await db.scalar(
-        select(func.count())
-        .select_from(ProjectMember)
-        .where(ProjectMember.project_id == project_id, ProjectMember.role == ProjectRole.owner)
-    )
-    if target.role == ProjectRole.owner and (owner_count or 0) <= 1:
+    if target.user_id == project.owner_id:
         raise ProjectMemberConflict("a project must retain an owner")
     await db.delete(target)
     record_event(

@@ -42,14 +42,8 @@ async def test_regenerate_bibtex_key_is_a_narrow_atomic_item_mutation(async_db):
     await db.commit()
     owner_id = owner.id
     item_id = item.id
-    item_version = item.version
 
-    result = await regenerate_bibtex_key(
-        db,
-        owner,
-        item_id,
-        item_version,
-    )
+    result = await regenerate_bibtex_key(db, owner, item_id)
 
     workspace = await open_item_workspace(db, owner, item_id, WorkspaceSection.metadata)
     assert isinstance(workspace, MetadataWorkspace)
@@ -153,6 +147,28 @@ async def test_revise_item_metadata_replaces_contributors_in_order(async_db):
     matches, total, _, _ = await search_library(db, owner, q="Contributor replacement")
     assert total == 1
     assert matches[0].id == item_id
+
+
+@pytest.mark.anyio
+async def test_revise_item_metadata_rejects_canonically_duplicate_contributors(async_db):
+    owner = User(username="canonical-contributor-owner", password_hash="unused")
+    async_db.add(owner)
+    await async_db.flush()
+    item = Item(title="Canonical contributor identity", created_by=owner.id)
+    async_db.add(item)
+    await async_db.commit()
+
+    with pytest.raises(ValidationFailure, match="unique within a role"):
+        await revise_item_metadata(
+            async_db,
+            owner,
+            item.id,
+            item.version,
+            ItemMetadata(
+                title=item.title,
+                authors=(Contributor("Van  Rossum", "Guido"), Contributor("Van Rossum", "Guido")),
+            ),
+        )
 
 
 @pytest.mark.anyio

@@ -10,7 +10,7 @@ from sqlalchemy import select
 from quirebase.core.config import get_settings
 from quirebase.core.crypto import token_hash
 from quirebase.core.database import get_db
-from quirebase.models import LoginSession, SystemSetting, User
+from quirebase.models import LoginSession, Project, SystemSetting, User
 from quirebase.web.app import app
 
 
@@ -87,6 +87,7 @@ async def test_admin_pages_accessible_by_admin(async_db, tmp_path, monkeypatch):
     for path in [
         "/admin",
         "/admin/users",
+        "/admin/projects",
         "/admin/items",
         "/admin/audit",
         "/admin/workflows",
@@ -96,6 +97,42 @@ async def test_admin_pages_accessible_by_admin(async_db, tmp_path, monkeypatch):
         res = await client.get(path)
         assert res.status_code == 200
         assert "Administration" in res.text or "Quirebase" in res.text
+    await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_admin_project_directory_links_to_later_filtered_pages(
+    async_db, tmp_path, monkeypatch
+):
+    client, admin, _login = await admin_client(async_db, tmp_path, monkeypatch)
+    async_db.add_all([
+        Project(name=f"Paged project {index:02d}", created_by=admin.id) for index in range(21)
+    ])
+    await async_db.commit()
+
+    first = await client.get(
+        "/admin/projects",
+        params={"search": "Paged", "state": "active", "visibility": "private"},
+    )
+    assert first.status_code == 200
+    assert "Page 1 of 2" in first.text
+    assert "page=2" in first.text
+    assert "search=Paged" in first.text
+    assert "state=active" in first.text
+    assert "visibility=private" in first.text
+
+    second = await client.get(
+        "/admin/projects",
+        params={
+            "search": "Paged",
+            "state": "active",
+            "visibility": "private",
+            "page": 2,
+        },
+    )
+    assert second.status_code == 200
+    assert "Page 2 of 2" in second.text
+    assert "page=1" in second.text
     await client.aclose()
 
 

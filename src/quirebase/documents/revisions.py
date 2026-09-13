@@ -8,10 +8,15 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from quirebase.access.documents import require_attachment, require_revision
-from quirebase.access.items import can_edit_item, require_editable_item, require_readable_item
+from quirebase.access.items import (
+    can_edit_item,
+    require_editable_item,
+    require_editable_item_for_mutation,
+    require_readable_item,
+)
 from quirebase.audit import record_event
 from quirebase.core.config import get_settings
 from quirebase.core.errors import (
@@ -59,6 +64,7 @@ from quirebase.models import (
     ProjectMember,
     User,
 )
+from quirebase.search import search_index
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -299,7 +305,9 @@ async def _referenced_candidates(db: AsyncSession, object_keys: tuple[str, ...])
     )
     candidates = set(object_keys)
     for records in await db.scalars(
-        select(ImportBatch.records).where(ImportBatch.file_format == "pdf")
+        select(ImportBatch.records).where(
+            ImportBatch.file_format == "pdf", ImportBatch.status != "committed"
+        )
     ):
         referenced.update(candidates & _pdf_import_object_keys(records))
     return referenced
@@ -392,11 +400,16 @@ async def store_pdf_revision(
 ) -> UploadWorkflow:
     from quirebase.operations.settings import get_effective_setting
 
+    user_id = user.id
     await require_editable_item(db, user, item_id)
     if not filename or not filename.lower().endswith(".pdf"):
         raise UnsupportedMediaType("a PDF file is required")
     if max_bytes is None:
         max_bytes = await get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes)
+    # Authorization and settings are read-only.  Do not keep their database
+    # transaction open while the upload performs external I/O; the durable
+    # finalizer revalidates authority immediately before committing the child.
+    await db.rollback()
     revision_id = uuid4()
     thumbnail_object_id = uuid4()
     revision_key = object_key(revision_id, ObjectSuffix.PDF)
@@ -405,7 +418,7 @@ async def store_pdf_revision(
     await durable_operations().enqueue(
         REVISION_UPLOAD_WORKFLOW,
         item_id,
-        user.id,
+        user_id,
         str(revision_id),
         str(revision_id),
         str(thumbnail_object_id),
@@ -415,7 +428,7 @@ async def store_pdf_revision(
         attributes={
             "capability": "documents",
             "operation": "upload_revision",
-            "owner_id": user.id,
+            "owner_id": user_id,
             "item_id": item_id,
             "revision_id": str(revision_id),
             "object_key": revision_key,
@@ -462,22 +475,6 @@ def _is_image_header(header: bytes, content_type: str) -> bool:
     }.get(content_type, False)
 
 
-async def _lock_item_for_attachment_role_replacement(db: AsyncSession, item_id: str) -> None:
-    if db.get_bind().dialect.name == "sqlite":
-        locked_item_id = await db.scalar(
-            update(Item)
-            .where(Item.id == item_id)
-            .values(updated_at=Item.updated_at)
-            .returning(Item.id)
-        )
-    else:
-        locked_item_id = await db.scalar(
-            select(Item.id).where(Item.id == item_id).with_for_update()
-        )
-    if locked_item_id is None:
-        raise ResourceUnavailable("item not accessible")
-
-
 async def create_attachment(
     db: AsyncSession,
     user: User,
@@ -490,6 +487,7 @@ async def create_attachment(
 ) -> UploadWorkflow:
     from quirebase.operations.settings import get_effective_setting
 
+    user_id = user.id
     if not await can_edit_item(db, user, item_id) or not filename:
         raise ResourceUnavailable("item not accessible or filename missing")
     if max_bytes is None:
@@ -500,13 +498,17 @@ async def create_attachment(
         GRAPHICAL_ABSTRACT_MEDIA_TYPES
     ):
         raise ValidationFailure("graphical abstract must be a PNG, JPEG, WebP, or GIF image")
+    # Release the read transaction before enqueueing and uploading the object.
+    # The finalizer performs the authoritative revalidation in its own short
+    # transaction.
+    await db.rollback()
     attachment_id = uuid4()
     attachment_key = object_key(attachment_id, ObjectSuffix.BINARY)
     workflow_id = f"upload-attachment:{attachment_id}"
     await durable_operations().enqueue(
         ATTACHMENT_UPLOAD_WORKFLOW,
         item_id,
-        user.id,
+        user_id,
         str(attachment_id),
         str(attachment_id),
         Path(filename).name,
@@ -517,7 +519,7 @@ async def create_attachment(
         attributes={
             "capability": "documents",
             "operation": "upload_attachment",
-            "owner_id": user.id,
+            "owner_id": user_id,
             "item_id": item_id,
             "attachment_id": str(attachment_id),
             "object_key": attachment_key,
@@ -654,7 +656,14 @@ async def get_item_thumbnail(db: AsyncSession, user: User, item_id: str) -> Item
 async def delete_file_revision(
     db: AsyncSession, user: User, item_id: str, revision_id: str
 ) -> None:
-    await require_editable_item(db, user, item_id)
+    await require_editable_item_for_mutation(db, user, item_id)
+    if (
+        await db.scalar(
+            select(Item.id).where(Item.id == item_id).with_for_update(read=True, key_share=True)
+        )
+        is None
+    ):
+        raise ResourceNotFound("item not found")
     revision = await db.scalar(
         select(FileRevision).where(FileRevision.id == revision_id).with_for_update()
     )
@@ -662,35 +671,54 @@ async def delete_file_revision(
         raise ResourceNotFound("file revision not found")
     object_key = revision.object_key
     thumbnail_key = revision.thumbnail_object_key
+    await search_index(db).remove_revision(db, revision.id)
     await db.delete(revision)
     await db.flush()
     event_workflow_id = f"file-revision-deleted:{revision_id}"
     await durable_operations().enqueue_in_transaction(
         db,
         FILE_REVISION_CHANGED_WORKFLOW,
+        revision_id,
         item_id,
         user.id,
         queue_name=LIBRARY_QUEUE,
         workflow_id=event_workflow_id,
         attributes={"capability": "library", "item_id": item_id},
     )
+    await enqueue_object_cleanup(
+        db,
+        tuple(key for key in (object_key, thumbnail_key) if key),
+        owner_id=user.id,
+        operation="file_revision_delete",
+        target_id=revision.id,
+    )
     record_event(db, user.id, "pdf.delete", "file_revision", revision.id)
     await db.commit()
-    if thumbnail_key:
-        await get_object_store().delete(thumbnail_key)
-    await delete_unreferenced_objects(db, (object_key,))
 
 
 async def delete_attachment(db: AsyncSession, user: User, item_id: str, attachment_id: str) -> None:
-    await require_editable_item(db, user, item_id)
+    await require_editable_item_for_mutation(db, user, item_id)
+    if (
+        await db.scalar(
+            select(Item.id).where(Item.id == item_id).with_for_update(read=True, key_share=True)
+        )
+        is None
+    ):
+        raise ResourceNotFound("item not found")
     attachment = await db.get(Attachment, attachment_id)
     if attachment is None or attachment.item_id != item_id:
         raise ResourceNotFound("attachment not found")
     object_key = attachment.object_key
     await db.delete(attachment)
+    await enqueue_object_cleanup(
+        db,
+        (object_key,),
+        owner_id=user.id,
+        operation="attachment_delete",
+        target_id=attachment.id,
+    )
     record_event(db, user.id, "attachment.delete", "attachment", attachment.id)
     await db.commit()
-    await delete_unreferenced_objects(db, (object_key,))
 
 
 async def get_pdf_viewer_data(

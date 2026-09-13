@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
 
 EXPECTED_TABLES = {
     "api_tokens",
@@ -86,6 +86,149 @@ assert not any(name.startswith("quirebase.web") for name in sys.modules)
     tables = set(inspect(engine).get_table_names())
     engine.dispose()
     assert EXPECTED_TABLES | {"alembic_version"} <= tables
+
+
+def test_project_management_migration_upgrades_existing_schema_without_losing_links(
+    tmp_path: Path,
+):
+    database = tmp_path / "project-management.db"
+    database_url = f"sqlite:///{database}"
+    environment = os.environ.copy()
+    environment["QUIREBASE_DATABASE_URL"] = database_url
+    migrate = """
+from alembic import command
+from alembic.config import Config
+
+config = Config()
+config.set_main_option("script_location", "migrations")
+command.upgrade(config, "0027_annotation_object_identity")
+"""
+    subprocess.run(
+        [sys.executable, "-c", migrate],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+
+    engine = create_engine(database_url)
+    with engine.connect() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        connection.execute(
+            text(
+                "CREATE TABLE projects_legacy ("
+                "id VARCHAR(36) NOT NULL PRIMARY KEY, "
+                "name VARCHAR(240) NOT NULL, "
+                "created_by VARCHAR(36) NOT NULL REFERENCES users (id), "
+                "created_at DATETIME NOT NULL)"
+            )
+        )
+        connection.execute(text("DROP TABLE projects"))
+        connection.execute(text("ALTER TABLE projects_legacy RENAME TO projects"))
+        connection.commit()
+        connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+        connection.commit()
+
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO users (id, username, password_hash, role, active, created_at) "
+                "VALUES ('user', 'owner', 'unused', 'member', 1, CURRENT_TIMESTAMP)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO items (id, title, created_by, version, created_at, updated_at) "
+                "VALUES ('item', 'Existing item', 'user', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO projects "
+                "(id, name, created_by, created_at) "
+                "VALUES ('project', 'Existing project', 'user', CURRENT_TIMESTAMP)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO projects "
+                "(id, name, created_by, created_at) "
+                "VALUES ('fallback-project', 'Fallback project', 'user', CURRENT_TIMESTAMP)"
+            )
+        )
+        connection.execute(text("INSERT INTO project_members VALUES ('project', 'user', 'owner')"))
+        connection.execute(
+            text("INSERT INTO project_members VALUES ('fallback-project', 'user', 'editor')")
+        )
+        connection.execute(text("INSERT INTO project_items VALUES ('project', 'item')"))
+        connection.execute(
+            text(
+                "INSERT INTO file_revisions "
+                "(id, item_id, object_key, thumbnail_object_key, thumbnail_size, size, mime_type, "
+                "original_name, page_count, page_geometry, full_text, processing_state, created_by, "
+                "created_at) VALUES "
+                "('revision', 'item', 'revision.pdf', NULL, NULL, 10, 'application/pdf', "
+                "'revision.pdf', 1, NULL, 'existing revision text', 'ready', 'user', "
+                "CURRENT_TIMESTAMP)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO item_search(item_id, content) "
+                "VALUES ('item', 'obsolete project tag text')"
+            )
+        )
+    engine.dispose()
+
+    subprocess.run(
+        [sys.executable, "-c", migrate.replace("0027_annotation_object_identity", "head")],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+
+    engine = create_engine(database_url)
+    with engine.connect() as connection:
+        columns = {column["name"] for column in inspect(connection).get_columns("projects")}
+        project = connection.execute(
+            text(
+                "SELECT state, updated_at, visibility, description, owner_id "
+                "FROM projects WHERE id = 'project'"
+            )
+        ).one()
+        fallback_owner = connection.execute(
+            text(
+                "SELECT p.owner_id, pm.role FROM projects p "
+                "JOIN project_members pm "
+                "ON pm.project_id = p.id AND pm.user_id = p.owner_id "
+                "WHERE p.id = 'fallback-project'"
+            )
+        ).one()
+        membership_count = connection.scalar(text("SELECT count(*) FROM project_members"))
+        assignment_count = connection.scalar(text("SELECT count(*) FROM project_items"))
+        item_search_content = connection.scalar(
+            text("SELECT content FROM item_search WHERE item_id = 'item'")
+        )
+        revision_search_content = connection.scalar(
+            text("SELECT content FROM revision_search WHERE revision_id = 'revision'")
+        )
+        foreign_key_errors = connection.execute(text("PRAGMA foreign_key_check")).all()
+    engine.dispose()
+
+    assert {"state", "updated_at", "visibility", "description"} <= columns
+    assert project.state == "active"
+    assert project.updated_at is not None
+    assert project.visibility == "private"
+    assert project.description == ""
+    assert project.owner_id == "user"
+    assert fallback_owner == ("user", "owner")
+    assert membership_count == 2
+    assert assignment_count == 1
+    assert item_search_content is not None and "Existing item" in item_search_content
+    assert "obsolete project tag text" not in item_search_content
+    assert revision_search_content == "existing revision text"
+    assert foreign_key_errors == []
 
 
 def test_rich_metadata_migration_deduplicates_contributors_per_role(tmp_path: Path):

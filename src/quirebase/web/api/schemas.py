@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from quirebase.library import DiscoveryClause, ItemMetadata
 
@@ -16,13 +16,36 @@ class NameRequest(BaseModel):
     name: str
 
 
+class ProjectCreateRequest(BaseModel):
+    name: str
+    visibility: Literal["private", "public"] = "private"
+    description: str = Field(default="", max_length=2000)
+
+
+class ProjectVisibilityRequest(BaseModel):
+    visibility: Literal["private", "public"]
+
+
+class ProjectDescriptionRequest(BaseModel):
+    description: str = Field(max_length=2000)
+
+
+class ProjectDeleteRequest(BaseModel):
+    confirmation: str
+
+
 class ProjectMemberRequest(BaseModel):
     username: str
-    role: Literal["owner", "editor", "viewer"] = "viewer"
+    role: Literal["editor", "viewer"] = "viewer"
 
 
 class TagSetRequest(BaseModel):
-    tag_ids: list[str] = Field(default_factory=list)
+    model_config = ConfigDict(extra="forbid")
+
+    # Tag mutations are explicit intent deltas. A full collection replacement
+    # would derive removals from a stale read and lose concurrent additions.
+    add_tag_ids: list[str] = Field(default_factory=list)
+    remove_tag_ids: list[str] = Field(default_factory=list)
     new_names: list[str] = Field(default_factory=list)
 
 

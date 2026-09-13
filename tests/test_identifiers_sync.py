@@ -177,6 +177,36 @@ async def test_rescan_pdf_doi(async_db):
 
 
 @pytest.mark.anyio
+async def test_rescan_pdf_doi_does_not_replace_manual_doi(async_db):
+    db = async_db
+    user = User(username="pdf_doi_manual", password_hash="hash")
+    db.add(user)
+    await db.flush()
+    item = Item(title="Manual DOI", doi="10.1000/manual", created_by=user.id)
+    db.add(item)
+    await db.flush()
+    db.add(
+        FileRevision(
+            item_id=item.id,
+            object_key="manual-rev",
+            size=1,
+            original_name="manual.pdf",
+            full_text="doi: 10.1000/detected",
+            created_by=user.id,
+        )
+    )
+    await db.commit()
+    initial_version = item.version
+
+    found_doi = await rescan_pdf_doi(db, user, item.id)
+
+    assert found_doi == "10.1000/manual"
+    await db.refresh(item)
+    assert item.doi == "10.1000/manual"
+    assert item.version == initial_version
+
+
+@pytest.mark.anyio
 async def test_sync_metadata_from_upstream(async_db):
     db = async_db
     user = User(username="sync_user", password_hash="hash")

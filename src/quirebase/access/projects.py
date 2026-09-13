@@ -5,16 +5,19 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 
 from quirebase.core.errors import PermissionDenied, ResourceUnavailable
-from quirebase.models import Project, ProjectMember, ProjectRole, SystemRole, User
+from quirebase.models import Project, ProjectMember, ProjectRole, ProjectState, SystemRole, User
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def visible_projects(db: AsyncSession, user: User) -> list[Project]:
-    query = select(Project).order_by(Project.name)
+    query = select(Project).where(Project.state == ProjectState.active).order_by(Project.name)
     if user.role != SystemRole.administrator.value:
-        query = query.join(ProjectMember).where(ProjectMember.user_id == user.id)
+        member_project_ids = select(ProjectMember.project_id).where(
+            ProjectMember.user_id == user.id
+        )
+        query = query.where((Project.owner_id == user.id) | Project.id.in_(member_project_ids))
     return list((await db.scalars(query)).all())
 
 
@@ -23,10 +26,15 @@ async def editable_projects(db: AsyncSession, user: User) -> list[Project]:
         (
             await db.scalars(
                 select(Project)
-                .join(ProjectMember)
                 .where(
-                    ProjectMember.user_id == user.id,
-                    ProjectMember.role.in_([ProjectRole.owner, ProjectRole.editor]),
+                    Project.state == ProjectState.active,
+                    (Project.owner_id == user.id)
+                    | Project.id.in_(
+                        select(ProjectMember.project_id).where(
+                            ProjectMember.user_id == user.id,
+                            ProjectMember.role == ProjectRole.editor,
+                        )
+                    ),
                 )
                 .order_by(Project.name)
             )

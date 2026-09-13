@@ -3,8 +3,8 @@
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0028_pdf_import_annotation_mode"
-down_revision = "0027_annotation_object_identity"
+revision = "0030_pdf_import_annotation_mode"
+down_revision = "0029_narrow_concurrency_boundaries"
 branch_labels = None
 depends_on = None
 

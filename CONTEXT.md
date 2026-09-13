@@ -97,7 +97,9 @@ for confirmation after successful preparation, and failed after a terminal workf
 a failed batch preserves its staged PDFs and assigns a new durable workflow. A pending PDF Import Batch
 whose associated workflow is terminal or missing converges to failed before retry. A PDF Candidate Record retains
 its independently owned UUID object until confirmation creates the Item and associated File
-Revision, or until the Import Batch is discarded.
+Revision, or until the Import Batch is discarded. After successful confirmation, the batch becomes
+committed, retains only the recorded committed Item IDs for idempotent confirmation responses, and no
+longer retains staged PDF object references.
 _Avoid_: Staged Import, Import Queue
 
 **Import**:
@@ -175,7 +177,8 @@ An immutable record of a security-sensitive or data-changing action.
 - An Annotation Export Artifact is derived from one File Revision and expires independently of it.
 - A Project-scoped Annotation references exactly one Project containing the Item.
 - Discovery produces Candidate Records; selecting one refetches metadata into Import.
-- An Import Batch holds parsed Candidate Records until confirmed into Items.
+- An Import Batch holds parsed Candidate Records until confirmed into Items; a committed batch retains
+  the confirmation result but is no longer an active staging reservation.
 - Citation Styles format Items during export or citation generation.
 - An Item may have zero or more Upstream Identifiers; DOI is represented by the
   Item's canonical DOI field and is not duplicated as an Upstream Identifier.

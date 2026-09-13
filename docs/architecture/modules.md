@@ -143,16 +143,16 @@ one opened Item and no Item mutation or bulk behaviour.
 
 Annotation and Annotation Reply CRUD cross the Documents interface through typed create/update
 commands and shared views. Documents owns the canonical per-page geometry and style schema,
-authorization coordination, optimistic versioning, soft deletion, Audit Events and projection to
+authorization coordination, optimistic versioning, annotation soft deletion, Audit Events and projection to
 PDF export. Web, REST and MCP are inbound Adapters over that Interface; EmbedPDF objects are
 translated only inside the Web asset and never enter Documents persistence or programmatic wire
 contracts.
 
-Tag selection is presented by the Item Workspace and committed through `set_item_tags`. Existing
-Tags may be matched case-insensitively against an Item Tag Recommendation, while candidates absent
-from the taxonomy are returned as suggested names and remain uncommitted until selected by the User. Taxonomy
-maintenance crosses the Library interface through rename, delete and `merge_tags`; merging moves
-Item associations, refreshes Library Search and deletes the source Tag atomically.
+Tag selection is presented by the Item Workspace and committed through additive/remove commands
+(`add_tag_to_item` and `remove_tag_from_item`). Existing Tags may be matched case-insensitively
+against an Item Tag Recommendation, while candidates absent from the taxonomy are returned as
+suggested names. Taxonomy maintenance crosses the Library interface through rename, delete and
+`merge_tags`; these operations mutate only Tag and association rows and never invalidate Search.
 
 Item Tag Recommendation generation crosses the Library Interface through generation-request and
 workflow operations. Library owns assembly and cleaning of title, abstract and latest ready
@@ -168,6 +168,18 @@ Opening a Project crosses the Projects interface through `open_project_workspace
 a typed read model containing the Project, the caller's membership, members and assigned Items.
 Membership authorization and the related queries remain coordinated behind that operation; only
 the Web adapter maps the typed view to template context.
+
+Project-scoped mutations lock the Project root only when changing Project state or membership;
+ownership is represented by `Project.owner_id` and transfer updates the owner and membership rows
+atomically. Item assignments use the Project root plus FK/primary-key idempotency and do not
+participate in a global lock graph. Library bulk assignment crosses this Projects interface while
+retaining ownership of the surrounding bulk-operation transaction and Audit Event.
+
+Administrator Project management crosses the Projects interface through
+`list_projects_for_admin`, which returns a paginated directory with creator and membership/item
+counts. Administrator lifecycle mutations reuse the Projects operations so state changes,
+visibility changes, renames and their Audit Events remain subject to one business seam; the Web
+administration adapter owns filtering controls and HTML formatting.
 
 `inquiro` presents one asynchronous `ProviderRuntime` as its reusable Provider Interface. Callers
 use `async with` and await its operations; `lookup` and `search` return immutable Candidate Record values, while
@@ -231,8 +243,8 @@ Library state without creating a reverse dependency. Operations
 reconciliation lists the Object Store once and only deletes old managed UUID objects after
 excluding database references and active workflow ownership twice. Item deletion and Import Batch
 discard transactionally enqueue idempotent Documents cleanup workflows on a non-partitioned cleanup
-queue. Revision work is partitioned by File Revision and bounded independently from serialized
-Library Search projection and Recommendation inference. Core queries active workflow reservations
+queue. Revision work is partitioned by File Revision and bounded independently from synchronous
+Item/Revision Search projection updates and Recommendation inference. Core queries active workflow reservations
 directly instead of scanning terminal history. Storage metrics aggregate recorded sizes from business
 tables without issuing Object Store HEAD requests; an Operations-owned scheduled integrity workflow
 performs Object Store I/O in retryable steps and commits thumbnail size backfills plus its result in
@@ -259,9 +271,9 @@ directions are:
 | `access` | `core`, `models` | Evaluate policies using persisted identities and domain errors |
 | `accounts` | `audit`, `core`, `models` | Authentication persistence and Audit Event recording |
 | `audit` | `core`, `models` | Authorization errors and Audit Event persistence |
-| `library` | `access`, `audit`, `core`, `documents`, `models`, `operations`, `search` | Authorization, persistence and auditing; selected-Item document assembly; runtime Provider/import settings; Library-owned workflows and search-index synchronization |
-| `projects` | `access`, `audit`, `core`, `models`, `search` | Authorization, Project persistence, audit recording and Item index synchronization |
-| `documents` | `access`, `audit`, `core`, `models`, `operations` | Authorization, owned-object persistence, auditing, runtime settings and Documents workflows |
+| `library` | `access`, `audit`, `core`, `documents`, `models`, `operations`, `projects`, `search` | Authorization, persistence and auditing; selected-Item document assembly; Project-gated bulk assignment; runtime Provider/import settings; Library-owned workflows and search-index synchronization |
+| `projects` | `access`, `audit`, `core`, `models` | Authorization, Project persistence and audit recording |
+| `documents` | `access`, `audit`, `core`, `models`, `operations`, `search` | Authorization, owned-object persistence, auditing, runtime settings, Documents workflows and revision-owned Search projection |
 | `operations` | `audit`, `core`, `library`, `models`, `search` | Infrastructure access, operational persistence, maintenance workflows, global rebuild coordination and audit recording |
 | `search` | `models` | Build and query the derived search representation |
 | `web` | Business Modules, `access`, `core`, `mcp`, `models`, `programmatic` | Invoke use cases, expose the Bearer-authenticated HTTP API with API Token provenance, format views and compose the MCP HTTP mount into the application |

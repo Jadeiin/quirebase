@@ -9,6 +9,7 @@ from quirebase.core.errors import ResourceNotFound, ResourceUnavailable, Validat
 from quirebase.models import (
     Item,
     ItemAuthor,
+    Project,
     ProjectItem,
     ProjectMember,
     ProjectRole,
@@ -24,7 +25,15 @@ def visible_items_query(user: User) -> Select[tuple[Item]]:
     query = select(Item)
     if user.role == SystemRole.administrator.value:
         return query
-    project_ids = select(ProjectMember.project_id).where(ProjectMember.user_id == user.id)
+    project_ids = (
+        select(ProjectItem.project_id)
+        .join(Project, Project.id == ProjectItem.project_id)
+        .outerjoin(
+            ProjectMember,
+            (ProjectMember.project_id == Project.id) & (ProjectMember.user_id == user.id),
+        )
+        .where((Project.owner_id == user.id) | (ProjectMember.user_id == user.id))
+    )
     shared_ids = select(ProjectItem.item_id).where(ProjectItem.project_id.in_(project_ids))
     return query.where(or_(Item.created_by == user.id, Item.id.in_(shared_ids)))
 
@@ -33,10 +42,17 @@ async def can_read_item(db: AsyncSession, user: User, item_id: str) -> bool:
     if user.role == SystemRole.administrator.value:
         return await db.get(Item, item_id) is not None
     own = exists().where(Item.id == item_id, Item.created_by == user.id)
-    shared = exists().where(
-        ProjectItem.item_id == item_id,
-        ProjectMember.project_id == ProjectItem.project_id,
-        ProjectMember.user_id == user.id,
+    shared = exists(
+        select(ProjectItem.project_id)
+        .join(Project, Project.id == ProjectItem.project_id)
+        .outerjoin(
+            ProjectMember,
+            (ProjectMember.project_id == Project.id) & (ProjectMember.user_id == user.id),
+        )
+        .where(
+            ProjectItem.item_id == item_id,
+            (Project.owner_id == user.id) | (ProjectMember.user_id == user.id),
+        )
     )
     return bool(await db.scalar(select(or_(own, shared))))
 
@@ -47,11 +63,19 @@ async def can_edit_item(db: AsyncSession, user: User, item_id: str) -> bool:
         return False
     if user.role == SystemRole.administrator.value or item.created_by == user.id:
         return True
-    editable = exists().where(
-        ProjectItem.item_id == item_id,
-        ProjectMember.project_id == ProjectItem.project_id,
-        ProjectMember.user_id == user.id,
-        ProjectMember.role.in_([ProjectRole.owner, ProjectRole.editor]),
+    editable = exists(
+        select(ProjectItem.project_id)
+        .join(Project, Project.id == ProjectItem.project_id)
+        .outerjoin(
+            ProjectMember,
+            (ProjectMember.project_id == Project.id) & (ProjectMember.user_id == user.id),
+        )
+        .where(
+            ProjectItem.item_id == item_id,
+            Project.state == "active",
+            (Project.owner_id == user.id)
+            | ((ProjectMember.user_id == user.id) & (ProjectMember.role == ProjectRole.editor)),
+        )
     )
     return bool(await db.scalar(select(editable)))
 
@@ -74,13 +98,49 @@ async def require_readable_item(db: AsyncSession, user: User, item_id: str) -> I
         .where(Item.id == item_id)
     )
     if item is None:
-        raise ResourceNotFound("item not found")
+        raise ResourceUnavailable("item not found")
     return item
 
 
 async def require_editable_item(db: AsyncSession, user: User, item_id: str) -> Item:
-    if not await can_edit_item(db, user, item_id):
+    item = await db.scalar(
+        select(Item)
+        .options(
+            selectinload(Item.author_links).selectinload(ItemAuthor.author),
+            selectinload(Item.identifier_links),
+        )
+        .where(Item.id == item_id)
+    )
+    if item is None:
         raise ResourceUnavailable("item not found")
+    if user.role == SystemRole.administrator.value or item.created_by == user.id:
+        return item
+    editable = exists(
+        select(ProjectItem.project_id)
+        .join(Project, Project.id == ProjectItem.project_id)
+        .outerjoin(
+            ProjectMember,
+            (ProjectMember.project_id == Project.id) & (ProjectMember.user_id == user.id),
+        )
+        .where(
+            ProjectItem.item_id == item_id,
+            Project.state == "active",
+            (Project.owner_id == user.id)
+            | ((ProjectMember.user_id == user.id) & (ProjectMember.role == ProjectRole.editor)),
+        )
+    )
+    if not await db.scalar(select(editable)):
+        raise ResourceUnavailable("item not found")
+    return item
+
+
+async def require_editable_item_for_mutation(db: AsyncSession, user: User, item_id: str) -> Item:
+    """Authorize a short Item command at command entry.
+
+    Project membership and active state are intentionally a point-in-time
+    authorization check for short synchronous commands. Durable finalizers
+    must use their own final revalidation primitive immediately before commit.
+    """
     item = await db.scalar(
         select(Item)
         .options(
@@ -91,6 +151,25 @@ async def require_editable_item(db: AsyncSession, user: User, item_id: str) -> I
     )
     if item is None:
         raise ResourceNotFound("item not found")
+    if user.role == SystemRole.administrator.value or item.created_by == user.id:
+        return item
+    project = await db.scalar(
+        select(Project)
+        .join(ProjectItem, ProjectItem.project_id == Project.id)
+        .outerjoin(
+            ProjectMember,
+            (ProjectMember.project_id == Project.id) & (ProjectMember.user_id == user.id),
+        )
+        .where(
+            ProjectItem.item_id == item_id,
+            Project.state == "active",
+            (Project.owner_id == user.id)
+            | ((ProjectMember.user_id == user.id) & (ProjectMember.role == ProjectRole.editor)),
+        )
+        .order_by(Project.id)
+    )
+    if project is None:
+        raise ResourceUnavailable("item not found")
     return item
 
 

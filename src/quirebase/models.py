@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import Any, Protocol
 
 from sqlalchemy import (
     JSON,
@@ -27,6 +28,26 @@ def uid() -> str:
     return str(uuid.uuid4())
 
 
+def normalize_author_identity(last_name: str, first_name: str | None = None) -> str:
+    """Return the canonical, case-insensitive identity key for an Author."""
+    last = " ".join(last_name.split()).casefold()
+    first = " ".join(first_name.split()).casefold() if first_name else ""
+    return f"{last}\x1f{first}"
+
+
+class _AuthorDefaultContext(Protocol):
+    def get_current_parameters(self) -> dict[str, Any]: ...
+
+
+def _author_identity_default(context: _AuthorDefaultContext) -> str:
+    parameters = context.get_current_parameters()
+    first_name = parameters.get("first_name")
+    return normalize_author_identity(
+        str(parameters.get("last_name") or ""),
+        first_name if isinstance(first_name, str) else None,
+    )
+
+
 def now() -> datetime:
     return datetime.now(UTC)
 
@@ -40,6 +61,16 @@ class ProjectRole(StrEnum):
     owner = "owner"
     editor = "editor"
     viewer = "viewer"
+
+
+class ProjectState(StrEnum):
+    active = "active"
+    archived = "archived"
+
+
+class ProjectVisibility(StrEnum):
+    private = "private"
+    public = "public"
 
 
 class AnnotationKind(StrEnum):
@@ -194,10 +225,13 @@ class Item(Base):
 
 class Author(Base):
     __tablename__ = "authors"
-    __table_args__ = (UniqueConstraint("last_name", "first_name", name="uq_authors_name"),)
+    __table_args__ = (UniqueConstraint("identity_key", name="uq_authors_identity"),)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     first_name: Mapped[str | None] = mapped_column(String(120))
     last_name: Mapped[str] = mapped_column(String(120), index=True)
+    identity_key: Mapped[str] = mapped_column(
+        String(512), nullable=False, default=_author_identity_default
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
@@ -242,10 +276,31 @@ class ItemRead(Base):
 
 class Project(Base):
     __tablename__ = "projects"
+    __table_args__ = (
+        CheckConstraint("state IN ('active', 'archived')", name="ck_projects_state"),
+        CheckConstraint("visibility IN ('private', 'public')", name="ck_projects_visibility"),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     name: Mapped[str] = mapped_column(String(240))
+    description: Mapped[str] = mapped_column(Text, default="")
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    owner_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id"),
+        index=True,
+        # A newly-created Project is always owned by its creator.  Deriving
+        # the value at INSERT keeps the invariant local to the model while
+        # allowing callers to override it only for an explicit transfer.
+        default=lambda context: context.get_current_parameters()["created_by"],
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+    state: Mapped[ProjectState] = mapped_column(
+        enum_type(ProjectState, "project_state"), default=ProjectState.active
+    )
+    visibility: Mapped[ProjectVisibility] = mapped_column(
+        enum_type(ProjectVisibility, "project_visibility"), default=ProjectVisibility.private
+    )
+    owner: Mapped[User] = relationship(foreign_keys=[owner_id])
 
 
 class ProjectMember(Base):
@@ -484,7 +539,7 @@ class ImportBatch(Base):
     __tablename__ = "import_batches"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('pending', 'ready', 'failed')",
+            "status IN ('pending', 'ready', 'failed', 'committed')",
             name="ck_import_batches_status",
         ),
     )
@@ -501,6 +556,7 @@ class ImportBatch(Base):
         enum_type(PdfAnnotationMode, "pdf_annotation_mode"), nullable=True
     )
     max_pdf_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    committed_item_ids: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
 
 

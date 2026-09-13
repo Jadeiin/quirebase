@@ -60,6 +60,9 @@ class ProjectSummaryView(BaseModel):
     name: str
     role: str
     item_count: int
+    state: str
+    visibility: str
+    description: str = ""
 
 
 class ProjectMemberView(BaseModel):

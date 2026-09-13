@@ -3,18 +3,31 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.exc import IntegrityError
 
 from quirebase.access.items import can_read_item
-from quirebase.access.projects import project_member, require_project_member
+from quirebase.access.projects import require_project_member
 from quirebase.audit import record_event
 from quirebase.core.errors import (
     ResourceNotFound,
     ResourceUnavailable,
     ValidationFailure,
 )
-from quirebase.models import Item, Project, ProjectItem, ProjectMember, ProjectRole, User
-from quirebase.search import search_index
+from quirebase.models import (
+    Item,
+    Project,
+    ProjectItem,
+    ProjectMember,
+    ProjectRole,
+    ProjectState,
+    ProjectVisibility,
+    User,
+)
+
+from ._locking import guard_project
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,15 +47,39 @@ class ProjectWorkspace:
     items: tuple[Item, ...]
 
 
-async def create_project(db: AsyncSession, user: User, name: str) -> Project:
+async def create_project(
+    db: AsyncSession,
+    user: User,
+    name: str,
+    visibility: ProjectVisibility | str = ProjectVisibility.private,
+    description: str = "",
+) -> Project:
+    creator = await db.scalar(
+        select(User).where(User.id == user.id, User.active.is_(True)).with_for_update(read=True)
+    )
+    if creator is None:
+        raise ResourceUnavailable("active user required")
     normalized = name.strip()
     if not normalized:
         raise ValidationFailure("project name is required")
-    project = Project(name=normalized, created_by=user.id)
+    try:
+        parsed_visibility = ProjectVisibility(visibility)
+    except ValueError as error:
+        raise ValidationFailure("invalid project visibility") from error
+    normalized_description = description.replace("\r\n", "\n").replace("\r", "\n").strip()
+    if len(normalized_description) > 2000:
+        raise ValidationFailure("project description is too long")
+    project = Project(
+        name=normalized,
+        created_by=creator.id,
+        owner_id=creator.id,
+        visibility=parsed_visibility,
+        description=normalized_description,
+    )
     db.add(project)
     await db.flush()
-    db.add(ProjectMember(project_id=project.id, user_id=user.id, role=ProjectRole.owner))
-    record_event(db, user.id, "project.create", "project", project.id)
+    db.add(ProjectMember(project_id=project.id, user_id=creator.id, role=ProjectRole.owner))
+    record_event(db, creator.id, "project.create", "project", project.id)
     await db.commit()
     return project
 
@@ -59,6 +96,51 @@ async def list_user_projects(db: AsyncSession, user: User) -> list[tuple[Project
         )
     ).all()
     return [(row[0], row[1], row[2]) for row in rows]
+
+
+async def list_joinable_projects(db: AsyncSession, user: User) -> list[tuple[Project, int]]:
+    rows = await db.execute(
+        select(Project, func.count(ProjectItem.item_id))
+        .outerjoin(ProjectItem)
+        .where(
+            Project.visibility == ProjectVisibility.public,
+            Project.state == "active",
+            ~select(ProjectMember.project_id)
+            .where(ProjectMember.project_id == Project.id, ProjectMember.user_id == user.id)
+            .exists(),
+        )
+        .group_by(Project.id)
+        .order_by(Project.name)
+    )
+    return [(row[0], row[1]) for row in rows]
+
+
+async def join_project(db: AsyncSession, user: User, project_id: str) -> ProjectMember:
+    await guard_project(
+        db,
+        project_id,
+        state=ProjectState.active,
+        visibility=ProjectVisibility.public,
+        message="public project not available",
+    )
+    existing = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
+    if existing:
+        await db.commit()
+        return existing
+    member = ProjectMember(project_id=project_id, user_id=user.id, role=ProjectRole.viewer)
+    db.add(member)
+    record_event(db, user.id, "project.member.join", "project", project_id)
+    try:
+        await db.commit()
+    except IntegrityError:
+        # A concurrent retry may have inserted the same composite key.  The
+        # failed transaction must be rolled back before reloading it.
+        await db.rollback()
+        existing = await db.get(ProjectMember, (project_id, user.id))
+        if existing is None:
+            raise
+        return existing
+    return member
 
 
 async def open_project_workspace(db: AsyncSession, user: User, project_id: str) -> ProjectWorkspace:
@@ -94,19 +176,33 @@ async def open_project_workspace(db: AsyncSession, user: User, project_id: str) 
 
 
 async def add_item_to_project(db: AsyncSession, user: User, project_id: str, item_id: str) -> None:
-    item = await db.get(Item, item_id)
-    membership = await project_member(db, user, project_id)
-    if (
-        item is None
-        or not await can_read_item(db, user, item_id)
-        or membership is None
-        or membership.role not in (ProjectRole.owner, ProjectRole.editor)
+    project = await guard_project(
+        db,
+        project_id,
+        state=ProjectState.active,
+        message="item or project not accessible or insufficient permissions",
+    )
+    item = await db.get(Item, item_id, populate_existing=True)
+    if item is None or not await can_read_item(db, user, item_id):
+        raise ResourceUnavailable("item or project not accessible or insufficient permissions")
+    membership = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
+    if user.id != project.owner_id and (
+        membership is None or membership.role != ProjectRole.editor
     ):
         raise ResourceUnavailable("item or project not accessible or insufficient permissions")
-    if await db.get(ProjectItem, (project_id, item_id)) is None:
-        db.add(ProjectItem(project_id=project_id, item_id=item_id))
-        await db.flush()
-        await search_index(db).index_item(db, item_id)
+    created = False
+    if await db.get(ProjectItem, (project_id, item_id), populate_existing=True) is None:
+        try:
+            async with db.begin_nested():
+                db.add(ProjectItem(project_id=project_id, item_id=item_id))
+                await db.flush()
+                created = True
+        except IntegrityError as error:
+            if await db.get(ProjectItem, (project_id, item_id), populate_existing=True) is None:
+                raise ResourceUnavailable(
+                    "item or project not accessible or insufficient permissions"
+                ) from error
+    if created:
         record_event(
             db,
             user.id,
@@ -115,30 +211,78 @@ async def add_item_to_project(db: AsyncSession, user: User, project_id: str, ite
             item_id,
             detail={"project_id": project_id},
         )
-        await db.commit()
+    await db.commit()
 
 
 async def remove_item_from_project(
     db: AsyncSession, user: User, project_id: str, item_id: str
 ) -> None:
-    membership = await project_member(db, user, project_id)
-    assignment = await db.get(ProjectItem, (project_id, item_id))
-    if (
-        assignment is None
-        or not await can_read_item(db, user, item_id)
-        or membership is None
-        or membership.role not in (ProjectRole.owner, ProjectRole.editor)
+    project = await guard_project(
+        db,
+        project_id,
+        state=ProjectState.active,
+        message="item or project not accessible or insufficient permissions",
+    )
+    item = await db.get(Item, item_id, populate_existing=True)
+    if item is None or not await can_read_item(db, user, item_id):
+        raise ResourceUnavailable("item or project not accessible or insufficient permissions")
+    membership = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
+    if user.id != project.owner_id and (
+        membership is None or membership.role != ProjectRole.editor
     ):
         raise ResourceUnavailable("item or project not accessible or insufficient permissions")
-    await db.delete(assignment)
-    await db.flush()
-    await search_index(db).index_item(db, item_id)
-    record_event(
-        db,
-        user.id,
-        "project.item.remove",
-        "item",
-        item_id,
-        detail={"project_id": project_id},
+    result = await db.execute(
+        delete(ProjectItem).where(
+            ProjectItem.project_id == project_id,
+            ProjectItem.item_id == item_id,
+        )
     )
+    if getattr(result, "rowcount", 0):
+        record_event(
+            db,
+            user.id,
+            "project.item.remove",
+            "item",
+            item_id,
+            detail={"project_id": project_id},
+        )
     await db.commit()
+
+
+async def add_items_to_project(
+    db: AsyncSession, user: User, project_id: str, item_ids: list[str]
+) -> int:
+    """Add many Item associations under the Projects module's root guard."""
+    project = await guard_project(
+        db,
+        project_id,
+        state=ProjectState.active,
+        message="item or project not accessible or insufficient permissions",
+    )
+    membership = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
+    if user.id != project.owner_id and (
+        membership is None or membership.role != ProjectRole.editor
+    ):
+        raise ResourceUnavailable("item or project not accessible or insufficient permissions")
+    ids = tuple(sorted(dict.fromkeys(item_ids)))
+    if not ids:
+        return 0
+    accessible = [item_id for item_id in ids if await can_read_item(db, user, item_id)]
+    if len(accessible) != len(ids):
+        raise ResourceUnavailable("item or project not accessible or insufficient permissions")
+    rows = [{"project_id": project_id, "item_id": item_id} for item_id in accessible]
+    dialect = db.get_bind().dialect.name
+    insert = pg_insert(ProjectItem) if dialect == "postgresql" else sqlite_insert(ProjectItem)
+    try:
+        async with db.begin_nested():
+            result = await db.execute(
+                insert.values(rows).on_conflict_do_nothing(index_elements=["project_id", "item_id"])
+            )
+    except IntegrityError as error:
+        # An Item may disappear after the accessibility check but before the
+        # association insert.  Treat the FK race as a normal rejected
+        # assignment rather than leaking a failed transaction to the caller.
+        raise ResourceUnavailable(
+            "item or project not accessible or insufficient permissions"
+        ) from error
+    return int(getattr(result, "rowcount", 0) or 0)
