@@ -123,7 +123,7 @@ async def remove_tag_from_item(db: AsyncSession, user: User, item_id: str, tag_i
 
 
 async def rename_tag(db: AsyncSession, user: User, tag_id: str, name: str) -> Tag:
-    tag = await db.get(Tag, tag_id)
+    tag = await db.scalar(select(Tag).where(Tag.id == tag_id).with_for_update(key_share=True))
     if tag is None or (tag.created_by != user.id and user.role != "administrator"):
         raise ResourceUnavailable("tag not found or cannot be managed")
     normalized = normalize_tag_name(name)
@@ -136,7 +136,8 @@ async def rename_tag(db: AsyncSession, user: User, tag_id: str, name: str) -> Ta
 
 
 async def delete_tag(db: AsyncSession, user: User, tag_id: str) -> None:
-    tag = await db.get(Tag, tag_id)
+    # Deleting a taxonomy root must block FK association inserts until commit.
+    tag = await db.scalar(select(Tag).where(Tag.id == tag_id).with_for_update())
     if tag is None or (tag.created_by != user.id and user.role != "administrator"):
         raise ResourceUnavailable("tag not found or cannot be managed")
     await db.delete(tag)
@@ -213,12 +214,20 @@ async def get_tag_matrix_for_item(db: AsyncSession, user: User, item_id: str) ->
 
 
 async def merge_tags(db: AsyncSession, user: User, source_tag_id: str, target_tag_id: str) -> Tag:
-    source_tag = await db.get(Tag, source_tag_id)
-    target_tag = await db.get(Tag, target_tag_id)
+    if source_tag_id == target_tag_id:
+        raise TagConflict("source and target tags must be different")
+    locked_tags: dict[str, Tag | None] = {}
+    for tag_id in sorted((source_tag_id, target_tag_id)):
+        query = select(Tag).where(Tag.id == tag_id)
+        if tag_id == source_tag_id:
+            query = query.with_for_update()
+        else:
+            query = query.with_for_update(key_share=True)
+        locked_tags[tag_id] = await db.scalar(query)
+    source_tag = locked_tags[source_tag_id]
+    target_tag = locked_tags[target_tag_id]
     if source_tag is None or target_tag is None:
         raise ResourceUnavailable("tags not found")
-    if source_tag.id == target_tag.id:
-        raise TagConflict("source and target tags must be different")
     if user.role != "administrator" and source_tag.created_by != user.id:
         raise ResourceUnavailable("not authorized to merge these tags")
 

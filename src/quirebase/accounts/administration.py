@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sqlalchemy import delete, func, or_, select
+from sqlalchemy.exc import IntegrityError
 
 from quirebase.audit import record_event
 from quirebase.core.crypto import hash_password_async
@@ -87,14 +88,18 @@ async def create_user_admin(
         user.id,
         detail={"username": user.username, "role": user.role},
     )
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as error:
+        await db.rollback()
+        raise ValidationFailure(f"username '{cleaned_name}' is already taken") from error
     return user
 
 
 async def update_user_status(db: AsyncSession, admin: User, user_id: str, active: bool) -> User:
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")
-    user = await db.get(User, user_id)
+    user = await db.scalar(select(User).where(User.id == user_id).with_for_update(key_share=True))
     if user is None:
         raise ResourceNotFound("user not found")
     if user.id == admin.id and not active:
@@ -120,7 +125,7 @@ async def change_user_role(db: AsyncSession, admin: User, user_id: str, new_role
         raise ResourceUnavailable("administrator required")
     if new_role not in (SystemRole.administrator.value, SystemRole.member.value):
         raise ValidationFailure("invalid user role")
-    user = await db.get(User, user_id)
+    user = await db.scalar(select(User).where(User.id == user_id).with_for_update(key_share=True))
     if user is None:
         raise ResourceNotFound("user not found")
     if user.id == admin.id and new_role != SystemRole.administrator.value:
@@ -145,7 +150,7 @@ async def reset_user_password(
         raise ResourceUnavailable("administrator required")
     if len(new_password) < 12:
         raise ValidationFailure("password must contain at least 12 characters")
-    user = await db.get(User, user_id)
+    user = await db.scalar(select(User).where(User.id == user_id).with_for_update(key_share=True))
     if user is None:
         raise ResourceNotFound("user not found")
     user.password_hash = await hash_password_async(new_password)
