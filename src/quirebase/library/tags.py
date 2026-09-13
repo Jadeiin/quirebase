@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy import and_, delete, func, select
+from sqlalchemy.exc import IntegrityError
 
 from quirebase.access.items import (
     can_edit_item,
@@ -51,9 +52,15 @@ async def get_or_create_tag(db: AsyncSession, user: User, name: str) -> Tag:
     normalized = normalize_tag_name(name)
     tag = await db.scalar(select(Tag).where(Tag.name == normalized))
     if tag is None:
-        tag = Tag(name=normalized, created_by=user.id)
-        db.add(tag)
-        await db.flush()
+        try:
+            async with db.begin_nested():
+                tag = Tag(name=normalized, created_by=user.id)
+                db.add(tag)
+                await db.flush()
+        except IntegrityError:
+            tag = await db.scalar(select(Tag).where(Tag.name == normalized))
+            if tag is None:  # pragma: no cover - constraint unrelated to Tag identity
+                raise
     return tag
 
 
@@ -62,22 +69,31 @@ async def add_tag_to_item(db: AsyncSession, user: User, item_id: str, name: str)
         raise ResourceUnavailable("item not found or cannot be edited")
     tag = await get_or_create_tag(db, user, name)
     assignment = await db.get(ItemTag, (item_id, tag.id))
+    created = False
     if assignment is None:
-        assignment = ItemTag(item_id=item_id, tag_id=tag.id)
-        db.add(assignment)
-        await db.flush()
+        try:
+            async with db.begin_nested():
+                assignment = ItemTag(item_id=item_id, tag_id=tag.id)
+                db.add(assignment)
+                await db.flush()
+                created = True
+        except IntegrityError:
+            assignment = await db.get(ItemTag, (item_id, tag.id), populate_existing=True)
+            if assignment is None:  # pragma: no cover - constraint unrelated to association PK
+                raise
+    if created:
         record_event(db, user.id, "tag.add", "item", item_id)
-        await db.commit()
+    await db.commit()
     return assignment
 
 
 async def remove_tag_from_item(db: AsyncSession, user: User, item_id: str, tag_id: str) -> None:
     if not await can_edit_item(db, user, item_id):
         raise ResourceUnavailable("item not found or cannot be edited")
-    assignment = await db.get(ItemTag, (item_id, tag_id))
-    if assignment:
-        await db.delete(assignment)
-        await db.flush()
+    result = await db.execute(
+        delete(ItemTag).where(ItemTag.item_id == item_id, ItemTag.tag_id == tag_id)
+    )
+    if getattr(result, "rowcount", 0):
         record_event(
             db,
             user.id,
@@ -86,7 +102,7 @@ async def remove_tag_from_item(db: AsyncSession, user: User, item_id: str, tag_i
             item_id,
             detail={"tag_id": tag_id},
         )
-        await db.commit()
+    await db.commit()
 
 
 async def rename_tag(db: AsyncSession, user: User, tag_id: str, name: str) -> Tag:

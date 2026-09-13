@@ -252,6 +252,14 @@ class Project(Base):
     name: Mapped[str] = mapped_column(String(240))
     description: Mapped[str] = mapped_column(Text, default="")
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    owner_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id"),
+        index=True,
+        # A newly-created Project is always owned by its creator.  Deriving
+        # the value at INSERT keeps the invariant local to the model while
+        # allowing callers to override it only for an explicit transfer.
+        default=lambda context: context.get_current_parameters()["created_by"],
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
     state: Mapped[ProjectState] = mapped_column(
@@ -260,6 +268,7 @@ class Project(Base):
     visibility: Mapped[ProjectVisibility] = mapped_column(
         enum_type(ProjectVisibility, "project_visibility"), default=ProjectVisibility.private
     )
+    owner: Mapped[User] = relationship(foreign_keys=[owner_id])
 
 
 class ProjectMember(Base):
@@ -497,7 +506,7 @@ class ImportBatch(Base):
     __tablename__ = "import_batches"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('pending', 'ready', 'failed')",
+            "status IN ('pending', 'ready', 'failed', 'committed')",
             name="ck_import_batches_status",
         ),
     )
@@ -508,6 +517,7 @@ class ImportBatch(Base):
     errors: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(16), default="ready")
     workflow_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    committed_item_ids: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
 
 

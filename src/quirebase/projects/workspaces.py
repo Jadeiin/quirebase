@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access.items import can_read_item
@@ -65,6 +65,7 @@ async def create_project(
     project = Project(
         name=normalized,
         created_by=user.id,
+        owner_id=user.id,
         visibility=parsed_visibility,
         description=normalized_description,
     )
@@ -168,21 +169,31 @@ async def open_project_workspace(db: AsyncSession, user: User, project_id: str) 
 
 
 async def add_item_to_project(db: AsyncSession, user: User, project_id: str, item_id: str) -> None:
-    item = await db.get(Item, item_id)
-    if item is None or not await can_read_item(db, user, item_id):
-        raise ResourceUnavailable("item or project not accessible or insufficient permissions")
     await require_project_write_gate(
         db,
         project_id,
         state=ProjectState.active,
         message="item or project not accessible or insufficient permissions",
     )
+    item = await db.get(Item, item_id, populate_existing=True)
+    if item is None or not await can_read_item(db, user, item_id):
+        raise ResourceUnavailable("item or project not accessible or insufficient permissions")
     membership = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     if membership is None or membership.role not in (ProjectRole.owner, ProjectRole.editor):
         raise ResourceUnavailable("item or project not accessible or insufficient permissions")
+    created = False
     if await db.get(ProjectItem, (project_id, item_id), populate_existing=True) is None:
-        db.add(ProjectItem(project_id=project_id, item_id=item_id))
-        await db.flush()
+        try:
+            async with db.begin_nested():
+                db.add(ProjectItem(project_id=project_id, item_id=item_id))
+                await db.flush()
+                created = True
+        except IntegrityError as error:
+            if await db.get(ProjectItem, (project_id, item_id), populate_existing=True) is None:
+                raise ResourceUnavailable(
+                    "item or project not accessible or insufficient permissions"
+                ) from error
+    if created:
         record_event(
             db,
             user.id,
@@ -197,30 +208,31 @@ async def add_item_to_project(db: AsyncSession, user: User, project_id: str, ite
 async def remove_item_from_project(
     db: AsyncSession, user: User, project_id: str, item_id: str
 ) -> None:
-    if not await can_read_item(db, user, item_id):
-        raise ResourceUnavailable("item or project not accessible or insufficient permissions")
     await require_project_write_gate(
         db,
         project_id,
         state=ProjectState.active,
         message="item or project not accessible or insufficient permissions",
     )
-    membership = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
-    assignment = await db.get(ProjectItem, (project_id, item_id), populate_existing=True)
-    if (
-        assignment is None
-        or membership is None
-        or membership.role not in (ProjectRole.owner, ProjectRole.editor)
-    ):
+    item = await db.get(Item, item_id, populate_existing=True)
+    if item is None or not await can_read_item(db, user, item_id):
         raise ResourceUnavailable("item or project not accessible or insufficient permissions")
-    await db.delete(assignment)
-    await db.flush()
-    record_event(
-        db,
-        user.id,
-        "project.item.remove",
-        "item",
-        item_id,
-        detail={"project_id": project_id},
+    membership = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
+    if membership is None or membership.role not in (ProjectRole.owner, ProjectRole.editor):
+        raise ResourceUnavailable("item or project not accessible or insufficient permissions")
+    result = await db.execute(
+        delete(ProjectItem).where(
+            ProjectItem.project_id == project_id,
+            ProjectItem.item_id == item_id,
+        )
     )
+    if getattr(result, "rowcount", 0):
+        record_event(
+            db,
+            user.id,
+            "project.item.remove",
+            "item",
+            item_id,
+            detail={"project_id": project_id},
+        )
     await db.commit()

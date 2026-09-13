@@ -73,7 +73,9 @@ async def request_item_tag_recommendation(
     elif await db.get(Item, item_id) is None:
         raise ValueError("Item no longer exists")
     record = await db.scalar(
-        select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == item_id)
+        select(ItemTagRecommendation)
+        .where(ItemTagRecommendation.item_id == item_id)
+        .with_for_update()
     )
     if record is not None and not force:
         workflow = await _linked_workflow(record)
@@ -119,7 +121,9 @@ async def _store_item_tag_recommendation(
     candidates: RecommendationCandidates,
 ) -> dict[str, Any]:
     record = await db.scalar(
-        select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == item_id)
+        select(ItemTagRecommendation)
+        .where(ItemTagRecommendation.item_id == item_id)
+        .with_for_update()
     )
     if (
         record is None

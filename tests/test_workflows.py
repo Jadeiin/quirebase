@@ -740,10 +740,10 @@ async def test_file_revision_change_retries_only_the_recommendation_request(monk
     monkeypatch.setattr(library_workflows, "request_item_tag_recommendation_step", request)
 
     workflow_body = library_workflows.file_revision_changed_workflow.__wrapped__.__wrapped__
-    await workflow_body("item-id", "owner-id")
+    await workflow_body("revision-id", "item-id", "owner-id")
 
     assert calls == [
-        ("index", "item-id"),
+        ("index", "revision-id"),
         ("request", "item-id", "owner-id"),
     ]
 

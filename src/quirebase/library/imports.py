@@ -444,12 +444,14 @@ async def _create_item_from_record(db: AsyncSession, user: User, record: dict) -
 async def get_import_batch_preview(
     db: AsyncSession, user: User, batch_id: str
 ) -> tuple[ImportBatch, list[dict], list[dict]]:
-    batch = await db.get(ImportBatch, batch_id)
+    batch = await db.scalar(
+        select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update(read=True)
+    )
     if batch is None or batch.owner_id != user.id:
         raise ResourceUnavailable("import batch not found")
     if await _converge_pdf_import_batch_status(db, batch):
         await db.commit()
-    records = json.loads(batch.records) if batch.status == "ready" else []
+    records = json.loads(batch.records) if batch.status in {"ready", "committed"} else []
     return batch, records, json.loads(batch.errors)
 
 
@@ -517,10 +519,28 @@ async def retry_pdf_import_batch(db: AsyncSession, user: User, batch_id: str) ->
     return batch
 
 
-async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> None:
-    batch = await db.get(ImportBatch, batch_id)
-    if batch is None or batch.owner_id != user.id:
+async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> list[str]:
+    # Revalidate the owner and hold a shared lock while the batch root is
+    # locked.  Account deactivation therefore cannot race a confirmation.
+    owner = await db.scalar(
+        select(User).where(User.id == user.id, User.active.is_(True)).with_for_update(read=True)
+    )
+    if owner is None:
+        raise ResourceUnavailable("user not available")
+    batch = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update())
+    if batch is None or batch.owner_id != owner.id:
         raise ResourceUnavailable("import batch not found")
+    if batch.status == "committed":
+        try:
+            committed_ids = json.loads(batch.committed_item_ids or "[]")
+        except (TypeError, json.JSONDecodeError) as error:
+            raise BatchConflict("the committed batch has invalid results") from error
+        if not isinstance(committed_ids, list) or not all(
+            isinstance(item_id, str) for item_id in committed_ids
+        ):
+            raise BatchConflict("the committed batch has invalid results")
+        await db.commit()
+        return committed_ids
     if batch.status != "ready":
         raise BatchConflict("the import batch is still being prepared")
     errors = json.loads(batch.errors)
@@ -532,7 +552,7 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
     if batch.file_format == "pdf":
         known_dois = {
             value
-            for provider, value in await get_accessible_item_identifiers(db, user)
+            for provider, value in await get_accessible_item_identifiers(db, owner)
             if provider == "doi"
         }
         candidate_dois: set[str] = set()
@@ -545,14 +565,15 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
                 raise BatchConflict("another PDF in this batch has the same DOI")
             if normalized_doi:
                 candidate_dois.add(normalized_doi)
+    committed_item_ids: list[str] = []
     for record in records:
         candidate = dict(record)
         pdf = candidate.pop("_pdf", None)
-        item = await _create_item_from_record(db, user, candidate)
+        item = await _create_item_from_record(db, owner, candidate)
         if pdf is not None:
             await attach_staged_pdf(
                 db,
-                user,
+                owner,
                 item,
                 (
                     pdf["object_key"],
@@ -563,20 +584,25 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> No
         await search_index(db).index_item(db, item.id)
         record_event(
             db,
-            user.id,
+            owner.id,
             "pdf.import" if pdf is not None else "bibliography.import",
             "item",
             item.id,
             detail={"format": batch.file_format, "filename": pdf["original_name"] if pdf else None},
         )
-    await db.delete(batch)
+        committed_item_ids.append(item.id)
+    batch.committed_item_ids = json.dumps(committed_item_ids)
+    batch.status = "committed"
     await db.commit()
+    return committed_item_ids
 
 
 async def discard_import_batch(db: AsyncSession, user: User, batch_id: str) -> None:
-    batch = await db.get(ImportBatch, batch_id)
+    batch = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update())
     if batch is None or batch.owner_id != user.id:
         raise ResourceUnavailable("import batch not found")
+    if batch.status == "committed":
+        raise BatchConflict("a committed import batch cannot be discarded")
     object_keys = _pdf_object_keys(batch.records)
     record_event(db, user.id, "import.batch.discard", "import_batch", batch.id)
     await db.delete(batch)

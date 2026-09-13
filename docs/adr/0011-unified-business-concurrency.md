@@ -39,6 +39,12 @@ Concurrency controls are selected by the invariant they protect:
    UUIDs are never reused; row existence plus foreign keys is the lifecycle boundary. A missing
    row is a normal rejected finalization, not a stale lifecycle-token protocol.
 
+5. **Lock only the row that owns the invariant.**
+   A command may take a row lock only at its linearization point. Authorization and existence
+   checks that merely need to prevent a concurrent delete use a shared lock; ordinary reads remain
+   unlocked. No helper may acquire a child lock and then reach back to its parent, and no caller
+   may compose locks from unrelated modules.
+
 ## Lock strength and ordering
 
 Locks are an implementation detail of the owning command and are held only for the short
@@ -50,6 +56,9 @@ transaction that mutates canonical state:
   or existence checks that must serialize with a delete.
 - A root row that will be mutated, or whose transition must be linearized, uses `FOR UPDATE`
   (`with_for_update()`).
+- A shared lock is never a substitute for a write lock: it protects a read set while allowing
+  other readers to proceed, but the owning command must still take `FOR UPDATE` before changing
+  that root row.
 - Multiple rows of one aggregate are acquired in stable ID order. No command acquires a child
   row and then goes back to lock its parent.
 
@@ -95,6 +104,10 @@ ID, per-child operation ID or deterministic child-key derivation.
   Library Search rebuild.
 - This is an alpha, forward-only cutover. No compatibility shim is provided for removed APIs,
   stored columns or persisted workflow parameters.
+
+The schema cutover is intentionally delivered as one revision after the current head. The
+revision may rebuild SQLite tables as needed, but must preserve all child rows while doing so; it
+does not retain transitional columns or aliases for older application contracts.
 
 ## Rejected alternatives
 
