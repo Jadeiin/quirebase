@@ -214,6 +214,54 @@ async def test_item_delete_wins_against_upload_finalizer(postgres_sessions, fina
     assert "no longer writable" in str(result)
 
 
+async def test_item_delete_wins_against_project_editor_upload_finalizer(postgres_sessions):
+    async with postgres_sessions() as db:
+        owner = User(username=f"owner-{uuid4()}", password_hash="hash")
+        editor = User(username=f"editor-{uuid4()}", password_hash="hash")
+        db.add_all([owner, editor])
+        await db.flush()
+        item = Item(title="Project delete race", created_by=owner.id)
+        project = Project(name="Project delete gate", created_by=owner.id)
+        db.add_all([item, project])
+        await db.flush()
+        db.add_all([
+            ProjectMember(project_id=project.id, user_id=owner.id, role=ProjectRole.owner),
+            ProjectMember(project_id=project.id, user_id=editor.id, role=ProjectRole.editor),
+            ProjectItem(project_id=project.id, item_id=item.id),
+        ])
+        await db.commit()
+        editor_id, item_id = editor.id, item.id
+
+    deletion_db = postgres_sessions()
+    locked_item = await deletion_db.scalar(select(Item).where(Item.id == item_id).with_for_update())
+    assert locked_item is not None
+
+    async def finish_upload() -> object:
+        return await commit_uploaded_attachment(
+            item_id,
+            editor_id,
+            str(uuid4()),
+            "project-delete-race.bin",
+            "application/octet-stream",
+            None,
+            {"object_key": "race/project-delete.bin", "size": 20},
+        )
+
+    try:
+        task = asyncio.create_task(finish_upload())
+        await asyncio.sleep(0.05)
+        assert not task.done()
+        await deletion_db.delete(locked_item)
+        await deletion_db.commit()
+        result = await task
+    except BaseException as error:
+        result = error
+    finally:
+        await deletion_db.close()
+    assert isinstance(result, ValueError)
+    assert "no longer writable" in str(result)
+
+
 async def test_bulk_item_delete_serializes_with_upload_finalizer(postgres_sessions):
     user_id, item_id = await _create_user_and_item(postgres_sessions, title="Bulk delete race")
 

@@ -86,6 +86,7 @@ def upgrade() -> None:
         sa.column("id", sa.String),
         sa.column("first_name", sa.String),
         sa.column("last_name", sa.String),
+        sa.column("identity_key", sa.String),
         sa.column("created_at", sa.DateTime),
     )
     item_authors_table = sa.table(
@@ -118,6 +119,11 @@ def upgrade() -> None:
                     id=author_id,
                     last_name=last_name,
                     first_name=first_name,
+                    identity_key=(
+                        " ".join(last_name.split()).casefold()
+                        + "\x1f"
+                        + (" ".join(first_name.split()).casefold() if first_name else "")
+                    ),
                     created_at=now_utc,
                 )
             )

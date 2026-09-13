@@ -24,6 +24,12 @@ def _sqlite_fk(bind: sa.Connection, enabled: bool) -> None:
         bind.execute(sa.text(f"PRAGMA foreign_keys={'ON' if enabled else 'OFF'}"))
 
 
+def _author_identity(last_name: str, first_name: str | None) -> str:
+    last = " ".join(last_name.split()).casefold()
+    first = " ".join(first_name.split()).casefold() if first_name else ""
+    return f"{last}\x1f{first}"
+
+
 def upgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
@@ -99,6 +105,80 @@ def upgrade() -> None:
                 )
                 batch.create_index("ix_projects_owner_id", ["owner_id"])
             _sqlite_fk(bind, True)
+
+    inspector = sa.inspect(bind)
+    if inspector.has_table("authors"):
+        author_columns = {column["name"] for column in inspector.get_columns("authors")}
+        if "identity_key" not in author_columns:
+            _sqlite_fk(bind, False)
+            with op.batch_alter_table("authors") as batch:
+                batch.add_column(sa.Column("identity_key", sa.String(length=260), nullable=True))
+            _sqlite_fk(bind, True)
+
+        authors_table = sa.table(
+            "authors",
+            sa.column("id", sa.String),
+            sa.column("last_name", sa.String),
+            sa.column("first_name", sa.String),
+            sa.column("identity_key", sa.String),
+        )
+        rows = bind.execute(
+            sa.select(
+                authors_table.c.id,
+                authors_table.c.last_name,
+                authors_table.c.first_name,
+            ).order_by(authors_table.c.id)
+        ).fetchall()
+        identities: dict[str, str] = {}
+        for author_id, last_name, first_name in rows:
+            identity_key = _author_identity(last_name, first_name)
+            canonical_id = identities.get(identity_key)
+            if canonical_id is None:
+                identities[identity_key] = author_id
+                bind.execute(
+                    sa
+                    .update(authors_table)
+                    .where(authors_table.c.id == author_id)
+                    .values(identity_key=identity_key)
+                )
+                continue
+            # Merge legacy duplicates before adding the unique constraint. If both duplicate
+            # authors are linked to the same Item/role, retain the canonical link only.
+            bind.execute(
+                sa.text(
+                    """
+                    DELETE FROM item_authors
+                    WHERE item_authors.author_id = :duplicate_id
+                      AND EXISTS (
+                          SELECT 1 FROM item_authors canonical_links
+                          WHERE canonical_links.author_id = :canonical_id
+                            AND canonical_links.item_id = item_authors.item_id
+                            AND canonical_links.role = item_authors.role
+                      )
+                    """
+                ),
+                {"duplicate_id": author_id, "canonical_id": canonical_id},
+            )
+            bind.execute(
+                sa.text(
+                    "UPDATE item_authors SET author_id = :canonical_id WHERE author_id = :duplicate_id"
+                ),
+                {"duplicate_id": author_id, "canonical_id": canonical_id},
+            )
+            bind.execute(sa.delete(authors_table).where(authors_table.c.id == author_id))
+
+        inspector = sa.inspect(bind)
+        unique_names = {
+            constraint.get("name") for constraint in inspector.get_unique_constraints("authors")
+        }
+        _sqlite_fk(bind, False)
+        with op.batch_alter_table("authors") as batch:
+            if "uq_authors_name" in unique_names:
+                batch.drop_constraint("uq_authors_name", type_="unique")
+            batch.alter_column("identity_key", nullable=False)
+            if "uq_authors_identity" not in unique_names:
+                batch.create_unique_constraint("uq_authors_identity", ["identity_key"])
+        _sqlite_fk(bind, True)
 
     inspector = sa.inspect(bind)
     if inspector.has_table("import_batches"):

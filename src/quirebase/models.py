@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import Any, Protocol
 
 from sqlalchemy import (
     JSON,
@@ -25,6 +26,26 @@ from .core.database import Base
 
 def uid() -> str:
     return str(uuid.uuid4())
+
+
+def normalize_author_identity(last_name: str, first_name: str | None = None) -> str:
+    """Return the canonical, case-insensitive identity key for an Author."""
+    last = " ".join(last_name.split()).casefold()
+    first = " ".join(first_name.split()).casefold() if first_name else ""
+    return f"{last}\x1f{first}"
+
+
+class _AuthorDefaultContext(Protocol):
+    def get_current_parameters(self) -> dict[str, Any]: ...
+
+
+def _author_identity_default(context: _AuthorDefaultContext) -> str:
+    parameters = context.get_current_parameters()
+    first_name = parameters.get("first_name")
+    return normalize_author_identity(
+        str(parameters.get("last_name") or ""),
+        first_name if isinstance(first_name, str) else None,
+    )
 
 
 def now() -> datetime:
@@ -196,10 +217,13 @@ class Item(Base):
 
 class Author(Base):
     __tablename__ = "authors"
-    __table_args__ = (UniqueConstraint("last_name", "first_name", name="uq_authors_name"),)
+    __table_args__ = (UniqueConstraint("identity_key", name="uq_authors_identity"),)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     first_name: Mapped[str | None] = mapped_column(String(120))
     last_name: Mapped[str] = mapped_column(String(120), index=True)
+    identity_key: Mapped[str] = mapped_column(
+        String(260), nullable=False, default=_author_identity_default
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 

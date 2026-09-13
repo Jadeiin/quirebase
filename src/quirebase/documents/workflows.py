@@ -51,9 +51,12 @@ async def _lock_upload_authority(
     owner = await db.scalar(
         select(User).where(User.id == owner_id, User.active.is_(True)).with_for_update(read=True)
     )
-    item = await db.scalar(
-        select(Item).where(Item.id == item_id).execution_options(populate_existing=True)
-    )
+    lock = select(Item).where(Item.id == item_id).execution_options(populate_existing=True)
+    if role is AttachmentRole.graphical_abstract:
+        lock = lock.with_for_update(key_share=True)
+    else:
+        lock = lock.with_for_update(read=True, key_share=True)
+    item = await db.scalar(lock)
     if owner is None or item is None:
         raise ValueError("Item is no longer writable")
     if owner.role != "administrator" and item.created_by != owner.id:
@@ -97,14 +100,6 @@ async def _lock_upload_authority(
             or member.role not in (ProjectRole.owner, ProjectRole.editor)
         ):
             raise ValueError("Item is no longer writable")
-    lock = select(Item).where(Item.id == item_id).execution_options(populate_existing=True)
-    if role is AttachmentRole.graphical_abstract:
-        lock = lock.with_for_update(key_share=True)
-    else:
-        lock = lock.with_for_update(read=True, key_share=True)
-    item = await db.scalar(lock)
-    if item is None:
-        raise ValueError("Item is no longer writable")
     return owner, item
 
 
