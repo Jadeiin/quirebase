@@ -43,7 +43,7 @@ TOOL_ALLOWLIST = frozenset({
     "tags.add_to_item",
     "tags.list",
     "tags.remove_from_item",
-    "tags.set_for_item",
+    "tags.add_many_to_item",
 })
 
 
