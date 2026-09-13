@@ -9,8 +9,9 @@ from typing import Any, Literal, TypedDict, cast
 from uuid import UUID
 
 from dbos import DBOS
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import and_, or_, select
 
+from quirebase.access.items import can_edit_item
 from quirebase.audit import record_event
 from quirebase.core.config import get_settings
 from quirebase.core.database import AsyncSessionLocal
@@ -41,6 +42,16 @@ ANNOTATION_EXPORT_WORKFLOW = "documents.export_annotations"
 IMPORTED_REVISION_INSPECTION_WORKFLOW = "documents.inspect_imported_revision"
 
 _MAX_THUMBNAIL_BYTES = 32 * 1024 * 1024
+
+
+async def _lock_upload_authority(db, item_id: str, owner_id: str) -> tuple[User, Item]:
+    owner = await db.scalar(
+        select(User).where(User.id == owner_id, User.active.is_(True)).with_for_update(read=True)
+    )
+    item = await db.scalar(select(Item).where(Item.id == item_id).with_for_update())
+    if owner is None or item is None or not await can_edit_item(db, owner, item_id):
+        raise ValueError("Item is no longer writable")
+    return owner, item
 
 
 class UploadReceipt(TypedDict):
@@ -195,9 +206,7 @@ async def commit_uploaded_revision(
     inspected: UploadedPdfInspection,
 ) -> RevisionWorkflowResult:
     db = ads.sql_session()
-    item_exists = await db.scalar(select(Item.id).where(Item.id == item_id).with_for_update())
-    if item_exists is None:
-        raise ValueError("Item no longer exists")
+    _owner, _item = await _lock_upload_authority(db, item_id, owner_id)
     existing = await db.get(FileRevision, inspected["revision_id"])
     if existing is not None:
         if existing.processing_state == FileRevisionProcessingState.pending:
@@ -372,20 +381,10 @@ async def commit_uploaded_attachment(
     receipt: ValidatedAttachment,
 ) -> AttachmentWorkflowResult:
     db = ads.sql_session()
+    _owner, _item = await _lock_upload_authority(db, item_id, owner_id)
     existing = await db.get(Attachment, attachment_id)
     if existing is not None:
         return {"attachment_id": existing.id, "item_id": existing.item_id}
-    if db.get_bind().dialect.name == "sqlite":
-        locked = await db.scalar(
-            update(Item)
-            .where(Item.id == item_id)
-            .values(updated_at=Item.updated_at)
-            .returning(Item.id)
-        )
-    else:
-        locked = await db.scalar(select(Item.id).where(Item.id == item_id).with_for_update())
-    if locked is None:
-        raise ValueError("Item no longer exists")
     role = AttachmentRole(role_value) if role_value else None
     if role is not None:
         current = await db.scalar(

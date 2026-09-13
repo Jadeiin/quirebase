@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+from uuid import uuid4
 
 import pytest
 
 from quirebase.core.errors import PermissionDenied
+from quirebase.documents import workflows as document_workflows
 from quirebase.library.imports import commit_import_batch
 from quirebase.models import ImportBatch, Item, Project, ProjectMember, ProjectRole, User
 from quirebase.projects.lifecycle import leave_project
@@ -47,3 +49,29 @@ async def test_project_owner_cannot_leave_without_transfer(async_db):
 
     with pytest.raises(PermissionDenied, match="transfer ownership"):
         await leave_project(async_db, owner, project.id)
+
+
+@pytest.mark.anyio
+async def test_upload_finalizer_rechecks_item_authority(async_db):
+    owner = User(username="upload-owner", password_hash="hash")
+    stranger = User(username="upload-stranger", password_hash="hash")
+    async_db.add_all([owner, stranger])
+    await async_db.flush()
+    item = Item(title="Upload gate", created_by=owner.id)
+    async_db.add(item)
+    await async_db.commit()
+    inspected = {
+        "revision_id": str(uuid4()),
+        "object_key": "gate/revision.pdf",
+        "thumbnail_object_key": "gate/thumb.png",
+        "thumbnail_size": 1,
+        "size": 2,
+        "page_count": 1,
+        "full_text": "text",
+        "page_geometry": "[]",
+    }
+
+    with pytest.raises(ValueError, match="no longer writable"):
+        await document_workflows.commit_uploaded_revision(
+            item.id, stranger.id, "sample.pdf", inspected
+        )
