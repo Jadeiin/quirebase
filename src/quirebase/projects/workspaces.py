@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from sqlalchemy import delete, func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access.items import can_read_item
@@ -25,7 +27,7 @@ from quirebase.models import (
     User,
 )
 
-from ._locking import lock_project_root
+from ._locking import guard_project
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -109,7 +111,7 @@ async def list_joinable_projects(db: AsyncSession, user: User) -> list[tuple[Pro
 
 
 async def join_project(db: AsyncSession, user: User, project_id: str) -> ProjectMember:
-    await lock_project_root(
+    await guard_project(
         db,
         project_id,
         state=ProjectState.active,
@@ -169,7 +171,7 @@ async def open_project_workspace(db: AsyncSession, user: User, project_id: str) 
 
 
 async def add_item_to_project(db: AsyncSession, user: User, project_id: str, item_id: str) -> None:
-    await lock_project_root(
+    await guard_project(
         db,
         project_id,
         state=ProjectState.active,
@@ -208,7 +210,7 @@ async def add_item_to_project(db: AsyncSession, user: User, project_id: str, ite
 async def remove_item_from_project(
     db: AsyncSession, user: User, project_id: str, item_id: str
 ) -> None:
-    await lock_project_root(
+    await guard_project(
         db,
         project_id,
         state=ProjectState.active,
@@ -236,3 +238,31 @@ async def remove_item_from_project(
             detail={"project_id": project_id},
         )
     await db.commit()
+
+
+async def add_items_to_project(
+    db: AsyncSession, user: User, project_id: str, item_ids: list[str]
+) -> int:
+    """Add many Item associations under the Projects module's root guard."""
+    await guard_project(
+        db,
+        project_id,
+        state=ProjectState.active,
+        message="item or project not accessible or insufficient permissions",
+    )
+    membership = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
+    if membership is None or membership.role not in (ProjectRole.owner, ProjectRole.editor):
+        raise ResourceUnavailable("item or project not accessible or insufficient permissions")
+    ids = tuple(dict.fromkeys(item_ids))
+    if not ids:
+        return 0
+    accessible = [item_id for item_id in ids if await can_read_item(db, user, item_id)]
+    if len(accessible) != len(ids):
+        raise ResourceUnavailable("item or project not accessible or insufficient permissions")
+    rows = [{"project_id": project_id, "item_id": item_id} for item_id in accessible]
+    dialect = db.get_bind().dialect.name
+    insert = pg_insert(ProjectItem) if dialect == "postgresql" else sqlite_insert(ProjectItem)
+    result = await db.execute(
+        insert.values(rows).on_conflict_do_nothing(index_elements=["project_id", "item_id"])
+    )
+    return int(getattr(result, "rowcount", 0) or 0)

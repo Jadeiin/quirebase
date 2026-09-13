@@ -281,7 +281,9 @@ async def _referenced_candidates(db: AsyncSession, object_keys: tuple[str, ...])
     )
     candidates = set(object_keys)
     for records in await db.scalars(
-        select(ImportBatch.records).where(ImportBatch.file_format == "pdf")
+        select(ImportBatch.records).where(
+            ImportBatch.file_format == "pdf", ImportBatch.status != "committed"
+        )
     ):
         referenced.update(candidates & _pdf_import_object_keys(records))
     return referenced

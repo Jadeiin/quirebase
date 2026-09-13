@@ -11,7 +11,6 @@ from uuid import UUID
 from dbos import DBOS
 from sqlalchemy import and_, or_, select
 
-from quirebase.access.items import can_edit_item
 from quirebase.audit import record_event
 from quirebase.core.config import get_settings
 from quirebase.core.database import AsyncSessionLocal
@@ -28,8 +27,10 @@ from quirebase.models import (
     FileRevisionProcessingState,
     Item,
     PdfAnnotation,
+    Project,
     ProjectItem,
     ProjectMember,
+    ProjectRole,
     User,
 )
 from quirebase.search import search_index
@@ -49,8 +50,25 @@ async def _lock_upload_authority(db, item_id: str, owner_id: str) -> tuple[User,
         select(User).where(User.id == owner_id, User.active.is_(True)).with_for_update(read=True)
     )
     item = await db.scalar(select(Item).where(Item.id == item_id).with_for_update())
-    if owner is None or item is None or not await can_edit_item(db, owner, item_id):
+    if owner is None or item is None:
         raise ValueError("Item is no longer writable")
+    if owner.role != "administrator" and item.created_by != owner.id:
+        # Freeze the actual project grant path until the final child insert.
+        # Project membership/state mutations serialize on the Project root.
+        grant = await db.scalar(
+            select(Project)
+            .join(ProjectItem, ProjectItem.project_id == Project.id)
+            .join(ProjectMember, ProjectMember.project_id == Project.id)
+            .where(
+                ProjectItem.item_id == item_id,
+                ProjectMember.user_id == owner.id,
+                ProjectMember.role.in_((ProjectRole.owner, ProjectRole.editor)),
+                Project.state == "active",
+            )
+            .with_for_update(read=True, of=Project)
+        )
+        if grant is None:
+            raise ValueError("Item is no longer writable")
     return owner, item
 
 

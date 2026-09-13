@@ -836,6 +836,21 @@ Alpine.data("tagMatrix", () => ({
   groupMatches(names) {
     return names.some((name) => matchesTag(name, this.query));
   },
+  prepareSubmit(event) {
+    const form = event.currentTarget;
+    const selected = new Set(
+      Array.from(form.querySelectorAll('input[name="tag_ids"]:checked')).map((input) => input.value),
+    );
+    Array.from(form.querySelectorAll('input[name="initial_tag_ids"]')).forEach((input) => {
+      if (!selected.has(input.value)) {
+        const removal = document.createElement("input");
+        removal.type = "hidden";
+        removal.name = "remove_tag_ids";
+        removal.value = input.value;
+        form.appendChild(removal);
+      }
+    });
+  },
   get query() {
     return this.filter.trim().toLowerCase();
   },

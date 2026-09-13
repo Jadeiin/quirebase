@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-from sqlalchemy import and_, delete, func, select
+from sqlalchemy import and_, delete, func, literal, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access.items import (
@@ -231,14 +233,14 @@ async def merge_tags(db: AsyncSession, user: User, source_tag_id: str, target_ta
     if user.role != "administrator" and source_tag.created_by != user.id:
         raise ResourceUnavailable("not authorized to merge these tags")
 
-    source_item_ids = set(
-        (await db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == source_tag.id))).all()
+    dialect = db.get_bind().dialect.name
+    insert = pg_insert(ItemTag) if dialect == "postgresql" else sqlite_insert(ItemTag)
+    await db.execute(
+        insert.from_select(
+            ["item_id", "tag_id"],
+            select(ItemTag.item_id, literal(target_tag.id)).where(ItemTag.tag_id == source_tag.id),
+        ).on_conflict_do_nothing(index_elements=["item_id", "tag_id"])
     )
-    target_item_ids = set(
-        (await db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == target_tag.id))).all()
-    )
-    for item_id in source_item_ids - target_item_ids:
-        db.add(ItemTag(item_id=item_id, tag_id=target_tag.id))
     await db.execute(delete(ItemTag).where(ItemTag.tag_id == source_tag.id))
     await db.delete(source_tag)
     await db.flush()

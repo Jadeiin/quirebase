@@ -417,6 +417,8 @@ async def remove_item_tag(item_id: str, tag_id: str, user: ApiUser, db: Database
 async def set_item_tag_selection(
     item_id: str, data: TagSetRequest, user: ApiUser, db: Database
 ) -> OkView:
+    for tag_id in data.remove_tag_ids:
+        await remove_tag_from_item(db, user, item_id, tag_id)
     for tag_id in data.tag_ids:
         await add_existing_tag_to_item(db, user, item_id, tag_id)
     for name in data.new_names or []:

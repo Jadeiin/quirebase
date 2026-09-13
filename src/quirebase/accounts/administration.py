@@ -13,7 +13,7 @@ from quirebase.core.errors import (
     ResourceUnavailable,
     ValidationFailure,
 )
-from quirebase.models import Invitation, LoginSession, SystemRole, User
+from quirebase.models import Invitation, LoginSession, Project, SystemRole, User
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -104,6 +104,8 @@ async def update_user_status(db: AsyncSession, admin: User, user_id: str, active
         raise ResourceNotFound("user not found")
     if user.id == admin.id and not active:
         raise PermissionDenied("administrators cannot deactivate their own account")
+    if not active and await db.scalar(select(Project.id).where(Project.owner_id == user.id)):
+        raise PermissionDenied("transfer project ownership before deactivating this account")
     user.active = active
     if not active:
         # Revoke all active sessions upon deactivation
@@ -150,10 +152,11 @@ async def reset_user_password(
         raise ResourceUnavailable("administrator required")
     if len(new_password) < 12:
         raise ValidationFailure("password must contain at least 12 characters")
+    password_hash = await hash_password_async(new_password)
     user = await db.scalar(select(User).where(User.id == user_id).with_for_update(key_share=True))
     if user is None:
         raise ResourceNotFound("user not found")
-    user.password_hash = await hash_password_async(new_password)
+    user.password_hash = password_hash
     # Revoke sessions after password reset
     await db.execute(delete(LoginSession).where(LoginSession.user_id == user.id))
     record_event(

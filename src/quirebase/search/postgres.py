@@ -13,45 +13,11 @@ if TYPE_CHECKING:
 
 
 class PostgreSQLSearchIndex:
-    async def ensure_schema(self, db: AsyncSession) -> None:
-        await db.execute(
-            text(
-                """
-                CREATE TABLE IF NOT EXISTS item_search (
-                    item_id varchar(36) PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
-                    document tsvector NOT NULL
-                )
-                """
-            )
-        )
-        await db.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS ix_item_search_document "
-                "ON item_search USING gin(document)"
-            )
-        )
-        await db.execute(
-            text(
-                """
-                CREATE TABLE IF NOT EXISTS revision_search (
-                    revision_id varchar(36) PRIMARY KEY REFERENCES file_revisions(id) ON DELETE CASCADE,
-                    item_id varchar(36) NOT NULL REFERENCES items(id) ON DELETE CASCADE,
-                    document tsvector NOT NULL
-                )
-                """
-            )
-        )
-        await db.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS ix_revision_search_document "
-                "ON revision_search USING gin(document)"
-            )
-        )
-
     async def index_item(self, db: AsyncSession, item_id: str) -> None:
-        await self.ensure_schema(db)
         item = await db.get(Item, item_id)
-        await self.remove_item(db, item_id)
+        await db.execute(
+            text("DELETE FROM item_search WHERE item_id = :item_id"), {"item_id": item_id}
+        )
         if item is not None:
             await db.execute(
                 text(
@@ -64,7 +30,6 @@ class PostgreSQLSearchIndex:
             )
 
     async def remove_item(self, db: AsyncSession, item_id: str) -> None:
-        await self.ensure_schema(db)
         await db.execute(
             text("DELETE FROM item_search WHERE item_id = :item_id"), {"item_id": item_id}
         )
@@ -73,7 +38,6 @@ class PostgreSQLSearchIndex:
         )
 
     async def index_revision(self, db: AsyncSession, revision_id: str) -> None:
-        await self.ensure_schema(db)
         revision = await db.get(FileRevision, revision_id)
         await self.remove_revision(db, revision_id)
         if revision is not None and revision.full_text:
@@ -92,14 +56,12 @@ class PostgreSQLSearchIndex:
             )
 
     async def remove_revision(self, db: AsyncSession, revision_id: str) -> None:
-        await self.ensure_schema(db)
         await db.execute(
             text("DELETE FROM revision_search WHERE revision_id = :revision_id"),
             {"revision_id": revision_id},
         )
 
     async def search(self, db: AsyncSession, query: str, limit: int = 200) -> list[str]:
-        await self.ensure_schema(db)
         if not query.strip():
             return []
         return list(
@@ -130,7 +92,6 @@ class PostgreSQLSearchIndex:
 
     async def matching_item_ids(self, db: AsyncSession, query: str) -> SelectBase:
         """Return an unbounded full-text match as a database-side ID query."""
-        await self.ensure_schema(db)
         if not query.strip():
             return select(Item.id).where(false())
         return (

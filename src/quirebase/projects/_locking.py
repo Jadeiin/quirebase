@@ -33,3 +33,23 @@ async def lock_project_root(
     if project is None:
         raise ResourceUnavailable(message)
     return project
+
+
+async def guard_project(
+    db: AsyncSession,
+    project_id: str,
+    *,
+    state: ProjectState | None = None,
+    visibility: ProjectVisibility | None = None,
+    message: str = "project not found",
+) -> Project:
+    """Acquire a shared root lock for short-lived association commands."""
+    predicates = [Project.id == project_id]
+    if state is not None:
+        predicates.append(Project.state == state)
+    if visibility is not None:
+        predicates.append(Project.visibility == visibility)
+    project = await db.scalar(select(Project).where(*predicates).with_for_update(read=True))
+    if project is None:
+        raise ResourceUnavailable(message)
+    return project

@@ -14,35 +14,11 @@ if TYPE_CHECKING:
 
 
 class SQLiteSearchIndex:
-    async def ensure_schema(self, db: AsyncSession) -> None:
-        await db.execute(
-            text(
-                """
-                CREATE VIRTUAL TABLE IF NOT EXISTS item_search USING fts5(
-                    item_id UNINDEXED,
-                    content,
-                    tokenize='unicode61 remove_diacritics 2'
-                )
-                """
-            )
-        )
-        await db.execute(
-            text(
-                """
-                CREATE VIRTUAL TABLE IF NOT EXISTS revision_search USING fts5(
-                    revision_id UNINDEXED,
-                    item_id UNINDEXED,
-                    content,
-                    tokenize='unicode61 remove_diacritics 2'
-                )
-                """
-            )
-        )
-
     async def index_item(self, db: AsyncSession, item_id: str) -> None:
-        await self.ensure_schema(db)
         item = await db.get(Item, item_id)
-        await self.remove_item(db, item_id)
+        await db.execute(
+            text("DELETE FROM item_search WHERE item_id = :item_id"), {"item_id": item_id}
+        )
         if item is not None:
             await db.execute(
                 text("INSERT INTO item_search(item_id, content) VALUES (:item_id, :content)"),
@@ -50,7 +26,6 @@ class SQLiteSearchIndex:
             )
 
     async def remove_item(self, db: AsyncSession, item_id: str) -> None:
-        await self.ensure_schema(db)
         await db.execute(
             text("DELETE FROM item_search WHERE item_id = :item_id"), {"item_id": item_id}
         )
@@ -59,7 +34,6 @@ class SQLiteSearchIndex:
         )
 
     async def index_revision(self, db: AsyncSession, revision_id: str) -> None:
-        await self.ensure_schema(db)
         revision = await db.get(FileRevision, revision_id)
         await self.remove_revision(db, revision_id)
         if revision is not None and revision.full_text:
@@ -76,14 +50,12 @@ class SQLiteSearchIndex:
             )
 
     async def remove_revision(self, db: AsyncSession, revision_id: str) -> None:
-        await self.ensure_schema(db)
         await db.execute(
             text("DELETE FROM revision_search WHERE revision_id = :revision_id"),
             {"revision_id": revision_id},
         )
 
     async def search(self, db: AsyncSession, query: str, limit: int = 200) -> list[str]:
-        await self.ensure_schema(db)
         tokens = re.findall(r"[^\W_]+", query, flags=re.UNICODE)
         if not tokens:
             return []
@@ -114,7 +86,6 @@ class SQLiteSearchIndex:
 
     async def matching_item_ids(self, db: AsyncSession, query: str) -> SelectBase:
         """Return an unbounded FTS match as a database-side ID query."""
-        await self.ensure_schema(db)
         tokens = re.findall(r"[^\W_]+", query, flags=re.UNICODE)
         if not tokens:
             return select(Item.id).where(false())

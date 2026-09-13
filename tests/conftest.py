@@ -118,6 +118,25 @@ async def async_session_factory(tmp_path, monkeypatch):
     engine = make_async_engine(f"sqlite:///{tmp_path / 'async-test.db'}")
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
+        await connection.exec_driver_sql(
+            """
+            CREATE VIRTUAL TABLE item_search USING fts5(
+                item_id UNINDEXED,
+                content,
+                tokenize='unicode61 remove_diacritics 2'
+            )
+            """
+        )
+        await connection.exec_driver_sql(
+            """
+            CREATE VIRTUAL TABLE revision_search USING fts5(
+                revision_id UNINDEXED,
+                item_id UNINDEXED,
+                content,
+                tokenize='unicode61 remove_diacritics 2'
+            )
+            """
+        )
     ds = await AsyncSQLAlchemyDatasource.create(
         f"sqlite+aiosqlite:///{tmp_path / 'async-test.db'}",
         engine=engine,

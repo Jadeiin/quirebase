@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from dbos import DBOS
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from quirebase.core.database import AsyncSessionLocal
 from quirebase.core.workflows import (
@@ -17,7 +17,6 @@ from quirebase.core.workflows import (
 )
 from quirebase.documents.events import FILE_REVISION_CHANGED_WORKFLOW, OBJECT_CLEANUP_WORKFLOW
 from quirebase.models import ImportBatch, Item, ItemTagRecommendation
-from quirebase.search import search_index
 
 from .tag_recommendations import (
     RecommendationCandidates,
@@ -57,17 +56,12 @@ async def request_item_tag_recommendation(
 ) -> ItemTagRecommendation:
     """Create an idempotent generation request without committing its caller's transaction."""
     if force:
-        if db.get_bind().dialect.name == "sqlite":
-            locked_item_id = await db.scalar(
-                update(Item)
-                .where(Item.id == item_id)
-                .values(updated_at=Item.updated_at)
-                .returning(Item.id)
-            )
-        else:
+        if db.get_bind().dialect.name == "postgresql":
             locked_item_id = await db.scalar(
                 select(Item.id).where(Item.id == item_id).with_for_update()
             )
+        else:
+            locked_item_id = await db.scalar(select(Item.id).where(Item.id == item_id))
         if locked_item_id is None:
             raise ValueError("Item no longer exists")
     elif await db.get(Item, item_id) is None:
@@ -266,12 +260,6 @@ async def prepare_pdf_import_workflow(
         raise
 
 
-@ads.transaction()
-async def apply_file_revision_changed(revision_id: str) -> None:
-    db = ads.sql_session()
-    await search_index(db).index_revision(db, revision_id)
-
-
 @DBOS.step(retries_allowed=True, max_attempts=3)
 async def request_item_tag_recommendation_step(item_id: str, owner_id: str | None) -> None:
     """Retry the idempotent request boundary, including its separate DBOS Client lookup."""
@@ -288,7 +276,6 @@ async def request_item_tag_recommendation_step(item_id: str, owner_id: str | Non
 async def file_revision_changed_workflow(
     revision_id: str, item_id: str, owner_id: str | None
 ) -> None:
-    await apply_file_revision_changed(revision_id)
     await request_item_tag_recommendation_step(item_id, owner_id)
 
 

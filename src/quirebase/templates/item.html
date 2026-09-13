@@ -376,7 +376,10 @@
         </div>
 
         {% if tag_matrix and tag_matrix.groups %}
-        <form method="post" action="/items/{{ item.id }}/tags/matrix">{{ csrf_field(csrf) }}
+        <form method="post" action="/items/{{ item.id }}/tags/matrix" @submit="prepareSubmit">{{ csrf_field(csrf) }}
+          {% for tid in tag_matrix.assigned_ids %}
+          <input type="hidden" name="initial_tag_ids" value="{{ tid }}">
+          {% endfor %}
           <div class="tag-matrix-scroll">
             {% for group in tag_matrix.groups %}
             <div class="tag-letter-row" x-show="groupMatches({{ group.names|tojson }})">

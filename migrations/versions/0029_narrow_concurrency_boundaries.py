@@ -34,8 +34,52 @@ def upgrade() -> None:
             _sqlite_fk(bind, False)
             with op.batch_alter_table("projects") as batch:
                 batch.add_column(sa.Column("owner_id", sa.String(length=36), nullable=True))
+            # Preserve the effective owner from the legacy membership table.
+            # Older revisions allowed multiple owner memberships and did not
+            # update ``created_by`` during ownership transfer, so deriving the
+            # new root owner from ``created_by`` would silently revert valid
+            # transfers.  Pick a deterministic owner, demote any additional
+            # legacy owners, and repair projects that had no owner row.
             bind.execute(
-                sa.text("UPDATE projects SET owner_id = created_by WHERE owner_id IS NULL")
+                sa.text(
+                    """
+                    UPDATE projects
+                    SET owner_id = COALESCE(
+                        (
+                            SELECT MIN(pm.user_id)
+                            FROM project_members pm
+                            WHERE pm.project_id = projects.id AND pm.role = 'owner'
+                        ),
+                        created_by
+                    )
+                    WHERE owner_id IS NULL
+                    """
+                )
+            )
+            bind.execute(
+                sa.text(
+                    """
+                    UPDATE project_members
+                    SET role = 'editor'
+                    WHERE role = 'owner'
+                      AND user_id <> (
+                          SELECT p.owner_id FROM projects p WHERE p.id = project_members.project_id
+                      )
+                    """
+                )
+            )
+            bind.execute(
+                sa.text(
+                    """
+                    INSERT INTO project_members(project_id, user_id, role)
+                    SELECT p.id, p.owner_id, 'owner'
+                    FROM projects p
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM project_members pm
+                        WHERE pm.project_id = p.id AND pm.user_id = p.owner_id
+                    )
+                    """
+                )
             )
             with op.batch_alter_table("projects") as batch:
                 batch.alter_column("owner_id", nullable=False)

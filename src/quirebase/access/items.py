@@ -9,6 +9,7 @@ from quirebase.core.errors import ResourceNotFound, ResourceUnavailable, Validat
 from quirebase.models import (
     Item,
     ItemAuthor,
+    Project,
     ProjectItem,
     ProjectMember,
     ProjectRole,
@@ -50,6 +51,8 @@ async def can_edit_item(db: AsyncSession, user: User, item_id: str) -> bool:
     editable = exists().where(
         ProjectItem.item_id == item_id,
         ProjectMember.project_id == ProjectItem.project_id,
+        Project.state == "active",
+        Project.id == ProjectItem.project_id,
         ProjectMember.user_id == user.id,
         ProjectMember.role.in_([ProjectRole.owner, ProjectRole.editor]),
     )

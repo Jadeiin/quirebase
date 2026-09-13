@@ -438,11 +438,14 @@ async def update_bibtex_key_route(
 async def update_tag_matrix_route(
     item_id: str,
     tag_ids: list[str] = Form(default=[]),
+    remove_tag_ids: list[str] = Form(default=[]),
     suggested_tags: list[str] = Form(default=[]),
     new_tags: str = Form(default=""),
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    for tag_id in remove_tag_ids:
+        await remove_tag_from_item(db, user, item_id, tag_id)
     new_names = [*suggested_tags, *(line.strip() for line in new_tags.splitlines() if line.strip())]
     for tag_id in tag_ids:
         await add_existing_tag_to_item(db, user, item_id, tag_id)

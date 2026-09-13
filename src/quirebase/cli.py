@@ -73,6 +73,17 @@ def init_db():
     alembic.set_main_option("script_location", str(migrations))
     command.upgrade(alembic, "head")
     asyncio.run(initialize_durable_operations())
+
+    # Search schema is a forward-only cutover: rebuild both projections after
+    # migrations so legacy rows cannot leave stale metadata or empty revision
+    # indexes behind.
+    async def rebuild_search() -> int:
+        async with AsyncSessionLocal() as db:
+            count = await reindex_all(db)
+            await db.commit()
+            return count
+
+    asyncio.run(rebuild_search())
     settings = get_settings()
     if settings.object_store == "local":
         settings.object_dir.mkdir(parents=True, exist_ok=True)

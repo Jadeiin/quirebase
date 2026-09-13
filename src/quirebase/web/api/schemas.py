@@ -41,6 +41,7 @@ class ProjectMemberRequest(BaseModel):
 
 class TagSetRequest(BaseModel):
     tag_ids: list[str] = Field(default_factory=list)
+    remove_tag_ids: list[str] = Field(default_factory=list)
     new_names: list[str] = Field(default_factory=list)
 
 

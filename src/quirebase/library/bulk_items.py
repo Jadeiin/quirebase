@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from quirebase.access.items import (
     can_edit_item,
@@ -26,13 +28,9 @@ from quirebase.models import (
     Attachment,
     FileRevision,
     ItemTag,
-    ProjectItem,
-    ProjectMember,
-    ProjectRole,
-    ProjectState,
     User,
 )
-from quirebase.projects._locking import lock_project_root
+from quirebase.projects import add_items_to_project
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
@@ -58,26 +56,19 @@ async def apply_bulk_item_action(
     cleanup_keys: list[str] = []
     if action in ("add_project", "project_add"):
         try:
-            await lock_project_root(
-                db,
-                project_id,
-                state=ProjectState.active,
-                message="active project not available",
-            )
+            await add_items_to_project(db, user, project_id, [item.id for item in items])
         except ResourceUnavailable as error:
             raise ValidationFailure("choose an editable project") from error
-        membership = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
-        if membership is None or membership.role not in (ProjectRole.owner, ProjectRole.editor):
-            raise ValidationFailure("choose an editable project")
-        for item in items:
-            if await db.get(ProjectItem, (project_id, item.id), populate_existing=True) is None:
-                db.add(ProjectItem(project_id=project_id, item_id=item.id))
         audit_action = "library.bulk.add_project"
     elif action in ("add_tag", "tag"):
         tag_record = await get_or_create_tag(db, user, tag_name)
-        for item in items:
-            if await db.get(ItemTag, (item.id, tag_record.id)) is None:
-                db.add(ItemTag(item_id=item.id, tag_id=tag_record.id))
+        dialect = db.get_bind().dialect.name
+        insert = pg_insert(ItemTag) if dialect == "postgresql" else sqlite_insert(ItemTag)
+        await db.execute(
+            insert.values([
+                {"item_id": item.id, "tag_id": tag_record.id} for item in items
+            ]).on_conflict_do_nothing(index_elements=["item_id", "tag_id"])
+        )
         audit_action = "library.bulk.add_tag"
     elif action in ("delete_items", "delete"):
         if confirm_delete != "delete":

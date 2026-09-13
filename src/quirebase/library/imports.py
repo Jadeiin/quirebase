@@ -596,6 +596,13 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> li
         )
         committed_item_ids.append(item.id)
     batch.committed_item_ids = json.dumps(committed_item_ids)
+    # A committed batch no longer owns staged upload objects.  Drop the PDF
+    # staging payload so cleanup cannot mistake it for a live reservation.
+    batch.records = json.dumps([
+        {key: value for key, value in record.items() if key != "_pdf"}
+        for record in records
+        if isinstance(record, dict)
+    ])
     batch.status = "committed"
     await db.commit()
     return committed_item_ids
