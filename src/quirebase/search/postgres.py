@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 class PostgreSQLSearchIndex:
     async def index_item(self, db: AsyncSession, item_id: str) -> None:
-        item = await db.get(Item, item_id)
+        item = await db.scalar(select(Item).where(Item.id == item_id).with_for_update(read=True))
         await db.execute(
             text("DELETE FROM item_search WHERE item_id = :item_id"), {"item_id": item_id}
         )
@@ -38,7 +38,9 @@ class PostgreSQLSearchIndex:
         )
 
     async def index_revision(self, db: AsyncSession, revision_id: str) -> None:
-        revision = await db.get(FileRevision, revision_id)
+        revision = await db.scalar(
+            select(FileRevision).where(FileRevision.id == revision_id).with_for_update(read=True)
+        )
         await self.remove_revision(db, revision_id)
         if revision is not None and revision.full_text:
             await db.execute(

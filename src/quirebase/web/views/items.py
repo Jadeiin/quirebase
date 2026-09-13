@@ -421,16 +421,10 @@ async def rescan_doi_route(
 @router.post("/items/{item_id}/update-bibtex-key")
 async def update_bibtex_key_route(
     item_id: str,
-    version: int = Form(),
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await regenerate_bibtex_key(
-        db,
-        user,
-        item_id,
-        version,
-    )
+    await regenerate_bibtex_key(db, user, item_id)
     return RedirectResponse(f"/items/{item_id}", status_code=303)
 
 
@@ -439,11 +433,17 @@ async def update_tag_matrix_route(
     item_id: str,
     tag_ids: list[str] = Form(default=[]),
     remove_tag_ids: list[str] = Form(default=[]),
+    initial_tag_ids: list[str] | None = Form(default=None),
     suggested_tags: list[str] = Form(default=[]),
     new_tags: str = Form(default=""),
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    if initial_tag_ids is not None:
+        initial_ids = set(initial_tag_ids)
+        selected_ids = set(tag_ids)
+        remove_tag_ids = list(set(remove_tag_ids) | (initial_ids - selected_ids))
+        tag_ids = list(selected_ids - initial_ids)
     new_names = [*suggested_tags, *(line.strip() for line in new_tags.splitlines() if line.strip())]
     await apply_item_tag_selection(
         db,

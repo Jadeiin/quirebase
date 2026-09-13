@@ -9,11 +9,11 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from inquiro.canonical import normalize_reference_type
-from sqlalchemy import update
+from sqlalchemy import select, update
 
-from quirebase.access.items import require_editable_item
+from quirebase.access.items import can_edit_item, require_editable_item
 from quirebase.audit import record_event
-from quirebase.core.errors import ValidationFailure, VersionConflict
+from quirebase.core.errors import ResourceUnavailable, ValidationFailure, VersionConflict
 from quirebase.library.authors import set_item_authors
 from quirebase.library.identifiers import (
     clean_identifier_value,
@@ -353,27 +353,18 @@ async def _regenerate_bibtex_key(
     db: AsyncSession,
     actor: User,
     item_id: str,
-    expected_version: int,
 ) -> ItemWriteResult:
     actor_id = actor.id
-    item = await require_editable_item(db, actor, item_id)
+    item = await db.scalar(select(Item).where(Item.id == item_id).with_for_update(key_share=True))
+    if item is None or not await can_edit_item(db, actor, item_id):
+        raise ResourceUnavailable("item not found")
     key = generate_bibtex_key(item)
-    version = await db.scalar(
-        update(Item)
-        .where(Item.id == item_id, Item.version == expected_version)
-        .values(
-            bibtex_id=key,
-            updated_by=actor_id,
-            updated_at=datetime.now(UTC),
-            version=Item.version + 1,
-        )
-        .returning(Item.version)
-    )
-    if version is None:
-        await db.rollback()
-        current = await db.get(Item, item_id)
-        raise VersionConflict(current.version if current else None)
-    await db.refresh(item)
+    item.bibtex_id = key
+    item.updated_by = actor_id
+    item.updated_at = datetime.now(UTC)
+    item.version += 1
+    version = item.version
+    await db.flush()
     await search_index(db).index_item(db, item_id)
     record_event(
         db,
@@ -391,10 +382,9 @@ async def regenerate_bibtex_key(
     db: AsyncSession,
     actor: User,
     item_id: str,
-    expected_version: int,
 ) -> ItemWriteResult:
     try:
-        return await _regenerate_bibtex_key(db, actor, item_id, expected_version)
+        return await _regenerate_bibtex_key(db, actor, item_id)
     except Exception:
         await db.rollback()
         raise

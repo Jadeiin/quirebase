@@ -258,7 +258,7 @@ async def add_items_to_project(
     membership = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     if membership is None or membership.role not in (ProjectRole.owner, ProjectRole.editor):
         raise ResourceUnavailable("item or project not accessible or insufficient permissions")
-    ids = tuple(dict.fromkeys(item_ids))
+    ids = tuple(sorted(dict.fromkeys(item_ids)))
     if not ids:
         return 0
     accessible = [item_id for item_id in ids if await can_read_item(db, user, item_id)]

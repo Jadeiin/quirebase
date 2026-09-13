@@ -85,6 +85,10 @@ Metadata writes update `item_search` in the same transaction. Ready/removed File
 Search. There is no Item aggregate sequence, SearchProjectionState, projection generation token or
 Search DBOS ordering protocol. A full reindex is an explicit maintenance operation.
 
+Any independent projection rebuild locks its canonical source row with a shared lock before
+replacing the projection; generation counters are not required when rebuilds serialize with
+canonical writes.
+
 The supported schema-upgrade command is `quirebase init-db`, which runs the forward migration and
 then rebuilds both projections before the application is served. Running Alembic directly is an
 advanced maintenance operation; after a schema-only upgrade, operators must run the equivalent

@@ -71,6 +71,17 @@ def upgrade() -> None:
             bind.execute(
                 sa.text(
                     """
+                    UPDATE project_members
+                    SET role = 'owner'
+                    WHERE user_id = (
+                        SELECT p.owner_id FROM projects p WHERE p.id = project_members.project_id
+                    )
+                    """
+                )
+            )
+            bind.execute(
+                sa.text(
+                    """
                     INSERT INTO project_members(project_id, user_id, role)
                     SELECT p.id, p.owner_id, 'owner'
                     FROM projects p
@@ -128,6 +139,60 @@ def upgrade() -> None:
                     content,
                     tokenize='unicode61 remove_diacritics 2'
                 )
+                """
+            )
+
+    # The legacy Item projection mixed bibliographic metadata with PDF text, Tag names and
+    # Project names. Rebuild both projections at the schema boundary so upgraded databases use
+    # the same split as fresh writes before the application starts serving Search.
+    if inspector.has_table("item_search") and sa.inspect(bind).has_table("revision_search"):
+        if bind.dialect.name == "postgresql":
+            op.execute("DELETE FROM item_search")
+            op.execute(
+                """
+                INSERT INTO item_search(item_id, document)
+                SELECT id, to_tsvector(
+                    'simple',
+                    concat_ws(
+                        ' ', title, abstract, authors, editors, keywords,
+                        custom_fields, identifiers
+                    )
+                )
+                FROM items
+                """
+            )
+            op.execute("DELETE FROM revision_search")
+            op.execute(
+                """
+                INSERT INTO revision_search(revision_id, item_id, document)
+                SELECT id, item_id, to_tsvector('simple', full_text)
+                FROM file_revisions
+                WHERE full_text IS NOT NULL AND full_text <> ''
+                """
+            )
+        else:
+            op.execute("DELETE FROM item_search")
+            op.execute(
+                """
+                INSERT INTO item_search(item_id, content)
+                SELECT id,
+                       COALESCE(title, '') || char(10) ||
+                       COALESCE(abstract, '') || char(10) ||
+                       COALESCE(authors, '') || char(10) ||
+                       COALESCE(editors, '') || char(10) ||
+                       COALESCE(keywords, '') || char(10) ||
+                       COALESCE(custom_fields, '') || char(10) ||
+                       COALESCE(identifiers, '')
+                FROM items
+                """
+            )
+            op.execute("DELETE FROM revision_search")
+            op.execute(
+                """
+                INSERT INTO revision_search(revision_id, item_id, content)
+                SELECT id, item_id, full_text
+                FROM file_revisions
+                WHERE full_text IS NOT NULL AND full_text <> ''
                 """
             )
 

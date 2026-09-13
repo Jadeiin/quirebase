@@ -17,6 +17,7 @@ from quirebase.models import (
     AuditEvent,
     FileRevision,
     Item,
+    ItemTag,
     PdfAnnotation,
     Project,
     ProjectItem,
@@ -218,6 +219,13 @@ async def test_http_api_library_project_tag_and_discussion_lifecycle(
         )
         assert tag.status_code == 200
         assert (await client.get("/api/v1/tags", headers=headers)).json()[0]["name"] == "Reviewed"
+        cleared = await client.put(
+            f"/api/v1/items/{item_id}/tags",
+            headers=headers,
+            json={"tag_ids": [], "new_names": []},
+        )
+        assert cleared.status_code == 200
+        assert await db.get(ItemTag, (item_id, tag.json()["id"])) is None
 
         discussion = await client.post(
             f"/api/v1/items/{item_id}/discussions",

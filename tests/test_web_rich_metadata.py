@@ -198,6 +198,8 @@ async def test_web_tag_matrix_batch_and_selection(
     tag1 = Tag(name="Machine Learning", created_by=item.created_by)
     tag2 = Tag(name="Transformers", created_by=item.created_by)
     db.add_all([tag1, tag2])
+    await db.flush()
+    db.add(ItemTag(item_id=item.id, tag_id=tag2.id))
     recommendation = await db.scalar(
         select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == item.id)
     )
@@ -223,6 +225,7 @@ async def test_web_tag_matrix_batch_and_selection(
         data={
             "csrf_token": csrf,
             "tag_ids": [tag1.id],
+            "initial_tag_ids": [tag2.id],
             "suggested_tags": ["Natural Language Processing", "New Research Direction"],
             "new_tags": "Deep Learning",
         },
@@ -328,7 +331,7 @@ async def test_web_sync_metadata_and_bibtex_key_update(
     # Test update citation key
     response = await client.post(
         f"/items/{item_id}/update-bibtex-key",
-        data={"csrf_token": csrf, "version": item.version},
+        data={"csrf_token": csrf},
         follow_redirects=True,
     )
     assert response.status_code == 200

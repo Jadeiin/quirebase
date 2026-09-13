@@ -149,8 +149,35 @@ command.upgrade(config, "0027_annotation_object_identity")
                 "VALUES ('project', 'Existing project', 'user', CURRENT_TIMESTAMP)"
             )
         )
+        connection.execute(
+            text(
+                "INSERT INTO projects "
+                "(id, name, created_by, created_at) "
+                "VALUES ('fallback-project', 'Fallback project', 'user', CURRENT_TIMESTAMP)"
+            )
+        )
         connection.execute(text("INSERT INTO project_members VALUES ('project', 'user', 'owner')"))
+        connection.execute(
+            text("INSERT INTO project_members VALUES ('fallback-project', 'user', 'editor')")
+        )
         connection.execute(text("INSERT INTO project_items VALUES ('project', 'item')"))
+        connection.execute(
+            text(
+                "INSERT INTO file_revisions "
+                "(id, item_id, object_key, thumbnail_object_key, thumbnail_size, size, mime_type, "
+                "original_name, page_count, page_geometry, full_text, processing_state, created_by, "
+                "created_at) VALUES "
+                "('revision', 'item', 'revision.pdf', NULL, NULL, 10, 'application/pdf', "
+                "'revision.pdf', 1, NULL, 'existing revision text', 'ready', 'user', "
+                "CURRENT_TIMESTAMP)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO item_search(item_id, content) "
+                "VALUES ('item', 'obsolete project tag text')"
+            )
+        )
     engine.dispose()
 
     subprocess.run(
@@ -166,12 +193,26 @@ command.upgrade(config, "0027_annotation_object_identity")
         columns = {column["name"] for column in inspect(connection).get_columns("projects")}
         project = connection.execute(
             text(
-                "SELECT state, updated_at, visibility, description "
+                "SELECT state, updated_at, visibility, description, owner_id "
                 "FROM projects WHERE id = 'project'"
+            )
+        ).one()
+        fallback_owner = connection.execute(
+            text(
+                "SELECT p.owner_id, pm.role FROM projects p "
+                "JOIN project_members pm "
+                "ON pm.project_id = p.id AND pm.user_id = p.owner_id "
+                "WHERE p.id = 'fallback-project'"
             )
         ).one()
         membership_count = connection.scalar(text("SELECT count(*) FROM project_members"))
         assignment_count = connection.scalar(text("SELECT count(*) FROM project_items"))
+        item_search_content = connection.scalar(
+            text("SELECT content FROM item_search WHERE item_id = 'item'")
+        )
+        revision_search_content = connection.scalar(
+            text("SELECT content FROM revision_search WHERE revision_id = 'revision'")
+        )
         foreign_key_errors = connection.execute(text("PRAGMA foreign_key_check")).all()
     engine.dispose()
 
@@ -180,8 +221,13 @@ command.upgrade(config, "0027_annotation_object_identity")
     assert project.updated_at is not None
     assert project.visibility == "private"
     assert project.description == ""
-    assert membership_count == 1
+    assert project.owner_id == "user"
+    assert fallback_owner == ("user", "owner")
+    assert membership_count == 2
     assert assignment_count == 1
+    assert item_search_content is not None and "Existing item" in item_search_content
+    assert "obsolete project tag text" not in item_search_content
+    assert revision_search_content == "existing revision text"
     assert foreign_key_errors == []
 
 

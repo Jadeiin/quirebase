@@ -49,7 +49,9 @@ async def _lock_upload_authority(db, item_id: str, owner_id: str) -> tuple[User,
     owner = await db.scalar(
         select(User).where(User.id == owner_id, User.active.is_(True)).with_for_update(read=True)
     )
-    item = await db.scalar(select(Item).where(Item.id == item_id).with_for_update())
+    item = await db.scalar(
+        select(Item).where(Item.id == item_id).with_for_update(read=True, key_share=True)
+    )
     if owner is None or item is None:
         raise ValueError("Item is no longer writable")
     if owner.role != "administrator" and item.created_by != owner.id:
@@ -65,7 +67,7 @@ async def _lock_upload_authority(db, item_id: str, owner_id: str) -> tuple[User,
                 ProjectMember.role.in_((ProjectRole.owner, ProjectRole.editor)),
                 Project.state == "active",
             )
-            .with_for_update(read=True, of=Project)
+            .with_for_update(read=True, of=(Project, ProjectItem, ProjectMember))
         )
         if grant is None:
             raise ValueError("Item is no longer writable")
@@ -339,7 +341,9 @@ async def commit_imported_revision(inspected: PdfInspection) -> RevisionWorkflow
     if revision is None:
         raise ValueError("imported revision no longer exists")
     item_exists = await db.scalar(
-        select(Item.id).where(Item.id == revision.item_id).with_for_update()
+        select(Item.id)
+        .where(Item.id == revision.item_id)
+        .with_for_update(read=True, key_share=True)
     )
     if item_exists is None:
         raise ValueError("Item no longer exists")

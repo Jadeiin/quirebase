@@ -36,6 +36,7 @@ from quirebase.library import (
     list_accessible_tags_with_counts,
     open_item_workspace,
     remove_tag_from_item,
+    replace_item_tag_selection,
     revise_item_metadata,
     search_candidate_records,
     search_library,
@@ -417,14 +418,24 @@ async def remove_item_tag(item_id: str, tag_id: str, user: ApiUser, db: Database
 async def set_item_tag_selection(
     item_id: str, data: TagSetRequest, user: ApiUser, db: Database
 ) -> OkView:
-    await apply_item_tag_selection(
-        db,
-        user,
-        item_id,
-        remove_tag_ids=data.remove_tag_ids,
-        tag_ids=data.tag_ids,
-        new_names=data.new_names,
-    )
+    if data.add_tag_ids is not None:
+        await apply_item_tag_selection(
+            db,
+            user,
+            item_id,
+            remove_tag_ids=data.remove_tag_ids,
+            tag_ids=data.add_tag_ids,
+            new_names=data.new_names,
+        )
+    else:
+        await replace_item_tag_selection(
+            db,
+            user,
+            item_id,
+            remove_tag_ids=data.remove_tag_ids,
+            tag_ids=data.tag_ids or [],
+            new_names=data.new_names,
+        )
     return OkView()
 
 

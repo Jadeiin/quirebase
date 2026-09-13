@@ -96,6 +96,7 @@ from quirebase.library.tags import (
     regenerate_item_tag_recommendation,
     remove_tag_from_item,
     rename_tag,
+    replace_item_tag_selection,
 )
 from quirebase.library.workflows import (
     item_ids_for_tag_recommendation,
@@ -170,6 +171,7 @@ __all__ = [
     "regenerate_item_tag_recommendation",
     "remove_tag_from_item",
     "rename_tag",
+    "replace_item_tag_selection",
     "request_item_tag_recommendation",
     "rescan_pdf_doi",
     "resolve_style_xml",

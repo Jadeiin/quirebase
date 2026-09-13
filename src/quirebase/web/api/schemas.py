@@ -40,7 +40,10 @@ class ProjectMemberRequest(BaseModel):
 
 
 class TagSetRequest(BaseModel):
-    tag_ids: list[str] = Field(default_factory=list)
+    # ``tag_ids`` remains the full replacement form for PUT callers. New callers that
+    # already computed an intent delta can use ``add_tag_ids`` with ``remove_tag_ids``.
+    tag_ids: list[str] | None = None
+    add_tag_ids: list[str] | None = None
     remove_tag_ids: list[str] = Field(default_factory=list)
     new_names: list[str] = Field(default_factory=list)
 
