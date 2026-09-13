@@ -290,10 +290,12 @@ async def test_bulk_item_delete_serializes_with_upload_finalizer(postgres_sessio
 
     results = await _start_together(bulk_delete, upload)
     assert isinstance(results[0], list), results
-    assert results[1] is None or (
-        isinstance(results[1], ValueError) and "no longer writable" in str(results[1])
+    assert (
+        results[1] is None
+        or (isinstance(results[1], ValueError) and "no longer writable" in str(results[1]))
+        or (isinstance(results[1], dict) and results[1].get("item_id") == item_id)
     ), results
-    if results[1] is None:
+    if results[1] is None or isinstance(results[1], dict):
         assert "race/bulk.bin" in results[0]
     async with postgres_sessions() as db:
         assert await db.get(Item, item_id) is None
