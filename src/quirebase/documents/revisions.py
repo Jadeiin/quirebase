@@ -381,11 +381,16 @@ async def store_pdf_revision(
 ) -> UploadWorkflow:
     from quirebase.operations.settings import get_effective_setting
 
+    user_id = user.id
     await require_editable_item(db, user, item_id)
     if not filename or not filename.lower().endswith(".pdf"):
         raise UnsupportedMediaType("a PDF file is required")
     if max_bytes is None:
         max_bytes = await get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes)
+    # Authorization and settings are read-only.  Do not keep their database
+    # transaction open while the upload performs external I/O; the durable
+    # finalizer revalidates authority immediately before committing the child.
+    await db.rollback()
     revision_id = uuid4()
     thumbnail_object_id = uuid4()
     revision_key = object_key(revision_id, ObjectSuffix.PDF)
@@ -394,7 +399,7 @@ async def store_pdf_revision(
     await durable_operations().enqueue(
         REVISION_UPLOAD_WORKFLOW,
         item_id,
-        user.id,
+        user_id,
         str(revision_id),
         str(revision_id),
         str(thumbnail_object_id),
@@ -404,7 +409,7 @@ async def store_pdf_revision(
         attributes={
             "capability": "documents",
             "operation": "upload_revision",
-            "owner_id": user.id,
+            "owner_id": user_id,
             "item_id": item_id,
             "revision_id": str(revision_id),
             "object_key": revision_key,
@@ -479,6 +484,7 @@ async def create_attachment(
 ) -> UploadWorkflow:
     from quirebase.operations.settings import get_effective_setting
 
+    user_id = user.id
     if not await can_edit_item(db, user, item_id) or not filename:
         raise ResourceUnavailable("item not accessible or filename missing")
     if max_bytes is None:
@@ -489,13 +495,17 @@ async def create_attachment(
         GRAPHICAL_ABSTRACT_MEDIA_TYPES
     ):
         raise ValidationFailure("graphical abstract must be a PNG, JPEG, WebP, or GIF image")
+    # Release the read transaction before enqueueing and uploading the object.
+    # The finalizer performs the authoritative revalidation in its own short
+    # transaction.
+    await db.rollback()
     attachment_id = uuid4()
     attachment_key = object_key(attachment_id, ObjectSuffix.BINARY)
     workflow_id = f"upload-attachment:{attachment_id}"
     await durable_operations().enqueue(
         ATTACHMENT_UPLOAD_WORKFLOW,
         item_id,
-        user.id,
+        user_id,
         str(attachment_id),
         str(attachment_id),
         Path(filename).name,
@@ -506,7 +516,7 @@ async def create_attachment(
         attributes={
             "capability": "documents",
             "operation": "upload_attachment",
-            "owner_id": user.id,
+            "owner_id": user_id,
             "item_id": item_id,
             "attachment_id": str(attachment_id),
             "object_key": attachment_key,
@@ -667,11 +677,15 @@ async def delete_file_revision(
         workflow_id=event_workflow_id,
         attributes={"capability": "library", "item_id": item_id},
     )
+    await enqueue_object_cleanup(
+        db,
+        tuple(key for key in (object_key, thumbnail_key) if key),
+        owner_id=user.id,
+        operation="file_revision_delete",
+        target_id=revision.id,
+    )
     record_event(db, user.id, "pdf.delete", "file_revision", revision.id)
     await db.commit()
-    if thumbnail_key:
-        await get_object_store().delete(thumbnail_key)
-    await delete_unreferenced_objects(db, (object_key,))
 
 
 async def delete_attachment(db: AsyncSession, user: User, item_id: str, attachment_id: str) -> None:
@@ -683,9 +697,15 @@ async def delete_attachment(db: AsyncSession, user: User, item_id: str, attachme
         raise ResourceNotFound("attachment not found")
     object_key = attachment.object_key
     await db.delete(attachment)
+    await enqueue_object_cleanup(
+        db,
+        (object_key,),
+        owner_id=user.id,
+        operation="attachment_delete",
+        target_id=attachment.id,
+    )
     record_event(db, user.id, "attachment.delete", "attachment", attachment.id)
     await db.commit()
-    await delete_unreferenced_objects(db, (object_key,))
 
 
 async def get_pdf_viewer_data(

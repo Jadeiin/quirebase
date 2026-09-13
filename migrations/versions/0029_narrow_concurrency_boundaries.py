@@ -122,7 +122,7 @@ def upgrade() -> None:
                 """
                 CREATE TABLE revision_search (
                     revision_id varchar(36) PRIMARY KEY REFERENCES file_revisions(id) ON DELETE CASCADE,
-                    item_id varchar(36) NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+                    item_id varchar(36) NOT NULL,
                     document tsvector NOT NULL
                 )
                 """
@@ -130,6 +130,7 @@ def upgrade() -> None:
             op.execute(
                 "CREATE INDEX ix_revision_search_document ON revision_search USING gin(document)"
             )
+            op.execute("CREATE INDEX ix_revision_search_item_id ON revision_search(item_id)")
         else:
             op.execute(
                 """
@@ -141,6 +142,24 @@ def upgrade() -> None:
                 )
                 """
             )
+
+    # ``item_id`` is a denormalized projection key owned by FileRevision.  A
+    # second FK to Item would make index_revision acquire a parent lock after
+    # locking the child revision, creating a child-to-parent deadlock with Item
+    # deletion.  Drop that FK for databases upgraded from an earlier cutover,
+    # and index the key used by remove_item().
+    if bind.dialect.name == "postgresql" and sa.inspect(bind).has_table("revision_search"):
+        revision_inspector = sa.inspect(bind)
+        for foreign_key in revision_inspector.get_foreign_keys("revision_search"):
+            if foreign_key.get("referred_table") == "items" and foreign_key.get(
+                "constrained_columns"
+            ) == ["item_id"]:
+                name = foreign_key.get("name")
+                if name:
+                    op.drop_constraint(name, "revision_search", type_="foreignkey")
+        indexes = {index.get("name") for index in revision_inspector.get_indexes("revision_search")}
+        if "ix_revision_search_item_id" not in indexes:
+            op.create_index("ix_revision_search_item_id", "revision_search", ["item_id"])
 
     # The legacy Item projection mixed bibliographic metadata with PDF text, Tag names and
     # Project names. Rebuild both projections at the schema boundary so upgraded databases use

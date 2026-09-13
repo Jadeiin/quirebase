@@ -240,12 +240,15 @@ async def test_postgresql_search_contract():
             text(
                 "CREATE TABLE revision_search ("
                 "revision_id varchar(36) PRIMARY KEY REFERENCES file_revisions(id) ON DELETE CASCADE,"
-                "item_id varchar(36) NOT NULL REFERENCES items(id) ON DELETE CASCADE,"
+                "item_id varchar(36) NOT NULL,"
                 "document tsvector NOT NULL)"
             )
         )
         await connection.execute(
             text("CREATE INDEX ix_revision_search_document ON revision_search USING gin(document)")
+        )
+        await connection.execute(
+            text("CREATE INDEX ix_revision_search_item_id ON revision_search(item_id)")
         )
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     username = f"contract-{uuid.uuid4()}"

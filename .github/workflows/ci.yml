@@ -50,7 +50,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: uv sync --extra postgres
-      - run: uv run pytest -q tests/test_postgres_contract.py
+      - run: uv run pytest -q tests/test_postgres_contract.py tests/test_postgres_concurrency.py
   s3-object-store:
     runs-on: ubuntu-latest
     env:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from quirebase.library import DiscoveryClause, ItemMetadata
 
@@ -40,10 +40,11 @@ class ProjectMemberRequest(BaseModel):
 
 
 class TagSetRequest(BaseModel):
-    # ``tag_ids`` remains the full replacement form for PUT callers. New callers that
-    # already computed an intent delta can use ``add_tag_ids`` with ``remove_tag_ids``.
-    tag_ids: list[str] | None = None
-    add_tag_ids: list[str] | None = None
+    model_config = ConfigDict(extra="forbid")
+
+    # Tag mutations are explicit intent deltas. A full collection replacement
+    # would derive removals from a stale read and lose concurrent additions.
+    add_tag_ids: list[str] = Field(default_factory=list)
     remove_tag_ids: list[str] = Field(default_factory=list)
     new_names: list[str] = Field(default_factory=list)
 

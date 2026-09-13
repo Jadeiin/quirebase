@@ -222,7 +222,7 @@ async def test_http_api_library_project_tag_and_discussion_lifecycle(
         cleared = await client.put(
             f"/api/v1/items/{item_id}/tags",
             headers=headers,
-            json={"tag_ids": [], "new_names": []},
+            json={"add_tag_ids": [], "remove_tag_ids": [tag.json()["id"]], "new_names": []},
         )
         assert cleared.status_code == 200
         assert await db.get(ItemTag, (item_id, tag.json()["id"])) is None

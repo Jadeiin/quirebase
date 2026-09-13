@@ -16,6 +16,7 @@ from quirebase.core.database import get_db
 from quirebase.core.errors import VersionConflict
 from quirebase.core.storage import ObjectMetadata, ObjectResponse, ObjectSuffix, get_object_store
 from quirebase.documents import create_attachment
+from quirebase.documents import workflows as document_workflows
 from quirebase.documents.bundles import export_revision_pdf
 from quirebase.library import ItemMetadata, request_item_tag_recommendation, revise_item_metadata
 from quirebase.models import (
@@ -507,6 +508,7 @@ async def test_deleting_latest_pdf_revision_removes_its_files_and_falls_back_thu
         assert deleted.status_code == 303
         assert deleted.headers["location"] == f"/items/{item_id}/files"
         assert await db.get(FileRevision, new_revision_id) is None
+        await document_workflows.delete_unreferenced_objects_step([key, new_thumbnail.key])
         assert not new_object.exists()
         assert not local_object_path(new_thumbnail.key).exists()
         assert (await client.get(thumbnail_url)).content == b"old-thumbnail"
@@ -530,22 +532,23 @@ async def test_graphical_abstract_attachment_overrides_the_pdf_thumbnail(
     client, item, revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    item_id = item.id
     pdf_thumbnail = get_settings().object_dir / "thumbnails" / f"{revision.id}.png"
     pdf_thumbnail.parent.mkdir(parents=True, exist_ok=True)
     pdf_thumbnail.write_bytes(b"pdf-thumbnail")
 
     try:
         uploaded = await client.post(
-            f"/items/{item.id}/attachments",
+            f"/items/{item_id}/attachments",
             data={"csrf_token": "test-csrf", "graphical_abstract": "true"},
             files={"attachment": ("abstract.png", b"\x89PNG\r\n\x1a\ngraphical", "image/png")},
             follow_redirects=False,
         )
         assert uploaded.status_code == 303
         assert uploaded.headers["location"].startswith(
-            f"/items/{item.id}/files?workflow=upload-attachment:"
+            f"/items/{item_id}/files?workflow=upload-attachment:"
         )
-        assert await db.scalar(select(Attachment).where(Attachment.item_id == item.id)) is None
+        assert await db.scalar(select(Attachment).where(Attachment.item_id == item_id)) is None
     finally:
         await client.aclose()
         get_settings.cache_clear()
@@ -559,10 +562,11 @@ async def test_graphical_abstract_rejects_content_that_is_not_an_image(
     client, item, _revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    item_id = item.id
 
     try:
         uploaded = await client.post(
-            f"/items/{item.id}/attachments",
+            f"/items/{item_id}/attachments",
             data={"csrf_token": "test-csrf", "graphical_abstract": "true"},
             files={"attachment": ("abstract.png", b"not really a png", "image/png")},
             follow_redirects=False,
@@ -571,7 +575,7 @@ async def test_graphical_abstract_rejects_content_that_is_not_an_image(
         assert uploaded.status_code == 303
         assert (
             await db.scalar(
-                select(func.count()).select_from(Attachment).where(Attachment.item_id == item.id)
+                select(func.count()).select_from(Attachment).where(Attachment.item_id == item_id)
             )
             == 0
         )
@@ -588,11 +592,12 @@ async def test_graphical_abstract_rejects_empty_content_without_leaking_staged_o
     client, item, _revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    item_id = item.id
     objects_before = set(get_settings().object_dir.rglob("*.bin"))
 
     try:
         uploaded = await client.post(
-            f"/items/{item.id}/attachments",
+            f"/items/{item_id}/attachments",
             data={"csrf_token": "test-csrf", "graphical_abstract": "true"},
             files={"attachment": ("abstract.png", b"", "image/png")},
             follow_redirects=False,
@@ -601,7 +606,7 @@ async def test_graphical_abstract_rejects_empty_content_without_leaking_staged_o
         assert uploaded.status_code == 303
         assert (
             await db.scalar(
-                select(func.count()).select_from(Attachment).where(Attachment.item_id == item.id)
+                select(func.count()).select_from(Attachment).where(Attachment.item_id == item_id)
             )
             == 0
         )
@@ -689,19 +694,20 @@ async def test_regular_attachment_accepts_non_image_content(
     client, item, _revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    item_id = item.id
 
     try:
         uploaded = await client.post(
-            f"/items/{item.id}/attachments",
+            f"/items/{item_id}/attachments",
             data={"csrf_token": "test-csrf"},
             files={"attachment": ("dataset.csv", b"column\nvalue\n", "text/csv")},
             follow_redirects=False,
         )
         assert uploaded.status_code == 303
         assert uploaded.headers["location"].startswith(
-            f"/items/{item.id}/files?workflow=upload-attachment:"
+            f"/items/{item_id}/files?workflow=upload-attachment:"
         )
-        assert await db.scalar(select(Attachment).where(Attachment.item_id == item.id)) is None
+        assert await db.scalar(select(Attachment).where(Attachment.item_id == item_id)) is None
     finally:
         await client.aclose()
         get_settings.cache_clear()
@@ -753,6 +759,7 @@ async def test_replacing_and_deleting_graphical_abstract_preserves_attachment_an
         assert deleted.status_code == 303
         assert await db.get(Attachment, first.id) is not None
         assert await db.get(Attachment, second.id) is None
+        await document_workflows.delete_unreferenced_objects_step([second.object_key])
         assert not second_object.exists()
         assert (await client.get(f"/documents/{item.id}/thumbnail")).content == b"pdf-thumbnail"
     finally:
