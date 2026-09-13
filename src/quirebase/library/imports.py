@@ -646,7 +646,12 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> li
     # Confirmation mutates the Import Batch root and creates child Items.  A
     # full UPDATE lock serializes concurrent confirmations before either caller
     # can observe ``ready`` and create duplicate Items.
-    batch = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update())
+    batch = await db.scalar(
+        select(ImportBatch)
+        .where(ImportBatch.id == batch_id)
+        .execution_options(populate_existing=True)
+        .with_for_update()
+    )
     if batch is None or batch.owner_id != owner.id:
         raise ResourceUnavailable("import batch not found")
     if batch.status == "committed":
