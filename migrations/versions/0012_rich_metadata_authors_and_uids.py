@@ -101,15 +101,20 @@ def upgrade() -> None:
     from quirebase.library.authors import parse_author_name
 
     # Preload existing authors keyed like find_or_create_author matches them:
-    # case-insensitive exact match on last/first name (None = no first name).
-    author_ids: dict[tuple[str, str | None], str] = {}
+    # case-insensitive, whitespace-normalized identity (None = no first name).
+    def author_identity(last_name: str, first_name: str | None) -> str:
+        last = " ".join(last_name.split()).casefold()
+        first = " ".join(first_name.split()).casefold() if first_name else ""
+        return f"{last}\x1f{first}"
+
+    author_ids: dict[str, str] = {}
     for row in bind.execute(
         sa.select(authors_table.c.id, authors_table.c.last_name, authors_table.c.first_name)
     ).fetchall():
-        author_ids[row[1].lower(), row[2].lower() if row[2] else None] = row[0]
+        author_ids[author_identity(row[1], row[2])] = row[0]
 
     def author_id_for(last_name: str, first_name: str | None) -> str:
-        key = (last_name.lower(), first_name.lower() if first_name else None)
+        key = author_identity(last_name, first_name)
         author_id = author_ids.get(key)
         if author_id is None:
             author_id = str(uuid.uuid4())
@@ -119,11 +124,7 @@ def upgrade() -> None:
                     id=author_id,
                     last_name=last_name,
                     first_name=first_name,
-                    identity_key=(
-                        " ".join(last_name.split()).casefold()
-                        + "\x1f"
-                        + (" ".join(first_name.split()).casefold() if first_name else "")
-                    ),
+                    identity_key=key,
                     created_at=now_utc,
                 )
             )

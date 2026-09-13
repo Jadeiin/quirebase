@@ -112,7 +112,7 @@ def upgrade() -> None:
         if "identity_key" not in author_columns:
             _sqlite_fk(bind, False)
             with op.batch_alter_table("authors") as batch:
-                batch.add_column(sa.Column("identity_key", sa.String(length=260), nullable=True))
+                batch.add_column(sa.Column("identity_key", sa.String(length=512), nullable=True))
             _sqlite_fk(bind, True)
 
         authors_table = sa.table(

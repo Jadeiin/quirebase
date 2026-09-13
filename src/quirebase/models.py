@@ -222,7 +222,7 @@ class Author(Base):
     first_name: Mapped[str | None] = mapped_column(String(120))
     last_name: Mapped[str] = mapped_column(String(120), index=True)
     identity_key: Mapped[str] = mapped_column(
-        String(260), nullable=False, default=_author_identity_default
+        String(512), nullable=False, default=_author_identity_default
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
