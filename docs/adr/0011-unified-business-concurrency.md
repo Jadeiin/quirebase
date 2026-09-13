@@ -39,6 +39,12 @@ Concurrency controls are selected by the invariant they protect:
    UUIDs are never reused; row existence plus foreign keys is the lifecycle boundary. A missing
    row is a normal rejected finalization, not a stale lifecycle-token protocol.
 
+   Short synchronous commands use command-entry authorization: active Project state and the
+   concrete membership/assignment grant are read once before the short mutation begins, but are
+   not held through commit. Durable finalizers differ because external work separates request
+   authorization from canonical commit; they revalidate and freeze the concrete grant path at
+   final commit.
+
 5. **Lock only the row that owns the invariant.**
    A command may take a row lock only at its linearization point. Authorization and existence
    checks that merely need to prevent a concurrent delete use a shared lock; ordinary reads remain
@@ -96,10 +102,12 @@ full reindex before relying on Search results.
 
 ## Project ownership
 
-Project ownership is represented by `Project.owner_id`. The owner is also a ProjectMember with the
-`owner` role for presentation and authorization joins. Ownership transfer locks the Project row,
-updates `owner_id` and the two membership rows atomically. Removing or leaving the owner is
-rejected; no owner-count scan or multi-owner race is needed.
+Project ownership is represented authoritatively by `Project.owner_id`. The owner is also a
+ProjectMember with the `owner` role as a presentation mirror, but authorization never grants owner
+authority from that mirrored role. Non-owner edit authority is granted only by an `editor`
+membership. Ownership transfer locks the Project row and updates `owner_id` plus the two mirrored
+membership roles atomically. Removing or leaving the authoritative owner is rejected; no
+owner-count scan or multi-owner race is needed.
 
 ## Import confirmation
 

@@ -96,7 +96,7 @@ async def transfer_project_ownership(
     actor = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     target = await db.get(ProjectMember, (project_id, target_user_id), populate_existing=True)
     project = await db.get(Project, project_id, populate_existing=True)
-    if project is None or actor is None or user.id != project.owner_id or target is None:
+    if project is None or user.id != project.owner_id or target is None:
         raise ResourceUnavailable("project or target member not found")
     if target.user_id == user.id:
         raise ValidationFailure("target must be another member")
@@ -105,7 +105,8 @@ async def transfer_project_ownership(
     )
     if target_user is None or not target_user.active:
         raise ValidationFailure("target user must be active")
-    actor.role = ProjectRole.editor
+    if actor is not None:
+        actor.role = ProjectRole.editor
     target.role = ProjectRole.owner
     project.owner_id = target.user_id
     record_event(

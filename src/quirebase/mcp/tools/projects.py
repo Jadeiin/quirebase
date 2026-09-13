@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from quirebase.mcp.tools.annotations import DESTRUCTIVE, READ_ONLY, WRITE
 from quirebase.programmatic import (
@@ -119,11 +119,14 @@ def register_project_tools(server: MCPServer, runtime: McpRuntime) -> None:
 
     @server.tool(
         name="projects.set_member",
-        description="Add or change a Project member; requires the Project owner role.",
+        description=(
+            "Add or change a Project editor or viewer; use projects.transfer_ownership "
+            "to change the owner."
+        ),
         annotations=WRITE,
     )
     async def projects_set_member(
-        project_id: str, username: str, role: str = "viewer"
+        project_id: str, username: str, role: Literal["editor", "viewer"] = "viewer"
     ) -> ProjectMemberView:
         async def run(db, user):
             member = await add_project_member(db, user, project_id, username, role)

@@ -79,6 +79,18 @@ async def set_item_authors(
     authors_data: list[dict],
     role: str = "author",
 ) -> list[ItemAuthor]:
+    identities: set[str] = set()
+    for entry in authors_data:
+        last = str(entry.get("last_name", "")).strip()
+        raw_first = entry.get("first_name")
+        first = str(raw_first).strip() or None if raw_first else None
+        if not last:
+            continue
+        identity = normalize_author_identity(last, first)
+        if identity in identities:
+            raise ValidationFailure("contributors must be unique within a role")
+        identities.add(identity)
+
     item = await require_editable_item_for_mutation(db, user, item_id)
 
     await db.execute(

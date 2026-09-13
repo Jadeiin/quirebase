@@ -63,12 +63,17 @@ async def _lock_upload_authority(
         project_id = await db.scalar(
             select(Project.id)
             .join(ProjectItem, ProjectItem.project_id == Project.id)
-            .join(ProjectMember, ProjectMember.project_id == Project.id)
+            .outerjoin(
+                ProjectMember,
+                (ProjectMember.project_id == Project.id) & (ProjectMember.user_id == owner.id),
+            )
             .where(
                 ProjectItem.item_id == item_id,
-                ProjectMember.user_id == owner.id,
-                ProjectMember.role.in_((ProjectRole.owner, ProjectRole.editor)),
                 Project.state == "active",
+                (Project.owner_id == owner.id)
+                | (
+                    (ProjectMember.user_id == owner.id) & (ProjectMember.role == ProjectRole.editor)
+                ),
             )
             .order_by(Project.id)
             .limit(1)
@@ -96,8 +101,10 @@ async def _lock_upload_authority(
         if (
             project is None
             or project_item is None
-            or member is None
-            or member.role not in (ProjectRole.owner, ProjectRole.editor)
+            or (
+                project.owner_id != owner.id
+                and (member is None or member.role != ProjectRole.editor)
+            )
         ):
             raise ValueError("Item is no longer writable")
     return owner, item

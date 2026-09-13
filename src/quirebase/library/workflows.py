@@ -55,17 +55,6 @@ async def request_item_tag_recommendation(
     force: bool = False,
 ) -> ItemTagRecommendation:
     """Create an idempotent generation request without committing its caller's transaction."""
-    if force:
-        if db.get_bind().dialect.name == "postgresql":
-            locked_item_id = await db.scalar(
-                select(Item.id).where(Item.id == item_id).with_for_update(read=True, key_share=True)
-            )
-        else:
-            locked_item_id = await db.scalar(select(Item.id).where(Item.id == item_id))
-        if locked_item_id is None:
-            raise ValueError("Item no longer exists")
-    elif await db.get(Item, item_id) is None:
-        raise ValueError("Item no longer exists")
     # Inspect the durable workflow before taking the recommendation row lock.  A slow DBOS
     # lookup must not block other recommendation requests or Item mutations.
     observed_record = await db.scalar(
@@ -73,6 +62,20 @@ async def request_item_tag_recommendation(
     )
     observed_workflow_id = observed_record.workflow_id if observed_record else None
     workflow = await _linked_workflow(observed_record) if observed_record and not force else None
+    if db.get_bind().dialect.name == "postgresql":
+        item_lock = select(Item.id).where(Item.id == item_id)
+        # An absent recommendation row cannot be locked. Serialize its creation
+        # on the Item root; existing generations serialize on their own row.
+        item_lock = (
+            item_lock.with_for_update(key_share=True)
+            if observed_record is None
+            else item_lock.with_for_update(read=True, key_share=True)
+        )
+        locked_item_id = await db.scalar(item_lock)
+    else:
+        locked_item_id = await db.scalar(select(Item.id).where(Item.id == item_id))
+    if locked_item_id is None:
+        raise ValueError("Item no longer exists")
     record = await db.scalar(
         select(ItemTagRecommendation)
         .where(ItemTagRecommendation.item_id == item_id)
@@ -83,7 +86,8 @@ async def request_item_tag_recommendation(
         record is not None
         and not force
         and (
-            record.generated_at is not None
+            observed_record is None
+            or record.generated_at is not None
             or (
                 record.workflow_id == observed_workflow_id
                 and workflow is not None

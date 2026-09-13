@@ -13,9 +13,9 @@ from quirebase.models import (
     Item,
     PdfAnnotation,
     PdfAnnotationReply,
+    Project,
     ProjectItem,
     ProjectMember,
-    ProjectRole,
     SystemRole,
     User,
 )
@@ -48,9 +48,10 @@ async def editable_annotation_ids(
     owned_project_ids = set(
         (
             await db.scalars(
-                select(ProjectMember.project_id).where(
-                    ProjectMember.user_id == user.id,
-                    ProjectMember.role == ProjectRole.owner,
+                select(ProjectMember.project_id)
+                .join(Project, Project.id == ProjectMember.project_id)
+                .where(
+                    Project.owner_id == user.id,
                     ProjectMember.project_id.in_(project_ids),
                 )
             )
@@ -88,9 +89,10 @@ async def editable_annotation_reply_ids(
     owned_project_ids = set(
         (
             await db.scalars(
-                select(ProjectMember.project_id).where(
-                    ProjectMember.user_id == user.id,
-                    ProjectMember.role == ProjectRole.owner,
+                select(ProjectMember.project_id)
+                .join(Project, Project.id == ProjectMember.project_id)
+                .where(
+                    Project.owner_id == user.id,
                     ProjectMember.project_id.in_(project_ids),
                 )
             )

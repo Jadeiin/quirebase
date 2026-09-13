@@ -14,7 +14,10 @@ if TYPE_CHECKING:
 async def visible_projects(db: AsyncSession, user: User) -> list[Project]:
     query = select(Project).where(Project.state == ProjectState.active).order_by(Project.name)
     if user.role != SystemRole.administrator.value:
-        query = query.join(ProjectMember).where(ProjectMember.user_id == user.id)
+        member_project_ids = select(ProjectMember.project_id).where(
+            ProjectMember.user_id == user.id
+        )
+        query = query.where((Project.owner_id == user.id) | Project.id.in_(member_project_ids))
     return list((await db.scalars(query)).all())
 
 
@@ -23,11 +26,15 @@ async def editable_projects(db: AsyncSession, user: User) -> list[Project]:
         (
             await db.scalars(
                 select(Project)
-                .join(ProjectMember)
                 .where(
                     Project.state == ProjectState.active,
-                    ProjectMember.user_id == user.id,
-                    ProjectMember.role.in_([ProjectRole.owner, ProjectRole.editor]),
+                    (Project.owner_id == user.id)
+                    | Project.id.in_(
+                        select(ProjectMember.project_id).where(
+                            ProjectMember.user_id == user.id,
+                            ProjectMember.role == ProjectRole.editor,
+                        )
+                    ),
                 )
                 .order_by(Project.name)
             )
@@ -40,7 +47,21 @@ async def project_member(
 ) -> ProjectMember | None:
     if project_id is None:
         return None
-    return await db.get(ProjectMember, (project_id, user.id))
+    project = await db.get(Project, project_id)
+    member = await db.get(ProjectMember, (project_id, user.id))
+    if project is None:
+        return None
+    if project.owner_id == user.id:
+        if member is not None and member.role == ProjectRole.owner:
+            return member
+        return ProjectMember(project_id=project_id, user_id=user.id, role=ProjectRole.owner)
+    if member is None:
+        return None
+    # ``owner`` is only authoritative when it matches Project.owner_id. Treat
+    # a stale mirror as an ordinary read membership rather than an owner grant.
+    if member.role == ProjectRole.owner:
+        return ProjectMember(project_id=project_id, user_id=user.id, role=ProjectRole.viewer)
+    return member
 
 
 async def require_project_member(

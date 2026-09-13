@@ -36,7 +36,7 @@ class ProjectDeleteRequest(BaseModel):
 
 class ProjectMemberRequest(BaseModel):
     username: str
-    role: Literal["owner", "editor", "viewer"] = "viewer"
+    role: Literal["editor", "viewer"] = "viewer"
 
 
 class TagSetRequest(BaseModel):

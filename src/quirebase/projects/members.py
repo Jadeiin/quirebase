@@ -32,8 +32,7 @@ async def add_project_member(
 ) -> ProjectMember:
     await lock_project_root(db, project_id)
     project = await db.get(Project, project_id, populate_existing=True)
-    actor = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
-    if project is None or actor is None or user.id != project.owner_id:
+    if project is None or user.id != project.owner_id:
         raise ResourceUnavailable("project not found or owner role required")
     try:
         requested_role = ProjectRole(role)
@@ -75,9 +74,8 @@ async def remove_project_member(
 ) -> None:
     await lock_project_root(db, project_id)
     project = await db.get(Project, project_id, populate_existing=True)
-    actor = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
     target = await db.get(ProjectMember, (project_id, member_id), populate_existing=True)
-    if project is None or actor is None or user.id != project.owner_id or target is None:
+    if project is None or user.id != project.owner_id or target is None:
         raise ResourceUnavailable("project or member not found")
     if target.user_id == project.owner_id:
         raise ProjectMemberConflict("a project must retain an owner")

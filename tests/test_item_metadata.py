@@ -150,6 +150,28 @@ async def test_revise_item_metadata_replaces_contributors_in_order(async_db):
 
 
 @pytest.mark.anyio
+async def test_revise_item_metadata_rejects_canonically_duplicate_contributors(async_db):
+    owner = User(username="canonical-contributor-owner", password_hash="unused")
+    async_db.add(owner)
+    await async_db.flush()
+    item = Item(title="Canonical contributor identity", created_by=owner.id)
+    async_db.add(item)
+    await async_db.commit()
+
+    with pytest.raises(ValidationFailure, match="unique within a role"):
+        await revise_item_metadata(
+            async_db,
+            owner,
+            item.id,
+            item.version,
+            ItemMetadata(
+                title=item.title,
+                authors=(Contributor("Van  Rossum", "Guido"), Contributor("Van Rossum", "Guido")),
+            ),
+        )
+
+
+@pytest.mark.anyio
 async def test_create_item_accepts_typed_metadata_and_returns_a_mutation_result(async_db):
     db = async_db
     owner = User(username="create-item-owner", password_hash="unused")
