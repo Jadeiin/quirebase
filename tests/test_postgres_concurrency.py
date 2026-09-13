@@ -16,11 +16,14 @@ from quirebase.core.database import Base, async_database_url, make_async_engine
 from quirebase.core.errors import VersionConflict
 from quirebase.core.workflows import ads
 from quirebase.documents.workflows import commit_uploaded_attachment, commit_uploaded_revision
+from quirebase.library.bulk_items import apply_bulk_item_action
 from quirebase.library.identifiers import rescan_pdf_doi
 from quirebase.library.imports import commit_import_batch
 from quirebase.library.item_metadata import ItemMetadata, revise_item_metadata
 from quirebase.library.tags import add_tag_to_item, rename_tag
 from quirebase.models import (
+    Attachment,
+    AttachmentRole,
     FileRevision,
     FileRevisionProcessingState,
     ImportBatch,
@@ -34,6 +37,7 @@ from quirebase.models import (
     Tag,
     User,
 )
+from quirebase.projects import remove_item_from_project, remove_project_member
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
@@ -167,8 +171,6 @@ async def test_item_delete_wins_against_upload_finalizer(postgres_sessions, fina
     deletion_db = postgres_sessions()
     item = await deletion_db.scalar(select(Item).where(Item.id == item_id).with_for_update())
     assert item is not None
-    await deletion_db.delete(item)
-    await deletion_db.flush()
 
     async def finish_upload() -> object:
         if finalizer == "revision":
@@ -199,6 +201,9 @@ async def test_item_delete_wins_against_upload_finalizer(postgres_sessions, fina
 
     try:
         task = asyncio.create_task(finish_upload())
+        await asyncio.sleep(0.05)
+        assert not task.done()
+        await deletion_db.delete(item)
         await deletion_db.commit()
         result = await task
     except BaseException as error:
@@ -207,6 +212,117 @@ async def test_item_delete_wins_against_upload_finalizer(postgres_sessions, fina
         await deletion_db.close()
     assert isinstance(result, ValueError)
     assert "no longer writable" in str(result)
+
+
+async def test_bulk_item_delete_serializes_with_upload_finalizer(postgres_sessions):
+    user_id, item_id = await _create_user_and_item(postgres_sessions, title="Bulk delete race")
+
+    async def bulk_delete() -> object:
+        async with postgres_sessions() as db:
+            user = await db.get(User, user_id)
+            assert user is not None
+            return await apply_bulk_item_action(
+                db,
+                user,
+                [item_id],
+                "delete_items",
+                confirm_delete="delete",
+            )
+
+    async def upload() -> object:
+        return await commit_uploaded_attachment(
+            item_id,
+            user_id,
+            str(uuid4()),
+            "race.bin",
+            "application/octet-stream",
+            None,
+            {"object_key": "race/bulk.bin", "size": 20},
+        )
+
+    results = await _start_together(bulk_delete, upload)
+    assert isinstance(results[0], list), results
+    assert results[1] is None or (
+        isinstance(results[1], ValueError) and "no longer writable" in str(results[1])
+    ), results
+    if results[1] is None:
+        assert "race/bulk.bin" in results[0]
+    async with postgres_sessions() as db:
+        assert await db.get(Item, item_id) is None
+
+
+async def test_project_item_removal_serializes_with_upload_finalizer(postgres_sessions):
+    async with postgres_sessions() as db:
+        owner = User(username=f"owner-{uuid4()}", password_hash="hash")
+        editor = User(username=f"editor-{uuid4()}", password_hash="hash")
+        db.add_all([owner, editor])
+        await db.flush()
+        item = Item(title="Project item race", created_by=owner.id)
+        project = Project(name="Project item gate", created_by=owner.id)
+        db.add_all([item, project])
+        await db.flush()
+        db.add_all([
+            ProjectMember(project_id=project.id, user_id=owner.id, role=ProjectRole.owner),
+            ProjectMember(project_id=project.id, user_id=editor.id, role=ProjectRole.editor),
+            ProjectItem(project_id=project.id, item_id=item.id),
+        ])
+        await db.commit()
+        owner_id, editor_id, item_id, project_id = owner.id, editor.id, item.id, project.id
+
+    async def remove_assignment() -> object:
+        async with postgres_sessions() as db:
+            owner = await db.get(User, owner_id)
+            assert owner is not None
+            return await remove_item_from_project(db, owner, project_id, item_id)
+
+    async def upload() -> object:
+        return await commit_uploaded_attachment(
+            item_id,
+            editor_id,
+            str(uuid4()),
+            "project-race.bin",
+            "application/octet-stream",
+            None,
+            {"object_key": "race/project-item.bin", "size": 20},
+        )
+
+    results = await _start_together(remove_assignment, upload)
+    assert results[0] is None
+    assert results[1] is None or (
+        isinstance(results[1], ValueError) and "no longer writable" in str(results[1])
+    ), results
+
+
+async def test_graphical_abstract_replacements_serialize_on_item(postgres_sessions):
+    user_id, item_id = await _create_user_and_item(
+        postgres_sessions, title="Graphical abstract race"
+    )
+
+    async def upload(suffix: str) -> object:
+        return await commit_uploaded_attachment(
+            item_id,
+            user_id,
+            str(uuid4()),
+            f"{suffix}.png",
+            "image/png",
+            AttachmentRole.graphical_abstract.value,
+            {"object_key": f"race/{suffix}.png", "size": 20},
+        )
+
+    results = await _start_together(lambda: upload("first"), lambda: upload("second"))
+    assert not any(isinstance(result, BaseException) for result in results), results
+    async with postgres_sessions() as db:
+        graphical = list(
+            (
+                await db.scalars(
+                    select(Attachment).where(
+                        Attachment.item_id == item_id,
+                        Attachment.role == AttachmentRole.graphical_abstract,
+                    )
+                )
+            ).all()
+        )
+        assert len(graphical) == 1
 
 
 async def test_project_member_revoke_wins_against_upload_finalizer(postgres_sessions):
@@ -225,16 +341,16 @@ async def test_project_member_revoke_wins_against_upload_finalizer(postgres_sess
             ProjectItem(project_id=project.id, item_id=item.id),
         ])
         await db.commit()
-        editor_id, item_id, project_id = editor.id, item.id, project.id
+        owner_id, editor_id, item_id, project_id = owner.id, editor.id, item.id, project.id
 
-    revoke_db = postgres_sessions()
-    target = await revoke_db.get(ProjectMember, (project_id, editor_id))
-    assert target is not None
-    await revoke_db.delete(target)
-    await revoke_db.flush()
+    async def revoke() -> object:
+        async with postgres_sessions() as db:
+            owner = await db.get(User, owner_id)
+            assert owner is not None
+            return await remove_project_member(db, owner, project_id, editor_id)
 
-    task = asyncio.create_task(
-        commit_uploaded_attachment(
+    async def upload() -> object:
+        return await commit_uploaded_attachment(
             item_id,
             editor_id,
             str(uuid4()),
@@ -243,16 +359,12 @@ async def test_project_member_revoke_wins_against_upload_finalizer(postgres_sess
             None,
             {"object_key": "race/revoked.bin", "size": 20},
         )
+
+    results = await _start_together(revoke, upload)
+    assert results[0] is None
+    assert results[1] is None or (
+        isinstance(results[1], ValueError) and "no longer writable" in str(results[1])
     )
-    try:
-        await revoke_db.commit()
-        result = await task
-    except BaseException as error:
-        result = error
-    finally:
-        await revoke_db.close()
-    assert isinstance(result, ValueError)
-    assert "no longer writable" in str(result)
 
 
 async def test_metadata_cas_races_pdf_doi_rescan(postgres_sessions):

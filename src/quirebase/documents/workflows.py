@@ -45,20 +45,20 @@ IMPORTED_REVISION_INSPECTION_WORKFLOW = "documents.inspect_imported_revision"
 _MAX_THUMBNAIL_BYTES = 32 * 1024 * 1024
 
 
-async def _lock_upload_authority(db, item_id: str, owner_id: str) -> tuple[User, Item]:
+async def _lock_upload_authority(
+    db, item_id: str, owner_id: str, *, role: AttachmentRole | None = None
+) -> tuple[User, Item]:
     owner = await db.scalar(
         select(User).where(User.id == owner_id, User.active.is_(True)).with_for_update(read=True)
     )
     item = await db.scalar(
-        select(Item).where(Item.id == item_id).with_for_update(read=True, key_share=True)
+        select(Item).where(Item.id == item_id).execution_options(populate_existing=True)
     )
     if owner is None or item is None:
         raise ValueError("Item is no longer writable")
     if owner.role != "administrator" and item.created_by != owner.id:
-        # Freeze the actual project grant path until the final child insert.
-        # Project membership/state mutations serialize on the Project root.
-        grant = await db.scalar(
-            select(Project)
+        project_id = await db.scalar(
+            select(Project.id)
             .join(ProjectItem, ProjectItem.project_id == Project.id)
             .join(ProjectMember, ProjectMember.project_id == Project.id)
             .where(
@@ -67,10 +67,44 @@ async def _lock_upload_authority(db, item_id: str, owner_id: str) -> tuple[User,
                 ProjectMember.role.in_((ProjectRole.owner, ProjectRole.editor)),
                 Project.state == "active",
             )
-            .with_for_update(read=True, of=(Project, ProjectItem, ProjectMember))
+            .order_by(Project.id)
+            .limit(1)
         )
-        if grant is None:
+        if project_id is None:
             raise ValueError("Item is no longer writable")
+        project = await db.scalar(
+            select(Project)
+            .where(Project.id == project_id, Project.state == "active")
+            .execution_options(populate_existing=True)
+            .with_for_update(read=True)
+        )
+        project_item = await db.scalar(
+            select(ProjectItem)
+            .where(ProjectItem.project_id == project_id, ProjectItem.item_id == item_id)
+            .execution_options(populate_existing=True)
+            .with_for_update(read=True)
+        )
+        member = await db.scalar(
+            select(ProjectMember)
+            .where(ProjectMember.project_id == project_id, ProjectMember.user_id == owner.id)
+            .execution_options(populate_existing=True)
+            .with_for_update(read=True)
+        )
+        if (
+            project is None
+            or project_item is None
+            or member is None
+            or member.role not in (ProjectRole.owner, ProjectRole.editor)
+        ):
+            raise ValueError("Item is no longer writable")
+    lock = select(Item).where(Item.id == item_id).execution_options(populate_existing=True)
+    if role is AttachmentRole.graphical_abstract:
+        lock = lock.with_for_update(key_share=True)
+    else:
+        lock = lock.with_for_update(read=True, key_share=True)
+    item = await db.scalar(lock)
+    if item is None:
+        raise ValueError("Item is no longer writable")
     return owner, item
 
 
@@ -403,11 +437,11 @@ async def commit_uploaded_attachment(
     receipt: ValidatedAttachment,
 ) -> AttachmentWorkflowResult:
     db = ads.sql_session()
-    _owner, _item = await _lock_upload_authority(db, item_id, owner_id)
+    role = AttachmentRole(role_value) if role_value else None
+    _owner, _item = await _lock_upload_authority(db, item_id, owner_id, role=role)
     existing = await db.get(Attachment, attachment_id)
     if existing is not None:
         return {"attachment_id": existing.id, "item_id": existing.item_id}
-    role = AttachmentRole(role_value) if role_value else None
     if role is not None:
         current = await db.scalar(
             select(Attachment).where(Attachment.item_id == item_id, Attachment.role == role)

@@ -178,36 +178,6 @@ async def apply_item_tag_selection(
         raise
 
 
-async def replace_item_tag_selection(
-    db: AsyncSession,
-    user: User,
-    item_id: str,
-    *,
-    tag_ids: list[str] | None = None,
-    remove_tag_ids: list[str] | None = None,
-    new_names: list[str] | None = None,
-) -> None:
-    """Replace an Item's Tag selection while preserving explicit removals."""
-    await require_editable_item_for_mutation(db, user, item_id)
-    try:
-        resolved_names = [await get_or_create_tag(db, user, name) for name in (new_names or [])]
-        current_ids = set(
-            (await db.scalars(select(ItemTag.tag_id).where(ItemTag.item_id == item_id))).all()
-        )
-        desired_ids = set(tag_ids or []) | {tag.id for tag in resolved_names}
-        derived_removals = (current_ids - desired_ids) | set(remove_tag_ids or [])
-        await apply_item_tag_selection(
-            db,
-            user,
-            item_id,
-            remove_tag_ids=list(derived_removals),
-            tag_ids=list(desired_ids),
-        )
-    except BaseException:
-        await db.rollback()
-        raise
-
-
 async def rename_tag(db: AsyncSession, user: User, tag_id: str, name: str) -> Tag:
     tag = await db.scalar(select(Tag).where(Tag.id == tag_id).with_for_update(key_share=True))
     if tag is None or (tag.created_by != user.id and user.role != "administrator"):

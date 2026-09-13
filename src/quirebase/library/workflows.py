@@ -58,7 +58,7 @@ async def request_item_tag_recommendation(
     if force:
         if db.get_bind().dialect.name == "postgresql":
             locked_item_id = await db.scalar(
-                select(Item.id).where(Item.id == item_id).with_for_update()
+                select(Item.id).where(Item.id == item_id).with_for_update(read=True, key_share=True)
             )
         else:
             locked_item_id = await db.scalar(select(Item.id).where(Item.id == item_id))
@@ -66,17 +66,32 @@ async def request_item_tag_recommendation(
             raise ValueError("Item no longer exists")
     elif await db.get(Item, item_id) is None:
         raise ValueError("Item no longer exists")
+    # Inspect the durable workflow before taking the recommendation row lock.  A slow DBOS
+    # lookup must not block other recommendation requests or Item mutations.
+    observed_record = await db.scalar(
+        select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == item_id)
+    )
+    observed_workflow_id = observed_record.workflow_id if observed_record else None
+    workflow = await _linked_workflow(observed_record) if observed_record and not force else None
     record = await db.scalar(
         select(ItemTagRecommendation)
         .where(ItemTagRecommendation.item_id == item_id)
+        .execution_options(populate_existing=True)
         .with_for_update(key_share=True)
     )
-    if record is not None and not force:
-        workflow = await _linked_workflow(record)
-        if record.generated_at is not None or (
-            workflow is not None and workflow.state in {"pending", "running", "succeeded"}
-        ):
-            return record
+    if (
+        record is not None
+        and not force
+        and (
+            record.generated_at is not None
+            or (
+                record.workflow_id == observed_workflow_id
+                and workflow is not None
+                and workflow.state in {"pending", "running", "succeeded"}
+            )
+        )
+    ):
+        return record
 
     token = (record.generation_token + 1) if record else 1
     if record is None:

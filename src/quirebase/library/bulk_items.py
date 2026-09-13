@@ -28,6 +28,7 @@ from quirebase.library.tags import get_or_create_tag
 from quirebase.models import (
     Attachment,
     FileRevision,
+    Item,
     ItemTag,
     User,
 )
@@ -79,6 +80,24 @@ async def apply_bulk_item_action(
     elif action in ("delete_items", "delete"):
         if confirm_delete != "delete":
             raise ValidationFailure("confirm deletion of the selected items")
+        # Lock every Item root in stable order before collecting child object keys.  Upload and
+        # import finalizers use the same parent lock, so no new child can commit after this
+        # snapshot and escape the cleanup intent.
+        requested_ids = tuple(sorted({item.id for item in items}))
+        locked_items = list(
+            (
+                await db.scalars(
+                    select(Item)
+                    .where(Item.id.in_(requested_ids))
+                    .order_by(Item.id)
+                    .execution_options(populate_existing=True)
+                    .with_for_update()
+                )
+            ).all()
+        )
+        if len(locked_items) != len(requested_ids):
+            raise ResourceUnavailable("one or more selected items no longer exist")
+        items = locked_items
         if user.role != "administrator" and any(item.created_by != user.id for item in items):
             raise PermissionDenied("only item owners can permanently delete items")
         cleanup_keys = list(

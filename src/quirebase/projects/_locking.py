@@ -29,7 +29,12 @@ async def lock_project_root(
         predicates.append(Project.state == state)
     if visibility is not None:
         predicates.append(Project.visibility == visibility)
-    project = await db.scalar(select(Project).where(*predicates).with_for_update(key_share=True))
+    project = await db.scalar(
+        select(Project)
+        .where(*predicates)
+        .execution_options(populate_existing=True)
+        .with_for_update(key_share=True)
+    )
     if project is None:
         raise ResourceUnavailable(message)
     return project
@@ -42,7 +47,12 @@ async def lock_project_delete(
     message: str = "project not found",
 ) -> Project:
     """Lock a Project that is about to be deleted with a full UPDATE lock."""
-    project = await db.scalar(select(Project).where(Project.id == project_id).with_for_update())
+    project = await db.scalar(
+        select(Project)
+        .where(Project.id == project_id)
+        .execution_options(populate_existing=True)
+        .with_for_update()
+    )
     if project is None:
         raise ResourceUnavailable(message)
     return project
@@ -62,7 +72,12 @@ async def guard_project(
         predicates.append(Project.state == state)
     if visibility is not None:
         predicates.append(Project.visibility == visibility)
-    project = await db.scalar(select(Project).where(*predicates).with_for_update(read=True))
+    project = await db.scalar(
+        select(Project)
+        .where(*predicates)
+        .execution_options(populate_existing=True)
+        .with_for_update(read=True)
+    )
     if project is None:
         raise ResourceUnavailable(message)
     return project

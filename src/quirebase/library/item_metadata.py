@@ -355,10 +355,15 @@ async def _regenerate_bibtex_key(
     item_id: str,
 ) -> ItemWriteResult:
     actor_id = actor.id
-    item = await db.scalar(select(Item).where(Item.id == item_id).with_for_update(key_share=True))
+    await require_editable_item_for_mutation(db, actor, item_id)
+    item = await db.scalar(
+        select(Item)
+        .where(Item.id == item_id)
+        .execution_options(populate_existing=True)
+        .with_for_update(key_share=True)
+    )
     if item is None:
         raise ResourceUnavailable("item not found")
-    await require_editable_item_for_mutation(db, actor, item_id)
     key = generate_bibtex_key(item)
     item.bibtex_id = key
     item.updated_by = actor_id

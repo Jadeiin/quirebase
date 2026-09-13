@@ -52,6 +52,7 @@ class BatchConflict(DomainError):
 
 
 MAX_PDF_IMPORT_FILES = 50
+_WORKFLOW_NOT_LOOKED_UP = object()
 
 
 def _consume_current_cancellation() -> None:
@@ -444,25 +445,42 @@ async def _create_item_from_record(db: AsyncSession, user: User, record: dict) -
 async def get_import_batch_preview(
     db: AsyncSession, user: User, batch_id: str
 ) -> tuple[ImportBatch, list[dict], list[dict]]:
+    observed = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id))
+    if observed is None or observed.owner_id != user.id:
+        raise ResourceUnavailable("import batch not found")
+    observed_workflow_id = observed.workflow_id
+    workflow = None
+    if observed.status == "pending" and observed.file_format == "pdf":
+        workflow = (
+            await durable_operations().get(observed.workflow_id) if observed.workflow_id else None
+        )
     batch = await db.scalar(
-        select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update(key_share=True)
+        select(ImportBatch)
+        .where(ImportBatch.id == batch_id)
+        .execution_options(populate_existing=True)
+        .with_for_update(key_share=True)
     )
     if batch is None or batch.owner_id != user.id:
         raise ResourceUnavailable("import batch not found")
-    if await _converge_pdf_import_batch_status(db, batch):
+    if batch.workflow_id == observed_workflow_id and await _converge_pdf_import_batch_status(
+        db, batch, workflow
+    ):
         await db.commit()
     records = json.loads(batch.records) if batch.status in {"ready", "committed"} else []
     return batch, records, json.loads(batch.errors)
 
 
-async def _converge_pdf_import_batch_status(db: AsyncSession, batch: ImportBatch) -> bool:
+async def _converge_pdf_import_batch_status(
+    db: AsyncSession, batch: ImportBatch, workflow=_WORKFLOW_NOT_LOOKED_UP
+) -> bool:
     """Map a missing or terminal durable preparation back to the retryable business state."""
     if batch.file_format != "pdf" or batch.status != "pending":
         return False
     observed_workflow_id = batch.workflow_id
-    workflow = (
-        await durable_operations().get(observed_workflow_id) if observed_workflow_id else None
-    )
+    if workflow is _WORKFLOW_NOT_LOOKED_UP:
+        workflow = (
+            await durable_operations().get(observed_workflow_id) if observed_workflow_id else None
+        )
     if workflow is not None and workflow.state in {"pending", "running"}:
         return False
     result = await db.execute(
@@ -482,15 +500,28 @@ async def _converge_pdf_import_batch_status(db: AsyncSession, batch: ImportBatch
 
 async def retry_pdf_import_batch(db: AsyncSession, user: User, batch_id: str) -> ImportBatch:
     """Retry a failed PDF Import Batch without relinquishing its staged objects."""
+    observed = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id))
+    if observed is None or observed.owner_id != user.id:
+        raise ResourceUnavailable("import batch not found")
+    observed_workflow_id = observed.workflow_id
+    workflow = None
+    if observed.file_format == "pdf" and observed.status == "pending":
+        workflow = (
+            await durable_operations().get(observed.workflow_id) if observed.workflow_id else None
+        )
     batch = await db.scalar(
         # Confirmation/retry mutate the Import Batch root.  A full UPDATE lock
         # serializes concurrent callers before either can create child Items or
         # transition the batch status.
-        select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update()
+        select(ImportBatch)
+        .where(ImportBatch.id == batch_id)
+        .execution_options(populate_existing=True)
+        .with_for_update()
     )
     if batch is None or batch.owner_id != user.id:
         raise ResourceUnavailable("import batch not found")
-    await _converge_pdf_import_batch_status(db, batch)
+    if batch.workflow_id == observed_workflow_id:
+        await _converge_pdf_import_batch_status(db, batch, workflow)
     if batch.file_format != "pdf" or batch.status != "failed":
         raise BatchConflict("only a failed PDF import batch can be retried")
     pending_records = json.loads(batch.records)

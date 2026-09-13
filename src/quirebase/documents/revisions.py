@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from quirebase.access.documents import require_attachment, require_revision
 from quirebase.access.items import (
@@ -456,22 +456,6 @@ def _is_image_header(header: bytes, content_type: str) -> bool:
     }.get(content_type, False)
 
 
-async def _lock_item_for_attachment_role_replacement(db: AsyncSession, item_id: str) -> None:
-    if db.get_bind().dialect.name == "sqlite":
-        locked_item_id = await db.scalar(
-            update(Item)
-            .where(Item.id == item_id)
-            .values(updated_at=Item.updated_at)
-            .returning(Item.id)
-        )
-    else:
-        locked_item_id = await db.scalar(
-            select(Item.id).where(Item.id == item_id).with_for_update()
-        )
-    if locked_item_id is None:
-        raise ResourceUnavailable("item not accessible")
-
-
 async def create_attachment(
     db: AsyncSession,
     user: User,
@@ -654,7 +638,12 @@ async def delete_file_revision(
     db: AsyncSession, user: User, item_id: str, revision_id: str
 ) -> None:
     await require_editable_item_for_mutation(db, user, item_id)
-    if await db.scalar(select(Item.id).where(Item.id == item_id).with_for_update()) is None:
+    if (
+        await db.scalar(
+            select(Item.id).where(Item.id == item_id).with_for_update(read=True, key_share=True)
+        )
+        is None
+    ):
         raise ResourceNotFound("item not found")
     revision = await db.scalar(
         select(FileRevision).where(FileRevision.id == revision_id).with_for_update()
@@ -690,7 +679,12 @@ async def delete_file_revision(
 
 async def delete_attachment(db: AsyncSession, user: User, item_id: str, attachment_id: str) -> None:
     await require_editable_item_for_mutation(db, user, item_id)
-    if await db.scalar(select(Item.id).where(Item.id == item_id).with_for_update()) is None:
+    if (
+        await db.scalar(
+            select(Item.id).where(Item.id == item_id).with_for_update(read=True, key_share=True)
+        )
+        is None
+    ):
         raise ResourceNotFound("item not found")
     attachment = await db.get(Attachment, attachment_id)
     if attachment is None or attachment.item_id != item_id:

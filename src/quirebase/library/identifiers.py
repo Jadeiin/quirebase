@@ -144,10 +144,15 @@ async def rescan_pdf_doi(db: AsyncSession, user: User, item_id: str) -> str | No
         if rev.full_text:
             found_doi = first_doi_from_text(rev.full_text)
             if found_doi:
+                await require_editable_item_for_mutation(db, user, item_id)
                 item = await db.scalar(
-                    select(Item).where(Item.id == item_id).with_for_update(key_share=True)
+                    select(Item)
+                    .where(Item.id == item_id)
+                    .execution_options(populate_existing=True)
+                    .with_for_update(key_share=True)
                 )
-                item = await require_editable_item_for_mutation(db, user, item_id)
+                if item is None:
+                    raise ResourceUnavailable("item not found")
                 # A manually supplied DOI takes precedence over scanner output.
                 if item.doi:
                     return item.doi
