@@ -1217,7 +1217,7 @@ async def test_pdf_annotation_preflight_reports_missing_staged_object(monkeypatc
 
 
 @pytest.mark.anyio
-async def test_destructive_pdf_preflight_claim_blocks_concurrent_discard(
+async def test_destructive_pdf_preflight_allows_concurrent_discard(
     async_db, async_session_factory, monkeypatch
 ):
     user = User(username="preflight-claim-owner", password_hash="unused")
