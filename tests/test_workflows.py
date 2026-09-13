@@ -714,11 +714,17 @@ async def test_reindex_workflow_checkpoints_bounded_database_batches(monkeypatch
 
     monkeypatch.setattr(operation_workflows, "list_reindex_item_ids_step", list_ids)
     monkeypatch.setattr(operation_workflows, "reindex_items_step", index_ids)
+
+    async def no_revisions(after_id, limit):
+        await asyncio.sleep(0)
+        return ()
+
+    monkeypatch.setattr(operation_workflows, "list_reindex_revision_ids_step", no_revisions)
     workflow_body = operation_workflows.reindex_all_workflow.__wrapped__.__wrapped__
 
     result = await workflow_body("workflow-id", "owner-id")
 
-    assert result == {"reindexed_items": 101}
+    assert result == {"reindexed_items": 101, "reindexed_revisions": 0}
     assert [len(batch) for batch in indexed_batches] == [100, 1]
 
 

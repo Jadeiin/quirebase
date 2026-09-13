@@ -445,7 +445,7 @@ async def get_import_batch_preview(
     db: AsyncSession, user: User, batch_id: str
 ) -> tuple[ImportBatch, list[dict], list[dict]]:
     batch = await db.scalar(
-        select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update(read=True)
+        select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update(key_share=True)
     )
     if batch is None or batch.owner_id != user.id:
         raise ResourceUnavailable("import batch not found")
