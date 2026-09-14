@@ -71,6 +71,7 @@ _UNREPRESENTABLE_ANNOTATION_FLAGS = _pymupdf_integer_constant(
     "PDF_ANNOT_IS_NO_ZOOM"
 ) | _pymupdf_integer_constant("PDF_ANNOT_IS_NO_ROTATE")
 _PRINT_ANNOTATION_FLAG = _pymupdf_integer_constant("PDF_ANNOT_IS_PRINT")
+_MAX_NATIVE_RECT_OVERHANG = 1.0
 
 
 def _hex_color(value: object) -> str | None:
@@ -238,7 +239,9 @@ def _free_text_format(annotation: pymupdf.Annot) -> dict[str, str | float]:
     }
 
 
-def _canonical_rect(page: pymupdf.Page, rect: pymupdf.Rect) -> dict[str, float]:
+def _canonical_rect(
+    page: pymupdf.Page, rect: pymupdf.Rect, *, reject_substantial_overhang: bool = False
+) -> dict[str, float]:
     crop = pdf_crop_box(page)
     normalized = rect.normalize()
     # Canonical coordinates intentionally follow the viewer's crop-local convention:
@@ -247,8 +250,15 @@ def _canonical_rect(page: pymupdf.Page, rect: pymupdf.Rect) -> dict[str, float]:
     y0 = normalized.y0
     x1 = normalized.x1
     y1 = normalized.y1
-    # Native annotation bounds may include a stroke half-width outside the page.
-    # Clamp those tiny overhangs while retaining the actual annotation geometry.
+    # Native annotation bounds may include a small stroke overhang outside the page.
+    # Reject substantially off-page geometry rather than silently changing its shape.
+    if reject_substantial_overhang and (
+        x0 < -_MAX_NATIVE_RECT_OVERHANG
+        or y0 < -_MAX_NATIVE_RECT_OVERHANG
+        or x1 > crop.width + _MAX_NATIVE_RECT_OVERHANG
+        or y1 > crop.height + _MAX_NATIVE_RECT_OVERHANG
+    ):
+        raise ValueError("annotation rectangle lies outside the crop box")
     x0 = max(0.0, x0)
     y0 = max(0.0, y0)
     x1 = min(crop.width, x1)
@@ -286,7 +296,7 @@ def _canonical_shape_rect(page: pymupdf.Page, annotation: pymupdf.Annot) -> dict
             )
             if not inner.is_empty:
                 rect = inner
-    return _canonical_rect(page, rect)
+    return _canonical_rect(page, rect, reject_substantial_overhang=True)
 
 
 def _is_axis_aligned_quad(points: Iterable[object]) -> bool:
@@ -537,12 +547,21 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
                         "reason": "note icon is unsupported",
                     })
                     continue
-                if subtype == "Text" and _note_popup_is_open(document, annotation):
+                if _note_popup_is_open(document, annotation):
                     diagnostics.append({
                         "page": page_index + 1,
                         "subtype": subtype,
                         "result": "skipped",
                         "reason": "open note popups are unsupported",
+                    })
+                    continue
+                rich_text_type, _rich_text = document.xref_get_key(annotation.xref, "RC")
+                if rich_text_type != "null":
+                    diagnostics.append({
+                        "page": page_index + 1,
+                        "subtype": subtype,
+                        "result": "skipped",
+                        "reason": "rich-text annotation bodies are unsupported",
                     })
                     continue
                 oc_type, _oc_value = document.xref_get_key(annotation.xref, "OC")
@@ -713,6 +732,9 @@ def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
 def _document_has_signature(document: pymupdf.Document) -> bool:
     """Detect populated signature fields, including inherited field values."""
     for xref in range(1, document.xref_length()):
+        byte_range_type, _byte_range = document.xref_get_key(xref, "ByteRange")
+        if byte_range_type == "array":
+            return True
         current = xref
         seen: set[int] = set()
         is_signature_field = False
@@ -733,6 +755,17 @@ def _document_has_signature(document: pymupdf.Document) -> bool:
             current = parent_xref or 0
         if is_signature_field and value_type in {"dict", "xref"}:
             return True
+    catalog_xref = document.pdf_catalog()
+    perms_type, perms_value = document.xref_get_key(catalog_xref, "Perms")
+    perms_xref = _xref_id(perms_value) if perms_type == "xref" else None
+    if perms_xref is not None:
+        for key in ("DocMDP", "UR", "UR3", "DocMDPRef"):
+            value_type, value = document.xref_get_key(perms_xref, key)
+            candidate = _xref_id(value) if value_type == "xref" else None
+            if candidate is not None:
+                byte_range_type, _ = document.xref_get_key(candidate, "ByteRange")
+                if byte_range_type == "array":
+                    return True
     return False
 
 

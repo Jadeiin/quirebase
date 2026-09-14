@@ -224,7 +224,6 @@ async def stage_pdf_import_batch(
     ):
         raise ValidationFailure(f"max_bytes must be between 1 and {MAX_SQL_INTEGER} bytes")
     user_id = user.id
-    await db.rollback()
     staged_pdfs: list[StagedPdf] = []
     pending_records: list[dict] = []
     errors: list[dict] = []
@@ -424,7 +423,6 @@ async def lookup_pdf_import_candidate(
     if user is None or not user.active:
         return {"discarded": True, "object_key": pdf["object_key"]}
     effective_settings = await get_effective_settings_model(db)
-    await db.rollback()
     try:
         normalized_doi = detected_doi.casefold()
         record = await lookup_candidate(detected_doi, "doi", effective_settings)
@@ -622,24 +620,28 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> li
     # Destructive annotation preflight performs external I/O and must not hold
     # the ImportBatch root lock.  The final transaction below re-reads the
     # batch and verifies that the staged records did not change meanwhile.
+    user_id = user.id
     observed = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id))
     if observed is None or observed.owner_id != user.id:
         raise ResourceUnavailable("import batch not found")
     preflight_modes: dict[str, str] = {}
     observed_records = json.loads(observed.records)
-    if observed.status == "ready" and observed.file_format == "pdf":
-        annotation_mode = PdfAnnotationMode(
-            observed.pdf_annotation_mode or PdfAnnotationMode.preserve
-        )
+    observed_status = observed.status
+    observed_file_format = observed.file_format
+    observed_annotation_mode = observed.pdf_annotation_mode
+    observed_max_pdf_bytes = observed.max_pdf_bytes
+    await db.rollback()
+    if observed_status == "ready" and observed_file_format == "pdf":
+        annotation_mode = PdfAnnotationMode(observed_annotation_mode or PdfAnnotationMode.preserve)
         if annotation_mode is not PdfAnnotationMode.preserve:
             preflight_modes = await _preflight_pdf_annotation_modes(
                 observed_records,
                 annotation_mode,
-                observed.max_pdf_bytes or get_settings().max_pdf_bytes,
+                observed_max_pdf_bytes or get_settings().max_pdf_bytes,
             )
 
     owner = await db.scalar(
-        select(User).where(User.id == user.id, User.active.is_(True)).with_for_update(read=True)
+        select(User).where(User.id == user_id, User.active.is_(True)).with_for_update(read=True)
     )
     if owner is None:
         raise ResourceUnavailable("user not available")
