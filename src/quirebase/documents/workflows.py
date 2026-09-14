@@ -421,6 +421,8 @@ async def validate_attachment_upload(
     if metadata.size != receipt["size"]:
         raise ValueError("uploaded object size mismatch")
     if graphical_abstract:
+        if metadata.size <= 0:
+            raise ValueError("graphical abstract content does not match its image type")
         response = await get_object_store().get_range(key, 0, min(12, metadata.size))
         header = b"".join([bytes(chunk) async for chunk in response.body])
         if not _is_image_header(header, content_type):

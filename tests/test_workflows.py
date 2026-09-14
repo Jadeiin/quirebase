@@ -54,6 +54,27 @@ def test_dbos_statuses_have_a_stable_user_visible_mapping(raw, visible):
     assert workflows._summary(status).state == visible
 
 
+def test_dbos_unknown_status_is_exposed_as_failed_instead_of_raising():
+    status = SimpleNamespace(
+        workflow_id="workflow-id",
+        name="documents.upload_revision",
+        status="FUTURE_STATUS",
+        queue_name="documents.upload",
+        executor_id=None,
+        created_at=None,
+        updated_at=None,
+        output=None,
+        error=None,
+        attributes={},
+        authenticated_user=None,
+    )
+
+    summary = workflows._summary(status)
+
+    assert summary.state == "failed"
+    assert summary.raw_status == "FUTURE_STATUS"
+
+
 @pytest.mark.anyio
 async def test_transactional_enqueue_records_queue_partition_and_attributes(
     async_db, fake_durable_operations
@@ -209,6 +230,7 @@ async def test_workflow_state_counts_use_database_aggregation():
                 {"group": {"status": "SUCCESS"}, "count": 7},
                 {"group": {"status": "ERROR"}, "count": 2},
                 {"group": {"status": "MAX_RECOVERY_ATTEMPTS_EXCEEDED"}, "count": 1},
+                {"group": {"status": "FUTURE_STATUS"}, "count": 4},
                 {"group": {"status": "ENQUEUED"}, "count": 3},
             ]
 
@@ -217,7 +239,7 @@ async def test_workflow_state_counts_use_database_aggregation():
 
     assert await DBOSAdapter(client).state_counts() == {
         "succeeded": 7,
-        "failed": 3,
+        "failed": 7,
         "pending": 3,
     }
     assert database.options == {
@@ -251,6 +273,39 @@ async def test_active_workflow_query_filters_in_dbos_system_database():
         "load_output": False,
         "application_name": "quirebase",
     }
+
+
+@pytest.mark.anyio
+async def test_failed_workflow_filter_includes_unknown_raw_statuses():
+    from quirebase.core.workflows import DBOSAdapter
+
+    def status(raw: str):
+        return SimpleNamespace(
+            workflow_id=raw,
+            name="documents.upload_revision",
+            status=raw,
+            queue_name="documents.upload",
+            executor_id=None,
+            created_at=None,
+            updated_at=None,
+            output=None,
+            error=None,
+            attributes={},
+            authenticated_user=None,
+        )
+
+    class ListingClient:
+        def __init__(self):
+            self.calls = 0
+
+        async def list_workflows_async(self, **options):
+            assert options["status"] is None
+            self.calls += 1
+            return [status("FUTURE_STATUS"), status("SUCCESS")] if self.calls == 1 else []
+
+    summaries = await DBOSAdapter(ListingClient()).list(status="failed")
+
+    assert [summary.raw_status for summary in summaries] == ["FUTURE_STATUS"]
 
 
 @pytest.mark.anyio

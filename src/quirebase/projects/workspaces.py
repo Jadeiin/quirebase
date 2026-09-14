@@ -62,6 +62,8 @@ async def create_project(
     normalized = name.strip()
     if not normalized:
         raise ValidationFailure("project name is required")
+    if len(normalized) > 240:
+        raise ValidationFailure("project name is too long")
     try:
         parsed_visibility = ProjectVisibility(visibility)
     except ValueError as error:

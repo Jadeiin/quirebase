@@ -239,12 +239,16 @@ def _timestamp(value: int | None) -> datetime | None:
     return datetime.fromtimestamp(value / 1000, UTC) if value is not None else None
 
 
+def _visible_state(raw_status: object) -> WorkflowState:
+    return _VISIBLE_STATE.get(str(raw_status), "failed")
+
+
 def _summary(status: Any) -> WorkflowSummary:
     raw = str(status.status)
     return WorkflowSummary(
         id=status.workflow_id,
         name=status.name,
-        state=_VISIBLE_STATE[raw],
+        state=_visible_state(raw),
         raw_status=raw,
         queue_name=status.queue_name,
         executor_id=status.executor_id,
@@ -329,11 +333,36 @@ class DBOSAdapter:
         self, *, status: str = "", limit: int = 100, offset: int = 0, name: str | None = None
     ) -> tuple[WorkflowSummary, ...]:
         raw_status: str | list[str] | None = None
+        requested: str | None = None
         if status:
             requested = status.strip().casefold()
             matching = [raw for raw, visible in _VISIBLE_STATE.items() if visible == requested]
             if not matching:
                 raise ValueError(f"unknown workflow state: {status}")
+            # Unknown raw statuses are intentionally treated as failed by the
+            # adapter.  DBOS cannot filter those future values by name, so scan
+            # unfiltered pages and apply the visible-state predicate locally.
+            if requested == "failed":
+                matched: list[Any] = []
+                scan_offset = 0
+                scan_limit = max(limit, 100)
+                while len(matched) < offset + limit:
+                    page = await self._client.list_workflows_async(
+                        status=None,
+                        name=name,
+                        limit=scan_limit,
+                        offset=scan_offset,
+                        sort_desc=True,
+                        load_input=False,
+                        application_name="quirebase",
+                    )
+                    if not page:
+                        break
+                    matched.extend(row for row in page if _visible_state(row.status) == requested)
+                    scan_offset += len(page)
+                    if len(page) < scan_limit:
+                        break
+                return tuple(_summary(row) for row in matched[offset : offset + limit])
             raw_status = matching
         rows = await self._client.list_workflows_async(
             status=raw_status,
@@ -375,9 +404,8 @@ class DBOSAdapter:
         counts: dict[WorkflowState, int] = {}
         for row in rows:
             raw_status = row["group"].get("status")
-            state = _VISIBLE_STATE.get(raw_status or "")
-            if state is not None:
-                counts[state] = counts.get(state, 0) + int(row["count"] or 0)
+            state = _visible_state(raw_status or "")
+            counts[state] = counts.get(state, 0) + int(row["count"] or 0)
         return counts
 
 

@@ -14,7 +14,7 @@ from sqlalchemy import delete, select, update
 
 from quirebase.access.items import require_editable_item, require_editable_item_for_mutation
 from quirebase.audit import record_event
-from quirebase.core.errors import ResourceUnavailable, VersionConflict
+from quirebase.core.errors import ResourceUnavailable, ValidationFailure, VersionConflict
 from quirebase.documents.pdf import first_doi_from_text
 from quirebase.library.authors import parse_author_name, set_item_authors_from_string
 from quirebase.library.providers import candidate_record_values, lookup_candidate
@@ -45,6 +45,20 @@ STOP_WORDS = {
     "from",
 }
 
+_BOUNDED_METADATA_FIELDS = {
+    "publication_date": 32,
+    "volume": 100,
+    "issue": 100,
+    "pages": 100,
+    "place_published": 255,
+}
+
+
+def _bounded_text(value: str, field: str, limit: int) -> str:
+    if len(value) > limit:
+        raise ValidationFailure(f"{field} is too long")
+    return value
+
 
 def clean_identifier_value(provider: str, value: str) -> str:
     cleaned = value.strip()
@@ -71,6 +85,18 @@ async def _set_item_identifiers_for_item(
 ) -> list[ItemIdentifier]:
     item_id = item.id
 
+    normalized_pairs: list[tuple[str, str]] = []
+    for provider, val in id_pairs:
+        prov = provider.strip().lower()
+        cleaned_val = clean_identifier_value(prov, val)
+        if not prov or not cleaned_val:
+            continue
+        if len(prov) > 40:
+            raise ValidationFailure("identifier provider is too long")
+        if len(cleaned_val) > 500:
+            raise ValidationFailure("identifier value is too long")
+        normalized_pairs.append((prov, cleaned_val))
+
     await db.execute(delete(ItemIdentifier).where(ItemIdentifier.item_id == item_id))
     await db.flush()
 
@@ -78,11 +104,7 @@ async def _set_item_identifiers_for_item(
     idents_dict: dict[str, str] = {}
     doi_value: str | None = None
 
-    for provider, val in id_pairs:
-        prov = provider.strip().lower()
-        cleaned_val = clean_identifier_value(prov, val)
-        if not prov or not cleaned_val:
-            continue
+    for prov, cleaned_val in normalized_pairs:
         if prov == "doi":
             # DOI is canonical on Item; it is not an upstream identifier row.
             doi_value = cleaned_val
@@ -207,15 +229,17 @@ async def apply_metadata_record(
     for field, (record_field, transform) in scalar_fields.items():
         value = rec.get(record_field)
         if value and (cleaned_value := transform(value)):
+            if (limit := _BOUNDED_METADATA_FIELDS.get(field)) is not None:
+                cleaned_value = _bounded_text(str(cleaned_value), field, limit)
             setattr(item, field, cleaned_value)
 
     if rec.get("reference_type") and (ref_type := normalize_reference_type(rec["reference_type"])):
-        item.reference_type = ref_type
+        item.reference_type = _bounded_text(ref_type, "reference type", 40)
         bib_type = rec.get("bibtex_type") or REFERENCE_TYPE_TO_BIBTEX.get(ref_type, ref_type)
         if bib_type:
-            item.bibtex_type = str(bib_type).strip().lower()
+            item.bibtex_type = _bounded_text(str(bib_type).strip().lower(), "BibTeX type", 40)
     elif rec.get("bibtex_type"):
-        item.bibtex_type = str(rec["bibtex_type"]).strip().lower()
+        item.bibtex_type = _bounded_text(str(rec["bibtex_type"]).strip().lower(), "BibTeX type", 40)
 
     for role, raw in (("author", rec.get("authors")), ("editor", rec.get("editors"))):
         if raw:
@@ -256,7 +280,8 @@ async def apply_metadata_record(
                 item.custom_fields = json.dumps(parsed_custom_fields, ensure_ascii=False)
 
     if not item.bibtex_id:
-        item.bibtex_id = str(rec.get("bibtex_id") or "").strip() or generate_bibtex_key(item)
+        candidate_key = str(rec.get("bibtex_id") or "").strip() or generate_bibtex_key(item)
+        item.bibtex_id = _bounded_text(candidate_key, "BibTeX key", 255)
 
     identifiers = (
         {ident.provider: ident.value for ident in await get_item_identifiers(db, item.id)}

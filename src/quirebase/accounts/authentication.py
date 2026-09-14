@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from quirebase.accounts.invitations import InvitationConflict
 from quirebase.accounts.sessions import create_login_session
@@ -101,7 +102,7 @@ async def logout(db: AsyncSession, user: User, login_session: LoginSession) -> N
 
 async def accept_invitation(db: AsyncSession, token: str, password: str) -> User:
     invitation = await db.scalar(
-        select(Invitation).where(Invitation.token_hash == token_hash(token))
+        select(Invitation).where(Invitation.token_hash == token_hash(token)).with_for_update()
     )
     if (
         invitation is None
@@ -119,9 +120,13 @@ async def accept_invitation(db: AsyncSession, token: str, password: str) -> User
     user = User(username=invitation.username, password_hash=encoded, role=invitation.role)
     db.add(user)
     invitation.accepted_at = datetime.now(UTC)
-    await db.flush()
-    record_event(db, user.id, "invitation.accept", "user", user.id)
-    await db.commit()
+    try:
+        await db.flush()
+        record_event(db, user.id, "invitation.accept", "user", user.id)
+        await db.commit()
+    except IntegrityError as error:
+        await db.rollback()
+        raise InvitationConflict("username already exists") from error
     return user
 
 

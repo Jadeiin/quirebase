@@ -39,7 +39,7 @@ async def search_library(
 ) -> tuple[list[Item], int, list[Tag], list[str]]:
     page = max(page, 1)
     item_query = visible_items_query(user)
-    matching_ids = await search_index(db).search(db, q) if q.strip() else None
+    matching_ids = await search_index(db).matching_item_ids(db, q) if q.strip() else None
     if matching_ids is not None:
         item_query = item_query.where(Item.id.in_(matching_ids))
     if tag:
@@ -88,6 +88,7 @@ async def search_library(
             visible_items_query(user)
             .with_only_columns(Item.publication_date)
             .where(Item.publication_date.is_not(None))
+            .distinct()
         )
     ).all()
     years = sorted({value[:4] for value in dates if value and value[:4].isdigit()}, reverse=True)

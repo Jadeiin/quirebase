@@ -155,27 +155,37 @@ def _optional_text(value: str | None) -> str | None:
     return value.strip() or None if value else None
 
 
+def _bounded_optional_text(value: str | None, field: str, limit: int) -> str | None:
+    normalized = _optional_text(value)
+    if normalized is not None and len(normalized) > limit:
+        raise ValidationFailure(f"{field} is too long")
+    return normalized
+
+
 def _bibliographic_values(metadata: ItemMetadata) -> dict[str, object]:
     title = metadata.title.strip()
     if not title:
         raise ValidationFailure("title is required")
+    reference_type = normalize_reference_type(metadata.reference_type or "")
     return {
         "title": title,
         "abstract": _optional_text(metadata.abstract),
         "keywords": "; ".join(value.strip() for value in metadata.keywords if value.strip())
         or None,
-        "publication_date": _optional_text(metadata.publication_date),
+        "publication_date": _bounded_optional_text(
+            metadata.publication_date, "publication date", 32
+        ),
         "publication_title": _optional_text(metadata.publication_title),
-        "reference_type": normalize_reference_type(metadata.reference_type or ""),
-        "volume": _optional_text(metadata.volume),
-        "issue": _optional_text(metadata.issue),
-        "pages": _optional_text(metadata.pages),
+        "reference_type": _bounded_optional_text(reference_type, "reference type", 40),
+        "volume": _bounded_optional_text(metadata.volume, "volume", 100),
+        "issue": _bounded_optional_text(metadata.issue, "issue", 100),
+        "pages": _bounded_optional_text(metadata.pages, "pages", 100),
         "affiliation": _optional_text(metadata.affiliation),
         "publisher": _optional_text(metadata.publisher),
-        "place_published": _optional_text(metadata.place_published),
+        "place_published": _bounded_optional_text(metadata.place_published, "place published", 255),
         "journal_abbreviation": _optional_text(metadata.journal_abbreviation),
-        "bibtex_id": _optional_text(metadata.bibtex_key),
-        "bibtex_type": _optional_text(metadata.bibtex_type),
+        "bibtex_id": _bounded_optional_text(metadata.bibtex_key, "BibTeX key", 255),
+        "bibtex_type": _bounded_optional_text(metadata.bibtex_type, "BibTeX type", 40),
         "urls": "\n".join(value.strip() for value in metadata.urls if value.strip()) or None,
     }
 
@@ -205,6 +215,8 @@ def _contributor_payload(contributors: tuple[Contributor, ...], *, editor: bool)
         if editor and contributor.is_corresponding:
             raise ValidationFailure("editors cannot be corresponding authors")
         identity = normalize_author_identity(last_name, first_name)
+        if len(last_name) > 120 or (first_name is not None and len(first_name) > 120):
+            raise ValidationFailure("contributor name is too long")
         if identity in seen:
             raise ValidationFailure("contributors must be unique within a role")
         seen.add(identity)

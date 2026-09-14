@@ -17,6 +17,7 @@ from sqlalchemy import select
 from quirebase.core.errors import ResourceNotFound, ValidationFailure, VersionConflict
 from quirebase.library import UpstreamServiceError
 from quirebase.library.identifiers import (
+    apply_metadata_record,
     generate_bibtex_key,
     get_item_identifiers,
     rescan_pdf_doi,
@@ -69,6 +70,24 @@ def candidate(identifier: Identifier, values: dict) -> CandidateRecord:
         identifiers=identifiers,
         **fields,
     )
+
+
+@pytest.mark.anyio
+async def test_apply_metadata_record_rejects_overlong_reference_type(async_db):
+    user = User(username="reference-type-owner", password_hash="hash")
+    async_db.add(user)
+    await async_db.flush()
+    item = Item(title="Reference type", created_by=user.id)
+    async_db.add(item)
+    await async_db.flush()
+
+    with pytest.raises(ValidationFailure, match="reference type is too long"):
+        await apply_metadata_record(
+            async_db,
+            user,
+            item,
+            {"reference_type": "x" * 41},
+        )
 
 
 @pytest.mark.anyio

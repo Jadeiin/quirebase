@@ -13,11 +13,11 @@ class ItemUpdateRequest(BaseModel):
 
 
 class NameRequest(BaseModel):
-    name: str
+    name: str = Field(max_length=240)
 
 
 class ProjectCreateRequest(BaseModel):
-    name: str
+    name: str = Field(max_length=240)
     visibility: Literal["private", "public"] = "private"
     description: str = Field(default="", max_length=2000)
 

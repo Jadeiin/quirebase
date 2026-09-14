@@ -447,15 +447,6 @@ async def store_pdf_revision(
     )
 
 
-def _is_image_header(header: bytes, content_type: str) -> bool:
-    return {
-        "image/gif": header.startswith((b"GIF87a", b"GIF89a")),
-        "image/jpeg": header.startswith(b"\xff\xd8\xff"),
-        "image/png": header.startswith(b"\x89PNG\r\n\x1a\n"),
-        "image/webp": header.startswith(b"RIFF") and header[8:12] == b"WEBP",
-    }.get(content_type, False)
-
-
 async def create_attachment(
     db: AsyncSession,
     user: User,

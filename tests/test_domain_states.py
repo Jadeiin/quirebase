@@ -522,6 +522,16 @@ async def test_project_membership_preserves_an_owner_and_returns_domain_roles(as
 
 
 @pytest.mark.anyio
+async def test_create_project_rejects_names_longer_than_storage_limit(async_db):
+    owner = User(username="project-length-owner", password_hash="unused")
+    async_db.add(owner)
+    await async_db.commit()
+
+    with pytest.raises(ValidationFailure, match="project name is too long"):
+        await create_project(async_db, owner, "x" * 241)
+
+
+@pytest.mark.anyio
 async def test_project_ownership_transfer_rejects_inactive_target(async_db):
     db = async_db
     owner = User(username="active-transfer-owner", password_hash="unused")

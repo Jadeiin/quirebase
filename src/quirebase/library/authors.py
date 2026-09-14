@@ -55,6 +55,8 @@ async def find_or_create_author(
     if not last:
         raise ValidationFailure("author last name is required")
     first = " ".join(first_name.split()) if first_name else None
+    if len(last) > 120 or (first is not None and len(first) > 120):
+        raise ValidationFailure("author name is too long")
     identity_key = normalize_author_identity(last, first)
 
     stmt = select(Author).where(Author.identity_key == identity_key)
@@ -86,6 +88,8 @@ async def set_item_authors(
         first = str(raw_first).strip() or None if raw_first else None
         if not last:
             continue
+        if len(last) > 120 or (first is not None and len(first) > 120):
+            raise ValidationFailure("author name is too long")
         identity = normalize_author_identity(last, first)
         if identity in identities:
             raise ValidationFailure("contributors must be unique within a role")

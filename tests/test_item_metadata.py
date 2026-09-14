@@ -60,6 +60,48 @@ async def test_regenerate_bibtex_key_is_a_narrow_atomic_item_mutation(async_db):
 
 
 @pytest.mark.anyio
+async def test_item_metadata_rejects_values_longer_than_bounded_columns(async_db):
+    db = async_db
+    owner = User(username="bounded-item-owner", password_hash="unused")
+    db.add(owner)
+    await db.commit()
+
+    with pytest.raises(ValidationFailure, match="publication date is too long"):
+        await create_item(
+            db,
+            owner,
+            ItemMetadata(title="Bounded", publication_date="x" * 33),
+        )
+    await db.refresh(owner)
+
+    with pytest.raises(ValidationFailure, match="reference type is too long"):
+        await create_item(
+            db,
+            owner,
+            ItemMetadata(title="Bounded", reference_type="x" * 41),
+        )
+    await db.refresh(owner)
+
+    with pytest.raises(ValidationFailure, match="contributor name is too long"):
+        await create_item(
+            db,
+            owner,
+            ItemMetadata(title="Bounded", authors=(Contributor("x" * 121),)),
+        )
+    await db.refresh(owner)
+
+    with pytest.raises(ValidationFailure, match="identifier value is too long"):
+        await create_item(
+            db,
+            owner,
+            ItemMetadata(
+                title="Bounded",
+                identifiers=(ExternalIdentifier("pmid", "x" * 501),),
+            ),
+        )
+
+
+@pytest.mark.anyio
 async def test_revise_item_metadata_makes_the_dedicated_doi_authoritative(async_db):
     db = async_db
     owner = User(username="identifier-owner", password_hash="unused")
