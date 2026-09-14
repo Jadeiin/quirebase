@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 
 import pymupdf
 import pytest
+from sqlalchemy import select
 
 from quirebase.core import workflows
 from quirebase.core.storage import ObjectSuffix, get_object_store, object_key
@@ -15,11 +16,15 @@ from quirebase.documents import enqueue_object_cleanup
 from quirebase.documents import workflows as document_workflows
 from quirebase.library import workflows as library_workflows
 from quirebase.models import (
+    AnnotationKind,
+    AuditEvent,
     ExportArtifact,
     FileRevision,
+    FileRevisionProcessingState,
     ImportBatch,
     Item,
     ObjectIntegrityScan,
+    PdfAnnotation,
     User,
 )
 from quirebase.operations import health
@@ -378,6 +383,102 @@ async def test_derived_pdf_inspection_uses_stripped_object_for_revision(
             assert list(original[0].annots())
     async with get_object_store().materialize(inspected["thumbnail_object_key"]) as thumbnail:
         assert thumbnail.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+@pytest.mark.anyio
+async def test_commit_imported_revision_persists_annotations_and_source_cleanup(
+    async_db, fake_durable_operations, tmp_path
+):
+    user = User(username="annotation-import-owner", password_hash="unused")
+    async_db.add(user)
+    await async_db.flush()
+    item = Item(title="Annotated import", created_by=user.id)
+    async_db.add(item)
+    await async_db.flush()
+
+    source_path = tmp_path / "annotated.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        page.add_text_annot((250, 40), "Imported note").update()
+        document.save(source_path)
+    stored = await get_object_store().put_object(
+        uuid4(),
+        ObjectSuffix.PDF,
+        source_path.read_bytes(),
+        max_bytes=100_000,
+        required_prefix=b"%PDF-",
+    )
+    revision = FileRevision(
+        item_id=item.id,
+        object_key=stored.key,
+        size=stored.size,
+        original_name="annotated.pdf",
+        processing_state=FileRevisionProcessingState.pending,
+        created_by=user.id,
+    )
+    async_db.add(revision)
+    await async_db.commit()
+
+    derived_object_id = str(uuid4())
+    inspected = await document_workflows._inspect_pdf_object(
+        stored.key,
+        str(uuid4()),
+        expected_size=stored.size,
+        annotation_mode="import",
+        derived_object_id=derived_object_id,
+        max_pdf_bytes=100_000,
+    )
+    assert len(inspected["imported_annotations"]) == 1
+    # Force the payload validation fallback so diagnostics are persisted too.
+    inspected["imported_annotations"].append({
+        **inspected["imported_annotations"][0],
+        "page_index": 999,
+    })
+
+    result = await document_workflows.commit_imported_revision(
+        {"revision_id": revision.id, **inspected}, owner_id=user.id
+    )
+
+    await async_db.refresh(revision)
+    assert revision.object_key == object_key(UUID(derived_object_id), ObjectSuffix.PDF)
+    assert revision.processing_state is FileRevisionProcessingState.ready
+    assert result["revision_id"] == revision.id
+
+    annotations = list(
+        await async_db.scalars(
+            select(PdfAnnotation).where(PdfAnnotation.file_revision_id == revision.id)
+        )
+    )
+    assert len(annotations) == 1
+    assert annotations[0].kind is AnnotationKind.note
+    assert annotations[0].page_index == 0
+    assert annotations[0].author_id == user.id
+    assert annotations[0].body == "Imported note"
+
+    diagnostics = json.loads(revision.annotation_diagnostics or "[]")
+    assert [entry["result"] for entry in diagnostics] == ["skipped"]
+    assert diagnostics[0]["page"] == 1000
+    assert result["annotation_diagnostics"] == diagnostics
+
+    event = await async_db.scalar(
+        select(AuditEvent).where(
+            AuditEvent.action == "pdf.import.annotations",
+            AuditEvent.target_id == revision.id,
+        )
+    )
+    assert event is not None
+    detail = json.loads(event.detail or "{}")
+    assert detail["imported_count"] == 1
+    assert detail["skipped_count"] == 1
+
+    cleanup = [
+        entry
+        for entry in fake_durable_operations.enqueues
+        if entry["workflow_name"] == document_workflows.OBJECT_CLEANUP_WORKFLOW
+    ]
+    assert len(cleanup) == 1
+    assert cleanup[0]["args"] == ([stored.key],)
+    assert cleanup[0]["attributes"]["revision_id"] == revision.id
 
 
 @pytest.mark.anyio
