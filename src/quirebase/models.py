@@ -105,7 +105,9 @@ class PdfAnnotationMode(StrEnum):
     """How native PDF annotations are handled during PDF Import."""
 
     preserve = "preserve"
-    strip_ = "strip"
+    # ``str`` already defines a method named ``strip``; the ignore is limited
+    # to the type-checker so callers can still use the natural enum member.
+    strip = "strip"  # type: ignore[assignment]
     import_ = "import"
 
 

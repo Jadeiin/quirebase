@@ -1216,6 +1216,11 @@ async def test_pdf_annotation_preflight_reports_missing_staged_object(monkeypatc
         )
 
 
+def test_pdf_annotation_mode_exposes_programmatic_strip_member():
+    assert isinstance(PdfAnnotationMode.strip, PdfAnnotationMode)
+    assert PdfAnnotationMode.strip.value == "strip"
+
+
 @pytest.mark.anyio
 async def test_destructive_pdf_preflight_allows_concurrent_discard(
     async_db, async_session_factory, monkeypatch
@@ -1239,7 +1244,7 @@ async def test_destructive_pdf_preflight_allows_concurrent_discard(
         errors="[]",
         status="ready",
         workflow_id="prepare-pdf-import:completed",
-        pdf_annotation_mode=PdfAnnotationMode.strip_,
+        pdf_annotation_mode=PdfAnnotationMode.strip,
         max_pdf_bytes=100,
     )
     async_db.add(batch)
