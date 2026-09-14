@@ -4,12 +4,13 @@ import asyncio
 import json
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
-from uuid import uuid4
+from uuid import UUID, uuid4
 
+import pymupdf
 import pytest
 
 from quirebase.core import workflows
-from quirebase.core.storage import ObjectSuffix, get_object_store
+from quirebase.core.storage import ObjectSuffix, get_object_store, object_key
 from quirebase.documents import enqueue_object_cleanup
 from quirebase.documents import workflows as document_workflows
 from quirebase.library import workflows as library_workflows
@@ -325,6 +326,58 @@ async def test_imported_revision_inspection_enqueues_derived_state_sync(
     await workflow_body(revision.id, user.id, stored.key, str(uuid4()))
 
     assert enqueued == [(revision.id, item.id, user.id)]
+
+
+@pytest.mark.parametrize("annotation_mode", ["strip", "import"])
+@pytest.mark.anyio
+async def test_derived_pdf_inspection_uses_stripped_object_for_revision(
+    async_session_factory, tmp_path, annotation_mode
+):
+    source_path = tmp_path / "annotated.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        page.add_text_annot((250, 40), "Source annotation").update()
+        document.save(source_path)
+    stored = await get_object_store().put_object(
+        uuid4(),
+        ObjectSuffix.PDF,
+        source_path.read_bytes(),
+        max_bytes=100_000,
+        required_prefix=b"%PDF-",
+    )
+    derived_object_id = str(uuid4())
+    thumbnail_object_id = str(uuid4())
+
+    inspected = await document_workflows._inspect_pdf_object(
+        stored.key,
+        thumbnail_object_id,
+        expected_size=stored.size,
+        annotation_mode=annotation_mode,
+        derived_object_id=derived_object_id,
+        max_pdf_bytes=100_000,
+    )
+
+    derived_key = object_key(UUID(derived_object_id), ObjectSuffix.PDF)
+    assert inspected["source_object_key"] == stored.key
+    assert inspected["object_key"] == derived_key
+    assert inspected["pdf_annotation_mode"] == annotation_mode
+    assert inspected["page_count"] == 1
+    assert inspected["thumbnail_object_key"] == object_key(
+        UUID(thumbnail_object_id), ObjectSuffix.PNG
+    )
+    if annotation_mode == "import":
+        assert [item["kind"] for item in inspected["imported_annotations"]] == ["note"]
+    else:
+        assert inspected["imported_annotations"] == []
+
+    async with get_object_store().materialize(derived_key) as derived_path:
+        with pymupdf.open(derived_path) as derived:
+            assert list(derived[0].annots() or ()) == []
+    async with get_object_store().materialize(stored.key) as source:
+        with pymupdf.open(source) as original:
+            assert list(original[0].annots())
+    async with get_object_store().materialize(inspected["thumbnail_object_key"]) as thumbnail:
+        assert thumbnail.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
 
 
 @pytest.mark.anyio

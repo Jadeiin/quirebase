@@ -1170,18 +1170,23 @@ async def test_commit_pdf_import_batch_rechecks_doi_after_stale_preview(
         assert len(batches) == 2
         for batch in batches:
             await finish_pdf_import_preview(db, async_session_factory, batch, monkeypatch)
-        batches = list(
-            await db.scalars(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
-        )
+        # Confirmation rolls back the shared session, expiring previously loaded rows.
+        batch_ids = [
+            batch.id
+            for batch in await db.scalars(
+                select(ImportBatch).where(ImportBatch.file_format == "pdf")
+            )
+        ]
+        assert len(batch_ids) == 2
         first = await client.post(
-            f"/bibliography/import/{batches[0].id}",
+            f"/bibliography/import/{batch_ids[0]}",
             data={"csrf_token": "test-csrf"},
             follow_redirects=False,
         )
         assert first.status_code == 303
 
         stale = await client.post(
-            f"/bibliography/import/{batches[1].id}",
+            f"/bibliography/import/{batch_ids[1]}",
             data={"csrf_token": "test-csrf"},
             follow_redirects=False,
         )
@@ -1192,7 +1197,7 @@ async def test_commit_pdf_import_batch_rechecks_doi_after_stale_preview(
             )
             == 1
         )
-        assert await db.get(ImportBatch, batches[1].id) is not None
+        assert await db.get(ImportBatch, batch_ids[1]) is not None
     finally:
         await client.aclose()
         get_settings.cache_clear()
@@ -1228,6 +1233,7 @@ async def test_destructive_pdf_preflight_allows_concurrent_discard(
     user = User(username="preflight-claim-owner", password_hash="unused")
     async_db.add(user)
     await async_db.flush()
+    user_id = user.id
     batch = ImportBatch(
         owner_id=user.id,
         file_format="pdf",
@@ -1253,7 +1259,7 @@ async def test_destructive_pdf_preflight_allows_concurrent_discard(
 
     async def preflight(_records, _annotation_mode, _max_pdf_bytes):
         async with async_session_factory() as concurrent_db:
-            concurrent_user = await concurrent_db.get(User, user.id)
+            concurrent_user = await concurrent_db.get(User, user_id)
             assert concurrent_user is not None
             await discard_import_batch(concurrent_db, concurrent_user, batch_id)
         raise RuntimeError("stop after checking the claim")

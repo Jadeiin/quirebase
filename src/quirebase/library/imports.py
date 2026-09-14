@@ -224,6 +224,9 @@ async def stage_pdf_import_batch(
     ):
         raise ValidationFailure(f"max_bytes must be between 1 and {MAX_SQL_INTEGER} bytes")
     user_id = user.id
+    # The limit is a short settings read; release its transaction before
+    # streaming uploads to the object store.
+    await db.rollback()
     staged_pdfs: list[StagedPdf] = []
     pending_records: list[dict] = []
     errors: list[dict] = []
@@ -423,6 +426,8 @@ async def lookup_pdf_import_candidate(
     if user is None or not user.active:
         return {"discarded": True, "object_key": pdf["object_key"]}
     effective_settings = await get_effective_settings_model(db)
+    # Settings are a short read; release its transaction before provider I/O.
+    await db.rollback()
     try:
         normalized_doi = detected_doi.casefold()
         record = await lookup_candidate(detected_doi, "doi", effective_settings)
@@ -620,6 +625,8 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> li
     # Destructive annotation preflight performs external I/O and must not hold
     # the ImportBatch root lock.  The final transaction below re-reads the
     # batch and verifies that the staged records did not change meanwhile.
+    # Releasing the read expires ORM instances on the caller's session, so
+    # callers must reload anything they still need after this returns.
     user_id = user.id
     observed = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id))
     if observed is None or observed.owner_id != user.id:
@@ -702,7 +709,6 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> li
                 raise BatchConflict("another PDF in this batch has the same DOI")
             if normalized_doi:
                 candidate_dois.add(normalized_doi)
-    cleanup_source_keys: set[str] = set()
     committed_item_ids: list[str] = []
     for record in records:
         try:
@@ -718,8 +724,6 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> li
                 if pdf is not None
                 else PdfAnnotationMode.preserve
             )
-            if pdf is not None and effective_annotation_mode is not PdfAnnotationMode.preserve:
-                cleanup_source_keys.add(pdf["object_key"])
             item = await _create_item_from_record(db, owner, candidate)
             if pdf is not None:
                 await attach_staged_pdf(

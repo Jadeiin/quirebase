@@ -452,23 +452,9 @@ def _canonical_text_markup_segments(
     return enclosing, segment_rects
 
 
-def parse_native_annotations(path: Path) -> list[dict]:
-    """Parse supported native PDF markup into transport-neutral Annotation values.
-
-    Unsupported objects are deliberately skipped. Callers can still inspect the
-    source with :func:`native_annotation_diagnostics` when they need diagnostics.
-    """
-    parsed, _diagnostics = _parse_native_annotations(path)
-    return parsed
-
-
 def parse_pdf_annotations(path: Path) -> tuple[list[dict], list[dict]]:
     """Return supported annotations and non-blocking diagnostics."""
     return _parse_native_annotations(path)
-
-
-def native_annotation_diagnostics(path: Path) -> list[dict]:
-    return _parse_native_annotations(path)[1]
 
 
 def _parse_native_annotations(path: Path) -> tuple[list[dict], list[dict]]:
