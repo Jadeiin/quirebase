@@ -18,5 +18,6 @@ Every migration must upgrade a fresh database on both SQLite and PostgreSQL: CI 
 `native_enum=False` with explicit CHECK constraints, so no PostgreSQL enum support plugin is
 needed or wanted.
 
-Add each schema change as a new revision on top of the existing chain; never replace or edit a
-committed revision.
+Add each schema change as a new revision on top of the existing chain; do not replace or edit a
+committed revision unless there is exceptional necessity, such as repairing a chain that cannot be
+applied to a supported database.

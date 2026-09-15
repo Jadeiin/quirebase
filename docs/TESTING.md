@@ -41,7 +41,7 @@ uv run prek run --all-files
 uv run pytest -q -m "not oa"
 ```
 
-The hooks reject malformed YAML/TOML/JSON, large files, case-conflicting paths, merge markers and private keys; update the uv lock; run strict Ruff checks plus formatting; type-check production modules with mypy; enforce Conventional Commits; and run the fast tests before pushes. This suite is offline and covers schema, permissions, storage, PDF coordinates and annotations, Library Search and Discovery, bibliography interchange, maintenance, migration, security and HTTP behavior. PostgreSQL Library Search runs in CI against PostgreSQL 17 when `QUIREBASE_TEST_POSTGRES_URL` is set.
+The hooks reject malformed YAML/TOML/JSON, large files, case-conflicting paths, merge markers and private keys; update the uv lock; run strict Ruff checks plus formatting; type-check production modules with mypy; enforce Conventional Commits; and run the fast tests before pushes. This suite is offline and covers schema, permissions, storage, PDF coordinates and annotations, Library Search and Discovery, bibliography interchange, maintenance, migration, security and HTTP behavior. PostgreSQL Library Search runs in CI against PostgreSQL 18 when `QUIREBASE_TEST_POSTGRES_URL` is set; the same job applies the full migration chain with `quirebase init-db` and runs `quirebase doctor`.
 
 ## Real open-access PDF suite
 
