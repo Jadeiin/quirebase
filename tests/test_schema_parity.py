@@ -13,6 +13,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import CheckConstraint, UniqueConstraint, create_engine, inspect, text
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import CompileError
 
 import quirebase.models  # ruff: ignore[unused-import]
 from quirebase.core.config import get_settings
@@ -103,13 +104,20 @@ def _metadata_schema(engine: Engine) -> dict[str, dict]:
     return schema
 
 
-def _reflected_schema(inspector: Inspector) -> dict[str, dict]:
+def _type_name(column_type: object, engine: Engine) -> str:
+    try:
+        return str(column_type.compile(dialect=engine.dialect))
+    except CompileError:
+        return str(column_type)
+
+
+def _reflected_schema(inspector: Inspector, engine: Engine) -> dict[str, dict]:
     schema: dict[str, dict] = {}
     for name in inspector.get_table_names():
         schema[name] = {
             "columns": {
                 column["name"]: (
-                    str(column["type"]),
+                    _type_name(column["type"], engine),
                     bool(column["nullable"]),
                     column.get("default") is not None,
                 )
@@ -139,7 +147,7 @@ def _reflected_schema(inspector: Inspector) -> dict[str, dict]:
 
 
 def _assert_schema_matches_metadata(inspector: Inspector, engine: Engine) -> None:
-    reflected = _reflected_schema(inspector)
+    reflected = _reflected_schema(inspector, engine)
     expected = _metadata_schema(engine)
     extras = set(reflected) - set(expected) - ALLOWED_EXTRA_TABLES
     assert not extras, f"database-only tables are not tracked in metadata: {sorted(extras)}"
