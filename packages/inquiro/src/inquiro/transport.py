@@ -90,6 +90,7 @@ class HttpExchange:
 
     async def send(self, request: TransportRequest) -> ExchangeResponse:
         stack = AsyncExitStack()
+        entered = False
         try:
             manager = self._client.stream(
                 "GET",
@@ -98,9 +99,12 @@ class HttpExchange:
                 headers=request.headers,
             )
             response = await stack.enter_async_context(manager)
+            entered = True
         except httpx2.HTTPError as error:
-            await stack.aclose()
             raise ProviderUnavailable("metadata provider request failed") from error
+        finally:
+            if not entered:
+                await stack.aclose()
         return _HttpExchangeResponse(stack, response)
 
     async def aclose(self) -> None:

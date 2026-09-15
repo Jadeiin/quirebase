@@ -56,7 +56,7 @@ jobs:
           version: "0.12.14"
           python-version: "3.12"
       - run: uv sync --extra postgres
-      - run: uv run pytest -q tests/test_postgres_contract.py tests/test_postgres_concurrency.py
+      - run: uv run pytest -q tests/test_postgres_contract.py tests/test_postgres_concurrency.py tests/test_schema_parity.py
       - name: Verify migrations and durable workflows against PostgreSQL
         env:
           QUIREBASE_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/quirebase_migrations
