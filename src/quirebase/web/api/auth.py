@@ -25,7 +25,7 @@ async def http_api_invocation(request: Request) -> AsyncIterator[None]:  # ruff:
     route = request.scope.get("route")
     operation = getattr(route, "name", "unknown")
     invocation = programmatic_invocation("http", operation)
-    invocation.__enter__()
+    invocation.__enter__()  # ruff: ignore[unnecessary-dunder-call]
     try:
         yield
     finally:
