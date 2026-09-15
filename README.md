@@ -10,7 +10,7 @@ Quirebase is an AGPL-3.0-only, self-hosted collaborative research library.
 
 ## Development
 
-Requirements: Python 3.12+, `uv`, and Bun 1.3+ (or Node.js 22+ with npm) for building the bundled PDF.js assets.
+Requirements: Python 3.12+, `uv` 0.12.14+, and Bun 1.4+ (or Node.js 22+ with npm) for building the bundled PDF.js assets.
 
 For a quick local test, run:
 

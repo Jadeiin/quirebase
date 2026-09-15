@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # Bundled UI assets (EmbedPDF/PDFium, Alpine.js, zxcvbn) for the wheel's static directory.
-FROM oven/bun:1.3.5 AS assets
+FROM oven/bun:1.4.2 AS assets
 WORKDIR /build
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
@@ -12,7 +12,7 @@ RUN bun run build
 # The project environment lives at the same path in both stages so the copied
 # console-script shebangs stay valid.
 FROM python:3.14-slim AS builder
-COPY --from=ghcr.io/astral-sh/uv:0.12.13 /uv /bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.12.14 /uv /bin/uv
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_PROJECT_ENVIRONMENT=/opt/venv \
