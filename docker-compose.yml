@@ -24,7 +24,7 @@ x-quirebase: &quirebase
     # The bundled database URL is only a default: set QUIREBASE_DATABASE_URL in
     # .env.docker (or the environment) to point at another database or to supply a
     # password that needs percent-encoding for URL-reserved characters.
-    QUIREBASE_DATABASE_URL: ${QUIREBASE_DATABASE_URL:-postgresql+psycopg://quirebase:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.docker}@postgres:5432/quirebase}
+    QUIREBASE_DATABASE_URL: ${QUIREBASE_DATABASE_URL:-postgresql://quirebase:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.docker}@postgres:5432/quirebase}
     QUIREBASE_DATA_DIR: /data
     QUIREBASE_ALLOWED_HOSTS: ${QUIREBASE_ALLOWED_HOSTS:-localhost,127.0.0.1}
     QUIREBASE_SECURE_COOKIES: ${QUIREBASE_SECURE_COOKIES:-false}

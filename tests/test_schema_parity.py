@@ -17,7 +17,7 @@ from sqlalchemy.exc import CompileError
 
 import quirebase.models  # ruff: ignore[unused-import]
 from quirebase.core.config import get_settings
-from quirebase.core.database import Base
+from quirebase.core.database import Base, async_database_url
 
 if TYPE_CHECKING:
     from sqlalchemy import Engine, Inspector
@@ -178,7 +178,7 @@ def test_sqlite_schema_matches_metadata(tmp_path: Path):
     not os.getenv("QUIREBASE_TEST_POSTGRES_URL"), reason="PostgreSQL is not configured"
 )
 def test_postgresql_schema_matches_metadata():
-    url = make_url(os.environ["QUIREBASE_TEST_POSTGRES_URL"])
+    url = make_url(async_database_url(os.environ["QUIREBASE_TEST_POSTGRES_URL"]))
     name = f"quirebase_parity_{uuid.uuid4().hex[:8]}"
     admin_engine = create_engine(
         url.set(database="postgres").render_as_string(hide_password=False),
@@ -187,8 +187,11 @@ def test_postgresql_schema_matches_metadata():
     with admin_engine.connect() as connection:
         connection.execute(text(f'CREATE DATABASE "{name}"'))
     parity_url = url.set(database=name).render_as_string(hide_password=False)
+    libpq_parity_url = url.set(database=name, drivername="postgresql").render_as_string(
+        hide_password=False
+    )
     try:
-        _upgrade_database(parity_url)
+        _upgrade_database(libpq_parity_url)
         engine = create_engine(parity_url)
         try:
             _assert_schema_matches_metadata(inspect(engine), engine)
