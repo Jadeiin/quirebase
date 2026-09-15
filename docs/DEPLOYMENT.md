@@ -14,7 +14,7 @@ SQLite is intended for a single-host installation with one worker. The applicati
 `asyncio` and `aiosqlite` optional groups and derives `sqlite+aiosqlite` from the familiar
 `sqlite:///...` setting. PostgreSQL is recommended for teams and supports concurrent workers
 through `FOR UPDATE SKIP LOCKED`; the `postgres` extra installs SQLAlchemy's
-`postgresql-psycopgbinary` and `postgresql-asyncpg` groups. `QUIREBASE_DATABASE_URL` takes a
+`postgresql-psycopgbinary` group. `QUIREBASE_DATABASE_URL` takes a
 libpq URL
 (`postgresql://...` or the `postgres://` alias) that the application opens with psycopg's native
 async implementation and passes to `pg_dump` and `pg_restore` unchanged. SQLAlchemy driver

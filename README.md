@@ -41,7 +41,7 @@ Run `uv run quirebase worker` in a second process. Configuration uses `QUIREBASE
 
 The default SQLite setup installs SQLAlchemy's `asyncio` and `aiosqlite` extras, so database
 access never uses a synchronous Session bridge. For PostgreSQL install the `postgres` extra; it selects SQLAlchemy's
-`postgresql-psycopgbinary` and `postgresql-asyncpg` groups. `QUIREBASE_DATABASE_URL` takes a libpq
+`postgresql-psycopgbinary` group. `QUIREBASE_DATABASE_URL` takes a libpq
 URL that the application opens with psycopg's native async implementation and passes to `pg_dump`
 and `pg_restore` unchanged, for example:
 

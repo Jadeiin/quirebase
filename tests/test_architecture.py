@@ -399,9 +399,7 @@ def test_persistence_dependencies_use_sqlalchemy_async_optional_groups():
     optional_dependencies = metadata["project"]["optional-dependencies"]
 
     assert "sqlalchemy[asyncio,aiosqlite]>=2.0,<3" in dependencies
-    assert optional_dependencies["postgres"] == [
-        "sqlalchemy[postgresql-psycopgbinary,postgresql-asyncpg]>=2.0,<3"
-    ]
+    assert optional_dependencies["postgres"] == ["sqlalchemy[postgresql-psycopgbinary]>=2.0,<3"]
     independently_declared = {
         dependency.split("[", 1)[0].split("<", 1)[0].split(">", 1)[0].split("=", 1)[0]
         for dependency in dependencies
