@@ -51,6 +51,13 @@ jobs:
           python-version: "3.12"
       - run: uv sync --extra postgres
       - run: uv run pytest -q tests/test_postgres_contract.py tests/test_postgres_concurrency.py
+      - name: Verify migrations and durable workflows against PostgreSQL
+        env:
+          QUIREBASE_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/quirebase_migrations
+        run: |
+          uv run python -c "import psycopg; psycopg.connect('postgresql://postgres:postgres@localhost:5432/postgres', autocommit=True).execute('CREATE DATABASE quirebase_migrations')"
+          uv run quirebase init-db
+          uv run quirebase doctor
   s3-object-store:
     runs-on: ubuntu-latest
     env:

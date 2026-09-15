@@ -41,7 +41,9 @@ services:
       # targets its parent directory.
       - postgres-data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U quirebase -d quirebase"]
+      # Force TCP so the check cannot pass against the entrypoint's initialization
+      # server, which only listens on the unix socket.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U quirebase -d quirebase"]
       interval: 5s
       timeout: 5s
       retries: 10

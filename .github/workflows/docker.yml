@@ -124,7 +124,10 @@ jobs:
           cp .env.docker.example .env.docker
           printf 'POSTGRES_PASSWORD=smoke\n' >> .env.docker
           docker tag quirebase:smoke ghcr.io/jadeiin/quirebase:latest
-          docker compose --env-file .env.docker up --detach
+          if ! docker compose --env-file .env.docker up --detach; then
+            docker compose --env-file .env.docker logs
+            exit 1
+          fi
           for attempt in {1..60}; do
             if curl --fail --silent --show-error http://127.0.0.1:9060/healthz; then
               exit 0
