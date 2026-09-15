@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import select
 
 from quirebase.audit import record_event
-from quirebase.core.config import get_settings
+from quirebase.core.config import MAX_SQL_INTEGER, get_settings
 from quirebase.core.errors import ResourceUnavailable, ValidationFailure
 from quirebase.models import SystemSetting, User
 
@@ -93,6 +93,8 @@ async def update_runtime_settings(db: AsyncSession, admin: User, updates: dict[s
                 int_val = int(str_val)
                 if int_val < 1:
                     raise ValidationFailure(f"'{key}' must be positive")
+                if key in {"max_pdf_bytes", "max_attachment_bytes"} and int_val > MAX_SQL_INTEGER:
+                    raise ValidationFailure(f"'{key}' must not exceed {MAX_SQL_INTEGER} bytes")
             except ValueError as error:
                 raise ValidationFailure(f"'{key}' must be a valid integer") from error
         sanitized[key] = str_val

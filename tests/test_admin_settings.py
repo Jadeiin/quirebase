@@ -85,6 +85,31 @@ async def test_update_settings_rejects_unwhitelisted_keys(async_db):
 
 
 @pytest.mark.anyio
+async def test_update_settings_rejects_file_size_above_database_integer(async_db):
+    db = async_db
+    admin = await create_test_admin(db, "admin_set_size_upper_bound")
+    with pytest.raises(ValidationFailure, match="must not exceed"):
+        await update_runtime_settings(db, admin, {"max_pdf_bytes": 2_147_483_648})
+
+
+@pytest.mark.anyio
+async def test_pdf_import_rejects_explicit_file_size_above_database_integer(async_db):
+    db = async_db
+    user = await create_test_member(db, "member_set_explicit_size_upper_bound")
+    from test_library_ui import pdf_bytes
+
+    from quirebase.library.imports import stage_pdf_import_batch
+
+    with pytest.raises(ValidationFailure, match="max_bytes must be between"):
+        await stage_pdf_import_batch(
+            db,
+            user,
+            [(pdf_bytes(), "too-large-limit.pdf")],
+            max_bytes=2_147_483_648,
+        )
+
+
+@pytest.mark.anyio
 async def test_non_admin_cannot_update_settings(async_db):
     db = async_db
     member = await create_test_member(db, "member_set_3")

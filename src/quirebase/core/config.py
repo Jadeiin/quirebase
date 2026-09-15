@@ -7,6 +7,8 @@ from typing import Literal
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+MAX_SQL_INTEGER = 2_147_483_647
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -25,8 +27,8 @@ class Settings(BaseSettings):
     session_cookie: str = "quirebase_session"
     session_days: int = 30
     secure_cookies: bool = False
-    max_pdf_bytes: int = 250 * 1024 * 1024
-    max_attachment_bytes: int = 250 * 1024 * 1024
+    max_pdf_bytes: int = Field(default=250 * 1024 * 1024, ge=1, le=MAX_SQL_INTEGER)
+    max_attachment_bytes: int = Field(default=250 * 1024 * 1024, ge=1, le=MAX_SQL_INTEGER)
     export_ttl_hours: int = 24
     object_orphan_retention_hours: int = Field(default=24, ge=1, le=8760)
     workflow_upload_timeout_seconds: int = Field(default=600, ge=1, le=3600)

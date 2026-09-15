@@ -15,7 +15,7 @@ from sqlalchemy.orm import selectinload
 
 from quirebase.access.items import require_accessible_items, visible_items_query
 from quirebase.audit import record_event
-from quirebase.core.config import Settings, get_settings
+from quirebase.core.config import MAX_SQL_INTEGER, Settings, get_settings
 from quirebase.core.errors import (
     DomainError,
     ResourceNotFound,
@@ -27,7 +27,7 @@ from quirebase.core.errors import (
 from quirebase.core.storage import ObjectSource, get_object_store
 from quirebase.core.workflows import IMPORT_QUEUE, durable_operations
 from quirebase.documents import enqueue_object_cleanup
-from quirebase.documents.pdf import extract_doi
+from quirebase.documents.pdf import extract_doi, validate_pdf_annotation_mode
 from quirebase.documents.revisions import (
     StagedPdf,
     attach_staged_pdf,
@@ -37,7 +37,7 @@ from quirebase.documents.revisions import (
 from quirebase.library.activity import get_accessible_item_identifiers
 from quirebase.library.citations import format_csl_export, format_standard_export
 from quirebase.library.providers import candidate_record_values, lookup_candidate
-from quirebase.models import ImportBatch, Item, ItemAuthor, User
+from quirebase.models import ImportBatch, Item, ItemAuthor, PdfAnnotationMode, User
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
@@ -68,6 +68,21 @@ async def _finish_cleanup_despite_cancellation(task: asyncio.Task[None]) -> None
             return
         except asyncio.CancelledError:
             _consume_current_cancellation()
+
+
+async def _await_thread_despite_cancellation(task: asyncio.Task[bool]) -> bool:
+    """Let a PyMuPDF worker finish before its materialized source is cleaned up."""
+    cancelled = False
+    while True:
+        try:
+            result = await asyncio.shield(task)
+            break
+        except asyncio.CancelledError:
+            cancelled = True
+            _consume_current_cancellation()
+    if cancelled:
+        raise asyncio.CancelledError
+    return result
 
 
 def _pdf_object_keys(records_json: str) -> set[str]:
@@ -183,6 +198,7 @@ async def stage_pdf_import_batch(
     *,
     max_bytes: int | None = None,
     settings: Settings | None = None,
+    pdf_annotation_mode: PdfAnnotationMode | str = PdfAnnotationMode.preserve,
 ) -> tuple[ImportBatch, list[dict], list[dict]]:
     from quirebase.operations.settings import get_effective_setting
 
@@ -190,6 +206,10 @@ async def stage_pdf_import_batch(
         raise ValidationFailure("at least one PDF is required")
     if len(uploads) > MAX_PDF_IMPORT_FILES:
         raise ValidationFailure(f"a PDF import batch is limited to {MAX_PDF_IMPORT_FILES} files")
+    try:
+        annotation_mode = PdfAnnotationMode(pdf_annotation_mode)
+    except ValueError as error:
+        raise ValidationFailure("pdf annotation mode must be preserve, strip, or import") from error
 
     if max_bytes is None:
         max_bytes = (
@@ -197,7 +217,15 @@ async def stage_pdf_import_batch(
             if settings is not None
             else await get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes)
         )
+    if (
+        not isinstance(max_bytes, int)
+        or isinstance(max_bytes, bool)
+        or not 1 <= max_bytes <= MAX_SQL_INTEGER
+    ):
+        raise ValidationFailure(f"max_bytes must be between 1 and {MAX_SQL_INTEGER} bytes")
     user_id = user.id
+    # The limit is a short settings read; release its transaction before
+    # streaming uploads to the object store.
     await db.rollback()
     staged_pdfs: list[StagedPdf] = []
     pending_records: list[dict] = []
@@ -239,6 +267,8 @@ async def stage_pdf_import_batch(
             records=json.dumps(pending_records, ensure_ascii=False),
             errors=json.dumps(errors, ensure_ascii=False),
             status="pending",
+            pdf_annotation_mode=annotation_mode,
+            max_pdf_bytes=max_bytes,
         )
         db.add(batch)
         await db.flush()
@@ -250,6 +280,7 @@ async def stage_pdf_import_batch(
             batch.id,
             workflow_id,
             pending_records,
+            annotation_mode.value,
             queue_name=IMPORT_QUEUE,
             workflow_id=workflow_id,
             attributes={
@@ -258,6 +289,7 @@ async def stage_pdf_import_batch(
                 "owner_id": reloaded_user.id,
                 "batch_id": batch.id,
                 "object_keys": [staged.object_key for staged in staged_pdfs],
+                "pdf_annotation_mode": annotation_mode.value,
             },
         )
         record_event(
@@ -293,6 +325,37 @@ def _pdf_import_candidate_error(pending: dict, code: str, error: DomainError) ->
         },
         "object_key": pdf["object_key"],
     }
+
+
+async def _preflight_pdf_annotation_modes(
+    records: list[dict], annotation_mode: PdfAnnotationMode, max_pdf_bytes: int
+) -> dict[str, str]:
+    """Validate destructive PDF processing without holding a database transaction."""
+    effective_modes: dict[str, str] = {}
+    for record in records:
+        pdf = record.get("_pdf") if isinstance(record, dict) else None
+        if not isinstance(pdf, dict) or not isinstance(pdf.get("object_key"), str):
+            raise BatchConflict("the import batch contains an invalid PDF record")
+        object_key = pdf["object_key"]
+        try:
+            async with get_object_store().materialize(object_key) as source:
+                validation_task = asyncio.create_task(
+                    asyncio.to_thread(
+                        validate_pdf_annotation_mode,
+                        source,
+                        annotation_mode.value,
+                        max_bytes=max_pdf_bytes,
+                    )
+                )
+                signed = await _await_thread_despite_cancellation(validation_task)
+        except ValueError as error:
+            raise BatchConflict(str(error)) from error
+        except FileNotFoundError as error:
+            raise BatchConflict("a staged PDF is no longer available") from error
+        effective_modes[object_key] = (
+            PdfAnnotationMode.preserve.value if signed else annotation_mode.value
+        )
+    return effective_modes
 
 
 async def extract_pdf_import_doi(pending: dict) -> dict:
@@ -363,6 +426,7 @@ async def lookup_pdf_import_candidate(
     if user is None or not user.active:
         return {"discarded": True, "object_key": pdf["object_key"]}
     effective_settings = await get_effective_settings_model(db)
+    # Settings are a short read; release its transaction before provider I/O.
     await db.rollback()
     try:
         normalized_doi = detected_doi.casefold()
@@ -540,6 +604,7 @@ async def retry_pdf_import_batch(db: AsyncSession, user: User, batch_id: str) ->
         batch.id,
         workflow_id,
         pending_records,
+        (batch.pdf_annotation_mode or PdfAnnotationMode.preserve).value,
         queue_name=IMPORT_QUEUE,
         workflow_id=workflow_id,
         attributes={
@@ -548,6 +613,7 @@ async def retry_pdf_import_batch(db: AsyncSession, user: User, batch_id: str) ->
             "owner_id": user.id,
             "batch_id": batch.id,
             "object_keys": [record["_pdf"]["object_key"] for record in pending_records],
+            "pdf_annotation_mode": (batch.pdf_annotation_mode or PdfAnnotationMode.preserve).value,
         },
     )
     record_event(db, user.id, "pdf.import.preview.retry", "import_batch", batch.id)
@@ -556,17 +622,45 @@ async def retry_pdf_import_batch(db: AsyncSession, user: User, batch_id: str) ->
 
 
 async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> list[str]:
-    # Revalidate the owner and hold a shared lock while the batch root is
-    # locked.  Account deactivation therefore cannot race a confirmation.
+    # Destructive annotation preflight performs external I/O and must not hold
+    # the ImportBatch root lock.  The final transaction below re-reads the
+    # batch and verifies that the staged records did not change meanwhile.
+    # Releasing the read expires ORM instances on the caller's session, so
+    # callers must reload anything they still need after this returns.
+    user_id = user.id
+    observed = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id))
+    if observed is None or observed.owner_id != user.id:
+        raise ResourceUnavailable("import batch not found")
+    preflight_modes: dict[str, str] = {}
+    observed_records = json.loads(observed.records)
+    observed_status = observed.status
+    observed_file_format = observed.file_format
+    observed_annotation_mode = observed.pdf_annotation_mode
+    observed_max_pdf_bytes = observed.max_pdf_bytes
+    await db.rollback()
+    if observed_status == "ready" and observed_file_format == "pdf":
+        annotation_mode = PdfAnnotationMode(observed_annotation_mode or PdfAnnotationMode.preserve)
+        if annotation_mode is not PdfAnnotationMode.preserve:
+            preflight_modes = await _preflight_pdf_annotation_modes(
+                observed_records,
+                annotation_mode,
+                observed_max_pdf_bytes or get_settings().max_pdf_bytes,
+            )
+
     owner = await db.scalar(
-        select(User).where(User.id == user.id, User.active.is_(True)).with_for_update(read=True)
+        select(User).where(User.id == user_id, User.active.is_(True)).with_for_update(read=True)
     )
     if owner is None:
         raise ResourceUnavailable("user not available")
     # Confirmation mutates the Import Batch root and creates child Items.  A
     # full UPDATE lock serializes concurrent confirmations before either caller
     # can observe ``ready`` and create duplicate Items.
-    batch = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update())
+    batch = await db.scalar(
+        select(ImportBatch)
+        .where(ImportBatch.id == batch_id)
+        .execution_options(populate_existing=True)
+        .with_for_update()
+    )
     if batch is None or batch.owner_id != owner.id:
         raise ResourceUnavailable("import batch not found")
     if batch.status == "committed":
@@ -589,6 +683,17 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> li
     if not records:
         raise BatchConflict("the import batch has no candidate records")
     if batch.file_format == "pdf":
+        current_keys = {
+            record.get("_pdf", {}).get("object_key")
+            for record in records
+            if isinstance(record, dict) and isinstance(record.get("_pdf"), dict)
+        }
+        if preflight_modes and current_keys != set(preflight_modes):
+            raise BatchConflict("the import batch changed during PDF preflight")
+        for record in records:
+            pdf = record.get("_pdf") if isinstance(record, dict) else None
+            if isinstance(pdf, dict) and pdf.get("object_key") in preflight_modes:
+                record["_pdf_annotation_mode"] = preflight_modes[pdf["object_key"]]
         known_dois = {
             value
             for provider, value in await get_accessible_item_identifiers(db, owner)
@@ -606,30 +711,52 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> li
                 candidate_dois.add(normalized_doi)
     committed_item_ids: list[str] = []
     for record in records:
-        candidate = dict(record)
-        pdf = candidate.pop("_pdf", None)
-        item = await _create_item_from_record(db, owner, candidate)
-        if pdf is not None:
-            await attach_staged_pdf(
-                db,
-                owner,
-                item,
-                (
-                    pdf["object_key"],
-                    pdf["size"],
-                    pdf["original_name"],
-                ),
+        try:
+            candidate = dict(record)
+            pdf = candidate.pop("_pdf", None)
+            record_annotation_mode = candidate.pop("_pdf_annotation_mode", None)
+            effective_annotation_mode = (
+                PdfAnnotationMode(
+                    record_annotation_mode
+                    or batch.pdf_annotation_mode
+                    or PdfAnnotationMode.preserve
+                )
+                if pdf is not None
+                else PdfAnnotationMode.preserve
             )
-        await search_index(db).index_item(db, item.id)
-        record_event(
-            db,
-            owner.id,
-            "pdf.import" if pdf is not None else "bibliography.import",
-            "item",
-            item.id,
-            detail={"format": batch.file_format, "filename": pdf["original_name"] if pdf else None},
-        )
-        committed_item_ids.append(item.id)
+            item = await _create_item_from_record(db, owner, candidate)
+            if pdf is not None:
+                await attach_staged_pdf(
+                    db,
+                    owner,
+                    item,
+                    (
+                        pdf["object_key"],
+                        pdf["size"],
+                        pdf["original_name"],
+                    ),
+                    annotation_mode=effective_annotation_mode,
+                    max_pdf_bytes=batch.max_pdf_bytes or get_settings().max_pdf_bytes,
+                )
+            await search_index(db).index_item(db, item.id)
+            record_event(
+                db,
+                owner.id,
+                "pdf.import" if pdf is not None else "bibliography.import",
+                "item",
+                item.id,
+                detail={
+                    "format": batch.file_format,
+                    "filename": pdf["original_name"] if pdf else None,
+                    "annotation_mode": (
+                        effective_annotation_mode.value if pdf is not None else None
+                    ),
+                },
+            )
+            committed_item_ids.append(item.id)
+        except BaseException:
+            await db.rollback()
+            raise
     batch.committed_item_ids = json.dumps(committed_item_ids)
     # A committed batch no longer owns staged upload objects.  Drop the PDF
     # staging payload so cleanup cannot mistake it for a live reservation.
@@ -639,7 +766,11 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> li
         if isinstance(record, dict)
     ])
     batch.status = "committed"
-    await db.commit()
+    try:
+        await db.commit()
+    except BaseException:
+        await db.rollback()
+        raise
     return committed_item_ids
 
 

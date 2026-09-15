@@ -39,6 +39,13 @@
         <input type="file" name="pdfs" accept="application/pdf,.pdf" multiple required @change="addPdfFiles">
         <small>{{ _('Choose PDFs more than once to add them to the same batch, or select several at once with Cmd/Ctrl or Shift.') }}</small>
       </label>
+      <fieldset class="pdf-annotation-mode">
+        <legend>{{ _('Native PDF annotations') }}</legend>
+        <label><input type="radio" name="pdf_annotation_mode" value="preserve" checked> {{ _('Keep as read-only PDF annotations') }}</label>
+        <label><input type="radio" name="pdf_annotation_mode" value="strip"> {{ _('Remove native annotations') }}</label>
+        <label><input type="radio" name="pdf_annotation_mode" value="import"> {{ _('Import supported annotations as editable private annotations') }}</label>
+        <small>{{ _('Importing removes embedded annotation objects, but does not remove marks already flattened into page content.') }}</small>
+      </fieldset>
       <ul class="pdf-selection" x-show="pdfFileNames.length" aria-live="polite">
         <template x-for="fileName in pdfFileNames" :key="fileName"><li x-text="fileName"></li></template>
       </ul>

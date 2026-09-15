@@ -101,6 +101,16 @@ class FileRevisionProcessingState(StrEnum):
     ready = "ready"
 
 
+class PdfAnnotationMode(StrEnum):
+    """How native PDF annotations are handled during PDF Import."""
+
+    preserve = "preserve"
+    # ``str`` already defines a method named ``strip``; the ignore is limited
+    # to the type-checker so callers can still use the natural enum member.
+    strip = "strip"  # type: ignore[assignment]
+    import_ = "import"
+
+
 class AttachmentRole(StrEnum):
     graphical_abstract = "graphical_abstract"
 
@@ -383,6 +393,7 @@ class FileRevision(Base):
     page_count: Mapped[int | None] = mapped_column(Integer)
     page_geometry: Mapped[str | None] = mapped_column(Text)
     full_text: Mapped[str | None] = mapped_column(Text)
+    annotation_diagnostics: Mapped[str | None] = mapped_column(Text, nullable=True)
     processing_state: Mapped[FileRevisionProcessingState] = mapped_column(
         enum_type(FileRevisionProcessingState, "file_revision_processing_state"),
         default=FileRevisionProcessingState.pending,
@@ -541,6 +552,12 @@ class ImportBatch(Base):
     errors: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(16), default="ready")
     workflow_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    # Nullable keeps existing non-PDF and pre-mode batches readable.  A NULL PDF
+    # batch is interpreted as ``preserve`` at the Library boundary.
+    pdf_annotation_mode: Mapped[PdfAnnotationMode | None] = mapped_column(
+        enum_type(PdfAnnotationMode, "pdf_annotation_mode"), nullable=True
+    )
+    max_pdf_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     committed_item_ids: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
 

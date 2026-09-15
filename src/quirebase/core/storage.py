@@ -233,7 +233,12 @@ class ObjectStore:
             return
         temporary = _temporary_path(prefix="quirebase-object-", suffix=Path(key).suffix)
         try:
-            response = await self.get(key)
+            try:
+                response = await self.get(key)
+            except (FileNotFoundError, ObstoreError) as error:
+                if isinstance(error, FileNotFoundError) or type(error).__name__ == "NotFoundError":
+                    raise FileNotFoundError(key) from error
+                raise
             async with await anyio.open_file(temporary, "wb") as target:
                 async for chunk in response.body:
                     await target.write(chunk)

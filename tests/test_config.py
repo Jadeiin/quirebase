@@ -1,4 +1,7 @@
-from quirebase.core.config import Settings
+import pytest
+from pydantic import ValidationError
+
+from quirebase.core.config import MAX_SQL_INTEGER, Settings
 
 
 def test_inquiro_environment_configures_embedded_provider_runtime(monkeypatch):
@@ -19,3 +22,9 @@ def test_inquiro_environment_configures_embedded_provider_runtime(monkeypatch):
     assert settings.openalex_api_key == "openalex-key"
     assert settings.nasa_ads_token == "ads-token"
     assert settings.ieee_api_key == "ieee-key"
+
+
+@pytest.mark.parametrize("field", ["max_pdf_bytes", "max_attachment_bytes"])
+def test_file_size_settings_fit_database_integer(field):
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, **{field: MAX_SQL_INTEGER + 1})

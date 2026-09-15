@@ -4,21 +4,27 @@ import asyncio
 import json
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
-from uuid import uuid4
+from uuid import UUID, uuid4
 
+import pymupdf
 import pytest
+from sqlalchemy import select
 
 from quirebase.core import workflows
-from quirebase.core.storage import ObjectSuffix, get_object_store
+from quirebase.core.storage import ObjectSuffix, get_object_store, object_key
 from quirebase.documents import enqueue_object_cleanup
 from quirebase.documents import workflows as document_workflows
 from quirebase.library import workflows as library_workflows
 from quirebase.models import (
+    AnnotationKind,
+    AuditEvent,
     ExportArtifact,
     FileRevision,
+    FileRevisionProcessingState,
     ImportBatch,
     Item,
     ObjectIntegrityScan,
+    PdfAnnotation,
     User,
 )
 from quirebase.operations import health
@@ -382,6 +388,154 @@ async def test_imported_revision_inspection_enqueues_derived_state_sync(
     assert enqueued == [(revision.id, item.id, user.id)]
 
 
+@pytest.mark.parametrize("annotation_mode", ["strip", "import"])
+@pytest.mark.anyio
+async def test_derived_pdf_inspection_uses_stripped_object_for_revision(
+    async_session_factory, tmp_path, annotation_mode
+):
+    source_path = tmp_path / "annotated.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        page.add_text_annot((250, 40), "Source annotation").update()
+        document.save(source_path)
+    stored = await get_object_store().put_object(
+        uuid4(),
+        ObjectSuffix.PDF,
+        source_path.read_bytes(),
+        max_bytes=100_000,
+        required_prefix=b"%PDF-",
+    )
+    derived_object_id = str(uuid4())
+    thumbnail_object_id = str(uuid4())
+
+    inspected = await document_workflows._inspect_pdf_object(
+        stored.key,
+        thumbnail_object_id,
+        expected_size=stored.size,
+        annotation_mode=annotation_mode,
+        derived_object_id=derived_object_id,
+        max_pdf_bytes=100_000,
+    )
+
+    derived_key = object_key(UUID(derived_object_id), ObjectSuffix.PDF)
+    assert inspected["source_object_key"] == stored.key
+    assert inspected["object_key"] == derived_key
+    assert inspected["pdf_annotation_mode"] == annotation_mode
+    assert inspected["page_count"] == 1
+    assert inspected["thumbnail_object_key"] == object_key(
+        UUID(thumbnail_object_id), ObjectSuffix.PNG
+    )
+    if annotation_mode == "import":
+        assert [item["kind"] for item in inspected["imported_annotations"]] == ["note"]
+    else:
+        assert inspected["imported_annotations"] == []
+
+    async with get_object_store().materialize(derived_key) as derived_path:
+        with pymupdf.open(derived_path) as derived:
+            assert list(derived[0].annots() or ()) == []
+    async with get_object_store().materialize(stored.key) as source:
+        with pymupdf.open(source) as original:
+            assert list(original[0].annots())
+    async with get_object_store().materialize(inspected["thumbnail_object_key"]) as thumbnail:
+        assert thumbnail.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+@pytest.mark.anyio
+async def test_commit_imported_revision_persists_annotations_and_source_cleanup(
+    async_db, fake_durable_operations, tmp_path
+):
+    user = User(username="annotation-import-owner", password_hash="unused")
+    async_db.add(user)
+    await async_db.flush()
+    item = Item(title="Annotated import", created_by=user.id)
+    async_db.add(item)
+    await async_db.flush()
+
+    source_path = tmp_path / "annotated.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        page.add_text_annot((250, 40), "Imported note").update()
+        document.save(source_path)
+    stored = await get_object_store().put_object(
+        uuid4(),
+        ObjectSuffix.PDF,
+        source_path.read_bytes(),
+        max_bytes=100_000,
+        required_prefix=b"%PDF-",
+    )
+    revision = FileRevision(
+        item_id=item.id,
+        object_key=stored.key,
+        size=stored.size,
+        original_name="annotated.pdf",
+        processing_state=FileRevisionProcessingState.pending,
+        created_by=user.id,
+    )
+    async_db.add(revision)
+    await async_db.commit()
+
+    derived_object_id = str(uuid4())
+    inspected = await document_workflows._inspect_pdf_object(
+        stored.key,
+        str(uuid4()),
+        expected_size=stored.size,
+        annotation_mode="import",
+        derived_object_id=derived_object_id,
+        max_pdf_bytes=100_000,
+    )
+    assert len(inspected["imported_annotations"]) == 1
+    # Force the payload validation fallback so diagnostics are persisted too.
+    inspected["imported_annotations"].append({
+        **inspected["imported_annotations"][0],
+        "page_index": 999,
+    })
+
+    result = await document_workflows.commit_imported_revision(
+        {"revision_id": revision.id, **inspected}, owner_id=user.id
+    )
+
+    await async_db.refresh(revision)
+    assert revision.object_key == object_key(UUID(derived_object_id), ObjectSuffix.PDF)
+    assert revision.processing_state is FileRevisionProcessingState.ready
+    assert result["revision_id"] == revision.id
+
+    annotations = list(
+        await async_db.scalars(
+            select(PdfAnnotation).where(PdfAnnotation.file_revision_id == revision.id)
+        )
+    )
+    assert len(annotations) == 1
+    assert annotations[0].kind is AnnotationKind.note
+    assert annotations[0].page_index == 0
+    assert annotations[0].author_id == user.id
+    assert annotations[0].body == "Imported note"
+
+    diagnostics = json.loads(revision.annotation_diagnostics or "[]")
+    assert [entry["result"] for entry in diagnostics] == ["skipped"]
+    assert diagnostics[0]["page"] == 1000
+    assert result["annotation_diagnostics"] == diagnostics
+
+    event = await async_db.scalar(
+        select(AuditEvent).where(
+            AuditEvent.action == "pdf.import.annotations",
+            AuditEvent.target_id == revision.id,
+        )
+    )
+    assert event is not None
+    detail = json.loads(event.detail or "{}")
+    assert detail["imported_count"] == 1
+    assert detail["skipped_count"] == 1
+
+    cleanup = [
+        entry
+        for entry in fake_durable_operations.enqueues
+        if entry["workflow_name"] == document_workflows.OBJECT_CLEANUP_WORKFLOW
+    ]
+    assert len(cleanup) == 1
+    assert cleanup[0]["args"] == ([stored.key],)
+    assert cleanup[0]["attributes"]["revision_id"] == revision.id
+
+
 @pytest.mark.anyio
 async def test_imported_revision_keeps_thumbnail_after_database_commit(monkeypatch):
     removed = []
@@ -390,7 +544,7 @@ async def test_imported_revision_keeps_thumbnail_after_database_commit(monkeypat
         await asyncio.sleep(0)
         return {"revision_id": "revision-id"}
 
-    async def commit(_inspected):
+    async def commit(_inspected, **_kwargs):
         await asyncio.sleep(0)
         return {"revision_id": "revision-id", "item_id": "item-id"}
 
@@ -417,6 +571,44 @@ async def test_imported_revision_keeps_thumbnail_after_database_commit(monkeypat
         )
 
     assert removed == []
+
+
+@pytest.mark.anyio
+async def test_imported_revision_failure_uses_reference_aware_cleanup(monkeypatch):
+    cleaned = []
+
+    async def inspect(*_args, **_kwargs):
+        await asyncio.sleep(0)
+        return {"revision_id": "revision-id"}
+
+    async def fail_commit(_inspected, **_kwargs):
+        await asyncio.sleep(0)
+        raise RuntimeError("commit failed")
+
+    async def cleanup(keys, *, ignore_workflow_id=None):
+        await asyncio.sleep(0)
+        cleaned.append((keys, ignore_workflow_id))
+
+    monkeypatch.setattr(document_workflows, "inspect_imported_pdf", inspect)
+    monkeypatch.setattr(document_workflows, "commit_imported_revision", fail_commit)
+    monkeypatch.setattr(document_workflows, "delete_unreferenced_objects_step", cleanup)
+    workflow_body = document_workflows.inspect_imported_revision_workflow.__wrapped__.__wrapped__
+
+    with pytest.raises(RuntimeError, match="commit failed"):
+        await workflow_body(
+            "revision-id",
+            "owner-id",
+            "aa/bb/source.pdf",
+            "00000000-0000-0000-0000-000000000001",
+            derived_object_id="00000000-0000-0000-0000-000000000002",
+            annotation_mode="strip",
+        )
+
+    assert len(cleaned) == 1
+    keys, ignore_workflow_id = cleaned[0]
+    assert keys[0].endswith("000000000001.png")
+    assert keys[1].endswith("000000000002.pdf")
+    assert ignore_workflow_id == document_workflows.DBOS.workflow_id
 
 
 @pytest.mark.anyio

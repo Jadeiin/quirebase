@@ -1,14 +1,22 @@
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 import pymupdf
 import pytest
 
+import quirebase.documents.pdf as pdf_module
 from quirebase.documents.pdf import (
+    _free_text_format,
+    _hex_color,
     create_thumbnail,
     export_annotations,
     extract_doi,
     inspect_pdf,
+    parse_pdf_annotations,
+    pdf_has_signature,
+    strip_native_annotations,
+    validate_pdf_annotation_mode,
     validate_pdf_container,
 )
 from quirebase.models import PdfAnnotation
@@ -47,6 +55,691 @@ def test_pymupdf_inspection_and_thumbnail(tmp_path):
     assert text == ""
     assert geometry == [[0.0, 0.0, 300.0, 400.0]]
     assert thumbnail.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_strip_native_annotations_writes_clean_derived_pdf(tmp_path):
+    source = tmp_path / "native.pdf"
+    derived = tmp_path / "stripped.pdf"
+    sample_pdf(source, native_annotation=True)
+
+    assert strip_native_annotations(source, derived) == 1
+    with pymupdf.open(source) as original, pymupdf.open(derived) as clean:
+        assert list(original[0].annots())
+        assert list(clean[0].annots() or ()) == []
+
+
+def test_strip_native_annotations_deletes_all_annotations_without_live_iterator_skips(tmp_path):
+    source = tmp_path / "multiple-native.pdf"
+    derived = tmp_path / "multiple-stripped.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        for index in range(3):
+            note = page.add_text_annot((20 + index * 30, 30), f"Note {index}")
+            note.update()
+        document.save(source)
+
+    assert strip_native_annotations(source, derived) == 3
+    with pymupdf.open(derived) as clean:
+        assert list(clean[0].annots() or ()) == []
+
+
+def test_parse_native_annotations_preserves_freetext_metadata_and_crop_coordinates(tmp_path):
+    source = tmp_path / "native.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        page.set_cropbox(pymupdf.Rect(20, 30, 280, 370))
+        free_text = page.add_freetext_annot(
+            pymupdf.Rect(50, 60, 120, 100),
+            "Visible text",
+            fontsize=18,
+            fontname="TiRo",
+            text_color=(1, 0, 0),
+            align=2,
+            border_width=0,
+        )
+        free_text.set_info(subject="Canonical body")
+        free_text.update()
+        document.xref_set_key(free_text.xref, "C", "[0 0 1]")
+        page.add_stamp_annot(pymupdf.Rect(140, 160, 180, 200), stamp=0)
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    free_text = next(item for item in parsed if item["kind"] == "free_text")
+    assert free_text["body"] == "Canonical body"
+    assert free_text["payload"]["text"] == "Visible text"
+    assert free_text["payload"]["rect"]["x"] == 50
+    assert free_text["payload"]["rect"]["y"] == 240
+    assert free_text["payload"]["font_family"] == "Times-Roman"
+    assert free_text["payload"]["font_size"] == 18
+    assert free_text["payload"]["alignment"] == "right"
+    assert free_text["payload"]["style"]["stroke_width"] == 0
+    assert free_text["payload"]["style"]["stroke_color"] == "#0000FF"
+    assert free_text["payload"]["style"]["text_color"] == "#FF0000"
+    assert diagnostics == [
+        {
+            "page": 1,
+            "subtype": "Stamp",
+            "result": "skipped",
+            "reason": "unsupported subtype",
+        }
+    ]
+
+
+def test_parse_native_ink_annotations(tmp_path):
+    source = tmp_path / "ink.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        ink = page.add_ink_annot([[(10, 20), (30, 40), (50, 20)]])
+        ink.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert diagnostics == []
+    assert parsed[0]["kind"] == "ink"
+    assert parsed[0]["payload"]["paths"] == [
+        [
+            {"x": 10.0, "y": 380.0},
+            {"x": 30.0, "y": 360.0},
+            {"x": 50.0, "y": 380.0},
+        ]
+    ]
+
+
+def test_parse_native_annotations_keeps_page_edge_geometry(tmp_path):
+    source = tmp_path / "edge-annotations.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        page.add_text_annot((0, 0), "Edge note").update()
+        line = page.add_line_annot((0, 0), (30, 30))
+        line.update()
+        ink = page.add_ink_annot([[(0, 0), (10, 10)]])
+        ink.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert diagnostics == []
+    assert {item["kind"] for item in parsed} == {"note", "line", "ink"}
+
+
+@pytest.mark.parametrize(
+    "flag",
+    [
+        pymupdf.PDF_ANNOT_IS_INVISIBLE,
+        pymupdf.PDF_ANNOT_IS_HIDDEN,
+        pymupdf.PDF_ANNOT_IS_NO_VIEW,
+    ],
+)
+def test_parse_native_annotations_skips_annotations_that_are_not_viewable(tmp_path, flag):
+    source = tmp_path / f"hidden-{flag}.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        native = page.add_text_annot((20, 30), "Suppressed")
+        native.set_flags(flag)
+        native.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics == [
+        {
+            "page": 1,
+            "subtype": "Text",
+            "result": "skipped",
+            "reason": "annotation is not viewable",
+        }
+    ]
+
+
+def test_parse_native_annotations_skips_non_printing_annotations(tmp_path):
+    source = tmp_path / "non-printing.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        native = page.add_text_annot((20, 30), "Screen only")
+        native.set_flags(native.flags & ~pymupdf.PDF_ANNOT_IS_PRINT)
+        native.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics == [
+        {
+            "page": 1,
+            "subtype": "Text",
+            "result": "skipped",
+            "reason": "annotation is not printable",
+        }
+    ]
+
+
+@pytest.mark.parametrize("fontsize", [0.5, 145])
+def test_parse_native_annotations_skips_unrepresentable_freetext_sizes(tmp_path, fontsize):
+    source = tmp_path / f"freetext-size-{fontsize}.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        free_text = page.add_freetext_annot(
+            pymupdf.Rect(20, 30, 120, 70), "Sized", fontsize=fontsize
+        )
+        free_text.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics[0]["reason"] == "FreeText font size is not representable"
+
+
+def test_parse_native_annotations_skips_open_note_popups(tmp_path):
+    source = tmp_path / "open-note.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        note = page.add_text_annot((20, 30), "Open")
+        note.update()
+        document.xref_set_key(note.xref, "Open", "true")
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics[0]["reason"] == "open note popups are unsupported"
+
+
+def test_parse_native_annotations_skips_open_associated_popup(tmp_path):
+    source = tmp_path / "open-popup.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        note = page.add_text_annot((20, 30), "Open")
+        note.update()
+        popup = document.get_new_xref()
+        document.update_object(
+            popup,
+            "<< /Type /Annot /Subtype /Popup /Rect [20 30 100 80] /Open true >>",
+        )
+        document.xref_set_key(note.xref, "Popup", f"{popup} 0 R")
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics[0]["reason"] == "open note popups are unsupported"
+
+
+@pytest.mark.parametrize("flag", [pymupdf.PDF_ANNOT_IS_NO_ZOOM, pymupdf.PDF_ANNOT_IS_NO_ROTATE])
+def test_parse_native_annotations_skips_unrepresentable_view_flags(tmp_path, flag):
+    source = tmp_path / f"unrepresentable-{flag}.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        native = page.add_rect_annot(pymupdf.Rect(20, 30, 120, 70))
+        native.set_flags(native.flags | flag)
+        native.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics[0]["reason"] == "annotation has unsupported NoZoom or NoRotate flags"
+
+
+def test_parse_native_note_color_maps_to_fill_color(tmp_path):
+    source = tmp_path / "colored-note.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        note = page.add_text_annot((20, 30), "Colored")
+        note.set_colors(stroke=(1, 0, 0))
+        note.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert diagnostics == []
+    assert parsed[0]["kind"] == "note"
+    assert parsed[0]["payload"]["style"]["fill_color"] == "#FF0000"
+
+
+def test_destructive_pdf_annotation_modes_detect_signed_documents(tmp_path):
+    source = tmp_path / "signed.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        widget = pymupdf.Widget()
+        widget.field_type = pymupdf.PDF_WIDGET_TYPE_SIGNATURE
+        widget.field_name = "signature"
+        widget.rect = pymupdf.Rect(10, 10, 100, 30)
+        widget = page.add_widget(widget)
+        assert widget is not None
+        widget.update()
+        document.xref_set_key(widget.xref, "V", "<< /Type /Sig /ByteRange [0 0 0 0] >>")
+        document.save(source)
+
+    assert validate_pdf_annotation_mode(source, "strip") is True
+    assert validate_pdf_annotation_mode(source, "import") is True
+
+
+def test_pdf_signature_detection_finds_inherited_signature_values(tmp_path):
+    source = tmp_path / "inherited-signed.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        widget = pymupdf.Widget()
+        widget.field_type = pymupdf.PDF_WIDGET_TYPE_SIGNATURE
+        widget.field_name = "signature"
+        widget.rect = pymupdf.Rect(10, 10, 100, 30)
+        widget = page.add_widget(widget)
+        assert widget is not None
+        widget.update()
+        parent = document.get_new_xref()
+        document.update_object(
+            parent,
+            f"<< /FT /Sig /T (signature) /V << /ByteRange [0 0 0 0] >>"
+            f" /Kids [{widget.xref} 0 R] >>",
+        )
+        document.xref_set_key(widget.xref, "Parent", f"{parent} 0 R")
+        document.xref_set_key(widget.xref, "V", "null")
+        document.save(source)
+
+    assert pdf_has_signature(source) is True
+
+
+def test_free_text_format_rejects_mixed_span_colors():
+    fake = SimpleNamespace(
+        get_text=lambda _kind: {
+            "blocks": [
+                {
+                    "lines": [
+                        {
+                            "spans": [
+                                {"font": "Helvetica", "size": 12, "color": 0x000000},
+                                {"font": "Helvetica", "size": 12, "color": 0xFF0000},
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        parent=SimpleNamespace(
+            parent=SimpleNamespace(xref_get_key=lambda _xref, _key: ("null", "null"))
+        ),
+        xref=1,
+    )
+    with pytest.raises(ValueError, match="mixed FreeText formatting"):
+        _free_text_format(fake)
+
+
+def test_free_text_format_rejects_span_color_that_differs_from_default_appearance():
+    fake = SimpleNamespace(
+        get_text=lambda _kind: {
+            "blocks": [
+                {"lines": [{"spans": [{"font": "Helvetica", "size": 12, "color": 0xFF0000}]}]}
+            ]
+        },
+        parent=SimpleNamespace(
+            parent=SimpleNamespace(
+                xref_get_key=lambda _xref, key: (
+                    ("string", "0 0 1 rg /Helv 12 Tf") if key == "DA" else ("null", "null")
+                )
+            )
+        ),
+        xref=1,
+    )
+    with pytest.raises(ValueError, match="FreeText span color differs from /DA"):
+        _free_text_format(fake)
+
+
+def test_parse_native_annotations_skips_optional_content(tmp_path):
+    source = tmp_path / "optional-content.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        note = page.add_text_annot((20, 30), "Layered")
+        note.update()
+        ocg = document.get_new_xref()
+        document.update_object(ocg, "<< /Type /OCG /Name (Layer) >>")
+        document.xref_set_key(note.xref, "OC", f"{ocg} 0 R")
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics[0]["reason"] == "optional-content annotations are unsupported"
+
+
+def test_parse_native_annotations_skips_freetext_rectangle_differences(tmp_path):
+    source = tmp_path / "freetext-rd.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        free_text = page.add_freetext_annot(pymupdf.Rect(20, 30, 120, 70), "Inset")
+        free_text.update()
+        document.xref_set_key(free_text.xref, "RD", "[1 0 0 0]")
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics[0]["reason"] == "FreeText rectangle differences are unsupported"
+
+
+def test_parse_native_annotations_skips_non_normal_blend_mode(tmp_path):
+    source = tmp_path / "blend-mode.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        rectangle = page.add_rect_annot(pymupdf.Rect(20, 30, 120, 70))
+        rectangle.set_blendmode("Multiply")
+        rectangle.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics[0]["reason"] == "annotation blend mode is unsupported"
+
+
+def test_parse_native_annotations_reports_all_annotations_after_text_budget(monkeypatch, tmp_path):
+    source = tmp_path / "text-budget.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        for index in range(3):
+            note = page.add_text_annot((20 + index * 30, 30), "abc")
+            note.update()
+        document.save(source)
+
+    monkeypatch.setattr(pdf_module, "MAX_NATIVE_TEXT_CHARS", 5)
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert len(parsed) == 1
+    assert diagnostics[-1]["reason"].startswith("PDF native annotation text exceeds")
+    assert diagnostics[-1]["skipped_count"] == 2
+
+
+def test_validate_pdf_annotation_mode_checks_derived_size(tmp_path):
+    source = tmp_path / "derived-too-large.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        note = page.add_text_annot((20, 30), "Source annotation")
+        note.update()
+        document.save(source)
+
+    with pytest.raises(ValueError, match="derived PDF exceeds configured size limit"):
+        validate_pdf_annotation_mode(source, "strip", max_bytes=1)
+
+
+def test_parse_native_annotations_skips_replies(tmp_path):
+    source = tmp_path / "reply.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        parent = page.add_text_annot((20, 30), "Parent")
+        parent.update()
+        reply = page.add_text_annot((40, 50), "Reply")
+        reply.set_irt_xref(parent.xref)
+        reply.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert [item["body"] for item in parsed] == ["Parent"]
+    assert diagnostics == [
+        {
+            "page": 1,
+            "subtype": "Text",
+            "result": "skipped",
+            "reason": "annotation replies are unsupported",
+        }
+    ]
+
+
+def test_parse_native_annotations_skips_non_default_note_icons(tmp_path):
+    source = tmp_path / "comment-icon.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        note = page.add_text_annot((20, 30), "Comment icon")
+        note.set_name("Comment")
+        note.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics == [
+        {
+            "page": 1,
+            "subtype": "Text",
+            "result": "skipped",
+            "reason": "note icon is unsupported",
+        }
+    ]
+
+
+def test_parse_native_annotations_skips_freetext_callouts(tmp_path):
+    source = tmp_path / "callout.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        callout = page.add_freetext_annot(pymupdf.Rect(20, 30, 120, 70), "Callout")
+        callout.update()
+        document.xref_set_key(callout.xref, "IT", "/FreeTextCallout")
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics == [
+        {
+            "page": 1,
+            "subtype": "FreeText",
+            "result": "skipped",
+            "reason": "FreeText callouts are unsupported",
+        }
+    ]
+
+
+@pytest.mark.parametrize("dashes", [[3, 0], [1] * 11])
+def test_parse_native_annotations_skips_unrepresentable_dash_patterns(tmp_path, dashes):
+    source = tmp_path / f"unsupported-dashes-{len(dashes)}.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        shape = page.add_rect_annot(pymupdf.Rect(20, 30, 120, 70))
+        shape.set_border(width=2, dashes=dashes)
+        shape.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics == [
+        {
+            "page": 1,
+            "subtype": "Square",
+            "result": "skipped",
+            "reason": "dash pattern is not representable",
+        }
+    ]
+
+
+def test_parse_native_annotations_rejects_dashed_border_without_explicit_pattern(tmp_path):
+    source = tmp_path / "default-dashes.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        shape = page.add_rect_annot(pymupdf.Rect(20, 30, 120, 70))
+        shape.update()
+        document.xref_set_key(shape.xref, "BS", "<< /S /D /W 2 >>")
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics[0]["reason"] == "border style or cloudy effects are unsupported"
+
+
+def test_parse_native_annotations_bounds_text_markup_segments(tmp_path):
+    source = tmp_path / "oversized-highlight.pdf"
+    quad = pymupdf.Quad((10, 10), (20, 10), (10, 20), (20, 20))
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        highlight = page.add_highlight_annot([quad] * 501)
+        highlight.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics == [
+        {
+            "page": 1,
+            "subtype": "Highlight",
+            "result": "skipped",
+            "reason": "text markup annotations support at most 500 segments",
+        }
+    ]
+
+
+def test_parse_native_annotations_skips_non_rectangular_text_markup(tmp_path):
+    source = tmp_path / "skewed-highlight.pdf"
+    skewed_quad = pymupdf.Quad((10, 10), (20, 12), (12, 20), (22, 22))
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        highlight = page.add_highlight_annot(skewed_quad)
+        highlight.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics == [
+        {
+            "page": 1,
+            "subtype": "Highlight",
+            "result": "skipped",
+            "reason": "non-rectangular text markup is unsupported",
+        }
+    ]
+
+
+def test_parse_native_annotations_bounds_freetext_before_returning_payload(tmp_path):
+    source = tmp_path / "oversized-freetext.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        free_text = page.add_freetext_annot(pymupdf.Rect(20, 30, 120, 70), "x" * 20_001)
+        free_text.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics == [
+        {
+            "page": 1,
+            "subtype": "FreeText",
+            "result": "skipped",
+            "reason": "annotation text exceeds 20000 characters",
+        }
+    ]
+
+
+def test_parse_native_annotations_skips_rotated_freetext(tmp_path):
+    source = tmp_path / "rotated-freetext.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        free_text = page.add_freetext_annot(pymupdf.Rect(20, 30, 120, 70), "Rotated")
+        free_text.update()
+        document.xref_set_key(free_text.xref, "Rotate", "90")
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics == [
+        {
+            "page": 1,
+            "subtype": "FreeText",
+            "result": "skipped",
+            "reason": "rotated FreeText annotations are unsupported",
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("IT", "/LineDimension"),
+        ("Cap", "true"),
+        ("LL", "12"),
+        ("LLE", "3"),
+    ],
+)
+def test_parse_native_annotations_skips_line_measurement_and_caption_features(tmp_path, key, value):
+    source = tmp_path / f"line-{key}.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        line = page.add_line_annot((20, 30), (120, 70))
+        line.update()
+        document.xref_set_key(line.xref, key, value)
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics == [
+        {
+            "page": 1,
+            "subtype": "Line",
+            "result": "skipped",
+            "reason": "line measurement or caption features are unsupported",
+        }
+    ]
+
+
+def test_parse_native_annotations_bounds_ink_points_before_returning_payload(tmp_path):
+    source = tmp_path / "oversized-ink.pdf"
+    points = [(float(index % 250), float(index // 250)) for index in range(10_001)]
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        ink = page.add_ink_annot([points])
+        ink.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics == [
+        {
+            "page": 1,
+            "subtype": "Ink",
+            "result": "skipped",
+            "reason": "ink annotations support at most 10000 points",
+        }
+    ]
+
+
+def test_parse_native_annotations_bounds_ink_paths_before_returning_payload(tmp_path):
+    source = tmp_path / "oversized-ink-paths.pdf"
+    paths = [[(float(index), 20.0), (float(index), 21.0)] for index in range(101)]
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        ink = page.add_ink_annot(paths)
+        ink.update()
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert parsed == []
+    assert diagnostics == [
+        {
+            "page": 1,
+            "subtype": "Ink",
+            "result": "skipped",
+            "reason": "ink annotations support at most 100 paths",
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    ("components", "expected"),
+    [
+        ((0.5,), "#808080"),
+        ((0.0, 1.0, 1.0, 0.0), "#FF0000"),
+    ],
+)
+def test_annotation_colors_convert_grayscale_and_cmyk(components, expected):
+    assert _hex_color(components) == expected
 
 
 STYLE = {
@@ -173,6 +866,22 @@ def test_export_writes_all_canonical_annotations_without_touching_source(tmp_pat
     assert source.read_bytes() == original
 
 
+def test_parse_native_line_arrow_intent_maps_to_arrow(tmp_path):
+    source = tmp_path / "line-arrow-intent.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        line = page.add_line_annot((20, 30), (120, 70))
+        line.update()
+        document.xref_set_key(line.xref, "IT", "/LineArrow")
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert diagnostics == []
+    assert parsed[0]["kind"] == "arrow"
+    assert parsed[0]["payload"]["type"] == "arrow"
+
+
 def test_geometry_preserves_pdf_crop_box_across_rotation(tmp_path):
     source = tmp_path / "cropped.pdf"
     with pymupdf.open() as document:
@@ -189,9 +898,10 @@ def test_geometry_preserves_pdf_crop_box_across_rotation(tmp_path):
 
 
 @pytest.mark.parametrize("rotation", [0, 90, 180, 270])
-def test_canonical_export_is_crop_local_and_rotation_independent(tmp_path, rotation):
-    source = tmp_path / f"cropped-{rotation}.pdf"
-    output = tmp_path / f"cropped-{rotation}-annotated.pdf"
+@pytest.mark.parametrize("kind", ["rectangle", "ellipse"])
+def test_canonical_export_is_crop_local_and_rotation_independent(tmp_path, rotation, kind):
+    source = tmp_path / f"cropped-{kind}-{rotation}.pdf"
+    output = tmp_path / f"cropped-{kind}-{rotation}-annotated.pdf"
     with pymupdf.open() as document:
         page = document.new_page(width=300, height=400)
         page.set_cropbox(pymupdf.Rect(20, 30, 280, 370))
@@ -199,7 +909,7 @@ def test_canonical_export_is_crop_local_and_rotation_independent(tmp_path, rotat
         document.save(source)
 
     record = annotation(
-        "rectangle",
+        kind,
         {"rect": {"x": 10, "y": 20, "width": 30, "height": 40}},
     )
     export_annotations(source, output, [record])
@@ -209,3 +919,34 @@ def test_canonical_export_is_crop_local_and_rotation_independent(tmp_path, rotat
         exported = next(page.annots())
         # PyMuPDF expands a 2pt rectangle border by one point on every side.
         assert exported.rect == pymupdf.Rect(9, 279, 41, 321)
+
+    parsed, diagnostics = parse_pdf_annotations(output)
+
+    assert diagnostics == []
+    assert parsed[0]["payload"]["rect"] == {
+        "x": 10.0,
+        "y": 20.0,
+        "width": 30.0,
+        "height": 40.0,
+    }
+
+
+def test_parse_native_shape_uses_asymmetric_rectangle_differences(tmp_path):
+    source = tmp_path / "asymmetric-rd.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        shape = page.add_rect_annot(pymupdf.Rect(10, 20, 50, 80))
+        shape.update()
+        document.xref_set_key(shape.xref, "Rect", "[10 320 50 380]")
+        document.xref_set_key(shape.xref, "RD", "[1 2 3 4]")
+        document.save(source)
+
+    parsed, diagnostics = parse_pdf_annotations(source)
+
+    assert diagnostics == []
+    assert parsed[0]["payload"]["rect"] == {
+        "x": 11.0,
+        "y": 324.0,
+        "width": 36.0,
+        "height": 54.0,
+    }

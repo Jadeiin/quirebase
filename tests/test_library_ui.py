@@ -4,6 +4,7 @@ import asyncio
 import io
 import json
 import zipfile
+from contextlib import asynccontextmanager
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
@@ -26,7 +27,10 @@ from quirebase.documents import workflows as document_workflows
 from quirebase.documents.revisions import delete_unreferenced_objects, stage_pdf
 from quirebase.library import workflows as library_workflows
 from quirebase.library.imports import (
+    BatchConflict,
+    _preflight_pdf_annotation_modes,
     check_pdf_import_doi,
+    commit_import_batch,
     discard_import_batch,
     extract_pdf_import_doi,
     finalize_pdf_import_batch,
@@ -40,6 +44,7 @@ from quirebase.models import (
     Item,
     ItemRead,
     ItemTag,
+    PdfAnnotationMode,
     Project,
     ProjectItem,
     ProjectMember,
@@ -113,6 +118,23 @@ def published_pdf_bytes(doi: str = "10.1000/published") -> bytes:
     document = pymupdf.open()
     page = document.new_page()
     page.insert_text((72, 72), f"https://doi.org/{doi}")
+    contents = document.tobytes()
+    document.close()
+    return contents
+
+
+def signed_published_pdf_bytes(doi: str = "10.1000/signed") -> bytes:
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_text((72, 72), f"https://doi.org/{doi}")
+    widget = pymupdf.Widget()
+    widget.field_type = pymupdf.PDF_WIDGET_TYPE_SIGNATURE
+    widget.field_name = "signature"
+    widget.rect = pymupdf.Rect(10, 10, 100, 30)
+    widget = page.add_widget(widget)
+    assert widget is not None
+    widget.update()
+    document.xref_set_key(widget.xref, "V", "<< /Type /Sig /ByteRange [0 0 0 0] >>")
     contents = document.tobytes()
     document.close()
     return contents
@@ -1148,18 +1170,23 @@ async def test_commit_pdf_import_batch_rechecks_doi_after_stale_preview(
         assert len(batches) == 2
         for batch in batches:
             await finish_pdf_import_preview(db, async_session_factory, batch, monkeypatch)
-        batches = list(
-            await db.scalars(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
-        )
+        # Confirmation rolls back the shared session, expiring previously loaded rows.
+        batch_ids = [
+            batch.id
+            for batch in await db.scalars(
+                select(ImportBatch).where(ImportBatch.file_format == "pdf")
+            )
+        ]
+        assert len(batch_ids) == 2
         first = await client.post(
-            f"/bibliography/import/{batches[0].id}",
+            f"/bibliography/import/{batch_ids[0]}",
             data={"csrf_token": "test-csrf"},
             follow_redirects=False,
         )
         assert first.status_code == 303
 
         stale = await client.post(
-            f"/bibliography/import/{batches[1].id}",
+            f"/bibliography/import/{batch_ids[1]}",
             data={"csrf_token": "test-csrf"},
             follow_redirects=False,
         )
@@ -1170,7 +1197,186 @@ async def test_commit_pdf_import_batch_rechecks_doi_after_stale_preview(
             )
             == 1
         )
-        assert await db.get(ImportBatch, batches[1].id) is not None
+        assert await db.get(ImportBatch, batch_ids[1]) is not None
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_pdf_annotation_preflight_reports_missing_staged_object(monkeypatch):
+    class MissingStore:
+        @asynccontextmanager
+        async def materialize(self, _object_key):
+            raise FileNotFoundError("missing staged object")
+            yield  # pragma: no cover
+
+    monkeypatch.setattr("quirebase.library.imports.get_object_store", lambda: MissingStore())
+
+    with pytest.raises(BatchConflict, match="staged PDF is no longer available"):
+        await _preflight_pdf_annotation_modes(
+            [{"_pdf": {"object_key": "aa/bb/missing.pdf"}}],
+            PdfAnnotationMode.strip,
+            100,
+        )
+
+
+def test_pdf_annotation_mode_exposes_programmatic_strip_member():
+    assert isinstance(PdfAnnotationMode.strip, PdfAnnotationMode)
+    assert PdfAnnotationMode.strip.value == "strip"
+
+
+@pytest.mark.anyio
+async def test_destructive_pdf_preflight_allows_concurrent_discard(
+    async_db, async_session_factory, monkeypatch
+):
+    user = User(username="preflight-claim-owner", password_hash="unused")
+    async_db.add(user)
+    await async_db.flush()
+    user_id = user.id
+    batch = ImportBatch(
+        owner_id=user.id,
+        file_format="pdf",
+        records=json.dumps([
+            {
+                "title": "Claimed PDF",
+                "_pdf": {
+                    "object_key": "aa/bb/staged.pdf",
+                    "size": 10,
+                    "original_name": "staged.pdf",
+                },
+            }
+        ]),
+        errors="[]",
+        status="ready",
+        workflow_id="prepare-pdf-import:completed",
+        pdf_annotation_mode=PdfAnnotationMode.strip,
+        max_pdf_bytes=100,
+    )
+    async_db.add(batch)
+    await async_db.commit()
+    batch_id = batch.id
+
+    async def preflight(_records, _annotation_mode, _max_pdf_bytes):
+        async with async_session_factory() as concurrent_db:
+            concurrent_user = await concurrent_db.get(User, user_id)
+            assert concurrent_user is not None
+            await discard_import_batch(concurrent_db, concurrent_user, batch_id)
+        raise RuntimeError("stop after checking the claim")
+
+    monkeypatch.setattr("quirebase.library.imports._preflight_pdf_annotation_modes", preflight)
+
+    with pytest.raises(RuntimeError, match="stop after checking the claim"):
+        await commit_import_batch(async_db, user, batch_id)
+
+    async_db.expire_all()
+    assert await async_db.get(ImportBatch, batch_id) is None
+
+
+@pytest.mark.anyio
+async def test_pdf_import_confirmation_rolls_back_partial_records(async_db, monkeypatch):
+    user = User(username="partial-import-owner", password_hash="unused")
+    async_db.add(user)
+    await async_db.flush()
+    batch = ImportBatch(
+        owner_id=user.id,
+        file_format="pdf",
+        records=json.dumps([
+            {
+                "title": "First partial",
+                "_pdf": {
+                    "object_key": "aa/bb/first.pdf",
+                    "size": 10,
+                    "original_name": "first.pdf",
+                },
+            },
+            {
+                "title": "Second partial",
+                "_pdf": {
+                    "object_key": "aa/bb/second.pdf",
+                    "size": 10,
+                    "original_name": "second.pdf",
+                },
+            },
+        ]),
+        errors="[]",
+        status="ready",
+        workflow_id="prepare-pdf-import:completed",
+        pdf_annotation_mode=PdfAnnotationMode.preserve,
+        max_pdf_bytes=100,
+    )
+    async_db.add(batch)
+    await async_db.commit()
+    batch_id = batch.id
+
+    class SearchIndex:
+        async def index_item(self, _db, _item_id):
+            return None
+
+    monkeypatch.setattr("quirebase.library.imports.search_index", lambda _db: SearchIndex())
+    attach_calls = 0
+
+    async def attach(_db, _user, _item, _staged, **_kwargs):
+        nonlocal attach_calls
+        attach_calls += 1
+        await asyncio.sleep(0)
+        if attach_calls == 2:
+            raise RuntimeError("stop after first record")
+
+    monkeypatch.setattr("quirebase.library.imports.attach_staged_pdf", attach)
+
+    with pytest.raises(RuntimeError, match="stop after first record"):
+        await commit_import_batch(async_db, user, batch_id)
+
+    assert (
+        await async_db.scalar(
+            select(func.count()).select_from(Item).where(Item.title.like("%partial%"))
+        )
+        == 0
+    )
+    restored = await async_db.get(ImportBatch, batch_id)
+    assert restored is not None
+    assert restored.workflow_id == "prepare-pdf-import:completed"
+
+
+@pytest.mark.anyio
+async def test_commit_pdf_import_preserves_signed_destructive_mode_source(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    client, item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    try:
+        user = await async_db.get(User, item.created_by)
+        assert user is not None
+        monkeypatch.setattr(
+            "quirebase.library.imports.lookup_candidate",
+            AsyncMock(return_value=provider_candidate("10.1000/signed", "Signed candidate")),
+        )
+        batch, _records, _errors = await stage_pdf_import_batch(
+            async_db,
+            user,
+            [(signed_published_pdf_bytes(), "signed.pdf")],
+            max_bytes=100_000,
+            pdf_annotation_mode="strip",
+        )
+        await finish_pdf_import_preview(async_db, async_session_factory, batch, monkeypatch)
+        await async_db.refresh(batch)
+        assert batch.status == "ready"
+
+        await commit_import_batch(async_db, user, batch.id)
+
+        committed = await async_db.get(ImportBatch, batch.id)
+        assert committed is not None and committed.status == "committed"
+        created = list(await async_db.scalars(select(Item).where(Item.id != item.id)))
+        assert len(created) == 1
+        event = await async_db.scalar(
+            select(AuditEvent)
+            .where(AuditEvent.action == "pdf.import", AuditEvent.target_id == created[0].id)
+            .order_by(AuditEvent.created_at.desc())
+        )
+        assert event is not None
+        assert json.loads(event.detail or "{}")["annotation_mode"] == "preserve"
     finally:
         await client.aclose()
         get_settings.cache_clear()

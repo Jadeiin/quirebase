@@ -165,6 +165,7 @@ export const createAnnotationAdapter = (pageGeometry) => {
       base.segmentRects = payload.segment_rects.map((rect) => toVendorRect(rect, pageIndex));
     } else if (annotation.kind === "note") {
       base.name = PdfAnnotationName.Note;
+      base.flags.push("noZoom", "noRotate");
     } else if (annotation.kind === "free_text") {
       const fonts = { Courier: 0, Helvetica: 4, "Times-Roman": 8 };
       const alignments = { left: 0, center: 1, right: 2 };
@@ -206,7 +207,9 @@ export const createAnnotationAdapter = (pageGeometry) => {
     name: PdfAnnotationName.Note,
     inReplyToId: annotation.id,
     replyType: PdfAnnotationReplyType.Reply,
-    flags: reply.editable ? ["print"] : ["print", "readOnly"],
+    flags: reply.editable
+      ? ["print", "noZoom", "noRotate"]
+      : ["print", "readOnly", "noZoom", "noRotate"],
     custom: { quirebase: true, reply: true },
   });
 
