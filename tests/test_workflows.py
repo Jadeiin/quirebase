@@ -326,7 +326,7 @@ async def test_system_metrics_use_aggregate_workflow_counts(async_db, monkeypatc
         async def list(self, **_options):
             raise AssertionError("metrics must not load workflow history")
 
-    monkeypatch.setattr(health, "durable_operations", lambda: CountsOnly())
+    monkeypatch.setattr(health, "durable_operations", CountsOnly)
 
     metrics = await health.get_system_metrics(async_db, admin)
 

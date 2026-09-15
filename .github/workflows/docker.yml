@@ -1,0 +1,214 @@
+name: Docker
+
+on:
+  push:
+    branches: [main]
+    tags: ["[0-9]*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+# The workflow default is read-only; only the gated publishing job requests the package
+# write permission it needs to upload to GHCR.
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_PASSWORD: smoke
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Validate the compose file
+        run: docker compose config --quiet
+      - name: Build the image for the local platform
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: quirebase:smoke
+          cache-from: type=gha
+      - name: Initialize the bundled SQLite defaults
+        run: docker run --rm -v quirebase-smoke:/data quirebase:smoke quirebase init-db
+      - name: Check the runtime
+        run: docker run --rm -v quirebase-smoke:/data quirebase:smoke quirebase doctor
+      - name: Check the PostgreSQL client tools
+        run: |
+          docker run --rm quirebase:smoke sh -c '
+            pg_dump --version
+            pg_restore --version
+            pg_dump --version | grep --extended-regexp --quiet "\) 18\."
+          '
+      - name: Check the bundled static assets
+        run: |
+          docker run --rm --interactive quirebase:smoke python - <<'PY'
+          from pathlib import Path
+
+          import quirebase
+
+          static = Path(quirebase.__file__).parent / "static"
+          for asset in ("app.js", "app.css", "vendor/pdfium.wasm"):
+              assert (static / asset).is_file(), asset
+          print("bundled static assets present")
+          PY
+      - name: Start the web process
+        run: docker run -d --name quirebase-smoke-web -v quirebase-smoke:/data -p 127.0.0.1:9060:9060 quirebase:smoke
+      - name: Wait for /healthz
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error http://127.0.0.1:9060/healthz; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs quirebase-smoke-web
+          exit 1
+      - name: Start the worker process
+        run: docker run -d --name quirebase-smoke-worker -v quirebase-smoke:/data quirebase:smoke quirebase worker
+      - name: Confirm the worker stays up
+        run: |
+          sleep 15
+          docker logs quirebase-smoke-worker
+          test "$(docker inspect -f '{{.State.Running}}' quirebase-smoke-worker)" = "true"
+      - name: Stop the smoke containers
+        if: always()
+        run: docker rm --force quirebase-smoke-web quirebase-smoke-worker || true
+      - name: Start the compose stack against PostgreSQL 18
+        run: |
+          cp .env.docker.example .env.docker
+          printf 'POSTGRES_PASSWORD=smoke\n' >> .env.docker
+          # Exercise the health probes with an allowlist that does not contain the
+          # loopback address the probe connects to.
+          sed -i 's/^QUIREBASE_ALLOWED_HOSTS=.*/QUIREBASE_ALLOWED_HOSTS=quirebase.test/' .env.docker
+          docker tag quirebase:smoke ghcr.io/jadeiin/quirebase:latest
+          if ! docker compose --env-file .env.docker up --detach; then
+            docker compose --env-file .env.docker logs
+            exit 1
+          fi
+          for attempt in {1..60}; do
+            if curl --fail --silent --show-error --header "Host: quirebase.test" http://127.0.0.1:9060/healthz; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose --env-file .env.docker logs
+          exit 1
+      - name: Check the compose services
+        run: |
+          sleep 15
+          docker compose --env-file .env.docker ps
+          web_id="$(docker compose --env-file .env.docker ps --quiet web)"
+          for attempt in {1..20}; do
+            web_health="$(docker inspect --format '{{.State.Health.Status}}' "$web_id")"
+            if [ "$web_health" = "healthy" ]; then
+              break
+            fi
+            sleep 5
+          done
+          docker inspect --format 'web health={{.State.Health.Status}}' "$web_id"
+          test "$web_health" = "healthy"
+          worker_id="$(docker compose --env-file .env.docker ps --quiet worker)"
+          docker inspect --format 'restarts={{.RestartCount}} running={{.State.Running}}' "$worker_id"
+          test "$(docker inspect --format '{{.State.Running}}' "$worker_id")" = "true"
+          test "$(docker inspect --format '{{.RestartCount}}' "$worker_id")" -eq 0
+          docker compose --env-file .env.docker exec --no-TTY web quirebase doctor
+      - name: Back up and verify the PostgreSQL deployment
+        run: |
+          docker compose --env-file .env.docker exec --no-TTY web quirebase backup /tmp/smoke.zip
+          docker compose --env-file .env.docker exec --no-TTY web quirebase verify-backup /tmp/smoke.zip
+      - name: Stop the compose stack
+        if: always()
+        run: docker compose --env-file .env.docker down --volumes || true
+      - name: Start the compose stack with the S3 variant
+        run: |
+          compose="docker compose -f docker-compose.yml -f docker-compose.s3.yml --env-file .env.docker"
+          if ! $compose up --detach; then
+            $compose logs
+            exit 1
+          fi
+          for attempt in {1..60}; do
+            if curl --fail --silent --show-error --header "Host: quirebase.test" http://127.0.0.1:9060/healthz; then
+              exit 0
+            fi
+            sleep 2
+          done
+          $compose logs
+          exit 1
+      - name: Check the S3 compose services
+        run: |
+          sleep 15
+          compose="docker compose -f docker-compose.yml -f docker-compose.s3.yml --env-file .env.docker"
+          $compose ps
+          garage_id="$($compose ps --quiet garage)"
+          docker inspect --format '{{.State.Health.Status}}' "$garage_id"
+          test "$(docker inspect --format '{{.State.Health.Status}}' "$garage_id")" = "healthy"
+          $compose exec --no-TTY web quirebase doctor
+      - name: Stop the S3 compose stack
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.s3.yml --env-file .env.docker down --volumes || true
+
+  # Publication is gated on the container smoke tests: images are uploaded by real pushes
+  # to main or a version tag, while pull requests, manual runs and other branches verify
+  # the build without touching the registry.
+  image:
+    needs: smoke
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      PUBLISH: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - name: Log in to GHCR
+        if: env.PUBLISH == 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # Releases use PEP 440 tags (commitizen tag_format "$version"), which type=semver
+      # does not recognize, so raw tag names are published as well. Only a stable
+      # X.Y.Z tag may advance latest.
+      - name: Classify the release tag
+        id: release_tag
+        if: github.ref_type == 'tag'
+        run: |
+          if [[ "${GITHUB_REF_NAME}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "stable=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "stable=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Derive image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ steps.release_tag.outputs.stable == 'true' }}
+            type=sha
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: ${{ env.PUBLISH == 'true' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+          push: ${{ env.PUBLISH == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: ${{ env.PUBLISH == 'true' }}
+          sbom: ${{ env.PUBLISH == 'true' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

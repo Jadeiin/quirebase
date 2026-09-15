@@ -1,0 +1,25 @@
+.git
+.github
+.agents
+.claude
+.worktrees
+.venv
+venv
+node_modules
+dist
+build
+*.egg-info
+.env*
+quirebase.db*
+quirebase-data
+.cache
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.coverage
+__pycache__
+*.pyc
+.DS_Store
+
+# Built by the assets stage from src/quirebase/assets.
+src/quirebase/static

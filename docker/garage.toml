@@ -1,0 +1,16 @@
+# Single-node Garage configuration for the bundled CI and Compose deployments.
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "sqlite"
+
+replication_factor = 1
+
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+# Development-only cluster secret for the bundled single-node deployment.
+rpc_secret = "75e9353bf6c4b54c92411a6721fdb7b184fb10f80b566e6276746bdbd0ec3206"
+
+[s3_api]
+s3_region = "us-east-1"
+api_bind_addr = "[::]:3900"
+root_domain = ".s3.garage.localhost"

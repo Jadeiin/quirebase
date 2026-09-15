@@ -1,0 +1,112 @@
+# Quirebase deployment: PostgreSQL + web + worker.
+#
+#   make docker-env      # creates .env.docker with a generated POSTGRES_PASSWORD
+#   make docker-up       # or: docker compose --env-file .env.docker up --detach
+#   make docker-admin    # creates the first administrator
+#
+# Terminate TLS in a reverse proxy in front of the published port, then set
+# QUIREBASE_ALLOWED_HOSTS to the public hostname and QUIREBASE_SECURE_COOKIES=true.
+# Immutable objects stay on the shared local volume unless QUIREBASE_OBJECT_STORE=s3,
+# QUIREBASE_S3_* and AWS_* are set in .env.docker.
+
+name: quirebase
+
+x-quirebase: &quirebase
+  image: ghcr.io/jadeiin/quirebase:${QUIREBASE_IMAGE_TAG:-latest}
+  build:
+    context: .
+  restart: unless-stopped
+  init: true
+  env_file:
+    - path: ${DOCKER_ENV:-.env.docker}
+      required: false
+  environment:
+    # The bundled database URL is only a default: set QUIREBASE_DATABASE_URL in
+    # .env.docker (or the environment) to point at another database or to supply a
+    # password that needs percent-encoding for URL-reserved characters.
+    QUIREBASE_DATABASE_URL: ${QUIREBASE_DATABASE_URL:-postgresql://quirebase:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.docker}@postgres:5432/quirebase}
+    QUIREBASE_DATA_DIR: /data
+    QUIREBASE_ALLOWED_HOSTS: ${QUIREBASE_ALLOWED_HOSTS:-localhost,127.0.0.1}
+    QUIREBASE_SECURE_COOKIES: ${QUIREBASE_SECURE_COOKIES:-false}
+  volumes:
+    - quirebase-data:/data
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: quirebase
+      POSTGRES_USER: quirebase
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.docker}
+    volumes:
+      # PostgreSQL 18+ keeps PGDATA at /var/lib/postgresql/18/docker, so the volume
+      # targets its parent directory.
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      # Force TCP so the check cannot pass against the entrypoint's initialization
+      # server, which only listens on the unix socket.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U quirebase -d quirebase"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    <<: *quirebase
+    restart: "no"
+    command: ["quirebase", "init-db"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    <<: *quirebase
+    command: ["quirebase", "serve", "--host", "0.0.0.0", "--port", "9060"]
+    # Publish on loopback by default; set QUIREBASE_BIND_ADDRESS to a host IP (or
+    # 0.0.0.0) only when a reverse proxy or load balancer cannot reach 127.0.0.1.
+    ports:
+      - "${QUIREBASE_BIND_ADDRESS:-127.0.0.1}:${QUIREBASE_PORT:-9060}:9060"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      # The probe connects over loopback but sends the first configured allowed host,
+      # so replacing QUIREBASE_ALLOWED_HOSTS with the public hostname keeps the
+      # container healthy instead of returning 400 from TrustedHostMiddleware.
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import os, urllib.request;
+          host = os.environ.get("QUIREBASE_ALLOWED_HOSTS", "127.0.0.1").split(",")[0].strip()
+          or "127.0.0.1";
+          request = urllib.request.Request("http://127.0.0.1:9060/healthz", headers={"Host": host});
+          urllib.request.urlopen(request, timeout=4)
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    stop_grace_period: 30s
+
+  worker:
+    <<: *quirebase
+    # The default executor ID is stable, so a recreated container resumes the workflows
+    # it had in flight: DBOS recovers pending workflows for its own ID on launch. The
+    # fixed container name makes `--scale worker=N` fail loudly instead of running two
+    # workers under one identity; scale by adding worker services with distinct
+    # QUIREBASE_WORKFLOW_EXECUTOR_ID values, as documented in docs/DEPLOYMENT.md.
+    container_name: quirebase-worker
+    command: ["quirebase", "worker"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    stop_grace_period: 60s
+
+volumes:
+  quirebase-data:
+  postgres-data:

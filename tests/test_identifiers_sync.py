@@ -37,6 +37,10 @@ async def _raise_async(error: Exception):
     raise error
 
 
+async def _ignore_async(*_args):
+    await asyncio.sleep(0)
+
+
 def candidate(identifier: Identifier, values: dict) -> CandidateRecord:
     raw_identifiers = values.get("identifiers") or {}
     if isinstance(raw_identifiers, str):
@@ -308,8 +312,8 @@ async def test_sync_metadata_translates_inquiro_errors_at_library_interface(
         "FailingRuntime",
         (),
         {
-            "__aenter__": lambda self: _return_async(self),
-            "__aexit__": lambda self, *_args: _return_async(None),
+            "__aenter__": _return_async,
+            "__aexit__": _ignore_async,
             "lookup": lambda self, *_args, **_kwargs: _raise_async(package_error),
         },
     )()

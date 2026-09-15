@@ -121,11 +121,11 @@ class _ActiveReads:
 
 async def _bridge(body: AsyncIterable[bytes], active_reads: _ActiveReads) -> AsyncIterator[bytes]:
     """Preserve cancellation while adapting obstore streams for stream-zip."""
-    iterator = body.__aiter__()
+    iterator = aiter(body)
     active_reads.register(iterator)
     try:
         while True:
-            read = asyncio.ensure_future(iterator.__anext__())
+            read = asyncio.ensure_future(anext(iterator))
             active_reads.add(read)
             try:
                 chunk = await read

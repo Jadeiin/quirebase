@@ -10,7 +10,7 @@ Quirebase is an AGPL-3.0-only, self-hosted collaborative research library.
 
 ## Development
 
-Requirements: Python 3.12+, `uv`, and Bun 1.3+ (or Node.js 22+ with npm) for building the bundled PDF.js assets.
+Requirements: Python 3.12+, `uv` 0.12.14+, and Bun 1.4+ (or Node.js 22+ with npm) for building the bundled PDF.js assets.
 
 For a quick local test, run:
 
@@ -40,12 +40,13 @@ uv run quirebase serve
 Run `uv run quirebase worker` in a second process. Configuration uses `QUIREBASE_` environment variables; the defaults use SQLite and `./quirebase-data`.
 
 The default SQLite setup installs SQLAlchemy's `asyncio` and `aiosqlite` extras, so database
-access never uses a synchronous Session bridge. For PostgreSQL install the `postgres` extra; it
-selects SQLAlchemy's `postgresql-psycopgbinary` and `postgresql-asyncpg` groups (the configured
-`postgresql+psycopg` URL uses psycopg's native async implementation) and set, for example:
+access never uses a synchronous Session bridge. For PostgreSQL install the `postgres` extra; it selects SQLAlchemy's
+`postgresql-psycopgbinary` group. `QUIREBASE_DATABASE_URL` takes a libpq
+URL that the application opens with psycopg's native async implementation and passes to `pg_dump`
+and `pg_restore` unchanged, for example:
 
 ```sh
-QUIREBASE_DATABASE_URL=postgresql+psycopg://quirebase:password@localhost/quirebase uv run quirebase serve
+QUIREBASE_DATABASE_URL=postgresql://quirebase:password@localhost/quirebase uv run quirebase serve
 ```
 
 ## Programmatic access

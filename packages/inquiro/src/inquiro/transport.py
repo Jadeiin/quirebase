@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import inspect
 import tempfile
+from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 from urllib.parse import unquote, urljoin, urlsplit
@@ -88,6 +89,8 @@ class HttpExchange:
         )
 
     async def send(self, request: TransportRequest) -> ExchangeResponse:
+        stack = AsyncExitStack()
+        entered = False
         try:
             manager = self._client.stream(
                 "GET",
@@ -95,10 +98,14 @@ class HttpExchange:
                 params=request.params,
                 headers=request.headers,
             )
-            response = await manager.__aenter__()
+            response = await stack.enter_async_context(manager)
+            entered = True
         except httpx2.HTTPError as error:
             raise ProviderUnavailable("metadata provider request failed") from error
-        return _HttpExchangeResponse(manager, response)
+        finally:
+            if not entered:
+                await stack.aclose()
+        return _HttpExchangeResponse(stack, response)
 
     async def aclose(self) -> None:
         await self._client.aclose()
@@ -109,7 +116,7 @@ class RemoteNotFound(Exception):
 
 
 class _HttpExchangeResponse:
-    def __init__(self, manager: Any, response: httpx2.Response) -> None:
+    def __init__(self, manager: AsyncExitStack, response: httpx2.Response) -> None:
         self._manager = manager
         self._response = response
         self.status_code = response.status_code
@@ -124,7 +131,7 @@ class _HttpExchangeResponse:
             raise ProviderUnavailable("metadata provider request failed") from error
 
     async def aclose(self) -> None:
-        await self._manager.__aexit__(None, None, None)
+        await self._manager.aclose()
 
 
 class BoundedTransport:
