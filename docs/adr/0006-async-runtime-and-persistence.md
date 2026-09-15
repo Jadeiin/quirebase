@@ -1,7 +1,6 @@
 # ADR 0006: native async runtime and persistence
 
-Status: accepted. The PostgreSQL driver note is refined by
-[ADR 0011](0011-one-postgresql-driver.md).
+Status: accepted.
 
 This decision supersedes the synchronous `ProviderRuntime` lifecycle in ADR 0005 and applies to
 the complete Quirebase/Inquiro runtime path: Provider access, SQLAlchemy persistence, Library
