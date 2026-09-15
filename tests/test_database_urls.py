@@ -96,3 +96,28 @@ def test_libpq_database_url_translates_asyncpg_options():
     )
     with pytest.raises(ValueError, match="command_timeout"):
         libpq_database_url("postgresql+psycopg://user:pw@host/db?command_timeout=5")
+
+
+def test_url_normalization_preserves_percent_encoding():
+    encoded = "postgresql+asyncpg://user:p%20ss@host/db?options=-c%20search_path%3Dprivate"
+    assert (
+        libpq_database_url(encoded)
+        == "postgresql://user:p%20ss@host/db?options=-c%20search_path%3Dprivate"
+    )
+    assert (
+        async_database_url(encoded)
+        == "postgresql+psycopg://user:p%20ss@host/db?options=-c%20search_path%3Dprivate"
+    )
+    assert (
+        libpq_database_url("postgresql://user:p%20ss@host/db?ssl=require&application_name=a%20b")
+        == "postgresql://user:p%20ss@host/db?sslmode=require&application_name=a%20b"
+    )
+
+
+def test_url_normalization_decodes_option_keys_before_matching():
+    assert (
+        async_database_url("postgresql+asyncpg://user:pw@host/db?%73sl=require")
+        == "postgresql+psycopg://user:pw@host/db?sslmode=require"
+    )
+    with pytest.raises(ValueError, match="statement_cache_size"):
+        async_database_url("postgresql+asyncpg://user:pw@host/db?statement%5Fcache_size=0")

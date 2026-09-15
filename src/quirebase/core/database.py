@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from urllib.parse import quote, unquote
 
 from sqlalchemy import event
-from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -53,25 +53,41 @@ def _psycopg_compatible_url(database_url: str) -> str:
 
     asyncpg accepts query options that libpq rejects outright, such as ``ssl=require``,
     so a normalized URL would otherwise fail at engine creation with an opaque error.
+    The URL is edited as text so its original percent-encoding survives: a reparsed and
+    re-rendered URL turns encoded spaces in the password or query values into bytes that
+    libpq rejects or misreads, because libpq does not treat ``+`` as a space.
     """
-    url = make_url(database_url)
-    query = dict(url.query)
-    ssl_value = query.pop("ssl", None)
-    if ssl_value is not None:
-        sslmode = _SSL_MODE_ALIASES.get(str(ssl_value).strip().lower(), str(ssl_value).lower())
-        if sslmode not in _SSL_MODES:
-            supported = ", ".join(sorted(_SSL_MODES))
-            raise ValueError(
-                f"unsupported asyncpg ssl option {ssl_value!r}; use sslmode with one of: {supported}"
-            )
-        query["sslmode"] = sslmode
-    unsupported = sorted(option for option in query if option in _ASYNC_ONLY_QUERY_OPTIONS)
+    base, separator, query = database_url.partition("?")
+    if not separator:
+        return database_url
+    rewritten: list[str] = []
+    unsupported: list[str] = []
+    for parameter in query.split("&"):
+        key, _, value = parameter.partition("=")
+        decoded_key = unquote(key)
+        if decoded_key == "ssl":
+            ssl_value = unquote(value).strip().lower()
+            sslmode = _SSL_MODE_ALIASES.get(ssl_value, ssl_value)
+            if sslmode not in _SSL_MODES:
+                supported = ", ".join(sorted(_SSL_MODES))
+                raise ValueError(
+                    f"unsupported asyncpg ssl option {ssl_value!r}; "
+                    f"use sslmode with one of: {supported}"
+                )
+            rewritten.append(f"sslmode={quote(sslmode, safe='')}")
+            continue
+        if decoded_key in _ASYNC_ONLY_QUERY_OPTIONS:
+            unsupported.append(decoded_key)
+            continue
+        rewritten.append(parameter)
     if unsupported:
         raise ValueError(
             "the database URL uses asyncpg-only options that psycopg and libpq do not accept: "
-            + ", ".join(unsupported)
+            + ", ".join(sorted(set(unsupported)))
         )
-    return url.set(query=query).render_as_string(hide_password=False)
+    if not rewritten:
+        return base
+    return f"{base}?{'&'.join(rewritten)}"
 
 
 def async_database_url(url: str | None = None) -> str:
