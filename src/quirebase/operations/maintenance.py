@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import delete, select
 
 from quirebase.core.config import get_settings
-from quirebase.core.database import is_sqlite_database_url
+from quirebase.core.database import is_sqlite_database_url, libpq_database_url
 from quirebase.core.storage import get_object_store, is_managed_object_key
 from quirebase.core.workflows import (
     durable_operations,
@@ -65,7 +65,7 @@ async def create_backup(destination: Path) -> Path:
                 "--format=custom",
                 "--file",
                 str(root / "database.dump"),
-                settings.database_url,
+                libpq_database_url(settings.database_url),
             )
             if returncode:
                 message = stderr.decode(errors="replace").strip() if stderr else ""
@@ -187,7 +187,7 @@ async def restore_backup(archive_path: Path, *, force: bool = False) -> None:
                 "--clean",
                 "--if-exists",
                 "--dbname",
-                settings.database_url,
+                libpq_database_url(settings.database_url),
                 str(root / manifest["database_file"]),
             )
             if returncode:

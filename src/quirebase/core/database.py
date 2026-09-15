@@ -40,6 +40,14 @@ def is_sqlite_database_url(url: str | None = None) -> bool:
     return database_url.startswith(("sqlite:///", "sqlite+aiosqlite:///"))
 
 
+def libpq_database_url(url: str | None = None) -> str:
+    database_url = url or get_settings().database_url
+    for prefix in ("postgresql+psycopg://", "postgresql+psycopg2://"):
+        if database_url.startswith(prefix):
+            return "postgresql://" + database_url.removeprefix(prefix)
+    return database_url
+
+
 def make_async_engine(url: str | None = None) -> AsyncEngine:
     database_url = async_database_url(url)
     engine = create_async_engine(database_url, pool_pre_ping=True)
