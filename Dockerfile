@@ -1,0 +1,50 @@
+# syntax=docker/dockerfile:1.7
+
+# Bundled UI assets (EmbedPDF/PDFium, Alpine.js, zxcvbn) for the wheel's static directory.
+FROM oven/bun:1.3.5 AS assets
+WORKDIR /build
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
+COPY scripts/build-assets.mjs ./scripts/build-assets.mjs
+COPY src/quirebase/assets ./src/quirebase/assets
+RUN bun run build
+
+# The project environment lives at the same path in both stages so the copied
+# console-script shebangs stay valid.
+FROM python:3.12-slim AS builder
+COPY --from=ghcr.io/astral-sh/uv:0.12.13 /uv /bin/uv
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    UV_PYTHON_DOWNLOADS=never
+WORKDIR /app
+
+# Dependency layer: manifests only, workspace packages are installed below.
+COPY pyproject.toml uv.lock ./
+COPY packages/inquiro/pyproject.toml packages/inquiro/pyproject.toml
+COPY packages/rubrica/pyproject.toml packages/rubrica/pyproject.toml
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --no-install-workspace --extra postgres --extra citation
+
+# Non-editable workspace install: the wheel bundles migrations, docs and static assets.
+COPY . .
+COPY --from=assets /build/src/quirebase/static ./src/quirebase/static
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --no-editable --extra postgres --extra citation
+
+FROM python:3.12-slim AS runtime
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    QUIREBASE_DATA_DIR=/data \
+    QUIREBASE_DATABASE_URL=sqlite:////data/quirebase.db
+RUN groupadd --system --gid 10001 quirebase \
+ && useradd --system --uid 10001 --gid quirebase --home-dir /data --shell /usr/sbin/nologin quirebase \
+ && install -d -o quirebase -g quirebase /data
+COPY --from=builder /opt/venv /opt/venv
+USER 10001:10001
+WORKDIR /data
+VOLUME ["/data"]
+EXPOSE 9060
+STOPSIGNAL SIGTERM
+CMD ["quirebase", "serve", "--host", "0.0.0.0", "--port", "9060"]

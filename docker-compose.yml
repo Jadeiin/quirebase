@@ -1,0 +1,86 @@
+# Quirebase deployment: PostgreSQL + web + worker.
+#
+#   make docker-env      # creates .env.docker with a generated POSTGRES_PASSWORD
+#   make docker-up       # or: docker compose --env-file .env.docker up --detach
+#   make docker-admin    # creates the first administrator
+#
+# Terminate TLS in a reverse proxy in front of the published port, then set
+# QUIREBASE_ALLOWED_HOSTS to the public hostname and QUIREBASE_SECURE_COOKIES=true.
+# Immutable objects stay on the shared local volume unless QUIREBASE_OBJECT_STORE=s3,
+# QUIREBASE_S3_* and AWS_* are set in .env.docker.
+
+name: quirebase
+
+x-quirebase: &quirebase
+  image: ghcr.io/jadeiin/quirebase:${QUIREBASE_IMAGE_TAG:-latest}
+  build:
+    context: .
+  restart: unless-stopped
+  init: true
+  env_file:
+    - path: .env.docker
+      required: false
+  environment:
+    QUIREBASE_DATABASE_URL: postgresql+psycopg://quirebase:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/quirebase
+    QUIREBASE_DATA_DIR: /data
+    QUIREBASE_ALLOWED_HOSTS: ${QUIREBASE_ALLOWED_HOSTS:-localhost,127.0.0.1}
+    QUIREBASE_SECURE_COOKIES: ${QUIREBASE_SECURE_COOKIES:-false}
+  volumes:
+    - quirebase-data:/data
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: quirebase
+      POSTGRES_USER: quirebase
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quirebase -d quirebase"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    <<: *quirebase
+    restart: "no"
+    command: ["quirebase", "init-db"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    <<: *quirebase
+    command: ["quirebase", "serve", "--host", "0.0.0.0", "--port", "9060"]
+    ports:
+      - "${QUIREBASE_PORT:-9060}:9060"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9060/healthz', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    stop_grace_period: 30s
+
+  worker:
+    <<: *quirebase
+    # Scale with a unique QUIREBASE_WORKFLOW_EXECUTOR_ID per replica.
+    command: ["quirebase", "worker"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    stop_grace_period: 60s
+
+volumes:
+  quirebase-data:
+  postgres-data:

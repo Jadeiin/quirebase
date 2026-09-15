@@ -3,6 +3,8 @@ include Makefile.config
 .SILENT:
 
 .PHONY: dev init-db doctor \
+        docker-env docker-build docker-pull docker-up docker-down \
+        docker-ps docker-logs docker-shell docker-admin docker-doctor \
         i18n-extract i18n-update i18n-compile i18n-init i18n-sync \
         build-client build-assets \
         check-all lint-all lint-python format-python type-check test-all test-oa \
@@ -17,6 +19,46 @@ init-db:
 
 doctor:
 	$(QUIREBASE) doctor
+
+# --- Containers (Docker or Podman) ---
+docker-env:
+	@if [ -f $(DOCKER_ENV) ]; then \
+		echo "$(DOCKER_ENV) already exists; leaving it unchanged."; \
+	else \
+		cp .env.docker.example $(DOCKER_ENV); \
+		printf 'POSTGRES_PASSWORD=%s\n' "$$(openssl rand -hex 24)" >> $(DOCKER_ENV); \
+		echo "Created $(DOCKER_ENV) with a generated POSTGRES_PASSWORD."; \
+	fi
+
+docker-build: docker-env
+	$(COMPOSE) --env-file $(DOCKER_ENV) build
+
+docker-pull: docker-env
+	$(COMPOSE) --env-file $(DOCKER_ENV) pull
+
+docker-up: docker-env
+	$(COMPOSE) --env-file $(DOCKER_ENV) up --detach
+
+# Pass DOWN_ARGS=--volumes to delete the database and object volumes.
+docker-down: docker-env
+	$(COMPOSE) --env-file $(DOCKER_ENV) down $(DOWN_ARGS)
+
+docker-ps: docker-env
+	$(COMPOSE) --env-file $(DOCKER_ENV) ps
+
+docker-logs: docker-env
+	$(COMPOSE) --env-file $(DOCKER_ENV) logs --follow --tail 100
+
+docker-shell: docker-env
+	$(COMPOSE) --env-file $(DOCKER_ENV) exec web sh
+
+# Prompt for a password when ADMIN_PASSWORD is unset.
+docker-admin: docker-env
+	$(COMPOSE) --env-file $(DOCKER_ENV) exec web quirebase create-admin \
+		--username "$(ADMIN_USERNAME)" $(if $(ADMIN_PASSWORD),--password "$(ADMIN_PASSWORD)",)
+
+docker-doctor: docker-env
+	$(COMPOSE) --env-file $(DOCKER_ENV) exec web quirebase doctor
 
 # Launch parallel targets and terminate all if any one exits
 make-p:

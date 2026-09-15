@@ -1,0 +1,114 @@
+name: Docker
+
+on:
+  push:
+    branches: [main]
+    tags: ["[0-9]*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Derive image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
+            type=sha
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: ${{ github.event_name != 'pull_request' }}
+          sbom: ${{ github.event_name != 'pull_request' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  smoke:
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_PASSWORD: smoke
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v4
+      - name: Validate the compose file
+        run: docker compose config --quiet
+      - name: Build the image for the local platform
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: quirebase:smoke
+          cache-from: type=gha
+      - name: Initialize the bundled SQLite defaults
+        run: docker run --rm -v quirebase-smoke:/data quirebase:smoke quirebase init-db
+      - name: Check the runtime
+        run: docker run --rm -v quirebase-smoke:/data quirebase:smoke quirebase doctor
+      - name: Check the bundled static assets
+        run: |
+          docker run --rm --interactive quirebase:smoke python - <<'PY'
+          from pathlib import Path
+
+          import quirebase
+
+          static = Path(quirebase.__file__).parent / "static"
+          for asset in ("app.js", "app.css", "vendor/pdfium.wasm"):
+              assert (static / asset).is_file(), asset
+          print("bundled static assets present")
+          PY
+      - name: Start the web process
+        run: docker run -d --name quirebase-smoke-web -v quirebase-smoke:/data -p 127.0.0.1:9060:9060 quirebase:smoke
+      - name: Wait for /healthz
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error http://127.0.0.1:9060/healthz; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs quirebase-smoke-web
+          exit 1
+      - name: Start the worker process
+        run: docker run -d --name quirebase-smoke-worker -v quirebase-smoke:/data quirebase:smoke quirebase worker
+      - name: Confirm the worker stays up
+        run: |
+          sleep 15
+          docker logs quirebase-smoke-worker
+          test "$(docker inspect -f '{{.State.Running}}' quirebase-smoke-worker)" = "true"
+      - name: Stop the smoke containers
+        if: always()
+        run: docker rm --force quirebase-smoke-web quirebase-smoke-worker || true
