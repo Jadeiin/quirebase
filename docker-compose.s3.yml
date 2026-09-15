@@ -4,7 +4,11 @@
 #   docker compose -f docker-compose.yml -f docker-compose.s3.yml --env-file .env.docker up --detach
 #   make docker-up COMPOSE_FILES="-f docker-compose.yml -f docker-compose.s3.yml"
 #
-# The bundled Garage bootstraps its layout, access key and bucket on first start.
+# The bundled Garage bootstraps its layout, access key and bucket on first start. It is a
+# single node with replication_factor 1 and no bucket versioning, and `quirebase backup`
+# refuses non-local object storage: keep an independent snapshot or mirror of the
+# garage-data volume before trusting it with the only copy of any object (see
+# docs/DEPLOYMENT.md).
 # Credentials and bucket default to the values below and can be overridden in
 # .env.docker through AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and
 # QUIREBASE_S3_BUCKET. The region is pinned to the region in docker/garage.toml:

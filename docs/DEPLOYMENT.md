@@ -59,7 +59,21 @@ service for the Compose deployment (`make docker-up-s3`); Garage bootstraps its 
 key and bucket on first start, and the CI storage suite runs against the same image.
 That bundled variant serves S3 region `us-east-1` as fixed by `docker/garage.toml`,
 because Garage only reads its region from that file; configure a different region with an
-external S3 service through the base compose file and `QUIREBASE_S3_REGION` instead.
+external S3 service through the base compose file and `QUIREBASE_S3_REGION` instead. The
+bundled Garage is one node with `replication_factor = 1` and no bucket versioning, and
+`quirebase backup` refuses non-local object storage, so its volume holds the only copy of
+every object. Treat `make docker-up-s3` as a single-host convenience deployment, keep an
+independent snapshot or bucket mirror off the host, and stop the `garage` service while
+snapshotting its volume:
+
+    docker compose -f docker-compose.yml -f docker-compose.s3.yml --env-file .env.docker stop garage
+    docker run --rm -v quirebase_garage-data:/source:ro -v "$PWD":/backup alpine \
+        tar czf /backup/garage-data-$(date +%F).tgz -C /source .
+    docker compose -f docker-compose.yml -f docker-compose.s3.yml --env-file .env.docker start garage
+
+Restore by stopping the stack, extracting the archive into the `quirebase_garage-data`
+volume, and starting it again. Production deployments should use an external S3 service
+with versioning, replication or an independent backup policy.
 
 Quirebase currently uses obstore's native S3 authentication. That implementation
 reads the AWS environment configuration supported by obstore; in particular,
@@ -77,7 +91,7 @@ Web and every worker must use the same backend, bucket, and prefix.
 
 ## Backups
 
-`quirebase backup backup.zip` creates a consistent SQLite snapshot or invokes `pg_dump` for PostgreSQL, adds immutable objects, and writes a checksum manifest. This backup/restore path currently requires the local object backend; protect an S3 bucket with its own versioning and backup policy. Verify a local backup with `quirebase verify-backup backup.zip`. Test restoration periodically on a separate installation. `quirebase restore backup.zip --force` replaces the configured database and overlays backed-up objects; stop all web and worker processes first.
+`quirebase backup backup.zip` creates a consistent SQLite snapshot or invokes `pg_dump` for PostgreSQL, adds immutable objects, and writes a checksum manifest. This backup/restore path currently requires the local object backend; protect an S3 bucket with its own versioning and backup policy, and snapshot or mirror the bundled Garage volume as described under Object storage. Verify a local backup with `quirebase verify-backup backup.zip`. Test restoration periodically on a separate installation. `quirebase restore backup.zip --force` replaces the configured database and overlays backed-up objects; stop all web and worker processes first.
 
 `quirebase doctor` checks the schema, writable directories, PyMuPDF, the configured Recommendation
 Engine and every stored object's SHA-256. `quirebase reindex` rebuilds the Library Search index. The

@@ -52,6 +52,27 @@ class _Server(ThreadingHTTPServer):
     allow_reuse_address = True
 
 
+@pytest.fixture(autouse=True)
+def _clear_proxy_environment(monkeypatch):
+    """Keep these loopback tests hermetic when the environment defines a proxy.
+
+    httpx builds its proxy transport while the client is constructed, so an ambient
+    ``ALL_PROXY`` without ``socksio`` fails before a request reaches 127.0.0.1 even when
+    ``NO_PROXY`` covers it.
+    """
+    for name in (
+        "ALL_PROXY",
+        "all_proxy",
+        "HTTP_PROXY",
+        "http_proxy",
+        "HTTPS_PROXY",
+        "https_proxy",
+        "NO_PROXY",
+        "no_proxy",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+
 @pytest.fixture
 def base_url() -> Iterator[str]:
     server = _Server(("127.0.0.1", 0), _Handler)
