@@ -152,3 +152,30 @@ jobs:
       - name: Stop the compose stack
         if: always()
         run: docker compose --env-file .env.docker down --volumes || true
+      - name: Start the compose stack with the S3 variant
+        run: |
+          compose="docker compose -f docker-compose.yml -f docker-compose.s3.yml --env-file .env.docker"
+          if ! $compose up --detach; then
+            $compose logs
+            exit 1
+          fi
+          for attempt in {1..60}; do
+            if curl --fail --silent --show-error http://127.0.0.1:9060/healthz; then
+              exit 0
+            fi
+            sleep 2
+          done
+          $compose logs
+          exit 1
+      - name: Check the S3 compose services
+        run: |
+          sleep 15
+          compose="docker compose -f docker-compose.yml -f docker-compose.s3.yml --env-file .env.docker"
+          $compose ps
+          garage_id="$($compose ps --quiet garage)"
+          docker inspect --format '{{.State.Health.Status}}' "$garage_id"
+          test "$(docker inspect --format '{{.State.Health.Status}}' "$garage_id")" = "healthy"
+          $compose exec --no-TTY web quirebase doctor
+      - name: Stop the S3 compose stack
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.s3.yml --env-file .env.docker down --volumes || true

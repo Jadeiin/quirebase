@@ -43,8 +43,10 @@ Use a reverse proxy for TLS and request-size limits. Do not expose Uvicorn direc
 `QUIREBASE_DATA_DIR/objects`. For S3 or an S3-compatible service, set
 `QUIREBASE_OBJECT_STORE=s3`, `QUIREBASE_S3_BUCKET`, and optionally
 `QUIREBASE_S3_REGION`, `QUIREBASE_S3_ENDPOINT`, and `QUIREBASE_S3_PREFIX`. An HTTP
-endpoint is accepted for private MinIO deployments; use TLS for traffic crossing a
-trusted host boundary.
+endpoint is accepted for private MinIO or Garage deployments; use TLS for traffic
+crossing a trusted host boundary. `docker-compose.s3.yml` bundles a single-node Garage
+service for the Compose deployment (`make docker-up-s3`); Garage bootstraps its access
+key and bucket on first start, and the CI storage suite runs against the same image.
 
 Quirebase currently uses obstore's native S3 authentication. That implementation
 reads the AWS environment configuration supported by obstore; in particular,

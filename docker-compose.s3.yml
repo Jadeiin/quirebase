@@ -1,0 +1,59 @@
+# S3 object storage variant: bundles a single-node Garage service and points the
+# application at it. Use it together with the base file:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.s3.yml --env-file .env.docker up --detach
+#   make docker-up COMPOSE_FILES="-f docker-compose.yml -f docker-compose.s3.yml"
+#
+# The bundled Garage bootstraps its layout, access key and bucket on first start.
+# Credentials, bucket and region default to the values below and can be overridden
+# in .env.docker through AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
+# QUIREBASE_S3_BUCKET and QUIREBASE_S3_REGION.
+
+x-s3: &s3
+  environment:
+    QUIREBASE_OBJECT_STORE: s3
+    QUIREBASE_S3_BUCKET: ${QUIREBASE_S3_BUCKET:-quirebase}
+    QUIREBASE_S3_REGION: ${QUIREBASE_S3_REGION:-us-east-1}
+    QUIREBASE_S3_ENDPOINT: ${QUIREBASE_S3_ENDPOINT:-http://garage:3900}
+    AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-GKquirebase00000000000000000000000000}
+    AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-quirebase-secret}
+
+services:
+  garage:
+    image: dxflrs/garage:v2.4.1
+    restart: unless-stopped
+    command: ["/garage", "server", "--single-node", "--default-bucket"]
+    environment:
+      GARAGE_DEFAULT_ACCESS_KEY: ${AWS_ACCESS_KEY_ID:-GKquirebase00000000000000000000000000}
+      GARAGE_DEFAULT_SECRET_KEY: ${AWS_SECRET_ACCESS_KEY:-quirebase-secret}
+      GARAGE_DEFAULT_BUCKET: ${QUIREBASE_S3_BUCKET:-quirebase}
+    volumes:
+      - ./docker/garage.toml:/etc/garage.toml:ro
+      - garage-data:/var/lib/garage
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  migrate:
+    <<: *s3
+    depends_on:
+      garage:
+        condition: service_healthy
+
+  web:
+    <<: *s3
+    depends_on:
+      garage:
+        condition: service_healthy
+
+  worker:
+    <<: *s3
+    depends_on:
+      garage:
+        condition: service_healthy
+
+volumes:
+  garage-data:

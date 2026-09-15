@@ -3,8 +3,9 @@ include Makefile.config
 .SILENT:
 
 .PHONY: dev init-db doctor \
-        docker-env docker-build docker-pull docker-up docker-down \
-        docker-ps docker-logs docker-shell docker-admin docker-doctor \
+        docker-env docker-build docker-pull docker-up docker-up-s3 \
+        docker-down docker-down-s3 docker-ps docker-logs docker-shell \
+        docker-admin docker-doctor \
         i18n-extract i18n-update i18n-compile i18n-init i18n-sync \
         build-client build-assets \
         check-all lint-all lint-python format-python type-check test-all test-oa \
@@ -31,33 +32,40 @@ docker-env:
 	fi
 
 docker-build: docker-env
-	$(COMPOSE) --env-file $(DOCKER_ENV) build
+	$(COMPOSE) --env-file $(DOCKER_ENV) $(COMPOSE_FILES) build
 
 docker-pull: docker-env
-	$(COMPOSE) --env-file $(DOCKER_ENV) pull
+	$(COMPOSE) --env-file $(DOCKER_ENV) $(COMPOSE_FILES) pull
 
 docker-up: docker-env
-	$(COMPOSE) --env-file $(DOCKER_ENV) up --detach
+	$(COMPOSE) --env-file $(DOCKER_ENV) $(COMPOSE_FILES) up --detach
+
+# Bundled single-node Garage plus S3 object storage.
+docker-up-s3: docker-env
+	$(COMPOSE) --env-file $(DOCKER_ENV) $(S3_COMPOSE_FILES) up --detach
 
 # Pass DOWN_ARGS=--volumes to delete the database and object volumes.
 docker-down: docker-env
-	$(COMPOSE) --env-file $(DOCKER_ENV) down $(DOWN_ARGS)
+	$(COMPOSE) --env-file $(DOCKER_ENV) $(COMPOSE_FILES) down $(DOWN_ARGS)
+
+docker-down-s3: docker-env
+	$(COMPOSE) --env-file $(DOCKER_ENV) $(S3_COMPOSE_FILES) down $(DOWN_ARGS)
 
 docker-ps: docker-env
-	$(COMPOSE) --env-file $(DOCKER_ENV) ps
+	$(COMPOSE) --env-file $(DOCKER_ENV) $(COMPOSE_FILES) ps
 
 docker-logs: docker-env
-	$(COMPOSE) --env-file $(DOCKER_ENV) logs --follow --tail 100
+	$(COMPOSE) --env-file $(DOCKER_ENV) $(COMPOSE_FILES) logs --follow --tail 100
 
 docker-shell: docker-env
-	$(COMPOSE) --env-file $(DOCKER_ENV) exec web sh
+	$(COMPOSE) --env-file $(DOCKER_ENV) $(COMPOSE_FILES) exec web sh
 
 # Prompts for the password; the value never reaches the command line or make arguments.
 docker-admin: docker-env
-	$(COMPOSE) --env-file $(DOCKER_ENV) exec web quirebase create-admin --username "$(ADMIN_USERNAME)"
+	$(COMPOSE) --env-file $(DOCKER_ENV) $(COMPOSE_FILES) exec web quirebase create-admin --username "$(ADMIN_USERNAME)"
 
 docker-doctor: docker-env
-	$(COMPOSE) --env-file $(DOCKER_ENV) exec web quirebase doctor
+	$(COMPOSE) --env-file $(DOCKER_ENV) $(COMPOSE_FILES) exec web quirebase doctor
 
 # Launch parallel targets and terminate all if any one exits
 make-p:
