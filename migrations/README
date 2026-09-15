@@ -1,0 +1,22 @@
+# Quirebase database migrations
+
+Configuration lives in `pyproject.toml` (`[tool.alembic]`) and `alembic.ini` (logging and a
+placeholder URL); `migrations/env.py` always takes the database URL from the application's
+`QUIREBASE_DATABASE_URL` setting.
+
+Create revisions from the repository root and never hand-write revision identifiers:
+
+    uv run alembic revision --autogenerate -m "add widget state"
+
+Commit the generated file as-is. Alembic's template assigns a random 12-character revision
+identifier, which fits the `alembic_version.version_num` column it creates. Fill in the
+upgrade/downgrade bodies where autogenerate cannot see the change, such as the
+dialect-specific full-text search tables.
+
+Every migration must upgrade a fresh database on both SQLite and PostgreSQL: CI runs
+`quirebase init-db` and `quirebase doctor` for both backends. Domain state columns use
+`native_enum=False` with explicit CHECK constraints, so no PostgreSQL enum support plugin is
+needed or wanted.
+
+Add each schema change as a new revision on top of the existing chain; never replace or edit a
+committed revision.
