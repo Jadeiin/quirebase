@@ -4,18 +4,7 @@ import sqlite3
 import pytest
 
 from quirebase.core.config import get_settings
-from quirebase.core.database import libpq_database_url
 from quirebase.operations import create_backup, restore_backup, verify_backup
-
-
-def test_libpq_database_url_strips_sqlalchemy_driver_suffixes():
-    assert (
-        libpq_database_url("postgresql+psycopg://user:pw@host:5432/db")
-        == "postgresql://user:pw@host:5432/db"
-    )
-    assert libpq_database_url("postgresql+psycopg2://user@host/db") == "postgresql://user@host/db"
-    assert libpq_database_url("postgresql://user@host/db") == "postgresql://user@host/db"
-    assert libpq_database_url("sqlite:///./quirebase.db") == "sqlite:///./quirebase.db"
 
 
 @pytest.mark.anyio

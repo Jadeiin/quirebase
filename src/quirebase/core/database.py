@@ -32,6 +32,8 @@ def async_database_url(url: str | None = None) -> str:
         return "postgresql+psycopg://" + database_url.removeprefix(prefix)
     if database_url.startswith("postgresql+psycopg2://"):
         return "postgresql+psycopg://" + database_url.removeprefix("postgresql+psycopg2://")
+    if database_url.startswith("postgresql+asyncpg://"):
+        return "postgresql+psycopg://" + database_url.removeprefix("postgresql+asyncpg://")
     return database_url
 
 
@@ -42,7 +44,11 @@ def is_sqlite_database_url(url: str | None = None) -> bool:
 
 def libpq_database_url(url: str | None = None) -> str:
     database_url = url or get_settings().database_url
-    for prefix in ("postgresql+psycopg://", "postgresql+psycopg2://"):
+    for prefix in (
+        "postgresql+psycopg://",
+        "postgresql+psycopg2://",
+        "postgresql+asyncpg://",
+    ):
         if database_url.startswith(prefix):
             return "postgresql://" + database_url.removeprefix(prefix)
     return database_url

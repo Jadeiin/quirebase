@@ -15,7 +15,10 @@ SQLite is intended for a single-host installation with one worker. The applicati
 `sqlite:///...` setting. PostgreSQL is recommended for teams and supports concurrent workers
 through `FOR UPDATE SKIP LOCKED`; the `postgres` extra installs SQLAlchemy's
 `postgresql-psycopgbinary` and `postgresql-asyncpg` groups. A `postgresql+psycopg://...` setting
-uses psycopg's native async implementation. Set `QUIREBASE_DATABASE_URL`, `QUIREBASE_DATA_DIR`,
+uses psycopg's native async implementation; other PostgreSQL spellings such as `postgres://`,
+`postgresql://`, `postgresql+psycopg2://` and `postgresql+asyncpg://` are normalized to
+`postgresql+psycopg`, which is the supported driver for durable workflows and maintenance tooling.
+Set `QUIREBASE_DATABASE_URL`, `QUIREBASE_DATA_DIR`,
 `QUIREBASE_ALLOWED_HOSTS`, and secure cookies behind HTTPS. Native MCP clients send no `Origin`;
 explicitly set `QUIREBASE_MCP_ALLOWED_ORIGINS` to a comma-separated list of trusted origins before
 enabling browser-based MCP clients. Quirebase then handles CORS preflights for the MCP methods and
