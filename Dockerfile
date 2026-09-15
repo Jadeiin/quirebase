@@ -11,7 +11,7 @@ RUN bun run build
 
 # The project environment lives at the same path in both stages so the copied
 # console-script shebangs stay valid.
-FROM python:3.12-slim AS builder
+FROM python:3.14-slim AS builder
 COPY --from=ghcr.io/astral-sh/uv:0.12.13 /uv /bin/uv
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -32,12 +32,25 @@ COPY --from=assets /build/src/quirebase/static ./src/quirebase/static
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-editable --extra postgres --extra citation
 
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     QUIREBASE_DATA_DIR=/data \
     QUIREBASE_DATABASE_URL=sqlite:////data/quirebase.db
+
+# pg_dump/pg_restore back up and restore PostgreSQL deployments, so the client
+# major must not be older than the postgres:18 server in docker-compose.yml.
+RUN set -eux; \
+    apt-get update; \
+    install -d /usr/share/postgresql-common/pgdg; \
+    python -c "import urllib.request; urllib.request.urlretrieve('https://www.postgresql.org/media/keys/ACCC4CF8.asc', '/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc')"; \
+    . /etc/os-release; \
+    echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" > /etc/apt/sources.list.d/pgdg.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends postgresql-client-18; \
+    rm -rf /var/lib/apt/lists/*
+
 RUN groupadd --system --gid 10001 quirebase \
  && useradd --system --uid 10001 --gid quirebase --home-dir /data --shell /usr/sbin/nologin quirebase \
  && install -d -o quirebase -g quirebase /data

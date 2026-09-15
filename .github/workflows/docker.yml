@@ -78,6 +78,13 @@ jobs:
         run: docker run --rm -v quirebase-smoke:/data quirebase:smoke quirebase init-db
       - name: Check the runtime
         run: docker run --rm -v quirebase-smoke:/data quirebase:smoke quirebase doctor
+      - name: Check the PostgreSQL client tools
+        run: |
+          docker run --rm quirebase:smoke sh -c '
+            pg_dump --version
+            pg_restore --version
+            pg_dump --version | grep --extended-regexp --quiet "\) 18\."
+          '
       - name: Check the bundled static assets
         run: |
           docker run --rm --interactive quirebase:smoke python - <<'PY'
@@ -112,3 +119,33 @@ jobs:
       - name: Stop the smoke containers
         if: always()
         run: docker rm --force quirebase-smoke-web quirebase-smoke-worker || true
+      - name: Start the compose stack against PostgreSQL 18
+        run: |
+          cp .env.docker.example .env.docker
+          printf 'POSTGRES_PASSWORD=smoke\n' >> .env.docker
+          docker tag quirebase:smoke ghcr.io/jadeiin/quirebase:latest
+          docker compose --env-file .env.docker up --detach
+          for attempt in {1..60}; do
+            if curl --fail --silent --show-error http://127.0.0.1:9060/healthz; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose --env-file .env.docker logs
+          exit 1
+      - name: Check the compose services
+        run: |
+          sleep 15
+          docker compose --env-file .env.docker ps
+          worker_id="$(docker compose --env-file .env.docker ps --quiet worker)"
+          docker inspect --format 'restarts={{.RestartCount}} running={{.State.Running}}' "$worker_id"
+          test "$(docker inspect --format '{{.State.Running}}' "$worker_id")" = "true"
+          test "$(docker inspect --format '{{.RestartCount}}' "$worker_id")" -eq 0
+          docker compose --env-file .env.docker exec --no-TTY web quirebase doctor
+      - name: Back up and verify the PostgreSQL deployment
+        run: |
+          docker compose --env-file .env.docker exec --no-TTY web quirebase backup /tmp/smoke.zip
+          docker compose --env-file .env.docker exec --no-TTY web quirebase verify-backup /tmp/smoke.zip
+      - name: Stop the compose stack
+        if: always()
+        run: docker compose --env-file .env.docker down --volumes || true

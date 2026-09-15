@@ -52,10 +52,9 @@ docker-logs: docker-env
 docker-shell: docker-env
 	$(COMPOSE) --env-file $(DOCKER_ENV) exec web sh
 
-# Prompt for a password when ADMIN_PASSWORD is unset.
+# Prompts for the password; the value never reaches the command line or make arguments.
 docker-admin: docker-env
-	$(COMPOSE) --env-file $(DOCKER_ENV) exec web quirebase create-admin \
-		--username "$(ADMIN_USERNAME)" $(if $(ADMIN_PASSWORD),--password "$(ADMIN_PASSWORD)",)
+	$(COMPOSE) --env-file $(DOCKER_ENV) exec web quirebase create-admin --username "$(ADMIN_USERNAME)"
 
 docker-doctor: docker-env
 	$(COMPOSE) --env-file $(DOCKER_ENV) exec web quirebase doctor
