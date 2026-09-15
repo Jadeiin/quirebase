@@ -24,11 +24,13 @@ doctor:
 # --- Containers (Docker or Podman) ---
 docker-env:
 	@if [ -f $(DOCKER_ENV) ]; then \
+		chmod 600 $(DOCKER_ENV); \
 		echo "$(DOCKER_ENV) already exists; leaving it unchanged."; \
 	else \
+		umask 077; \
 		cp .env.docker.example $(DOCKER_ENV); \
 		printf 'POSTGRES_PASSWORD=%s\n' "$$(openssl rand -hex 24)" >> $(DOCKER_ENV); \
-		echo "Created $(DOCKER_ENV) with a generated POSTGRES_PASSWORD."; \
+		echo "Created $(DOCKER_ENV) (mode 0600) with a generated POSTGRES_PASSWORD."; \
 	fi
 
 docker-build: docker-env

@@ -21,7 +21,10 @@ x-quirebase: &quirebase
     - path: ${DOCKER_ENV:-.env.docker}
       required: false
   environment:
-    QUIREBASE_DATABASE_URL: postgresql+psycopg://quirebase:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.docker}@postgres:5432/quirebase
+    # The bundled database URL is only a default: set QUIREBASE_DATABASE_URL in
+    # .env.docker (or the environment) to point at another database or to supply a
+    # password that needs percent-encoding for URL-reserved characters.
+    QUIREBASE_DATABASE_URL: ${QUIREBASE_DATABASE_URL:-postgresql+psycopg://quirebase:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.docker}@postgres:5432/quirebase}
     QUIREBASE_DATA_DIR: /data
     QUIREBASE_ALLOWED_HOSTS: ${QUIREBASE_ALLOWED_HOSTS:-localhost,127.0.0.1}
     QUIREBASE_SECURE_COOKIES: ${QUIREBASE_SECURE_COOKIES:-false}
@@ -76,15 +79,13 @@ services:
 
   worker:
     <<: *quirebase
-    # Every replica derives a distinct executor ID from its container hostname, so the
-    # service can be scaled. Pin QUIREBASE_WORKFLOW_EXECUTOR_ID in .env.docker to a
-    # stable value to let a single worker resume its own workflows after a restart.
-    command:
-      - sh
-      - -c
-      - >-
-        export QUIREBASE_WORKFLOW_EXECUTOR_ID="$${QUIREBASE_WORKFLOW_EXECUTOR_ID:-quirebase-worker-$${HOSTNAME}}";
-        exec quirebase worker
+    # The default executor ID is stable, so a recreated container resumes the workflows
+    # it had in flight: DBOS recovers pending workflows for its own ID on launch. The
+    # fixed container name makes `--scale worker=N` fail loudly instead of running two
+    # workers under one identity; scale by adding worker services with distinct
+    # QUIREBASE_WORKFLOW_EXECUTOR_ID values, as documented in docs/DEPLOYMENT.md.
+    container_name: quirebase-worker
+    command: ["quirebase", "worker"]
     depends_on:
       postgres:
         condition: service_healthy

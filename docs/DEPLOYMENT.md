@@ -37,6 +37,16 @@ license separately.
 
 Use a reverse proxy for TLS and request-size limits. Do not expose Uvicorn directly to the public internet. Preserve the application data directory independently from the installed wheel.
 
+## Workers and recovery
+
+One worker is the default deployment. Its executor ID (`quirebase-worker` unless
+`QUIREBASE_WORKFLOW_EXECUTOR_ID` overrides it) is stable, so a restarted or recreated worker
+recovers the workflows it had in flight when DBOS launches. The Compose worker keeps a fixed
+container name, so `--scale worker=N` is refused instead of silently running replicas under one
+identity; to run several workers, add one worker service per replica in a Compose override and
+set a distinct `QUIREBASE_WORKFLOW_EXECUTOR_ID` for each. A workflow whose executor ID is gone
+for good is listed and resumed manually with `quirebase recover-workflows <executor-id> --apply`.
+
 ## Object storage
 
 `QUIREBASE_OBJECT_STORE=local` keeps immutable objects below
@@ -82,3 +92,5 @@ non-partitioned queue, and Recommendation inference is isolated from Library Sea
 ## Upgrades
 
 Back up first, install the new wheel, run `quirebase init-db` to apply Alembic migrations, rebuild assets only for source checkouts (`bun install && bun run build`), restart web and worker processes, then run `quirebase doctor`.
+
+**Alpha migration chain:** Quirebase is alpha software and a release may replace the migration chain instead of extending it. A database stamped by a revision that no longer exists cannot be upgraded in place: `quirebase init-db` and the Compose `migrate` service abort with `Can't locate revision`. Back up the installation so the old data is preserved, recreate the database (for Compose: `make docker-down DOWN_ARGS=--volumes`, then start the stack again), and reimport content through the application; cross-chain data migration is not provided.

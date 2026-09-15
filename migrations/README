@@ -21,3 +21,7 @@ needed or wanted.
 Add each schema change as a new revision on top of the existing chain; do not replace or edit a
 committed revision unless there is exceptional necessity, such as repairing a chain that cannot be
 applied to a supported database.
+
+When a chain rewrite does happen, databases stamped with a removed revision cannot be upgraded in
+place: `alembic upgrade head` aborts with `Can't locate revision`. `docs/DEPLOYMENT.md` documents the
+backup and recreate cutover that operators must follow for such installations.
