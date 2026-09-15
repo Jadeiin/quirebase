@@ -62,15 +62,29 @@ services:
   web:
     <<: *quirebase
     command: ["quirebase", "serve", "--host", "0.0.0.0", "--port", "9060"]
+    # Publish on loopback by default; set QUIREBASE_BIND_ADDRESS to a host IP (or
+    # 0.0.0.0) only when a reverse proxy or load balancer cannot reach 127.0.0.1.
     ports:
-      - "${QUIREBASE_PORT:-9060}:9060"
+      - "${QUIREBASE_BIND_ADDRESS:-127.0.0.1}:${QUIREBASE_PORT:-9060}:9060"
     depends_on:
       postgres:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9060/healthz', timeout=4)"]
+      # The probe connects over loopback but sends the first configured allowed host,
+      # so replacing QUIREBASE_ALLOWED_HOSTS with the public hostname keeps the
+      # container healthy instead of returning 400 from TrustedHostMiddleware.
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import os, urllib.request;
+          host = os.environ.get("QUIREBASE_ALLOWED_HOSTS", "127.0.0.1").split(",")[0].strip()
+          or "127.0.0.1";
+          request = urllib.request.Request("http://127.0.0.1:9060/healthz", headers={"Host": host});
+          urllib.request.urlopen(request, timeout=4)
       interval: 30s
       timeout: 5s
       start_period: 20s

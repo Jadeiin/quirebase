@@ -71,6 +71,8 @@ jobs:
       AWS_SECRET_ACCESS_KEY: quirebase-secret
       QUIREBASE_TEST_S3_ENDPOINT: http://localhost:3900
       QUIREBASE_TEST_S3_BUCKET: quirebase-contract
+      # Must match s3_region in docker/garage.toml; Garage rejects a client that signs
+      # for another region.
       QUIREBASE_TEST_S3_REGION: us-east-1
     steps:
       - uses: actions/checkout@v7

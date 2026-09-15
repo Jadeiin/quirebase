@@ -84,13 +84,16 @@ jobs:
         run: |
           cp .env.docker.example .env.docker
           printf 'POSTGRES_PASSWORD=smoke\n' >> .env.docker
+          # Exercise the health probes with an allowlist that does not contain the
+          # loopback address the probe connects to.
+          sed -i 's/^QUIREBASE_ALLOWED_HOSTS=.*/QUIREBASE_ALLOWED_HOSTS=quirebase.test/' .env.docker
           docker tag quirebase:smoke ghcr.io/jadeiin/quirebase:latest
           if ! docker compose --env-file .env.docker up --detach; then
             docker compose --env-file .env.docker logs
             exit 1
           fi
           for attempt in {1..60}; do
-            if curl --fail --silent --show-error http://127.0.0.1:9060/healthz; then
+            if curl --fail --silent --show-error --header "Host: quirebase.test" http://127.0.0.1:9060/healthz; then
               exit 0
             fi
             sleep 2
@@ -101,6 +104,16 @@ jobs:
         run: |
           sleep 15
           docker compose --env-file .env.docker ps
+          web_id="$(docker compose --env-file .env.docker ps --quiet web)"
+          for attempt in {1..20}; do
+            web_health="$(docker inspect --format '{{.State.Health.Status}}' "$web_id")"
+            if [ "$web_health" = "healthy" ]; then
+              break
+            fi
+            sleep 5
+          done
+          docker inspect --format 'web health={{.State.Health.Status}}' "$web_id"
+          test "$web_health" = "healthy"
           worker_id="$(docker compose --env-file .env.docker ps --quiet worker)"
           docker inspect --format 'restarts={{.RestartCount}} running={{.State.Running}}' "$worker_id"
           test "$(docker inspect --format '{{.State.Running}}' "$worker_id")" = "true"
@@ -121,7 +134,7 @@ jobs:
             exit 1
           fi
           for attempt in {1..60}; do
-            if curl --fail --silent --show-error http://127.0.0.1:9060/healthz; then
+            if curl --fail --silent --show-error --header "Host: quirebase.test" http://127.0.0.1:9060/healthz; then
               exit 0
             fi
             sleep 2

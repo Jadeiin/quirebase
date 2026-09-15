@@ -35,7 +35,7 @@ Tag Recommendations use offline YAKE by default. To use the optional semantic en
 model downloads and remote model identifiers are not supported. Record the model's source and
 license separately.
 
-Use a reverse proxy for TLS and request-size limits. Do not expose Uvicorn directly to the public internet. Preserve the application data directory independently from the installed wheel.
+Use a reverse proxy for TLS and request-size limits. Do not expose Uvicorn directly to the public internet. The bundled Compose deployment publishes its web port on loopback (`QUIREBASE_BIND_ADDRESS`, default `127.0.0.1`); set a host IP or `0.0.0.0` only when the reverse proxy cannot reach loopback. Preserve the application data directory independently from the installed wheel.
 
 ## Workers and recovery
 
@@ -57,6 +57,9 @@ endpoint is accepted for private MinIO or Garage deployments; use TLS for traffi
 crossing a trusted host boundary. `docker-compose.s3.yml` bundles a single-node Garage
 service for the Compose deployment (`make docker-up-s3`); Garage bootstraps its access
 key and bucket on first start, and the CI storage suite runs against the same image.
+That bundled variant serves S3 region `us-east-1` as fixed by `docker/garage.toml`,
+because Garage only reads its region from that file; configure a different region with an
+external S3 service through the base compose file and `QUIREBASE_S3_REGION` instead.
 
 Quirebase currently uses obstore's native S3 authentication. That implementation
 reads the AWS environment configuration supported by obstore; in particular,
