@@ -11,9 +11,11 @@ concurrency:
   group: docker-${{ github.ref }}
   cancel-in-progress: true
 
+# The workflow default is read-only; only the gated publishing job requests the package
+# write permission it needs to upload to GHCR.
 permissions:
   contents: read
-  packages: write
+  packages: read
 
 jobs:
   smoke:
@@ -161,6 +163,18 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # Releases use PEP 440 tags (commitizen tag_format "$version"), which type=semver
+      # does not recognize, so raw tag names are published as well. Only a stable
+      # X.Y.Z tag may advance latest.
+      - name: Classify the release tag
+        id: release_tag
+        if: github.ref_type == 'tag'
+        run: |
+          if [[ "${GITHUB_REF_NAME}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "stable=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "stable=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Derive image metadata
         id: meta
         uses: docker/metadata-action@v6
@@ -168,9 +182,10 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=ref,event=branch
+            type=ref,event=tag
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
+            type=raw,value=latest,enable=${{ steps.release_tag.outputs.stable == 'true' }}
             type=sha
       - name: Build and push
         uses: docker/build-push-action@v7

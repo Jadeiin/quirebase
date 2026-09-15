@@ -86,5 +86,13 @@ def test_libpq_database_url_translates_asyncpg_options():
         libpq_database_url("postgresql+asyncpg://user:pw@host/db?ssl=require")
         == "postgresql://user:pw@host/db?sslmode=require"
     )
+    assert (
+        libpq_database_url("postgres://user:pw@host/db?ssl=require")
+        == "postgresql://user:pw@host/db?sslmode=require"
+    )
+    assert (
+        libpq_database_url("postgresql://user:pw@host/db?ssl=true")
+        == "postgresql://user:pw@host/db?sslmode=require"
+    )
     with pytest.raises(ValueError, match="command_timeout"):
         libpq_database_url("postgresql+psycopg://user:pw@host/db?command_timeout=5")

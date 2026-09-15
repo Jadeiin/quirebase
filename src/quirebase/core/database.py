@@ -104,9 +104,13 @@ def libpq_database_url(url: str | None = None) -> str:
         "postgresql+psycopg://",
         "postgresql+psycopg2://",
         "postgresql+asyncpg://",
+        "postgres://",
     ):
         if database_url.startswith(prefix):
-            return _psycopg_compatible_url("postgresql://" + database_url.removeprefix(prefix))
+            database_url = "postgresql://" + database_url.removeprefix(prefix)
+            break
+    if database_url.startswith("postgresql://"):
+        return _psycopg_compatible_url(database_url)
     return database_url
 
 
