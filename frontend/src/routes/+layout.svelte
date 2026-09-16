@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { QueryClient, QueryClientProvider } from '@tanstack/svelte-query';
-	import { Tooltip } from 'bits-ui';
 
 	import '../app.css';
 
@@ -13,7 +12,5 @@
 <svelte:head><meta name="theme-color" content="#111827" /></svelte:head>
 
 <QueryClientProvider client={queryClient}>
-	<Tooltip.Provider delayDuration={450} skipDelayDuration={150}>
-		{@render children()}
-	</Tooltip.Provider>
+	{@render children()}
 </QueryClientProvider>

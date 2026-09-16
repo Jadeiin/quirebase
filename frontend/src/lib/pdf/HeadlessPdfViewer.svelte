@@ -85,11 +85,11 @@
 </script>
 
 {#if pdfEngine.error}
-	<div class="grid h-full place-items-center text-danger" role="alert">
+	<div class="grid h-full place-items-center text-error-700" role="alert">
 		{$t('Unable to initialize the PDF engine.')}
 	</div>
 {:else if pdfEngine.isLoading || !pdfEngine.engine}
-	<div class="grid h-full place-items-center text-muted">{$t('Loading PDF engine…')}</div>
+	<div class="grid h-full place-items-center text-surface-600">{$t('Loading PDF engine…')}</div>
 {:else}
 	<EmbedPDF engine={pdfEngine.engine} {plugins}>
 		{#snippet children({ activeDocumentId })}
@@ -98,9 +98,11 @@
 				<DocumentContent documentId={activeId}>
 					{#snippet children(documentContent)}
 						{#if documentContent.isLoading}
-							<div class="grid h-full place-items-center text-muted">{$t('Loading document…')}</div>
+							<div class="grid h-full place-items-center text-surface-600">
+								{$t('Loading document…')}
+							</div>
 						{:else if documentContent.isError}
-							<div class="grid h-full place-items-center text-danger" role="alert">
+							<div class="grid h-full place-items-center text-error-700" role="alert">
 								{$t('Unable to load the document.')}
 							</div>
 						{:else if documentContent.isLoaded}

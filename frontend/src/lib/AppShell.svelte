@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import { Menu, Portal } from '@skeletonlabs/skeleton-svelte';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { DropdownMenu } from 'bits-ui';
 	import { onMount, type Snippet } from 'svelte';
 	import { apiRequest, type SessionView } from '$lib/api/client';
 	import Icon from '$lib/design/Icon.svelte';
@@ -57,22 +57,22 @@
 </script>
 
 {#if session.isPending}
-	<main class="workspace"><p class="muted">{$t('Loading Quirebase…')}</p></main>
+	<main class="workspace"><p class="text-surface-600">{$t('Loading Quirebase…')}</p></main>
 {:else if !session.data?.authenticated}
 	<Login />
 {:else}
 	<div
-		class={`sticky top-0 z-40 items-center justify-between bg-sidebar px-4 py-3 text-white md:hidden ${readerRoute ? 'hidden' : 'flex'}`}
+		class={`sticky top-0 z-40 items-center justify-between bg-primary-950 px-4 py-3 text-white md:hidden ${readerRoute ? 'hidden' : 'flex'}`}
 	>
 		<a class="flex items-center gap-2 font-bold no-underline" href={resolve('/')}
 			><span
-				class="grid size-7 place-items-center rounded-lg bg-white text-sm font-extrabold text-accent-strong"
+				class="grid size-7 place-items-center rounded-lg bg-white text-sm font-extrabold text-primary-800"
 				>Q</span
 			>
 			Quirebase</a
 		>
 		<a
-			class="grid size-8 place-items-center rounded-full bg-[#d7eee3] font-extrabold text-accent-strong no-underline"
+			class="grid size-8 place-items-center rounded-full bg-[#d7eee3] font-extrabold text-primary-800 no-underline"
 			href={resolve('/account')}>{session.data.user?.username.slice(0, 1).toUpperCase()}</a
 		>
 	</div>
@@ -80,38 +80,38 @@
 		class={`min-h-screen md:grid ${sidebarCollapsed ? 'md:grid-cols-[4.75rem_minmax(0,1fr)]' : 'md:grid-cols-[15.5rem_minmax(0,1fr)]'} ${readerRoute ? '' : 'pb-16 md:pb-0'}`}
 	>
 		<aside
-			class={`sticky top-0 hidden h-screen flex-col gap-4 bg-sidebar py-5 text-[#edf5f1] transition-[padding] md:flex ${sidebarCollapsed ? 'px-2.5' : 'px-3.5'}`}
+			class={`sticky top-0 hidden h-screen flex-col gap-4 bg-primary-950 py-5 text-[#edf5f1] transition-[padding] md:flex ${sidebarCollapsed ? 'px-2.5' : 'px-3.5'}`}
 		>
 			<div class="flex items-center gap-1 pb-3">
 				<a
 					class={`flex min-w-0 flex-1 items-center gap-3 text-xl font-extrabold tracking-tight text-white no-underline ${sidebarCollapsed ? 'justify-center' : 'px-2'}`}
 					href={resolve('/')}
 					><span
-						class="grid size-8 shrink-0 place-items-center rounded-xl bg-[#f1faf5] font-serif text-xl text-accent-strong"
+						class="grid size-8 shrink-0 place-items-center rounded-xl bg-[#f1faf5] font-serif text-xl text-primary-800"
 						>Q</span
 					>{#if !sidebarCollapsed}<span>Quirebase</span>{/if}</a
 				>
 				{#if !sidebarCollapsed}<button
 						type="button"
-						class="grid size-8 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-sidebar-muted hover:bg-white/10 hover:text-white"
+						class="grid size-8 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-surface-400 hover:bg-white/10 hover:text-white"
 						aria-label={$t('Collapse sidebar')}
 						onclick={toggleSidebar}><Icon name="chevron-left" size={16} /></button
 					>{/if}
 			</div>
 			{#if sidebarCollapsed}<button
 					type="button"
-					class="mx-auto grid size-8 cursor-pointer place-items-center rounded-md border-0 bg-white/7 text-sidebar-muted hover:bg-white/12 hover:text-white"
+					class="mx-auto grid size-8 cursor-pointer place-items-center rounded-md border-0 bg-white/7 text-surface-400 hover:bg-white/12 hover:text-white"
 					aria-label={$t('Expand sidebar')}
 					onclick={toggleSidebar}><Icon name="chevron-right" size={16} /></button
 				>{:else}<p
-					class="mx-3 mt-1 text-[0.68rem] font-bold tracking-[0.11em] text-sidebar-muted uppercase"
+					class="mx-3 mt-1 text-[0.68rem] font-bold tracking-[0.11em] text-surface-400 uppercase"
 				>
 					{$t('Workspace')}
 				</p>{/if}
 			<nav class="grid gap-1" aria-label={$t('Main navigation')}>
 				{#each nav as [route, label, icon] (route)}
 					<a
-						class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-sidebar-muted no-underline transition-colors hover:bg-white/9 hover:text-white aria-[current=page]:bg-white/10 aria-[current=page]:text-white"
+						class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-surface-400 no-underline transition-colors hover:bg-white/9 hover:text-white aria-[current=page]:bg-white/10 aria-[current=page]:text-white"
 						href={resolve(route)}
 						title={sidebarCollapsed ? $t(label) : undefined}
 						aria-current={routeIsActive(route) ? 'page' : undefined}
@@ -120,7 +120,7 @@
 				{/each}
 				{#if session.data.user?.role === 'administrator'}
 					<a
-						class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-sidebar-muted no-underline transition-colors hover:bg-white/9 hover:text-white aria-[current=page]:bg-white/10 aria-[current=page]:text-white"
+						class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-surface-400 no-underline transition-colors hover:bg-white/9 hover:text-white aria-[current=page]:bg-white/10 aria-[current=page]:text-white"
 						href={resolve('/admin')}
 						title={sidebarCollapsed ? $t('Administration') : undefined}
 						aria-current={routeIsActive('/admin') ? 'page' : undefined}
@@ -129,42 +129,44 @@
 				{/if}
 			</nav>
 			<div class="mt-auto border-t border-white/12 pt-3.5">
-				<DropdownMenu.Root>
-					<DropdownMenu.Trigger
+				<Menu positioning={{ placement: 'top-start', gutter: 8 }}>
+					<Menu.Trigger
 						class="flex w-full cursor-pointer items-center gap-2.5 rounded-lg border-0 bg-white/7 p-2 text-white transition-colors hover:bg-white/12"
 					>
 						<span
-							class="grid size-8 shrink-0 place-items-center rounded-full bg-[#d7eee3] font-extrabold text-accent-strong"
+							class="grid size-8 shrink-0 place-items-center rounded-full bg-[#d7eee3] font-extrabold text-primary-800"
 							>{session.data.user?.username.slice(0, 1).toUpperCase()}</span
 						>
 						{#if !sidebarCollapsed}<span class="grid min-w-0 flex-1 text-left"
 								><strong class="truncate text-sm">{session.data.user?.username}</strong><small
-									class="truncate text-xs text-sidebar-muted"
+									class="truncate text-xs text-surface-400"
 									>{$t(domainLabel(session.data.user!.role))}</small
 								></span
 							>
 							<Icon name="chevron-down" size={15} />{/if}
-					</DropdownMenu.Trigger>
-					<DropdownMenu.Portal>
-						<DropdownMenu.Content
-							class="z-100 min-w-56 rounded-lg border border-line bg-raised p-1 shadow-xl"
-							sideOffset={8}
-							align="start"
-						>
-							<DropdownMenu.Item
-								class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none data-[highlighted]:bg-accent-soft data-[highlighted]:text-accent-strong"
-								onclick={() => location.assign(resolve('/account'))}
-								><Icon name="user" /> {$t('Account settings')}</DropdownMenu.Item
+					</Menu.Trigger>
+					<Portal>
+						<Menu.Positioner class="z-100">
+							<Menu.Content
+								class="min-w-56 rounded-container border border-surface-300 bg-surface-50 p-1 shadow-xl"
 							>
-							<DropdownMenu.Separator class="m-1 h-px bg-line" />
-							<DropdownMenu.Item
-								class="flex cursor-pointer items-center rounded-md px-2.5 py-2 text-sm text-danger outline-none data-[highlighted]:bg-red-50"
-								disabled={actionBusy}
-								onclick={logout}>{$t('Sign out')}</DropdownMenu.Item
-							>
-						</DropdownMenu.Content>
-					</DropdownMenu.Portal>
-				</DropdownMenu.Root>
+								<Menu.Item
+									value="account-settings"
+									class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none data-[highlighted]:bg-primary-50 data-[highlighted]:text-primary-800"
+									onclick={() => location.assign(resolve('/account'))}
+									><Icon name="user" /> {$t('Account settings')}</Menu.Item
+								>
+								<Menu.Separator class="m-1 h-px bg-surface-300" />
+								<Menu.Item
+									value="sign-out"
+									class="flex cursor-pointer items-center rounded-md px-2.5 py-2 text-sm text-error-700 outline-none data-[highlighted]:bg-red-50"
+									disabled={actionBusy}
+									onclick={logout}>{$t('Sign out')}</Menu.Item
+								>
+							</Menu.Content>
+						</Menu.Positioner>
+					</Portal>
+				</Menu>
 			</div>
 		</aside>
 		<main
@@ -172,12 +174,12 @@
 				? 'mx-auto min-h-0 w-full max-w-[100rem] min-w-0'
 				: 'mx-auto w-full max-w-[100rem] min-w-0 p-4 md:p-[clamp(1.25rem,3vw,2.75rem)]'}
 		>
-			{#if actionError}<p class="error" role="alert">{actionError}</p>{/if}
+			{#if actionError}<p class="text-error-700" role="alert">{actionError}</p>{/if}
 			{@render children()}
 		</main>
 	</div>
 	<nav
-		class={`fixed inset-x-0 bottom-0 z-50 overflow-x-auto bg-sidebar text-[#dbe4f0] md:hidden ${readerRoute ? 'hidden' : 'flex'}`}
+		class={`fixed inset-x-0 bottom-0 z-50 overflow-x-auto bg-primary-950 text-[#dbe4f0] md:hidden ${readerRoute ? 'hidden' : 'flex'}`}
 		aria-label={$t('Mobile navigation')}
 	>
 		{#each nav as [route, label, icon] (route)}

@@ -141,40 +141,47 @@
 	}
 </script>
 
-{#if project.isPending}<p class="muted">{$t('Loading Project…')}</p>
-{:else if project.isError}<p class="error">{$t('Unable to open this Project.')}</p>
+{#if project.isPending}<p class="text-surface-600">{$t('Loading Project…')}</p>
+{:else if project.isError}<p class="text-error-700">{$t('Unable to open this Project.')}</p>
 {:else if project.data}
 	<div class="workspace-header">
 		<div>
 			<a class="eyebrow" href={resolve('/projects')}>{$t('Projects')}</a>
 			<h1>{project.data.name}</h1>
-			<p class="muted">{project.data.description || $t('No description')}</p>
+			<p class="text-surface-600">{project.data.description || $t('No description')}</p>
 		</div>
 		<div class="toolbar">
-			<span class="badge">{$t(domainLabel(project.data.role))}</span>
-			<a class="button" href={resolve(`/library?project=${encodeURIComponent(projectId)}`)}
+			<span class="badge preset-tonal-surface">{$t(domainLabel(project.data.role))}</span>
+			<a
+				class="btn preset-tonal-surface font-semibold"
+				href={resolve(`/library?project=${encodeURIComponent(projectId)}`)}
 				>{$t('Open in Library')}</a
 			>
 		</div>
 	</div>
-	{#if error}<p class="error" role="alert">{error}</p>{/if}
-	{#if notice}<p class="notice" role="status">{notice}</p>{/if}
+	{#if error}<p class="text-error-700" role="alert">{error}</p>{/if}
+	{#if notice}<p
+			class="rounded-base border border-success-200 preset-tonal-success px-4 py-3 text-success-900"
+			role="status"
+		>
+			{notice}
+		</p>{/if}
 	<div class="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(20rem,1fr)]">
 		<div class="stack">
-			<section class="panel">
+			<section class="card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 				<h2>{$t('Items')}</h2>
 				{#each project.data.items as item (item.id)}
 					<div class="item-row grid-cols-[minmax(0,1fr)_auto] items-center">
 						<a
 							class="grid gap-1 no-underline"
 							href={resolve('/(app)/item/[itemId]', { itemId: item.id })}
-							><strong><RichText html={item.title_html} /></strong><span class="muted"
+							><strong><RichText html={item.title_html} /></strong><span class="text-surface-600"
 								>{item.authors ?? ''}{#if item.publication_date}
 									· {item.publication_date}{/if}</span
 							></a
 						>
 						{#if canEdit}<button
-								class="button"
+								class="btn preset-tonal-surface font-semibold"
 								disabled={busy}
 								onclick={() =>
 									mutate(
@@ -184,31 +191,33 @@
 									)}>{$t('Remove')}</button
 							>{/if}
 					</div>
-				{:else}<p class="muted">{$t('No Items in this Project.')}</p>{/each}
+				{:else}<p class="text-surface-600">{$t('No Items in this Project.')}</p>{/each}
 			</section>
 			{#if isOwner}
-				<section class="panel stack">
+				<section class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 					<h2>{$t('Project settings')}</h2>
-					<label>{$t('Name')}<input class="field" bind:value={name} /></label>
+					<label>{$t('Name')}<input class="input" bind:value={name} /></label>
 					<label
-						>{$t('Description')}<textarea class="field min-h-24" bind:value={description}
+						>{$t('Description')}<textarea class="textarea min-h-24" bind:value={description}
 						></textarea></label
 					>
 					<label
-						>{$t('Visibility')}<select class="field" bind:value={visibility}
+						>{$t('Visibility')}<select class="select" bind:value={visibility}
 							><option value="private">{$t('Private')}</option><option value="public"
 								>{$t('Public')}</option
 							></select
 						></label
 					>
-					<button class="button button-primary" disabled={busy} onclick={saveSettings}
-						>{$t('Save Project settings')}</button
+					<button
+						class="btn preset-filled-primary-700-300 font-semibold"
+						disabled={busy}
+						onclick={saveSettings}>{$t('Save Project settings')}</button
 					>
 				</section>
 			{/if}
 		</div>
 		<div class="stack self-start">
-			<section class="panel">
+			<section class="card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 				<h2>{$t('Members')}</h2>
 				{#each project.data.members as member (member.user_id)}
 					<div class="item-row">
@@ -216,28 +225,28 @@
 						{#if isOwner && member.role !== 'owner'}
 							<div class="toolbar">
 								<select
-									class="field compact"
+									class="compact input"
 									value={member.role}
 									onchange={(event) => updateMember(member.username, event.currentTarget.value)}
 									><option value="viewer">{$t('Viewer')}</option><option value="editor"
 										>{$t('Editor')}</option
 									></select
 								><button
-									class="button"
+									class="btn preset-tonal-surface font-semibold"
 									disabled={busy}
 									onclick={() => transferOwnership(member.user_id)}>{$t('Make owner')}</button
 								><button
-									class="button text-danger"
+									class="btn preset-tonal-error font-semibold"
 									disabled={busy}
 									onclick={() => removeMember(member.user_id)}>{$t('Remove')}</button
 								>
 							</div>
-						{:else}<span class="muted">{$t(domainLabel(member.role))}</span>{/if}
+						{:else}<span class="text-surface-600">{$t(domainLabel(member.role))}</span>{/if}
 					</div>
 				{/each}
 				{#if isOwner}
 					<form
-						class="stack mt-4 border-t border-line pt-4"
+						class="stack mt-4 border-t border-surface-300 pt-4"
 						onsubmit={(event) => {
 							event.preventDefault();
 							addMember();
@@ -245,25 +254,27 @@
 					>
 						<h3>{$t('Add or update member')}</h3>
 						<input
-							class="field"
+							class="input"
 							bind:value={memberUsername}
 							placeholder={$t('Username')}
 							required
 						/>
-						<select class="field" bind:value={memberRole}
+						<select class="select" bind:value={memberRole}
 							><option value="viewer">{$t('Viewer')}</option><option value="editor"
 								>{$t('Editor')}</option
 							></select
 						>
-						<button class="button" disabled={busy}>{$t('Save member')}</button>
+						<button class="btn preset-tonal-surface font-semibold" disabled={busy}
+							>{$t('Save member')}</button
+						>
 					</form>
 				{/if}
 			</section>
-			<section class="panel stack">
+			<section class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 				<h2>{$t('Project lifecycle')}</h2>
 				{#if isOwner}
 					{#if project.data.state === 'archived'}<button
-							class="button"
+							class="btn preset-tonal-surface font-semibold"
 							disabled={busy}
 							onclick={() =>
 								mutate(
@@ -271,7 +282,7 @@
 									$t('Project restored')
 								)}>{$t('Restore Project')}</button
 						>{:else}<button
-							class="button"
+							class="btn preset-tonal-surface font-semibold"
 							disabled={busy}
 							onclick={() =>
 								mutate(
@@ -279,11 +290,15 @@
 									$t('Project archived')
 								)}>{$t('Archive Project')}</button
 						>{/if}
-					<button class="button text-danger" disabled={busy} onclick={deleteProject}
-						>{$t('Delete Project')}</button
+					<button
+						class="btn preset-tonal-error font-semibold"
+						disabled={busy}
+						onclick={deleteProject}>{$t('Delete Project')}</button
 					>
-				{:else}<button class="button text-danger" disabled={busy} onclick={leaveProject}
-						>{$t('Leave Project')}</button
+				{:else}<button
+						class="btn preset-tonal-error font-semibold"
+						disabled={busy}
+						onclick={leaveProject}>{$t('Leave Project')}</button
 					>{/if}
 			</section>
 		</div>

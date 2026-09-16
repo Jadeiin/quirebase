@@ -129,10 +129,11 @@
 		updateUrl();
 	}
 
-	function togglePageSelection() {
+	function togglePageSelection(event: Event) {
+		const checked = (event.currentTarget as HTMLInputElement).checked;
 		for (const item of library.data?.items ?? []) {
-			if (allPageSelected) selected.delete(item.id);
-			else selected.add(item.id);
+			if (checked) selected.add(item.id);
+			else selected.delete(item.id);
 		}
 	}
 
@@ -185,7 +186,17 @@
 					}
 				});
 				selected.clear();
-				await queryClient.invalidateQueries({ queryKey: ['library'] });
+				const invalidations = [
+					queryClient.invalidateQueries({ queryKey: ['library'] }),
+					queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+				];
+				if (bulkAction === 'add_project' && bulkProject) {
+					invalidations.push(
+						queryClient.invalidateQueries({ queryKey: ['project', bulkProject] }),
+						queryClient.invalidateQueries({ queryKey: ['projects'] })
+					);
+				}
+				await Promise.all(invalidations);
 			}
 			notice = $t('Bulk action completed');
 		} catch (reason) {
@@ -198,44 +209,46 @@
 
 <div class="mb-8 flex items-end justify-between gap-4">
 	<div>
-		<p class="mb-2 text-xs font-bold tracking-[0.12em] text-accent uppercase">{$t('Workspace')}</p>
+		<p class="mb-2 text-xs font-bold tracking-[0.12em] text-primary-700 uppercase">
+			{$t('Workspace')}
+		</p>
 		<h1 class="mb-2">{$t('Library')}</h1>
-		<p class="m-0 max-w-2xl text-secondary">
+		<p class="m-0 max-w-2xl text-surface-700">
 			{$t('Search, select, organize, and export your scholarly Items.')}
 		</p>
 	</div>
 	{#if library.data}<span
-			class="hidden rounded-full border border-line bg-raised px-3 py-1.5 text-xs font-semibold text-muted sm:inline"
+			class="hidden rounded-full border border-surface-300 bg-surface-50 px-3 py-1.5 text-xs font-semibold text-surface-600 sm:inline"
 			>{library.data.total} {$t('Items')}</span
 		>{/if}
 </div>
 
 <form
-	class="panel stack"
+	class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm"
 	onsubmit={(event) => {
 		event.preventDefault();
 		updateUrl();
 	}}
 >
 	<div class="flex items-center gap-2">
-		<span class="ml-1 text-muted"><Icon name="search" /></span>
+		<span class="ml-1 text-surface-600"><Icon name="search" /></span>
 		<input
-			class="min-w-0 flex-1 border-0 bg-transparent px-1 py-2 text-base outline-none placeholder:text-muted"
+			class="min-w-0 flex-1 border-0 bg-transparent px-1 py-2 text-base outline-none placeholder:text-surface-600"
 			bind:value={query}
 			placeholder={$t('Search title, author, Tag, or full text')}
 		/>
 		<button
 			type="button"
-			class="button"
+			class="btn preset-tonal-surface font-semibold"
 			aria-expanded={filtersOpen}
 			onclick={() => (filtersOpen = !filtersOpen)}>{$t('Filters')}</button
 		>
-		<button class="button button-primary">{$t('Search')}</button>
+		<button class="btn preset-filled-primary-700-300 font-semibold">{$t('Search')}</button>
 	</div>
 	{#if filtersOpen}
-		<div class="grid gap-3 border-t border-line pt-4 sm:grid-cols-2 xl:grid-cols-5">
+		<div class="grid gap-3 border-t border-surface-300 pt-4 sm:grid-cols-2 xl:grid-cols-5">
 			<label
-				>{$t('Tag')}<select class="field" bind:value={tag}
+				>{$t('Tag')}<select class="select" bind:value={tag}
 					><option value="">{$t('All Tags')}</option
 					>{#each tags.data ?? [] as option (option.id)}<option value={option.id}
 							>{option.name}</option
@@ -243,7 +256,7 @@
 				></label
 			>
 			<label
-				>{$t('Project')}<select class="field" bind:value={project}
+				>{$t('Project')}<select class="select" bind:value={project}
 					><option value="">{$t('All Projects')}</option
 					>{#each projects.data ?? [] as option (option.id)}<option value={option.id}
 							>{option.name}</option
@@ -252,27 +265,29 @@
 			>
 			<label
 				>{$t('Year')}<input
-					class="field"
+					class="input"
 					inputmode="numeric"
 					maxlength="4"
 					bind:value={year}
 				/></label
 			>
-			<label>{$t('Contributor')}<input class="field" bind:value={author} /></label>
-			<label>{$t('Keyword')}<input class="field" bind:value={keyword} /></label>
+			<label>{$t('Contributor')}<input class="input" bind:value={author} /></label>
+			<label>{$t('Keyword')}<input class="input" bind:value={keyword} /></label>
 		</div>
 		<div class="toolbar justify-end">
-			<button type="button" class="button" onclick={clearFilters}>{$t('Clear filters')}</button>
+			<button type="button" class="btn preset-tonal-surface font-semibold" onclick={clearFilters}
+				>{$t('Clear filters')}</button
+			>
 		</div>
 	{/if}
 </form>
 
 {#if selected.size}
 	<section
-		class="sticky top-3 z-30 mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-accent/30 bg-raised p-3 shadow-lg"
+		class="sticky top-3 z-30 mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-primary-700/30 bg-surface-50 p-3 shadow-lg"
 	>
 		<strong class="mr-2">{selected.size} {$t('selected')}</strong>
-		<select class="field compact" bind:value={bulkAction} aria-label={$t('Bulk action')}>
+		<select class="compact input" bind:value={bulkAction} aria-label={$t('Bulk action')}>
 			<option value="">{$t('Choose action')}</option>
 			<option value="add_project">{$t('Add to Project')}</option>
 			<option value="add_tag">{$t('Add Tag')}</option>
@@ -280,55 +295,67 @@
 			<option value="documents">{$t('Download documents')}</option>
 			<option value="delete">{$t('Permanently delete')}</option>
 		</select>
-		{#if bulkAction === 'add_project'}<select class="field compact" bind:value={bulkProject}
+		{#if bulkAction === 'add_project'}<select
+				class="compact input"
+				bind:value={bulkProject}
+				aria-label={$t('Select Project')}
 				><option value="">{$t('Select Project')}</option
 				>{#each projects.data ?? [] as option (option.id)}<option value={option.id}
 						>{option.name}</option
 					>{/each}</select
 			>{/if}
 		{#if bulkAction === 'add_tag'}<input
-				class="field compact"
+				class="compact input"
 				bind:value={bulkTag}
 				placeholder={$t('Tag name')}
 			/>{/if}
-		{#if bulkAction === 'bibliography'}<select class="field compact" bind:value={exportFormat}
+		{#if bulkAction === 'bibliography'}<select class="compact input" bind:value={exportFormat}
 				><option value="bibtex">BibTeX</option><option value="biblatex">BibLaTeX</option><option
 					value="ris">RIS</option
 				><option value="endnote">EndNote</option><option value="csl">CSL</option></select
 			>{/if}
 		<button
-			class="button button-primary"
+			class="btn preset-filled-primary-700-300 font-semibold"
 			disabled={busy ||
 				!bulkAction ||
 				(bulkAction === 'add_project' && !bulkProject) ||
 				(bulkAction === 'add_tag' && !bulkTag.trim())}
 			onclick={runBulkAction}>{$t('Apply')}</button
 		>
-		<button class="button" onclick={() => selected.clear()}>{$t('Clear selection')}</button>
+		<button class="btn preset-tonal-surface font-semibold" onclick={() => selected.clear()}
+			>{$t('Clear selection')}</button
+		>
 	</section>
 {/if}
 
-{#if error}<p class="error mt-4" role="alert">{error}</p>{/if}
-{#if notice}<p class="notice mt-4" role="status">{notice}</p>{/if}
+{#if error}<p class="mt-4 text-error-700" role="alert">{error}</p>{/if}
+{#if notice}<p
+		class="mt-4 rounded-base border border-success-200 preset-tonal-success px-4 py-3 text-success-900"
+		role="status"
+	>
+		{notice}
+	</p>{/if}
 
-<section class="mt-6 overflow-hidden rounded-xl border border-line bg-raised shadow-sm">
-	{#if library.isPending}<div class="grid min-h-56 place-items-center text-muted">
+<section class="mt-6 overflow-hidden rounded-xl border border-surface-300 bg-surface-50 shadow-sm">
+	{#if library.isPending}<div class="grid min-h-56 place-items-center text-surface-600">
 			{$t('Loading Library…')}
 		</div>
-	{:else if library.isError}<div class="grid min-h-56 place-items-center text-danger">
+	{:else if library.isError}<div class="grid min-h-56 place-items-center text-error-700">
 			{$t('Unable to load the Library.')}
 		</div>
 	{:else if !library.data?.items.length}<div
 			class="grid min-h-56 place-items-center gap-2 p-8 text-center"
 		>
-			<span class="grid size-12 place-items-center rounded-full bg-muted-surface text-muted"
+			<span class="grid size-12 place-items-center rounded-full bg-surface-200 text-surface-600"
 				><Icon name="library" size={22} /></span
-			><strong>{$t('No Items found.')}</strong><span class="text-sm text-muted"
+			><strong>{$t('No Items found.')}</strong><span class="text-sm text-surface-600"
 				>{$t('Try a different Library Search.')}</span
 			>
 		</div>
 	{:else}
-		<div class="flex items-center gap-3 border-b border-line bg-surface/60 px-5 py-3 text-sm">
+		<div
+			class="bg-surface/60 flex items-center gap-3 border-b border-surface-300 px-5 py-3 text-sm"
+		>
 			<input
 				type="checkbox"
 				checked={allPageSelected}
@@ -336,10 +363,10 @@
 				aria-label={$t('Select this page')}
 			/><span class="font-semibold">{$t('Select this page')}</span>
 		</div>
-		<div class="divide-y divide-line">
+		<div class="divide-line divide-y">
 			{#each library.data.items as item (item.id)}
 				<article
-					class="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-5 py-4 transition-colors hover:bg-accent-soft/60"
+					class="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-5 py-4 transition-colors hover:bg-primary-50/60"
 				>
 					<input
 						type="checkbox"
@@ -351,33 +378,58 @@
 					<a
 						class="grid min-w-0 gap-1 no-underline"
 						href={resolve('/(app)/item/[itemId]', { itemId: item.id })}
-						><strong class="text-[0.98rem] leading-snug group-hover:text-accent-strong"
+						><strong class="text-[0.98rem] leading-snug group-hover:text-primary-800"
 							><RichText html={item.title_html} /></strong
-						><span class="truncate text-sm text-muted">{item.authors || $t('Unknown authors')}</span
-						>{#if item.publication_title}<span class="truncate text-xs text-muted"
+						><span class="truncate text-sm text-surface-600"
+							>{item.authors || $t('Unknown authors')}</span
+						>{#if item.publication_title}<span class="truncate text-xs text-surface-600"
 								>{item.publication_title}</span
 							>{/if}</a
 					>
-					<span class="flex items-center gap-2 text-xs text-muted"
+					<span class="flex items-center gap-2 text-xs text-surface-600"
 						>{item.publication_date || '—'}<Icon name="chevron-right" size={16} /></span
 					>
 				</article>
 			{/each}
 		</div>
 		<nav
-			class="flex items-center justify-between gap-3 border-t border-line bg-surface/60 px-4 py-3"
+			class="bg-surface/60 flex items-center justify-center gap-1 border-t border-surface-300 px-4 py-3"
 			aria-label={$t('Library pages')}
 		>
-			<button class="button" disabled={pageNumber <= 1} onclick={() => updateUrl(pageNumber - 1)}
-				>{$t('Previous page')}</button
+			<button
+				type="button"
+				class="inline-grid size-9 place-items-center rounded-md border border-surface-300 bg-surface-50 text-surface-600 hover:bg-primary-50 hover:text-primary-800 disabled:opacity-35"
+				disabled={pageNumber <= 1}
+				aria-label={$t('First page')}
+				title={$t('First page')}
+				onclick={() => updateUrl(1)}><Icon name="chevrons-left" size={17} /></button
 			>
-			<span class="text-xs font-medium text-muted tabular-nums"
+			<button
+				type="button"
+				class="inline-grid size-9 place-items-center rounded-md border border-surface-300 bg-surface-50 text-surface-600 hover:bg-primary-50 hover:text-primary-800 disabled:opacity-35"
+				disabled={pageNumber <= 1}
+				aria-label={$t('Previous page')}
+				title={$t('Previous page')}
+				onclick={() => updateUrl(pageNumber - 1)}><Icon name="chevron-left" size={17} /></button
+			>
+			<span class="min-w-24 px-2 text-center text-xs font-medium text-surface-600 tabular-nums"
 				>{$t('Page')} {pageNumber} {$t('of')} {totalPages}</span
 			>
 			<button
-				class="button"
+				type="button"
+				class="inline-grid size-9 place-items-center rounded-md border border-surface-300 bg-surface-50 text-surface-600 hover:bg-primary-50 hover:text-primary-800 disabled:opacity-35"
 				disabled={pageNumber >= totalPages}
-				onclick={() => updateUrl(pageNumber + 1)}>{$t('Next page')}</button
+				aria-label={$t('Next page')}
+				title={$t('Next page')}
+				onclick={() => updateUrl(pageNumber + 1)}><Icon name="chevron-right" size={17} /></button
+			>
+			<button
+				type="button"
+				class="inline-grid size-9 place-items-center rounded-md border border-surface-300 bg-surface-50 text-surface-600 hover:bg-primary-50 hover:text-primary-800 disabled:opacity-35"
+				disabled={pageNumber >= totalPages}
+				aria-label={$t('Last page')}
+				title={$t('Last page')}
+				onclick={() => updateUrl(totalPages)}><Icon name="chevrons-right" size={17} /></button
 			>
 		</nav>
 	{/if}

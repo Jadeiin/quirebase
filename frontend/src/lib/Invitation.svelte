@@ -36,29 +36,29 @@
 
 <main class="workspace auth-page">
 	<form
-		class="panel stack"
+		class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm"
 		onsubmit={(event) => {
 			event.preventDefault();
 			accept();
 		}}
 	>
 		<h1>{$t('Join Quirebase')}</h1>
-		{#if invitation.isPending}<p class="muted">
+		{#if invitation.isPending}<p class="text-surface-600">
 				{$t('Checking invitation…')}
-			</p>{:else if invitation.isError}<p class="error">
+			</p>{:else if invitation.isError}<p class="text-error-700">
 				{$t('This invitation is invalid or expired.')}
 			</p>{:else}<p>{$t('Create a password for')} <strong>{invitation.data?.username}</strong>.</p>
 			<label
 				>{$t('Password')}<input
-					class="field"
+					class="input"
 					type="password"
 					bind:value={password}
 					minlength="12"
 					autocomplete="new-password"
 					required
 				/></label
-			>{#if error}<p class="error">{error}</p>{/if}<button
-				class="button button-primary"
+			>{#if error}<p class="text-error-700">{error}</p>{/if}<button
+				class="btn preset-filled-primary-700-300 font-semibold"
 				disabled={busy}>{$t('Create account')}</button
 			>{/if}
 	</form>

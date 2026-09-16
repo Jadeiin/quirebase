@@ -1027,6 +1027,152 @@ test('Project creation preserves description and visibility', async ({ page }) =
 		});
 });
 
+test('Library page selection toggles and icon pagination reaches every boundary', async ({
+	page
+}) => {
+	await mockSession(page);
+	const requestedPages: number[] = [];
+	await page.route('**/api/v1/account', (route) =>
+		route.fulfill({
+			json: {
+				user: { id: 'user-1', username: 'reader', role: 'member' },
+				sessions: [],
+				api_tokens: []
+			}
+		})
+	);
+	await page.route('**/api/v1/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/projects', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/items?*', (route) => {
+		const currentPage = Number(new URL(route.request().url()).searchParams.get('page') ?? '1');
+		requestedPages.push(currentPage);
+		return route.fulfill({
+			json: {
+				items: [1, 2].map((number) => ({
+					id: `item-${currentPage}-${number}`,
+					title_html: `Page ${currentPage} Item ${number}`,
+					authors: 'A. Reader',
+					publication_date: '2026',
+					publication_title: null,
+					doi: null,
+					version: 1
+				})),
+				total: 75,
+				page: currentPage,
+				per_page: 25
+			}
+		});
+	});
+
+	await page.goto('/library');
+	const pageSelection = page.getByLabel('Select this page');
+	const itemSelections = page.locator('article input[type="checkbox"]');
+	await pageSelection.check();
+	await expect(page.locator('article input[type="checkbox"]:checked')).toHaveCount(2);
+	await pageSelection.uncheck();
+	await expect(page.locator('article input[type="checkbox"]:checked')).toHaveCount(0);
+	await expect(itemSelections).toHaveCount(2);
+
+	await page.getByRole('button', { name: 'Last page' }).click();
+	await expect.poll(() => requestedPages.at(-1)).toBe(3);
+	await page.getByRole('button', { name: 'Previous page' }).click();
+	await expect.poll(() => requestedPages.at(-1)).toBe(2);
+	await page.getByRole('button', { name: 'First page' }).click();
+	await expect(page).toHaveURL(/\/library$/);
+	await expect(page.getByText('Page 1 Item 1')).toBeVisible();
+	await page.getByRole('button', { name: 'Next page' }).click();
+	await expect(page).toHaveURL(/page=2/);
+	await expect(page.getByText('Page 2 Item 1')).toBeVisible();
+});
+
+test('adding a Library Item invalidates a previously opened Project', async ({ page }) => {
+	await mockSession(page);
+	let added = false;
+	let projectReads = 0;
+	await page.route('**/api/v1/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/projects/joinable', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/projects/project-1', (route) => {
+		projectReads += 1;
+		return route.fulfill({
+			json: {
+				id: 'project-1',
+				name: 'Research',
+				description: 'Reading list',
+				role: 'owner',
+				item_count: added ? 1 : 0,
+				state: 'active',
+				visibility: 'private',
+				items: added
+					? [
+							{
+								id: 'item-1',
+								title_html: 'Newly added Item',
+								authors: 'A. Reader',
+								publication_date: '2026',
+								publication_title: null,
+								doi: null,
+								version: 1
+							}
+						]
+					: [],
+				members: [{ user_id: 'user-1', username: 'reader', role: 'owner' }]
+			}
+		});
+	});
+	await page.route('**/api/v1/projects', (route) =>
+		route.fulfill({
+			json: [
+				{
+					id: 'project-1',
+					name: 'Research',
+					role: 'owner',
+					item_count: added ? 1 : 0,
+					state: 'active',
+					visibility: 'private',
+					description: 'Reading list'
+				}
+			]
+		})
+	);
+	await page.route('**/api/v1/items?*', (route) =>
+		route.fulfill({
+			json: {
+				items: [
+					{
+						id: 'item-1',
+						title_html: 'Newly added Item',
+						authors: 'A. Reader',
+						publication_date: '2026',
+						publication_title: null,
+						doi: null,
+						version: 1
+					}
+				],
+				total: 1,
+				page: 1,
+				per_page: 25
+			}
+		})
+	);
+	await page.route('**/api/v1/items/bulk', (route) => {
+		added = true;
+		return route.fulfill({ json: { ok: true } });
+	});
+
+	await page.goto('/projects/project-1');
+	await expect.poll(() => projectReads).toBe(1);
+	await page.getByRole('link', { name: 'Library', exact: true }).first().click();
+	await page.getByLabel('Select this page').check();
+	await page.getByLabel('Bulk action').selectOption('add_project');
+	await page.getByLabel('Select Project').selectOption('project-1');
+	await page.getByRole('button', { name: 'Apply' }).click();
+	await expect(page.getByText('Bulk action completed')).toBeVisible();
+	await page.getByRole('link', { name: 'Projects', exact: true }).first().click();
+	await page.getByRole('link').filter({ hasText: 'Research' }).click();
+	await expect.poll(() => projectReads).toBeGreaterThan(1);
+	await expect(page.getByText('Newly added Item')).toBeVisible();
+});
+
 test('Project owners can manage settings and members', async ({ page }) => {
 	await mockSession(page);
 	const mutations: Array<{ method: string; path: string; body: unknown }> = [];
@@ -1092,7 +1238,11 @@ test('Project owners can manage settings and members', async ({ page }) => {
 test('Tools exposes Tag maintenance and Citation Style installation', async ({ page }) => {
 	await mockSession(page);
 	let styleCreation: Record<string, unknown> | null = null;
-	await page.route('**/api/v1/duplicates*', (route) => route.fulfill({ json: { groups: [] } }));
+	let duplicateReads = 0;
+	await page.route('**/api/v1/duplicates*', (route) => {
+		duplicateReads += 1;
+		return route.fulfill({ json: { groups: [] } });
+	});
 	await page.route('**/api/v1/tags', (route) =>
 		route.fulfill({ json: [{ id: 'tag-1', name: 'Methods', accessible_item_count: 3 }] })
 	);
@@ -1105,6 +1255,14 @@ test('Tools exposes Tag maintenance and Citation Style installation', async ({ p
 	});
 
 	await page.goto('/tools');
+	await expect.poll(() => duplicateReads).toBe(0);
+	await page.getByRole('button', { name: 'Check for duplicates' }).click();
+	await expect.poll(() => duplicateReads).toBe(1);
+	await page.getByRole('button', { name: 'Same title' }).click();
+	await expect.poll(() => duplicateReads).toBe(1);
+	await expect(page.getByText('The match criteria changed.')).toBeVisible();
+	await page.getByRole('button', { name: 'Check for duplicates' }).click();
+	await expect.poll(() => duplicateReads).toBe(2);
 	await page.getByRole('tab', { name: 'Manage Tags' }).click();
 	await expect(page.locator('strong').filter({ hasText: 'Methods' })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Rename' })).toBeVisible();

@@ -37,10 +37,11 @@
 		"@embedpdf/plugin-viewport": "2.15.0",
 		"@embedpdf/plugin-zoom": "2.15.0",
 		"@lingui/core": "^6.7.0",
+		"@skeletonlabs/skeleton": "5.0.1",
+		"@skeletonlabs/skeleton-svelte": "5.0.1",
 		"@sveltejs/adapter-static": "^3.0.10",
 		"@sveltejs/kit": "^2.70.3",
 		"@tanstack/svelte-query": "^6.1.48",
-		"bits-ui": "^2.19.2",
 		"svelte": "^5.57.0",
 		"temml": "0.13.5"
 	},

@@ -157,63 +157,64 @@
 <form class="stack" onsubmit={submit}>
 	<div class="grid gap-3 lg:grid-cols-2">
 		<label class="lg:col-span-2"
-			>{$t('Title')}<input class="field" bind:value={draft.title} required /></label
+			>{$t('Title')}<input class="input" bind:value={draft.title} required /></label
 		>
 		<label
 			>{$t('Reference type')}<input
-				class="field"
+				class="input"
 				bind:value={draft.reference_type}
 				placeholder="journalArticle"
 			/></label
 		>
 		<label
 			>{$t('Publication date')}<input
-				class="field"
+				class="input"
 				bind:value={draft.publication_date}
 				placeholder="2026-09-16"
 			/></label
 		>
 		<label class="lg:col-span-2"
-			>{$t('Publication title')}<input class="field" bind:value={draft.publication_title} /></label
+			>{$t('Publication title')}<input class="input" bind:value={draft.publication_title} /></label
 		>
 		<label
 			>{$t('Journal abbreviation')}<input
-				class="field"
+				class="input"
 				bind:value={draft.journal_abbreviation}
 			/></label
 		>
-		<label>{$t('DOI')}<input class="field" bind:value={draft.doi} /></label>
-		<label>{$t('Volume')}<input class="field" bind:value={draft.volume} /></label>
-		<label>{$t('Issue')}<input class="field" bind:value={draft.issue} /></label>
-		<label>{$t('Pages')}<input class="field" bind:value={draft.pages} /></label>
-		<label>{$t('Affiliation')}<input class="field" bind:value={draft.affiliation} /></label>
-		<label>{$t('Publisher')}<input class="field" bind:value={draft.publisher} /></label>
-		<label>{$t('Place published')}<input class="field" bind:value={draft.place_published} /></label>
-		<label>{$t('Citation key')}<input class="field" bind:value={draft.bibtex_key} /></label>
-		<label>{$t('BibTeX type')}<input class="field" bind:value={draft.bibtex_type} /></label>
+		<label>{$t('DOI')}<input class="input" bind:value={draft.doi} /></label>
+		<label>{$t('Volume')}<input class="input" bind:value={draft.volume} /></label>
+		<label>{$t('Issue')}<input class="input" bind:value={draft.issue} /></label>
+		<label>{$t('Pages')}<input class="input" bind:value={draft.pages} /></label>
+		<label>{$t('Affiliation')}<input class="input" bind:value={draft.affiliation} /></label>
+		<label>{$t('Publisher')}<input class="input" bind:value={draft.publisher} /></label>
+		<label>{$t('Place published')}<input class="input" bind:value={draft.place_published} /></label>
+		<label>{$t('Citation key')}<input class="input" bind:value={draft.bibtex_key} /></label>
+		<label>{$t('BibTeX type')}<input class="input" bind:value={draft.bibtex_type} /></label>
 		<label class="lg:col-span-2"
 			>{$t('Keywords')}<input
-				class="field"
+				class="input"
 				bind:value={draft.keywords_text}
 				placeholder={$t('Separate Keywords with semicolons')}
 			/></label
 		>
 		<label class="lg:col-span-2"
-			>{$t('URLs')}<textarea class="field min-h-24" bind:value={draft.urls_text}></textarea></label
+			>{$t('URLs')}<textarea class="textarea min-h-24" bind:value={draft.urls_text}
+			></textarea></label
 		>
 		<label class="lg:col-span-2"
-			>{$t('Abstract')}<textarea class="field min-h-36" bind:value={draft.abstract}
+			>{$t('Abstract')}<textarea class="textarea min-h-36" bind:value={draft.abstract}
 			></textarea></label
 		>
 	</div>
 
 	{#each contributorGroups as group (group.label)}
-		<section class="rounded-lg border border-line p-3">
+		<section class="rounded-lg border border-surface-300 p-3">
 			<div class="workspace-header mb-3">
 				<h3>{$t(group.label)}</h3>
 				<button
 					type="button"
-					class="button"
+					class="btn preset-tonal-surface font-semibold"
 					onclick={() =>
 						group.rows.push({
 							key: rowKey(),
@@ -225,12 +226,12 @@
 			</div>
 			{#each group.rows as row (row.key)}
 				<div
-					class="grid gap-2 border-t border-line py-3 first:border-0 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end"
+					class="grid gap-2 border-t border-surface-300 py-3 first:border-0 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end"
 				>
-					<label>{$t('First name')}<input class="field" bind:value={row.first_name} /></label>
+					<label>{$t('First name')}<input class="input" bind:value={row.first_name} /></label>
 					<label
 						>{$t('Last name or organization')}<input
-							class="field"
+							class="input"
 							bind:value={row.last_name}
 						/></label
 					>
@@ -240,61 +241,63 @@
 					>
 					<button
 						type="button"
-						class="button"
+						class="btn preset-tonal-surface font-semibold"
 						onclick={() => group.rows.splice(group.rows.indexOf(row), 1)}>{$t('Remove')}</button
 					>
 				</div>
-			{:else}<p class="muted">{$t('No contributors.')}</p>{/each}
+			{:else}<p class="text-surface-600">{$t('No contributors.')}</p>{/each}
 		</section>
 	{/each}
 
-	<section class="rounded-lg border border-line p-3">
+	<section class="rounded-lg border border-surface-300 p-3">
 		<div class="workspace-header mb-3">
 			<h3>{$t('Upstream identifiers')}</h3>
 			<button
 				type="button"
-				class="button"
+				class="btn preset-tonal-surface font-semibold"
 				onclick={() => draft.identifiers.push({ key: rowKey(), provider: '', value: '' })}
 				>{$t('Add identifier')}</button
 			>
 		</div>
 		{#each draft.identifiers as row (row.key)}<div
-				class="grid gap-2 border-t border-line py-3 first:border-0 sm:grid-cols-[1fr_2fr_auto] sm:items-end"
+				class="grid gap-2 border-t border-surface-300 py-3 first:border-0 sm:grid-cols-[1fr_2fr_auto] sm:items-end"
 			>
-				<label>{$t('Provider')}<input class="field" bind:value={row.provider} /></label><label
-					>{$t('Identifier')}<input class="field" bind:value={row.value} /></label
+				<label>{$t('Provider')}<input class="input" bind:value={row.provider} /></label><label
+					>{$t('Identifier')}<input class="input" bind:value={row.value} /></label
 				><button
 					type="button"
-					class="button"
+					class="btn preset-tonal-surface font-semibold"
 					onclick={() => draft.identifiers.splice(draft.identifiers.indexOf(row), 1)}
 					>{$t('Remove')}</button
 				>
-			</div>{:else}<p class="muted">{$t('No upstream identifiers.')}</p>{/each}
+			</div>{:else}<p class="text-surface-600">{$t('No upstream identifiers.')}</p>{/each}
 	</section>
 
-	<section class="rounded-lg border border-line p-3">
+	<section class="rounded-lg border border-surface-300 p-3">
 		<div class="workspace-header mb-3">
 			<h3>{$t('Custom fields')}</h3>
 			<button
 				type="button"
-				class="button"
+				class="btn preset-tonal-surface font-semibold"
 				onclick={() => draft.custom_fields.push({ key: rowKey(), name: '', value: '' })}
 				>{$t('Add custom field')}</button
 			>
 		</div>
 		{#each draft.custom_fields as row (row.key)}<div
-				class="grid gap-2 border-t border-line py-3 first:border-0 sm:grid-cols-[1fr_2fr_auto] sm:items-end"
+				class="grid gap-2 border-t border-surface-300 py-3 first:border-0 sm:grid-cols-[1fr_2fr_auto] sm:items-end"
 			>
-				<label>{$t('Field name')}<input class="field" bind:value={row.name} /></label><label
-					>{$t('JSON or text value')}<input class="field" bind:value={row.value} /></label
+				<label>{$t('Field name')}<input class="input" bind:value={row.name} /></label><label
+					>{$t('JSON or text value')}<input class="input" bind:value={row.value} /></label
 				><button
 					type="button"
-					class="button"
+					class="btn preset-tonal-surface font-semibold"
 					onclick={() => draft.custom_fields.splice(draft.custom_fields.indexOf(row), 1)}
 					>{$t('Remove')}</button
 				>
-			</div>{:else}<p class="muted">{$t('No custom fields.')}</p>{/each}
+			</div>{:else}<p class="text-surface-600">{$t('No custom fields.')}</p>{/each}
 	</section>
 
-	<button class="button button-primary" disabled={busy}>{submitLabel}</button>
+	<button class="btn preset-filled-primary-700-300 font-semibold" disabled={busy}
+		>{submitLabel}</button
+	>
 </form>

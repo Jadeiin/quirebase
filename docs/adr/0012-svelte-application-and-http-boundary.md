@@ -23,15 +23,18 @@ releases; there is no frontend installation/copy script. There is no Node server
 endpoint, server action or second domain implementation in production.
 
 The Svelte application uses TanStack Svelte Query for remote state, Svelte runes for local UI
-state, URL parameters for shareable state, Tailwind CSS 4 with semantic CSS tokens for styling,
-and headless accessible component primitives. SvelteKit's filesystem router owns application URL
-matching and parameter parsing; a persistent authenticated route layout owns the Login Session,
-locale and application shell. Route pages remain thin adapters over feature views instead of
-reimplementing domain behavior or maintaining a catch-all client dispatcher. Frontend
-localization is owned by Lingui. Committed gettext PO catalogs are the translation source of
-truth; a strict Svelte extractor records literal messages and marked dynamic labels, and Lingui
-generates runtime catalogs during checks and builds. Python gettext catalogs and template
-localization helpers are removed.
+state, and URL parameters for shareable state. Skeleton 5 is the sole general-purpose design
+system: its semantic theme tokens and Tailwind CSS 4 utilities own visual styling, while Skeleton
+Svelte components backed by Zag own accessible interactive primitives. Feature views compose those
+primitives with a small set of Quirebase product patterns in `src/lib/design`; they do not define a
+parallel application-wide button, field, card, menu, dialog, tooltip, or status system. SvelteKit's
+filesystem router owns application URL matching and parameter parsing; a persistent authenticated
+route layout owns the Login Session, locale and application shell. Route pages remain thin
+adapters over feature views instead of reimplementing domain behavior or maintaining a catch-all
+client dispatcher. Frontend localization is owned by Lingui. Committed gettext PO catalogs are the
+translation source of truth; a strict Svelte extractor records literal messages and marked dynamic
+labels, and Lingui generates runtime catalogs during checks and builds. Python gettext catalogs
+and template localization helpers are removed.
 
 Both browsers and programmatic clients use `/api/v1`:
 
@@ -59,7 +62,8 @@ or form URLs.
 The PDF reader uses EmbedPDF's native Svelte headless packages and Svelte lifecycle. PDFium is a
 declared frontend dependency imported as a Vite asset URL; Vite emits a content-hashed,
 same-origin WASM asset. Quirebase does not copy PDFium to a fixed vendor path or manage the
-EmbedPDF engine lifecycle imperatively.
+EmbedPDF engine lifecycle imperatively. EmbedPDF remains isolated under `src/lib/pdf`; its domain-
+specific viewer controls may compose Skeleton primitives but do not become a second design system.
 
 ## Consequences
 
@@ -71,6 +75,14 @@ EmbedPDF engine lifecycle imperatively.
 - Web is the source product. PWA, Tauri and Capacitor may package or enhance the same static
   application later without changing the FastAPI boundary.
 - Deployments must build the frontend before constructing the Python wheel or container.
+- Quirebase owns one named Skeleton theme, including the complete semantic color ramps,
+  typography and radii. Product code consumes those tokens instead of raw palette values for
+  general interface states.
+- Skeleton Svelte brings Zag's state machines and a broader dependency graph. Production builds
+  must continue to tree-shake unused components, and frontend upgrades must check generated JS and
+  CSS sizes as well as accessibility behavior.
+- This alpha cutover is forward-only: the former Bits UI dependency and global `.button`, `.field`,
+  `.panel` and related compatibility classes are removed in the same change.
 
 ## Rejected alternatives
 
@@ -84,3 +96,9 @@ EmbedPDF engine lifecycle imperatively.
   boundary.
 - A fixed copied `vendor/pdfium.wasm` was rejected because it bypasses Vite's dependency graph,
   hashing and asset URL handling.
+- Direct Bits UI primitives plus an ad-hoc global stylesheet were rejected because component
+  behavior, theme semantics and product patterns would continue to evolve as separate systems.
+- shadcn-svelte was rejected because copied source components transfer long-term design-system and
+  upgrade ownership into this repository, which is not useful differentiation for Quirebase.
+- CSS-only component kits were rejected because dialogs, menus, tooltips and other composite
+  controls still need a separate accessible behavior layer.

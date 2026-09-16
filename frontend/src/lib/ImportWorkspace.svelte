@@ -7,6 +7,7 @@
 	import { SvelteMap } from 'svelte/reactivity';
 	import { apiRequest } from '$lib/api/client';
 	import type { components } from '$lib/api/schema';
+	import Icon from '$lib/design/Icon.svelte';
 	import RichText from '$lib/design/RichText.svelte';
 	import ItemMetadataForm from '$lib/ItemMetadataForm.svelte';
 	import { domainLabel } from '$lib/domain-labels';
@@ -222,94 +223,180 @@
 	onDestroy(stopPolling);
 </script>
 
-<div class="workspace-header">
+<div class="mb-7 flex flex-wrap items-end justify-between gap-4">
 	<div>
-		<h1>{$t('Import')}</h1>
-		<p class="muted">{$t('Stage metadata or PDFs, inspect the preview, then commit.')}</p>
+		<p class="mb-2 text-xs font-bold tracking-[0.12em] text-primary-700 uppercase">
+			{$t('Add to Library')}
+		</p>
+		<h1 class="mb-2">{$t('Import')}</h1>
+		<p class="mb-0 max-w-2xl text-surface-600">
+			{$t('Bring records into Quirebase from an identifier, a bibliography, or published PDFs.')}
+		</p>
 	</div>
 </div>
-{#if error}<p class="error" role="alert">{error}</p>{/if}
-<div class="dashboard-grid">
+<ol
+	class="mb-5 grid list-none gap-px overflow-hidden rounded-xl border border-surface-300 bg-surface-300 p-0 sm:grid-cols-3"
+>
+	{#each [{ number: '1', title: $t('Choose a source'), text: $t('Identifier, file, or PDFs') }, { number: '2', title: $t('Review the preview'), text: $t('Check records and diagnostics') }, { number: '3', title: $t('Commit to Library'), text: $t('Save only when you approve') }] as step (step.number)}
+		<li class="flex items-center gap-3 bg-surface-50 px-4 py-3">
+			<span
+				class="grid size-7 shrink-0 place-items-center rounded-full bg-primary-50 text-xs font-bold text-primary-800"
+				>{step.number}</span
+			>
+			<span class="min-w-0"
+				><strong class="block text-sm">{step.title}</strong><small class="text-surface-600"
+					>{step.text}</small
+				></span
+			>
+		</li>
+	{/each}
+</ol>
+{#if error}<p class="text-error-700" role="alert">{error}</p>{/if}
+<div class="grid items-start gap-4 lg:grid-cols-3">
 	<form
-		class="panel stack"
+		class="stack h-full card border border-surface-300 bg-surface-50 p-5 shadow-sm"
 		onsubmit={(event) => {
 			event.preventDefault();
 			importIdentifier();
 		}}
 	>
-		<h2>{$t('Identifier')}</h2>
-		<input class="field" bind:value={identifier} placeholder="DOI, PMID, arXiv ID…" required />
-		<select class="field" bind:value={provider}>
-			<option value="auto">{$t('Auto detect')}</option><option value="crossref">Crossref</option>
-			<option value="pubmed">PubMed</option><option value="arxiv">arXiv</option>
-			<option value="openalex">OpenAlex</option><option value="openlibrary">Open Library</option>
-			<option value="pmc">PMC</option><option value="nasa">NASA ADS</option><option value="ieee"
-				>IEEE Xplore</option
+		<div class="flex items-start gap-3">
+			<span
+				class="grid size-10 shrink-0 place-items-center rounded-lg bg-primary-50 text-primary-800"
+				><Icon name="search" size={20} /></span
 			>
-		</select>
-		<button class="button button-primary" disabled={busy}>{$t('Preview metadata')}</button>
+			<div>
+				<h2 class="mb-1">{$t('Look up an identifier')}</h2>
+				<p class="mb-0 text-sm text-surface-600">
+					{$t('Fetch one record from DOI, PubMed, arXiv, and other scholarly providers.')}
+				</p>
+			</div>
+		</div>
+		<label
+			>{$t('DOI, PMID, or arXiv ID')}<input
+				class="input"
+				bind:value={identifier}
+				placeholder="DOI, PMID, arXiv ID…"
+				required
+			/></label
+		>
+		<label
+			>{$t('Data source')}<select class="select" bind:value={provider}>
+				<option value="auto">{$t('Auto detect')}</option><option value="crossref">Crossref</option>
+				<option value="pubmed">PubMed</option><option value="arxiv">arXiv</option>
+				<option value="openalex">OpenAlex</option><option value="openlibrary">Open Library</option>
+				<option value="pmc">PMC</option><option value="nasa">NASA ADS</option><option value="ieee"
+					>IEEE Xplore</option
+				>
+			</select></label
+		>
+		<button class="btn preset-filled-primary-700-300 font-semibold" disabled={busy}
+			>{$t('Preview metadata')}</button
+		>
 	</form>
 	<form
-		class="panel stack"
+		class="stack h-full card border border-surface-300 bg-surface-50 p-5 shadow-sm"
 		onsubmit={(event) => {
 			event.preventDefault();
 			upload(event, 'bibliography');
 		}}
 	>
-		<h2>{$t('Bibliography file')}</h2>
-		<input class="field" type="file" name="bibliography" required />
-		<select class="field" name="file_format">
-			<option value="bibtex">BibTeX</option><option value="biblatex">BibLaTeX</option>
-			<option value="ris">RIS</option><option value="endnote">EndNote</option>
-		</select>
-		<button class="button button-primary" disabled={busy}>{$t('Preview bibliography')}</button>
+		<div class="flex items-start gap-3">
+			<span
+				class="grid size-10 shrink-0 place-items-center rounded-lg bg-primary-50 text-primary-800"
+				><Icon name="library" size={20} /></span
+			>
+			<div>
+				<h2 class="mb-1">{$t('Upload a bibliography')}</h2>
+				<p class="mb-0 text-sm text-surface-600">
+					{$t('Stage many records from a reference manager export.')}
+				</p>
+			</div>
+		</div>
+		<label
+			>{$t('Bibliography file')}<input
+				class="input"
+				type="file"
+				name="bibliography"
+				required
+			/></label
+		>
+		<label
+			>{$t('File format')}<select class="select" name="file_format">
+				<option value="bibtex">BibTeX</option><option value="biblatex">BibLaTeX</option>
+				<option value="ris">RIS</option><option value="endnote">EndNote</option>
+			</select></label
+		>
+		<button class="btn preset-filled-primary-700-300 font-semibold" disabled={busy}
+			>{$t('Preview bibliography')}</button
+		>
 	</form>
 	<form
-		class="panel stack"
+		class="stack h-full card border border-surface-300 bg-surface-50 p-5 shadow-sm"
 		onsubmit={(event) => {
 			event.preventDefault();
 			upload(event, 'pdfs');
 		}}
 	>
-		<h2>{$t('Published PDFs')}</h2>
-		<input
-			class="field"
-			type="file"
-			name="pdfs"
-			accept="application/pdf,.pdf"
-			multiple
-			required={pdfFiles.length === 0}
-			bind:this={pdfInput}
-			onchange={addPdfFiles}
-		/>
-		<p class="muted text-sm">
+		<div class="flex items-start gap-3">
+			<span
+				class="grid size-10 shrink-0 place-items-center rounded-lg bg-primary-50 text-primary-800"
+				><Icon name="import" size={20} /></span
+			>
+			<div>
+				<h2 class="mb-1">{$t('Import published PDFs')}</h2>
+				<p class="mb-0 text-sm text-surface-600">
+					{$t('Extract metadata and keep the papers together in one Import Batch.')}
+				</p>
+			</div>
+		</div>
+		<label
+			>{$t('PDF files')}<input
+				class="input"
+				type="file"
+				name="pdfs"
+				accept="application/pdf,.pdf"
+				multiple
+				required={pdfFiles.length === 0}
+				bind:this={pdfInput}
+				onchange={addPdfFiles}
+			/></label
+		>
+		<p class="text-sm text-surface-600">
 			{$t('Choose PDFs more than once to add them to the same batch.')}
 		</p>
 		{#if pdfFiles.length}<ul class="m-0 grid list-none gap-2 p-0" aria-live="polite">
 				{#each pdfFiles as file (`${file.name}:${file.size}:${file.lastModified}`)}<li
-						class="flex items-center justify-between gap-3 rounded-lg border border-line px-3 py-2 text-sm"
+						class="flex items-center justify-between gap-3 rounded-lg border border-surface-300 px-3 py-2 text-sm"
 					>
 						<span class="truncate">{file.name}</span><button
 							type="button"
-							class="button"
+							class="btn preset-tonal-surface font-semibold"
 							onclick={() => removePdf(file)}>{$t('Remove')}</button
 						>
 					</li>{/each}
 			</ul>{/if}
-		<button class="button button-primary" disabled={busy || pdfFiles.length === 0}
-			>{$t('Stage PDFs')}</button
+		<button
+			class="btn preset-filled-primary-700-300 font-semibold"
+			disabled={busy || pdfFiles.length === 0}>{$t('Stage PDFs')}</button
 		>
 	</form>
-	<section class="panel stack">
-		<h2>{$t('New Item')}</h2>
-		<p class="muted">{$t('Create a bibliographic record manually without an Import Batch.')}</p>
-		<button class="button button-primary" onclick={() => (manualOpen = !manualOpen)}
-			>{manualOpen ? $t('Close editor') : $t('Open metadata editor')}</button
-		>
-	</section>
 </div>
+<section
+	class="bg-surface/60 mt-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-dashed border-surface-400 px-5 py-4"
+>
+	<div>
+		<h2 class="mb-1">{$t('Create an Item manually')}</h2>
+		<p class="mb-0 text-sm text-surface-600">
+			{$t('Use the metadata editor when no import source is available.')}
+		</p>
+	</div>
+	<button class="btn preset-tonal-surface font-semibold" onclick={() => (manualOpen = !manualOpen)}
+		>{manualOpen ? $t('Close editor') : $t('Open metadata editor')}</button
+	>
+</section>
 {#if manualOpen}
-	<section class="panel list-panel stack">
+	<section class="list-panel stack card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 		<div>
 			<p class="eyebrow">{$t('Manual creation')}</p>
 			<h2>{$t('New Item metadata')}</h2>
@@ -323,48 +410,66 @@
 	</section>
 {/if}
 {#if batch}
-	<section class="panel list-panel">
+	<section class="mt-6 card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 		<div class="workspace-header">
 			<div>
 				<h2>{$t('Import preview')}</h2>
-				<p class="muted">
+				<p class="text-surface-600">
 					{batch.records.length}
 					{$t('records')} · {batch.errors.length}
 					{$t('diagnostics')} · {$t(domainLabel(batch.status))}
 				</p>
 			</div>
 			<div class="toolbar">
-				<button class="button" onclick={discard} disabled={busy}>{$t('Discard')}</button>
+				<button class="btn preset-tonal-surface font-semibold" onclick={discard} disabled={busy}
+					>{$t('Discard')}</button
+				>
 				{#if batch.status === 'failed'}
-					<button class="button" onclick={retry} disabled={busy}>{$t('Retry')}</button>
+					<button class="btn preset-tonal-surface font-semibold" onclick={retry} disabled={busy}
+						>{$t('Retry')}</button
+					>
 				{/if}
 				<button
-					class="button button-primary"
+					class="btn preset-filled-primary-700-300 font-semibold"
 					onclick={commit}
 					disabled={busy || batch.status !== 'ready'}>{$t('Commit')}</button
 				>
 			</div>
 		</div>
 		{#if batch.status === 'pending'}
-			<p class="notice" role="status">{$t('Preparing uploaded PDFs…')}</p>
+			<p
+				class="rounded-base border border-success-200 preset-tonal-success px-4 py-3 text-success-900"
+				role="status"
+			>
+				{$t('Preparing uploaded PDFs…')}
+			</p>
 		{:else if batch.status === 'committed'}
-			<p class="notice" role="status">{$t('This Import Batch has already been committed.')}</p>
+			<p
+				class="rounded-base border border-success-200 preset-tonal-success px-4 py-3 text-success-900"
+				role="status"
+			>
+				{$t('This Import Batch has already been committed.')}
+			</p>
 		{/if}
 		{#each previewRecords as record (record)}
 			<div class="item-row">
 				<strong><RichText html={String(record.title ?? $t('Untitled'))} /></strong>
-				<span class="muted">{String(record.authors ?? record.doi ?? '')}</span>
-				{#if record.original_name}<span class="muted">{String(record.original_name)}</span>{/if}
+				<span class="text-surface-600">{String(record.authors ?? record.doi ?? '')}</span>
+				{#if record.original_name}<span class="text-surface-600"
+						>{String(record.original_name)}</span
+					>{/if}
 			</div>
 		{/each}
 		{#if previewPageCount > 1}
 			<nav class="pagination" aria-label={$t('Import preview pages')}>
-				<button class="button" disabled={previewPage === 1} onclick={() => (previewPage -= 1)}
-					>{$t('Previous')}</button
+				<button
+					class="btn preset-tonal-surface font-semibold"
+					disabled={previewPage === 1}
+					onclick={() => (previewPage -= 1)}>{$t('Previous')}</button
 				>
 				<span>{$t('Page')} {previewPage} / {previewPageCount}</span>
 				<button
-					class="button"
+					class="btn preset-tonal-surface font-semibold"
 					disabled={previewPage === previewPageCount}
 					onclick={() => (previewPage += 1)}>{$t('Next')}</button
 				>
@@ -374,7 +479,7 @@
 			<h3>{$t('Diagnostics')}</h3>
 		{/if}
 		{#each batch.errors as diagnostic (diagnostic)}
-			<div class="error grid gap-1">
+			<div class="grid gap-1 text-error-700">
 				<strong>{String(diagnostic.message ?? diagnostic.code)}</strong>
 				{#if diagnostic.filename}<span>{String(diagnostic.filename)}</span>{/if}
 				{#if diagnostic.row || diagnostic.code}<small

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { Dialog, Menu, Portal } from '@skeletonlabs/skeleton-svelte';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { Dialog, DropdownMenu } from 'bits-ui';
 	import { apiRequest, type ItemSummary } from '$lib/api/client';
 	import Icon from '$lib/design/Icon.svelte';
 	import { domainLabel } from '$lib/domain-labels';
@@ -127,90 +127,91 @@
 </script>
 
 <div class="grid h-dvh min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden bg-[#dfe4e1]">
-	<header class="flex items-center gap-3 border-b border-line bg-raised px-3 py-2">
+	<header class="flex items-center gap-3 border-b border-surface-300 bg-surface-50 px-3 py-2">
 		<a
-			class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-line bg-raised px-2.5 py-1.5 text-sm font-semibold text-secondary no-underline transition-colors hover:bg-muted-surface hover:text-accent-strong"
+			class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-surface-300 bg-surface-50 px-2.5 py-1.5 text-sm font-semibold text-surface-700 no-underline transition-colors hover:bg-surface-200 hover:text-primary-800"
 			href={resolve('/(app)/item/[itemId]', { itemId })}
 			><Icon name="chevron-left" /> <span>{$t('Item')}</span></a
 		>
 		<div class="grid min-w-0 flex-1">
 			<strong class="truncate text-sm"
 				><RichText html={viewer.data?.item.title_html ?? $t('PDF Reader')} /></strong
-			><span class="truncate text-xs text-muted"
+			><span class="truncate text-xs text-surface-600"
 				>{viewer.data?.revision.original_name ?? $t('Loading')}</span
 			>
 		</div>
 		<button
-			class="hidden min-h-9 cursor-pointer items-center gap-1.5 rounded-md border border-line bg-raised px-2.5 py-1.5 text-sm font-semibold text-secondary transition-colors hover:bg-muted-surface hover:text-accent-strong sm:inline-flex"
+			class="hidden min-h-9 cursor-pointer items-center gap-1.5 rounded-md border border-surface-300 bg-surface-50 px-2.5 py-1.5 text-sm font-semibold text-surface-700 transition-colors hover:bg-surface-200 hover:text-primary-800 sm:inline-flex"
 			onclick={() => (inspectorOpen = true)}
 		>
 			<Icon name="annotation" />
 			{$t('Annotations')}
 		</button>
-		<DropdownMenu.Root>
-			<DropdownMenu.Trigger
-				class="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md border border-line bg-raised px-2.5 py-1.5 text-sm font-semibold text-secondary transition-colors hover:bg-muted-surface hover:text-accent-strong"
+		<Menu positioning={{ placement: 'bottom-end', gutter: 6 }}>
+			<Menu.Trigger
+				class="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md border border-surface-300 bg-surface-50 px-2.5 py-1.5 text-sm font-semibold text-surface-700 transition-colors hover:bg-surface-200 hover:text-primary-800"
 			>
 				<Icon name="download" /> <span class="hidden sm:inline">{$t('Download')}</span><Icon
 					name="chevron-down"
 					size={14}
 				/>
-			</DropdownMenu.Trigger>
-			<DropdownMenu.Portal>
-				<DropdownMenu.Content
-					class="z-100 w-[min(22rem,calc(100vw-1rem))] rounded-lg border border-line bg-raised p-1.5 shadow-xl"
-					sideOffset={6}
-					align="end"
-				>
-					<DropdownMenu.GroupHeading
-						class="px-2.5 py-2 text-xs font-bold tracking-wide text-muted uppercase"
-						>{$t('Current PDF')}</DropdownMenu.GroupHeading
+			</Menu.Trigger>
+			<Portal>
+				<Menu.Positioner class="z-100">
+					<Menu.Content
+						class="w-[min(22rem,calc(100vw-1rem))] rounded-container border border-surface-300 bg-surface-50 p-1.5 shadow-xl"
 					>
-					<DropdownMenu.Item
-						class="flex cursor-pointer items-center rounded-md text-sm outline-none data-[highlighted]:bg-accent-soft data-[highlighted]:text-accent-strong"
-					>
-						<a
-							class="w-full px-2.5 py-2 no-underline"
-							href={`/api/v1/items/${itemId}/revisions/${revisionId}/content`}
-							download={viewer.data?.revision.original_name ?? ''}
-							rel="external"
-							data-sveltekit-reload>{$t('Download original')}</a
+						<div class="px-2.5 py-2 text-xs font-bold tracking-wide text-surface-600 uppercase">
+							{$t('Current PDF')}
+						</div>
+						<Menu.Item
+							value="download-original"
+							class="flex cursor-pointer items-center rounded-md text-sm outline-none data-[highlighted]:bg-primary-50 data-[highlighted]:text-primary-800"
 						>
-					</DropdownMenu.Item>
-					<div class="m-1 h-px bg-line"></div>
-					<label class="grid gap-1.5 px-2.5 py-2 text-xs font-medium text-secondary">
-						{$t('Annotations to include')}
-						<select
-							class="min-h-9 rounded-md border border-line bg-surface px-2 text-sm text-ink"
-							bind:value={exportProjectId}
+							<a
+								class="w-full px-2.5 py-2 no-underline"
+								href={`/api/v1/items/${itemId}/revisions/${revisionId}/content`}
+								download={viewer.data?.revision.original_name ?? ''}
+								rel="external"
+								data-sveltekit-reload>{$t('Download original')}</a
+							>
+						</Menu.Item>
+						<div class="m-1 h-px bg-surface-300"></div>
+						<label class="grid gap-1.5 px-2.5 py-2 text-xs font-medium text-surface-700">
+							{$t('Annotations to include')}
+							<select
+								class="min-h-9 rounded-md border border-surface-300 bg-surface-100 px-2 text-sm text-surface-900"
+								bind:value={exportProjectId}
+							>
+								<option value="">{$t('Private annotations only')}</option>
+								{#each viewer.data?.projects ?? [] as project (project.id)}
+									<option value={project.id}
+										>{$t('Private annotations and project')}: {project.name}</option
+									>
+								{/each}
+							</select>
+						</label>
+						<Menu.Item
+							value="download-annotated"
+							class="flex cursor-pointer items-center rounded-md text-sm outline-none data-[highlighted]:bg-primary-50 data-[highlighted]:text-primary-800"
 						>
-							<option value="">{$t('Private annotations only')}</option>
-							{#each viewer.data?.projects ?? [] as project (project.id)}
-								<option value={project.id}
-									>{$t('Private annotations and project')}: {project.name}</option
-								>
-							{/each}
-						</select>
-					</label>
-					<DropdownMenu.Item
-						class="flex cursor-pointer items-center rounded-md text-sm outline-none data-[highlighted]:bg-accent-soft data-[highlighted]:text-accent-strong"
-					>
-						<a
-							class="w-full px-2.5 py-2 no-underline"
-							href={annotatedExportUrl}
-							rel="external"
-							data-sveltekit-reload>{$t('Download with annotations')}</a
-						>
-					</DropdownMenu.Item>
-				</DropdownMenu.Content>
-			</DropdownMenu.Portal>
-		</DropdownMenu.Root>
+							<a
+								class="w-full px-2.5 py-2 no-underline"
+								href={annotatedExportUrl}
+								rel="external"
+								data-sveltekit-reload>{$t('Download with annotations')}</a
+							>
+						</Menu.Item>
+					</Menu.Content>
+				</Menu.Positioner>
+			</Portal>
+		</Menu>
 	</header>
 	<div class="flex h-full min-h-0 flex-col overflow-hidden bg-[#dfe4e1]">
-		{#if viewer.isPending}<div class="grid h-full place-items-center text-muted">
+		{#if viewer.isPending}<div class="grid h-full place-items-center text-surface-600">
 				{$t('Loading reader configuration…')}
 			</div>
-		{:else if viewer.isError}<div class="grid h-full place-items-center text-danger">
+		{:else if viewer.isError}<div class="grid h-full place-items-center text-error-700">
 				{$t('Unable to open this PDF.')}
 			</div>
 		{:else if viewer.data}<HeadlessPdfViewer
@@ -224,109 +225,120 @@
 				projects={viewer.data.projects}
 			/>{/if}
 	</div>
-	<Dialog.Root bind:open={inspectorOpen}>
+	<Dialog open={inspectorOpen} onOpenChange={(details) => (inspectorOpen = details.open)}>
 		<Dialog.Trigger
-			class="flex w-full cursor-pointer items-center justify-between border-0 bg-sidebar px-4 py-3 text-sm font-semibold text-white sm:hidden"
+			class="flex w-full cursor-pointer items-center justify-between border-0 bg-primary-950 px-4 py-3 text-sm font-semibold text-white sm:hidden"
 			><span class="flex items-center gap-2"><Icon name="annotation" /> {$t('Annotations')}</span
-			><span class="flex items-center gap-1 text-sidebar-muted"
+			><span class="flex items-center gap-1 text-surface-400"
 				>{$t('Open inspector')} <Icon name="chevron-right" /></span
 			></Dialog.Trigger
 		>
-		<Dialog.Portal>
-			<Dialog.Overlay class="fixed inset-0 z-70 bg-[#07120d]/45 backdrop-blur-[2px]" />
-			<Dialog.Content
-				class="fixed inset-x-0 bottom-0 z-71 grid max-h-[72dvh] overflow-hidden rounded-t-2xl border border-line bg-raised shadow-2xl sm:inset-auto sm:right-4 sm:bottom-4 sm:w-[min(27rem,calc(100vw-2rem))] sm:rounded-xl"
+		<Portal>
+			<Dialog.Backdrop class="fixed inset-0 z-70 bg-surface-950/45 backdrop-blur-[2px]" />
+			<Dialog.Positioner
+				class="fixed inset-0 z-71 flex items-end justify-center p-0 sm:items-end sm:justify-end sm:p-4"
 			>
-				<header class="flex items-center justify-between border-b border-line px-4 py-3">
-					<Dialog.Title class="font-semibold">{$t('Annotation inspector')}</Dialog.Title>
-					<Dialog.Close
-						class="grid size-9 cursor-pointer place-items-center rounded-md hover:bg-muted-surface"
-						aria-label={$t('Close')}><Icon name="close" /></Dialog.Close
-					>
-				</header>
-				<div class="overflow-auto px-4 pt-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-					{#if inspectorError}<p class="text-danger" role="alert">{inspectorError}</p>{/if}
-					{#if annotations.isPending}<p class="text-muted">{$t('Loading annotations…')}</p>
-					{:else if annotations.isError}<p class="text-danger">
-							{$t('Unable to load annotations.')}
-						</p>
-					{:else}{#each annotations.data ?? [] as annotation (annotation.id)}<article
-								class="grid gap-3 border-b border-line py-4 last:border-0"
-							>
-								<div>
-									<strong class="text-sm"
-										>{$t(domainLabel(annotation.kind))} · {$t('page')}
-										{annotation.page_index + 1}</strong
-									>
-									<p class="mb-0 text-xs text-muted">
-										{annotation.author_display_name} · {annotation.scope}
-									</p>
-								</div>
-								{#if annotation.selected_text}<blockquote
-										class="m-0 border-l-2 border-accent pl-2 text-sm text-secondary"
-									>
-										{annotation.selected_text}
-									</blockquote>{/if}
-								{#if annotation.editable}<form
-										class="stack"
-										onsubmit={(event) => updateAnnotation(event, annotation)}
-									>
-										<textarea
-											class="field min-h-20 text-sm"
-											name="body"
-											value={annotation.body ?? ''}></textarea>
-										<div class="toolbar">
-											<button class="button" disabled={inspectorBusy}>{$t('Save note')}</button
-											><button
-												type="button"
-												class="button text-danger"
-												disabled={inspectorBusy}
-												onclick={() => deleteAnnotation(annotation)}
-												>{$t('Delete Annotation')}</button
+				<Dialog.Content
+					class="grid max-h-[72dvh] w-full overflow-hidden rounded-t-2xl border border-surface-300 bg-surface-50 shadow-2xl sm:w-[min(27rem,calc(100vw-2rem))] sm:rounded-container"
+				>
+					<header class="flex items-center justify-between border-b border-surface-300 px-4 py-3">
+						<Dialog.Title class="font-semibold">{$t('Annotation inspector')}</Dialog.Title>
+						<Dialog.CloseTrigger class="btn-icon preset-tonal-surface" aria-label={$t('Close')}
+							><Icon name="close" /></Dialog.CloseTrigger
+						>
+					</header>
+					<div class="overflow-auto px-4 pt-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+						{#if inspectorError}<p class="text-error-700" role="alert">{inspectorError}</p>{/if}
+						{#if annotations.isPending}<p class="text-surface-600">{$t('Loading annotations…')}</p>
+						{:else if annotations.isError}<p class="text-error-700">
+								{$t('Unable to load annotations.')}
+							</p>
+						{:else}{#each annotations.data ?? [] as annotation (annotation.id)}<article
+									class="grid gap-3 border-b border-surface-300 py-4 last:border-0"
+								>
+									<div>
+										<strong class="text-sm"
+											>{$t(domainLabel(annotation.kind))} · {$t('page')}
+											{annotation.page_index + 1}</strong
+										>
+										<p class="mb-0 text-xs text-surface-600">
+											{annotation.author_display_name} · {annotation.scope}
+										</p>
+									</div>
+									{#if annotation.selected_text}<blockquote
+											class="m-0 border-l-2 border-primary-700 pl-2 text-sm text-surface-700"
+										>
+											{annotation.selected_text}
+										</blockquote>{/if}
+									{#if annotation.editable}<form
+											class="stack"
+											onsubmit={(event) => updateAnnotation(event, annotation)}
+										>
+											<textarea
+												class="textarea min-h-20 text-sm"
+												name="body"
+												value={annotation.body ?? ''}></textarea>
+											<div class="toolbar">
+												<button
+													class="btn preset-tonal-surface font-semibold"
+													disabled={inspectorBusy}>{$t('Save note')}</button
+												><button
+													type="button"
+													class="btn preset-tonal-error font-semibold"
+													disabled={inspectorBusy}
+													onclick={() => deleteAnnotation(annotation)}
+													>{$t('Delete Annotation')}</button
+												>
+											</div>
+										</form>{:else if annotation.body}<p class="mb-0 text-sm">
+											{annotation.body}
+										</p>{/if}
+									<div class="rounded-lg bg-surface-200 p-2">
+										<h4 class="mb-2 text-sm">{$t('Replies')}</h4>
+										{#each annotation.replies as reply (reply.id)}{#if reply.editable}<form
+													class="stack border-t border-surface-300 py-2 first:border-0"
+													onsubmit={(event) => updateReply(event, annotation, reply)}
+												>
+													<small class="text-surface-600">{reply.author_display_name}</small
+													><textarea
+														class="textarea min-h-16 text-sm"
+														name="body"
+														value={reply.body}></textarea>
+													<div class="toolbar">
+														<button
+															class="btn preset-tonal-surface font-semibold"
+															disabled={inspectorBusy}>{$t('Save reply')}</button
+														><button
+															type="button"
+															class="btn preset-tonal-error font-semibold"
+															disabled={inspectorBusy}
+															onclick={() => deleteReply(annotation, reply)}
+															>{$t('Delete reply')}</button
+														>
+													</div>
+												</form>{:else}<div class="border-t border-surface-300 py-2 first:border-0">
+													<small class="text-surface-600">{reply.author_display_name}</small>
+													<p class="mb-0 text-sm">{reply.body}</p>
+												</div>{/if}{/each}
+										<form
+											class="toolbar border-t border-surface-300 pt-2"
+											onsubmit={(event) => createReply(event, annotation)}
+										>
+											<input
+												class="input grow"
+												name="body"
+												placeholder={$t('Write a reply')}
+												required
+											/><button
+												class="btn preset-tonal-surface font-semibold"
+												disabled={inspectorBusy}>{$t('Reply')}</button
 											>
-										</div>
-									</form>{:else if annotation.body}<p class="mb-0 text-sm">
-										{annotation.body}
-									</p>{/if}
-								<div class="rounded-lg bg-muted-surface p-2">
-									<h4 class="mb-2 text-sm">{$t('Replies')}</h4>
-									{#each annotation.replies as reply (reply.id)}{#if reply.editable}<form
-												class="stack border-t border-line py-2 first:border-0"
-												onsubmit={(event) => updateReply(event, annotation, reply)}
-											>
-												<small class="text-muted">{reply.author_display_name}</small><textarea
-													class="field min-h-16 text-sm"
-													name="body"
-													value={reply.body}></textarea>
-												<div class="toolbar">
-													<button class="button" disabled={inspectorBusy}>{$t('Save reply')}</button
-													><button
-														type="button"
-														class="button text-danger"
-														disabled={inspectorBusy}
-														onclick={() => deleteReply(annotation, reply)}
-														>{$t('Delete reply')}</button
-													>
-												</div>
-											</form>{:else}<div class="border-t border-line py-2 first:border-0">
-												<small class="text-muted">{reply.author_display_name}</small>
-												<p class="mb-0 text-sm">{reply.body}</p>
-											</div>{/if}{/each}
-									<form
-										class="toolbar border-t border-line pt-2"
-										onsubmit={(event) => createReply(event, annotation)}
-									>
-										<input
-											class="field grow"
-											name="body"
-											placeholder={$t('Write a reply')}
-											required
-										/><button class="button" disabled={inspectorBusy}>{$t('Reply')}</button>
-									</form>
-								</div>
-							</article>{:else}<p class="text-muted">{$t('No annotations.')}</p>{/each}{/if}
-				</div>
-			</Dialog.Content>
-		</Dialog.Portal>
-	</Dialog.Root>
+										</form>
+									</div>
+								</article>{:else}<p class="text-surface-600">{$t('No annotations.')}</p>{/each}{/if}
+					</div>
+				</Dialog.Content>
+			</Dialog.Positioner>
+		</Portal>
+	</Dialog>
 </div>

@@ -159,165 +159,256 @@
 	}
 </script>
 
-<div class="workspace-header">
+<div class="mb-8 flex flex-wrap items-end justify-between gap-4">
 	<div>
-		<h1>{$t('Account')}</h1>
-		<p class="muted">{$t('Sessions, API Tokens, locale, and password.')}</p>
+		<p class="mb-2 text-xs font-bold tracking-[0.12em] text-primary-700 uppercase">
+			{$t('Personal settings')}
+		</p>
+		<h1 class="mb-2">{$t('Account')}</h1>
+		<p class="mb-0 text-surface-600">{$t('Sessions, API Tokens, locale, and password.')}</p>
 	</div>
-	<button class="button" disabled={busy} onclick={logout}>{$t('Sign out')}</button>
+	<button class="btn preset-tonal-surface font-semibold" disabled={busy} onclick={logout}
+		>{$t('Sign out')}</button
+	>
 </div>
-{#if error}<p class="error" role="alert">{error}</p>{/if}
-{#if notice}<p class="notice" role="status">{$t(notice)}</p>{/if}
+{#if error}<p class="text-error-700" role="alert">{error}</p>{/if}
+{#if notice}<p
+		class="rounded-base border border-success-200 preset-tonal-success px-4 py-3 text-success-900"
+		role="status"
+	>
+		{$t(notice)}
+	</p>{/if}
 {#if account.isPending}
-	<p class="muted">{$t('Loading account…')}</p>
+	<p class="text-surface-600">{$t('Loading account…')}</p>
 {:else if account.data}
-	<div class="dashboard-grid">
-		<section class="panel stack">
-			<div>
-				<h2>{account.data.user.username}</h2>
-				<p class="muted">{$t(domainLabel(account.data.user.role))}</p>
-			</div>
-			<form class="stack" onsubmit={changePassword}>
-				<h3>{$t('Password')}</h3>
-				<label
-					>{$t('Current password')}<input
-						class="field"
-						name="current_password"
-						type="password"
-						autocomplete="current-password"
-						required
-					/></label
-				>
-				<label
-					>{$t('New password')}<input
-						class="field"
-						name="new_password"
-						type="password"
-						autocomplete="new-password"
-						minlength="12"
-						required
-					/></label
-				>
-				<button class="button button-primary" disabled={busy}>{$t('Change password')}</button>
-			</form>
-			<form class="stack" onsubmit={saveLocale}>
-				<h3>{$t('Language')}</h3>
-				<label
-					>{$t('Locale')}<select class="field" bind:value={selectedLocale}
-						><option value="en-US">English</option><option value="zh-CN">简体中文</option></select
-					></label
-				>
-				<button class="button" disabled={busy}>{$t('Save locale')}</button>
-			</form>
-			<label class="flex items-start gap-2">
-				<input type="checkbox" bind:checked={sidebarCollapsed} onchange={saveSidebarPreference} />
-				<span
-					><strong>{$t('Collapse navigation sidebar by default')}</strong><small
-						class="block text-muted"
-						>{$t('Free more horizontal space for reading and metadata work.')}</small
-					></span
-				>
-			</label>
-		</section>
-		<section class="panel stack">
-			<div class="workspace-header">
-				<h2>{$t('Sessions')}</h2>
-				<button class="button" disabled={busy} onclick={revokeAllSessions}
-					>{$t('Revoke all sessions')}</button
-				>
-			</div>
-			{#each account.data.sessions as session (session.id)}
-				<div class="item-row">
-					<strong>{session.current ? $t('Current session') : $t('Session')}</strong>
-					<span class="muted"
-						>{$t('Created')}
-						{new Date(session.created_at).toLocaleString()} · {$t('expires')}
-						{new Date(session.expires_at).toLocaleString()}</span
-					>
-					<button
-						class="button"
-						disabled={busy}
-						onclick={() => revokeSession(session.id, session.current)}
-						>{session.current ? $t('Revoke current session') : $t('Revoke session')}</button
-					>
-				</div>
-			{:else}
-				<p class="muted">{$t('No sessions.')}</p>
-			{/each}
-		</section>
-		<section class="panel stack">
-			<h2>{$t('API Tokens')}</h2>
-			<form
-				class="grid gap-2 sm:grid-cols-[minmax(10rem,1fr)_9rem_auto]"
-				onsubmit={(event) => {
-					event.preventDefault();
-					createToken();
-				}}
+	<section
+		class="mb-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-surface-300 bg-surface-50 p-5 shadow-sm"
+	>
+		<div class="flex min-w-0 items-center gap-3">
+			<span
+				class="grid size-11 shrink-0 place-items-center rounded-full bg-primary-50 text-lg font-bold text-primary-800"
+				>{account.data.user.username.slice(0, 1).toUpperCase()}</span
 			>
-				<input class="field grow" bind:value={tokenName} placeholder={$t('Token name')} required />
-				<select class="field" bind:value={tokenDays} aria-label={$t('Expires after')}>
-					<option value={7}>{$t('7 days')}</option><option value={30}>{$t('30 days')}</option
-					><option value={90}>{$t('90 days')}</option><option value={365}>{$t('365 days')}</option>
-				</select>
-				<button class="button button-primary" disabled={busy}>{$t('Create')}</button>
-			</form>
-			{#if createdToken}
-				<div class="secret" role="status">
-					<strong>{$t('Copy this token now')}</strong><code>{createdToken}</code>
+			<div class="min-w-0">
+				<h2 class="m-0 truncate text-lg">{account.data.user.username}</h2>
+				<p class="m-0 text-sm text-surface-600">{$t(domainLabel(account.data.user.role))}</p>
+			</div>
+		</div>
+		<span class="badge preset-tonal-surface">{$t('Signed in')}</span>
+	</section>
+	<div class="grid items-start gap-4 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.2fr)]">
+		<div class="grid min-w-0 content-start gap-4">
+			<section class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm">
+				<div>
+					<h2>{$t('Preferences')}</h2>
+					<p class="mb-0 text-sm text-surface-600">
+						{$t('Choose how Quirebase looks and speaks to you.')}
+					</p>
 				</div>
-			{/if}
-			{#each account.data.api_tokens as token (token.id)}
-				<div class="item-row">
-					<strong>{token.name}</strong><span class="muted"
-						>{$t(domainLabel(token.status))} · {$t('expires')}
-						{new Date(token.expires_at).toLocaleDateString()}</span
-					><button class="button" disabled={busy} onclick={() => revokeToken(token.id)}
-						>{$t('Revoke token')}</button
+				<form class="stack" onsubmit={saveLocale}>
+					<label
+						>{$t('Language')}<select
+							class="select"
+							bind:value={selectedLocale}
+							aria-label={$t('Locale')}
+							><option value="en-US">English</option><option value="zh-CN">简体中文</option></select
+						></label
+					>
+					<div>
+						<button class="btn preset-tonal-surface font-semibold" disabled={busy}
+							>{$t('Save locale')}</button
+						>
+					</div>
+				</form>
+				<label class="flex items-start gap-2 border-t border-surface-300 pt-4">
+					<input type="checkbox" bind:checked={sidebarCollapsed} onchange={saveSidebarPreference} />
+					<span
+						><strong>{$t('Collapse navigation sidebar by default')}</strong><small
+							class="block text-surface-600"
+							>{$t('Free more horizontal space for reading and metadata work.')}</small
+						></span
+					>
+				</label>
+			</section>
+			<section class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm">
+				<div>
+					<h2>{$t('Password')}</h2>
+					<p class="mb-0 text-sm text-surface-600">
+						{$t('Use at least 12 characters for a strong password.')}
+					</p>
+				</div>
+				<form class="stack" onsubmit={changePassword}>
+					<label
+						>{$t('Current password')}<input
+							class="input"
+							name="current_password"
+							type="password"
+							autocomplete="current-password"
+							required
+						/></label
+					>
+					<label
+						>{$t('New password')}<input
+							class="input"
+							name="new_password"
+							type="password"
+							autocomplete="new-password"
+							minlength="12"
+							required
+						/></label
+					>
+					<div>
+						<button class="btn preset-filled-primary-700-300 font-semibold" disabled={busy}
+							>{$t('Change password')}</button
+						>
+					</div>
+				</form>
+			</section>
+		</div>
+		<div class="grid min-w-0 content-start gap-4">
+			<section class="stack min-w-0 card border border-surface-300 bg-surface-50 p-5 shadow-sm">
+				<div class="flex flex-wrap items-center justify-between gap-3">
+					<div>
+						<h2 class="mb-1">{$t('Sessions')}</h2>
+						<p class="mb-0 text-sm text-surface-600">
+							{account.data.sessions.length}
+							{$t('active sessions')}
+						</p>
+					</div>
+					<button
+						class="btn preset-tonal-surface font-semibold"
+						disabled={busy}
+						onclick={revokeAllSessions}>{$t('Revoke all sessions')}</button
 					>
 				</div>
-			{:else}
-				<p class="muted">{$t('No API Tokens.')}</p>
-			{/each}
-			<div class="mt-3 border-t border-line pt-4">
-				<h3>{$t('Connect an HTTP API client')}</h3>
-				<p class="muted text-sm">
-					{$t('Use the versioned JSON API and send your API Token in the Authorization header.')}
-				</p>
-				<dl class="metadata-grid text-sm">
-					<div>
-						<dt>{$t('Base endpoint')}</dt>
-						<dd><code>{externalOrigin}/api/v1</code></dd>
-					</div>
-					<div>
-						<dt>{$t('OpenAPI')}</dt>
-						<dd>
+				<div class="divide-line divide-y">
+					{#each account.data.sessions as session (session.id)}
+						<div
+							class="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+						>
+							<div class="min-w-0">
+								<strong>{session.current ? $t('Current session') : $t('Session')}</strong>
+								<p class="m-0 text-sm text-surface-600">
+									{$t('Created')}
+									{new Date(session.created_at).toLocaleString()}
+								</p>
+								<p class="m-0 text-xs text-surface-600">
+									{$t('Expires')}
+									{new Date(session.expires_at).toLocaleString()}
+								</p>
+							</div>
 							<button
-								class="cursor-pointer border-0 bg-transparent p-0 underline"
-								onclick={() => location.assign(`${externalOrigin}/docs`)}
-								><code>{externalOrigin}/docs</code></button
+								class="btn shrink-0 preset-tonal-surface font-semibold"
+								disabled={busy}
+								onclick={() => revokeSession(session.id, session.current)}
+								>{session.current ? $t('Revoke current session') : $t('Revoke session')}</button
 							>
-						</dd>
+						</div>
+					{:else}
+						<p class="text-surface-600">{$t('No sessions.')}</p>
+					{/each}
+				</div>
+			</section>
+			<section
+				class="stack min-w-0 overflow-hidden card border border-surface-300 bg-surface-50 p-5 shadow-sm"
+			>
+				<div>
+					<h2 class="mb-1">{$t('API Tokens')}</h2>
+					<p class="mb-0 text-sm text-surface-600">
+						{$t('Create revocable credentials for API and MCP clients.')}
+					</p>
+				</div>
+				<form
+					class="grid min-w-0 gap-2 sm:grid-cols-[minmax(8rem,1fr)_8rem_auto]"
+					onsubmit={(event) => {
+						event.preventDefault();
+						createToken();
+					}}
+				>
+					<input
+						class="input grow"
+						bind:value={tokenName}
+						placeholder={$t('Token name')}
+						required
+					/>
+					<select class="select" bind:value={tokenDays} aria-label={$t('Expires after')}>
+						<option value={7}>{$t('7 days')}</option><option value={30}>{$t('30 days')}</option
+						><option value={90}>{$t('90 days')}</option><option value={365}>{$t('365 days')}</option
+						>
+					</select>
+					<button class="btn preset-filled-primary-700-300 font-semibold" disabled={busy}
+						>{$t('Create')}</button
+					>
+				</form>
+				{#if createdToken}
+					<div class="secret min-w-0" role="status">
+						<strong>{$t('Copy this token now')}</strong><code>{createdToken}</code>
 					</div>
-					<div>
-						<dt>{$t('Header')}</dt>
-						<dd><code>Authorization: Bearer YOUR_API_TOKEN</code></dd>
+				{/if}
+				{#each account.data.api_tokens as token (token.id)}
+					<div
+						class="flex min-w-0 flex-wrap items-center justify-between gap-3 border-t border-surface-300 pt-3"
+					>
+						<div class="min-w-0">
+							<strong class="block truncate">{token.name}</strong><span
+								class="text-sm text-surface-600"
+								>{$t(domainLabel(token.status))} · {$t('Expires')}
+								{new Date(token.expires_at).toLocaleDateString()}</span
+							>
+						</div>
+						<button
+							class="btn shrink-0 preset-tonal-surface font-semibold"
+							disabled={busy}
+							onclick={() => revokeToken(token.id)}>{$t('Revoke token')}</button
+						>
 					</div>
-				</dl>
-				<pre
-					class="overflow-x-auto rounded-lg border border-line bg-muted-surface p-3 text-xs"><code
-						>curl \
+				{:else}
+					<p class="text-surface-600">{$t('No API Tokens.')}</p>
+				{/each}
+				<details class="mt-2 min-w-0 border-t border-surface-300 pt-4">
+					<summary class="cursor-pointer font-semibold">{$t('Client connection guide')}</summary>
+					<div class="mt-4 min-w-0">
+						<h3>{$t('Connect an HTTP API client')}</h3>
+						<p class="text-sm text-surface-600">
+							{$t(
+								'Use the versioned JSON API and send your API Token in the Authorization header.'
+							)}
+						</p>
+						<dl class="grid min-w-0 gap-3 text-sm sm:grid-cols-[7rem_minmax(0,1fr)]">
+							<div>
+								<dt>{$t('Base endpoint')}</dt>
+								<dd class="m-0 break-all"><code>{externalOrigin}/api/v1</code></dd>
+							</div>
+							<div>
+								<dt>{$t('OpenAPI')}</dt>
+								<dd class="m-0 break-all">
+									<button
+										class="cursor-pointer border-0 bg-transparent p-0 underline"
+										onclick={() => location.assign(`${externalOrigin}/docs`)}
+										><code>{externalOrigin}/docs</code></button
+									>
+								</dd>
+							</div>
+							<div>
+								<dt>{$t('Header')}</dt>
+								<dd class="m-0 break-all"><code>Authorization: Bearer YOUR_API_TOKEN</code></dd>
+							</div>
+						</dl>
+						<pre
+							class="overflow-x-auto rounded-lg border border-surface-300 bg-surface-200 p-3 text-xs"><code
+								>curl \
   -H 'Authorization: Bearer YOUR_API_TOKEN' \
   '{externalOrigin}/api/v1/items'</code
-					></pre>
-			</div>
-			<div class="mt-3 border-t border-line pt-4">
-				<h3>{$t('Connect an MCP client')}</h3>
-				<p class="muted text-sm">
-					{$t('Use Streamable HTTP. Never put an API Token in the URL.')}
-				</p>
-				<pre
-					class="overflow-x-auto rounded-lg border border-line bg-muted-surface p-3 text-xs"><code
-						>{`{
+							></pre>
+					</div>
+					<div class="mt-4 border-t border-surface-300 pt-4">
+						<h3>{$t('Connect an MCP client')}</h3>
+						<p class="text-sm text-surface-600">
+							{$t('Use Streamable HTTP. Never put an API Token in the URL.')}
+						</p>
+						<pre
+							class="overflow-x-auto rounded-lg border border-surface-300 bg-surface-200 p-3 text-xs"><code
+								>{`{
   "mcpServers": {
     "quirebase": {
       "url": "${externalOrigin}/mcp",
@@ -325,9 +416,11 @@
     }
   }
 }`}</code
-					></pre>
-			</div>
-		</section>
+							></pre>
+					</div>
+				</details>
+			</section>
+		</div>
 	</div>
 	<div class="mt-4"><ExportPreferences userId={account.data.user.id} /></div>
 {/if}

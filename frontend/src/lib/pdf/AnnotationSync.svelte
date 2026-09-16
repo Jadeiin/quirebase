@@ -278,7 +278,7 @@
 </script>
 
 <div
-	class="flex items-center gap-1.5 overflow-x-auto border-b border-line bg-[#f9fbfa] px-2.5 py-1.5"
+	class="flex items-center gap-1.5 overflow-x-auto border-b border-surface-300 bg-[#f9fbfa] px-2.5 py-1.5"
 	aria-label={$t('Annotation tools')}
 >
 	<div class="flex shrink-0 items-center gap-1">
@@ -286,7 +286,7 @@
 			{#each tools as [id, label] (id)}
 				{@const active = annotations.state.activeToolId === id}
 				<button
-					class={`min-h-8 cursor-pointer rounded-md border px-2.5 py-1 text-xs font-medium whitespace-nowrap transition-colors ${active ? 'border-accent bg-accent text-white' : 'border-line bg-surface text-ink hover:border-accent/50 hover:bg-accent-soft hover:text-accent-strong'}`}
+					class={`min-h-8 cursor-pointer rounded-md border px-2.5 py-1 text-xs font-medium whitespace-nowrap transition-colors ${active ? 'border-primary-700 bg-primary-700 text-white' : 'border-surface-300 bg-surface-100 text-surface-900 hover:border-primary-700/50 hover:bg-primary-50 hover:text-primary-800'}`}
 					aria-pressed={active}
 					onclick={() => selectTool(id, active)}>{$t(label)}</button
 				>
@@ -294,19 +294,19 @@
 		{/if}
 	</div>
 	{#if editable}
-		<div class="flex shrink-0 items-center gap-2 border-l border-line pl-2">
-			<label class="flex items-center gap-1 text-xs text-muted">
+		<div class="flex shrink-0 items-center gap-2 border-l border-surface-300 pl-2">
+			<label class="flex items-center gap-1 text-xs text-surface-600">
 				<span class="sr-only">{$t('Annotation color')}</span>
 				<input
-					class="size-7 cursor-pointer rounded border border-line bg-transparent p-0.5"
+					class="size-7 cursor-pointer rounded border border-surface-300 bg-transparent p-0.5"
 					type="color"
 					bind:value={annotationColor}
 					onchange={applyAnnotationStyle}
 				/>
 			</label>
-			<label class="flex items-center gap-1 text-xs text-muted">
+			<label class="flex items-center gap-1 text-xs text-surface-600">
 				<span>{$t('Opacity')}</span><input
-					class="w-20 accent-accent"
+					class="accent-accent w-20"
 					type="range"
 					min="0.1"
 					max="1"
@@ -315,9 +315,9 @@
 					onchange={applyAnnotationStyle}
 				/>
 			</label>
-			<label class="flex items-center gap-1 text-xs text-muted">
+			<label class="flex items-center gap-1 text-xs text-surface-600">
 				<span>{$t('Width')}</span><input
-					class="w-16 accent-accent"
+					class="accent-accent w-16"
 					type="range"
 					min="1"
 					max="12"
@@ -328,11 +328,11 @@
 			</label>
 		</div>
 	{/if}
-	<div class="ml-auto flex shrink-0 items-center gap-2 border-l border-line pl-2">
+	<div class="ml-auto flex shrink-0 items-center gap-2 border-l border-surface-300 pl-2">
 		<label>
 			<span class="sr-only">{$t('Annotation visibility')}</span>
 			<select
-				class="min-h-8 max-w-48 rounded-md border border-line bg-surface px-2 py-1 text-xs text-ink"
+				class="min-h-8 max-w-48 rounded-md border border-surface-300 bg-surface-100 px-2 py-1 text-xs text-surface-900"
 				bind:value={selectedProject}
 				onchange={changeProject}
 			>
@@ -341,7 +341,7 @@
 					>{/each}
 			</select>
 		</label>
-		<span class={`max-w-44 truncate text-xs ${syncFailed ? 'text-danger' : 'text-muted'}`}
+		<span class={`max-w-44 truncate text-xs ${syncFailed ? 'text-error-700' : 'text-surface-600'}`}
 			>{status}</span
 		>
 	</div>

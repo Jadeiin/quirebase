@@ -76,23 +76,28 @@
 	}
 </script>
 
-<section class="panel stack" id="export-preferences">
+<section
+	class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm"
+	id="export-preferences"
+>
 	<div class="workspace-header">
 		<div>
 			<p class="eyebrow">{$t('Defaults')}</p>
 			<h2>{$t('Export preferences')}</h2>
 		</div>
-		<button class="button" onclick={reset}>{$t('Reset to defaults')}</button>
+		<button class="btn preset-tonal-surface font-semibold" onclick={reset}
+			>{$t('Reset to defaults')}</button
+		>
 	</div>
-	<p class="muted">
+	<p class="text-surface-600">
 		{$t('Configure defaults used by Library and Item export actions on this browser.')}
 	</p>
 	<div class="grid gap-4 xl:grid-cols-2">
-		<section class="stack rounded-lg border border-line p-3">
+		<section class="stack rounded-lg border border-surface-300 p-3">
 			<h3>{$t('General citation options')}</h3>
 			<label
 				>{$t('Default citation format')}<select
-					class="field"
+					class="select"
 					bind:value={preferences.citation.format}
 					><option value="csl">CSL citation</option><option value="bibtex">BibTeX</option><option
 						value="biblatex">BibLaTeX</option
@@ -104,45 +109,45 @@
 				{$t('Include abstract')}</label
 			>
 			{#if preferences.citation.format === 'csl'}<label
-					>{$t('Search Citation Styles')}<input class="field" bind:value={styleQuery} /></label
+					>{$t('Search Citation Styles')}<input class="input" bind:value={styleQuery} /></label
 				><label
-					>{$t('Default CSL style')}<select class="field" bind:value={preferences.citation.style}
+					>{$t('Default CSL style')}<select class="select" bind:value={preferences.citation.style}
 						>{#each styles.data?.styles ?? [] as style (style.key)}<option value={style.key}
 								>{style.name}</option
 							>{/each}</select
 					></label
 				>{/if}
 		</section>
-		<section class="stack rounded-lg border border-line p-3">
+		<section class="stack rounded-lg border border-surface-300 p-3">
 			<h3>{$t('Bibliography file options')}</h3>
 			<label
-				>{$t('Journal title')}<select class="field" bind:value={preferences.citation.journalMode}
+				>{$t('Journal title')}<select class="select" bind:value={preferences.citation.journalMode}
 					><option value="full">{$t('Full title')}</option><option value="prefer_abbreviated"
 						>{$t('Prefer abbreviation')}</option
 					><option value="abbreviated">{$t('Abbreviation only')}</option></select
 				></label
 			>
 			<label
-				>{$t('DOI policy')}<select class="field" bind:value={preferences.citation.doiPolicy}
+				>{$t('DOI policy')}<select class="select" bind:value={preferences.citation.doiPolicy}
 					><option value="include">{$t('Include')}</option><option value="omit">{$t('Omit')}</option
 					></select
 				></label
 			>
 			<label
-				>{$t('URL policy')}<select class="field" bind:value={preferences.citation.urlPolicy}
+				>{$t('URL policy')}<select class="select" bind:value={preferences.citation.urlPolicy}
 					><option value="include">{$t('Include')}</option><option value="omit">{$t('Omit')}</option
 					><option value="omit_when_doi">{$t('Omit when DOI exists')}</option></select
 				></label
 			>
 			<label
 				>{$t('Excluded fields')}<input
-					class="field"
+					class="input"
 					bind:value={preferences.citation.excludedFields}
 					placeholder="abstract, keywords"
 				/></label
 			>
 			<label
-				>{$t('Output sorting')}<select class="field" bind:value={preferences.citation.sortBy}
+				>{$t('Output sorting')}<select class="select" bind:value={preferences.citation.sortBy}
 					><option value="input">{$t('Library order')}</option><option value="citation_key"
 						>{$t('Citation key')}</option
 					><option value="author">{$t('Author')}</option><option value="year">{$t('Year')}</option
@@ -150,10 +155,10 @@
 				></label
 			>
 		</section>
-		<section class="stack rounded-lg border border-line p-3">
+		<section class="stack rounded-lg border border-surface-300 p-3">
 			<h3>{$t('BibTeX and BibLaTeX options')}</h3>
 			<label
-				>{$t('Encoding')}<select class="field" bind:value={preferences.citation.encoding}
+				>{$t('Encoding')}<select class="select" bind:value={preferences.citation.encoding}
 					><option value="unicode">Unicode</option><option value="latex">LaTeX</option></select
 				></label
 			>
@@ -170,25 +175,25 @@
 				{$t('Include custom fields')}</label
 			>
 		</section>
-		<section class="stack rounded-lg border border-line p-3">
+		<section class="stack rounded-lg border border-surface-300 p-3">
 			<h3>{$t('Citation Key options')}</h3>
 			<label
-				>{$t('Citation Key formula')}<input class="field" bind:value={citationKeyFormula} /></label
+				>{$t('Citation Key formula')}<input class="input" bind:value={citationKeyFormula} /></label
 			>
 			<label class="flex gap-2"
 				><input type="checkbox" bind:checked={citationKeyForceAscii} />
 				{$t('Use ASCII characters only')}</label
 			>
 			<label
-				>{$t('Preview Citation Key')}<output class="field block"
+				>{$t('Preview Citation Key')}<output class="input block"
 					>{citationPreview.data?.key ?? '—'}</output
 				></label
 			>
-			{#if citationPreview.isError}<p class="text-danger">
+			{#if citationPreview.isError}<p class="text-error-700">
 					{$t('Invalid Citation Key formula')}
 				</p>{/if}
 		</section>
-		<section class="stack rounded-lg border border-line p-3 xl:col-span-2">
+		<section class="stack rounded-lg border border-surface-300 p-3 xl:col-span-2">
 			<h3>{$t('Document download options')}</h3>
 			<label class="flex gap-2"
 				><input type="checkbox" bind:checked={preferences.document.includeAnnotations} />
@@ -200,8 +205,8 @@
 			>
 		</section>
 	</div>
-	<p class="muted mb-0 text-sm">
+	<p class="mb-0 text-sm text-surface-600">
 		{$t('Preferences are automatically saved to your browser.')}
-		{#if saved}<span class="text-success">{$t('Saved')}</span>{/if}
+		{#if saved}<span class="text-success-700">{$t('Saved')}</span>{/if}
 	</p>
 </section>

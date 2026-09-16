@@ -93,6 +93,9 @@
 		settings: msg('Settings'),
 		maintenance: msg('Maintenance')
 	};
+	function sectionPath(key: string) {
+		return key === 'overview' ? ('/admin' as const) : (`/admin/${key}` as const);
+	}
 	const settingFields = [
 		['metadata_contact_email', msg('Metadata contact email')],
 		['ncbi_api_key', msg('NCBI API key')],
@@ -342,46 +345,45 @@
 <div class="workspace-header">
 	<div>
 		<h1>{$t('Administration')}</h1>
-		<p class="muted">{$t('Users, storage, audit, settings, and durable operations.')}</p>
+		<p class="text-surface-600">{$t('Users, storage, audit, settings, and durable operations.')}</p>
 	</div>
 </div>
 <nav class="tabs" aria-label={$t('Administration sections')}>
 	{#each Object.entries(labels) as [key, label] (key)}<a
 			aria-current={section === key ? 'page' : undefined}
-			href={key === 'overview'
-				? resolve('/admin')
-				: resolve('/(app)/admin/[section=adminSection]', {
-						section: key as Exclude<AdminSection, 'overview'>
-					})}>{$t(label)}</a
+			href={resolve(sectionPath(key))}>{$t(label)}</a
 		>{/each}
 </nav>
 {#if ['users', 'projects', 'items', 'audit', 'workflows'].includes(section)}
-	<form class="panel toolbar mb-4 items-end" onsubmit={applyFilters}>
+	<form
+		class="toolbar mb-4 items-end card border border-surface-300 bg-surface-50 p-5 shadow-sm"
+		onsubmit={applyFilters}
+	>
 		{#if section !== 'workflows'}
-			<label class="grow">{$t('Search')}<input class="field" bind:value={searchInput} /></label>
+			<label class="grow">{$t('Search')}<input class="input" bind:value={searchInput} /></label>
 		{/if}
 		{#if section === 'users'}
 			<label
-				>{$t('Role')}<select class="field compact" bind:value={filterA}
+				>{$t('Role')}<select class="compact input" bind:value={filterA}
 					><option value="">{$t('All roles')}</option><option value="member">{$t('Member')}</option
 					><option value="administrator">{$t('Administrator')}</option></select
 				></label
 			>
 			<label
-				>{$t('Status')}<select class="field compact" bind:value={filterB}
+				>{$t('Status')}<select class="compact input" bind:value={filterB}
 					><option value="">{$t('Any status')}</option><option value="true">{$t('Active')}</option
 					><option value="false">{$t('Disabled')}</option></select
 				></label
 			>
 		{:else if section === 'projects'}
 			<label
-				>{$t('State')}<select class="field compact" bind:value={filterA}
+				>{$t('State')}<select class="compact input" bind:value={filterA}
 					><option value="">{$t('Any state')}</option><option value="active">{$t('Active')}</option
 					><option value="archived">{$t('Archived')}</option></select
 				></label
 			>
 			<label
-				>{$t('Visibility')}<select class="field compact" bind:value={filterB}
+				>{$t('Visibility')}<select class="compact input" bind:value={filterB}
 					><option value="">{$t('Any visibility')}</option><option value="private"
 						>{$t('Private')}</option
 					><option value="public">{$t('Public')}</option></select
@@ -389,18 +391,18 @@
 			>
 		{:else if section === 'items'}
 			<label
-				>{$t('PDF availability')}<select class="field compact" bind:value={filterA}
+				>{$t('PDF availability')}<select class="compact input" bind:value={filterA}
 					><option value="">{$t('Any')}</option><option value="true">{$t('Has PDF')}</option><option
 						value="false">{$t('Without PDF')}</option
 					></select
 				></label
 			>
 		{:else if section === 'audit'}
-			<label>{$t('Action')}<input class="field compact" bind:value={filterA} /></label>
-			<label>{$t('Target type')}<input class="field compact" bind:value={filterB} /></label>
+			<label>{$t('Action')}<input class="compact input" bind:value={filterA} /></label>
+			<label>{$t('Target type')}<input class="compact input" bind:value={filterB} /></label>
 		{:else}
 			<label
-				>{$t('State')}<select class="field compact" bind:value={filterA}
+				>{$t('State')}<select class="compact input" bind:value={filterA}
 					><option value="">{$t('Any state')}</option><option value="pending"
 						>{$t('Pending')}</option
 					><option value="running">{$t('Running')}</option><option value="succeeded"
@@ -411,18 +413,23 @@
 				></label
 			>
 		{/if}
-		<button class="button button-primary">{$t('Apply filters')}</button>
-		<button type="button" class="button" onclick={clearFilters}>{$t('Clear filters')}</button>
+		<button class="btn preset-filled-primary-700-300 font-semibold">{$t('Apply filters')}</button>
+		<button type="button" class="btn preset-tonal-surface font-semibold" onclick={clearFilters}
+			>{$t('Clear filters')}</button
+		>
 	</form>
 {/if}
-{#if error}<p class="error" role="alert">{error}</p>{/if}{#if notice}<p
-		class="notice"
+{#if error}<p class="text-error-700" role="alert">{error}</p>{/if}{#if notice}<p
+		class="rounded-base border border-success-200 preset-tonal-success px-4 py-3 text-success-900"
 		role="status"
 	>
 		{$t(notice)}
 	</p>{/if}
-{#if data.isPending}<p class="muted">{$t('Loading')} {$t(sectionLabel).toLowerCase()}…</p>
-{:else if data.isError}<p class="error">{$t('Unable to load administration.')}</p>
+{#if data.isPending}<p class="text-surface-600">
+		{$t('Loading')}
+		{$t(sectionLabel).toLowerCase()}…
+	</p>
+{:else if data.isError}<p class="text-error-700">{$t('Unable to load administration.')}</p>
 {:else if data.data}
 	{#if section === 'overview'}
 		{@const overview = data.data as Overview}
@@ -436,23 +443,23 @@
 				<strong>{overview.failed_workflows.length}</strong><span>{$t('Failed workflows')}</span>
 			</div>
 		</div>
-		<section class="panel list-panel">
+		<section class="list-panel card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 			<h2>{$t('Recent audit events')}</h2>
 			{#each overview.recent_events as event (event.id)}<div class="item-row">
-					<strong>{event.action}</strong><span class="muted"
+					<strong>{event.action}</strong><span class="text-surface-600"
 						>{event.target_type} · {new Date(event.created_at).toLocaleString()}</span
 					>
-				</div>{:else}<p class="muted">{$t('No audit events.')}</p>{/each}
+				</div>{:else}<p class="text-surface-600">{$t('No audit events.')}</p>{/each}
 		</section>
 	{:else if section === 'users'}
 		{@const users = data.data as Users}
 		<div class="item-layout">
-			<section class="panel list-panel">
+			<section class="list-panel card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 				<h2>{$t('Users')} ({users.total})</h2>
 				{#each users.users as user (user.id)}
 					<div class="item-row admin-user-row">
 						<div>
-							<strong>{user.username}</strong><span class="muted"
+							<strong>{user.username}</strong><span class="text-surface-600"
 								>{$t(domainLabel(user.role))} · {user.active ? $t('active') : $t('disabled')}</span
 							>
 						</div>
@@ -460,22 +467,27 @@
 							<form class="toolbar" onsubmit={(event) => updateUserRole(event, user.id)}>
 								<label
 									><span class="sr-only">{$t('Role for')} {user.username}</span><select
-										class="field compact"
+										class="compact input"
 										name="role"
 										value={user.role}
 										><option value="member">{$t('Member')}</option><option value="administrator"
 											>{$t('Administrator')}</option
 										></select
 									></label
-								><button class="button" disabled={busy}>{$t('Save role')}</button>
+								><button class="btn preset-tonal-surface font-semibold" disabled={busy}
+									>{$t('Save role')}</button
+								>
 							</form>
-							<button class="button" disabled={busy} onclick={() => updateUserStatus(user)}
+							<button
+								class="btn preset-tonal-surface font-semibold"
+								disabled={busy}
+								onclick={() => updateUserStatus(user)}
 								>{user.active ? $t('Disable user') : $t('Enable user')}</button
 							>
 							<form class="toolbar" onsubmit={(event) => resetUserPassword(event, user.id)}>
 								<label
 									><span class="sr-only">{$t('New password for')} {user.username}</span><input
-										class="field compact"
+										class="compact input"
 										name="password"
 										type="password"
 										autocomplete="new-password"
@@ -483,50 +495,64 @@
 										placeholder={$t('New password')}
 										required
 									/></label
-								><button class="button" disabled={busy}>{$t('Reset password')}</button>
+								><button class="btn preset-tonal-surface font-semibold" disabled={busy}
+									>{$t('Reset password')}</button
+								>
 							</form>
-							<button class="button" disabled={busy} onclick={() => revokeUserSessions(user.id)}
-								>{$t('Revoke sessions')}</button
+							<button
+								class="btn preset-tonal-surface font-semibold"
+								disabled={busy}
+								onclick={() => revokeUserSessions(user.id)}>{$t('Revoke sessions')}</button
 							>
 						</div>
 					</div>
 				{:else}
-					<p class="muted">{$t('No users.')}</p>
+					<p class="text-surface-600">{$t('No users.')}</p>
 				{/each}
 				<h2>{$t('Invitations')}</h2>
 				{#each users.invitations as invitation (invitation.id)}<div class="item-row">
-						<strong>{invitation.username}</strong><span class="muted"
+						<strong>{invitation.username}</strong><span class="text-surface-600"
 							>{$t(domainLabel(invitation.role))} · {invitation.accepted_at
 								? $t('accepted')
 								: $t('pending')}</span
 						>
-					</div>{:else}<p class="muted">{$t('No invitations.')}</p>{/each}
+					</div>{:else}<p class="text-surface-600">{$t('No invitations.')}</p>{/each}
 			</section>
 			<aside class="stack">
-				<form class="panel stack" onsubmit={createUser}>
+				<form
+					class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm"
+					onsubmit={createUser}
+				>
 					<h2>{$t('Create user')}</h2>
-					<input class="field" name="username" placeholder={$t('Username')} required /><input
-						class="field"
+					<input class="input" name="username" placeholder={$t('Username')} required /><input
+						class="input"
 						name="password"
 						type="password"
 						minlength="12"
 						placeholder={$t('Password')}
 						required
-					/><select class="field" name="role"
+					/><select class="select" name="role"
 						><option value="member">{$t('Member')}</option><option value="administrator"
 							>{$t('Administrator')}</option
 						></select
-					><button class="button" disabled={busy}>{$t('Create user')}</button>
+					><button class="btn preset-tonal-surface font-semibold" disabled={busy}
+						>{$t('Create user')}</button
+					>
 				</form>
-				<form class="panel stack" onsubmit={createInvitation}>
+				<form
+					class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm"
+					onsubmit={createInvitation}
+				>
 					<h2>{$t('Invite user')}</h2>
-					<input class="field" name="username" placeholder={$t('Username')} required /><select
-						class="field"
+					<input class="input" name="username" placeholder={$t('Username')} required /><select
+						class="select"
 						name="role"
 						><option value="member">{$t('Member')}</option><option value="administrator"
 							>{$t('Administrator')}</option
 						></select
-					><button class="button" disabled={busy}>{$t('Create invitation')}</button>
+					><button class="btn preset-tonal-surface font-semibold" disabled={busy}
+						>{$t('Create invitation')}</button
+					>
 					{#if invitationUrl}<div class="secret" role="status">
 							<strong>{$t('Copy this invitation URL now')}</strong><a
 								href={invitationUrl}
@@ -538,15 +564,16 @@
 		</div>
 	{:else if section === 'projects'}
 		{@const projects = (data.data as { projects: Project[]; total: number }).projects}
-		<section class="panel list-panel">
+		<section class="list-panel card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 			<h2>{$t('Projects')}</h2>
 			{#each projects as project (project.id)}<div class="item-row">
-					<strong>{project.name}</strong><span>{project.description}</span><span class="muted"
+					<strong>{project.name}</strong><span>{project.description}</span><span
+						class="text-surface-600"
 						>{$t(domainLabel(project.visibility))} · {$t(domainLabel(project.state))} · {project.member_count}
 						{$t('members')} · {project.item_count}
 						{$t('Items')} · {project.creator.username}</span
 					>
-				</div>{:else}<p class="muted">{$t('No projects.')}</p>{/each}
+				</div>{:else}<p class="text-surface-600">{$t('No projects.')}</p>{/each}
 		</section>
 	{:else if section === 'items'}
 		{@const items = data.data as {
@@ -554,75 +581,79 @@
 			total: number;
 			storage: { total_disk_bytes: number };
 		}}
-		<section class="panel list-panel">
+		<section class="list-panel card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 			<h2>{$t('Items')} ({items.total})</h2>
-			<p class="muted">{Math.ceil(items.storage.total_disk_bytes / 1048576)} MB stored</p>
+			<p class="text-surface-600">
+				{Math.ceil(items.storage.total_disk_bytes / 1048576)} MB stored
+			</p>
 			{#each items.items as item (item.id)}<div
 					class="item-row grid-cols-[minmax(0,1fr)_auto] items-center"
 				>
 					<a
 						class="grid gap-1 no-underline"
 						href={resolve('/(app)/item/[itemId]', { itemId: item.id })}
-						><strong><RichText html={item.title_html} /></strong><span class="muted"
+						><strong><RichText html={item.title_html} /></strong><span class="text-surface-600"
 							>{item.authors ?? $t('Unknown authors')}</span
 						></a
 					><button
-						class="button text-danger"
+						class="btn preset-tonal-error font-semibold"
 						disabled={busy}
 						onclick={() => deleteAdminItem(item.id)}>{$t('Delete')}</button
 					>
-				</div>{:else}<p class="muted">{$t('No Items.')}</p>{/each}
+				</div>{:else}<p class="text-surface-600">{$t('No Items.')}</p>{/each}
 		</section>
 	{:else if section === 'audit'}
 		{@const events = (data.data as { events: AuditEvent[] }).events}
-		<section class="panel list-panel">
+		<section class="list-panel card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 			<h2>{$t('Audit log')}</h2>
 			{#each events as event (event.id)}<div class="item-row">
 					<strong>{event.action}</strong><span
 						>{event.target_type}{event.target_id ? ` · ${event.target_id}` : ''}</span
-					><span class="muted"
+					><span class="text-surface-600"
 						>{event.actor_id ? `${$t('Actor')} ${event.actor_id} · ` : ''}{new Date(
 							event.created_at
 						).toLocaleString()}</span
 					>
 					{#if event.detail}<pre
-							class="overflow-x-auto rounded bg-muted-surface p-2 text-xs">{typeof event.detail ===
+							class="overflow-x-auto rounded bg-surface-200 p-2 text-xs">{typeof event.detail ===
 							'string'
 								? event.detail
 								: JSON.stringify(event.detail, null, 2)}</pre>{/if}
-				</div>{:else}<p class="muted">{$t('No audit events.')}</p>{/each}
+				</div>{:else}<p class="text-surface-600">{$t('No audit events.')}</p>{/each}
 		</section>
 	{:else if section === 'workflows'}
 		{@const workflows = (data.data as { workflows: Workflow[] }).workflows}
-		<section class="panel list-panel">
+		<section class="list-panel card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 			<h2>{$t('Durable workflows')}</h2>
 			{#each workflows as workflow (workflow.id ?? workflow.workflow_id ?? workflow)}<div
 					class="item-row"
 				>
 					<strong>{workflow.name ?? workflow.id ?? workflow.workflow_id ?? $t('Workflow')}</strong
-					><span class="muted"
+					><span class="text-surface-600"
 						>{$t(domainLabel(workflow.state))}{workflow.error ? ` · ${workflow.error}` : ''}</span
 					>
-				</div>{:else}<p class="muted">{$t('No workflows.')}</p>{/each}
+				</div>{:else}<p class="text-surface-600">{$t('No workflows.')}</p>{/each}
 		</section>
 	{:else if section === 'settings'}
 		{@const settings = data.data as Settings}
-		<section class="panel stack">
+		<section class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 			<h2>{$t('Runtime settings')}</h2>
 			<form class="stack" onsubmit={saveSettings}>
 				{#each settingFields as [key, label] (key)}<label
 						>{$t(label)}<input
-							class="field"
+							class="input"
 							name={key}
 							type={typeof settings[key] === 'number' ? 'number' : 'text'}
 							value={settings[key]}
 							required={typeof settings[key] === 'number'}
 						/></label
 					>{/each}
-				<p class="muted">
+				<p class="text-surface-600">
 					Database: {settings.database_url}<br />Data directory: {settings.data_dir}
 				</p>
-				<button class="button button-primary" disabled={busy}>{$t('Save settings')}</button>
+				<button class="btn preset-filled-primary-700-300 font-semibold" disabled={busy}
+					>{$t('Save settings')}</button
+				>
 			</form>
 		</section>
 	{:else}
@@ -630,7 +661,7 @@
 			storage: { items_count: number; total_disk_bytes: number };
 			workflows: Workflow[];
 		}}
-		<section class="panel stack">
+		<section class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 			<h2>{$t('Maintenance')}</h2>
 			<p>
 				{maintenance.storage.items_count} Items · {Math.ceil(
@@ -639,7 +670,7 @@
 			</p>
 			<div class="toolbar">
 				{#each maintenanceOperations as [operation, label] (operation)}<button
-						class="button"
+						class="btn preset-tonal-surface font-semibold"
 						disabled={busy}
 						onclick={() => runMaintenance(operation)}>{$t(label)}</button
 					>{/each}
@@ -648,23 +679,25 @@
 			{#each maintenance.workflows as workflow (workflow.id ?? workflow.workflow_id ?? workflow)}<div
 					class="item-row"
 				>
-					<strong>{workflow.name ?? workflow.id ?? $t('Operation')}</strong><span class="muted"
-						>{$t(domainLabel(workflow.state))}</span
+					<strong>{workflow.name ?? workflow.id ?? $t('Operation')}</strong><span
+						class="text-surface-600">{$t(domainLabel(workflow.state))}</span
 					>
 					{#if workflow.state === 'succeeded' && (workflow.name ?? '').includes('backup') && (workflow.id || workflow.workflow_id)}<button
-							class="button"
+							class="btn preset-tonal-surface font-semibold"
 							onclick={() => downloadBackup((workflow.id ?? workflow.workflow_id)!)}
 							>{$t('Download backup')}</button
 						>{/if}
-				</div>{:else}<p class="muted">{$t('No maintenance workflows.')}</p>{/each}
+				</div>{:else}<p class="text-surface-600">{$t('No maintenance workflows.')}</p>{/each}
 		</section>
 	{/if}
 	{#if pagination?.total !== undefined && pageCount > 1}
 		<nav class="pagination" aria-label={$t('Administration pages')}>
-			<button class="button" disabled={adminPage <= 1} onclick={() => (adminPage -= 1)}
-				>{$t('Previous')}</button
+			<button
+				class="btn preset-tonal-surface font-semibold"
+				disabled={adminPage <= 1}
+				onclick={() => (adminPage -= 1)}>{$t('Previous')}</button
 			><span>{$t('Page')} {adminPage} / {pageCount}</span><button
-				class="button"
+				class="btn preset-tonal-surface font-semibold"
 				disabled={adminPage >= pageCount}
 				onclick={() => (adminPage += 1)}>{$t('Next')}</button
 			>

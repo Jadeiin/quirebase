@@ -25,6 +25,11 @@ test('authenticated shell loads dashboard and navigates to Library', async ({ pa
 	await expect.poll(() => sessionRequests).toBe(1);
 	await expect.poll(() => pageErrors).toEqual([]);
 	await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+	await page.getByRole('button', { name: /reader/i }).click();
+	await expect(page.getByRole('menuitem', { name: 'Account settings' })).toBeVisible();
+	const accountMenu = page.locator('[role="menu"]');
+	await accountMenu.press('Escape');
+	await expect(accountMenu).toBeHidden();
 	await page.getByRole('link', { name: 'Library' }).first().click();
 	await expect(page.getByRole('heading', { name: 'Library' })).toBeVisible();
 });

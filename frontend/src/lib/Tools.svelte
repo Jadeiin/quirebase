@@ -11,6 +11,7 @@
 
 	let activeTool = $state<Tool>('duplicates');
 	let mode = $state('doi');
+	let scannedMode = $state('');
 	let tagFilter = $state('');
 	let tagPage = $state(1);
 	let sourceTag = $state('');
@@ -30,8 +31,9 @@
 		queryFn: () => apiRequest<Tag[]>('/tags')
 	}));
 	const duplicates = createQuery(() => ({
-		queryKey: ['duplicates', mode],
-		queryFn: () => apiRequest<{ groups: ItemSummary[][] }>(`/duplicates?mode=${mode}`)
+		queryKey: ['duplicates', scannedMode],
+		queryFn: () => apiRequest<{ groups: ItemSummary[][] }>(`/duplicates?mode=${scannedMode}`),
+		enabled: Boolean(scannedMode)
 	}));
 	const citationStyles = createQuery(() => ({
 		queryKey: ['citation-styles', styleQuery],
@@ -111,6 +113,13 @@
 		queueMicrotask(() => document.getElementById(`tool-tab-${activeTool}`)?.focus());
 	}
 
+	async function scanDuplicates() {
+		error = '';
+		notice = '';
+		if (scannedMode === mode) await duplicates.refetch();
+		else scannedMode = mode;
+	}
+
 	async function createStyle() {
 		busy = true;
 		error = '';
@@ -150,18 +159,29 @@
 	<div>
 		<p class="eyebrow">{$t('Library maintenance')}</p>
 		<h1>{$t('Tools')}</h1>
-		<p class="muted">{$t('Review duplicates, maintain Tags, and install Citation Styles.')}</p>
+		<p class="text-surface-600">
+			{$t('Review duplicates, maintain Tags, and install Citation Styles.')}
+		</p>
 	</div>
 </div>
 
-<div class="tabs" role="tablist" aria-label={$t('Library tools')}>
+<div
+	class="mb-5 inline-flex max-w-full gap-1 overflow-x-auto rounded-lg border border-surface-300 bg-surface-200 p-1"
+	role="tablist"
+	aria-label={$t('Library tools')}
+>
 	<button
 		id="tool-tab-duplicates"
 		role="tab"
 		aria-selected={activeTool === 'duplicates'}
 		aria-controls="tool-panel-duplicates"
 		tabindex={activeTool === 'duplicates' ? 0 : -1}
-		class={['button', activeTool === 'duplicates' && 'button-primary']}
+		class={[
+			'rounded-md border-0 px-3.5 py-2 text-sm font-semibold whitespace-nowrap transition-colors',
+			activeTool === 'duplicates'
+				? 'bg-surface-50 text-primary-800 shadow-sm'
+				: 'bg-transparent text-surface-600 hover:text-surface-900'
+		]}
 		onkeydown={(event) => handleTabKey(event, 'duplicates')}
 		onclick={() => (activeTool = 'duplicates')}>{$t('Duplicate review')}</button
 	>
@@ -171,7 +191,12 @@
 		aria-selected={activeTool === 'tags'}
 		aria-controls="tool-panel-tags"
 		tabindex={activeTool === 'tags' ? 0 : -1}
-		class={['button', activeTool === 'tags' && 'button-primary']}
+		class={[
+			'rounded-md border-0 px-3.5 py-2 text-sm font-semibold whitespace-nowrap transition-colors',
+			activeTool === 'tags'
+				? 'bg-surface-50 text-primary-800 shadow-sm'
+				: 'bg-transparent text-surface-600 hover:text-surface-900'
+		]}
 		onkeydown={(event) => handleTabKey(event, 'tags')}
 		onclick={() => (activeTool = 'tags')}>{$t('Manage Tags')}</button
 	>
@@ -181,46 +206,96 @@
 		aria-selected={activeTool === 'citation-styles'}
 		aria-controls="tool-panel-citation-styles"
 		tabindex={activeTool === 'citation-styles' ? 0 : -1}
-		class={['button', activeTool === 'citation-styles' && 'button-primary']}
+		class={[
+			'rounded-md border-0 px-3.5 py-2 text-sm font-semibold whitespace-nowrap transition-colors',
+			activeTool === 'citation-styles'
+				? 'bg-surface-50 text-primary-800 shadow-sm'
+				: 'bg-transparent text-surface-600 hover:text-surface-900'
+		]}
 		onkeydown={(event) => handleTabKey(event, 'citation-styles')}
 		onclick={() => (activeTool = 'citation-styles')}>{$t('Citation Styles')}</button
 	>
 </div>
 
-{#if error}<p class="error" role="alert">{error}</p>{/if}
-{#if notice}<p class="notice" role="status">{notice}</p>{/if}
+{#if error}<p class="text-error-700" role="alert">{error}</p>{/if}
+{#if notice}<p
+		class="rounded-base border border-success-200 preset-tonal-success px-4 py-3 text-success-900"
+		role="status"
+	>
+		{notice}
+	</p>{/if}
 
 {#if activeTool === 'duplicates'}
 	<div id="tool-panel-duplicates" role="tabpanel" aria-labelledby="tool-tab-duplicates">
-		<section class="panel">
-			<div class="workspace-header">
+		<section class="overflow-hidden card border border-surface-300 bg-surface-50 p-0 shadow-sm">
+			<div class="flex flex-wrap items-end justify-between gap-4 border-b border-surface-300 p-5">
 				<div>
 					<h2>{$t('Duplicate review')}</h2>
-					<p class="muted">
+					<p class="mb-0 max-w-2xl text-surface-600">
 						{$t('Compare likely duplicate Items before deciding what to retain.')}
 					</p>
 				</div>
-				<select class="field compact" bind:value={mode}>
-					<option value="doi">{$t('Same DOI')}</option><option value="title"
-						>{$t('Same title')}</option
-					><option value="similar">{$t('Similar title')}</option>
-				</select>
+				<button
+					class="btn preset-filled-primary-700-300 font-semibold"
+					disabled={duplicates.isFetching}
+					onclick={() => void scanDuplicates()}
+					>{duplicates.isFetching ? $t('Scanning…') : $t('Check for duplicates')}</button
+				>
 			</div>
-			{#if duplicates.isPending}<p class="muted">{$t('Scanning…')}</p>
-			{:else}{#each duplicates.data?.groups ?? [] as group, index (group
-					.map((item) => item.id)
-					.join(':'))}
-					<article class="mb-4 rounded-lg border border-line p-3 last:mb-0">
-						<h3>{$t('Duplicate group')} {index + 1}</h3>
-						{#each group as item (item.id)}
-							<a class="item-row" href={resolve('/(app)/item/[itemId]', { itemId: item.id })}>
-								<strong><RichText html={item.title_html} /></strong>
-								<span class="muted">{item.authors ?? $t('Unknown contributors')}</span>
-								{#if item.doi}<code class="text-xs">{item.doi}</code>{/if}
-							</a>
-						{/each}
-					</article>
-				{:else}<p class="muted">{$t('No duplicate groups found.')}</p>{/each}{/if}
+			<div class="bg-surface/60 border-b border-surface-300 px-5 py-3">
+				<p class="mb-2 text-xs font-bold tracking-wide text-surface-600 uppercase">
+					{$t('Match criteria')}
+				</p>
+				<div class="flex flex-wrap gap-2" role="group" aria-label={$t('Match criteria')}>
+					{#each [{ value: 'doi', label: $t('Same DOI') }, { value: 'title', label: $t('Same title') }, { value: 'similar', label: $t('Similar title') }] as option (option.value)}
+						<button
+							type="button"
+							class={[
+								'rounded-full border px-3 py-1.5 text-sm font-medium',
+								mode === option.value
+									? 'border-primary-700 bg-primary-50 text-primary-800'
+									: 'border-surface-300 bg-surface-50 text-surface-600 hover:border-surface-400'
+							]}
+							aria-pressed={mode === option.value}
+							onclick={() => (mode = option.value)}>{option.label}</button
+						>
+					{/each}
+				</div>
+			</div>
+			<div class="p-5">
+				{#if !scannedMode}
+					<div class="grid min-h-40 place-items-center text-center">
+						<div class="max-w-md">
+							<h3>{$t('Run a check when you are ready')}</h3>
+							<p class="mb-0 text-surface-600">
+								{$t('Quirebase will not inspect your Library until you start the check.')}
+							</p>
+						</div>
+					</div>
+				{:else if scannedMode !== mode}
+					<p
+						class="rounded-base border border-success-200 preset-tonal-success px-4 py-3 text-success-900"
+						role="status"
+					>
+						{$t('The match criteria changed. Start a new check to refresh these results.')}
+					</p>
+				{:else if duplicates.isPending || duplicates.isFetching}
+					<p class="text-surface-600">{$t('Scanning…')}</p>
+				{:else}{#each duplicates.data?.groups ?? [] as group, index (group
+						.map((item) => item.id)
+						.join(':'))}
+						<article class="mb-4 rounded-lg border border-surface-300 p-3 last:mb-0">
+							<h3>{$t('Duplicate group')} {index + 1}</h3>
+							{#each group as item (item.id)}
+								<a class="item-row" href={resolve('/(app)/item/[itemId]', { itemId: item.id })}>
+									<strong><RichText html={item.title_html} /></strong>
+									<span class="text-surface-600">{item.authors ?? $t('Unknown contributors')}</span>
+									{#if item.doi}<code class="text-xs">{item.doi}</code>{/if}
+								</a>
+							{/each}
+						</article>
+					{:else}<p class="text-surface-600">{$t('No duplicate groups found.')}</p>{/each}{/if}
+			</div>
 		</section>
 	</div>
 {:else if activeTool === 'tags'}
@@ -230,14 +305,14 @@
 		role="tabpanel"
 		aria-labelledby="tool-tab-tags"
 	>
-		<section class="panel">
+		<section class="card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 			<div class="workspace-header">
 				<div>
 					<h2>{$t('Manage Tags')}</h2>
-					<p class="muted">{filteredTags.length} {$t('Tags')}</p>
+					<p class="text-surface-600">{filteredTags.length} {$t('Tags')}</p>
 				</div>
 				<input
-					class="field compact"
+					class="compact input"
 					bind:value={tagFilter}
 					oninput={() => (tagPage = 1)}
 					placeholder={$t('Filter Tags')}
@@ -247,54 +322,63 @@
 				<div class="item-row grid-cols-[minmax(0,1fr)_auto] items-center">
 					<div>
 						<strong>{tag.name}</strong>
-						<p class="muted mb-0 text-sm">{tag.accessible_item_count} {$t('Items')}</p>
+						<p class="mb-0 text-sm text-surface-600">{tag.accessible_item_count} {$t('Items')}</p>
 					</div>
 					<div class="toolbar">
-						<a class="button" href={resolve(`/library?tag=${encodeURIComponent(tag.id)}`)}
-							>{$t('View Items')}</a
+						<a
+							class="btn preset-tonal-surface font-semibold"
+							href={resolve(`/library?tag=${encodeURIComponent(tag.id)}`)}>{$t('View Items')}</a
 						>
-						<button class="button" disabled={busy} onclick={() => renameTag(tag)}
-							>{$t('Rename')}</button
+						<button
+							class="btn preset-tonal-surface font-semibold"
+							disabled={busy}
+							onclick={() => renameTag(tag)}>{$t('Rename')}</button
 						>
-						<button class="button text-danger" disabled={busy} onclick={() => deleteTag(tag)}
-							>{$t('Delete')}</button
+						<button
+							class="btn preset-tonal-error font-semibold"
+							disabled={busy}
+							onclick={() => deleteTag(tag)}>{$t('Delete')}</button
 						>
 					</div>
 				</div>
-			{:else}<p class="muted">{$t('No Tags match this filter.')}</p>{/each}
+			{:else}<p class="text-surface-600">{$t('No Tags match this filter.')}</p>{/each}
 			{#if tagPageCount > 1}
 				<nav class="pagination" aria-label={$t('Tag pages')}>
-					<button class="button" disabled={tagPage === 1} onclick={() => (tagPage -= 1)}
-						>{$t('Previous')}</button
+					<button
+						class="btn preset-tonal-surface font-semibold"
+						disabled={tagPage === 1}
+						onclick={() => (tagPage -= 1)}>{$t('Previous')}</button
 					>
 					<span>{$t('Page')} {tagPage} / {tagPageCount}</span>
-					<button class="button" disabled={tagPage === tagPageCount} onclick={() => (tagPage += 1)}
-						>{$t('Next')}</button
+					<button
+						class="btn preset-tonal-surface font-semibold"
+						disabled={tagPage === tagPageCount}
+						onclick={() => (tagPage += 1)}>{$t('Next')}</button
 					>
 				</nav>
 			{/if}
 		</section>
-		<aside class="panel stack self-start">
+		<aside class="stack self-start card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 			<h2>{$t('Merge Tags')}</h2>
-			<p class="muted text-sm">
+			<p class="text-sm text-surface-600">
 				{$t('Move every assignment from the source Tag into the target Tag.')}
 			</p>
 			<label
-				>{$t('Source Tag')}<select class="field" bind:value={sourceTag}
+				>{$t('Source Tag')}<select class="select" bind:value={sourceTag}
 					><option value="">{$t('Select a Tag')}</option
 					>{#each tags.data ?? [] as tag (tag.id)}<option value={tag.id}>{tag.name}</option
 						>{/each}</select
 				></label
 			>
 			<label
-				>{$t('Target Tag')}<select class="field" bind:value={targetTag}
+				>{$t('Target Tag')}<select class="select" bind:value={targetTag}
 					><option value="">{$t('Select a Tag')}</option
 					>{#each tags.data ?? [] as tag (tag.id)}<option value={tag.id}>{tag.name}</option
 						>{/each}</select
 				></label
 			>
 			<button
-				class="button button-primary"
+				class="btn preset-filled-primary-700-300 font-semibold"
 				disabled={busy || !sourceTag || !targetTag || sourceTag === targetTag}
 				onclick={mergeTags}>{$t('Merge Tags')}</button
 			>
@@ -307,44 +391,46 @@
 		role="tabpanel"
 		aria-labelledby="tool-tab-citation-styles"
 	>
-		<section class="panel">
+		<section class="card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 			<div class="workspace-header">
 				<div>
 					<h2>{$t('Citation Style catalog')}</h2>
-					<p class="muted">{$t('Built-in CSL styles and styles installed by you.')}</p>
+					<p class="text-surface-600">{$t('Built-in CSL styles and styles installed by you.')}</p>
 				</div>
-				<input class="field compact" bind:value={styleQuery} placeholder={$t('Search styles')} />
+				<input class="compact input" bind:value={styleQuery} placeholder={$t('Search styles')} />
 			</div>
 			{#each citationStyles.data?.styles ?? [] as style (style.key)}
 				<div class="item-row grid-cols-[minmax(0,1fr)_auto] items-center">
 					<div>
 						<strong>{style.name}</strong>
-						<p class="muted mb-0 text-sm">{style.scope}</p>
+						<p class="mb-0 text-sm text-surface-600">{style.scope}</p>
 					</div>
 					{#if style.scope === 'custom'}<button
-							class="button text-danger"
+							class="btn preset-tonal-error font-semibold"
 							disabled={busy}
 							onclick={() => deleteStyle(style)}>{$t('Delete')}</button
 						>{/if}
 				</div>
-			{:else}<p class="muted">{$t('No Citation Styles match this search.')}</p>{/each}
+			{:else}<p class="text-surface-600">{$t('No Citation Styles match this search.')}</p>{/each}
 		</section>
 		<form
-			class="panel stack self-start"
+			class="stack self-start card border border-surface-300 bg-surface-50 p-5 shadow-sm"
 			onsubmit={(event) => {
 				event.preventDefault();
 				void createStyle();
 			}}
 		>
 			<h2>{$t('Add custom Citation Style')}</h2>
-			<label>{$t('Style name')}<input class="field" bind:value={styleName} required /></label>
+			<label>{$t('Style name')}<input class="input" bind:value={styleName} required /></label>
 			<label
 				>{$t('CSL XML')}<textarea
-					class="field min-h-64 font-mono text-xs"
+					class="textarea min-h-64 font-mono text-xs"
 					bind:value={styleCsl}
 					required></textarea></label
 			>
-			<button class="button button-primary" disabled={busy}>{$t('Install Citation Style')}</button>
+			<button class="btn preset-filled-primary-700-300 font-semibold" disabled={busy}
+				>{$t('Install Citation Style')}</button
+			>
 		</form>
 	</div>
 {/if}

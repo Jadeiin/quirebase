@@ -66,6 +66,10 @@
 		<path d="m15 18-6-6 6-6" />
 	{:else if name === 'chevron-right'}
 		<path d="m9 18 6-6-6-6" />
+	{:else if name === 'chevrons-left'}
+		<path d="m13 18-6-6 6-6" /><path d="m19 18-6-6 6-6" />
+	{:else if name === 'chevrons-right'}
+		<path d="m11 18 6-6-6-6" /><path d="m5 18 6-6-6-6" />
 	{:else if name === 'chevron-down'}
 		<path d="m6 9 6 6 6-6" />
 	{:else if name === 'close'}

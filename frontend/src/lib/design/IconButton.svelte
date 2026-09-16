@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Tooltip } from 'bits-ui';
+	import { Portal, Tooltip } from '@skeletonlabs/skeleton-svelte';
 	import Icon from '$lib/design/Icon.svelte';
 
 	let {
@@ -17,10 +17,10 @@
 	}>();
 </script>
 
-<Tooltip.Root>
+<Tooltip openDelay={450} closeDelay={100} positioning={{ placement: 'bottom', gutter: 7 }}>
 	<Tooltip.Trigger
 		type="button"
-		class={`inline-grid size-9 shrink-0 cursor-pointer place-items-center rounded-md border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${active ? 'border-line bg-accent-soft text-accent-strong' : 'border-transparent bg-transparent text-current hover:border-line hover:bg-muted-surface hover:text-accent-strong'}`}
+		class={`inline-grid size-9 shrink-0 cursor-pointer place-items-center rounded-md border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${active ? 'border-surface-300 bg-primary-50 text-primary-800' : 'border-transparent bg-transparent text-current hover:border-surface-300 hover:bg-surface-200 hover:text-primary-800'}`}
 		aria-label={label}
 		aria-pressed={active || undefined}
 		{disabled}
@@ -28,10 +28,11 @@
 	>
 		<Icon name={icon} />
 	</Tooltip.Trigger>
-	<Tooltip.Portal>
-		<Tooltip.Content
-			class="z-100 rounded-md bg-[#17251f] px-2 py-1 text-xs text-white shadow-xl"
-			sideOffset={7}>{label}</Tooltip.Content
-		>
-	</Tooltip.Portal>
-</Tooltip.Root>
+	<Portal>
+		<Tooltip.Positioner class="z-100">
+			<Tooltip.Content class="rounded-base bg-surface-900 px-2 py-1 text-xs text-white shadow-xl"
+				>{label}</Tooltip.Content
+			>
+		</Tooltip.Positioner>
+	</Portal>
+</Tooltip>

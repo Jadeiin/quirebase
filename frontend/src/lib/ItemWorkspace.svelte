@@ -149,6 +149,9 @@
 		annotations: msg('Annotations'),
 		discussion: msg('Discussion')
 	};
+	function sectionPath(key: string) {
+		return key === 'overview' ? (`/item/${itemId}` as const) : (`/item/${itemId}/${key}` as const);
+	}
 	const sectionLabel = $derived(labels[section as ItemSection]);
 
 	async function mutate(operation: () => Promise<unknown>, form?: HTMLFormElement) {
@@ -308,13 +311,13 @@
 <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
 	<div class="min-w-0">
 		<a
-			class="mb-2 inline-flex items-center gap-1 text-xs font-bold tracking-[0.1em] text-accent uppercase no-underline hover:text-accent-strong"
+			class="mb-2 inline-flex items-center gap-1 text-xs font-bold tracking-[0.1em] text-primary-700 uppercase no-underline hover:text-primary-800"
 			href={resolve('/library')}>{$t('Library')}</a
 		>
 		<h1 class="max-w-4xl text-balance">
 			{#if title}<RichText html={title} />{:else}{$t('Item workspace')}{/if}
 		</h1>
-		{#if shell.data}<p class="mt-2 text-sm text-secondary">
+		{#if shell.data}<p class="mt-2 text-sm text-surface-700">
 				{shell.data.item.authors || $t('Unknown authors')}{#if shell.data.item.publication_title}
 					· {shell.data.item.publication_title}{/if}{#if shell.data.item.publication_date}
 					· {shell.data.item.publication_date}{/if}
@@ -327,29 +330,27 @@
 				onchanged={() => Promise.all([shell.refetch(), workspace.refetch(), details.refetch()])}
 			/>{/key}{/if}
 </div>
-<nav class="mb-6 flex gap-1 overflow-x-auto border-b border-line" aria-label={$t('Item workspace')}>
+<nav
+	class="mb-6 flex gap-1 overflow-x-auto border-b border-surface-300"
+	aria-label={$t('Item workspace')}
+>
 	{#each Object.entries(labels) as [key, label] (key)}<a
-			class="border-b-2 border-transparent px-3 py-2.5 text-sm font-semibold whitespace-nowrap text-secondary no-underline transition-colors hover:text-accent aria-[current=page]:border-accent aria-[current=page]:text-accent"
+			class="border-b-2 border-transparent px-3 py-2.5 text-sm font-semibold whitespace-nowrap text-surface-700 no-underline transition-colors hover:text-primary-700 aria-[current=page]:border-primary-700 aria-[current=page]:text-primary-700"
 			aria-current={section === key ? 'page' : undefined}
-			href={key === 'overview'
-				? resolve('/(app)/item/[itemId]', { itemId })
-				: resolve('/(app)/item/[itemId]/[section=itemSection]', {
-						itemId,
-						section: key as Exclude<ItemSection, 'overview'>
-					})}>{$t(label)}</a
+			href={resolve(sectionPath(key))}>{$t(label)}</a
 		>{/each}
 </nav>
 {#if mutationError}<p
-		class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-danger"
+		class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-error-700"
 		role="alert"
 	>
 		{mutationError}
 	</p>{/if}
-{#if workspace.isPending}<div class="grid min-h-52 place-items-center text-muted">
+{#if workspace.isPending}<div class="grid min-h-52 place-items-center text-surface-600">
 		{$t('Loading')}
 		{$t(sectionLabel).toLowerCase()}…
 	</div>
-{:else if workspace.isError}<div class="grid min-h-52 place-items-center text-danger">
+{:else if workspace.isError}<div class="grid min-h-52 place-items-center text-error-700">
 		{$t('Unable to open this Item section.')}
 	</div>
 {:else if workspace.data}
@@ -357,23 +358,27 @@
 		{@const data = workspace.data as WorkspaceView}
 		<div class="grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(17rem,0.5fr)]">
 			<div class="stack">
-				<section class="overflow-hidden rounded-xl border border-line bg-raised shadow-sm">
-					<header class="border-b border-line px-5 py-4">
+				<section
+					class="overflow-hidden rounded-xl border border-surface-300 bg-surface-50 shadow-sm"
+				>
+					<header class="border-b border-surface-300 px-5 py-4">
 						<h2 class="m-0 text-lg">{$t('Abstract')}</h2>
 					</header>
-					<div class="px-5 py-5 leading-7 text-secondary">
+					<div class="px-5 py-5 leading-7 text-surface-700">
 						{#if details.data?.abstract_html}<RichText html={details.data.abstract_html} />{:else}<p
-								class="muted m-0"
+								class="m-0 text-surface-600"
 							>
 								{$t('No abstract available.')}
 							</p>{/if}
 					</div>
 				</section>
-				<section class="overflow-hidden rounded-xl border border-line bg-raised shadow-sm">
-					<header class="flex items-center justify-between border-b border-line px-5 py-4">
+				<section
+					class="overflow-hidden rounded-xl border border-surface-300 bg-surface-50 shadow-sm"
+				>
+					<header class="flex items-center justify-between border-b border-surface-300 px-5 py-4">
 						<h2 class="m-0 text-lg">{$t('Publication details')}</h2>
 						{#if data.permissions.edit}<a
-								class="text-sm font-semibold text-accent no-underline"
+								class="text-sm font-semibold text-primary-700 no-underline"
 								href={resolve('/(app)/item/[itemId]/[section=itemSection]', {
 									itemId,
 									section: 'metadata'
@@ -382,37 +387,37 @@
 					</header>
 					<dl class="grid gap-4 px-5 py-5 text-sm sm:grid-cols-2">
 						<div>
-							<dt class="text-muted">{$t('Publication')}</dt>
+							<dt class="text-surface-600">{$t('Publication')}</dt>
 							<dd class="m-0 mt-1">{data.item.publication_title ?? '—'}</dd>
 						</div>
 						<div>
-							<dt class="text-muted">{$t('Date')}</dt>
+							<dt class="text-surface-600">{$t('Date')}</dt>
 							<dd class="m-0 mt-1">{data.item.publication_date ?? '—'}</dd>
 						</div>
 						<div>
-							<dt class="text-muted">DOI</dt>
+							<dt class="text-surface-600">DOI</dt>
 							<dd class="m-0 mt-1 break-all">{data.item.doi ?? '—'}</dd>
 						</div>
 						<div>
-							<dt class="text-muted">{$t('Type')}</dt>
+							<dt class="text-surface-600">{$t('Type')}</dt>
 							<dd class="m-0 mt-1">{details.data?.metadata.reference_type ?? '—'}</dd>
 						</div>
 						<div>
-							<dt class="text-muted">{$t('Volume / Issue')}</dt>
+							<dt class="text-surface-600">{$t('Volume / Issue')}</dt>
 							<dd class="m-0 mt-1">
 								{details.data?.metadata.volume ?? '—'} / {details.data?.metadata.issue ?? '—'}
 							</dd>
 						</div>
 						<div>
-							<dt class="text-muted">{$t('Pages')}</dt>
+							<dt class="text-surface-600">{$t('Pages')}</dt>
 							<dd class="m-0 mt-1">{details.data?.metadata.pages ?? '—'}</dd>
 						</div>
 						<div>
-							<dt class="text-muted">{$t('Journal abbreviation')}</dt>
+							<dt class="text-surface-600">{$t('Journal abbreviation')}</dt>
 							<dd class="m-0 mt-1">{details.data?.metadata.journal_abbreviation ?? '—'}</dd>
 						</div>
 						<div>
-							<dt class="text-muted">{$t('Publisher')}</dt>
+							<dt class="text-surface-600">{$t('Publisher')}</dt>
 							<dd class="m-0 mt-1">
 								{details.data?.metadata.publisher ??
 									'—'}{#if details.data?.metadata.place_published}
@@ -420,80 +425,81 @@
 							</dd>
 						</div>
 						<div class="sm:col-span-2">
-							<dt class="text-muted">{$t('Affiliation')}</dt>
+							<dt class="text-surface-600">{$t('Affiliation')}</dt>
 							<dd class="m-0 mt-1">{details.data?.metadata.affiliation ?? '—'}</dd>
 						</div>
 					</dl>
-					<div class="grid grid-cols-4 border-t border-line bg-surface/55">
-						<div class="grid gap-0.5 border-r border-line p-4">
+					<div class="bg-surface/55 grid grid-cols-4 border-t border-surface-300">
+						<div class="grid gap-0.5 border-r border-surface-300 p-4">
 							<strong class="text-2xl tabular-nums">{data.counts.revisions}</strong><span
-								class="text-xs text-muted">{$t('PDF revisions')}</span
+								class="text-xs text-surface-600">{$t('PDF revisions')}</span
 							>
 						</div>
-						<div class="grid gap-0.5 border-r border-line p-4">
+						<div class="grid gap-0.5 border-r border-surface-300 p-4">
 							<strong class="text-2xl tabular-nums">{data.counts.attachments}</strong><span
-								class="text-xs text-muted">{$t('Supplements')}</span
+								class="text-xs text-surface-600">{$t('Supplements')}</span
 							>
 						</div>
-						<div class="grid gap-0.5 border-r border-line p-4">
+						<div class="grid gap-0.5 border-r border-surface-300 p-4">
 							<strong class="text-2xl tabular-nums">{data.counts.annotations}</strong><span
-								class="text-xs text-muted">{$t('Annotations')}</span
+								class="text-xs text-surface-600">{$t('Annotations')}</span
 							>
 						</div>
 						<div class="grid gap-0.5 p-4">
 							<strong class="text-2xl tabular-nums">{data.counts.discussion}</strong><span
-								class="text-xs text-muted">{$t('Messages')}</span
+								class="text-xs text-surface-600">{$t('Messages')}</span
 							>
 						</div>
 					</div>
 				</section>
 			</div>
 			<aside class="grid content-start gap-5">
-				<section class="rounded-xl border border-line bg-raised p-5 shadow-sm">
+				<section class="rounded-xl border border-surface-300 bg-surface-50 p-5 shadow-sm">
 					<h2 class="m-0 mb-4 text-lg">{$t('Tags')}</h2>
 					<div class="flex flex-wrap gap-2">
 						{#each data.tags as tag (tag.id)}<span
-								class="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-semibold text-accent-strong"
+								class="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-800"
 								>{tag.name}</span
-							>{:else}<span class="text-sm text-muted">{$t('No tags')}</span>{/each}
+							>{:else}<span class="text-sm text-surface-600">{$t('No tags')}</span>{/each}
 					</div>
 				</section>
-				<section class="rounded-xl border border-line bg-raised p-5 shadow-sm">
+				<section class="rounded-xl border border-surface-300 bg-surface-50 p-5 shadow-sm">
 					<h2 class="m-0 mb-4 text-lg">{$t('Keywords')}</h2>
 					<div class="flex flex-wrap gap-2">
 						{#each details.data?.metadata.keywords ?? [] as keyword (keyword)}<span
-								class="rounded-full border border-line bg-muted-surface px-2.5 py-1 text-xs font-semibold"
+								class="rounded-full border border-surface-300 bg-surface-200 px-2.5 py-1 text-xs font-semibold"
 								>{keyword}</span
-							>{:else}<span class="text-sm text-muted">{$t('No keywords.')}</span>{/each}
+							>{:else}<span class="text-sm text-surface-600">{$t('No keywords.')}</span>{/each}
 					</div>
 				</section>
-				<section class="rounded-xl border border-line bg-raised p-5 shadow-sm">
+				<section class="rounded-xl border border-surface-300 bg-surface-50 p-5 shadow-sm">
 					<h2 class="m-0 mb-4 text-lg">{$t('External links')}</h2>
 					<div class="grid gap-2">
 						{#each details.data?.metadata.urls ?? [] as url, index (url)}<a
-								class="grid min-w-0 gap-0.5 rounded-lg border border-line px-3 py-2 text-sm no-underline hover:bg-accent-soft"
+								class="grid min-w-0 gap-0.5 rounded-lg border border-surface-300 px-3 py-2 text-sm no-underline hover:bg-primary-50"
 								href={url}
 								target="_blank"
 								rel="external noreferrer"
 								><strong>{$t('External source')} {index + 1}</strong><span
-									class="truncate text-xs text-muted">{url}</span
+									class="truncate text-xs text-surface-600">{url}</span
 								></a
-							>{:else}<span class="text-sm text-muted">{$t('No external links.')}</span>{/each}
+							>{:else}<span class="text-sm text-surface-600">{$t('No external links.')}</span
+							>{/each}
 					</div>
 				</section>
-				<section class="rounded-xl border border-line bg-raised p-5 shadow-sm">
+				<section class="rounded-xl border border-surface-300 bg-surface-50 p-5 shadow-sm">
 					<h2 class="m-0 mb-4 text-lg">{$t('Record')}</h2>
 					<dl class="grid gap-3 text-sm">
 						<div>
-							<dt class="text-muted">{$t('Owner')}</dt>
+							<dt class="text-surface-600">{$t('Owner')}</dt>
 							<dd class="m-0">{data.owner.username}</dd>
 						</div>
 						<div>
-							<dt class="text-muted">{$t('Permissions')}</dt>
+							<dt class="text-surface-600">{$t('Permissions')}</dt>
 							<dd class="m-0">{data.permissions.edit ? $t('Can edit') : $t('Read only')}</dd>
 						</div>
 						<div>
-							<dt class="text-muted">{$t('Citation key')}</dt>
+							<dt class="text-surface-600">{$t('Citation key')}</dt>
 							<dd class="m-0"><code>{details.data?.metadata.bibtex_key ?? '—'}</code></dd>
 						</div>
 					</dl>
@@ -502,7 +508,7 @@
 		</div>
 	{:else if section === 'metadata'}
 		{@const item = workspace.data as ItemDetail}
-		<section class="panel stack">
+		<section class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 			<h2>{$t('Metadata')}</h2>
 			{#if shell.data?.permissions.edit}{#key item.id}<ItemMetadataForm
 						metadata={item.metadata}
@@ -511,11 +517,11 @@
 						onsubmit={(metadata) => updateMetadata(item, metadata)}
 					/>{/key}{:else}<dl class="grid gap-4 text-sm sm:grid-cols-2">
 					<div class="sm:col-span-2">
-						<dt class="text-muted">{$t('Title')}</dt>
+						<dt class="text-surface-600">{$t('Title')}</dt>
 						<dd class="m-0 mt-1"><RichText html={item.title_html} /></dd>
 					</div>
 					<div>
-						<dt class="text-muted">{$t('Authors')}</dt>
+						<dt class="text-surface-600">{$t('Authors')}</dt>
 						<dd class="m-0 mt-1">
 							{item.metadata.authors
 								.map((author) => [author.first_name, author.last_name].filter(Boolean).join(' '))
@@ -523,7 +529,7 @@
 						</dd>
 					</div>
 					<div>
-						<dt class="text-muted">{$t('Editors')}</dt>
+						<dt class="text-surface-600">{$t('Editors')}</dt>
 						<dd class="m-0 mt-1">
 							{item.metadata.editors
 								.map((editor) => [editor.first_name, editor.last_name].filter(Boolean).join(' '))
@@ -532,15 +538,15 @@
 					</div>
 					{#each [[$t('Publication'), item.metadata.publication_title], [$t('Publication date'), item.metadata.publication_date], [$t('Reference type'), item.metadata.reference_type], ['DOI', item.metadata.doi], [$t('Volume'), item.metadata.volume], [$t('Issue'), item.metadata.issue], [$t('Pages'), item.metadata.pages], [$t('Publisher'), item.metadata.publisher], [$t('Affiliation'), item.metadata.affiliation], [$t('Citation key'), item.metadata.bibtex_key]] as field (field[0])}<div
 						>
-							<dt class="text-muted">{field[0]}</dt>
+							<dt class="text-surface-600">{field[0]}</dt>
 							<dd class="m-0 mt-1">{field[1] || '—'}</dd>
 						</div>{/each}
 					<div class="sm:col-span-2">
-						<dt class="text-muted">{$t('Keywords')}</dt>
+						<dt class="text-surface-600">{$t('Keywords')}</dt>
 						<dd class="m-0 mt-1">{item.metadata.keywords.join('; ') || '—'}</dd>
 					</div>
 					<div class="sm:col-span-2">
-						<dt class="text-muted">{$t('Abstract')}</dt>
+						<dt class="text-surface-600">{$t('Abstract')}</dt>
 						<dd class="m-0 mt-1 whitespace-pre-wrap">
 							{#if item.abstract_html}<RichText html={item.abstract_html} />{:else}—{/if}
 						</dd>
@@ -550,13 +556,13 @@
 	{:else if section === 'files'}
 		{@const data = workspace.data as FilesView}
 		<div class="item-layout">
-			<section class="panel list-panel">
+			<section class="list-panel card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 				<h2>{$t('Files')}</h2>
 				{#each data.files as file (file.id)}<div
 						class="item-row grid-cols-[minmax(0,1fr)_auto] items-center"
 					>
 						<div class="grid gap-1">
-							<strong>{file.original_name}</strong><span class="muted"
+							<strong>{file.original_name}</strong><span class="text-surface-600"
 								>{$t(domainLabel(file.kind))} · {Math.ceil(file.size / 1024)} KB{file.processing_state
 									? ` · ${$t(domainLabel(file.processing_state))}`
 									: ''}</span
@@ -564,39 +570,47 @@
 						</div>
 						<div class="toolbar">
 							{#if file.kind === 'revision' && file.processing_state === 'ready'}<a
-									class="button"
+									class="btn preset-tonal-surface font-semibold"
 									href={resolve('/(app)/item/[itemId]/pdf/[revisionId]', {
 										itemId,
 										revisionId: file.id
 									})}>{$t('Read')}</a
 								>{/if}
-							<button class="button" onclick={() => downloadFile(file)}>{$t('Download')}</button>
+							<button
+								class="btn preset-tonal-surface font-semibold"
+								onclick={() => downloadFile(file)}>{$t('Download')}</button
+							>
 							{#if shell.data?.permissions.edit}<button
-									class="button text-danger"
+									class="btn preset-tonal-error font-semibold"
 									disabled={busy}
 									onclick={() => deleteFile(file)}>{$t('Delete')}</button
 								>{/if}
 						</div>
-					</div>{:else}<p class="muted">{$t('No files.')}</p>{/each}
+					</div>{:else}<p class="text-surface-600">{$t('No files.')}</p>{/each}
 			</section>
 			{#if shell.data?.permissions.edit}<aside class="stack">
 					<form
-						class="panel stack"
+						class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm"
 						onsubmit={(event) => upload(event, `/items/${itemId}/revisions`)}
 					>
 						<h2>{$t('Add PDF revision')}</h2>
 						<input
-							class="field"
+							class="input"
 							name="pdf"
 							type="file"
 							accept="application/pdf,.pdf"
 							required
-						/><button class="button" disabled={busy}>{$t('Upload PDF')}</button>
+						/><button class="btn preset-tonal-surface font-semibold" disabled={busy}
+							>{$t('Upload PDF')}</button
+						>
 					</form>
-					<form class="panel stack" onsubmit={(event) => uploadFromUrl(event, 'revision')}>
+					<form
+						class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm"
+						onsubmit={(event) => uploadFromUrl(event, 'revision')}
+					>
 						<h2>{$t('Add a PDF from URL')}</h2>
 						<input
-							class="field"
+							class="input"
 							name="url"
 							type="url"
 							value={details.data?.metadata.urls.find((url) =>
@@ -604,24 +618,31 @@
 							) ?? ''}
 							placeholder="https://example.org/article.pdf"
 							required
-						/><button class="button" disabled={busy}>{$t('Download and add PDF')}</button>
+						/><button class="btn preset-tonal-surface font-semibold" disabled={busy}
+							>{$t('Download and add PDF')}</button
+						>
 					</form>
 					<form
-						class="panel stack"
+						class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm"
 						onsubmit={(event) => upload(event, `/items/${itemId}/attachments`)}
 					>
 						<h2>{$t('Add attachment')}</h2>
-						<input class="field" name="attachment" type="file" required />
+						<input class="input" name="attachment" type="file" required />
 						<label class="flex items-center gap-2"
 							><input name="graphical_abstract" type="checkbox" value="true" />
 							{$t('Use as Graphical Abstract')}</label
 						>
-						<button class="button" disabled={busy}>{$t('Upload attachment')}</button>
+						<button class="btn preset-tonal-surface font-semibold" disabled={busy}
+							>{$t('Upload attachment')}</button
+						>
 					</form>
-					<form class="panel stack" onsubmit={(event) => uploadFromUrl(event, 'attachment')}>
+					<form
+						class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm"
+						onsubmit={(event) => uploadFromUrl(event, 'attachment')}
+					>
 						<h2>{$t('Add attachment from URL')}</h2>
 						<input
-							class="field"
+							class="input"
 							name="url"
 							type="url"
 							placeholder="https://example.org/supplement.zip"
@@ -631,7 +652,9 @@
 							><input name="graphical_abstract" type="checkbox" value="true" />
 							{$t('Use as Graphical Abstract')}</label
 						>
-						<button class="button" disabled={busy}>{$t('Download and add attachment')}</button>
+						<button class="btn preset-tonal-surface font-semibold" disabled={busy}
+							>{$t('Download and add attachment')}</button
+						>
 					</form>
 				</aside>{/if}
 		</div>
@@ -639,35 +662,37 @@
 		{@const data = workspace.data as OrganizeView}
 		<div class="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(20rem,0.8fr)]">
 			<div class="stack">
-				<section class="panel stack">
+				<section class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 					<h2>{$t('Projects')}</h2>
 					{#each data.projects as project (project.id)}<div class="toolbar">
 							<button
-								class="button"
+								class="btn preset-tonal-surface font-semibold"
 								disabled={busy || !data.permissions.edit}
 								onclick={() => toggleProject(project)}
 								>{project.assigned ? $t('Remove') : $t('Add')}</button
-							><span>{project.name}</span><span class="muted">{$t(domainLabel(project.role))}</span>
-						</div>{:else}<p class="muted">{$t('No available projects.')}</p>{/each}
+							><span>{project.name}</span><span class="text-surface-600"
+								>{$t(domainLabel(project.role))}</span
+							>
+						</div>{:else}<p class="text-surface-600">{$t('No available projects.')}</p>{/each}
 				</section>
-				<section class="panel stack">
+				<section class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 					<div class="workspace-header mb-2">
 						<div>
 							<h2>{$t('Tag matrix')}</h2>
-							<p class="muted">{$t('Browse the complete accessible taxonomy.')}</p>
+							<p class="text-surface-600">{$t('Browse the complete accessible taxonomy.')}</p>
 						</div>
-						<input class="field compact" bind:value={tagFilter} placeholder={$t('Filter Tags')} />
+						<input class="compact input" bind:value={tagFilter} placeholder={$t('Filter Tags')} />
 					</div>
 					{#each data.tag_matrix.groups as group (group.letter)}
 						{@const visibleTags = group.tags.filter((tag) =>
 							tag.name.toLocaleLowerCase().includes(tagFilter.toLocaleLowerCase())
 						)}
 						{#if visibleTags.length}<div>
-								<h3 class="text-sm text-muted">{group.letter}</h3>
+								<h3 class="text-sm text-surface-600">{group.letter}</h3>
 								<div class="flex flex-wrap gap-2">
 									{#each visibleTags as tag (tag.id)}{@const assigned =
 											data.tag_matrix.assigned_ids.includes(tag.id)}<button
-											class={`badge cursor-pointer border ${assigned ? 'border-accent bg-accent-soft text-accent-strong' : 'border-line bg-raised'}`}
+											class={`badge cursor-pointer border ${assigned ? 'border-primary-700 preset-tonal-primary' : 'border-surface-300 preset-tonal-surface'}`}
 											disabled={busy || !data.permissions.edit}
 											aria-pressed={assigned}
 											onclick={() => toggleTag(tag.id, assigned)}
@@ -681,64 +706,64 @@
 				</section>
 			</div>
 			<aside class="stack">
-				<section class="panel stack">
+				<section class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 					<div class="workspace-header mb-2">
 						<div>
 							<h2>{$t('Item Tags')}</h2>
-							<p class="muted">{$t('Tags currently assigned to this Item.')}</p>
+							<p class="text-surface-600">{$t('Tags currently assigned to this Item.')}</p>
 						</div>
 					</div>
 					<div class="flex flex-wrap gap-2">
 						{#each data.tags as tag (tag.id)}<button
-								class="badge cursor-pointer border border-accent/20 bg-accent-soft text-accent-strong"
+								class="badge cursor-pointer border border-primary-700/20 preset-tonal-primary"
 								disabled={busy || !data.permissions.edit}
 								onclick={() => toggleTag(tag.id, true)}>{tag.name} ×</button
-							>{:else}<span class="muted">{$t('No tags')}</span>{/each}
+							>{:else}<span class="text-surface-600">{$t('No tags')}</span>{/each}
 					</div>
 					<form class="toolbar" onsubmit={addTag}>
-						<input class="field grow" name="name" placeholder={$t('New tag')} required /><button
-							class="button"
+						<input class="input grow" name="name" placeholder={$t('New tag')} required /><button
+							class="btn preset-tonal-surface font-semibold"
 							disabled={busy || !data.permissions.edit}>{$t('Add tag')}</button
 						>
 					</form>
 				</section>
-				<section class="panel stack">
+				<section class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 					<div class="workspace-header mb-2">
 						<div>
 							<h2>{$t('Tag Recommendations')}</h2>
-							<p class="muted">
+							<p class="text-surface-600">
 								{$t('Suggestions derived from metadata and the latest ready PDF.')}
 							</p>
 						</div>
 						<button
-							class="button"
+							class="btn preset-tonal-surface font-semibold"
 							disabled={busy || !data.permissions.edit}
 							onclick={refreshTagRecommendations}>{$t('Refresh')}</button
 						>
 					</div>
-					<p class="muted text-sm">
+					<p class="text-sm text-surface-600">
 						{$t('State')}: {$t(domainLabel(data.tag_matrix.recommendation_state))}
 					</p>
-					{#if data.tag_matrix.recommendation_error}<p class="error">
+					{#if data.tag_matrix.recommendation_error}<p class="text-error-700">
 							{data.tag_matrix.recommendation_error}
 						</p>{/if}
 					<div class="flex flex-wrap gap-2">
 						{#each data.tag_matrix.suggested_names as name (name)}<button
-								class="badge cursor-pointer border border-warning/30 bg-amber-50"
+								class="badge cursor-pointer border border-warning-700/30 preset-tonal-warning"
 								disabled={busy || !data.permissions.edit}
 								onclick={() => addSuggestedTag(name)}>+ {name}</button
-							>{:else}<span class="muted">{$t('No new Tag suggestions.')}</span>{/each}
+							>{:else}<span class="text-surface-600">{$t('No new Tag suggestions.')}</span>{/each}
 					</div>
 				</section>
 			</aside>
 		</div>
 	{:else if section === 'annotations'}
-		<section class="panel list-panel">
+		<section class="list-panel card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 			<div class="workspace-header">
 				<h2>{$t('Annotations')}</h2>
 				{#if annotationRevisions.length > 1}<label
-						class="flex items-center gap-2 text-sm text-secondary"
-						>{$t('PDF revision')}<select class="field compact" bind:value={annotationRevision}
+						class="flex items-center gap-2 text-sm text-surface-700"
+						>{$t('PDF revision')}<select class="compact input" bind:value={annotationRevision}
 							><option value="all">{$t('All revisions')}</option
 							>{#each annotationRevisions as revision (revision.id)}<option value={revision.id}
 									>{revision.original_name}</option
@@ -746,13 +771,13 @@
 						></label
 					>{/if}
 			</div>
-			{#if annotationDocuments.isPending}<p class="muted">
+			{#if annotationDocuments.isPending}<p class="text-surface-600">
 					{$t('Loading annotations…')}
-				</p>{:else if annotationRevisions.length === 0}<p class="muted">
+				</p>{:else if annotationRevisions.length === 0}<p class="text-surface-600">
 					{$t('Add a PDF revision to begin annotating.')}
-				</p>{:else if annotations.isPending}<p class="muted">
+				</p>{:else if annotations.isPending}<p class="text-surface-600">
 					{$t('Loading annotations…')}
-				</p>{:else if annotations.isError}<p class="error">
+				</p>{:else if annotations.isError}<p class="text-error-700">
 					{$t('Unable to load annotations.')}
 				</p>{:else}{#each displayedAnnotations as annotation (annotation.id)}<div class="item-row">
 						<div class="toolbar justify-between">
@@ -760,7 +785,7 @@
 								>{$t(domainLabel(annotation.kind))} · {$t('page')}
 								{annotation.page_index + 1}</strong
 							><a
-								class="text-sm font-semibold text-accent no-underline"
+								class="text-sm font-semibold text-primary-700 no-underline"
 								href={resolve('/(app)/item/[itemId]/pdf/[revisionId]', {
 									itemId,
 									revisionId: annotation.revision_id
@@ -768,13 +793,13 @@
 							>
 						</div>
 						<span>{annotation.body ?? annotation.selected_text ?? $t('No note text')}</span><span
-							class="muted"
+							class="text-surface-600"
 							>{annotation.author_display_name} · {annotation.revision_name} · {annotation.replies
 								.length}
 							{$t('replies')}</span
 						>
-					</div>{:else}<p class="muted">{$t('No annotations.')}</p>{/each}<a
-					class="button button-primary"
+					</div>{:else}<p class="text-surface-600">{$t('No annotations.')}</p>{/each}<a
+					class="btn preset-filled-primary-700-300 font-semibold"
 					href={resolve('/(app)/item/[itemId]/pdf/[revisionId]', {
 						itemId,
 						revisionId: annotationRevisions[0].id
@@ -783,26 +808,28 @@
 		</section>
 	{:else}
 		{@const messages = workspace.data as Message[]}
-		<section class="panel list-panel">
+		<section class="list-panel card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 			<h2>{$t('Discussion')}</h2>
 			{#each messages as message (message.id)}<div class="item-row">
 					<div class="toolbar justify-between">
 						<strong>{message.author_username}</strong
 						>{#if message.author_id === session.data?.user?.id || session.data?.user?.role === 'administrator'}<button
-								class="button text-danger"
+								class="btn preset-tonal-error font-semibold"
 								disabled={busy}
 								onclick={() => deleteDiscussion(message.id)}>{$t('Delete')}</button
 							>{/if}
 					</div>
-					<span>{message.body}</span><span class="muted"
+					<span>{message.body}</span><span class="text-surface-600"
 						>{new Date(message.created_at).toLocaleString()}</span
 					>
-				</div>{:else}<p class="muted">{$t('No discussion messages.')}</p>{/each}
+				</div>{:else}<p class="text-surface-600">{$t('No discussion messages.')}</p>{/each}
 			<form class="stack" onsubmit={addDiscussion}>
 				<label
-					>{$t('Add message')}<textarea class="field" name="body" rows="4" required
+					>{$t('Add message')}<textarea class="textarea" name="body" rows="4" required
 					></textarea></label
-				><button class="button button-primary" disabled={busy}>{$t('Post message')}</button>
+				><button class="btn preset-filled-primary-700-300 font-semibold" disabled={busy}
+					>{$t('Post message')}</button
+				>
 			</form>
 		</section>
 	{/if}
