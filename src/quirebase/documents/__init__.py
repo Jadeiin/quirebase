@@ -23,6 +23,7 @@ from quirebase.documents.exports import (
     get_export_file,
     get_export_status,
 )
+from quirebase.documents.remote import acquire_remote_attachment
 from quirebase.documents.revisions import (
     ItemThumbnail,
     UnsupportedMediaType,
@@ -63,6 +64,7 @@ __all__ = [
     "Point",
     "Rect",
     "UnsupportedMediaType",
+    "acquire_remote_attachment",
     "assemble_document_bundle",
     "create_annotation_reply",
     "create_attachment",

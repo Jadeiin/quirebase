@@ -13,8 +13,8 @@ Core PDF components:
 - pylatexenc 2.11 — MIT, used directly by Inquiro's rich-text layer for
   Unicode/LaTeX text conversion. Quirebase preserves Unicode code points such as
   CJK characters when no LaTeX mapping exists.
-- latex2mathml 3.81.x — MIT, used only by Inquiro's Web projection to render
-  bounded inline LaTeX formulae as allowlisted MathML.
+- Temml 0.13.5 — MIT, bundled by the frontend to render bounded inline LaTeX
+  formulae as MathML before Quirebase rebuilds them through a strict allowlist.
 - RISpy — MIT, used for RIS parsing and serialization.
 - YAKE 0.7.x — used as the default local keyword extractor. Its package metadata says LGPL-3.0,
   while the upstream distribution's actual LICENSE is AGPL-3.0-or-later; Quirebase records and
@@ -32,6 +32,8 @@ Core PDF components:
 - obstore — Apache-2.0, the native asynchronous Local/S3 object-storage data plane.
 - stream-zip — MIT, used to generate ZIP downloads incrementally without assembling an archive on disk.
 
-The lockfiles are the authoritative version inventory. Produce a release SBOM from `uv.lock` and `bun.lock`, and include dependency license files from installed wheels and packages in every release artifact.
+The lockfiles are the authoritative version inventory. Produce a release SBOM from `uv.lock` and
+`frontend/bun.lock`, and include dependency license files from installed wheels and packages in
+every release artifact.
 
 `python-poppler`, `pypdfium2`, and `pypdf` are deliberately not dependencies.

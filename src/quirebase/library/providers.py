@@ -1,13 +1,19 @@
 from __future__ import annotations
 
 import json
+from contextlib import asynccontextmanager
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from inquiro import (
     CandidateNotFound,
     CandidatePage,
     CandidateRecord,
+    DocumentRequest,
+    InvalidPdfResponse,
     InvalidProviderRequest,
+    PdfAccessDenied,
+    PdfNotAvailable,
     ProviderConfig,
     ProviderRuntime,
     ProviderUnavailable,
@@ -17,7 +23,16 @@ from inquiro import (
 from quirebase.core.errors import ResourceNotFound, UpstreamServiceError, ValidationFailure
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
     from quirebase.core.config import Settings
+
+
+@dataclass(frozen=True)
+class RemotePdf:
+    content: AsyncIterator[bytes]
+    filename: str
+    media_type: str
 
 
 def provider_config(settings: Settings) -> ProviderConfig:
@@ -35,6 +50,32 @@ def provider_config(settings: Settings) -> ProviderConfig:
 def provider_runtime(settings: Settings) -> ProviderRuntime:
     """Library-owned construction seam for the external Provider runtime."""
     return ProviderRuntime(provider_config(settings))
+
+
+@asynccontextmanager
+async def acquire_remote_pdf(
+    source: str, settings: Settings, max_bytes: int
+) -> AsyncIterator[RemotePdf]:
+    """Acquire and validate a remote PDF through the Library Provider interface."""
+    config = replace(provider_config(settings), max_document_bytes=max_bytes)
+    try:
+        async with (
+            ProviderRuntime(config) as runtime,
+            await runtime.acquire_document(DocumentRequest(source)) as document,
+        ):
+            yield RemotePdf(
+                content=aiter(document),
+                filename=document.filename,
+                media_type=document.media_type,
+            )
+    except InvalidProviderRequest as error:
+        raise ValidationFailure(str(error)) from error
+    except InvalidPdfResponse as error:
+        raise ValidationFailure(str(error)) from error
+    except PdfNotAvailable as error:
+        raise ResourceNotFound(str(error)) from error
+    except (PdfAccessDenied, ProviderUnavailable) as error:
+        raise UpstreamServiceError(str(error)) from error
 
 
 async def lookup_candidate(

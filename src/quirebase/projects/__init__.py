@@ -9,6 +9,7 @@ from quirebase.projects.lifecycle import (
     set_project_visibility,
     transfer_project_ownership,
     update_project_description,
+    update_project_settings,
     validate_project_state,
 )
 from quirebase.projects.members import (
@@ -52,5 +53,6 @@ __all__ = [
     "set_project_visibility",
     "transfer_project_ownership",
     "update_project_description",
+    "update_project_settings",
     "validate_project_state",
 ]

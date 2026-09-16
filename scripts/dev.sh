@@ -12,8 +12,8 @@ dev_password="${QUIREBASE_DEV_PASSWORD:-quirebase-dev}"
 
 if [[ "${QUIREBASE_DEV_SKIP_SETUP:-0}" != "1" ]]; then
   uv sync
-  bun install --frozen-lockfile
-  bun run build
+  bun install --cwd frontend --frozen-lockfile
+  bun run --cwd frontend build
 fi
 
 uv run quirebase init-db

@@ -10,7 +10,7 @@ Quirebase is an AGPL-3.0-only, self-hosted collaborative research library.
 
 ## Development
 
-Requirements: Python 3.12+, `uv` 0.12.14+, and Bun 1.4+ (or Node.js 22+ with npm) for building the bundled PDF.js assets.
+Requirements: Python 3.12+, `uv` 0.12.14+, and Bun 1.4+ (or Node.js 22+ with npm) for building the Svelte application and bundled PDFium asset.
 
 For a quick local test, run:
 
@@ -30,8 +30,8 @@ For manual setup:
 ```sh
 uv sync
 uv run prek install --hook-type pre-commit --hook-type pre-push --hook-type commit-msg
-bun install --frozen-lockfile
-bun run build
+bun install --cwd frontend --frozen-lockfile
+bun run --cwd frontend build
 uv run quirebase init-db
 uv run quirebase create-admin
 uv run quirebase serve
@@ -70,7 +70,7 @@ tokens with `list-api-tokens USERNAME` and `revoke-api-token USERNAME TOKEN_ID`.
 
 ## PDF architecture
 
-- PDF.js is bundled locally and renders the document, text and annotation layers in the browser.
+- EmbedPDF's Svelte headless components and bundled PDFium engine render the document, text and annotation layers in the browser.
 - PyMuPDF validates PDFs, extracts text, creates thumbnails, and writes database-backed highlights and notes into temporary export copies.
 - Original PDFs are content-addressed and never modified.
 
@@ -91,4 +91,6 @@ Quirebase includes local accounts and invitations, administrator/member and proj
 
 Operational instructions are in `docs/DEPLOYMENT.md`. Deferred integrations and their security gates are recorded in `docs/adr/0001-deferred-integrations.md`.
 
-The real open-access PDF validation suite uses separately downloaded, checksum-pinned PMC open-access PDFs. See `docs/TESTING.md`; run `uv run python scripts/download-oa-corpus.py`, `uv run pytest -q -m oa`, and `bun run test:oa:pdfjs`.
+The real open-access PDF validation suite uses separately downloaded, checksum-pinned PMC
+open-access PDFs. See `docs/TESTING.md`; run
+`uv run python scripts/download-oa-corpus.py` and `uv run pytest -q -m oa`.

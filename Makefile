@@ -6,8 +6,7 @@ include Makefile.config
         docker-env docker-build docker-pull docker-up docker-up-s3 \
         docker-down docker-down-s3 docker-ps docker-logs docker-shell \
         docker-admin docker-doctor \
-        i18n-extract i18n-update i18n-compile i18n-init i18n-sync \
-        build-client build-assets \
+        build-frontend \
         check-all lint-all lint-python format-python type-check test-all test-oa \
         clean clean-install make-p
 
@@ -73,32 +72,9 @@ docker-doctor: docker-env
 make-p:
 	set -m; (for p in $(P); do ($(MAKE) $$p || kill 0)& done; wait)
 
-# --- i18n / Babel Workflow ---
-i18n-extract:
-	$(PYBABEL) extract -F $(BABEL_CFG) -o $(POT_FILE) --project quirebase $(SRC_DIR)
-
-i18n-update:
-	$(PYBABEL) update -i $(POT_FILE) -d $(LOCALES_DIR)
-
-i18n-compile:
-	$(PYBABEL) compile -d $(LOCALES_DIR)
-
-i18n-init:
-	@if [ -z "$(LOCALE)" ]; then \
-		echo "Error: Please specify a locale with LOCALE=<lang_code>, e.g. make i18n-init LOCALE=fr"; \
-		exit 1; \
-	fi
-	$(PYBABEL) init -i $(POT_FILE) -d $(LOCALES_DIR) -l $(LOCALE)
-
-i18n-sync: i18n-extract
-	$(MAKE) i18n-update i18n-compile
-
-# --- Client & Frontend Assets ---
-build-assets: build-client
-
-build-client:
-	$(BUN) scripts/build-assets.mjs
-	$(BUN) run build:app
+# --- Frontend application ---
+build-frontend:
+	$(BUN) run --cwd frontend build
 
 # --- Code Quality & Verification ---
 check-all: lint-all type-check test-all
@@ -129,6 +105,6 @@ clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 
 clean-install: clean
-	rm -rf node_modules
+	rm -rf node_modules frontend/node_modules
 	rm -rf $(VENV)
 	rm -rf dist *.egg-info

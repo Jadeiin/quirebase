@@ -72,7 +72,6 @@ ALLOWED_STANDALONE_DEPENDENCIES = {
     "documents": {"inquiro"},
     "library": {"inquiro", "rubrica"},
     "search": {"inquiro"},
-    "web": {"inquiro"},
 }
 
 BUSINESS_ROLES = {"business", "domain-policy"}
@@ -330,7 +329,7 @@ def test_standalone_dependency_policy_covers_every_application_edge():
 
 
 def test_non_library_inquiro_edges_are_restricted_to_rich_text():
-    for package_name in ("documents", "search", "web"):
+    for package_name in ("documents", "search"):
         imports = {
             module
             for py_file in get_python_files(SRC_ROOT / package_name)
@@ -605,7 +604,7 @@ def test_only_audit_module_constructs_audit_events():
 
 
 def test_item_metadata_mutations_cross_the_typed_library_seam():
-    item_routes = SRC_ROOT / "web" / "views" / "items.py"
+    item_routes = SRC_ROOT / "web" / "api" / "routes.py"
     assert "quirebase.access.items" not in imported_modules(item_routes)
 
     for py_file in get_python_files(SRC_ROOT):
@@ -632,7 +631,7 @@ def test_item_workspace_uses_typed_section_views():
 
 
 def test_multi_item_document_downloads_cross_the_library_bulk_seam():
-    library_routes = SRC_ROOT / "web" / "views" / "library.py"
+    library_routes = SRC_ROOT / "web" / "api" / "workspaces.py"
     assert "quirebase.documents" not in imported_modules(library_routes)
 
     documents_bundle = SRC_ROOT / "documents" / "bundles.py"
@@ -782,13 +781,12 @@ def test_bibliography_package_layers_stay_acyclic():
                 )
 
 
-def test_web_uses_library_provider_operations_only():
+def test_web_does_not_import_inquiro():
     for py_file in get_python_files(SRC_ROOT / "web"):
         dependencies = imported_modules(py_file)
         assert not any(
-            (module == "inquiro" or module.startswith("inquiro.")) and module != "inquiro.richtext"
-            for module in dependencies
-        ), f"{py_file} bypasses the Library Interface and imports Inquiro"
+            module == "inquiro" or module.startswith("inquiro.") for module in dependencies
+        ), f"{py_file} imports Inquiro; Web Rich Text projection belongs to the frontend Adapter"
 
 
 def test_inquiro_facade_is_the_narrow_provider_interface():

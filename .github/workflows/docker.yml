@@ -53,10 +53,10 @@ jobs:
 
           import quirebase
 
-          static = Path(quirebase.__file__).parent / "static"
-          for asset in ("app.js", "app.css", "vendor/pdfium.wasm"):
-              assert (static / asset).is_file(), asset
-          print("bundled static assets present")
+          frontend = Path(quirebase.__file__).parent.parent / "quirebase_frontend"
+          assert (frontend / "index.html").is_file()
+          assert tuple((frontend / "_app" / "immutable" / "assets").glob("pdfium.*.wasm"))
+          print("bundled frontend assets present")
           PY
       - name: Start the web process
         run: docker run -d --name quirebase-smoke-web -v quirebase-smoke:/data -p 127.0.0.1:9060:9060 quirebase:smoke

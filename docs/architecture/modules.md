@@ -18,10 +18,22 @@ Planned deepening work is ordered in `docs/architecture/deep-module-roadmap.md`.
 | `documents` | Business Module | File Revisions, Attachments, Annotations, uploads, PDF inspection, thumbnails, annotation-export workflows and Annotation Export Artifacts |
 | `operations` | Business Module | Runtime settings, health, backup, reconciliation and maintenance workflows |
 | `search` | Outbound adapter Module | The Library Search port plus SQLite and PostgreSQL adapters |
-| `web` | Inbound adapter Module | HTTP parsing, authentication dependencies and response formatting |
+| `web` | Inbound adapter Module | HTTP parsing, Login Session/API Token credential selection, Origin enforcement, API routing, response formatting and static application delivery |
 | `mcp` | Inbound adapter Module | MCP tool registration, API Token adaptation and protocol conversion |
 | `programmatic` | Application Interface Module | Shared response contracts and pure projections used by the HTTP API and MCP adapters |
-| `core` | Infrastructure Module | Configuration, database setup, UUID object storage, DBOS Adapter, cryptography, i18n and base errors |
+| `core` | Infrastructure Module | Configuration, database setup, UUID object storage, DBOS Adapter, cryptography and base errors |
+
+The TypeScript workspace under `frontend/` is the Web UI adapter. It owns responsive application
+composition, client-side routing, remote-state caching, frontend localization, semantic design
+tokens, Web Rich Text projection and the EmbedPDF Svelte integration. Inline `$...$` formulae are
+rendered through Temml, then rebuilt through a strict MathML element and attribute allowlist before
+entering the sole raw-HTML rendering seam. Gettext PO files under `frontend/src/lib/locales` are
+the only manually edited translation catalogs; Lingui extracts English message IDs from Svelte
+and compiles ignored TypeScript runtime catalogs during checks and builds. It calls `/api/v1` and
+does not import or reproduce Python business behavior. Its generated output stays in
+`frontend/build`; FastAPI serves that directory directly in source checkouts, while the wheel
+builder includes it as frontend data without writing generated files into `src/quirebase`. It is
+not a separately deployed server.
 
 ## Standalone workspace packages
 
@@ -110,10 +122,9 @@ LaTeX commands (`emph`, `mkbibemph`, `textit`, `textbf`, `textsuperscript` and `
 Inquiro-owned nodes and renders canonical HTML, LaTeX or plaintext. Library stores canonical HTML
 for Item titles and abstracts; Citation Key generation, Search, recommendations, archive names and
 non-rich export formats explicitly request plaintext. Inline `$...$` formulae remain verbatim in
-the canonical representation and bibliography round-trips. Only the Web output Adapter projects
-them through `latex2mathml` into MathML, then rebuilds the result through a strict element and
-attribute allowlist before marking it safe for template rendering. `pylatexenc`, `latex2mathml`
-and bibliography implementation types do not cross the Interface.
+the canonical representation and bibliography round-trips. The frontend Web UI Adapter alone
+projects them through Temml into allowlisted MathML. `pylatexenc` and bibliography implementation
+types do not cross the Inquiro Interface.
 
 Item metadata mutation crosses the Library interface through `create_item`,
 `revise_item_metadata` and `regenerate_bibtex_key`. Creation and revision share one flat,
@@ -125,7 +136,7 @@ Their implementation lives in `library.item_metadata`; that internal Module owns
 Item's bibliographic record, not unrelated Item operations.
 `ItemMetadata` is a transport-neutral business command and may be used directly by inbound
 Adapters that can derive their wire schema from dataclasses; they must not maintain mirrored input
-models. Response contracts shared by both programmatic Adapters live in `programmatic`; HTML-only
+models. Response contracts shared by both programmatic Adapters live in `programmatic`; UI-only
 or protocol-only projections remain owned by their Adapter.
 
 Operations over a user-selected set of Items live in `library.bulk_items`. This Module owns the
@@ -136,7 +147,7 @@ not define single-Item metadata behaviour or Item workspace queries.
 
 Opening an Item crosses the Library interface through `open_item_workspace` with a typed
 `WorkspaceSection`. Summary, Metadata, Files, Organize, Annotations and Discussion each return a
-section-specific read model; only the Web adapter maps those views to template context. Access
+section-specific read model; only the Web adapter maps those views to API projections. Access
 validation, section query selection and recent-reading persistence remain coordinated behind the
 same operation seam. The implementation lives in `library.item_workspace`, which owns reads for
 one opened Item and no Item mutation or bulk behaviour.
@@ -167,7 +178,12 @@ Adapter, and the Library-owned workflow invokes the Library operation.
 Opening a Project crosses the Projects interface through `open_project_workspace`, which returns
 a typed read model containing the Project, the caller's membership, members and assigned Items.
 Membership authorization and the related queries remain coordinated behind that operation; only
-the Web adapter maps the typed view to template context.
+the Web adapter maps the typed view to an API projection.
+
+The Project settings form crosses the Projects interface through `update_project_settings`.
+Name, description and visibility are validated before mutation and committed with their Audit
+Event in one transaction; the Web adapter sends the form as one request and does not coordinate
+partial Project updates.
 
 Project-scoped mutations lock the Project root only when changing Project state or membership;
 ownership is represented by `Project.owner_id` and transfer updates the owner and membership rows
@@ -179,7 +195,7 @@ Administrator Project management crosses the Projects interface through
 `list_projects_for_admin`, which returns a paginated directory with creator and membership/item
 counts. Administrator lifecycle mutations reuse the Projects operations so state changes,
 visibility changes, renames and their Audit Events remain subject to one business seam; the Web
-administration adapter owns filtering controls and HTML formatting.
+administration adapter owns filtering controls and UI projection.
 
 `inquiro` presents one asynchronous `ProviderRuntime` as its reusable Provider Interface. Callers
 use `async with` and await its operations; `lookup` and `search` return immutable Candidate Record values, while
@@ -276,7 +292,7 @@ directions are:
 | `documents` | `access`, `audit`, `core`, `models`, `operations`, `search` | Authorization, owned-object persistence, auditing, runtime settings, Documents workflows and revision-owned Search projection |
 | `operations` | `audit`, `core`, `library`, `models`, `search` | Infrastructure access, operational persistence, maintenance workflows, global rebuild coordination and audit recording |
 | `search` | `models` | Build and query the derived search representation |
-| `web` | Business Modules, `access`, `core`, `mcp`, `models`, `programmatic` | Invoke use cases, expose the Bearer-authenticated HTTP API with API Token provenance, format views and compose the MCP HTTP mount into the application |
+| `web` | Business Modules, `access`, `core`, `mcp`, `models`, `programmatic` | Invoke use cases, expose `/api/v1` through explicit Bearer or Login Session authentication, enforce cookie-request Origins, format responses, serve the static application and compose the MCP HTTP mount |
 | `mcp` | `accounts`, `audit`, `core`, `documents`, `library`, `programmatic`, `projects` | Resolve a verified token subject, bind invocation provenance for business Audit Events, manage request persistence lifetime, invoke ordinary User use cases and format protocol results without owning their authorization or transactions |
 | `programmatic` | `documents`, `library` | Define shared programmatic response contracts and pure projections without owning authentication, transactions or business authorization |
 | `core` | Nothing above infrastructure | Infrastructure must not know business concepts |
@@ -288,11 +304,11 @@ Dependencies on standalone workspace packages are also explicit:
 | `documents` | `inquiro` | Render canonical scholarly Rich Text as plaintext for archive filenames and manifests |
 | `library` | `inquiro`, `rubrica` | Adapt reusable metadata, bibliography, citation and recommendation computation to Library business operations and typed domain errors |
 | `search` | `inquiro` | Project canonical scholarly Rich Text into the plaintext derived search representation |
-| `web` | `inquiro` | Sanitize and render canonical scholarly Rich Text at the HTML output Adapter |
 
-The `documents`, `search` and `web` edges are restricted to `inquiro.richtext`; they do not permit
-those Modules to call Provider, bibliography or citation operations. Those business workflows
-still cross Library.
+The `documents` and `search` edges are restricted to `inquiro.richtext`; they do not permit those
+Modules to call Provider, bibliography or citation operations. Those business workflows still
+cross Library. The Python Web Adapter does not depend on Inquiro; browser-only Rich Text projection
+belongs to the frontend Adapter.
 
 Standalone workspace packages never depend back on Quirebase. Audit Event construction and
 administrative queries cross only the `quirebase.audit` Interface.

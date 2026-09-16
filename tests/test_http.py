@@ -1,8 +1,6 @@
 import asyncio
 import json
-import re
 from datetime import UTC, datetime, timedelta
-from html import unescape
 from uuid import uuid4
 
 import httpx2
@@ -45,7 +43,6 @@ async def authenticated_async_client(db, session_factory, tmp_path, monkeypatch)
     raw = "test-session-token"
     login = LoginSession(
         token_hash=token_hash(raw),
-        csrf_token="test-csrf",
         user_id=user.id,
         expires_at=datetime.now(UTC) + timedelta(hours=1),
     )
@@ -76,7 +73,10 @@ async def authenticated_async_client(db, session_factory, tmp_path, monkeypatch)
     client = httpx2.AsyncClient(
         transport=httpx2.ASGITransport(app=test_app),
         base_url="http://testserver",
-        headers={"Accept-Language": "zh-CN,zh;q=0.9"},
+        headers={
+            "Accept-Language": "zh-CN,zh;q=0.9",
+            "Origin": "http://testserver",
+        },
         follow_redirects=True,
     )
     client.cookies.set(get_settings().session_cookie, raw)
@@ -90,33 +90,18 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         db, async_session_factory, tmp_path, monkeypatch
     )
     try:
-        viewer = await client.get(f"/items/{item.id}/pdf/{revision.id}")
+        viewer = await client.get(f"/api/v1/items/{item.id}/revisions/{revision.id}/viewer")
         assert viewer.status_code == 200
-        content_security_policy = viewer.headers["content-security-policy"]
-        assert "script-src 'self' 'wasm-unsafe-eval'" in content_security_policy
-        assert "img-src 'self' data: blob:" in content_security_policy
-        assert 'lang="zh-CN"' in viewer.text
-        assert 'data-locale="zh-CN"' in viewer.text
-        assert 'id="embedpdf-viewer"' in viewer.text
-        encoded_messages = re.search(r'data-i18n="([^"]+)"', viewer.text)
-        assert encoded_messages is not None
-        messages = json.loads(unescape(encoded_messages.group(1)))
-        assert messages["syncFailed"] == "批注无法保存；已恢复服务器版本。"  # ruff: ignore[ambiguous-unicode-character-string]
-        assert messages["loadTimedOut"] == "PDF 加载超时，请重试或下载该文件。"  # ruff: ignore[ambiguous-unicode-character-string]
-
-        client.cookies.set("quirebase_locale", "en_US")
-        english_viewer = await client.get(f"/items/{item.id}/pdf/{revision.id}")
-        assert 'lang="en-US"' in english_viewer.text
-        assert 'data-locale="en-US"' in english_viewer.text
-        assert "PDF loading timed out. Please retry or download the file." in english_viewer.text
-
-        wasm = await client.get("/static/vendor/pdfium.wasm")
-        assert wasm.status_code == 200
-        assert wasm.headers["content-type"] == "application/wasm"
-        assert wasm.content[:4] == b"\x00asm"
+        assert viewer.json()["revision"]["id"] == revision.id
+        assert viewer.json()["revision"]["page_geometry"] == [[0, 0, 300, 400]]
+        assert viewer.json()["editable"] is True
+        assert viewer.json()["annotation_author"] == "reader"
+        assert viewer.json()["revision"]["content_url"] == (
+            f"/api/v1/items/{item.id}/revisions/{revision.id}/content"
+        )
 
         content = await client.get(
-            f"/documents/{item.id}/revisions/{revision.id}/content",
+            f"/api/v1/items/{item.id}/revisions/{revision.id}/content",
             headers={"Range": "bytes=0-4"},
         )
         assert content.status_code == 206
@@ -127,7 +112,7 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         assert not content.headers["etag"].startswith('""')
 
         created = await client.post(
-            f"/documents/{item.id}/annotations",
+            f"/api/v1/items/{item.id}/annotations",
             headers={"X-CSRF-Token": "test-csrf"},
             json={
                 "id": str(uuid4()),
@@ -151,7 +136,7 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
 
         reply_id = str(uuid4())
         replied = await client.post(
-            f"/documents/{item.id}/annotations/{annotation['id']}/replies",
+            f"/api/v1/items/{item.id}/annotations/{annotation['id']}/replies",
             headers={"X-CSRF-Token": "test-csrf"},
             json={"id": reply_id, "body": "Collaborative reply"},
         )
@@ -160,14 +145,14 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         assert reply["annotation_id"] == annotation["id"]
         assert reply["body"] == "Collaborative reply"
         listed_with_reply = await client.get(
-            f"/documents/{item.id}/annotations",
+            f"/api/v1/items/{item.id}/annotations",
             params={"revision_id": revision.id},
         )
-        listed_reply = listed_with_reply.json()["annotations"][0]["replies"][0]
+        listed_reply = listed_with_reply.json()[0]["replies"][0]
         assert listed_reply["id"] == reply["id"]
         assert listed_reply["body"] == reply["body"]
         updated_reply = await client.patch(
-            f"/documents/{item.id}/annotations/{annotation['id']}/replies/{reply_id}",
+            f"/api/v1/items/{item.id}/annotations/{annotation['id']}/replies/{reply_id}",
             headers={"X-CSRF-Token": "test-csrf"},
             json={"version": reply["version"], "body": "Updated reply"},
         )
@@ -175,27 +160,27 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         assert updated_reply.json()["version"] == 2
         assert updated_reply.json()["body"] == "Updated reply"
         deleted_reply = await client.delete(
-            f"/documents/{item.id}/annotations/{annotation['id']}/replies/{reply_id}",
+            f"/api/v1/items/{item.id}/annotations/{annotation['id']}/replies/{reply_id}",
             headers={"X-CSRF-Token": "test-csrf"},
             params={"version": 2},
         )
-        assert deleted_reply.status_code == 204
+        assert deleted_reply.status_code == 200
         restored_reply = await client.post(
-            f"/documents/{item.id}/annotations/{annotation['id']}/replies/{reply_id}/restore",
+            f"/api/v1/items/{item.id}/annotations/{annotation['id']}/replies/{reply_id}/restore",
             headers={"X-CSRF-Token": "test-csrf"},
             params={"version": 3},
         )
         assert restored_reply.status_code == 200
         assert restored_reply.json()["version"] == 4
         deleted_reply_again = await client.delete(
-            f"/documents/{item.id}/annotations/{annotation['id']}/replies/{reply_id}",
+            f"/api/v1/items/{item.id}/annotations/{annotation['id']}/replies/{reply_id}",
             headers={"X-CSRF-Token": "test-csrf"},
             params={"version": 4},
         )
-        assert deleted_reply_again.status_code == 204
+        assert deleted_reply_again.status_code == 200
 
         duplicate = await client.post(
-            f"/documents/{item.id}/annotations",
+            f"/api/v1/items/{item.id}/annotations",
             headers={"X-CSRF-Token": "test-csrf"},
             json={
                 "id": annotation["id"],
@@ -214,18 +199,22 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         other_item = Item(title="Different paper", created_by=item.created_by)
         db.add(other_item)
         await db.commit()
-        mismatched = await client.get(f"/documents/{other_item.id}/revisions/{revision.id}/export")
+        mismatched = await client.get(
+            f"/api/v1/items/{other_item.id}/revisions/{revision.id}/export"
+        )
         assert mismatched.status_code == 404
 
         revision.original_name = "论文.pdf"
         await db.commit()
-        unicode_content = await client.get(f"/documents/{item.id}/revisions/{revision.id}/content")
+        unicode_content = await client.get(
+            f"/api/v1/items/{item.id}/revisions/{revision.id}/content"
+        )
         unicode_range = await client.get(
-            f"/documents/{item.id}/revisions/{revision.id}/content",
+            f"/api/v1/items/{item.id}/revisions/{revision.id}/content",
             headers={"Range": "bytes=0-4"},
         )
         unicode_download = await client.get(
-            f"/documents/{item.id}/revisions/{revision.id}/export",
+            f"/api/v1/items/{item.id}/revisions/{revision.id}/export",
             params={"include_annotations": False},
         )
         assert unicode_content.status_code == 200
@@ -259,7 +248,7 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         ])
         await db.commit()
         exported = await client.get(
-            f"/documents/{item.id}/revisions/{revision.id}/export",
+            f"/api/v1/items/{item.id}/revisions/{revision.id}/export",
             params={
                 "include_annotations": True,
                 "project_id": project.id,
@@ -299,7 +288,7 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         )
         with pytest.raises(RuntimeError, match="annotation export failed"):
             await client.get(
-                f"/documents/{item.id}/revisions/{revision.id}/export",
+                f"/api/v1/items/{item.id}/revisions/{revision.id}/export",
                 params={"include_annotations": True},
             )
         assert len(failed_export_paths) == 1
@@ -332,7 +321,7 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         assert not exported_paths[0].exists()
 
         underlined = await client.post(
-            f"/documents/{item.id}/annotations",
+            f"/api/v1/items/{item.id}/annotations",
             headers={"X-CSRF-Token": "test-csrf"},
             json={
                 "id": str(uuid4()),
@@ -355,7 +344,7 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         assert underlined.json()["payload"]["style"]["stroke_color"] == "#FF5959"
 
         conflict = await client.patch(
-            f"/documents/{item.id}/annotations/{annotation['id']}",
+            f"/api/v1/items/{item.id}/annotations/{annotation['id']}",
             headers={"X-CSRF-Token": "test-csrf"},
             json={
                 "version": 99,
@@ -371,20 +360,20 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         assert conflict.status_code == 409
 
         deleted = await client.delete(
-            f"/documents/{item.id}/annotations/{annotation['id']}",
+            f"/api/v1/items/{item.id}/annotations/{annotation['id']}",
             headers={"X-CSRF-Token": "test-csrf"},
             params={"version": annotation["version"]},
         )
-        assert deleted.status_code == 204
-        assert deleted.content == b""
+        assert deleted.status_code == 200
+        assert deleted.json() == {"ok": True}
         stale_restore = await client.post(
-            f"/documents/{item.id}/annotations/{annotation['id']}/restore",
+            f"/api/v1/items/{item.id}/annotations/{annotation['id']}/restore",
             headers={"X-CSRF-Token": "test-csrf"},
             params={"version": annotation["version"]},
         )
         assert stale_restore.status_code == 409
         restored = await client.post(
-            f"/documents/{item.id}/annotations/{annotation['id']}/restore",
+            f"/api/v1/items/{item.id}/annotations/{annotation['id']}/restore",
             headers={"X-CSRF-Token": "test-csrf"},
             params={"version": annotation["version"] + 1},
         )
@@ -409,6 +398,59 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
 
 
 @pytest.mark.anyio
+async def test_project_viewer_can_create_annotations(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    owner_client, item, revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    viewer = User(username="annotation-viewer", password_hash="unused")
+    project = Project(name="Readable annotations", created_by=item.created_by)
+    db.add_all([viewer, project])
+    await db.flush()
+    db.add_all([
+        ProjectItem(project_id=project.id, item_id=item.id),
+        ProjectMember(project_id=project.id, user_id=viewer.id, role="viewer"),
+        LoginSession(
+            token_hash=token_hash("annotation-viewer-session"),
+            user_id=viewer.id,
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+        ),
+    ])
+    await db.commit()
+
+    try:
+        owner_client.cookies.set(
+            get_settings().session_cookie,
+            "annotation-viewer-session",
+        )
+        viewer = await owner_client.get(f"/api/v1/items/{item.id}/revisions/{revision.id}/viewer")
+        created = await owner_client.post(
+            f"/api/v1/items/{item.id}/annotations",
+            json={
+                "id": str(uuid4()),
+                "revision_id": revision.id,
+                "page_index": 0,
+                "kind": "note",
+                "scope": "private",
+                "body": "Reader note",
+                "payload": {
+                    "type": "note",
+                    "rect": {"x": 10, "y": 10, "width": 20, "height": 20},
+                },
+            },
+        )
+
+        assert viewer.status_code == 200
+        assert viewer.json()["editable"] is True
+        assert created.status_code == 201
+    finally:
+        await owner_client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
 async def test_item_overview_uses_the_ready_revision_thumbnail(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
@@ -420,13 +462,11 @@ async def test_item_overview_uses_the_ready_revision_thumbnail(
     )
     revision.thumbnail_object_key = thumbnail.key
     await async_db.commit()
-    thumbnail_url = f"/documents/{item.id}/thumbnail"
+    thumbnail_url = f"/api/v1/items/{item.id}/thumbnail"
 
     try:
-        overview = await client.get(f"/items/{item.id}")
         response = await client.get(thumbnail_url)
 
-        assert f'src="{thumbnail_url}"' in overview.text
         assert response.status_code == 200
         assert response.headers["content-type"] == "image/png"
         assert response.content == b"\x89PNG\r\n\x1a\nthumbnail"
@@ -442,12 +482,11 @@ async def test_item_overview_omits_a_missing_thumbnail(
     client, item, _revision = await authenticated_async_client(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
-    thumbnail_url = f"/documents/{item.id}/thumbnail"
+    thumbnail_url = f"/api/v1/items/{item.id}/thumbnail"
 
     try:
-        overview = await client.get(f"/items/{item.id}")
-
-        assert thumbnail_url not in overview.text
+        response = await client.get(thumbnail_url)
+        assert response.status_code == 404
     finally:
         await client.aclose()
         get_settings.cache_clear()
@@ -488,7 +527,7 @@ async def test_deleting_latest_pdf_revision_removes_its_files_and_falls_back_thu
     await db.commit()
     new_revision_id = new_revision.id
     new_object = local_object_path(key)
-    thumbnail_url = f"/documents/{item_id}/thumbnail"
+    thumbnail_url = f"/api/v1/items/{item_id}/thumbnail"
     index = search_index(db)
     await index.index_revision(db, new_revision.id)
     recommendation = await request_item_tag_recommendation(db, item_id, owner_id=item.created_by)
@@ -499,14 +538,9 @@ async def test_deleting_latest_pdf_revision_removes_its_files_and_falls_back_thu
         assert (await client.get(thumbnail_url)).content == b"new-thumbnail"
         assert await index.search(db, "deletedsearchtoken") == [item_id]
 
-        deleted = await client.post(
-            f"/items/{item_id}/pdf/{new_revision_id}/delete",
-            data={"csrf_token": "test-csrf"},
-            follow_redirects=False,
-        )
+        deleted = await client.delete(f"/api/v1/items/{item_id}/revisions/{new_revision_id}")
 
-        assert deleted.status_code == 303
-        assert deleted.headers["location"] == f"/items/{item_id}/files"
+        assert deleted.status_code == 200
         assert await db.get(FileRevision, new_revision_id) is None
         await document_workflows.delete_unreferenced_objects_step([key, new_thumbnail.key])
         assert not new_object.exists()
@@ -539,15 +573,13 @@ async def test_graphical_abstract_attachment_overrides_the_pdf_thumbnail(
 
     try:
         uploaded = await client.post(
-            f"/items/{item_id}/attachments",
-            data={"csrf_token": "test-csrf", "graphical_abstract": "true"},
+            f"/api/v1/items/{item_id}/attachments",
+            data={"graphical_abstract": "true"},
             files={"attachment": ("abstract.png", b"\x89PNG\r\n\x1a\ngraphical", "image/png")},
             follow_redirects=False,
         )
-        assert uploaded.status_code == 303
-        assert uploaded.headers["location"].startswith(
-            f"/items/{item_id}/files?workflow=upload-attachment:"
-        )
+        assert uploaded.status_code == 202
+        assert uploaded.json()["id"].startswith("upload-attachment:")
         assert await db.scalar(select(Attachment).where(Attachment.item_id == item_id)) is None
     finally:
         await client.aclose()
@@ -566,13 +598,13 @@ async def test_graphical_abstract_rejects_content_that_is_not_an_image(
 
     try:
         uploaded = await client.post(
-            f"/items/{item_id}/attachments",
-            data={"csrf_token": "test-csrf", "graphical_abstract": "true"},
+            f"/api/v1/items/{item_id}/attachments",
+            data={"graphical_abstract": "true"},
             files={"attachment": ("abstract.png", b"not really a png", "image/png")},
             follow_redirects=False,
         )
 
-        assert uploaded.status_code == 303
+        assert uploaded.status_code == 202
         assert (
             await db.scalar(
                 select(func.count()).select_from(Attachment).where(Attachment.item_id == item_id)
@@ -597,13 +629,13 @@ async def test_graphical_abstract_rejects_empty_content_without_leaking_staged_o
 
     try:
         uploaded = await client.post(
-            f"/items/{item_id}/attachments",
-            data={"csrf_token": "test-csrf", "graphical_abstract": "true"},
+            f"/api/v1/items/{item_id}/attachments",
+            data={"graphical_abstract": "true"},
             files={"attachment": ("abstract.png", b"", "image/png")},
             follow_redirects=False,
         )
 
-        assert uploaded.status_code == 303
+        assert uploaded.status_code == 202
         assert (
             await db.scalar(
                 select(func.count()).select_from(Attachment).where(Attachment.item_id == item_id)
@@ -698,70 +730,13 @@ async def test_regular_attachment_accepts_non_image_content(
 
     try:
         uploaded = await client.post(
-            f"/items/{item_id}/attachments",
-            data={"csrf_token": "test-csrf"},
+            f"/api/v1/items/{item_id}/attachments",
             files={"attachment": ("dataset.csv", b"column\nvalue\n", "text/csv")},
             follow_redirects=False,
         )
-        assert uploaded.status_code == 303
-        assert uploaded.headers["location"].startswith(
-            f"/items/{item_id}/files?workflow=upload-attachment:"
-        )
+        assert uploaded.status_code == 202
+        assert uploaded.json()["id"].startswith("upload-attachment:")
         assert await db.scalar(select(Attachment).where(Attachment.item_id == item_id)) is None
-    finally:
-        await client.aclose()
-        get_settings.cache_clear()
-
-
-@pytest.mark.anyio
-@pytest.mark.skip(reason="covered by durable attachment workflow integration tests")
-async def test_replacing_and_deleting_graphical_abstract_preserves_attachment_and_falls_back(
-    async_db, async_session_factory, tmp_path, monkeypatch
-):
-    db = async_db
-    client, item, revision = await authenticated_async_client(
-        db, async_session_factory, tmp_path, monkeypatch
-    )
-    pdf_thumbnail = get_settings().object_dir / "thumbnails" / f"{revision.id}.png"
-    pdf_thumbnail.parent.mkdir(parents=True, exist_ok=True)
-    pdf_thumbnail.write_bytes(b"pdf-thumbnail")
-
-    try:
-        for name, content in (("first.png", b"first-image"), ("second.png", b"second-image")):
-            response = await client.post(
-                f"/items/{item.id}/attachments",
-                data={"csrf_token": "test-csrf", "graphical_abstract": "true"},
-                files={"attachment": (name, b"\x89PNG\r\n\x1a\n" + content, "image/png")},
-                follow_redirects=False,
-            )
-            assert response.status_code == 303
-
-        first, second = (
-            await db.scalars(
-                select(Attachment)
-                .where(Attachment.item_id == item.id)
-                .order_by(Attachment.created_at)
-            )
-        ).all()
-        second_object = local_object_path(second.object_key)
-        assert first.role is None
-        assert second.role == "graphical_abstract"
-        assert (await client.get(f"/documents/{item.id}/thumbnail")).content.endswith(
-            b"second-image"
-        )
-
-        deleted = await client.post(
-            f"/items/{item.id}/attachments/{second.id}/delete",
-            data={"csrf_token": "test-csrf"},
-            follow_redirects=False,
-        )
-
-        assert deleted.status_code == 303
-        assert await db.get(Attachment, first.id) is not None
-        assert await db.get(Attachment, second.id) is None
-        await document_workflows.delete_unreferenced_objects_step([second.object_key])
-        assert not second_object.exists()
-        assert (await client.get(f"/documents/{item.id}/thumbnail")).content == b"pdf-thumbnail"
     finally:
         await client.aclose()
         get_settings.cache_clear()
@@ -776,28 +751,25 @@ async def test_item_edit_detects_conflicts_and_updates_search(
         db, async_session_factory, tmp_path, monkeypatch
     )
     try:
-        updated = await client.post(
-            f"/items/{item.id}/edit",
-            data={
-                "csrf_token": "test-csrf",
-                "version": 1,
-                "title": "Revised Paper",
-                "abstract": "Quantum transport",
+        updated = await client.put(
+            f"/api/v1/items/{item.id}",
+            json={
+                "expected_version": 1,
+                "metadata": {"title": "Revised Paper", "abstract": "Quantum transport"},
             },
-            follow_redirects=False,
         )
-        assert updated.status_code == 303
+        assert updated.status_code == 200
         await db.refresh(item)
         assert item.version == 2
         assert item.title == "Revised Paper"
 
-        results = await client.get("/?q=quantum")
+        results = await client.get("/api/v1/items", params={"query": "quantum"})
         assert results.status_code == 200
-        assert "Revised Paper" in results.text
+        assert results.json()["items"][0]["title_html"] == "Revised Paper"
 
-        stale = await client.post(
-            f"/items/{item.id}/edit",
-            data={"csrf_token": "test-csrf", "version": 1, "title": "Lost update"},
+        stale = await client.put(
+            f"/api/v1/items/{item.id}",
+            json={"expected_version": 1, "metadata": {"title": "Lost update"}},
         )
         assert stale.status_code == 409
         await db.refresh(item)

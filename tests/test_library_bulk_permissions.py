@@ -421,8 +421,8 @@ async def test_bulk_export_rejects_inaccessible_items(
     await db.commit()
 
     response = await client.post(
-        "/library/bulk",
-        data={"csrf_token": "test-csrf", "action": "export_bibtex", "item_ids": private_item.id},
+        "/api/v1/items/bibliography",
+        json={"file_format": "bibtex", "item_ids": [private_item.id]},
     )
 
     assert response.status_code == 422

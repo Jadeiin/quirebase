@@ -1,0 +1,9 @@
+node_modules/
+.cache/
+.svelte-kit/
+build/
+openapi.json
+playwright-report/
+test-results/
+src/lib/locales/*/messages.ts
+src/lib/locales/messages.pot

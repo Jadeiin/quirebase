@@ -38,7 +38,13 @@ Tag Recommendations use offline YAKE by default. To use the optional semantic en
 model downloads and remote model identifiers are not supported. Record the model's source and
 license separately.
 
-Use a reverse proxy for TLS and request-size limits. Do not expose Uvicorn directly to the public internet. The bundled Compose deployment publishes its web port on loopback (`QUIREBASE_BIND_ADDRESS`, default `127.0.0.1`); set a host IP or `0.0.0.0` only when the reverse proxy cannot reach loopback. Preserve the application data directory independently from the installed wheel.
+Use a reverse proxy for TLS and request-size limits. Set `QUIREBASE_EXTERNAL_ORIGIN` to the exact
+public origin, including scheme and any non-default port, so Login Session mutations validate the
+browser's `Origin` against the proxy-facing address rather than the container address. Do not expose
+Uvicorn directly to the public internet. The bundled Compose deployment publishes its web port on
+loopback (`QUIREBASE_BIND_ADDRESS`, default `127.0.0.1`); set a host IP or `0.0.0.0` only when the
+reverse proxy cannot reach loopback. Preserve the application data directory independently from the
+installed wheel.
 
 ## Workers and recovery
 
@@ -107,10 +113,17 @@ non-partitioned queue, and Recommendation inference is isolated from Library Sea
 
 ## Building assets from source
 
-`src/quirebase/static` is a build output directory and is not tracked by git. From a source checkout, run `bun install` and `bun run build`; the script bundles `src/quirebase/assets` (with EmbedPDF, Alpine.js and zxcvbn from the pinned `package.json` dependencies), copies the handwritten `src/quirebase/assets/styles.css`, and copies EmbedPDF's PDFium WebAssembly binary to `static/vendor/pdfium.wasm`. Release wheels are built after this step and therefore ship the assets.
+`frontend/build` is generated and not tracked by git. From a source checkout, run
+`bun install --cwd frontend` and `bun run --cwd frontend build`; FastAPI serves that directory
+directly. Hatch includes the same directory as frontend data when building the release wheel,
+without copying generated assets into the Python source tree. EmbedPDF's PDFium WebAssembly binary
+remains a content-hashed, same-origin Vite asset.
 
 ## Upgrades
 
-Back up first, install the new wheel, run `quirebase init-db` to apply Alembic migrations, rebuild assets only for source checkouts (`bun install && bun run build`), restart web and worker processes, then run `quirebase doctor`.
+Back up first, install the new wheel, run `quirebase init-db` to apply Alembic migrations, rebuild
+assets only for source checkouts
+(`bun install --cwd frontend && bun run --cwd frontend build`), restart web and worker processes,
+then run `quirebase doctor`.
 
 **Alpha migration chain:** Quirebase is alpha software and a release may replace the migration chain instead of extending it. A database stamped by a revision that no longer exists cannot be upgraded in place: `quirebase init-db` and the Compose `migrate` service abort with `Can't locate revision`. Back up the installation so the old data is preserved, recreate the database (for Compose: `make docker-down DOWN_ARGS=--volumes`, then start the stack again), and reimport content through the application; cross-chain data migration is not provided.

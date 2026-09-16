@@ -97,36 +97,6 @@ def test_inline_math_is_preserved_verbatim_across_conversions():
     assert convert_rich_text(r"H$_2$O", source="latex", target="latex") == r"H$_2$O"
 
 
-def test_web_projection_renders_inline_latex_as_safe_mathml():
-    canonical = r"Energy $E_{mc}\in\mathbb{R}$ and <i>$x^2$</i>"
-
-    rendered = convert_rich_text(canonical, source="html", target="web")
-
-    assert rendered.count('<math xmlns="http://www.w3.org/1998/Math/MathML"') == 2
-    assert "<msub>" in rendered
-    assert "<msup>" in rendered
-    assert "$E_" not in rendered
-    assert "<i><math" in rendered
-    assert convert_rich_text(canonical, source="html", target="html") == canonical
-
-
-def test_web_mathml_projection_drops_active_attributes_and_falls_back_safely():
-    linked = convert_rich_text(r"$\href{javascript:alert(1)}{x}$", source="html", target="web")
-    malformed = convert_rich_text(
-        r"$\text{&lt;/mtext&gt;&lt;script&gt;alert(1)&lt;/script&gt;}$",
-        source="html",
-        target="web",
-    )
-    invalid = convert_rich_text(r"$\frac{$", source="html", target="web")
-
-    assert "href=" not in linked
-    assert "javascript:" not in linked
-    assert "<mi>x</mi>" in linked
-    assert "<script>" not in malformed
-    assert malformed == r"$\text{&lt;/mtext&gt;&lt;script&gt;alert(1)&lt;/script&gt;}$"
-    assert invalid == r"$\frac{$"
-
-
 def test_inline_math_survives_an_import_export_round_trip():
     plain = convert_rich_text("Water ($H_2O$) study", source="latex", target="text")
 

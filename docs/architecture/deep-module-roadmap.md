@@ -70,8 +70,8 @@ Treat each workspace section as a caller-visible result type while retaining one
 Module. Move recent-read recording behind the open-workspace operation so callers cannot forget
 the side effect or record reads for inaccessible Items.
 
-Done means templates receive typed views or a Web-owned mapping and no business operation returns
-the section-dependent dictionary.
+Done means the HTTP API receives typed views or a Web-owned projection and no business operation
+returns the section-dependent dictionary.
 
 ### 4. Improve Provider locality without shallowing Discovery — completed
 

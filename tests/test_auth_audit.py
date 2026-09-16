@@ -32,15 +32,17 @@ async def web_client(db, session_factory, *, authenticated: bool = False):
     client = httpx2.AsyncClient(
         transport=httpx2.ASGITransport(app=test_app),
         base_url="http://testserver",
-        headers={"Accept-Language": "zh-CN,zh;q=0.9"},
+        headers={
+            "Accept-Language": "zh-CN,zh;q=0.9",
+            "Origin": "http://testserver",
+        },
     )
     user = None
     if authenticated:
         user = User(username="reader", password_hash="unused")
         db.add(user)
         await db.flush()
-        login, raw = await create_login_session(db, user, session_days=1)
-        login.csrf_token = "test-csrf"
+        _login, raw = await create_login_session(db, user, session_days=1)
         await db.commit()
         client.cookies.set(get_settings().session_cookie, raw)
     return client, user
@@ -57,15 +59,15 @@ async def test_failed_and_successful_logins_are_audited_without_credentials(
     client, _ = await web_client(db, async_session_factory)
     try:
         failed = await client.post(
-            "/login", data={"username": "audited", "password": "wrong-password"}
+            "/api/v1/session", json={"username": "audited", "password": "wrong-password"}
         )
         assert failed.status_code == 401
         succeeded = await client.post(
-            "/login",
-            data={"username": "audited", "password": "correct-password"},
-            follow_redirects=False,
+            "/api/v1/session",
+            json={"username": "audited", "password": "correct-password"},
         )
-        assert succeeded.status_code == 303
+        assert succeeded.status_code == 200
+        assert succeeded.json()["authenticated"] is True
 
         events = (
             await db.scalars(
@@ -144,7 +146,7 @@ async def test_password_hashing_does_not_block_the_event_loop(monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_revoke_all_sessions_requires_csrf_and_invalidates_every_session(
+async def test_revoke_all_sessions_requires_same_origin_and_invalidates_every_session(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
     monkeypatch.chdir(tmp_path)
@@ -154,25 +156,23 @@ async def test_revoke_all_sessions_requires_csrf_and_invalidates_every_session(
     db.add(
         LoginSession(
             token_hash=token_hash("another-session"),
-            csrf_token="another-csrf",
             user_id=user.id,
             expires_at=datetime.now(UTC) + timedelta(days=1),
         )
     )
     await db.commit()
     try:
-        rejected = await client.post("/account/sessions/revoke-all", follow_redirects=False)
+        rejected = await client.delete(
+            "/api/v1/account/sessions", headers={"Origin": "https://attacker.example"}
+        )
         assert rejected.status_code == 403
         assert (
             await db.scalar(select(LoginSession).where(LoginSession.user_id == user.id).limit(1))
             is not None
         )
 
-        response = await client.post(
-            "/account/sessions/revoke-all", follow_redirects=False, data={"csrf_token": "test-csrf"}
-        )
-        assert response.status_code == 303
-        assert response.headers["location"] == "/login"
+        response = await client.delete("/api/v1/account/sessions")
+        assert response.status_code == 200
         assert get_settings().session_cookie in response.headers["set-cookie"]
         assert "Max-Age=0" in response.headers["set-cookie"]
         assert (
@@ -185,7 +185,7 @@ async def test_revoke_all_sessions_requires_csrf_and_invalidates_every_session(
         assert event is not None
         assert event.actor_id == user.id
         assert '"revoked_sessions": 2' in event.detail
-        assert (await client.get("/")).status_code == 401
+        assert (await client.get("/api/v1/session")).json()["authenticated"] is False
     finally:
         await client.aclose()
         get_settings.cache_clear()
@@ -199,11 +199,12 @@ async def test_throttled_login_is_audited(async_db, async_session_factory):
         for _ in range(5):
             assert (
                 await client.post(
-                    "/login", data={"username": "missing", "password": "not-a-password"}
+                    "/api/v1/session",
+                    json={"username": "missing", "password": "not-a-password"},
                 )
             ).status_code == 401
         throttled = await client.post(
-            "/login", data={"username": "missing", "password": "not-a-password"}
+            "/api/v1/session", json={"username": "missing", "password": "not-a-password"}
         )
         assert throttled.status_code == 429
         event = await db.scalar(
@@ -267,49 +268,31 @@ async def test_account_settings_and_password_update(
     user.password_hash = hash_password("correct-password")
     await db.commit()
 
-    page = await client.get("/account/settings")
+    page = await client.get("/api/v1/account")
     assert page.status_code == 200
-    assert "reader" in page.text
-    assert "quirebase:export-preferences:v1" in page.text
-
-    # Password mismatch returns 422
-    mismatch = await client.post(
-        "/account/settings/password",
-        data={
-            "csrf_token": "test-csrf",
-            "current_password": "correct-password",
-            "new_password": "new-secret-password-1",
-            "confirm_password": "different-password",
-        },
-    )
-    assert mismatch.status_code == 422
-    assert "两次输入的新密码不一致" in mismatch.text
+    assert page.json()["user"]["username"] == "reader"
 
     # Wrong current password returns 422
-    wrong = await client.post(
-        "/account/settings/password",
-        data={
-            "csrf_token": "test-csrf",
+    wrong = await client.put(
+        "/api/v1/account/password",
+        json={
             "current_password": "wrong-current-password",
             "new_password": "new-secret-password-1",
-            "confirm_password": "new-secret-password-1",
         },
     )
-    assert wrong.status_code == 422
-    assert "当前密码不正确" in wrong.text
+    assert wrong.status_code == 400
+    assert "Current password incorrect" in wrong.text
 
     # Successful update
-    success = await client.post(
-        "/account/settings/password",
-        data={
-            "csrf_token": "test-csrf",
+    success = await client.put(
+        "/api/v1/account/password",
+        json={
             "current_password": "correct-password",
             "new_password": "new-secret-password-1",
-            "confirm_password": "new-secret-password-1",
         },
     )
     assert success.status_code == 200
-    assert "密码更新成功" in success.text
+    assert success.json() == {"ok": True}
 
     event = await db.scalar(
         select(AuditEvent).where(AuditEvent.action == "account.password.changed")
@@ -318,11 +301,9 @@ async def test_account_settings_and_password_update(
     assert event.actor_id == user.id
 
     # Switch locale to zh_CN
-    loc_resp = await client.post(
-        "/account/settings/locale",
-        data={"csrf_token": "test-csrf", "locale": "zh_CN"},
-        follow_redirects=False,
+    loc_resp = await client.put(
+        "/api/v1/account/locale",
+        json={"locale": "zh_CN"},
     )
-    assert loc_resp.status_code == 303
-    assert loc_resp.headers["location"] == "/account/settings"
-    assert "quirebase_locale=zh_CN" in loc_resp.headers.get("set-cookie", "")
+    assert loc_resp.status_code == 200
+    assert "quirebase_locale=zh-CN" in loc_resp.headers.get("set-cookie", "")

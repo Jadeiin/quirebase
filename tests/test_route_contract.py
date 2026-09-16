@@ -12,7 +12,7 @@ def get_app():
     return app
 
 
-EXPECTED_OPERATIONAL_ROUTES = {
+REMOVED_TEMPLATE_ERA_ROUTES = {
     (
         "DELETE",
         "/api/v1/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}",
@@ -208,8 +208,21 @@ def test_operational_routes_contract():
                 continue
             operational_routes.add((method, route.path))
 
-    assert len(operational_routes) == 152, f"Expected 152 routes, found {len(operational_routes)}"
-    assert operational_routes == EXPECTED_OPERATIONAL_ROUTES
+    assert len(operational_routes) == 128, f"Expected 128 routes, found {len(operational_routes)}"
+    assert {
+        ("POST", "/api/v1/items/{item_id}/attachments/remote"),
+        ("POST", "/api/v1/items/{item_id}/revisions/remote"),
+    } <= operational_routes
+    removed_routes = {
+        route
+        for route in REMOVED_TEMPLATE_ERA_ROUTES
+        if not route[1].startswith("/api/v1") and route[1] not in {"/healthz", "/metrics"}
+    }
+    assert operational_routes.isdisjoint(removed_routes)
+    assert all(
+        path.startswith("/api/v1") or path in {"/healthz", "/metrics"}
+        for _method, path in operational_routes
+    )
 
 
 @pytest.mark.anyio
@@ -220,8 +233,8 @@ async def test_http_behavioral_contract(async_db, async_session_factory, tmp_pat
     )
     item_id = item.id
 
-    # 1. Non-admin accessing /admin or /metrics returns 404 (hides admin routes)
-    admin_resp = await client.get("/admin")
+    # 1. Non-admin access to the administration API is concealed.
+    admin_resp = await client.get("/api/v1/admin/overview")
     assert admin_resp.status_code == 404
 
     metrics_resp = await client.get("/metrics")
@@ -239,16 +252,16 @@ async def test_http_behavioral_contract(async_db, async_session_factory, tmp_pat
     db.add(other_item)
     await db.commit()
 
-    edit_resp = await client.post(
-        f"/items/{other_item.id}/edit",
-        data={"csrf_token": "test-csrf", "version": 1, "title": "New Title"},
+    edit_resp = await client.put(
+        f"/api/v1/items/{other_item.id}",
+        json={"expected_version": 1, "metadata": {"title": "New Title"}},
     )
     assert edit_resp.status_code == 404
 
     # 3. Version conflict returns 409 with detail {"version": ...}
-    conflict_resp = await client.post(
-        f"/items/{item_id}/edit",
-        data={"csrf_token": "test-csrf", "version": 999, "title": "Conflict Title"},
+    conflict_resp = await client.put(
+        f"/api/v1/items/{item_id}",
+        json={"expected_version": 999, "metadata": {"title": "Conflict Title"}},
     )
     assert conflict_resp.status_code == 409
     assert "version" in str(conflict_resp.json())
@@ -264,8 +277,8 @@ async def test_oversized_bibliography_upload_returns_payload_too_large(
     )
     try:
         response = await client.post(
-            "/bibliography/preview",
-            data={"csrf_token": "test-csrf", "file_format": "bibtex"},
+            "/api/v1/imports/bibliography",
+            data={"file_format": "bibtex"},
             files={
                 "bibliography": (
                     "oversized.bib",
@@ -296,13 +309,8 @@ async def test_tag_rename_conceals_missing_and_foreign_tags(
     db.add(foreign_tag)
     await db.commit()
     try:
-        missing = await client.post(
-            "/tools/tags/missing", data={"csrf_token": "test-csrf", "name": "Renamed"}
-        )
-        foreign = await client.post(
-            f"/tools/tags/{foreign_tag.id}",
-            data={"csrf_token": "test-csrf", "name": "Renamed"},
-        )
+        missing = await client.patch("/api/v1/tags/missing", json={"name": "Renamed"})
+        foreign = await client.patch(f"/api/v1/tags/{foreign_tag.id}", json={"name": "Renamed"})
 
         assert foreign.status_code == 404
         assert foreign.content == missing.content
@@ -325,10 +333,8 @@ async def test_tag_delete_conceals_missing_and_foreign_tags(
     db.add(foreign_tag)
     await db.commit()
     try:
-        missing = await client.post("/tools/tags/missing/delete", data={"csrf_token": "test-csrf"})
-        foreign = await client.post(
-            f"/tools/tags/{foreign_tag.id}/delete", data={"csrf_token": "test-csrf"}
-        )
+        missing = await client.delete("/api/v1/tags/missing")
+        foreign = await client.delete(f"/api/v1/tags/{foreign_tag.id}")
 
         assert foreign.status_code == 404
         assert foreign.content == missing.content
@@ -353,13 +359,8 @@ async def test_discussion_delete_conceals_missing_and_foreign_messages(
     db.add(foreign_message)
     await db.commit()
     try:
-        missing = await client.post(
-            f"/items/{item.id}/discussion/missing/delete", data={"csrf_token": "test-csrf"}
-        )
-        foreign = await client.post(
-            f"/items/{item.id}/discussion/{foreign_message.id}/delete",
-            data={"csrf_token": "test-csrf"},
-        )
+        missing = await client.delete(f"/api/v1/items/{item.id}/discussions/missing")
+        foreign = await client.delete(f"/api/v1/items/{item.id}/discussions/{foreign_message.id}")
 
         assert foreign.status_code == 404
         assert foreign.content == missing.content
@@ -376,18 +377,18 @@ async def test_invitation_creation_is_hidden_from_non_administrators(
     )
     try:
         response = await client.post(
-            "/admin/invitations",
-            data={"csrf_token": "test-csrf", "username": "invitee", "role": "member"},
+            "/api/v1/admin/invitations",
+            json={"username": "invitee", "role": "member"},
         )
 
         assert response.status_code == 404
-        assert response.json() == {"detail": "not found"}
+        assert response.json() == {"detail": "resource not found"}
     finally:
         await client.aclose()
 
 
 @pytest.mark.anyio
-async def test_admin_mutation_is_hidden_before_csrf_validation(
+async def test_admin_mutation_requires_same_origin_before_authorization(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
     client, _item, _revision = await authenticated_async_client(
@@ -395,12 +396,13 @@ async def test_admin_mutation_is_hidden_before_csrf_validation(
     )
     try:
         response = await client.post(
-            "/admin/invitations",
-            data={"username": "invitee", "role": "member"},
+            "/api/v1/admin/invitations",
+            headers={"Origin": "https://attacker.example"},
+            json={"username": "invitee", "role": "member"},
         )
 
-        assert response.status_code == 404
-        assert response.json() == {"detail": "not found"}
+        assert response.status_code == 403
+        assert response.json() == {"detail": "origin does not match request origin"}
     finally:
         await client.aclose()
 
@@ -419,14 +421,10 @@ async def test_discussion_author_can_delete_own_message(
     db.add(own_message)
     await db.commit()
     try:
-        response = await client.post(
-            f"/items/{item.id}/discussion/{own_message.id}/delete",
-            data={"csrf_token": "test-csrf"},
-            follow_redirects=False,
-        )
+        response = await client.delete(f"/api/v1/items/{item.id}/discussions/{own_message.id}")
 
-        assert response.status_code == 303
-        assert response.headers["location"] == f"/items/{item.id}/discussion"
+        assert response.status_code == 200
+        assert response.json() == {"ok": True}
     finally:
         await client.aclose()
 
@@ -445,11 +443,11 @@ async def test_administrator_can_create_invitation(
     await db.commit()
     try:
         response = await client.post(
-            "/admin/invitations",
-            data={"csrf_token": "test-csrf", "username": "new-member", "role": "member"},
+            "/api/v1/admin/invitations",
+            json={"username": "new-member", "role": "member"},
         )
 
-        assert response.status_code == 200
-        assert "/accept-invitation/" in response.text
+        assert response.status_code == 201
+        assert response.json()["accept_path"].startswith("/invitation/")
     finally:
         await client.aclose()

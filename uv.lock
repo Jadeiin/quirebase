@@ -130,15 +130,6 @@ wheels = [
 ]
 
 [[package]]
-name = "babel"
-version = "2.18.0"
-source = { registry = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple" }
-sdist = { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/7d/b2/51899539b6ceeeb420d40ed3cd4b7a40519404f9baf3d4ac99dc413a834b/babel-2.18.0.tar.gz", hash = "sha256:b80b99a14bd085fcacfa15c9165f651fbb3406e66cc603abf11c5750937c992d", size = 9959554, upload-time = "2026-02-01T12:30:56.078Z" }
-wheels = [
-    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/77/f5/21d2de20e8b8b0408f0681956ca2c69f1320a3848ac50e6e7f39c6159675/babel-2.18.0-py3-none-any.whl", hash = "sha256:e2b422b277c2b9a9630c1d7903c2a00d0830c409c59ac8cae9081c92f1aeba35", size = 10196845, upload-time = "2026-02-01T12:30:53.445Z" },
-]
-
-[[package]]
 name = "bibtexparser"
 version = "2.0.0b9"
 source = { registry = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple" }
@@ -988,7 +979,6 @@ source = { editable = "packages/inquiro" }
 dependencies = [
     { name = "bibtexparser" },
     { name = "httpx2" },
-    { name = "latex2mathml" },
     { name = "pylatexenc" },
     { name = "rispy" },
 ]
@@ -1005,7 +995,6 @@ requires-dist = [
     { name = "citeproc-py", marker = "extra == 'citation'", specifier = ">=0.10,<0.11" },
     { name = "citeproc-py-styles", marker = "extra == 'citation'", specifier = ">=0.1.6,<0.2" },
     { name = "httpx2", specifier = ">=2.12,<3" },
-    { name = "latex2mathml", specifier = ">=3.81,<4" },
     { name = "pylatexenc", specifier = ">=2.11,<3" },
     { name = "rispy", specifier = ">=0.10,<1" },
 ]
@@ -1110,15 +1099,6 @@ dependencies = [
 sdist = { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/b7/a8/a73003cc0f6a606eb30c9e19a85b5a89bef076e9adcb642aed29e47c693c/keybert-0.9.0.tar.gz", hash = "sha256:eec8ebd37d3d9fa238d7075e727adb993de4f3ed67c94112840e4cc0e55d7657", size = 32235, upload-time = "2025-02-07T08:45:13.187Z" }
 wheels = [
     { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/82/07/e2f42a8ec3ff1935debbf2a5255570d22033fca3fe3180d5af99a6c9ee8c/keybert-0.9.0-py3-none-any.whl", hash = "sha256:afa2f300a72f69d279e4482bc85d8b34493b119876dc0818cb4f260466285b36", size = 41364, upload-time = "2025-02-07T08:45:08.093Z" },
-]
-
-[[package]]
-name = "latex2mathml"
-version = "3.81.0"
-source = { registry = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple" }
-sdist = { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/3b/62/35bb816c5c19d4d0cde5bdfb82ebb996306243d5f94e03f201658c629960/latex2mathml-3.81.0.tar.gz", hash = "sha256:4b959cdc3cac8686bc0e3e5aece8127dfb1b81ca1241bed8e00ef31b82bb4022", size = 77584, upload-time = "2026-04-15T00:55:27.977Z" }
-wheels = [
-    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/e8/b1/c488b530994c4f68e46efa99a4d6ca6741aaf158e35779fe6c4d8a9a427d/latex2mathml-3.81.0-py3-none-any.whl", hash = "sha256:d317710393fe20579aea39cfe8928fa2ad9b8780896e585326c75e89c1d1d1a4", size = 79185, upload-time = "2026-04-15T00:55:29.301Z" },
 ]
 
 [[package]]
@@ -2264,11 +2244,10 @@ source = { editable = "." }
 dependencies = [
     { name = "alembic" },
     { name = "argon2-cffi" },
-    { name = "babel" },
     { name = "dbos" },
     { name = "fastapi" },
+    { name = "httpx2" },
     { name = "inquiro" },
-    { name = "jinja2" },
     { name = "mcp" },
     { name = "obstore" },
     { name = "pydantic-settings" },
@@ -2310,12 +2289,11 @@ dev = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.16,<2" },
     { name = "argon2-cffi", specifier = ">=25,<26" },
-    { name = "babel", specifier = ">=2.18.0" },
     { name = "dbos", specifier = ">=2.31.0,<3" },
-    { name = "fastapi", specifier = ">=0.116,<1" },
+    { name = "fastapi", specifier = ">=0.141.1,<1" },
+    { name = "httpx2", specifier = ">=2.12,<3" },
     { name = "inquiro", editable = "packages/inquiro" },
     { name = "inquiro", extras = ["citation"], marker = "extra == 'citation'", editable = "packages/inquiro" },
-    { name = "jinja2", specifier = ">=3.1,<4" },
     { name = "mcp", specifier = ">=2.1,<3" },
     { name = "obstore", specifier = ">=0.11.1,<0.12" },
     { name = "pydantic-settings", specifier = ">=2.10,<3" },

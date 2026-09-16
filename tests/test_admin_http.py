@@ -28,7 +28,6 @@ async def admin_client(db, tmp_path, monkeypatch):
     raw = "admin-session-raw-token"
     login = LoginSession(
         token_hash=token_hash(raw),
-        csrf_token="test-admin-csrf",
         user_id=user.id,
         expires_at=datetime.now(UTC) + timedelta(hours=1),
     )
@@ -41,7 +40,9 @@ async def admin_client(db, tmp_path, monkeypatch):
 
     app.dependency_overrides[get_db] = override_db
     client = httpx2.AsyncClient(
-        transport=httpx2.ASGITransport(app=app), base_url="http://testserver"
+        transport=httpx2.ASGITransport(app=app),
+        base_url="http://testserver",
+        headers={"Origin": "http://testserver"},
     )
     client.cookies.set(get_settings().session_cookie, raw)
     return client, user, login
@@ -61,7 +62,6 @@ async def member_client(db, tmp_path, monkeypatch):
     raw = "member-session-raw-token"
     login = LoginSession(
         token_hash=token_hash(raw),
-        csrf_token="test-member-csrf",
         user_id=user.id,
         expires_at=datetime.now(UTC) + timedelta(hours=1),
     )
@@ -74,7 +74,9 @@ async def member_client(db, tmp_path, monkeypatch):
 
     app.dependency_overrides[get_db] = override_db
     client = httpx2.AsyncClient(
-        transport=httpx2.ASGITransport(app=app), base_url="http://testserver"
+        transport=httpx2.ASGITransport(app=app),
+        base_url="http://testserver",
+        headers={"Origin": "http://testserver"},
     )
     client.cookies.set(get_settings().session_cookie, raw)
     return client, user, login
@@ -85,18 +87,18 @@ async def test_admin_pages_accessible_by_admin(async_db, tmp_path, monkeypatch):
     client, _user, _ = await admin_client(async_db, tmp_path, monkeypatch)
 
     for path in [
-        "/admin",
-        "/admin/users",
-        "/admin/projects",
-        "/admin/items",
-        "/admin/audit",
-        "/admin/workflows",
-        "/admin/settings",
-        "/admin/maintenance",
+        "/api/v1/admin/overview",
+        "/api/v1/admin/users",
+        "/api/v1/admin/projects",
+        "/api/v1/admin/items",
+        "/api/v1/admin/audit",
+        "/api/v1/admin/workflows",
+        "/api/v1/admin/settings",
+        "/api/v1/admin/maintenance",
     ]:
         res = await client.get(path)
         assert res.status_code == 200
-        assert "Administration" in res.text or "Quirebase" in res.text
+        assert res.headers["content-type"].startswith("application/json")
     await client.aclose()
 
 
@@ -111,18 +113,16 @@ async def test_admin_project_directory_links_to_later_filtered_pages(
     await async_db.commit()
 
     first = await client.get(
-        "/admin/projects",
+        "/api/v1/admin/projects",
         params={"search": "Paged", "state": "active", "visibility": "private"},
     )
     assert first.status_code == 200
-    assert "Page 1 of 2" in first.text
-    assert "page=2" in first.text
-    assert "search=Paged" in first.text
-    assert "state=active" in first.text
-    assert "visibility=private" in first.text
+    assert first.json()["page"] == 1
+    assert first.json()["total"] == 21
+    assert len(first.json()["projects"]) == 20
 
     second = await client.get(
-        "/admin/projects",
+        "/api/v1/admin/projects",
         params={
             "search": "Paged",
             "state": "active",
@@ -131,8 +131,8 @@ async def test_admin_project_directory_links_to_later_filtered_pages(
         },
     )
     assert second.status_code == 200
-    assert "Page 2 of 2" in second.text
-    assert "page=1" in second.text
+    assert second.json()["page"] == 2
+    assert len(second.json()["projects"]) == 1
     await client.aclose()
 
 
@@ -140,7 +140,7 @@ async def test_admin_project_directory_links_to_later_filtered_pages(
 async def test_admin_workflow_filter_rejects_unknown_state(async_db, tmp_path, monkeypatch):
     client, _user, _login = await admin_client(async_db, tmp_path, monkeypatch)
     try:
-        response = await client.get("/admin/workflows", params={"state": "unknown"})
+        response = await client.get("/api/v1/admin/workflows", params={"state": "unknown"})
 
         assert response.status_code == 422
         assert "unknown workflow state" in response.text
@@ -153,13 +153,13 @@ async def test_admin_pages_forbidden_for_member(async_db, tmp_path, monkeypatch)
     client, _user, _ = await member_client(async_db, tmp_path, monkeypatch)
 
     for path in [
-        "/admin",
-        "/admin/users",
-        "/admin/items",
-        "/admin/audit",
-        "/admin/jobs",
-        "/admin/settings",
-        "/admin/maintenance",
+        "/api/v1/admin/overview",
+        "/api/v1/admin/users",
+        "/api/v1/admin/items",
+        "/api/v1/admin/audit",
+        "/api/v1/admin/workflows",
+        "/api/v1/admin/settings",
+        "/api/v1/admin/maintenance",
     ]:
         res = await client.get(path)
         assert res.status_code in (403, 404, 500)
@@ -169,20 +169,18 @@ async def test_admin_pages_forbidden_for_member(async_db, tmp_path, monkeypatch)
 @pytest.mark.anyio
 async def test_admin_create_user_endpoint(async_db, tmp_path, monkeypatch):
     db = async_db
-    client, _admin, login = await admin_client(db, tmp_path, monkeypatch)
+    client, _admin, _login = await admin_client(db, tmp_path, monkeypatch)
 
     res = await client.post(
-        "/admin/users/create",
-        data={
-            "csrf_token": login.csrf_token,
+        "/api/v1/admin/users",
+        json={
             "username": "http_created_user",
             "password": "strong_password_123",
             "role": "member",
         },
-        follow_redirects=False,
     )
-    assert res.status_code == 303
-    assert res.headers["location"] == "/admin/users"
+    assert res.status_code == 201
+    assert res.json()["username"] == "http_created_user"
 
     created = await db.scalar(select(User).where(User.username == "http_created_user"))
     assert created is not None
@@ -193,26 +191,23 @@ async def test_admin_create_user_endpoint(async_db, tmp_path, monkeypatch):
 @pytest.mark.anyio
 async def test_admin_settings_endpoint(async_db, tmp_path, monkeypatch):
     db = async_db
-    client, _admin, login = await admin_client(db, tmp_path, monkeypatch)
+    client, _admin, _login = await admin_client(db, tmp_path, monkeypatch)
 
-    res = await client.post(
-        "/admin/settings",
-        data={
-            "csrf_token": login.csrf_token,
+    res = await client.put(
+        "/api/v1/admin/settings",
+        json={
             "metadata_contact_email": "http_admin@institution.edu",
             "ncbi_api_key": "ncbi_key_xyz",
             "openalex_api_key": "",
             "nasa_ads_token": "",
             "ieee_api_key": "",
-            "session_days": "60",
-            "max_pdf_bytes": "104857600",
-            "max_attachment_bytes": "104857600",
-            "export_ttl_hours": "48",
+            "session_days": 60,
+            "max_pdf_bytes": 104857600,
+            "max_attachment_bytes": 104857600,
+            "export_ttl_hours": 48,
         },
-        follow_redirects=False,
     )
-    assert res.status_code == 303
-    assert res.headers["location"] == "/admin/settings"
+    assert res.status_code == 200
 
     setting = await db.get(SystemSetting, "metadata_contact_email")
     assert setting is not None
@@ -223,28 +218,25 @@ async def test_admin_settings_endpoint(async_db, tmp_path, monkeypatch):
 @pytest.mark.anyio
 async def test_admin_maintenance_triggers(async_db, tmp_path, monkeypatch, fake_durable_operations):
     db = async_db
-    client, _admin, login = await admin_client(db, tmp_path, monkeypatch)
+    client, _admin, _login = await admin_client(db, tmp_path, monkeypatch)
 
     routes = {
-        "/admin/maintenance/reindex": "reindex_all",
-        "/admin/maintenance/check-objects": "check_objects",
-        "/admin/maintenance/backup": "backup",
-        "/admin/maintenance/recommend-tags": "recommend_tags_all",
+        "/api/v1/admin/maintenance/reindex_all": "reindex_all",
+        "/api/v1/admin/maintenance/check_objects": "check_objects",
+        "/api/v1/admin/maintenance/backup": "backup",
+        "/api/v1/admin/maintenance/recommend_tags_all": "recommend_tags_all",
     }
     for route, operation in routes.items():
         res = await client.post(
             route,
-            data={"csrf_token": login.csrf_token},
-            follow_redirects=False,
+            json={},
         )
-        assert res.status_code == 303
-        location = res.headers["location"]
-        assert location.startswith(f"/admin/maintenance?workflow=maintenance:{operation}:")
-
-        progress = await client.get(location)
+        assert res.status_code == 200
+        workflow_id = res.json()["id"]
+        assert workflow_id.startswith(f"maintenance:{operation}:")
+        progress = await client.get(f"/api/v1/admin/workflows/{workflow_id}")
         assert progress.status_code == 200
-        assert "workflow-modal-backdrop" in progress.text
-        assert "/api/workflows/maintenance%3A" in progress.text
+        assert progress.json()["id"] == workflow_id
 
     assert {row.name for row in await fake_durable_operations.list()} == {
         "operations.reindex_all",

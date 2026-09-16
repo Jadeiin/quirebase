@@ -3,6 +3,11 @@
 .DS_Store
 .venv/
 node_modules/
+frontend/.svelte-kit/
+frontend/build/
+frontend/openapi.json
+frontend/playwright-report/
+frontend/test-results/
 quirebase.db*
 quirebase-data/
 __pycache__/
@@ -15,6 +20,3 @@ dist/
 .claude/
 .worktrees/
 skills-lock.json
-# src/quirebase/static is a pure build output directory (bun run build);
-# only src/quirebase/assets, package.json and bun.lock are tracked sources.
-src/quirebase/static/

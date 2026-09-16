@@ -2,11 +2,15 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 
-from quirebase.core.config import Settings, get_settings
-from quirebase.core.database import get_db
+from quirebase.accounts import get_login_session_by_token
+from quirebase.accounts.authentication import InvalidCredentials, authenticate_user
+from quirebase.accounts.authentication import logout as logout_op
+from quirebase.core.config import get_settings
+from quirebase.core.crypto import token_hash
+from quirebase.core.errors import ResourceNotFound
+from quirebase.core.workflows import durable_operations
 from quirebase.documents import (
     AnnotationCreate,
     AnnotationReplyCreate,
@@ -17,6 +21,8 @@ from quirebase.documents import (
     delete_annotation_reply,
     delete_document_annotation,
     list_document_annotations,
+    restore_annotation_reply,
+    restore_document_annotation,
     update_annotation_reply,
     update_document_annotation,
 )
@@ -41,6 +47,7 @@ from quirebase.library import (
     search_library,
 )
 from quirebase.models import ProjectState, User
+from quirebase.operations.settings import get_effective_setting, get_effective_settings_model
 from quirebase.programmatic import (
     AnnotationReplyView,
     AnnotationView,
@@ -66,38 +73,108 @@ from quirebase.projects import (
     add_project_member,
     create_project,
     delete_project,
+    join_project,
     leave_project,
+    list_joinable_projects,
     list_user_projects,
     open_project_workspace,
     remove_item_from_project,
     remove_project_member,
-    rename_project,
     set_project_state,
     set_project_visibility,
     transfer_project_ownership,
     update_project_description,
+    update_project_settings,
 )
-from quirebase.web.api.auth import current_api_user, http_api_invocation
+from quirebase.web.api.auth import require_same_origin
+from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.schemas import (
     DiscoverySearchRequest,
     DiscussionRequest,
     ItemUpdateRequest,
+    LoginRequest,
     NameRequest,
     ProjectCreateRequest,
     ProjectDeleteRequest,
     ProjectDescriptionRequest,
     ProjectMemberRequest,
+    ProjectSettingsRequest,
     ProjectVisibilityRequest,
     TagSetRequest,
 )
+from quirebase.web.locale import resolve_request_locale
 
 router = APIRouter(
     prefix="/api/v1",
     tags=["HTTP API"],
-    dependencies=[Depends(http_api_invocation)],
 )
-ApiUser = Annotated[User, Depends(current_api_user)]
-Database = Annotated[AsyncSession, Depends(get_db)]
+
+
+@router.get("/session")
+async def session_bootstrap(request: Request, db: Database):
+    raw_session = request.cookies.get(get_settings().session_cookie, "")
+    login = await get_login_session_by_token(db, raw_session)
+    locale = resolve_request_locale(request)
+    if login is None:
+        return {"authenticated": False, "user": None, "locale": locale}
+    return {
+        "authenticated": True,
+        "user": {"id": login.user.id, "username": login.user.username, "role": login.user.role},
+        "locale": locale,
+    }
+
+
+@router.post("/session")
+async def login_session(
+    request: Request,
+    response: Response,
+    data: LoginRequest,
+    db: Database,
+):
+    require_same_origin(request)
+    address = request.client.host if request.client else "unknown"
+    identity = token_hash(f"{address}\0{data.username.casefold()}")
+    session_days = await get_effective_setting(db, "session_days", get_settings().session_days)
+    try:
+        login, raw_token = await authenticate_user(
+            db,
+            identity,
+            data.username,
+            data.password,
+            session_days=session_days,
+        )
+    except InvalidCredentials as error:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid credentials",
+        ) from error
+    response.set_cookie(
+        get_settings().session_cookie,
+        raw_token,
+        httponly=True,
+        secure=get_settings().secure_cookies,
+        samesite="lax",
+        max_age=session_days * 86400,
+    )
+    response.headers["Cache-Control"] = "no-store"
+    user = await db.get(User, login.user_id)
+    if user is None:  # pragma: no cover - the Login Session foreign key guarantees this
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    return {
+        "authenticated": True,
+        "user": {"id": user.id, "username": user.username, "role": user.role},
+        "locale": resolve_request_locale(request),
+    }
+
+
+@router.delete("/session", status_code=status.HTTP_204_NO_CONTENT)
+async def logout_session(request: Request, response: Response, user: ApiUser, db: Database) -> None:
+    raw_session = request.cookies.get(get_settings().session_cookie, "")
+    login = await get_login_session_by_token(db, raw_session)
+    if login is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    await logout_op(db, user, login)
+    response.delete_cookie(get_settings().session_cookie)
 
 
 @router.get("/items", response_model=LibrarySearchView)
@@ -186,6 +263,22 @@ async def list_projects(user: ApiUser, db: Database) -> list[ProjectSummaryView]
     ]
 
 
+@router.get("/projects/joinable")
+async def list_projects_available_to_join(user: ApiUser, db: Database):
+    rows = await list_joinable_projects(db, user)
+    return [
+        {
+            "id": project.id,
+            "name": project.name,
+            "item_count": count,
+            "state": project.state.value,
+            "visibility": project.visibility.value,
+            "description": project.description,
+        }
+        for project, count in rows
+    ]
+
+
 @router.post("/projects", response_model=WriteResult, status_code=status.HTTP_201_CREATED)
 async def create_user_project(
     data: ProjectCreateRequest, user: ApiUser, db: Database
@@ -201,9 +294,16 @@ async def get_project(project_id: str, user: ApiUser, db: Database) -> ProjectDe
 
 @router.patch("/projects/{project_id}", response_model=WriteResult)
 async def update_project(
-    project_id: str, data: NameRequest, user: ApiUser, db: Database
+    project_id: str, data: ProjectSettingsRequest, user: ApiUser, db: Database
 ) -> WriteResult:
-    project = await rename_project(db, user, project_id, data.name)
+    project = await update_project_settings(
+        db,
+        user,
+        project_id,
+        name=data.name,
+        description=data.description,
+        visibility=data.visibility,
+    )
     return WriteResult(id=project.id)
 
 
@@ -246,6 +346,12 @@ async def set_project_visibility_api(
 @router.post("/projects/{project_id}/leave", response_model=OkView)
 async def leave_user_project(project_id: str, user: ApiUser, db: Database) -> OkView:
     await leave_project(db, user, project_id)
+    return OkView()
+
+
+@router.post("/projects/{project_id}/join", response_model=OkView)
+async def join_public_project(project_id: str, user: ApiUser, db: Database) -> OkView:
+    await join_project(db, user, project_id)
     return OkView()
 
 
@@ -345,6 +451,15 @@ async def delete_annotation(
     return OkView()
 
 
+@router.post("/items/{item_id}/annotations/{annotation_id}/restore", response_model=AnnotationView)
+async def restore_annotation(
+    item_id: str, annotation_id: str, version: int, user: ApiUser, db: Database
+) -> AnnotationView:
+    return AnnotationView.model_validate(
+        await restore_document_annotation(db, user, item_id, annotation_id, version)
+    )
+
+
 @router.post(
     "/items/{item_id}/annotations/{annotation_id}/replies",
     response_model=AnnotationReplyView,
@@ -393,6 +508,23 @@ async def delete_reply(
 ) -> OkView:
     await delete_annotation_reply(db, user, item_id, annotation_id, reply_id, version)
     return OkView()
+
+
+@router.post(
+    "/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}/restore",
+    response_model=AnnotationReplyView,
+)
+async def restore_reply(
+    item_id: str,
+    annotation_id: str,
+    reply_id: str,
+    version: int,
+    user: ApiUser,
+    db: Database,
+) -> AnnotationReplyView:
+    return AnnotationReplyView.model_validate(
+        await restore_annotation_reply(db, user, item_id, annotation_id, reply_id, version)
+    )
 
 
 @router.get("/tags", response_model=list[TagView])
@@ -461,7 +593,6 @@ async def search_discovery(
     data: DiscoverySearchRequest,
     user: ApiUser,
     db: Database,
-    settings: Annotated[Settings, Depends(get_settings)],
 ) -> CandidatePageView:
     return await search_candidate_records(
         db,
@@ -473,5 +604,34 @@ async def search_discovery(
         sort=data.sort,
         year_from=data.year_from,
         year_to=data.year_to,
-        settings=settings,
+        settings=await get_effective_settings_model(db),
     )
+
+
+@router.get("/discovery/providers")
+async def discovery_providers(user: ApiUser, db: Database):
+    del user
+    settings = await get_effective_settings_model(db)
+    providers = [
+        {"id": "openalex", "name": "OpenAlex"},
+        {"id": "crossref", "name": "Crossref"},
+        {"id": "pubmed", "name": "PubMed"},
+        {"id": "arxiv", "name": "arXiv"},
+        {"id": "openlibrary", "name": "Open Library"},
+        {"id": "pmc", "name": "PMC"},
+    ]
+    if settings.nasa_ads_token:
+        providers.append({"id": "nasa", "name": "NASA ADS"})
+    if settings.ieee_api_key:
+        providers.append({"id": "ieee", "name": "IEEE Xplore"})
+    return providers
+
+
+@router.get("/workflows/{workflow_id}")
+async def workflow_status(workflow_id: str, user: ApiUser):
+    workflow = await durable_operations().get(workflow_id)
+    if workflow is None or (
+        user.role != "administrator" and (workflow.attributes or {}).get("owner_id") != user.id
+    ):
+        raise ResourceNotFound("workflow not found")
+    return {"id": workflow.id, "state": workflow.state, "error": workflow.error}

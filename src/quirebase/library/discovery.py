@@ -6,7 +6,10 @@ from typing import TYPE_CHECKING
 from inquiro import SearchClause, SearchQuery
 
 from quirebase.core.errors import ResourceUnavailable
-from quirebase.library.activity import record_discovery_search_audit
+from quirebase.library.activity import (
+    get_matching_accessible_item_identifiers,
+    record_discovery_search_audit,
+)
 from quirebase.library.providers import search_candidates
 from quirebase.models import User
 
@@ -34,6 +37,7 @@ class CandidateView:
     publication_date: str | None = None
     doi: str | None = None
     abstract: str | None = None
+    imported: bool = False
 
 
 @dataclass(frozen=True)
@@ -76,6 +80,18 @@ async def search_candidate_records(
         ),
         settings,
     )
+    reloaded_user = await db.get(User, user_id)
+    if reloaded_user is None or not reloaded_user.active:
+        raise ResourceUnavailable("user not available")
+    candidate_identifiers = {
+        (candidate.identifier.provider, candidate.identifier.value) for candidate in result.results
+    }
+    candidate_identifiers.update(
+        ("doi", candidate.doi) for candidate in result.results if candidate.doi
+    )
+    accessible_identifiers = await get_matching_accessible_item_identifiers(
+        db, reloaded_user, candidate_identifiers
+    )
     page_view = CandidatePageView(
         provider=result.provider,
         results=tuple(
@@ -89,6 +105,17 @@ async def search_candidate_records(
                 publication_date=candidate.publication_date,
                 doi=candidate.doi,
                 abstract=candidate.abstract,
+                imported=(
+                    (
+                        candidate.identifier.provider.casefold(),
+                        candidate.identifier.value.casefold(),
+                    )
+                    in accessible_identifiers
+                    or bool(
+                        candidate.doi
+                        and ("doi", candidate.doi.casefold()) in accessible_identifiers
+                    )
+                ),
             )
             for candidate in result.results
         ),
@@ -96,9 +123,6 @@ async def search_candidate_records(
         page=result.page,
         per_page=result.per_page,
     )
-    reloaded_user = await db.get(User, user_id)
-    if reloaded_user is None or not reloaded_user.active:
-        raise ResourceUnavailable("user not available")
     await record_discovery_search_audit(
         db, reloaded_user, provider, clauses, len(page_view.results)
     )

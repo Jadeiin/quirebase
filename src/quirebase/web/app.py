@@ -5,38 +5,54 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import FastAPI, Request
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI, HTTPException, Request
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from quirebase.core.config import get_settings
 from quirebase.core.database import AsyncSessionLocal, engine
 from quirebase.core.logging import configure_logging, log_context
 from quirebase.mcp import SessionFactory, create_mcp_http_mount
+from quirebase.web.api.account import router as account_router
+from quirebase.web.api.admin import router as admin_router
+from quirebase.web.api.content import router as content_router
+from quirebase.web.api.exports import router as exports_router
+from quirebase.web.api.items import router as items_router
 from quirebase.web.api.routes import router as api_router
+from quirebase.web.api.workspaces import router as workspaces_router
 from quirebase.web.errors import register_error_handlers
-from quirebase.web.json.annotations import router as json_annotations_router
-from quirebase.web.json.documents import router as json_documents_router
-from quirebase.web.json.exports import router as json_exports_router
-from quirebase.web.views.admin import router as views_admin_router
-from quirebase.web.views.auth import public_router as views_auth_public_router
-from quirebase.web.views.auth import router as views_auth_router
-from quirebase.web.views.dashboard import router as views_dashboard_router
-from quirebase.web.views.discovery import router as views_discovery_router
-from quirebase.web.views.items import router as views_items_router
-from quirebase.web.views.library import router as views_library_router
-from quirebase.web.views.projects import router as views_projects_router
-from quirebase.web.views.system import public_router as views_system_public_router
-from quirebase.web.views.system import router as views_system_router
-from quirebase.web.views.tools import router as views_tools_router
-from quirebase.web.views.workflows import router as views_workflows_router
+from quirebase.web.system import router as system_router
 
 PACKAGE_DIR = Path(__file__).resolve().parent.parent
+SOURCE_FRONTEND_DIRECTORY = PACKAGE_DIR.parent.parent / "frontend" / "build"
+PACKAGED_FRONTEND_DIRECTORY = PACKAGE_DIR.parent / "quirebase_frontend"
 _REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,64}$")
+_CSP_PATTERN = re.compile(
+    r'<meta\s+http-equiv="content-security-policy"\s+content="([^"]+)"',
+    re.IGNORECASE,
+)
+
+
+def _frontend_directory() -> Path:
+    for directory in (SOURCE_FRONTEND_DIRECTORY, PACKAGED_FRONTEND_DIRECTORY):
+        if (directory / "index.html").is_file():
+            return directory
+    raise RuntimeError(
+        "frontend build not found; run `bun run --cwd frontend build` before starting Quirebase"
+    )
+
+
+def _frontend_content_security_policy(directory: Path) -> str:
+    index = directory / "index.html"
+    match = _CSP_PATTERN.search(index.read_text(encoding="utf-8"))
+    if match is None:
+        raise RuntimeError(f"frontend build has no Content Security Policy: {index}")
+    return match.group(1)
 
 
 def create_app(*, mcp_session_factory: SessionFactory = AsyncSessionLocal) -> FastAPI:
     settings = get_settings()
+    frontend_directory = _frontend_directory()
+    frontend_csp = _frontend_content_security_policy(frontend_directory)
     mcp_http = create_mcp_http_mount(
         mcp_session_factory,
         allowed_hosts=settings.allowed_host_list,
@@ -59,7 +75,6 @@ def create_app(*, mcp_session_factory: SessionFactory = AsyncSessionLocal) -> Fa
     app = FastAPI(title="Quirebase", version="0.1.0", lifespan=lifespan)
     app.state.mcp_server = mcp_http.server
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_host_list)
-    app.mount("/static", StaticFiles(directory=PACKAGE_DIR / "static"), name="static")
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next):
@@ -75,37 +90,40 @@ def create_app(*, mcp_session_factory: SessionFactory = AsyncSessionLocal) -> Fa
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "same-origin"
         response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
-            "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: blob:; connect-src 'self' https: http:; worker-src 'self' blob:; "
-            "object-src 'none'; frame-ancestors 'none'"
-        )
+        response.headers["Content-Security-Policy"] = frontend_csp
+        content_type = response.headers.get("content-type", "")
+        if request.url.path == "/api/v1/session" or (
+            request.url.path.startswith("/api/v1/") and settings.session_cookie in request.cookies
+        ):
+            response.headers["Cache-Control"] = "private, no-store"
+        elif content_type.startswith("text/html"):
+            response.headers["Cache-Control"] = "no-cache"
+        elif request.url.path.startswith("/_app/immutable/"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         return response
 
     register_error_handlers(app)
 
-    # Views (public_router holds the pre-authentication endpoints exempt from CSRF)
-    app.include_router(views_system_public_router)
-    app.include_router(views_auth_public_router)
-    app.include_router(views_system_router)
-    app.include_router(views_auth_router)
-    app.include_router(views_admin_router)
-    app.include_router(views_dashboard_router)
-    app.include_router(views_library_router)
-    app.include_router(views_projects_router)
-    app.include_router(views_items_router)
-    app.include_router(views_discovery_router)
-    app.include_router(views_tools_router)
-    app.include_router(views_workflows_router)
-
-    # JSON / Binary APIs
+    app.include_router(system_router)
     app.include_router(api_router)
-    app.include_router(json_documents_router)
-    app.include_router(json_annotations_router)
-    app.include_router(json_exports_router)
+    app.include_router(account_router)
+    app.include_router(admin_router)
+    app.include_router(content_router)
+    app.include_router(exports_router)
+    app.include_router(items_router)
+    app.include_router(workspaces_router)
+
+    @app.api_route(
+        "/api/v1/{path:path}",
+        methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        include_in_schema=False,
+    )
+    def api_not_found(path: str) -> None:
+        del path
+        raise HTTPException(status_code=404, detail="not found")
 
     app.mount("/mcp", mcp_http.app, name="mcp")
+    app.frontend("/", directory=frontend_directory, fallback="index.html")
 
     return app
 

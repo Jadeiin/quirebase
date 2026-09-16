@@ -82,7 +82,7 @@ async def test_http_api_requires_a_bearer_api_token_and_rejects_cookie_or_query_
 
 
 @pytest.mark.anyio
-async def test_http_api_exposes_the_same_ordinary_user_capability_set_as_mcp(
+async def test_http_api_includes_the_programmatic_capability_set(
     async_session_factory,
 ):
     expected = {
@@ -143,7 +143,9 @@ async def test_http_api_exposes_the_same_ordinary_user_capability_set_as_mcp(
             if isinstance(route, APIRoute) and route.methods
         }
 
-    assert actual == expected
+    # The unified router also owns browser session and UI-specific aggregate
+    # capabilities, while preserving every programmatic API route.
+    assert expected <= actual
     assert response_models["GET", "/api/v1/items"] is LibrarySearchView
     assert response_models["GET", "/api/v1/items/{item_id}"] is ItemDetailView
     assert response_models["GET", "/api/v1/projects/{project_id}"] is ProjectDetailView
