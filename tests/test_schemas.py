@@ -3,7 +3,12 @@ from uuid import uuid4
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from quirebase.documents.schemas import AnnotationCreate, AnnotationPayload, AnnotationReplyCreate
+from quirebase.documents.schemas import (
+    AnnotationCreate,
+    AnnotationPayload,
+    AnnotationReplyCreate,
+    AnnotationUpdate,
+)
 
 
 def base(kind: str, payload: dict) -> dict:
@@ -112,3 +117,23 @@ def test_annotation_reply_requires_a_uuid_and_nonempty_bounded_body():
     for body in ("", "x" * 20_001):
         with pytest.raises(ValidationError):
             AnnotationReplyCreate.model_validate({"id": str(uuid4()), "body": body})
+
+
+def test_pdf_selected_text_drops_nul_characters():
+    data = base("highlight", {"segment_rects": [{"x": 1, "y": 2, "width": 20, "height": 10}]})
+    created = AnnotationCreate.model_validate(data | {"selected_text": "A\x00B"})
+    updated = AnnotationUpdate.model_validate({
+        "version": 1,
+        "page_index": 0,
+        "kind": "highlight",
+        "scope": "private",
+        "selected_text": "C\x00D",
+        "payload": data["payload"],
+    })
+
+    assert created.selected_text == "AB"
+    assert updated.selected_text == "CD"
+
+    for invalid_selected_text in (123, b"A\x00B"):
+        with pytest.raises(ValidationError):
+            AnnotationCreate.model_validate(data | {"selected_text": invalid_selected_text})

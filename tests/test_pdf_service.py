@@ -49,6 +49,18 @@ def test_pymupdf_inspection_and_thumbnail(tmp_path):
     assert thumbnail.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
 
 
+def test_inspection_strips_nul_bytes_from_extracted_text(tmp_path):
+    source = tmp_path / "nul.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page()
+        page.insert_text((72, 72), "A\x00B C")
+        document.save(source)
+
+    _pages, text, _geometry = inspect_pdf(source)
+
+    assert text == "AB C\n"
+
+
 STYLE = {
     "stroke_color": "#3366CC",
     "fill_color": None,

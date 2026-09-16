@@ -3,14 +3,33 @@ from __future__ import annotations
 import math
 from typing import Annotated, Literal
 
-from pydantic import UUID4, BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    UUID4,
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    StrictStr,
+    model_validator,
+)
 
 from quirebase.models import AnnotationKind, AnnotationScope
+
+from .pdf import strip_nul
 
 MAX_COORDINATE = 1_000_000.0
 MAX_SEGMENT_RECTS = 500
 MAX_INK_PATHS = 100
 MAX_INK_POINTS = 10_000
+
+
+def _strip_selected_text_nul(value: object) -> object:
+    # Leave non-strings to pydantic's type validation so malformed input keeps
+    # reporting a validation error instead of an unhandled exception.
+    return strip_nul(value) if isinstance(value, str) else value
+
+
+PdfSelectedText = Annotated[StrictStr, BeforeValidator(_strip_selected_text_nul)]
 LineEnding = Literal[
     "none",
     "square",
@@ -138,7 +157,7 @@ class AnnotationCreate(CanonicalModel):
     scope: AnnotationScope = AnnotationScope.private
     project_id: str | None = Field(default=None, max_length=36)
     body: str | None = Field(default=None, max_length=20_000)
-    selected_text: str | None = Field(default=None, max_length=50_000)
+    selected_text: PdfSelectedText | None = Field(default=None, max_length=50_000)
     payload: AnnotationPayload
 
     @model_validator(mode="after")
@@ -157,7 +176,7 @@ class AnnotationUpdate(CanonicalModel):
     scope: AnnotationScope
     project_id: str | None = Field(default=None, max_length=36)
     body: str | None = Field(default=None, max_length=20_000)
-    selected_text: str | None = Field(default=None, max_length=50_000)
+    selected_text: PdfSelectedText | None = Field(default=None, max_length=50_000)
     payload: AnnotationPayload
 
     @model_validator(mode="after")

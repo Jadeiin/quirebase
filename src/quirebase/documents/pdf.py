@@ -112,10 +112,15 @@ def validate_pdf_container(path: Path) -> None:
         raise ValueError("PDF structure is invalid") from error
 
 
+def strip_nul(value: str) -> str:
+    """Drop NUL characters that PostgreSQL text columns reject."""
+    return value.replace("\x00", "")
+
+
 def inspect_pdf(path: Path) -> tuple[int, str, list[list[float]]]:
     with pymupdf.open(path) as document:
         page_count = document.page_count
-        text = [page.get_text("text") for page in document]
+        text = [strip_nul(page.get_text("text")) for page in document]
         geometry = []
         for page in document:
             pdf_box = pdf_crop_box(page)
