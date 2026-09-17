@@ -247,44 +247,23 @@ msgid "AND"
 msgstr "且"
 
 #. js-lingui-explicit-id
-#: src/lib/PdfWorkspace.svelte
-msgid "Annotation action failed"
-msgstr "标注操作失败"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/AnnotationSync.svelte
-msgid "Annotation color"
-msgstr "标注颜色"
-
-#. js-lingui-explicit-id
-#: src/lib/PdfWorkspace.svelte
-msgid "Annotation inspector"
-msgstr "批注检查器"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/AnnotationSync.svelte
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
 msgid "Annotation sync failed"
 msgstr "批注同步失败"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/AnnotationSync.svelte
-msgid "Annotation tools"
-msgstr "批注工具"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/AnnotationSync.svelte
+#: src/lib/PdfWorkspace.svelte
 msgid "Annotation visibility"
 msgstr "批注可见范围"
 
 #. js-lingui-explicit-id
 #: src/lib/ItemActions.svelte
 #: src/lib/ItemWorkspace.svelte
-#: src/lib/PdfWorkspace.svelte
 msgid "Annotations"
 msgstr "批注"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/AnnotationSync.svelte
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
 msgid "annotations loaded"
 msgstr "条批注"
 
@@ -362,7 +341,6 @@ msgstr "已归档"
 
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/pdf/AnnotationSync.svelte
 msgid "Arrow"
 msgstr "箭头"
 
@@ -400,6 +378,7 @@ msgstr "作者"
 
 #. js-lingui-explicit-id
 #: src/lib/ImportWorkspace.svelte
+#: src/lib/ItemActions.svelte
 msgid "Auto detect"
 msgstr "自动检测"
 
@@ -614,7 +593,6 @@ msgstr "客户端连接指南"
 
 #. js-lingui-explicit-id
 #: src/lib/ItemActions.svelte
-#: src/lib/PdfWorkspace.svelte
 #: src/lib/Projects.svelte
 msgid "Close"
 msgstr "关闭"
@@ -623,11 +601,6 @@ msgstr "关闭"
 #: src/lib/ImportWorkspace.svelte
 msgid "Close editor"
 msgstr "关闭编辑器"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Close search"
-msgstr "关闭搜索"
 
 #. js-lingui-explicit-id
 #: src/lib/Projects.svelte
@@ -848,11 +821,6 @@ msgid "Delete"
 msgstr "删除"
 
 #. js-lingui-explicit-id
-#: src/lib/PdfWorkspace.svelte
-msgid "Delete Annotation"
-msgstr "删除标注"
-
-#. js-lingui-explicit-id
 #: src/lib/ItemActions.svelte
 msgid "Delete Item"
 msgstr "删除条目"
@@ -866,16 +834,6 @@ msgstr "永久删除条目"
 #: src/lib/ProjectWorkspace.svelte
 msgid "Delete Project"
 msgstr "删除项目"
-
-#. js-lingui-explicit-id
-#: src/lib/PdfWorkspace.svelte
-msgid "Delete reply"
-msgstr "删除回复"
-
-#. js-lingui-explicit-id
-#: src/lib/PdfWorkspace.svelte
-msgid "Delete this Annotation?"
-msgstr "删除此标注？"
 
 #. js-lingui-explicit-id
 #: src/lib/ItemWorkspace.svelte
@@ -948,6 +906,11 @@ msgstr "发现结果分页"
 #: src/lib/ItemWorkspace.svelte
 msgid "Discussion"
 msgstr "讨论"
+
+#. js-lingui-explicit-id
+#: src/lib/PdfWorkspace.svelte
+msgid "Dismiss"
+msgstr ""
 
 #. js-lingui-explicit-id
 #: src/lib/ItemActions.svelte
@@ -1071,7 +1034,6 @@ msgstr "编者"
 
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/pdf/AnnotationSync.svelte
 msgid "Ellipse"
 msgstr "椭圆"
 
@@ -1219,16 +1181,6 @@ msgid "First page"
 msgstr "第一页"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Fit page"
-msgstr "适合页面"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Fit width"
-msgstr "适合宽度"
-
-#. js-lingui-explicit-id
 #: src/lib/ItemActions.svelte
 msgid "Format"
 msgstr "格式"
@@ -1275,7 +1227,6 @@ msgstr "请求头"
 
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/pdf/AnnotationSync.svelte
 msgid "Highlight"
 msgstr "高亮"
 
@@ -1368,7 +1319,6 @@ msgstr "包含"
 
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/pdf/AnnotationSync.svelte
 msgid "Ink"
 msgstr "墨迹"
 
@@ -1545,7 +1495,6 @@ msgstr "文献库工具"
 
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/pdf/AnnotationSync.svelte
 msgid "Line"
 msgstr "直线"
 
@@ -1563,8 +1512,7 @@ msgstr "正在加载账号…"
 
 #. js-lingui-explicit-id
 #: src/lib/ItemWorkspace.svelte
-#: src/lib/pdf/AnnotationSync.svelte
-#: src/lib/PdfWorkspace.svelte
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
 msgid "Loading annotations…"
 msgstr "正在加载批注…"
 
@@ -1574,19 +1522,9 @@ msgid "Loading dashboard…"
 msgstr "正在加载概览…"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/HeadlessPdfViewer.svelte
-msgid "Loading document…"
-msgstr "正在加载文档…"
-
-#. js-lingui-explicit-id
 #: src/lib/Library.svelte
 msgid "Loading Library…"
 msgstr "正在加载文献库…"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/HeadlessPdfViewer.svelte
-msgid "Loading PDF engine…"
-msgstr "正在加载 PDF 引擎…"
 
 #. js-lingui-explicit-id
 #: src/lib/ProjectWorkspace.svelte
@@ -1797,14 +1735,8 @@ msgstr "后续"
 
 #. js-lingui-explicit-id
 #: src/lib/Library.svelte
-#: src/lib/pdf/PdfReaderToolbar.svelte
 msgid "Next page"
 msgstr "下一页"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Next search result"
-msgstr "下一个搜索结果"
 
 #. js-lingui-explicit-id
 #: src/lib/ItemWorkspace.svelte
@@ -1813,7 +1745,6 @@ msgstr "暂无摘要。"
 
 #. js-lingui-explicit-id
 #: src/lib/ItemWorkspace.svelte
-#: src/lib/PdfWorkspace.svelte
 msgid "No annotations."
 msgstr "暂无批注。"
 
@@ -1979,7 +1910,6 @@ msgstr "未生成"
 
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/pdf/AnnotationSync.svelte
 msgid "Note"
 msgstr "注释"
 
@@ -2004,11 +1934,6 @@ msgid "Only invited members can access this Project."
 msgstr "只有受邀成员才能访问此项目。"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/AnnotationSync.svelte
-msgid "Opacity"
-msgstr "不透明度"
-
-#. js-lingui-explicit-id
 #: src/lib/ItemWorkspace.svelte
 msgid "Open"
 msgstr "打开"
@@ -2027,11 +1952,6 @@ msgstr "打开批注工作区"
 #: src/lib/ProjectWorkspace.svelte
 msgid "Open in Library"
 msgstr "在文献库中打开"
-
-#. js-lingui-explicit-id
-#: src/lib/PdfWorkspace.svelte
-msgid "Open inspector"
-msgstr "打开检查器"
 
 #. js-lingui-explicit-id
 #: src/lib/Dashboard.svelte
@@ -2097,7 +2017,6 @@ msgstr "所有者"
 
 #. js-lingui-explicit-id
 #: src/lib/ItemWorkspace.svelte
-#: src/lib/PdfWorkspace.svelte
 msgid "page"
 msgstr "页"
 
@@ -2106,37 +2025,15 @@ msgstr "页"
 #: src/lib/Discovery.svelte
 #: src/lib/ImportWorkspace.svelte
 #: src/lib/Library.svelte
-#: src/lib/pdf/PdfThumbnails.svelte
 #: src/lib/Tools.svelte
 msgid "Page"
 msgstr "第"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Page layout"
-msgstr "页面布局"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Page number"
-msgstr "页码"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfThumbnails.svelte
-msgid "Page thumbnails"
-msgstr "页面缩略图"
-
-#. js-lingui-explicit-id
 #: src/lib/ItemMetadataForm.svelte
 #: src/lib/ItemWorkspace.svelte
-#: src/lib/pdf/PdfThumbnails.svelte
 msgid "Pages"
 msgstr "页码 (Pages)"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Pan tool"
-msgstr "平移工具"
 
 #. js-lingui-explicit-id
 #: src/lib/Account.svelte
@@ -2170,11 +2067,6 @@ msgstr "PDF 文件"
 #: src/lib/PdfWorkspace.svelte
 msgid "PDF Reader"
 msgstr "PDF 阅读器"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "PDF reader controls"
-msgstr "PDF 阅读器控件"
 
 #. js-lingui-explicit-id
 #: src/lib/ItemWorkspace.svelte
@@ -2302,14 +2194,8 @@ msgstr "上一页"
 
 #. js-lingui-explicit-id
 #: src/lib/Library.svelte
-#: src/lib/pdf/PdfReaderToolbar.svelte
 msgid "Previous page"
 msgstr "上一页"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Previous search result"
-msgstr "上一个搜索结果"
 
 #. js-lingui-explicit-id
 #: src/lib/Admin.svelte
@@ -2320,7 +2206,7 @@ msgid "Private"
 msgstr "私有"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/AnnotationSync.svelte
+#: src/lib/PdfWorkspace.svelte
 msgid "Private annotations"
 msgstr "私人批注"
 
@@ -2396,6 +2282,7 @@ msgstr "项目"
 
 #. js-lingui-explicit-id
 #: src/lib/Discovery.svelte
+#: src/lib/ItemActions.svelte
 #: src/lib/ItemMetadataForm.svelte
 msgid "Provider"
 msgstr "提供方"
@@ -2519,14 +2406,8 @@ msgstr "条记录"
 
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/pdf/AnnotationSync.svelte
 msgid "Rectangle"
 msgstr "矩形"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Redo"
-msgstr "重做"
 
 #. js-lingui-explicit-id
 #: src/lib/ItemMetadataForm.svelte
@@ -2577,16 +2458,6 @@ msgstr "重命名"
 #: src/lib/ItemWorkspace.svelte
 msgid "replies"
 msgstr "条回复"
-
-#. js-lingui-explicit-id
-#: src/lib/PdfWorkspace.svelte
-msgid "Replies"
-msgstr "回复"
-
-#. js-lingui-explicit-id
-#: src/lib/PdfWorkspace.svelte
-msgid "Reply"
-msgstr "回复"
 
 #. js-lingui-explicit-id
 #: src/lib/ItemActions.svelte
@@ -2679,11 +2550,6 @@ msgid "Role for"
 msgstr "以下用户的角色"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Rotate clockwise"
-msgstr "顺时针旋转"
-
-#. js-lingui-explicit-id
 #: src/lib/ImportWorkspace.svelte
 msgid "Row"
 msgstr "行"
@@ -2730,11 +2596,6 @@ msgid "Save metadata"
 msgstr "保存元数据"
 
 #. js-lingui-explicit-id
-#: src/lib/PdfWorkspace.svelte
-msgid "Save note"
-msgstr "保存笔记"
-
-#. js-lingui-explicit-id
 #: src/lib/ImportWorkspace.svelte
 msgid "Save only when you approve"
 msgstr "确认后再保存"
@@ -2743,11 +2604,6 @@ msgstr "确认后再保存"
 #: src/lib/ProjectWorkspace.svelte
 msgid "Save Project settings"
 msgstr "保存项目设置"
-
-#. js-lingui-explicit-id
-#: src/lib/PdfWorkspace.svelte
-msgid "Save reply"
-msgstr "保存回复"
 
 #. js-lingui-explicit-id
 #: src/lib/Admin.svelte
@@ -2761,17 +2617,17 @@ msgstr "保存设置"
 
 #. js-lingui-explicit-id
 #: src/lib/ExportPreferences.svelte
-#: src/lib/pdf/AnnotationSync.svelte
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
 msgid "Saved"
 msgstr "已保存"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/AnnotationSync.svelte
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
 msgid "Saving annotation…"
 msgstr "正在保存批注…"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/AnnotationSync.svelte
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
 msgid "Saving reply…"
 msgstr "正在保存回复…"
 
@@ -2802,11 +2658,6 @@ msgid "Search Discovery"
 msgstr "搜索发现"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Search document"
-msgstr "搜索文档"
-
-#. js-lingui-explicit-id
 #: src/lib/Discovery.svelte
 msgid "Search failed"
 msgstr "搜索失败"
@@ -2815,11 +2666,6 @@ msgstr "搜索失败"
 #: src/lib/Discovery.svelte
 msgid "Search field"
 msgstr "检索字段"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Search in document"
-msgstr "在文档中搜索"
 
 #. js-lingui-explicit-id
 #: src/lib/Dashboard.svelte
@@ -2958,11 +2804,6 @@ msgid "Similar title"
 msgstr "相似标题"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Single page"
-msgstr "单页"
-
-#. js-lingui-explicit-id
 #: src/lib/Discovery.svelte
 msgid "Sort"
 msgstr "排序"
@@ -2993,11 +2834,6 @@ msgstr "状态"
 #: src/lib/Admin.svelte
 msgid "Status"
 msgstr "状态"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/AnnotationSync.svelte
-msgid "Strike out"
-msgstr "删除线"
 
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
@@ -3093,11 +2929,6 @@ msgid "Target type"
 msgstr "目标类型"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/AnnotationSync.svelte
-msgid "Text"
-msgstr "文本"
-
-#. js-lingui-explicit-id
 #: src/lib/Tools.svelte
 msgid "The match criteria changed. Start a new check to refresh these results."
 msgstr "匹配条件已更改，请重新开始检查以刷新结果。"
@@ -3136,11 +2967,6 @@ msgid "To year"
 msgstr "结束年份"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Toggle page thumbnails"
-msgstr "切换页面缩略图"
-
-#. js-lingui-explicit-id
 #: src/lib/Account.svelte
 msgid "Token name"
 msgstr "令牌名称"
@@ -3155,11 +2981,6 @@ msgstr "工具"
 #: src/lib/Library.svelte
 msgid "Try a different Library Search."
 msgstr "请尝试其他文献库搜索条件。"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Two-page spread"
-msgstr "双页展开"
 
 #. js-lingui-explicit-id
 #: src/lib/ItemWorkspace.svelte
@@ -3207,11 +3028,6 @@ msgid "Unable to discard Import"
 msgstr "无法丢弃导入"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/HeadlessPdfViewer.svelte
-msgid "Unable to initialize the PDF engine."
-msgstr "无法初始化 PDF 引擎。"
-
-#. js-lingui-explicit-id
 #: src/lib/Projects.svelte
 msgid "Unable to join Project"
 msgstr "无法加入项目"
@@ -3222,13 +3038,12 @@ msgid "Unable to load administration."
 msgstr "无法加载管理页面。"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/AnnotationSync.svelte
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
 msgid "Unable to load annotations"
 msgstr "无法加载批注"
 
 #. js-lingui-explicit-id
 #: src/lib/ItemWorkspace.svelte
-#: src/lib/PdfWorkspace.svelte
 msgid "Unable to load annotations."
 msgstr "无法加载批注。"
 
@@ -3248,11 +3063,6 @@ msgid "Unable to load the dashboard."
 msgstr "无法加载概览。"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/HeadlessPdfViewer.svelte
-msgid "Unable to load the document."
-msgstr "无法加载文档。"
-
-#. js-lingui-explicit-id
 #: src/lib/Library.svelte
 msgid "Unable to load the Library."
 msgstr "无法加载文献库。"
@@ -3268,6 +3078,7 @@ msgid "Unable to open this Item section."
 msgstr "无法打开此条目分区。"
 
 #. js-lingui-explicit-id
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
 #: src/lib/PdfWorkspace.svelte
 msgid "Unable to open this PDF."
 msgstr "无法打开此 PDF。"
@@ -3299,14 +3110,8 @@ msgstr "无法登录"
 
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/pdf/AnnotationSync.svelte
 msgid "Underline"
 msgstr "下划线"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Undo"
-msgstr "撤销"
 
 #. js-lingui-explicit-id
 #: src/lib/Admin.svelte
@@ -3489,11 +3294,6 @@ msgid "Volume / Issue"
 msgstr "卷 / 期"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/AnnotationSync.svelte
-msgid "Width"
-msgstr "线宽"
-
-#. js-lingui-explicit-id
 #: src/lib/Admin.svelte
 msgid "Without PDF"
 msgstr "无 PDF"
@@ -3515,11 +3315,6 @@ msgid "Workspace"
 msgstr "工作区"
 
 #. js-lingui-explicit-id
-#: src/lib/PdfWorkspace.svelte
-msgid "Write a reply"
-msgstr "撰写回复"
-
-#. js-lingui-explicit-id
 #: src/lib/ExportPreferences.svelte
 #: src/lib/Library.svelte
 msgid "Year"
@@ -3534,13 +3329,3 @@ msgstr "文献库为空。请先导入一篇文献。"
 #: src/lib/Projects.svelte
 msgid "Your Projects"
 msgstr "你的项目"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Zoom in"
-msgstr "放大"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Zoom out"
-msgstr "缩小"

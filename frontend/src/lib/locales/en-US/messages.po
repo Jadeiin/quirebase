@@ -247,44 +247,23 @@ msgid "AND"
 msgstr "AND"
 
 #. js-lingui-explicit-id
-#: src/lib/PdfWorkspace.svelte
-msgid "Annotation action failed"
-msgstr "Annotation action failed"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/AnnotationSync.svelte
-msgid "Annotation color"
-msgstr "Annotation color"
-
-#. js-lingui-explicit-id
-#: src/lib/PdfWorkspace.svelte
-msgid "Annotation inspector"
-msgstr "Annotation inspector"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/AnnotationSync.svelte
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
 msgid "Annotation sync failed"
 msgstr "Annotation sync failed"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/AnnotationSync.svelte
-msgid "Annotation tools"
-msgstr "Annotation tools"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/AnnotationSync.svelte
+#: src/lib/PdfWorkspace.svelte
 msgid "Annotation visibility"
 msgstr "Annotation visibility"
 
 #. js-lingui-explicit-id
 #: src/lib/ItemActions.svelte
 #: src/lib/ItemWorkspace.svelte
-#: src/lib/PdfWorkspace.svelte
 msgid "Annotations"
 msgstr "Annotations"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/AnnotationSync.svelte
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
 msgid "annotations loaded"
 msgstr "annotations loaded"
 
@@ -361,7 +340,6 @@ msgstr "Archived"
 
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/pdf/AnnotationSync.svelte
 msgid "Arrow"
 msgstr "Arrow"
 
@@ -399,6 +377,7 @@ msgstr "Authors"
 
 #. js-lingui-explicit-id
 #: src/lib/ImportWorkspace.svelte
+#: src/lib/ItemActions.svelte
 msgid "Auto detect"
 msgstr "Auto detect"
 
@@ -613,7 +592,6 @@ msgstr "Client connection guide"
 
 #. js-lingui-explicit-id
 #: src/lib/ItemActions.svelte
-#: src/lib/PdfWorkspace.svelte
 #: src/lib/Projects.svelte
 msgid "Close"
 msgstr "Close"
@@ -622,11 +600,6 @@ msgstr "Close"
 #: src/lib/ImportWorkspace.svelte
 msgid "Close editor"
 msgstr "Close editor"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Close search"
-msgstr "Close search"
 
 #. js-lingui-explicit-id
 #: src/lib/Projects.svelte
@@ -847,11 +820,6 @@ msgid "Delete"
 msgstr "Delete"
 
 #. js-lingui-explicit-id
-#: src/lib/PdfWorkspace.svelte
-msgid "Delete Annotation"
-msgstr "Delete Annotation"
-
-#. js-lingui-explicit-id
 #: src/lib/ItemActions.svelte
 msgid "Delete Item"
 msgstr "Delete Item"
@@ -865,16 +833,6 @@ msgstr "Delete Item permanently"
 #: src/lib/ProjectWorkspace.svelte
 msgid "Delete Project"
 msgstr "Delete Project"
-
-#. js-lingui-explicit-id
-#: src/lib/PdfWorkspace.svelte
-msgid "Delete reply"
-msgstr "Delete reply"
-
-#. js-lingui-explicit-id
-#: src/lib/PdfWorkspace.svelte
-msgid "Delete this Annotation?"
-msgstr "Delete this Annotation?"
 
 #. js-lingui-explicit-id
 #: src/lib/ItemWorkspace.svelte
@@ -947,6 +905,11 @@ msgstr "Discovery result pages"
 #: src/lib/ItemWorkspace.svelte
 msgid "Discussion"
 msgstr "Discussion"
+
+#. js-lingui-explicit-id
+#: src/lib/PdfWorkspace.svelte
+msgid "Dismiss"
+msgstr "Dismiss"
 
 #. js-lingui-explicit-id
 #: src/lib/ItemActions.svelte
@@ -1070,7 +1033,6 @@ msgstr "Editors"
 
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/pdf/AnnotationSync.svelte
 msgid "Ellipse"
 msgstr "Ellipse"
 
@@ -1218,16 +1180,6 @@ msgid "First page"
 msgstr "First page"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Fit page"
-msgstr "Fit page"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Fit width"
-msgstr "Fit width"
-
-#. js-lingui-explicit-id
 #: src/lib/ItemActions.svelte
 msgid "Format"
 msgstr "Format"
@@ -1274,7 +1226,6 @@ msgstr "Header"
 
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/pdf/AnnotationSync.svelte
 msgid "Highlight"
 msgstr "Highlight"
 
@@ -1367,7 +1318,6 @@ msgstr "included"
 
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/pdf/AnnotationSync.svelte
 msgid "Ink"
 msgstr "Ink"
 
@@ -1544,7 +1494,6 @@ msgstr "Library tools"
 
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/pdf/AnnotationSync.svelte
 msgid "Line"
 msgstr "Line"
 
@@ -1562,8 +1511,7 @@ msgstr "Loading account…"
 
 #. js-lingui-explicit-id
 #: src/lib/ItemWorkspace.svelte
-#: src/lib/pdf/AnnotationSync.svelte
-#: src/lib/PdfWorkspace.svelte
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
 msgid "Loading annotations…"
 msgstr "Loading annotations…"
 
@@ -1573,19 +1521,9 @@ msgid "Loading dashboard…"
 msgstr "Loading dashboard…"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/HeadlessPdfViewer.svelte
-msgid "Loading document…"
-msgstr "Loading document…"
-
-#. js-lingui-explicit-id
 #: src/lib/Library.svelte
 msgid "Loading Library…"
 msgstr "Loading Library…"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/HeadlessPdfViewer.svelte
-msgid "Loading PDF engine…"
-msgstr "Loading PDF engine…"
 
 #. js-lingui-explicit-id
 #: src/lib/ProjectWorkspace.svelte
@@ -1796,14 +1734,8 @@ msgstr "Next"
 
 #. js-lingui-explicit-id
 #: src/lib/Library.svelte
-#: src/lib/pdf/PdfReaderToolbar.svelte
 msgid "Next page"
 msgstr "Next page"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Next search result"
-msgstr "Next search result"
 
 #. js-lingui-explicit-id
 #: src/lib/ItemWorkspace.svelte
@@ -1812,7 +1744,6 @@ msgstr "No abstract available."
 
 #. js-lingui-explicit-id
 #: src/lib/ItemWorkspace.svelte
-#: src/lib/PdfWorkspace.svelte
 msgid "No annotations."
 msgstr "No annotations."
 
@@ -1978,7 +1909,6 @@ msgstr "Not generated"
 
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/pdf/AnnotationSync.svelte
 msgid "Note"
 msgstr "Note"
 
@@ -2003,11 +1933,6 @@ msgid "Only invited members can access this Project."
 msgstr "Only invited members can access this Project."
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/AnnotationSync.svelte
-msgid "Opacity"
-msgstr "Opacity"
-
-#. js-lingui-explicit-id
 #: src/lib/ItemWorkspace.svelte
 msgid "Open"
 msgstr "Open"
@@ -2026,11 +1951,6 @@ msgstr "Open annotation workspace"
 #: src/lib/ProjectWorkspace.svelte
 msgid "Open in Library"
 msgstr "Open in Library"
-
-#. js-lingui-explicit-id
-#: src/lib/PdfWorkspace.svelte
-msgid "Open inspector"
-msgstr "Open inspector"
 
 #. js-lingui-explicit-id
 #: src/lib/Dashboard.svelte
@@ -2096,7 +2016,6 @@ msgstr "Owner"
 
 #. js-lingui-explicit-id
 #: src/lib/ItemWorkspace.svelte
-#: src/lib/PdfWorkspace.svelte
 msgid "page"
 msgstr "page"
 
@@ -2105,37 +2024,15 @@ msgstr "page"
 #: src/lib/Discovery.svelte
 #: src/lib/ImportWorkspace.svelte
 #: src/lib/Library.svelte
-#: src/lib/pdf/PdfThumbnails.svelte
 #: src/lib/Tools.svelte
 msgid "Page"
 msgstr "Page"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Page layout"
-msgstr "Page layout"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Page number"
-msgstr "Page number"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfThumbnails.svelte
-msgid "Page thumbnails"
-msgstr "Page thumbnails"
-
-#. js-lingui-explicit-id
 #: src/lib/ItemMetadataForm.svelte
 #: src/lib/ItemWorkspace.svelte
-#: src/lib/pdf/PdfThumbnails.svelte
 msgid "Pages"
 msgstr "Pages"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Pan tool"
-msgstr "Pan tool"
 
 #. js-lingui-explicit-id
 #: src/lib/Account.svelte
@@ -2169,11 +2066,6 @@ msgstr "PDF files"
 #: src/lib/PdfWorkspace.svelte
 msgid "PDF Reader"
 msgstr "PDF Reader"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "PDF reader controls"
-msgstr "PDF reader controls"
 
 #. js-lingui-explicit-id
 #: src/lib/ItemWorkspace.svelte
@@ -2301,14 +2193,8 @@ msgstr "Previous"
 
 #. js-lingui-explicit-id
 #: src/lib/Library.svelte
-#: src/lib/pdf/PdfReaderToolbar.svelte
 msgid "Previous page"
 msgstr "Previous page"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Previous search result"
-msgstr "Previous search result"
 
 #. js-lingui-explicit-id
 #: src/lib/Admin.svelte
@@ -2319,7 +2205,7 @@ msgid "Private"
 msgstr "Private"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/AnnotationSync.svelte
+#: src/lib/PdfWorkspace.svelte
 msgid "Private annotations"
 msgstr "Private annotations"
 
@@ -2395,6 +2281,7 @@ msgstr "Projects"
 
 #. js-lingui-explicit-id
 #: src/lib/Discovery.svelte
+#: src/lib/ItemActions.svelte
 #: src/lib/ItemMetadataForm.svelte
 msgid "Provider"
 msgstr "Provider"
@@ -2518,14 +2405,8 @@ msgstr "records"
 
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/pdf/AnnotationSync.svelte
 msgid "Rectangle"
 msgstr "Rectangle"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Redo"
-msgstr "Redo"
 
 #. js-lingui-explicit-id
 #: src/lib/ItemMetadataForm.svelte
@@ -2576,16 +2457,6 @@ msgstr "Rename"
 #: src/lib/ItemWorkspace.svelte
 msgid "replies"
 msgstr "replies"
-
-#. js-lingui-explicit-id
-#: src/lib/PdfWorkspace.svelte
-msgid "Replies"
-msgstr "Replies"
-
-#. js-lingui-explicit-id
-#: src/lib/PdfWorkspace.svelte
-msgid "Reply"
-msgstr "Reply"
 
 #. js-lingui-explicit-id
 #: src/lib/ItemActions.svelte
@@ -2678,11 +2549,6 @@ msgid "Role for"
 msgstr "Role for"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Rotate clockwise"
-msgstr "Rotate clockwise"
-
-#. js-lingui-explicit-id
 #: src/lib/ImportWorkspace.svelte
 msgid "Row"
 msgstr "Row"
@@ -2729,11 +2595,6 @@ msgid "Save metadata"
 msgstr "Save metadata"
 
 #. js-lingui-explicit-id
-#: src/lib/PdfWorkspace.svelte
-msgid "Save note"
-msgstr "Save note"
-
-#. js-lingui-explicit-id
 #: src/lib/ImportWorkspace.svelte
 msgid "Save only when you approve"
 msgstr "Save only when you approve"
@@ -2742,11 +2603,6 @@ msgstr "Save only when you approve"
 #: src/lib/ProjectWorkspace.svelte
 msgid "Save Project settings"
 msgstr "Save Project settings"
-
-#. js-lingui-explicit-id
-#: src/lib/PdfWorkspace.svelte
-msgid "Save reply"
-msgstr "Save reply"
 
 #. js-lingui-explicit-id
 #: src/lib/Admin.svelte
@@ -2760,17 +2616,17 @@ msgstr "Save settings"
 
 #. js-lingui-explicit-id
 #: src/lib/ExportPreferences.svelte
-#: src/lib/pdf/AnnotationSync.svelte
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
 msgid "Saved"
 msgstr "Saved"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/AnnotationSync.svelte
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
 msgid "Saving annotation…"
 msgstr "Saving annotation…"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/AnnotationSync.svelte
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
 msgid "Saving reply…"
 msgstr "Saving reply…"
 
@@ -2801,11 +2657,6 @@ msgid "Search Discovery"
 msgstr "Search Discovery"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Search document"
-msgstr "Search document"
-
-#. js-lingui-explicit-id
 #: src/lib/Discovery.svelte
 msgid "Search failed"
 msgstr "Search failed"
@@ -2814,11 +2665,6 @@ msgstr "Search failed"
 #: src/lib/Discovery.svelte
 msgid "Search field"
 msgstr "Search field"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Search in document"
-msgstr "Search in document"
 
 #. js-lingui-explicit-id
 #: src/lib/Dashboard.svelte
@@ -2957,11 +2803,6 @@ msgid "Similar title"
 msgstr "Similar title"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Single page"
-msgstr "Single page"
-
-#. js-lingui-explicit-id
 #: src/lib/Discovery.svelte
 msgid "Sort"
 msgstr "Sort"
@@ -2991,11 +2832,6 @@ msgstr "State"
 #: src/lib/Admin.svelte
 msgid "Status"
 msgstr "Status"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/AnnotationSync.svelte
-msgid "Strike out"
-msgstr "Strike out"
 
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
@@ -3091,11 +2927,6 @@ msgid "Target type"
 msgstr "Target type"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/AnnotationSync.svelte
-msgid "Text"
-msgstr "Text"
-
-#. js-lingui-explicit-id
 #: src/lib/Tools.svelte
 msgid "The match criteria changed. Start a new check to refresh these results."
 msgstr "The match criteria changed. Start a new check to refresh these results."
@@ -3134,11 +2965,6 @@ msgid "To year"
 msgstr "To year"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Toggle page thumbnails"
-msgstr "Toggle page thumbnails"
-
-#. js-lingui-explicit-id
 #: src/lib/Account.svelte
 msgid "Token name"
 msgstr "Token name"
@@ -3153,11 +2979,6 @@ msgstr "Tools"
 #: src/lib/Library.svelte
 msgid "Try a different Library Search."
 msgstr "Try a different Library Search."
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Two-page spread"
-msgstr "Two-page spread"
 
 #. js-lingui-explicit-id
 #: src/lib/ItemWorkspace.svelte
@@ -3205,11 +3026,6 @@ msgid "Unable to discard Import"
 msgstr "Unable to discard Import"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/HeadlessPdfViewer.svelte
-msgid "Unable to initialize the PDF engine."
-msgstr "Unable to initialize the PDF engine."
-
-#. js-lingui-explicit-id
 #: src/lib/Projects.svelte
 msgid "Unable to join Project"
 msgstr "Unable to join Project"
@@ -3220,13 +3036,12 @@ msgid "Unable to load administration."
 msgstr "Unable to load administration."
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/AnnotationSync.svelte
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
 msgid "Unable to load annotations"
 msgstr "Unable to load annotations"
 
 #. js-lingui-explicit-id
 #: src/lib/ItemWorkspace.svelte
-#: src/lib/PdfWorkspace.svelte
 msgid "Unable to load annotations."
 msgstr "Unable to load annotations."
 
@@ -3246,11 +3061,6 @@ msgid "Unable to load the dashboard."
 msgstr "Unable to load the dashboard."
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/HeadlessPdfViewer.svelte
-msgid "Unable to load the document."
-msgstr "Unable to load the document."
-
-#. js-lingui-explicit-id
 #: src/lib/Library.svelte
 msgid "Unable to load the Library."
 msgstr "Unable to load the Library."
@@ -3266,6 +3076,7 @@ msgid "Unable to open this Item section."
 msgstr "Unable to open this Item section."
 
 #. js-lingui-explicit-id
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
 #: src/lib/PdfWorkspace.svelte
 msgid "Unable to open this PDF."
 msgstr "Unable to open this PDF."
@@ -3297,14 +3108,8 @@ msgstr "Unable to sign in"
 
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/pdf/AnnotationSync.svelte
 msgid "Underline"
 msgstr "Underline"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Undo"
-msgstr "Undo"
 
 #. js-lingui-explicit-id
 #: src/lib/Admin.svelte
@@ -3487,11 +3292,6 @@ msgid "Volume / Issue"
 msgstr "Volume / Issue"
 
 #. js-lingui-explicit-id
-#: src/lib/pdf/AnnotationSync.svelte
-msgid "Width"
-msgstr "Width"
-
-#. js-lingui-explicit-id
 #: src/lib/Admin.svelte
 msgid "Without PDF"
 msgstr "Without PDF"
@@ -3513,11 +3313,6 @@ msgid "Workspace"
 msgstr "Workspace"
 
 #. js-lingui-explicit-id
-#: src/lib/PdfWorkspace.svelte
-msgid "Write a reply"
-msgstr "Write a reply"
-
-#. js-lingui-explicit-id
 #: src/lib/ExportPreferences.svelte
 #: src/lib/Library.svelte
 msgid "Year"
@@ -3532,13 +3327,3 @@ msgstr "Your library is empty. Import a paper to begin."
 #: src/lib/Projects.svelte
 msgid "Your Projects"
 msgstr "Your Projects"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Zoom in"
-msgstr "Zoom in"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/PdfReaderToolbar.svelte
-msgid "Zoom out"
-msgstr "Zoom out"
