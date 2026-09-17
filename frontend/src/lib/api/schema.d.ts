@@ -6057,6 +6057,9 @@ export interface operations {
 				};
 				content: {
 					'text/plain': string;
+					'application/x-bibtex': string;
+					'application/x-research-info-systems': string;
+					'application/x-endnote-refer': string;
 				};
 			};
 			/** @description Validation Error */
@@ -6103,6 +6106,9 @@ export interface operations {
 				};
 				content: {
 					'text/plain': string;
+					'application/x-bibtex': string;
+					'application/x-research-info-systems': string;
+					'application/x-endnote-refer': string;
 				};
 			};
 			/** @description Validation Error */
@@ -6137,6 +6143,7 @@ export interface operations {
 				};
 				content: {
 					'text/plain': string;
+					'text/html': string;
 				};
 			};
 			/** @description Validation Error */
@@ -6241,6 +6248,9 @@ export interface operations {
 				};
 				content: {
 					'image/png': string;
+					'image/jpeg': string;
+					'image/webp': string;
+					'image/gif': string;
 				};
 			};
 			/** @description Validation Error */
@@ -7083,6 +7093,9 @@ export interface operations {
 				};
 				content: {
 					'text/plain': string;
+					'application/x-bibtex': string;
+					'application/x-research-info-systems': string;
+					'application/x-endnote-refer': string;
 				};
 			};
 			/** @description Validation Error */
@@ -7148,6 +7161,9 @@ export interface operations {
 				};
 				content: {
 					'text/plain': string;
+					'application/x-bibtex': string;
+					'application/x-research-info-systems': string;
+					'application/x-endnote-refer': string;
 				};
 			};
 			/** @description Validation Error */

@@ -47,3 +47,43 @@ def test_openapi_contract_has_no_untyped_endpoints() -> None:
             f"  {method} {path} ({code}): {reason}" for path, method, code, reason in untyped
         )
     )
+
+
+def test_openapi_media_type_contracts() -> None:
+    """Verify that multi-content-type endpoints expose all runtime media types in OpenAPI."""
+    paths = create_app().openapi().get("paths", {})
+
+    bib_expected = {
+        "text/plain",
+        "application/x-bibtex",
+        "application/x-research-info-systems",
+        "application/x-endnote-refer",
+    }
+    for bib_path, method in [
+        ("/api/v1/items/{item_id}/bibliography", "get"),
+        ("/api/v1/items/{item_id}/bibliography/content", "get"),
+        ("/api/v1/items/bibliography", "post"),
+        ("/api/v1/bibliography", "get"),
+    ]:
+        content = paths[bib_path][method]["responses"]["200"]["content"]
+        assert set(content.keys()) == bib_expected, f"Mismatched media types in {bib_path}"
+
+    citation_content = paths["/api/v1/items/{item_id}/citation/content"]["get"]["responses"]["200"][
+        "content"
+    ]
+    assert set(citation_content.keys()) == {"text/plain", "text/html"}
+
+    thumbnail_content = paths["/api/v1/items/{item_id}/thumbnail"]["get"]["responses"]["200"][
+        "content"
+    ]
+    assert set(thumbnail_content.keys()) == {
+        "image/png",
+        "image/jpeg",
+        "image/webp",
+        "image/gif",
+    }
+
+    attachment_content = paths["/api/v1/items/{item_id}/attachments/{attachment_id}/content"][
+        "get"
+    ]["responses"]["200"]["content"]
+    assert set(attachment_content.keys()) == {"application/octet-stream"}

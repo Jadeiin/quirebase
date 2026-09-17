@@ -828,3 +828,78 @@ async def test_item_edit_uses_atomic_optimistic_lock(async_db, async_session_fac
     refreshed = await db.get(Item, item_id)
     assert refreshed is not None
     assert refreshed.title == "First update"
+
+
+@pytest.mark.anyio
+async def test_content_media_types_at_runtime(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    item_id = item.id
+    store = get_object_store()
+
+    try:
+        # 1. Attachment download consistently returns application/octet-stream
+        att_key = "attachments/test.pdf"
+        await store.put(att_key, b"%PDF-1.4 test")
+        attachment = Attachment(
+            id=str(uuid4()),
+            item_id=item_id,
+            object_key=att_key,
+            original_name="test.pdf",
+            mime_type="application/pdf",
+            size=13,
+            role=None,
+            created_by=item.created_by,
+        )
+        db.add(attachment)
+        await db.flush()
+
+        att_resp = await client.get(f"/api/v1/items/{item_id}/attachments/{attachment.id}/content")
+        assert att_resp.status_code == 200
+        assert att_resp.headers["content-type"] == "application/octet-stream"
+        assert 'filename="test.pdf"' in att_resp.headers["content-disposition"]
+
+        # 2. Citation text returns text/plain or text/html based on output param
+        cite_text = await client.get(f"/api/v1/items/{item_id}/citation/content?output=text")
+        assert cite_text.status_code == 200
+        assert "text/plain" in cite_text.headers["content-type"]
+
+        cite_html = await client.get(f"/api/v1/items/{item_id}/citation/content?output=html")
+        assert cite_html.status_code == 200
+        assert "text/html" in cite_html.headers["content-type"]
+
+        # 3. Bibliography returns application/x-bibtex or application/x-research-info-systems
+        bib_resp = await client.get(f"/api/v1/items/{item_id}/bibliography?file_format=bibtex")
+        assert bib_resp.status_code == 200
+        assert "application/x-bibtex" in bib_resp.headers["content-type"]
+
+        ris_resp = await client.get(f"/api/v1/items/{item_id}/bibliography?file_format=ris")
+        assert ris_resp.status_code == 200
+        assert "application/x-research-info-systems" in ris_resp.headers["content-type"]
+
+        # 4. Graphical abstract thumbnail returns its image media type (e.g. image/jpeg)
+        ga_key = "attachments/ga.jpg"
+        await store.put(ga_key, b"\xff\xd8\xff test")
+        ga_attachment = Attachment(
+            id=str(uuid4()),
+            item_id=item_id,
+            object_key=ga_key,
+            original_name="abstract.jpg",
+            mime_type="image/jpeg",
+            size=11,
+            role=AttachmentRole.graphical_abstract,
+            created_by=item.created_by,
+        )
+        db.add(ga_attachment)
+        await db.flush()
+
+        thumb_resp = await client.get(f"/api/v1/items/{item_id}/thumbnail")
+        assert thumb_resp.status_code == 200
+        assert thumb_resp.headers["content-type"] == "image/jpeg"
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()

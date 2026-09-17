@@ -287,12 +287,12 @@ async def upload_remote_item_attachment(
 async def download_item_attachment(
     item_id: str, attachment_id: str, user: ApiUser, db: Database
 ) -> StreamingResponse:
-    response, original_name, media_type = await get_attachment_file(
+    response, original_name, _media_type = await get_attachment_file(
         db, user, item_id, attachment_id
     )
     return StreamingResponse(
         response.body,
-        media_type=media_type,
+        media_type="application/octet-stream",
         headers={"Content-Disposition": content_disposition(original_name)},
     )
 

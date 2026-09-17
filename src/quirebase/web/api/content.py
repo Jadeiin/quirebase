@@ -72,16 +72,25 @@ async def ranged_object(request: Request, metadata, filename: str, object_get):
     )
 
 
+BIBLIOGRAPHY_CONTENT_TYPES = {
+    "text/plain": {"schema": {"type": "string"}},
+    "application/x-bibtex": {"schema": {"type": "string"}},
+    "application/x-research-info-systems": {"schema": {"type": "string"}},
+    "application/x-endnote-refer": {"schema": {"type": "string"}},
+}
+
+THUMBNAIL_CONTENT_TYPES = {
+    "image/png": {"schema": {"type": "string", "format": "binary"}},
+    "image/jpeg": {"schema": {"type": "string", "format": "binary"}},
+    "image/webp": {"schema": {"type": "string", "format": "binary"}},
+    "image/gif": {"schema": {"type": "string", "format": "binary"}},
+}
+
+
 @router.get(
     "/items/{item_id}/bibliography",
     response_class=Response,
-    responses={
-        200: {
-            "content": {
-                "text/plain": {"schema": {"type": "string"}},
-            }
-        }
-    },
+    responses={200: {"content": BIBLIOGRAPHY_CONTENT_TYPES}},
 )
 async def export_item_bibliography(
     item_id: str,
@@ -135,13 +144,7 @@ async def export_item_bibliography(
 @router.get(
     "/items/{item_id}/bibliography/content",
     response_class=Response,
-    responses={
-        200: {
-            "content": {
-                "text/plain": {"schema": {"type": "string"}},
-            }
-        }
-    },
+    responses={200: {"content": BIBLIOGRAPHY_CONTENT_TYPES}},
 )
 async def copy_citation(
     item_id: str,
@@ -195,6 +198,7 @@ async def copy_citation(
         200: {
             "content": {
                 "text/plain": {"schema": {"type": "string"}},
+                "text/html": {"schema": {"type": "string"}},
             }
         }
     },
@@ -270,13 +274,7 @@ async def pdf_thumbnail(
 @router.get(
     "/items/{item_id}/thumbnail",
     response_class=StreamingResponse,
-    responses={
-        200: {
-            "content": {
-                "image/png": {"schema": {"type": "string", "format": "binary"}},
-            }
-        }
-    },
+    responses={200: {"content": THUMBNAIL_CONTENT_TYPES}},
 )
 async def item_thumbnail(
     item_id: str,

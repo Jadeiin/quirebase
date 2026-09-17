@@ -29,6 +29,7 @@ from quirebase.library import (
 )
 from quirebase.operations.settings import get_effective_settings_model
 from quirebase.programmatic import OkView, WriteResult, item_search_view
+from quirebase.web.api.content import BIBLIOGRAPHY_CONTENT_TYPES
 from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.schemas import (
     BibliographyExportRequest,
@@ -114,13 +115,7 @@ def _bibliography_options(data: BibliographyExportRequest) -> BibliographyExport
 @router.post(
     "/items/bibliography",
     response_class=Response,
-    responses={
-        200: {
-            "content": {
-                "text/plain": {"schema": {"type": "string"}},
-            }
-        }
-    },
+    responses={200: {"content": BIBLIOGRAPHY_CONTENT_TYPES}},
 )
 async def export_item_selection(
     data: BibliographyExportRequest, user: ApiUser, db: Database
@@ -172,13 +167,7 @@ async def download_item_selection(
 @router.get(
     "/bibliography",
     response_class=Response,
-    responses={
-        200: {
-            "content": {
-                "text/plain": {"schema": {"type": "string"}},
-            }
-        }
-    },
+    responses={200: {"content": BIBLIOGRAPHY_CONTENT_TYPES}},
 )
 async def export_library_bibliography(
     user: ApiUser, db: Database, file_format: str, style: str = "apa"
