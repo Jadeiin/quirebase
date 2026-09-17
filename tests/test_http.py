@@ -111,6 +111,13 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         assert content.headers["etag"].endswith('"')
         assert not content.headers["etag"].startswith('""')
 
+        empty_range = await client.get(
+            f"/api/v1/items/{item.id}/revisions/{revision.id}/content",
+            headers={"Range": "bytes=-"},
+        )
+        assert empty_range.status_code == 416
+        assert empty_range.headers["content-range"].startswith("bytes */")
+
         created = await client.post(
             f"/api/v1/items/{item.id}/annotations",
             headers={"X-CSRF-Token": "test-csrf"},

@@ -51,6 +51,8 @@ async def ranged_object(request: Request, metadata, filename: str, object_get):
     if not match:
         raise HTTPException(416, headers={"Content-Range": f"bytes */{size}"})
     start_text, end_text = match.groups()
+    if not start_text and not end_text:
+        raise HTTPException(416, headers={"Content-Range": f"bytes */{size}"})
     if not start_text:
         length = int(end_text)
         start, end = max(0, size - length), size - 1
