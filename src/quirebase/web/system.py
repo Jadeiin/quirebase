@@ -10,13 +10,14 @@ from quirebase.core.database import get_db
 from quirebase.models import User
 from quirebase.operations import check_health, get_system_metrics
 from quirebase.web.api.auth import current_api_user
+from quirebase.web.api.schemas import HealthView
 
 router = APIRouter()
 ApiUser = Annotated[User, Depends(current_api_user)]
 Database = Annotated[AsyncSession, Depends(get_db)]
 
 
-@router.get("/healthz")
+@router.get("/healthz", response_model=HealthView)
 async def healthz():
     return check_health()
 

@@ -6,60 +6,17 @@
 	import RichText from '$lib/design/RichText.svelte';
 	import { domainLabel } from '$lib/domain-labels';
 	import { msg, t, type MessageKey } from '$lib/i18n';
+	import type { components } from '$lib/api/schema';
 
-	type Overview = {
-		user_count: number;
-		pending_invitation_count: number;
-		failed_workflows: unknown[];
-		storage: { items_count: number; total_disk_bytes: number };
-		recent_events: AuditEvent[];
-	};
-	type User = { id: string; username: string; role: string; active: boolean; created_at: string };
-	type Users = {
-		users: User[];
-		total: number;
-		page: number;
-		per_page: number;
-		invitations: Array<{
-			id: string;
-			username: string;
-			role: string;
-			expires_at: string;
-			accepted_at: string | null;
-		}>;
-	};
-	type Project = {
-		id: string;
-		name: string;
-		description: string;
-		state: string;
-		visibility: string;
-		creator: { username: string };
-		member_count: number;
-		item_count: number;
-	};
-	type AuditEvent = {
-		id: string;
-		action: string;
-		target_type: string;
-		target_id?: string | null;
-		actor_id?: string | null;
-		detail?: unknown;
-		created_at: string;
-	};
-	type Workflow = {
-		id?: string;
-		workflow_id?: string;
-		state: string;
-		name?: string;
-		created_at?: string;
-		error?: string | null;
-	};
-	type Settings = Record<string, string | number>;
-	type CreatedInvitation = {
-		token: string;
-		accept_path: string;
-	};
+	type Overview = components['schemas']['AdminOverviewView'];
+	type User = components['schemas']['AdminUserView'];
+	type Users = components['schemas']['AdminUsersView'];
+	type Project = components['schemas']['AdminProjectItemView'];
+	type AuditEvent = components['schemas']['AdminAuditEventView'];
+	type Workflow = components['schemas']['WorkflowSummaryView'];
+	type Settings = components['schemas']['AdminSettingsView'];
+	type CreatedInvitation = components['schemas']['AdminInvitationCreatedView'];
+
 	type AdminSection =
 		| 'overview'
 		| 'users'
@@ -96,7 +53,7 @@
 	function sectionPath(key: string) {
 		return key === 'overview' ? ('/admin' as const) : (`/admin/${key}` as const);
 	}
-	const settingFields = [
+	const settingFields: ReadonlyArray<readonly [keyof Settings, MessageKey]> = [
 		['metadata_contact_email', msg('Metadata contact email')],
 		['ncbi_api_key', msg('NCBI API key')],
 		['openalex_api_key', msg('OpenAlex API key')],
@@ -107,6 +64,7 @@
 		['max_attachment_bytes', msg('Maximum attachment size in bytes')],
 		['export_ttl_hours', msg('Export lifetime in hours')]
 	] as const;
+
 	const maintenanceOperations = [
 		['reindex_all', msg('Reindex all Items')],
 		['check_objects', msg('Check stored objects')],
@@ -625,11 +583,9 @@
 		{@const workflows = (data.data as { workflows: Workflow[] }).workflows}
 		<section class="list-panel card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 			<h2>{$t('Durable workflows')}</h2>
-			{#each workflows as workflow (workflow.id ?? workflow.workflow_id ?? workflow)}<div
-					class="item-row"
-				>
-					<strong>{workflow.name ?? workflow.id ?? workflow.workflow_id ?? $t('Workflow')}</strong
-					><span class="text-surface-600"
+			{#each workflows as workflow (workflow.id)}<div class="item-row">
+					<strong>{workflow.name || workflow.id || $t('Workflow')}</strong><span
+						class="text-surface-600"
 						>{$t(domainLabel(workflow.state))}{workflow.error ? ` · ${workflow.error}` : ''}</span
 					>
 				</div>{:else}<p class="text-surface-600">{$t('No workflows.')}</p>{/each}
@@ -676,16 +632,13 @@
 					>{/each}
 			</div>
 			<h3>{$t('Recent operations')}</h3>
-			{#each maintenance.workflows as workflow (workflow.id ?? workflow.workflow_id ?? workflow)}<div
-					class="item-row"
-				>
-					<strong>{workflow.name ?? workflow.id ?? $t('Operation')}</strong><span
+			{#each maintenance.workflows as workflow (workflow.id)}<div class="item-row">
+					<strong>{workflow.name || workflow.id || $t('Operation')}</strong><span
 						class="text-surface-600">{$t(domainLabel(workflow.state))}</span
 					>
-					{#if workflow.state === 'succeeded' && (workflow.name ?? '').includes('backup') && (workflow.id || workflow.workflow_id)}<button
+					{#if workflow.state === 'succeeded' && (workflow.name ?? '').includes('backup') && workflow.id}<button
 							class="btn preset-tonal-surface font-semibold"
-							onclick={() => downloadBackup((workflow.id ?? workflow.workflow_id)!)}
-							>{$t('Download backup')}</button
+							onclick={() => downloadBackup(workflow.id)}>{$t('Download backup')}</button
 						>{/if}
 				</div>{:else}<p class="text-surface-600">{$t('No maintenance workflows.')}</p>{/each}
 		</section>

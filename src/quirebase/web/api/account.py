@@ -19,10 +19,12 @@ from quirebase.programmatic import OkView
 from quirebase.web.api.auth import require_same_origin
 from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.schemas import (
+    AccountSummaryView,
     ApiTokenCreateRequest,
     ApiTokenGrantView,
     ApiTokenView,
     InvitationAcceptRequest,
+    InvitationDetailsView,
     LocaleRequest,
     LoginSessionView,
     PasswordChangeRequest,
@@ -32,7 +34,7 @@ from quirebase.web.locale import normalize_locale
 router = APIRouter(prefix="/api/v1", tags=["HTTP API"])
 
 
-@router.get("/invitations/{token}")
+@router.get("/invitations/{token}", response_model=InvitationDetailsView)
 async def invitation_details(token: str, db: Database):
     invitation = await get_valid_invitation(db, token)
     if invitation is None:
@@ -53,8 +55,9 @@ async def accept_user_invitation(
     return OkView()
 
 
-@router.get("/account")
+@router.get("/account", response_model=AccountSummaryView)
 async def account_summary(request: Request, user: ApiUser, db: Database):
+
     raw_session = request.cookies.get(get_settings().session_cookie, "")
     current = await get_login_session_by_token(db, raw_session)
     sessions = await list_user_sessions(db, user.id)

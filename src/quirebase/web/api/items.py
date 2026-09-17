@@ -34,11 +34,19 @@ from quirebase.library import (
 )
 from quirebase.models import AttachmentRole
 from quirebase.operations.settings import get_effective_setting, get_effective_settings_model
-from quirebase.programmatic import OkView, WriteResult, item_search_view
+from quirebase.programmatic import (
+    AuthorSuggestionView,
+    OkView,
+    WriteResult,
+    item_search_view,
+)
 from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.schemas import (
     DeleteConfirmationRequest,
+    ItemOrganizeView,
+    ItemWorkspaceView,
     MetadataSyncRequest,
+    PdfViewerView,
     RemoteAttachmentRequest,
     RemoteRevisionRequest,
 )
@@ -49,7 +57,7 @@ from quirebase.web.uploads import upload_chunks
 router = APIRouter(prefix="/api/v1", tags=["HTTP API"])
 
 
-@router.get("/items/{item_id}/workspace")
+@router.get("/items/{item_id}/workspace", response_model=ItemWorkspaceView)
 async def item_workspace(item_id: str, user: ApiUser, db: Database):
     workspace = await open_item_workspace(db, user, item_id, WorkspaceSection.summary)
     if not isinstance(workspace, SummaryWorkspace):  # pragma: no cover
@@ -84,8 +92,9 @@ async def item_workspace(item_id: str, user: ApiUser, db: Database):
     }
 
 
-@router.get("/items/{item_id}/organize")
+@router.get("/items/{item_id}/organize", response_model=ItemOrganizeView)
 async def item_organize_workspace(item_id: str, user: ApiUser, db: Database):
+
     workspace = await open_item_workspace(db, user, item_id, WorkspaceSection.organize)
     if not isinstance(workspace, OrganizeWorkspace):  # pragma: no cover
         raise TypeError("item organize workspace mismatch")
@@ -167,13 +176,23 @@ async def regenerate_tag_recommendations(item_id: str, user: ApiUser, db: Databa
     return WriteResult(id=workflow_id)
 
 
-@router.get("/authors")
+@router.get("/authors", response_model=list[AuthorSuggestionView])
 async def suggest_authors(user: ApiUser, db: Database, query: str = ""):
     del user
     return await search_authors_typeahead(db, query=query)
 
 
-@router.get("/items/{item_id}/archive")
+@router.get(
+    "/items/{item_id}/archive",
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "content": {
+                "application/zip": {"schema": {"type": "string", "format": "binary"}},
+            }
+        }
+    },
+)
 async def download_item_archive(
     item_id: str,
     user: ApiUser,
@@ -254,7 +273,17 @@ async def upload_remote_item_attachment(
     return WriteResult(id=workflow.workflow_id)
 
 
-@router.get("/items/{item_id}/attachments/{attachment_id}/content")
+@router.get(
+    "/items/{item_id}/attachments/{attachment_id}/content",
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "content": {
+                "application/octet-stream": {"schema": {"type": "string", "format": "binary"}},
+            }
+        }
+    },
+)
 async def download_item_attachment(
     item_id: str, attachment_id: str, user: ApiUser, db: Database
 ) -> StreamingResponse:
@@ -318,7 +347,7 @@ async def delete_item_pdf(item_id: str, revision_id: str, user: ApiUser, db: Dat
     return OkView()
 
 
-@router.get("/items/{item_id}/revisions/{revision_id}/viewer")
+@router.get("/items/{item_id}/revisions/{revision_id}/viewer", response_model=PdfViewerView)
 async def pdf_viewer_configuration(item_id: str, revision_id: str, user: ApiUser, db: Database):
     data = await get_pdf_viewer_data(db, user, item_id, revision_id)
     revision = data["revision"]

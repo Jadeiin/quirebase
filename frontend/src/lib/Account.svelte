@@ -5,17 +5,9 @@
 	import { domainLabel } from '$lib/domain-labels';
 	import ExportPreferences from '$lib/ExportPreferences.svelte';
 	import { activateLocale, msg, t, type MessageKey } from '$lib/i18n';
+	import type { components } from '$lib/api/schema';
 
-	type AccountView = {
-		user: { id: string; username: string; role: string };
-		sessions: Array<{ id: string; current: boolean; created_at: string; expires_at: string }>;
-		api_tokens: Array<{
-			id: string;
-			name: string;
-			status: string;
-			expires_at: string;
-		}>;
-	};
+	type AccountView = components['schemas']['AccountSummaryView'];
 
 	let tokenName = $state('');
 	let tokenDays = $state(30);

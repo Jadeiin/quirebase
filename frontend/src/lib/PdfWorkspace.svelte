@@ -3,10 +3,11 @@
 	import { Menu, Portal } from '@skeletonlabs/skeleton-svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
-	import { apiRequest, type ItemSummary } from '$lib/api/client';
+	import { apiRequest } from '$lib/api/client';
 	import Icon from '$lib/design/Icon.svelte';
 	import RichText from '$lib/design/RichText.svelte';
 	import { t } from '$lib/i18n';
+	import type { components } from '$lib/api/schema';
 	import EmbeddedPdfViewer from '$lib/pdf/EmbeddedPdfViewer.svelte';
 
 	let { itemId, revisionId } = $props<{ itemId: string; revisionId: string }>();
@@ -22,20 +23,7 @@
 		if (exportProjectId) parameters.set('project_id', exportProjectId);
 		return `/api/v1/items/${itemId}/revisions/${revisionId}/export?${parameters}`;
 	});
-	type ViewerView = {
-		item: ItemSummary;
-		editable: boolean;
-		annotation_author: string;
-		revision: {
-			id: string;
-			original_name: string;
-			page_count: number | null;
-			processing_state: string;
-			page_geometry: number[][];
-			content_url: string;
-		};
-		projects: Array<{ id: string; name: string }>;
-	};
+	type ViewerView = components['schemas']['PdfViewerView'];
 	const viewer = createQuery(() => ({
 		queryKey: ['pdf-viewer', itemId, revisionId],
 		queryFn: () => apiRequest<ViewerView>(`/items/${itemId}/revisions/${revisionId}/viewer`)

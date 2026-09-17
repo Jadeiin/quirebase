@@ -1,18 +1,15 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { apiRequest, type ItemSummary } from '$lib/api/client';
+	import { apiRequest } from '$lib/api/client';
 	import Icon from '$lib/design/Icon.svelte';
 	import RichText from '$lib/design/RichText.svelte';
 	import { domainLabel } from '$lib/domain-labels';
 	import { t } from '$lib/i18n';
+	import type { components } from '$lib/api/schema';
 
-	type DashboardView = {
-		new_items: ItemSummary[];
-		recent_items: Array<{ item: ItemSummary; last_read_at: string }>;
-		projects: Array<{ id: string; name: string; visibility: string }>;
-		session_count: number;
-	};
+	type DashboardView = components['schemas']['DashboardView'];
+
 	const dashboard = createQuery(() => ({
 		queryKey: ['dashboard'],
 		queryFn: () => apiRequest<DashboardView>('/dashboard')

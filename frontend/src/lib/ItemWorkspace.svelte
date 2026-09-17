@@ -21,45 +21,12 @@
 		metadata: components['schemas']['ItemMetadata-Input'];
 		abstract_html: string | null;
 	};
-	type FileRow = {
-		id: string;
-		kind: 'revision' | 'attachment';
-		original_name: string;
-		mime_type: string;
-		size: number;
-		created_at: string;
-		page_count?: number | null;
-		processing_state?: string | null;
-	};
-	type FilesView = { item_id: string; files: FileRow[] };
-	type OrganizeView = {
-		item: ItemSummary;
-		permissions: { edit: boolean };
-		tags: Array<{ id: string; name: string }>;
-		projects: Array<{ id: string; name: string; role: string; assigned: boolean }>;
-		tag_matrix: {
-			groups: Array<{
-				letter: string;
-				tags: Array<{ id: string; name: string }>;
-				names: string[];
-			}>;
-			assigned_ids: string[];
-			recommended_ids: string[];
-			suggested_names: string[];
-			suggested_single_words: string[];
-			suggested_phrases: string[];
-			recommendation_state: string;
-			recommendation_error: string | null;
-		};
-	};
-	type Message = {
-		id: string;
-		author_id: string;
-		author_username: string;
-		body: string;
-		created_at: string;
-	};
+	type FileRow = components['schemas']['FileView'];
+	type FilesView = components['schemas']['DocumentListView'];
+	type OrganizeView = components['schemas']['ItemOrganizeView'];
+	type Message = components['schemas']['DiscussionMessageView'];
 	type AnnotationRow = CanonicalAnnotation & { revision_name: string };
+
 	type ItemSection = 'overview' | 'metadata' | 'files' | 'organize' | 'annotations' | 'discussion';
 
 	let { itemId, section } = $props<{ itemId: string; section: ItemSection }>();

@@ -34,8 +34,12 @@ from quirebase.web.api.schemas import (
     BibliographyExportRequest,
     BulkActionRequest,
     CitationStyleCreateRequest,
+    DashboardView,
     DocumentArchiveRequest,
+    DuplicatesReviewView,
     IdentifierImportRequest,
+    ImportBatchRetryView,
+    ImportBatchView,
     NameRequest,
     TagMergeRequest,
 )
@@ -58,8 +62,9 @@ def _import_batch_view(batch, records: list[dict], errors: list[dict]) -> dict:
     }
 
 
-@router.get("/dashboard")
+@router.get("/dashboard", response_model=DashboardView)
 async def dashboard(user: ApiUser, db: Database):
+
     data = await get_dashboard_data(db, user)
     return {
         "new_items": [item_search_view(item) for item in data["new_items"]],
@@ -106,7 +111,17 @@ def _bibliography_options(data: BibliographyExportRequest) -> BibliographyExport
     )
 
 
-@router.post("/items/bibliography")
+@router.post(
+    "/items/bibliography",
+    response_class=Response,
+    responses={
+        200: {
+            "content": {
+                "text/plain": {"schema": {"type": "string"}},
+            }
+        }
+    },
+)
 async def export_item_selection(
     data: BibliographyExportRequest, user: ApiUser, db: Database
 ) -> Response:
@@ -125,7 +140,17 @@ async def export_item_selection(
     )
 
 
-@router.post("/items/documents/archive")
+@router.post(
+    "/items/documents/archive",
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "content": {
+                "application/zip": {"schema": {"type": "string", "format": "binary"}},
+            }
+        }
+    },
+)
 async def download_item_selection(
     data: DocumentArchiveRequest, user: ApiUser, db: Database
 ) -> StreamingResponse:
@@ -144,7 +169,17 @@ async def download_item_selection(
     )
 
 
-@router.get("/bibliography")
+@router.get(
+    "/bibliography",
+    response_class=Response,
+    responses={
+        200: {
+            "content": {
+                "text/plain": {"schema": {"type": "string"}},
+            }
+        }
+    },
+)
 async def export_library_bibliography(
     user: ApiUser, db: Database, file_format: str, style: str = "apa"
 ) -> Response:
@@ -158,7 +193,11 @@ async def export_library_bibliography(
     )
 
 
-@router.post("/imports/bibliography", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/imports/bibliography",
+    response_model=ImportBatchView,
+    status_code=status.HTTP_201_CREATED,
+)
 async def stage_bibliography_import(
     user: ApiUser,
     db: Database,
@@ -169,7 +208,11 @@ async def stage_bibliography_import(
     return _import_batch_view(*(await stage_import_batch(db, user, raw, file_format)))
 
 
-@router.post("/imports/identifier", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/imports/identifier",
+    response_model=ImportBatchView,
+    status_code=status.HTTP_201_CREATED,
+)
 async def stage_identifier_import(data: IdentifierImportRequest, user: ApiUser, db: Database):
     result = await stage_identifier_import_batch(
         db,
@@ -181,7 +224,11 @@ async def stage_identifier_import(data: IdentifierImportRequest, user: ApiUser, 
     return _import_batch_view(*result)
 
 
-@router.post("/imports/pdfs", status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/imports/pdfs",
+    response_model=ImportBatchView,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def stage_pdf_import(user: ApiUser, db: Database, pdfs: Annotated[list[UploadFile], File()]):
     result = await stage_pdf_import_batch(
         db,
@@ -192,12 +239,12 @@ async def stage_pdf_import(user: ApiUser, db: Database, pdfs: Annotated[list[Upl
     return _import_batch_view(*result)
 
 
-@router.get("/imports/{batch_id}")
+@router.get("/imports/{batch_id}", response_model=ImportBatchView)
 async def import_batch(batch_id: str, user: ApiUser, db: Database):
     return _import_batch_view(*(await get_import_batch_preview(db, user, batch_id)))
 
 
-@router.post("/imports/{batch_id}/retry")
+@router.post("/imports/{batch_id}/retry", response_model=ImportBatchRetryView)
 async def retry_import_batch(batch_id: str, user: ApiUser, db: Database):
     batch = await retry_pdf_import_batch(db, user, batch_id)
     return {"id": batch.id, "status": batch.status, "workflow_id": batch.workflow_id}
@@ -215,7 +262,7 @@ async def discard_staged_import(batch_id: str, user: ApiUser, db: Database) -> O
     return OkView()
 
 
-@router.get("/duplicates")
+@router.get("/duplicates", response_model=DuplicatesReviewView)
 async def duplicate_items(user: ApiUser, db: Database, mode: str = ""):
     return {
         "groups": [

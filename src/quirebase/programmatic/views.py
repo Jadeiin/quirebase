@@ -142,3 +142,40 @@ class DiscussionMessageView(BaseModel):
 class CitationView(BaseModel):
     content: str
     media_type: str
+
+
+class AuthorSuggestionView(BaseModel):
+    id: str
+    last_name: str
+    first_name: str | None = None
+    full_name: str
+
+
+class JoinableProjectView(BaseModel):
+    id: str
+    name: str
+    item_count: int
+    state: str
+    visibility: str
+    description: str = ""
+
+
+class CitationStyleItemView(BaseModel):
+    key: str
+    name: str
+    scope: Literal["builtin", "custom"]
+
+
+class CitationStylesResponseView(BaseModel):
+    styles: list[CitationStyleItemView]
+
+
+class WorkflowStatusView(BaseModel):
+    id: str
+    state: str
+    error: str | None = None
+
+
+class DiscoveryProviderView(BaseModel):
+    id: str
+    name: str

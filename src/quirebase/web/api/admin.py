@@ -32,12 +32,23 @@ from quirebase.programmatic import OkView, WriteResult, item_search_view
 from quirebase.projects import list_projects_for_admin
 from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.schemas import (
+    AdminAuditView,
+    AdminInvitationCreatedView,
+    AdminItemsView,
+    AdminMaintenanceView,
+    AdminOverviewView,
+    AdminProjectsView,
+    AdminSettingsView,
     AdminUserCreateRequest,
+    AdminUsersView,
+    AdminUserView,
+    AdminWorkflowsView,
     InvitationCreateRequest,
     PasswordResetRequest,
     RuntimeSettingsRequest,
     UserRoleRequest,
     UserStatusRequest,
+    WorkflowSummaryView,
 )
 from quirebase.web.api.serialization import enum_value
 
@@ -69,7 +80,7 @@ def _workflow_view(workflow) -> dict:
     return asdict(workflow)
 
 
-@router.get("/overview")
+@router.get("/overview", response_model=AdminOverviewView)
 async def admin_overview(user: AdminUser, db: Database):
     users = await list_users(db, user)
     invitations = await list_invitations(db, user)
@@ -97,7 +108,7 @@ async def admin_overview(user: AdminUser, db: Database):
     }
 
 
-@router.get("/users")
+@router.get("/users", response_model=AdminUsersView)
 async def admin_users(
     user: AdminUser,
     db: Database,
@@ -128,19 +139,19 @@ async def admin_users(
     }
 
 
-@router.post("/users", status_code=status.HTTP_201_CREATED)
+@router.post("/users", response_model=AdminUserView, status_code=status.HTTP_201_CREATED)
 async def admin_create_user(data: AdminUserCreateRequest, user: AdminUser, db: Database):
     return _user_view(await create_user_admin(db, user, data.username, data.password, data.role))
 
 
-@router.put("/users/{user_id}/status")
+@router.put("/users/{user_id}/status", response_model=AdminUserView)
 async def admin_update_user_status(
     user_id: str, data: UserStatusRequest, user: AdminUser, db: Database
 ):
     return _user_view(await update_user_status(db, user, user_id, data.active))
 
 
-@router.put("/users/{user_id}/role")
+@router.put("/users/{user_id}/role", response_model=AdminUserView)
 async def admin_update_user_role(
     user_id: str, data: UserRoleRequest, user: AdminUser, db: Database
 ):
@@ -161,8 +172,11 @@ async def admin_revoke_sessions(user_id: str, user: AdminUser, db: Database) -> 
     return OkView()
 
 
-@router.post("/invitations", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/invitations", response_model=AdminInvitationCreatedView, status_code=status.HTTP_201_CREATED
+)
 async def admin_create_invitation(data: InvitationCreateRequest, user: AdminUser, db: Database):
+
     invitation, token = await create_invitation(db, user, data.username, data.role)
     return {
         "id": invitation.id,
@@ -174,7 +188,7 @@ async def admin_create_invitation(data: InvitationCreateRequest, user: AdminUser
     }
 
 
-@router.get("/projects")
+@router.get("/projects", response_model=AdminProjectsView)
 async def admin_projects(
     user: AdminUser,
     db: Database,
@@ -212,7 +226,7 @@ async def admin_projects(
     }
 
 
-@router.get("/items")
+@router.get("/items", response_model=AdminItemsView)
 async def admin_items(
     user: AdminUser,
     db: Database,
@@ -238,7 +252,7 @@ async def admin_remove_item(item_id: str, user: AdminUser, db: Database) -> OkVi
     return OkView()
 
 
-@router.get("/audit")
+@router.get("/audit", response_model=AdminAuditView)
 async def admin_audit(
     user: AdminUser,
     db: Database,
@@ -277,7 +291,7 @@ async def admin_audit(
     }
 
 
-@router.get("/workflows")
+@router.get("/workflows", response_model=AdminWorkflowsView)
 async def admin_workflows(user: AdminUser, state: str = ""):
     del user
     normalized = state.strip().casefold()
@@ -291,7 +305,7 @@ async def admin_workflows(user: AdminUser, state: str = ""):
     }
 
 
-@router.get("/settings")
+@router.get("/settings", response_model=AdminSettingsView)
 async def admin_settings(user: AdminUser, db: Database):
     del user
     return await get_runtime_settings(db)
@@ -305,7 +319,7 @@ async def admin_update_settings(
     return OkView()
 
 
-@router.get("/maintenance")
+@router.get("/maintenance", response_model=AdminMaintenanceView)
 async def admin_maintenance(user: AdminUser, db: Database):
     workflows = await durable_operations().list(limit=100)
     return {
@@ -327,13 +341,19 @@ async def run_maintenance(
     return WriteResult(id=await dispatch_maintenance_workflow(db, user, operation))
 
 
-@router.get("/maintenance/backups/{workflow_id}/content")
+@router.get(
+    "/maintenance/backups/{workflow_id}/content",
+    response_class=FileResponse,
+    responses={
+        200: {"content": {"application/zip": {"schema": {"type": "string", "format": "binary"}}}}
+    },
+)
 async def download_backup(workflow_id: str, user: AdminUser, db: Database) -> FileResponse:
     path, filename = await get_backup_artifact(db, user, workflow_id)
     return FileResponse(str(path), media_type="application/zip", filename=filename)
 
 
-@router.get("/workflows/{workflow_id}")
+@router.get("/workflows/{workflow_id}", response_model=WorkflowSummaryView)
 async def workflow_status(workflow_id: str, user: AdminUser):
     del user
     workflow = await durable_operations().get(workflow_id)

@@ -1778,6 +1778,170 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
 	schemas: {
+		/** AccountSummaryView */
+		AccountSummaryView: {
+			user: components['schemas']['SessionUserView'];
+			/** Sessions */
+			sessions: components['schemas']['LoginSessionView'][];
+			/** Api Tokens */
+			api_tokens: components['schemas']['ApiTokenView'][];
+		};
+		/** AdminAuditEventView */
+		AdminAuditEventView: {
+			/** Id */
+			id: string;
+			/** Actor Id */
+			actor_id?: string | null;
+			/** Action */
+			action: string;
+			/** Target Type */
+			target_type: string;
+			/** Target Id */
+			target_id?: string | null;
+			/** Detail */
+			detail?: unknown | null;
+			/**
+			 * Created At
+			 * Format: date-time
+			 */
+			created_at: string;
+		};
+		/** AdminAuditView */
+		AdminAuditView: {
+			/** Events */
+			events: components['schemas']['AdminAuditEventView'][];
+			/** Total */
+			total: number;
+			/** Page */
+			page: number;
+			/** Per Page */
+			per_page: number;
+		};
+		/** AdminInvitationCreatedView */
+		AdminInvitationCreatedView: {
+			/** Id */
+			id: string;
+			/** Username */
+			username: string;
+			/** Role */
+			role: string;
+			/**
+			 * Expires At
+			 * Format: date-time
+			 */
+			expires_at: string;
+			/** Token */
+			token: string;
+			/** Accept Path */
+			accept_path: string;
+		};
+		/** AdminInvitationView */
+		AdminInvitationView: {
+			/** Id */
+			id: string;
+			/** Username */
+			username: string;
+			/** Role */
+			role: string;
+			/**
+			 * Expires At
+			 * Format: date-time
+			 */
+			expires_at: string;
+			/** Accepted At */
+			accepted_at?: string | null;
+		};
+		/** AdminItemsView */
+		AdminItemsView: {
+			/** Items */
+			items: components['schemas']['ItemSearchView'][];
+			/** Total */
+			total: number;
+			/** Page */
+			page: number;
+			/** Per Page */
+			per_page: number;
+			storage: components['schemas']['StorageMetricsView'];
+		};
+		/** AdminMaintenanceView */
+		AdminMaintenanceView: {
+			storage: components['schemas']['StorageMetricsView'];
+			/** Workflows */
+			workflows: components['schemas']['WorkflowSummaryView'][];
+		};
+		/** AdminOverviewView */
+		AdminOverviewView: {
+			/** User Count */
+			user_count: number;
+			/** Pending Invitation Count */
+			pending_invitation_count: number;
+			/** Failed Workflows */
+			failed_workflows: components['schemas']['WorkflowSummaryView'][];
+			storage: components['schemas']['StorageMetricsView'];
+			/** Recent Events */
+			recent_events: components['schemas']['AdminAuditEventView'][];
+		};
+		/** AdminProjectItemView */
+		AdminProjectItemView: {
+			/** Id */
+			id: string;
+			/** Name */
+			name: string;
+			/** Description */
+			description: string;
+			/** State */
+			state: string;
+			/** Visibility */
+			visibility: string;
+			creator: components['schemas']['AdminProjectUserView'];
+			/** Member Count */
+			member_count: number;
+			/** Item Count */
+			item_count: number;
+		};
+		/** AdminProjectUserView */
+		AdminProjectUserView: {
+			/** Id */
+			id: string;
+			/** Username */
+			username: string;
+		};
+		/** AdminProjectsView */
+		AdminProjectsView: {
+			/** Projects */
+			projects: components['schemas']['AdminProjectItemView'][];
+			/** Total */
+			total: number;
+			/** Page */
+			page: number;
+			/** Per Page */
+			per_page: number;
+		};
+		/** AdminSettingsView */
+		AdminSettingsView: {
+			/** Metadata Contact Email */
+			metadata_contact_email: string;
+			/** Ncbi Api Key */
+			ncbi_api_key: string;
+			/** Openalex Api Key */
+			openalex_api_key: string;
+			/** Nasa Ads Token */
+			nasa_ads_token: string;
+			/** Ieee Api Key */
+			ieee_api_key: string;
+			/** Session Days */
+			session_days: number;
+			/** Max Pdf Bytes */
+			max_pdf_bytes: number;
+			/** Max Attachment Bytes */
+			max_attachment_bytes: number;
+			/** Export Ttl Hours */
+			export_ttl_hours: number;
+			/** Database Url */
+			database_url: string;
+			/** Data Dir */
+			data_dir: string;
+		};
 		/** AdminUserCreateRequest */
 		AdminUserCreateRequest: {
 			/** Username */
@@ -1790,6 +1954,40 @@ export interface components {
 			 * @enum {string}
 			 */
 			role: 'member' | 'administrator';
+		};
+		/** AdminUserView */
+		AdminUserView: {
+			/** Id */
+			id: string;
+			/** Username */
+			username: string;
+			/** Role */
+			role: string;
+			/** Active */
+			active: boolean;
+			/**
+			 * Created At
+			 * Format: date-time
+			 */
+			created_at: string;
+		};
+		/** AdminUsersView */
+		AdminUsersView: {
+			/** Users */
+			users: components['schemas']['AdminUserView'][];
+			/** Total */
+			total: number;
+			/** Page */
+			page: number;
+			/** Per Page */
+			per_page: number;
+			/** Invitations */
+			invitations: components['schemas']['AdminInvitationView'][];
+		};
+		/** AdminWorkflowsView */
+		AdminWorkflowsView: {
+			/** Workflows */
+			workflows: components['schemas']['WorkflowSummaryView'][];
 		};
 		/** AnnotationCreate */
 		AnnotationCreate: {
@@ -1821,6 +2019,15 @@ export interface components {
 				| components['schemas']['EllipsePayload']
 				| components['schemas']['LinePayload']
 				| components['schemas']['ArrowPayload'];
+		};
+		/** AnnotationExportCreatedView */
+		AnnotationExportCreatedView: {
+			/** Id */
+			id: string;
+			/** State */
+			state: string;
+			/** Status Url */
+			status_url: string;
 		};
 		/**
 		 * AnnotationKind
@@ -1991,6 +2198,28 @@ export interface components {
 			 */
 			expires_at: string;
 		};
+		/** ApiTokenView */
+		ApiTokenView: {
+			/** Id */
+			id: string;
+			/** Name */
+			name: string;
+			/**
+			 * Status
+			 * @enum {string}
+			 */
+			status: 'active' | 'expired' | 'revoked';
+			/**
+			 * Expires At
+			 * Format: date-time
+			 */
+			expires_at: string;
+			/**
+			 * Created At
+			 * Format: date-time
+			 */
+			created_at: string;
+		};
 		/** ArrowPayload */
 		ArrowPayload: {
 			rect: components['schemas']['Rect'];
@@ -2034,6 +2263,17 @@ export interface components {
 				| 'reverse_open_arrow'
 				| 'reverse_closed_arrow'
 				| 'slash';
+		};
+		/** AuthorSuggestionView */
+		AuthorSuggestionView: {
+			/** Id */
+			id: string;
+			/** Last Name */
+			last_name: string;
+			/** First Name */
+			first_name?: string | null;
+			/** Full Name */
+			full_name: string;
 		};
 		/** BibliographyExportRequest */
 		BibliographyExportRequest: {
@@ -2192,12 +2432,34 @@ export interface components {
 			 */
 			imported: boolean;
 		};
+		/** CitationKeyPreviewView */
+		CitationKeyPreviewView: {
+			/** Key */
+			key: string;
+		};
 		/** CitationStyleCreateRequest */
 		CitationStyleCreateRequest: {
 			/** Name */
 			name: string;
 			/** Csl */
 			csl: string;
+		};
+		/** CitationStyleItemView */
+		CitationStyleItemView: {
+			/** Key */
+			key: string;
+			/** Name */
+			name: string;
+			/**
+			 * Scope
+			 * @enum {string}
+			 */
+			scope: 'builtin' | 'custom';
+		};
+		/** CitationStylesResponseView */
+		CitationStylesResponseView: {
+			/** Styles */
+			styles: components['schemas']['CitationStyleItemView'][];
 		};
 		/** CitationView */
 		CitationView: {
@@ -2242,6 +2504,35 @@ export interface components {
 			name: string;
 			value: components['schemas']['JsonValue-Output'];
 		};
+		/** DashboardProjectView */
+		DashboardProjectView: {
+			/** Id */
+			id: string;
+			/** Name */
+			name: string;
+			/** Visibility */
+			visibility: string;
+		};
+		/** DashboardRecentItemView */
+		DashboardRecentItemView: {
+			item: components['schemas']['ItemSearchView'];
+			/**
+			 * Last Read At
+			 * Format: date-time
+			 */
+			last_read_at: string;
+		};
+		/** DashboardView */
+		DashboardView: {
+			/** New Items */
+			new_items: components['schemas']['ItemSearchView'][];
+			/** Recent Items */
+			recent_items: components['schemas']['DashboardRecentItemView'][];
+			/** Projects */
+			projects: components['schemas']['DashboardProjectView'][];
+			/** Session Count */
+			session_count: number;
+		};
 		/** DeleteConfirmationRequest */
 		DeleteConfirmationRequest: {
 			/** Confirmation */
@@ -2255,6 +2546,13 @@ export interface components {
 			operator: string;
 			/** Term */
 			term: string;
+		};
+		/** DiscoveryProviderView */
+		DiscoveryProviderView: {
+			/** Id */
+			id: string;
+			/** Name */
+			name: string;
 		};
 		/** DiscoverySearchRequest */
 		DiscoverySearchRequest: {
@@ -2330,6 +2628,11 @@ export interface components {
 			item_id: string;
 			/** Files */
 			files: components['schemas']['FileView'][];
+		};
+		/** DuplicatesReviewView */
+		DuplicatesReviewView: {
+			/** Groups */
+			groups: components['schemas']['ItemSearchView'][][];
 		};
 		/** EllipsePayload */
 		EllipsePayload: {
@@ -2418,6 +2721,14 @@ export interface components {
 			/** Detail */
 			detail?: components['schemas']['ValidationError'][];
 		};
+		/** HealthView */
+		HealthView: {
+			/**
+			 * Status
+			 * @default ok
+			 */
+			status: string;
+		};
 		/** IdentifierImportRequest */
 		IdentifierImportRequest: {
 			/** Identifier */
@@ -2427,6 +2738,39 @@ export interface components {
 			 * @default auto
 			 */
 			provider: string;
+		};
+		/** ImportBatchRetryView */
+		ImportBatchRetryView: {
+			/** Id */
+			id: string;
+			/** Status */
+			status: string;
+			/** Workflow Id */
+			workflow_id?: string | null;
+		};
+		/** ImportBatchView */
+		ImportBatchView: {
+			/** Id */
+			id: string;
+			/** File Format */
+			file_format: string;
+			/** Status */
+			status: string;
+			/** Workflow Id */
+			workflow_id?: string | null;
+			/** Records */
+			records: {
+				[key: string]: unknown;
+			}[];
+			/** Errors */
+			errors: {
+				[key: string]: unknown;
+			}[];
+			/**
+			 * Created At
+			 * Format: date-time
+			 */
+			created_at: string;
 		};
 		/** InkPayload */
 		InkPayload: {
@@ -2455,6 +2799,18 @@ export interface components {
 			 * @enum {string}
 			 */
 			role: 'member' | 'administrator';
+		};
+		/** InvitationDetailsView */
+		InvitationDetailsView: {
+			/** Username */
+			username: string;
+			/** Role */
+			role: string;
+			/**
+			 * Expires At
+			 * Format: date-time
+			 */
+			expires_at: string;
 		};
 		/** ItemDetailView */
 		ItemDetailView: {
@@ -2491,6 +2847,26 @@ export interface components {
 			keywords: string | null;
 			/** Urls */
 			urls: string | null;
+		};
+		/** ItemIdentifierView */
+		ItemIdentifierView: {
+			/** Provider */
+			provider: string;
+			/** Value */
+			value: string;
+		};
+		/** ItemLatestRevisionView */
+		ItemLatestRevisionView: {
+			/** Id */
+			id: string;
+			/** Original Name */
+			original_name: string;
+			/** Size */
+			size: number;
+			/** Page Count */
+			page_count?: number | null;
+			/** Processing State */
+			processing_state: string;
 		};
 		/** ItemMetadata */
 		'ItemMetadata-Input': {
@@ -2618,6 +2994,34 @@ export interface components {
 			 */
 			custom_fields: components['schemas']['CustomField-Output'][];
 		};
+		/** ItemOrganizeProjectView */
+		ItemOrganizeProjectView: {
+			/** Id */
+			id: string;
+			/** Name */
+			name: string;
+			/** Role */
+			role: string;
+			/** Assigned */
+			assigned: boolean;
+		};
+		/** ItemOrganizeView */
+		ItemOrganizeView: {
+			item: components['schemas']['ItemSearchView'];
+			permissions: components['schemas']['ItemWorkspacePermissionsView'];
+			/** Tags */
+			tags: components['schemas']['ItemTagView'][];
+			/** Projects */
+			projects: components['schemas']['ItemOrganizeProjectView'][];
+			tag_matrix: components['schemas']['TagMatrixView'];
+		};
+		/** ItemOwnerView */
+		ItemOwnerView: {
+			/** Id */
+			id: string;
+			/** Username */
+			username: string;
+		};
 		/** ItemSearchView */
 		ItemSearchView: {
 			/** Id */
@@ -2635,11 +3039,66 @@ export interface components {
 			/** Version */
 			version: number;
 		};
+		/** ItemTagView */
+		ItemTagView: {
+			/** Id */
+			id: string;
+			/** Name */
+			name: string;
+		};
 		/** ItemUpdateRequest */
 		ItemUpdateRequest: {
 			/** Expected Version */
 			expected_version: number;
 			metadata: components['schemas']['ItemMetadata-Input'];
+		};
+		/** ItemWorkspaceCountsView */
+		ItemWorkspaceCountsView: {
+			/** Revisions */
+			revisions: number;
+			/** Attachments */
+			attachments: number;
+			/** Annotations */
+			annotations: number;
+			/** Discussion */
+			discussion: number;
+		};
+		/** ItemWorkspacePermissionsView */
+		ItemWorkspacePermissionsView: {
+			/** Edit */
+			edit: boolean;
+			/** Delete */
+			delete: boolean;
+		};
+		/** ItemWorkspaceView */
+		ItemWorkspaceView: {
+			item: components['schemas']['ItemSearchView'];
+			permissions: components['schemas']['ItemWorkspacePermissionsView'];
+			counts: components['schemas']['ItemWorkspaceCountsView'];
+			/** Tags */
+			tags: components['schemas']['ItemTagView'][];
+			owner: components['schemas']['ItemOwnerView'];
+			/** Identifiers */
+			identifiers: components['schemas']['ItemIdentifierView'][];
+			latest_revision?: components['schemas']['ItemLatestRevisionView'] | null;
+		};
+		/** JoinableProjectView */
+		JoinableProjectView: {
+			/** Id */
+			id: string;
+			/** Name */
+			name: string;
+			/** Item Count */
+			item_count: number;
+			/** State */
+			state: string;
+			/** Visibility */
+			visibility: string;
+			/**
+			 * Description
+			 * @default
+			 */
+			description: string;
 		};
 		'JsonValue-Input':
 			| string
@@ -2726,6 +3185,26 @@ export interface components {
 			/** Password */
 			password: string;
 		};
+		/** LoginSessionView */
+		LoginSessionView: {
+			/** Id */
+			id: string;
+			/**
+			 * Current
+			 * @default false
+			 */
+			current: boolean;
+			/**
+			 * Expires At
+			 * Format: date-time
+			 */
+			expires_at: string;
+			/**
+			 * Created At
+			 * Format: date-time
+			 */
+			created_at: string;
+		};
 		/** MetadataSyncRequest */
 		MetadataSyncRequest: {
 			/** Expected Version */
@@ -2769,6 +3248,39 @@ export interface components {
 		PasswordResetRequest: {
 			/** Password */
 			password: string;
+		};
+		/** PdfViewerProjectView */
+		PdfViewerProjectView: {
+			/** Id */
+			id: string;
+			/** Name */
+			name: string;
+		};
+		/** PdfViewerRevisionView */
+		PdfViewerRevisionView: {
+			/** Id */
+			id: string;
+			/** Original Name */
+			original_name: string;
+			/** Page Count */
+			page_count?: number | null;
+			/** Processing State */
+			processing_state: string;
+			/** Page Geometry */
+			page_geometry: number[][];
+			/** Content Url */
+			content_url: string;
+		};
+		/** PdfViewerView */
+		PdfViewerView: {
+			item: components['schemas']['ItemSearchView'];
+			/** Editable */
+			editable: boolean;
+			/** Annotation Author */
+			annotation_author: string;
+			revision: components['schemas']['PdfViewerRevisionView'];
+			/** Projects */
+			projects: components['schemas']['PdfViewerProjectView'][];
 		};
 		/** Point */
 		Point: {
@@ -2971,6 +3483,79 @@ export interface components {
 			 */
 			export_ttl_hours: number;
 		};
+		/** SessionUserView */
+		SessionUserView: {
+			/** Id */
+			id: string;
+			/** Username */
+			username: string;
+			/**
+			 * Role
+			 * @enum {string}
+			 */
+			role: 'administrator' | 'member';
+		};
+		/** SessionView */
+		SessionView: {
+			/** Authenticated */
+			authenticated: boolean;
+			user?: components['schemas']['SessionUserView'] | null;
+			/** Locale */
+			locale: string;
+		};
+		/** StorageMetricsView */
+		StorageMetricsView: {
+			/** Items Count */
+			items_count: number;
+			/** Revisions Count */
+			revisions_count: number;
+			/** Attachments Count */
+			attachments_count: number;
+			/** Thumbnails Count */
+			thumbnails_count: number;
+			/** Revisions Bytes */
+			revisions_bytes: number;
+			/** Attachments Bytes */
+			attachments_bytes: number;
+			/** Thumbnails Bytes */
+			thumbnails_bytes: number;
+			/** Total Disk Bytes */
+			total_disk_bytes: number;
+			/** Missing Files Count */
+			missing_files_count: number;
+			/** Integrity Status */
+			integrity_status: string;
+			/** Integrity Checked At */
+			integrity_checked_at?: string | null;
+		};
+		/** TagMatrixGroupView */
+		TagMatrixGroupView: {
+			/** Letter */
+			letter: string;
+			/** Tags */
+			tags: components['schemas']['ItemTagView'][];
+			/** Names */
+			names: string[];
+		};
+		/** TagMatrixView */
+		TagMatrixView: {
+			/** Groups */
+			groups: components['schemas']['TagMatrixGroupView'][];
+			/** Assigned Ids */
+			assigned_ids: string[];
+			/** Recommended Ids */
+			recommended_ids: string[];
+			/** Suggested Names */
+			suggested_names: string[];
+			/** Suggested Single Words */
+			suggested_single_words: string[];
+			/** Suggested Phrases */
+			suggested_phrases: string[];
+			/** Recommendation State */
+			recommendation_state: string;
+			/** Recommendation Error */
+			recommendation_error?: string | null;
+		};
 		/** TagMergeRequest */
 		TagMergeRequest: {
 			/** Source Tag Id */
@@ -3034,6 +3619,44 @@ export interface components {
 			/** Context */
 			ctx?: Record<string, never>;
 		};
+		/** WorkflowStatusView */
+		WorkflowStatusView: {
+			/** Id */
+			id: string;
+			/** State */
+			state: string;
+			/** Error */
+			error?: string | null;
+		};
+		/** WorkflowSummaryView */
+		WorkflowSummaryView: {
+			/** Id */
+			id: string;
+			/** Name */
+			name: string;
+			/** State */
+			state: string;
+			/** Raw Status */
+			raw_status: string;
+			/** Queue Name */
+			queue_name?: string | null;
+			/** Executor Id */
+			executor_id?: string | null;
+			/** Created At */
+			created_at?: string | null;
+			/** Updated At */
+			updated_at?: string | null;
+			/** Output */
+			output?: unknown | null;
+			/** Error */
+			error?: string | null;
+			/** Attributes */
+			attributes?: {
+				[key: string]: unknown;
+			} | null;
+			/** Authenticated User */
+			authenticated_user?: string | null;
+		};
 		/** WriteResult */
 		WriteResult: {
 			/** Id */
@@ -3065,7 +3688,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['HealthView'];
 				};
 			};
 		};
@@ -3105,7 +3728,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['SessionView'];
 				};
 			};
 		};
@@ -3129,7 +3752,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['SessionView'];
 				};
 			};
 			/** @description Validation Error */
@@ -3434,7 +4057,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['JoinableProjectView'][];
 				};
 			};
 		};
@@ -4512,7 +5135,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['DiscoveryProviderView'][];
 				};
 			};
 		};
@@ -4534,7 +5157,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['WorkflowStatusView'];
 				};
 			};
 			/** @description Validation Error */
@@ -4565,7 +5188,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['InvitationDetailsView'];
 				};
 			};
 			/** @description Validation Error */
@@ -4629,7 +5252,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['AccountSummaryView'];
 				};
 			};
 		};
@@ -4830,7 +5453,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['AdminOverviewView'];
 				};
 			};
 		};
@@ -4855,7 +5478,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['AdminUsersView'];
 				};
 			};
 			/** @description Validation Error */
@@ -4888,7 +5511,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['AdminUserView'];
 				};
 			};
 			/** @description Validation Error */
@@ -4923,7 +5546,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['AdminUserView'];
 				};
 			};
 			/** @description Validation Error */
@@ -4958,7 +5581,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['AdminUserView'];
 				};
 			};
 			/** @description Validation Error */
@@ -5057,7 +5680,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['AdminInvitationCreatedView'];
 				};
 			};
 			/** @description Validation Error */
@@ -5091,7 +5714,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['AdminProjectsView'];
 				};
 			};
 			/** @description Validation Error */
@@ -5124,7 +5747,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['AdminItemsView'];
 				};
 			};
 			/** @description Validation Error */
@@ -5190,7 +5813,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['AdminAuditView'];
 				};
 			};
 			/** @description Validation Error */
@@ -5221,7 +5844,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['AdminWorkflowsView'];
 				};
 			};
 			/** @description Validation Error */
@@ -5250,7 +5873,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['AdminSettingsView'];
 				};
 			};
 		};
@@ -5303,7 +5926,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['AdminMaintenanceView'];
 				};
 			};
 		};
@@ -5356,7 +5979,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/zip': string;
 				};
 			};
 			/** @description Validation Error */
@@ -5387,7 +6010,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['WorkflowSummaryView'];
 				};
 			};
 			/** @description Validation Error */
@@ -5433,7 +6056,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'text/plain': string;
 				};
 			};
 			/** @description Validation Error */
@@ -5479,7 +6102,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'text/plain': string;
 				};
 			};
 			/** @description Validation Error */
@@ -5513,7 +6136,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'text/plain': string;
 				};
 			};
 			/** @description Validation Error */
@@ -5545,7 +6168,16 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/pdf': string;
+				};
+			};
+			/** @description Partial Content */
+			206: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/pdf': string;
 				};
 			};
 			/** @description Validation Error */
@@ -5577,7 +6209,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'image/png': string;
 				};
 			};
 			/** @description Validation Error */
@@ -5608,7 +6240,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'image/png': string;
 				};
 			};
 			/** @description Validation Error */
@@ -5644,7 +6276,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/pdf': string;
 				};
 			};
 			/** @description Validation Error */
@@ -5676,7 +6308,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['CitationKeyPreviewView'];
 				};
 			};
 			/** @description Validation Error */
@@ -5709,7 +6341,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['CitationStylesResponseView'];
 				};
 			};
 			/** @description Validation Error */
@@ -5772,12 +6404,12 @@ export interface operations {
 		};
 		responses: {
 			/** @description Successful Response */
-			200: {
+			202: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['AnnotationExportCreatedView'];
 				};
 			};
 			/** @description Validation Error */
@@ -5808,7 +6440,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['WorkflowStatusView'];
 				};
 			};
 			/** @description Validation Error */
@@ -5839,7 +6471,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/pdf': string;
 				};
 			};
 			/** @description Validation Error */
@@ -5870,7 +6502,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['ItemWorkspaceView'];
 				};
 			};
 			/** @description Validation Error */
@@ -5901,7 +6533,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['ItemOrganizeView'];
 				};
 			};
 			/** @description Validation Error */
@@ -6060,7 +6692,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['AuthorSuggestionView'][];
 				};
 			};
 			/** @description Validation Error */
@@ -6096,7 +6728,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/zip': string;
 				};
 			};
 			/** @description Validation Error */
@@ -6198,7 +6830,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/octet-stream': string;
 				};
 			};
 			/** @description Validation Error */
@@ -6364,7 +6996,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['PdfViewerView'];
 				};
 			};
 			/** @description Validation Error */
@@ -6393,7 +7025,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['DashboardView'];
 				};
 			};
 		};
@@ -6450,7 +7082,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'text/plain': string;
 				};
 			};
 			/** @description Validation Error */
@@ -6483,7 +7115,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/zip': string;
 				};
 			};
 			/** @description Validation Error */
@@ -6515,7 +7147,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'text/plain': string;
 				};
 			};
 			/** @description Validation Error */
@@ -6548,7 +7180,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['ImportBatchView'];
 				};
 			};
 			/** @description Validation Error */
@@ -6581,7 +7213,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['ImportBatchView'];
 				};
 			};
 			/** @description Validation Error */
@@ -6614,7 +7246,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['ImportBatchView'];
 				};
 			};
 			/** @description Validation Error */
@@ -6645,7 +7277,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['ImportBatchView'];
 				};
 			};
 			/** @description Validation Error */
@@ -6707,7 +7339,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['ImportBatchRetryView'];
 				};
 			};
 			/** @description Validation Error */
@@ -6769,7 +7401,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': unknown;
+					'application/json': components['schemas']['DuplicatesReviewView'];
 				};
 			};
 			/** @description Validation Error */

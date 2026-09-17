@@ -52,15 +52,18 @@ from quirebase.programmatic import (
     AnnotationReplyView,
     AnnotationView,
     CitationView,
+    DiscoveryProviderView,
     DiscussionMessageView,
     DocumentListView,
     ItemDetailView,
+    JoinableProjectView,
     LibrarySearchView,
     OkView,
     ProjectDetailView,
     ProjectMemberView,
     ProjectSummaryView,
     TagView,
+    WorkflowStatusView,
     WriteResult,
     discussion_message_views,
     document_list_view,
@@ -100,6 +103,7 @@ from quirebase.web.api.schemas import (
     ProjectMemberRequest,
     ProjectSettingsRequest,
     ProjectVisibilityRequest,
+    SessionView,
     TagSetRequest,
 )
 from quirebase.web.locale import resolve_request_locale
@@ -110,7 +114,7 @@ router = APIRouter(
 )
 
 
-@router.get("/session")
+@router.get("/session", response_model=SessionView)
 async def session_bootstrap(request: Request, db: Database):
     raw_session = request.cookies.get(get_settings().session_cookie, "")
     login = await get_login_session_by_token(db, raw_session)
@@ -124,7 +128,7 @@ async def session_bootstrap(request: Request, db: Database):
     }
 
 
-@router.post("/session")
+@router.post("/session", response_model=SessionView)
 async def login_session(
     request: Request,
     response: Response,
@@ -263,7 +267,7 @@ async def list_projects(user: ApiUser, db: Database) -> list[ProjectSummaryView]
     ]
 
 
-@router.get("/projects/joinable")
+@router.get("/projects/joinable", response_model=list[JoinableProjectView])
 async def list_projects_available_to_join(user: ApiUser, db: Database):
     rows = await list_joinable_projects(db, user)
     return [
@@ -608,7 +612,7 @@ async def search_discovery(
     )
 
 
-@router.get("/discovery/providers")
+@router.get("/discovery/providers", response_model=list[DiscoveryProviderView])
 async def discovery_providers(user: ApiUser, db: Database):
     del user
     settings = await get_effective_settings_model(db)
@@ -627,7 +631,7 @@ async def discovery_providers(user: ApiUser, db: Database):
     return providers
 
 
-@router.get("/workflows/{workflow_id}")
+@router.get("/workflows/{workflow_id}", response_model=WorkflowStatusView)
 async def workflow_status(workflow_id: str, user: ApiUser):
     workflow = await durable_operations().get(workflow_id)
     if workflow is None or (

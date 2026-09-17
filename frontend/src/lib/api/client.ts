@@ -106,51 +106,10 @@ export async function apiText(path: string, fetcher: typeof fetch = fetch): Prom
 	return response.text();
 }
 
-export type SessionView = {
-	authenticated: boolean;
-	user: null | { id: string; username: string; role: 'administrator' | 'member' };
-	locale: string;
-};
+import type { components } from '$lib/api/schema';
 
-export type ItemSummary = {
-	id: string;
-	title_html: string;
-	authors: string | null;
-	publication_date: string | null;
-	publication_title: string | null;
-	doi: string | null;
-	version: number;
-};
-
-export type ProjectSummary = {
-	id: string;
-	name: string;
-	role: string;
-	item_count: number;
-	state: string;
-	visibility: string;
-	description: string;
-};
-
-export type WorkspaceView = {
-	item: ItemSummary;
-	permissions: { edit: boolean; delete: boolean };
-	counts: { revisions: number; attachments: number; annotations: number; discussion: number };
-	tags: Array<{ id: string; name: string }>;
-	owner: { id: string; username: string };
-	identifiers: Array<{ provider: string; value: string }>;
-	latest_revision: null | {
-		id: string;
-		original_name: string;
-		size: number;
-		page_count: number | null;
-		processing_state: string;
-	};
-};
-
-export type LibraryView = {
-	items: ItemSummary[];
-	total: number;
-	page: number;
-	per_page: number;
-};
+export type SessionView = components['schemas']['SessionView'];
+export type ItemSummary = components['schemas']['ItemSearchView'];
+export type ProjectSummary = components['schemas']['ProjectSummaryView'];
+export type WorkspaceView = components['schemas']['ItemWorkspaceView'];
+export type LibraryView = components['schemas']['LibrarySearchView'];

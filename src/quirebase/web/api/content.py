@@ -72,7 +72,17 @@ async def ranged_object(request: Request, metadata, filename: str, object_get):
     )
 
 
-@router.get("/items/{item_id}/bibliography")
+@router.get(
+    "/items/{item_id}/bibliography",
+    response_class=Response,
+    responses={
+        200: {
+            "content": {
+                "text/plain": {"schema": {"type": "string"}},
+            }
+        }
+    },
+)
 async def export_item_bibliography(
     item_id: str,
     file_format: str,
@@ -122,7 +132,17 @@ async def export_item_bibliography(
     )
 
 
-@router.get("/items/{item_id}/bibliography/content")
+@router.get(
+    "/items/{item_id}/bibliography/content",
+    response_class=Response,
+    responses={
+        200: {
+            "content": {
+                "text/plain": {"schema": {"type": "string"}},
+            }
+        }
+    },
+)
 async def copy_citation(
     item_id: str,
     user: ApiUser,
@@ -168,7 +188,17 @@ async def copy_citation(
     return Response(contents, media_type="text/plain; charset=utf-8")
 
 
-@router.get("/items/{item_id}/citation/content")
+@router.get(
+    "/items/{item_id}/citation/content",
+    response_class=Response,
+    responses={
+        200: {
+            "content": {
+                "text/plain": {"schema": {"type": "string"}},
+            }
+        }
+    },
+)
 async def citation_text(
     item_id: str,
     user: ApiUser,
@@ -182,7 +212,22 @@ async def citation_text(
     return Response(rendered, media_type=f"{media_type}; charset=utf-8")
 
 
-@router.get("/items/{item_id}/revisions/{revision_id}/content")
+@router.get(
+    "/items/{item_id}/revisions/{revision_id}/content",
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "content": {
+                "application/pdf": {"schema": {"type": "string", "format": "binary"}},
+            }
+        },
+        206: {
+            "content": {
+                "application/pdf": {"schema": {"type": "string", "format": "binary"}},
+            }
+        },
+    },
+)
 async def pdf_content(
     request: Request,
     item_id: str,
@@ -201,7 +246,17 @@ async def pdf_content(
     return await ranged_object(request, metadata, original_name, object_get)
 
 
-@router.get("/items/{item_id}/revisions/{revision_id}/thumbnail")
+@router.get(
+    "/items/{item_id}/revisions/{revision_id}/thumbnail",
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "content": {
+                "image/png": {"schema": {"type": "string", "format": "binary"}},
+            }
+        }
+    },
+)
 async def pdf_thumbnail(
     item_id: str,
     revision_id: str,
@@ -212,7 +267,17 @@ async def pdf_thumbnail(
     return StreamingResponse(response.body, media_type="image/png")
 
 
-@router.get("/items/{item_id}/thumbnail")
+@router.get(
+    "/items/{item_id}/thumbnail",
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "content": {
+                "image/png": {"schema": {"type": "string", "format": "binary"}},
+            }
+        }
+    },
+)
 async def item_thumbnail(
     item_id: str,
     user: ApiUser,
@@ -222,7 +287,17 @@ async def item_thumbnail(
     return StreamingResponse(thumbnail.response.body, media_type=thumbnail.media_type)
 
 
-@router.get("/items/{item_id}/revisions/{revision_id}/export")
+@router.get(
+    "/items/{item_id}/revisions/{revision_id}/export",
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "content": {
+                "application/pdf": {"schema": {"type": "string", "format": "binary"}},
+            }
+        }
+    },
+)
 async def export_revision_pdf_route(
     item_id: str,
     revision_id: str,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi import APIRouter, status
+from fastapi.responses import StreamingResponse
 
 from quirebase.documents import (
     create_export_job,
@@ -14,12 +14,20 @@ from quirebase.library import (
     preview_citation_key,
     select_builtin_citation_styles,
 )
+from quirebase.programmatic import (
+    CitationStylesResponseView,
+    WorkflowStatusView,
+)
 from quirebase.web.api.dependencies import ApiUser, Database
+from quirebase.web.api.schemas import (
+    AnnotationExportCreatedView,
+    CitationKeyPreviewView,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["HTTP API"])
 
 
-@router.get("/citation-key-preview")
+@router.get("/citation-key-preview", response_model=CitationKeyPreviewView)
 async def citation_key_preview(
     formula: str,
     _user: ApiUser,
@@ -28,7 +36,7 @@ async def citation_key_preview(
     return {"key": preview_citation_key(formula, force_ascii=force_ascii)}
 
 
-@router.get("/citation-styles")
+@router.get("/citation-styles", response_model=CitationStylesResponseView)
 async def citation_styles(
     user: ApiUser,
     db: Database,
@@ -73,7 +81,11 @@ async def citation_styles(
     }
 
 
-@router.post("/items/{item_id}/annotation-exports")
+@router.post(
+    "/items/{item_id}/annotation-exports",
+    response_model=AnnotationExportCreatedView,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def create_export(
     item_id: str,
     data: ExportCreate,
@@ -81,22 +93,29 @@ async def create_export(
     db: Database,
 ):
     workflow_id = await create_export_job(db, user, item_id, data)
-    return JSONResponse(
-        {
-            "id": workflow_id,
-            "state": "pending",
-            "status_url": f"/api/v1/annotation-exports/{workflow_id}",
-        },
-        status_code=202,
-    )
+    return {
+        "id": workflow_id,
+        "state": "pending",
+        "status_url": f"/api/v1/annotation-exports/{workflow_id}",
+    }
 
 
-@router.get("/annotation-exports/{workflow_id}")
+@router.get("/annotation-exports/{workflow_id}", response_model=WorkflowStatusView)
 async def export_status(workflow_id: str, user: ApiUser, db: Database):
     return await get_export_status(db, user, workflow_id)
 
 
-@router.get("/annotation-exports/{workflow_id}/content")
+@router.get(
+    "/annotation-exports/{workflow_id}/content",
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "content": {
+                "application/pdf": {"schema": {"type": "string", "format": "binary"}},
+            }
+        }
+    },
+)
 async def export_content(workflow_id: str, user: ApiUser, db: Database):
     response = await get_export_file(db, user, workflow_id)
     return StreamingResponse(

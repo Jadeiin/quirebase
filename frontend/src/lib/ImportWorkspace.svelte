@@ -13,13 +13,7 @@
 	import { domainLabel } from '$lib/domain-labels';
 	import { t } from '$lib/i18n';
 
-	type ImportBatch = {
-		id: string;
-		status: string;
-		workflow_id: string | null;
-		records: Array<Record<string, unknown>>;
-		errors: Array<Record<string, unknown>>;
-	};
+	type ImportBatch = components['schemas']['ImportBatchView'];
 
 	let identifier = $state('');
 	let provider = $state('auto');
