@@ -2,21 +2,17 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { apiRequest, type ItemSummary, type ProjectSummary } from '$lib/api/client';
+	import { apiRequest } from '$lib/api/client';
 	import RichText from '$lib/design/RichText.svelte';
 	import { domainLabel } from '$lib/domain-labels';
 	import { t } from '$lib/i18n';
 
 	let { projectId } = $props<{ projectId: string }>();
-	type ProjectView = ProjectSummary & {
-		members: Array<{ user_id: string; username: string; role: string }>;
-		items: ItemSummary[];
-	};
 	let name = $state('');
 	let description = $state('');
-	let visibility = $state('private');
+	let visibility = $state<'private' | 'public'>('private');
 	let memberUsername = $state('');
-	let memberRole = $state('viewer');
+	let memberRole = $state<'editor' | 'viewer'>('viewer');
 	let busy = $state(false);
 	let error = $state('');
 	let notice = $state('');
@@ -24,10 +20,16 @@
 	const queryClient = useQueryClient();
 	const project = createQuery(() => ({
 		queryKey: ['project', projectId],
-		queryFn: () => apiRequest<ProjectView>(`/projects/${projectId}`)
+		queryFn: () =>
+			apiRequest('GET', '/projects/{project_id}', {
+				params: { path: { project_id: projectId } }
+			})
 	}));
 	const canEdit = $derived(project.data?.role === 'owner' || project.data?.role === 'editor');
 	const isOwner = $derived(project.data?.role === 'owner');
+	const isAdministrator = $derived(project.data?.role === 'administrator');
+	const canManageLifecycle = $derived(isOwner || isAdministrator);
+	const canLeave = $derived(project.data?.role === 'editor' || project.data?.role === 'viewer');
 
 	$effect(() => {
 		const value = project.data;
@@ -35,7 +37,7 @@
 		loadedProjectId = projectId;
 		name = value.name;
 		description = value.description;
-		visibility = value.visibility;
+		visibility = value.visibility === 'public' ? 'public' : 'private';
 	});
 
 	async function mutate(operation: () => Promise<unknown>, success: string): Promise<boolean> {
@@ -61,8 +63,8 @@
 	function saveSettings() {
 		void mutate(
 			() =>
-				apiRequest(`/projects/${projectId}`, {
-					method: 'PATCH',
+				apiRequest('PATCH', '/projects/{project_id}', {
+					params: { path: { project_id: projectId } },
 					body: { name, description, visibility }
 				}),
 			$t('Project settings saved')
@@ -72,8 +74,8 @@
 	function addMember() {
 		void mutate(
 			() =>
-				apiRequest(`/projects/${projectId}/members`, {
-					method: 'PUT',
+				apiRequest('PUT', '/projects/{project_id}/members', {
+					params: { path: { project_id: projectId } },
 					body: { username: memberUsername, role: memberRole }
 				}),
 			$t('Project member saved')
@@ -82,24 +84,33 @@
 		});
 	}
 
-	function updateMember(username: string, role: string) {
+	function updateMember(username: string, role: 'editor' | 'viewer') {
 		void mutate(
 			() =>
-				apiRequest(`/projects/${projectId}/members`, { method: 'PUT', body: { username, role } }),
+				apiRequest('PUT', '/projects/{project_id}/members', {
+					params: { path: { project_id: projectId } },
+					body: { username, role }
+				}),
 			$t('Project member saved')
 		);
 	}
 
 	function removeMember(userId: string) {
 		void mutate(
-			() => apiRequest(`/projects/${projectId}/members/${userId}`, { method: 'DELETE' }),
+			() =>
+				apiRequest('DELETE', '/projects/{project_id}/members/{user_id}', {
+					params: { path: { project_id: projectId, user_id: userId } }
+				}),
 			$t('Project member removed')
 		);
 	}
 
 	function transferOwnership(userId: string) {
 		void mutate(
-			() => apiRequest(`/projects/${projectId}/ownership/${userId}`, { method: 'POST' }),
+			() =>
+				apiRequest('POST', '/projects/{project_id}/ownership/{user_id}', {
+					params: { path: { project_id: projectId, user_id: userId } }
+				}),
 			$t('Project ownership transferred')
 		);
 	}
@@ -108,7 +119,9 @@
 		busy = true;
 		error = '';
 		try {
-			await apiRequest(`/projects/${projectId}/leave`, { method: 'POST' });
+			await apiRequest('POST', '/projects/{project_id}/leave', {
+				params: { path: { project_id: projectId } }
+			});
 			await goto(resolve('/projects'));
 		} catch (reason) {
 			error = reason instanceof Error ? reason.message : $t('Project action failed');
@@ -128,8 +141,8 @@
 		busy = true;
 		error = '';
 		try {
-			await apiRequest(`/projects/${projectId}`, {
-				method: 'DELETE',
+			await apiRequest('DELETE', '/projects/{project_id}', {
+				params: { path: { project_id: projectId } },
 				body: { confirmation }
 			});
 			await goto(resolve('/projects'));
@@ -186,14 +199,16 @@
 								onclick={() =>
 									mutate(
 										() =>
-											apiRequest(`/projects/${projectId}/items/${item.id}`, { method: 'DELETE' }),
+											apiRequest('DELETE', '/projects/{project_id}/items/{item_id}', {
+												params: { path: { project_id: projectId, item_id: item.id } }
+											}),
 										$t('Item removed from Project')
 									)}>{$t('Remove')}</button
 							>{/if}
 					</div>
 				{:else}<p class="text-surface-600">{$t('No Items in this Project.')}</p>{/each}
 			</section>
-			{#if isOwner}
+			{#if canManageLifecycle}
 				<section class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 					<h2>{$t('Project settings')}</h2>
 					<label>{$t('Name')}<input class="input" bind:value={name} /></label>
@@ -227,7 +242,11 @@
 								<select
 									class="compact input"
 									value={member.role}
-									onchange={(event) => updateMember(member.username, event.currentTarget.value)}
+									onchange={(event) =>
+										updateMember(
+											member.username,
+											event.currentTarget.value === 'editor' ? 'editor' : 'viewer'
+										)}
 									><option value="viewer">{$t('Viewer')}</option><option value="editor"
 										>{$t('Editor')}</option
 									></select
@@ -272,13 +291,16 @@
 			</section>
 			<section class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 				<h2>{$t('Project lifecycle')}</h2>
-				{#if isOwner}
+				{#if canManageLifecycle}
 					{#if project.data.state === 'archived'}<button
 							class="btn preset-tonal-surface font-semibold"
 							disabled={busy}
 							onclick={() =>
 								mutate(
-									() => apiRequest(`/projects/${projectId}/restore`, { method: 'POST' }),
+									() =>
+										apiRequest('POST', '/projects/{project_id}/restore', {
+											params: { path: { project_id: projectId } }
+										}),
 									$t('Project restored')
 								)}>{$t('Restore Project')}</button
 						>{:else}<button
@@ -286,7 +308,10 @@
 							disabled={busy}
 							onclick={() =>
 								mutate(
-									() => apiRequest(`/projects/${projectId}/archive`, { method: 'POST' }),
+									() =>
+										apiRequest('POST', '/projects/{project_id}/archive', {
+											params: { path: { project_id: projectId } }
+										}),
 									$t('Project archived')
 								)}>{$t('Archive Project')}</button
 						>{/if}
@@ -295,7 +320,7 @@
 						disabled={busy}
 						onclick={deleteProject}>{$t('Delete Project')}</button
 					>
-				{:else}<button
+				{:else if canLeave}<button
 						class="btn preset-tonal-error font-semibold"
 						disabled={busy}
 						onclick={leaveProject}>{$t('Leave Project')}</button

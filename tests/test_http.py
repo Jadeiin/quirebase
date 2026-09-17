@@ -842,7 +842,7 @@ async def test_content_media_types_at_runtime(
     store = get_object_store()
 
     try:
-        # 1. Attachment download consistently returns application/octet-stream
+        # 1. Attachment downloads retain their stored media type.
         att_key = "attachments/test.pdf"
         await store.put(att_key, b"%PDF-1.4 test")
         attachment = Attachment(
@@ -860,7 +860,7 @@ async def test_content_media_types_at_runtime(
 
         att_resp = await client.get(f"/api/v1/items/{item_id}/attachments/{attachment.id}/content")
         assert att_resp.status_code == 200
-        assert att_resp.headers["content-type"] == "application/octet-stream"
+        assert att_resp.headers["content-type"] == "application/pdf"
         assert 'filename="test.pdf"' in att_resp.headers["content-disposition"]
 
         # 2. Citation text returns text/plain or text/html based on output param

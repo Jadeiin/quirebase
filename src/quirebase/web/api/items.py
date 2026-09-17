@@ -34,14 +34,9 @@ from quirebase.library import (
 )
 from quirebase.models import AttachmentRole
 from quirebase.operations.settings import get_effective_setting, get_effective_settings_model
-from quirebase.programmatic import (
-    AuthorSuggestionView,
-    OkView,
-    WriteResult,
-    item_search_view,
-)
+from quirebase.web.api.common import OkView, WriteResult
 from quirebase.web.api.dependencies import ApiUser, Database
-from quirebase.web.api.schemas import (
+from quirebase.web.api.item_schemas import (
     DeleteConfirmationRequest,
     ItemOrganizeView,
     ItemWorkspaceView,
@@ -50,6 +45,7 @@ from quirebase.web.api.schemas import (
     RemoteAttachmentRequest,
     RemoteRevisionRequest,
 )
+from quirebase.web.api.library_schemas import AuthorSuggestionView, item_search_view
 from quirebase.web.api.serialization import enum_value
 from quirebase.web.responses import content_disposition
 from quirebase.web.uploads import upload_chunks
@@ -287,12 +283,12 @@ async def upload_remote_item_attachment(
 async def download_item_attachment(
     item_id: str, attachment_id: str, user: ApiUser, db: Database
 ) -> StreamingResponse:
-    response, original_name, _media_type = await get_attachment_file(
+    response, original_name, media_type = await get_attachment_file(
         db, user, item_id, attachment_id
     )
     return StreamingResponse(
         response.body,
-        media_type="application/octet-stream",
+        media_type=media_type,
         headers={"Content-Disposition": content_disposition(original_name)},
     )
 

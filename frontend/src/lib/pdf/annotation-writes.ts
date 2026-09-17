@@ -1,9 +1,42 @@
 import type { AnnotationEvent } from '@embedpdf/svelte-pdf-viewer';
+import { apiRequest } from '$lib/api/client';
 import type { CanonicalAnnotation, CanonicalReply } from '$lib/pdf/annotation-adapter';
 
 type WritableAnnotationEvent = Exclude<AnnotationEvent, { type: 'loaded' }>;
-type RequestOptions = { method?: string; body?: unknown };
-type Request = (path: string, options?: RequestOptions) => Promise<unknown>;
+type ReplyIdentity = { itemId: string; annotationId: string; replyId: string };
+export type AnnotationReplyApi = {
+	create(input: ReplyIdentity & { body: string }): Promise<CanonicalReply>;
+	restore(input: ReplyIdentity & { version: number }): Promise<CanonicalReply>;
+	update(input: ReplyIdentity & { version: number; body: string }): Promise<CanonicalReply>;
+	delete(input: ReplyIdentity & { version: number }): Promise<unknown>;
+};
+
+export const annotationReplyApi: AnnotationReplyApi = {
+	create: ({ itemId, annotationId, replyId, body }) =>
+		apiRequest('POST', '/items/{item_id}/annotations/{annotation_id}/replies', {
+			params: { path: { item_id: itemId, annotation_id: annotationId } },
+			body: { id: replyId, body }
+		}),
+	restore: ({ itemId, annotationId, replyId, version }) =>
+		apiRequest('POST', '/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}/restore', {
+			params: {
+				path: { item_id: itemId, annotation_id: annotationId, reply_id: replyId },
+				query: { version }
+			}
+		}),
+	update: ({ itemId, annotationId, replyId, version, body }) =>
+		apiRequest('PATCH', '/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}', {
+			params: { path: { item_id: itemId, annotation_id: annotationId, reply_id: replyId } },
+			body: { version, body }
+		}),
+	delete: ({ itemId, annotationId, replyId, version }) =>
+		apiRequest('DELETE', '/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}', {
+			params: {
+				path: { item_id: itemId, annotation_id: annotationId, reply_id: replyId },
+				query: { version }
+			}
+		})
+};
 
 export function selectNativeAnnotationIds(
 	annotationIds: Iterable<string>,
@@ -48,13 +81,13 @@ export async function persistReplyEvent({
 	itemId,
 	records,
 	tombstones,
-	request
+	api = annotationReplyApi
 }: {
 	event: WritableAnnotationEvent;
 	itemId: string;
 	records: Map<string, CanonicalAnnotation>;
 	tombstones: Map<string, CanonicalReply>;
-	request: Request;
+	api?: AnnotationReplyApi;
 }): Promise<{ parent: CanonicalAnnotation; reply: CanonicalReply | null } | null> {
 	const parentId = event.annotation.inReplyToId;
 	if (!parentId) return null;
@@ -64,35 +97,39 @@ export async function persistReplyEvent({
 
 	const replyId = event.annotation.id;
 	const existing = parent.replies.find((reply) => reply.id === replyId);
-	const basePath = `/items/${itemId}/annotations/${parentId}/replies/${replyId}`;
 	let saved: CanonicalReply | null = null;
 
 	if (event.type === 'create') {
 		if (existing) return { parent, reply: existing };
 		const tombstone = tombstones.get(replyId);
 		saved = tombstone
-			? ((await request(`${basePath}/restore?version=${tombstone.version}`, {
-					method: 'POST'
-				})) as CanonicalReply)
-			: ((await request(`/items/${itemId}/annotations/${parentId}/replies`, {
-					method: 'POST',
-					body: { id: replyId, body: event.annotation.contents ?? '' }
-				})) as CanonicalReply);
+			? await api.restore({
+					itemId,
+					annotationId: parentId,
+					replyId,
+					version: tombstone.version
+				})
+			: await api.create({
+					itemId,
+					annotationId: parentId,
+					replyId,
+					body: event.annotation.contents ?? ''
+				});
 		tombstones.delete(replyId);
 		parent.replies = [...parent.replies, saved];
 	} else if (event.type === 'update') {
 		if (!existing) return null;
-		saved = (await request(basePath, {
-			method: 'PATCH',
-			body: {
-				version: existing.version,
-				body: event.patch.contents ?? event.annotation.contents ?? ''
-			}
-		})) as CanonicalReply;
+		saved = await api.update({
+			itemId,
+			annotationId: parentId,
+			replyId,
+			version: existing.version,
+			body: event.patch.contents ?? event.annotation.contents ?? ''
+		});
 		parent.replies = parent.replies.map((reply) => (reply.id === replyId ? saved! : reply));
 	} else {
 		if (!existing) return null;
-		await request(`${basePath}?version=${existing.version}`, { method: 'DELETE' });
+		await api.delete({ itemId, annotationId: parentId, replyId, version: existing.version });
 		tombstones.set(replyId, { ...existing, version: existing.version + 1 });
 		parent.replies = parent.replies.filter((reply) => reply.id !== replyId);
 	}

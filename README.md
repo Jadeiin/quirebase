@@ -53,9 +53,10 @@ QUIREBASE_DATABASE_URL=postgresql://quirebase:password@localhost/quirebase uv ru
 
 Quirebase exposes authenticated library, project, document-metadata, annotation, tag, discussion,
 Discovery and citation capabilities through a versioned JSON HTTP API at `/api/v1/` and MCP
-Streamable HTTP at `/mcp/`. Both surfaces share response contracts and the same ordinary User
-authorization rules; interactive OpenAPI documentation is available at `/docs`. They include reads and
-ordinary User mutations; it deliberately excludes administrator operations, file bytes and the
+Streamable HTTP at `/mcp/`. The curated MCP tool surface is generated from the OpenAPI contract and
+executes those same API operations, so both surfaces share response contracts and ordinary User
+authorization rules; interactive OpenAPI documentation is available at `/docs`. They include reads
+and ordinary User mutations; MCP deliberately excludes administrator operations, file bytes and the
 currently unstructured PDF full text. A signed-in User can create and revoke their own time-limited
 API Tokens under **Account settings → MCP and API Tokens**; that page also shows the deployment's
 HTTP API and MCP endpoints plus an MCP client configuration example. Operators may alternatively use the CLI:

@@ -4,13 +4,7 @@
 	import { page } from '$app/state';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
-	import {
-		apiDownload,
-		apiRequest,
-		type LibraryView,
-		type ProjectSummary,
-		type SessionView
-	} from '$lib/api/client';
+	import { apiDownload, apiRequest } from '$lib/api/client';
 	import Icon from '$lib/design/Icon.svelte';
 	import RichText from '$lib/design/RichText.svelte';
 	import {
@@ -20,7 +14,6 @@
 	} from '$lib/export-preferences';
 	import { t } from '$lib/i18n';
 
-	type Tag = { id: string; name: string; accessible_item_count: number };
 	const submitted = $derived({
 		query: page.url.searchParams.get('q')?.trim() ?? '',
 		tag: page.url.searchParams.get('tag') ?? '',
@@ -49,7 +42,7 @@
 	const queryClient = useQueryClient();
 	const session = createQuery(() => ({
 		queryKey: ['session'],
-		queryFn: () => apiRequest<SessionView>('/session')
+		queryFn: () => apiRequest('GET', '/session')
 	}));
 
 	let previousSearch = page.url.search;
@@ -68,29 +61,28 @@
 
 	const library = createQuery(() => ({
 		queryKey: ['library', submitted, pageNumber],
-		queryFn: () => {
-			const parameters = new SvelteURLSearchParams();
-			parameters.set('page', String(pageNumber));
-			if (submitted.query) parameters.set('query', submitted.query);
-			for (const [key, value] of Object.entries({
-				tag: submitted.tag,
-				project: submitted.project,
-				year: submitted.year,
-				keyword: submitted.keyword,
-				author: submitted.author
-			})) {
-				if (value) parameters.set(key, value);
-			}
-			return apiRequest<LibraryView>(`/items?${parameters}`);
-		}
+		queryFn: () =>
+			apiRequest('GET', '/items', {
+				params: {
+					query: {
+						page: pageNumber,
+						query: submitted.query,
+						tag: submitted.tag,
+						project: submitted.project,
+						year: submitted.year,
+						keyword: submitted.keyword,
+						author: submitted.author
+					}
+				}
+			})
 	}));
 	const tags = createQuery(() => ({
 		queryKey: ['tags'],
-		queryFn: () => apiRequest<Tag[]>('/tags')
+		queryFn: () => apiRequest('GET', '/tags')
 	}));
 	const projects = createQuery(() => ({
 		queryKey: ['projects'],
-		queryFn: () => apiRequest<ProjectSummary[]>('/projects')
+		queryFn: () => apiRequest('GET', '/projects')
 	}));
 	const totalPages = $derived(
 		Math.max(1, Math.ceil((library.data?.total ?? 0) / (library.data?.per_page ?? 25)))
@@ -162,35 +154,38 @@
 			if (bulkAction === 'bibliography') {
 				const citation = exportPreferences.citation;
 				await apiDownload('/items/bibliography', {
-					item_ids: [...selected],
-					file_format: exportFormat,
-					style: citation.style,
-					include_abstract: citation.includeAbstract,
-					preserve_case: citation.preserveCase,
-					include_identifiers: citation.includeIdentifiers,
-					include_custom_fields: citation.includeCustomFields,
-					encoding: citation.encoding,
-					journal_mode: citation.journalMode,
-					doi_policy: citation.doiPolicy,
-					url_policy: citation.urlPolicy,
-					excluded_fields: citation.excludedFields
-						.split(',')
-						.map((value) => value.trim())
-						.filter(Boolean),
-					sort_by: citation.sortBy,
-					citation_key_formula: citation.citationKeyFormula,
-					citation_key_force_ascii: citation.citationKeyForceAscii
+					body: {
+						item_ids: [...selected],
+						file_format: exportFormat,
+						style: citation.style,
+						include_abstract: citation.includeAbstract,
+						preserve_case: citation.preserveCase,
+						include_identifiers: citation.includeIdentifiers,
+						include_custom_fields: citation.includeCustomFields,
+						encoding: citation.encoding,
+						journal_mode: citation.journalMode,
+						doi_policy: citation.doiPolicy,
+						url_policy: citation.urlPolicy,
+						excluded_fields: citation.excludedFields
+							.split(',')
+							.map((value) => value.trim())
+							.filter(Boolean),
+						sort_by: citation.sortBy,
+						citation_key_formula: citation.citationKeyFormula,
+						citation_key_force_ascii: citation.citationKeyForceAscii
+					}
 				});
 			} else if (bulkAction === 'documents') {
 				await apiDownload('/items/documents/archive', {
-					item_ids: [...selected],
-					include_annotations: exportPreferences.document.includeAnnotations,
-					include_supplements: exportPreferences.document.includeSupplements,
-					timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+					body: {
+						item_ids: [...selected],
+						include_annotations: exportPreferences.document.includeAnnotations,
+						include_supplements: exportPreferences.document.includeSupplements,
+						timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+					}
 				});
 			} else {
-				await apiRequest('/items/bulk', {
-					method: 'POST',
+				await apiRequest('POST', '/items/bulk', {
 					body: {
 						item_ids: [...selected],
 						action: bulkAction,

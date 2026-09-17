@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { createQuery } from '@tanstack/svelte-query';
+	import { onDestroy } from 'svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { apiRequest, type ItemSummary } from '$lib/api/client';
+	import { waitForWorkflow } from '$lib/api/workflows';
 	import RichText from '$lib/design/RichText.svelte';
 	import { domainLabel } from '$lib/domain-labels';
 	import { msg, t, type MessageKey } from '$lib/i18n';
@@ -15,7 +17,6 @@
 	type AuditEvent = components['schemas']['AdminAuditEventView'];
 	type Workflow = components['schemas']['WorkflowSummaryView'];
 	type Settings = components['schemas']['AdminSettingsView'];
-	type CreatedInvitation = components['schemas']['AdminInvitationCreatedView'];
 
 	type AdminSection =
 		| 'overview'
@@ -40,6 +41,8 @@
 	let filterB = $state('');
 	let appliedFilterB = $state('');
 	let activeSection = $state<AdminSection | null>(null);
+	const workflowAbort = new AbortController();
+	onDestroy(() => workflowAbort.abort());
 	const labels: Record<AdminSection, MessageKey> = {
 		overview: msg('Overview'),
 		users: msg('Users'),
@@ -94,7 +97,56 @@
 	});
 	const data = createQuery(() => ({
 		queryKey: ['admin', section, queryString],
-		queryFn: () => apiRequest<unknown>(`/admin/${section}${queryString ? `?${queryString}` : ''}`)
+		queryFn: async (): Promise<unknown> => {
+			const common = { page: adminPage, search: appliedSearch };
+			switch (section) {
+				case 'users':
+					return apiRequest('GET', '/admin/users', {
+						params: {
+							query: {
+								...common,
+								role: appliedFilterA,
+								active: appliedFilterB ? appliedFilterB === 'true' : undefined
+							}
+						}
+					});
+				case 'projects':
+					return apiRequest('GET', '/admin/projects', {
+						params: {
+							query: { ...common, state: appliedFilterA, visibility: appliedFilterB }
+						}
+					});
+				case 'items':
+					return apiRequest('GET', '/admin/items', {
+						params: {
+							query: {
+								...common,
+								has_pdf: appliedFilterA ? appliedFilterA === 'true' : undefined
+							}
+						}
+					});
+				case 'audit':
+					return apiRequest('GET', '/admin/audit', {
+						params: {
+							query: {
+								...common,
+								action: appliedFilterA,
+								target_type: appliedFilterB
+							}
+						}
+					});
+				case 'workflows':
+					return apiRequest('GET', '/admin/workflows', {
+						params: { query: { state: appliedFilterA } }
+					});
+				case 'settings':
+					return apiRequest('GET', '/admin/settings');
+				case 'maintenance':
+					return apiRequest('GET', '/admin/maintenance');
+				default:
+					return apiRequest('GET', '/admin/overview');
+			}
+		}
 	}));
 	const pagination = $derived(
 		data.data as { total?: number; page?: number; per_page?: number } | undefined
@@ -165,12 +217,11 @@
 		const values = new FormData(form);
 		void mutate(
 			() =>
-				apiRequest('/admin/users', {
-					method: 'POST',
+				apiRequest('POST', '/admin/users', {
 					body: {
-						username: values.get('username'),
-						password: values.get('password'),
-						role: values.get('role')
+						username: String(values.get('username') ?? ''),
+						password: String(values.get('password') ?? ''),
+						role: values.get('role') === 'administrator' ? 'administrator' : 'member'
 					}
 				}),
 			msg('User created'),
@@ -181,8 +232,8 @@
 	function updateUserStatus(user: User) {
 		void mutate(
 			() =>
-				apiRequest(`/admin/users/${user.id}/status`, {
-					method: 'PUT',
+				apiRequest('PUT', '/admin/users/{user_id}/status', {
+					params: { path: { user_id: user.id } },
 					body: { active: !user.active }
 				}),
 			user.active ? msg('User disabled') : msg('User enabled')
@@ -194,9 +245,9 @@
 		const values = new FormData(event.currentTarget as HTMLFormElement);
 		void mutate(
 			() =>
-				apiRequest(`/admin/users/${userId}/role`, {
-					method: 'PUT',
-					body: { role: values.get('role') }
+				apiRequest('PUT', '/admin/users/{user_id}/role', {
+					params: { path: { user_id: userId } },
+					body: { role: values.get('role') === 'administrator' ? 'administrator' : 'member' }
 				}),
 			msg('User role saved')
 		);
@@ -208,9 +259,9 @@
 		const values = new FormData(form);
 		void mutate(
 			() =>
-				apiRequest(`/admin/users/${userId}/password`, {
-					method: 'PUT',
-					body: { password: values.get('password') }
+				apiRequest('PUT', '/admin/users/{user_id}/password', {
+					params: { path: { user_id: userId } },
+					body: { password: String(values.get('password') ?? '') }
 				}),
 			msg('User password reset'),
 			form
@@ -219,7 +270,10 @@
 
 	function revokeUserSessions(userId: string) {
 		void mutate(
-			() => apiRequest(`/admin/users/${userId}/sessions`, { method: 'DELETE' }),
+			() =>
+				apiRequest('DELETE', '/admin/users/{user_id}/sessions', {
+					params: { path: { user_id: userId } }
+				}),
 			msg('User sessions revoked')
 		);
 	}
@@ -233,9 +287,11 @@
 		notice = null;
 		invitationUrl = '';
 		try {
-			const invitation = await apiRequest<CreatedInvitation>('/admin/invitations', {
-				method: 'POST',
-				body: { username: values.get('username'), role: values.get('role') }
+			const invitation = await apiRequest('POST', '/admin/invitations', {
+				body: {
+					username: String(values.get('username') ?? ''),
+					role: values.get('role') === 'administrator' ? 'administrator' : 'member'
+				}
 			});
 			invitationUrl = new URL(invitation.accept_path, window.location.origin).href;
 			await data.refetch();
@@ -257,27 +313,23 @@
 		for (const key of ['session_days', 'max_pdf_bytes', 'max_attachment_bytes', 'export_ttl_hours'])
 			values[key] = Number(values[key]);
 		void mutate(
-			() => apiRequest('/admin/settings', { method: 'PUT', body: values }),
+			() => apiRequest('PUT', '/admin/settings', { body: values as Settings }),
 			msg('Settings saved')
 		);
 	}
 
-	async function runMaintenance(operation: string) {
+	async function runMaintenance(operation: (typeof maintenanceOperations)[number][0]) {
 		busy = true;
 		error = '';
 		notice = msg('Maintenance operation started');
 		try {
-			const started = await apiRequest<{ id: string }>(`/admin/maintenance/${operation}`, {
-				method: 'POST'
+			const started = await apiRequest('POST', '/admin/maintenance/{operation}', {
+				params: { path: { operation } }
 			});
-			for (;;) {
-				const workflow = await apiRequest<Workflow>(`/admin/workflows/${started.id}`);
-				if (workflow.state === 'succeeded') break;
-				if (workflow.state === 'failed' || workflow.state === 'cancelled') {
-					throw new Error(workflow.error || $t('Maintenance operation failed'));
-				}
-				await new Promise((resolveDelay) => window.setTimeout(resolveDelay, 750));
-			}
+			await waitForWorkflow(started.id, {
+				signal: workflowAbort.signal,
+				failureMessage: $t('Maintenance operation failed')
+			});
 			await data.refetch();
 			notice = msg('Maintenance operation completed');
 		} catch (reason) {
@@ -290,7 +342,10 @@
 	function deleteAdminItem(itemId: string) {
 		if (!window.confirm($t('Permanently delete this Item?'))) return;
 		void mutate(
-			() => apiRequest(`/admin/items/${itemId}`, { method: 'DELETE' }),
+			() =>
+				apiRequest('DELETE', '/admin/items/{item_id}', {
+					params: { path: { item_id: itemId } }
+				}),
 			msg('Item deleted')
 		);
 	}

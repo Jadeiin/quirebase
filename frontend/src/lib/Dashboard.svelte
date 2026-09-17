@@ -6,13 +6,10 @@
 	import RichText from '$lib/design/RichText.svelte';
 	import { domainLabel } from '$lib/domain-labels';
 	import { t } from '$lib/i18n';
-	import type { components } from '$lib/api/schema';
-
-	type DashboardView = components['schemas']['DashboardView'];
 
 	const dashboard = createQuery(() => ({
 		queryKey: ['dashboard'],
-		queryFn: () => apiRequest<DashboardView>('/dashboard')
+		queryFn: () => apiRequest('GET', '/dashboard')
 	}));
 </script>
 

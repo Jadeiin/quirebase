@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
-	import { apiRequest, type SessionView } from '$lib/api/client';
+	import { apiRequest } from '$lib/api/client';
 	import { activateLocale, t } from '$lib/i18n';
 	let { token } = $props<{ token: string }>();
 	let password = $state('');
@@ -8,13 +8,12 @@
 	let busy = $state(false);
 	const session = createQuery(() => ({
 		queryKey: ['session'],
-		queryFn: () => apiRequest<SessionView>('/session'),
+		queryFn: () => apiRequest('GET', '/session'),
 		retry: false
 	}));
 	const invitation = createQuery(() => ({
 		queryKey: ['invitation', token],
-		queryFn: () =>
-			apiRequest<{ username: string; role: string; expires_at: string }>(`/invitations/${token}`),
+		queryFn: () => apiRequest('GET', '/invitations/{token}', { params: { path: { token } } }),
 		retry: false
 	}));
 	$effect(() => {
@@ -24,7 +23,10 @@
 		busy = true;
 		error = '';
 		try {
-			await apiRequest(`/invitations/${token}/accept`, { method: 'POST', body: { password } });
+			await apiRequest('POST', '/invitations/{token}/accept', {
+				params: { path: { token } },
+				body: { password }
+			});
 			location.assign('/');
 		} catch (reason) {
 			error = reason instanceof Error ? reason.message : $t('Unable to accept invitation');

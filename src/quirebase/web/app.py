@@ -12,13 +12,7 @@ from quirebase.core.config import get_settings
 from quirebase.core.database import AsyncSessionLocal, engine
 from quirebase.core.logging import configure_logging, log_context
 from quirebase.mcp import SessionFactory, create_mcp_http_mount
-from quirebase.web.api.account import router as account_router
-from quirebase.web.api.admin import router as admin_router
-from quirebase.web.api.content import router as content_router
-from quirebase.web.api.exports import router as exports_router
-from quirebase.web.api.items import router as items_router
 from quirebase.web.api.routes import router as api_router
-from quirebase.web.api.workspaces import router as workspaces_router
 from quirebase.web.errors import register_error_handlers
 from quirebase.web.system import router as system_router
 
@@ -53,27 +47,7 @@ def create_app(*, mcp_session_factory: SessionFactory = AsyncSessionLocal) -> Fa
     settings = get_settings()
     frontend_directory = _frontend_directory()
     frontend_csp = _frontend_content_security_policy(frontend_directory)
-    mcp_http = create_mcp_http_mount(
-        mcp_session_factory,
-        allowed_hosts=settings.allowed_host_list,
-        settings=settings,
-    )
-
-    @asynccontextmanager
-    async def lifespan(_app: FastAPI):
-        configure_logging(
-            level=settings.log_level,
-            json_output=settings.log_format == "json",
-        )
-        try:
-            async with mcp_http.server.session_manager.run():
-                yield
-        finally:
-            if mcp_session_factory is AsyncSessionLocal:
-                await engine.dispose()
-
-    app = FastAPI(title="Quirebase", version="0.1.0", lifespan=lifespan)
-    app.state.mcp_server = mcp_http.server
+    app = FastAPI(title="Quirebase", version="0.1.0")
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_host_list)
 
     @app.middleware("http")
@@ -106,12 +80,29 @@ def create_app(*, mcp_session_factory: SessionFactory = AsyncSessionLocal) -> Fa
 
     app.include_router(system_router)
     app.include_router(api_router)
-    app.include_router(account_router)
-    app.include_router(admin_router)
-    app.include_router(content_router)
-    app.include_router(exports_router)
-    app.include_router(items_router)
-    app.include_router(workspaces_router)
+
+    mcp_http = create_mcp_http_mount(
+        app,
+        mcp_session_factory,
+        allowed_hosts=settings.allowed_host_list,
+        settings=settings,
+    )
+    app.state.mcp_server = mcp_http.server
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        configure_logging(
+            level=settings.log_level,
+            json_output=settings.log_format == "json",
+        )
+        try:
+            async with mcp_http.lifespan():
+                yield
+        finally:
+            if mcp_session_factory is AsyncSessionLocal:
+                await engine.dispose()
+
+    app.router.lifespan_context = lifespan
 
     @app.api_route(
         "/api/v1/{path:path}",

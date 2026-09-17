@@ -10,7 +10,11 @@ from sqlalchemy.ext.asyncio import (  # ruff: ignore[typing-only-third-party-imp
 )
 
 from quirebase.accounts import get_login_session_by_token, resolve_api_token_user, verify_api_token
-from quirebase.audit import identify_programmatic_invocation, programmatic_invocation
+from quirebase.audit import (
+    current_programmatic_invocation,
+    identify_programmatic_invocation,
+    programmatic_invocation,
+)
 from quirebase.core.config import get_settings
 from quirebase.core.database import get_db
 from quirebase.models import User
@@ -52,6 +56,14 @@ async def current_api_user(
         if verified is None:
             raise _authentication_required()
         user = await resolve_api_token_user(db, verified.user_id)
+        trusted_invocation = current_programmatic_invocation()
+        if trusted_invocation is not None and trusted_invocation.protocol == "mcp":
+            identify_programmatic_invocation(
+                api_token_id=verified.token_id,
+                client_id=trusted_invocation.client_id or "mcp",
+            )
+            yield user
+            return
         route = request.scope.get("route")
         operation = getattr(route, "name", "unknown")
         invocation = programmatic_invocation("http", operation)

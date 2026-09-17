@@ -19,8 +19,7 @@ Planned deepening work is ordered in `docs/architecture/deep-module-roadmap.md`.
 | `operations` | Business Module | Runtime settings, health, backup, reconciliation and maintenance workflows |
 | `search` | Outbound adapter Module | The Library Search port plus SQLite and PostgreSQL adapters |
 | `web` | Inbound adapter Module | HTTP parsing, Login Session/API Token credential selection, Origin enforcement, API routing, response formatting and static application delivery |
-| `mcp` | Inbound adapter Module | MCP tool registration, API Token adaptation and protocol conversion |
-| `programmatic` | Application Interface Module | Shared response contracts and pure projections used by the HTTP API and MCP adapters |
+| `mcp` | Inbound adapter Module | Curated OpenAPI-to-MCP projection, API Token adaptation, trusted invocation provenance and protocol conversion |
 | `core` | Infrastructure Module | Configuration, database setup, UUID object storage, DBOS Adapter, cryptography and base errors |
 
 The TypeScript workspace under `frontend/` is the Web UI adapter. It owns responsive application
@@ -136,8 +135,9 @@ Their implementation lives in `library.item_metadata`; that internal Module owns
 Item's bibliographic record, not unrelated Item operations.
 `ItemMetadata` is a transport-neutral business command and may be used directly by inbound
 Adapters that can derive their wire schema from dataclasses; they must not maintain mirrored input
-models. Response contracts shared by both programmatic Adapters live in `programmatic`; UI-only
-or protocol-only projections remain owned by their Adapter.
+models. HTTP response DTOs and pure projections live beside their capability routes under
+`web/api`; MCP derives its schemas and execution from that OpenAPI contract instead of owning a
+second response model or orchestration path.
 
 Operations over a user-selected set of Items live in `library.bulk_items`. This Module owns the
 bulk-operation transaction, all-selected authorization rule, audit event and post-commit file
@@ -156,8 +156,7 @@ Annotation and Annotation Reply CRUD cross the Documents interface through typed
 commands and shared views. Documents owns the canonical per-page geometry and style schema,
 authorization coordination, optimistic versioning, annotation soft deletion, Audit Events and projection to
 PDF export. Web, REST and MCP are inbound Adapters over that Interface; EmbedPDF objects are
-translated only inside the Web asset and never enter Documents persistence or programmatic wire
-contracts.
+translated only inside the Web asset and never enter Documents persistence or API wire contracts.
 
 Tag selection is presented by the Item Workspace and committed through additive/remove commands
 (`add_tag_to_item` and `remove_tag_from_item`). Existing Tags may be matched case-insensitively
@@ -292,9 +291,8 @@ directions are:
 | `documents` | `access`, `audit`, `core`, `models`, `operations`, `search` | Authorization, owned-object persistence, auditing, runtime settings, Documents workflows and revision-owned Search projection |
 | `operations` | `audit`, `core`, `library`, `models`, `search` | Infrastructure access, operational persistence, maintenance workflows, global rebuild coordination and audit recording |
 | `search` | `models` | Build and query the derived search representation |
-| `web` | Business Modules, `access`, `core`, `mcp`, `models`, `programmatic` | Invoke use cases, expose `/api/v1` through explicit Bearer or Login Session authentication, enforce cookie-request Origins, format responses, serve the static application and compose the MCP HTTP mount |
-| `mcp` | `accounts`, `audit`, `core`, `documents`, `library`, `programmatic`, `projects` | Resolve a verified token subject, bind invocation provenance for business Audit Events, manage request persistence lifetime, invoke ordinary User use cases and format protocol results without owning their authorization or transactions |
-| `programmatic` | `documents`, `library` | Define shared programmatic response contracts and pure projections without owning authentication, transactions or business authorization |
+| `web` | Business Modules, `access`, `accounts`, `audit`, `core`, `documents`, `library`, `mcp`, `models`, `operations`, `projects`, `search` | Invoke use cases, own capability-local HTTP DTOs and projections, expose `/api/v1` through explicit Bearer or Login Session authentication, enforce cookie-request Origins, format responses, serve the static application and compose the MCP HTTP mount |
+| `mcp` | `accounts`, `audit`, `core` | Verify API Tokens at the MCP transport, select a fixed OpenAPI operation allowlist, bind trusted MCP provenance and invoke the same `/api/v1` handlers through an in-process ASGI client |
 | `core` | Nothing above infrastructure | Infrastructure must not know business concepts |
 
 Dependencies on standalone workspace packages are also explicit:

@@ -5,9 +5,6 @@
 	import { domainLabel } from '$lib/domain-labels';
 	import ExportPreferences from '$lib/ExportPreferences.svelte';
 	import { activateLocale, msg, t, type MessageKey } from '$lib/i18n';
-	import type { components } from '$lib/api/schema';
-
-	type AccountView = components['schemas']['AccountSummaryView'];
 
 	let tokenName = $state('');
 	let tokenDays = $state(30);
@@ -20,7 +17,7 @@
 	let busy = $state(false);
 	const account = createQuery(() => ({
 		queryKey: ['account'],
-		queryFn: () => apiRequest<AccountView>('/account')
+		queryFn: () => apiRequest('GET', '/account')
 	}));
 
 	onMount(() => {
@@ -73,8 +70,7 @@
 		error = '';
 		notice = null;
 		try {
-			const grant = await apiRequest<{ token: string }>('/account/api-tokens', {
-				method: 'POST',
+			const grant = await apiRequest('POST', '/account/api-tokens', {
 				body: { name: tokenName, days: tokenDays }
 			});
 			createdToken = grant.token;
@@ -93,11 +89,10 @@
 		const values = new FormData(form);
 		void mutate(
 			() =>
-				apiRequest('/account/password', {
-					method: 'PUT',
+				apiRequest('PUT', '/account/password', {
 					body: {
-						current_password: values.get('current_password'),
-						new_password: values.get('new_password')
+						current_password: String(values.get('current_password') ?? ''),
+						new_password: String(values.get('new_password') ?? '')
 					}
 				}),
 			msg('Password changed'),
@@ -111,8 +106,7 @@
 		error = '';
 		notice = null;
 		try {
-			await apiRequest('/account/locale', {
-				method: 'PUT',
+			await apiRequest('PUT', '/account/locale', {
 				body: { locale: selectedLocale }
 			});
 			activateLocale(selectedLocale);
@@ -126,28 +120,38 @@
 
 	function revokeToken(tokenId: string) {
 		void mutate(
-			() => apiRequest(`/account/api-tokens/${tokenId}`, { method: 'DELETE' }),
+			() =>
+				apiRequest('DELETE', '/account/api-tokens/{token_id}', {
+					params: { path: { token_id: tokenId } }
+				}),
 			msg('API Token revoked')
 		);
 	}
 
 	function revokeSession(sessionId: string, current: boolean) {
 		if (current) {
-			void navigateAfter(() => apiRequest(`/account/sessions/${sessionId}`, { method: 'DELETE' }));
+			void navigateAfter(() =>
+				apiRequest('DELETE', '/account/sessions/{session_id}', {
+					params: { path: { session_id: sessionId } }
+				})
+			);
 			return;
 		}
 		void mutate(
-			() => apiRequest(`/account/sessions/${sessionId}`, { method: 'DELETE' }),
+			() =>
+				apiRequest('DELETE', '/account/sessions/{session_id}', {
+					params: { path: { session_id: sessionId } }
+				}),
 			msg('Session revoked')
 		);
 	}
 
 	async function revokeAllSessions() {
-		await navigateAfter(() => apiRequest('/account/sessions', { method: 'DELETE' }));
+		await navigateAfter(() => apiRequest('DELETE', '/account/sessions'));
 	}
 
 	async function logout() {
-		await navigateAfter(() => apiRequest('/session', { method: 'DELETE' }));
+		await navigateAfter(() => apiRequest('DELETE', '/session'));
 	}
 </script>
 

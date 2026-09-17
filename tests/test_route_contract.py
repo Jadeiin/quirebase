@@ -208,7 +208,7 @@ def test_operational_routes_contract():
                 continue
             operational_routes.add((method, route.path))
 
-    assert len(operational_routes) == 128, f"Expected 128 routes, found {len(operational_routes)}"
+    assert len(operational_routes) == 129, f"Expected 129 routes, found {len(operational_routes)}"
     assert {
         ("POST", "/api/v1/items/{item_id}/attachments/remote"),
         ("POST", "/api/v1/items/{item_id}/revisions/remote"),

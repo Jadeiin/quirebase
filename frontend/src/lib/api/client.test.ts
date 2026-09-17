@@ -12,13 +12,67 @@ describe('apiRequest', () => {
 			return new Response(JSON.stringify({ ok: true }));
 		};
 
-		await apiRequest('/items', { method: 'POST', body: { title: 'Item' } }, fetcher);
+		await apiRequest(
+			'POST',
+			'/items',
+			{
+				body: {
+					title: 'Item',
+					keywords: [],
+					urls: [],
+					authors: [],
+					editors: [],
+					identifiers: [],
+					custom_fields: []
+				}
+			},
+			fetcher
+		);
 
 		expect(receivedInput).toBe('/api/v1/items');
 		const headers = new Headers(receivedInit?.headers);
 		expect(receivedInit?.credentials).toBe('same-origin');
 		expect(headers.get('Content-Type')).toBe('application/json');
 		expect(headers.has('X-CSRF-Token')).toBe(false);
+	});
+
+	it('expands typed path and query parameters', async () => {
+		let receivedInput: RequestInfo | URL | undefined;
+		const fetcher: typeof fetch = async (input) => {
+			receivedInput = input;
+			return new Response(JSON.stringify([]));
+		};
+
+		await apiRequest(
+			'GET',
+			'/items/{item_id}/annotations',
+			{
+				params: {
+					path: { item_id: 'item/with slash' },
+					query: { revision_id: 'revision-1', project_id: 'project-1' }
+				}
+			},
+			fetcher
+		);
+
+		expect(receivedInput).toBe(
+			'/api/v1/items/item%2Fwith%20slash/annotations?revision_id=revision-1&project_id=project-1'
+		);
+	});
+
+	it('keeps method, path, parameters, body, and response tied to OpenAPI at compile time', () => {
+		function openApiCompileChecks() {
+			// @ts-expect-error Unknown paths are rejected.
+			void apiRequest('GET', '/unknown');
+			// @ts-expect-error Existing paths reject unsupported methods.
+			void apiRequest('PATCH', '/session');
+			// @ts-expect-error Path parameters are required and use their OpenAPI names.
+			void apiRequest('GET', '/projects/{project_id}', { params: { path: { id: 'wrong' } } });
+			// @ts-expect-error Request bodies are checked against the selected operation.
+			void apiRequest('POST', '/session', { body: { username: 'reader' } });
+		}
+		void openApiCompileChecks;
+		expect(true).toBe(true);
 	});
 });
 
@@ -39,8 +93,24 @@ describe('downloadFilename', () => {
 
 describe('non-JSON API errors', () => {
 	it.each([
-		['download', (fetcher: typeof fetch) => apiDownloadGet('/export', fetcher)],
-		['text', (fetcher: typeof fetch) => apiText('/citation', fetcher)]
+		[
+			'download',
+			(fetcher: typeof fetch) =>
+				apiDownloadGet(
+					'/items/{item_id}/attachments/{attachment_id}/content',
+					{ params: { path: { item_id: 'item-1', attachment_id: 'attachment-1' } } },
+					fetcher
+				)
+		],
+		[
+			'text',
+			(fetcher: typeof fetch) =>
+				apiText(
+					'/items/{item_id}/citation/content',
+					{ params: { path: { item_id: 'item-1' } } },
+					fetcher
+				)
+		]
 	])('preserves the HTTP status for %s responses', async (_name, request) => {
 		const fetcher = (async () =>
 			new Response('<h1>Bad gateway</h1>', {

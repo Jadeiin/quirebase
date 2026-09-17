@@ -28,10 +28,12 @@ from quirebase.library import (
     stage_pdf_import_batch,
 )
 from quirebase.operations.settings import get_effective_settings_model
-from quirebase.programmatic import OkView, WriteResult, item_search_view
+from quirebase.web.api.common import OkView, WriteResult
 from quirebase.web.api.content import BIBLIOGRAPHY_CONTENT_TYPES
 from quirebase.web.api.dependencies import ApiUser, Database
-from quirebase.web.api.schemas import (
+from quirebase.web.api.library_schemas import NameRequest, item_search_view
+from quirebase.web.api.serialization import enum_value
+from quirebase.web.api.workspace_schemas import (
     BibliographyExportRequest,
     BulkActionRequest,
     CitationStyleCreateRequest,
@@ -41,10 +43,8 @@ from quirebase.web.api.schemas import (
     IdentifierImportRequest,
     ImportBatchRetryView,
     ImportBatchView,
-    NameRequest,
     TagMergeRequest,
 )
-from quirebase.web.api.serialization import enum_value
 from quirebase.web.responses import content_disposition
 from quirebase.web.uploads import upload_chunks
 

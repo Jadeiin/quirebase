@@ -10,7 +10,6 @@
 	type Results = components['schemas']['CandidatePageView'];
 	type Candidate = components['schemas']['CandidateView'];
 	type Clause = { id: number; field: string; operator: string; term: string };
-	type Provider = { id: string; name: string };
 
 	let nextClauseId = 2;
 	let provider = $state('openalex');
@@ -25,7 +24,7 @@
 
 	const providers = createQuery(() => ({
 		queryKey: ['discovery-providers'],
-		queryFn: () => apiRequest<Provider[]>('/discovery/providers')
+		queryFn: () => apiRequest('GET', '/discovery/providers')
 	}));
 
 	function addClause() {
@@ -40,8 +39,7 @@
 		busy = true;
 		error = '';
 		try {
-			results = await apiRequest<Results>('/discovery/search', {
-				method: 'POST',
+			results = await apiRequest('POST', '/discovery/search', {
 				body: {
 					provider,
 					clauses: clauses.map(({ field, operator, term }) => ({ field, operator, term })),
@@ -64,8 +62,7 @@
 		importing = key;
 		error = '';
 		try {
-			const batch = await apiRequest<{ id: string }>('/imports/identifier', {
-				method: 'POST',
+			const batch = await apiRequest('POST', '/imports/identifier', {
 				body: { identifier: candidate.identifier, provider: candidate.identifier_provider }
 			});
 			await goto(resolve(`/import?batch=${encodeURIComponent(batch.id)}`));

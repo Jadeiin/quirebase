@@ -4,7 +4,7 @@ Date: 2026-08-15
 
 ## Status
 
-Proposed
+Accepted
 
 Tracking: [#1 Plan staged Research Intelligence and MCP capabilities](https://github.com/Jadeiin/quirebase/issues/1)
 
@@ -31,16 +31,24 @@ A dedicated capability module providing:
 
 ### 2. Protocol Adapter: `quirebase.mcp` (Model Context Protocol)
 
-An inbound protocol adapter built on the official Python `mcp` 2.x SDK. Remote access uses
-Streamable HTTP; standard input/output is reserved for a client launching a trusted local process.
-The superseded HTTP+SSE transport is not a new implementation target.
+An inbound protocol adapter built with FastMCP 3 over the official MCP SDK. Remote access uses
+stateless Streamable HTTP; standard input/output is reserved for a client launching a trusted local
+process. The superseded HTTP+SSE transport is not a new implementation target.
+
+The typed FastAPI `/api/v1` contract is the canonical application protocol. MCP tools are a curated
+OpenAPI-derived projection of those routes, executed through an in-process ASGI client. The adapter
+keeps a fixed operation allowlist and supplies MCP-specific names, descriptions and safety
+annotations; it does not duplicate application orchestration or response DTOs. API Tokens are
+verified by the MCP transport and again by the API dependency. A request-local trusted context
+preserves MCP tool and token provenance for Audit Events without accepting client-controlled
+provenance headers.
 
 The server exposes a fixed allowlist covering the ordinary User's core research workflows:
 
 | Capability | Tools | Deliberate limits |
 | --- | --- | --- |
 | Library | `library.search`, `library.get_item`, `library.create_item`, `library.update_item` | Search is limited to 25 Items per page; writes reuse Item ownership and optimistic version checks |
-| Projects | `projects.list`, `projects.get`, `projects.create`, `projects.add_item`, `projects.remove_item`, `projects.set_member`, `projects.remove_member` | Project Role checks remain authoritative, including owner-only membership changes |
+| Projects | `projects.list`, `projects.get`, `projects.create`, `projects.update_settings`, lifecycle, item and membership tools | Project Role checks remain authoritative, including owner-only membership changes |
 | Documents | `documents.list` | Returns revision and attachment metadata, never object keys, bytes or extracted text |
 | Annotations | `annotations.list`, `annotations.create`, `annotations.update`, `annotations.delete` | Reuses revision, Item and Project visibility plus annotation ownership/version rules |
 | Organization | `tags.list`, `tags.add_to_item`, `tags.remove_from_item`, `tags.set_for_item`, `discussions.list`, `discussions.add`, `discussions.delete` | Reuses editable-Item and message ownership rules |
@@ -53,9 +61,10 @@ and prompts are not required for this tool-oriented slice. API Tokens do not car
 read/write or per-tool scopes; adding a tool changes the server allowlist for every valid token and
 therefore requires its own authorization and behaviour review.
 
-Every handler derives the User from the verified API Token and invokes the existing business
-Interface, which continues to apply System Role, Project Role, Item ownership, transaction and
-Audit Event rules. Tool input never selects the authorization subject.
+Every generated tool forwards the already verified Bearer credential only to the in-process API
+client. The API verifies it again, derives the User and invokes the existing business Interface,
+which continues to apply System Role, Project Role, Item ownership, transaction and Audit Event
+rules. Tool input never selects the authorization subject.
 
 Programmatic Adapters bind protocol, operation and API Token/client identity through the Audit
 Module interface. A successful data-changing operation records one business Audit Event enriched
@@ -114,6 +123,9 @@ graph LR
 - External agent ecosystems can read and write to Quirebase without custom integration code.
 - Research papers preserve mathematical equations and structured tables when processed by LLMs.
 - Agents can run with either local models (e.g. Ollama) or cloud providers via configurable runtime settings.
-- Protocol and transport behaviour follows the official `mcp` SDK rather than a Quirebase JSON-RPC implementation.
+- Protocol and transport behaviour follows FastMCP and the official MCP SDK rather than a
+  Quirebase JSON-RPC implementation.
+- MCP and HTTP cannot drift into parallel orchestration paths because both execute the same API
+  operations and response contracts.
 - API Tokens expire, can be revoked, and immediately lose access when their User is deactivated.
 - Tool availability is server-wide; User- and object-level authorization remains authoritative.

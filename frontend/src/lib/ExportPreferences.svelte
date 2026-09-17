@@ -21,9 +21,11 @@
 	const styles = createQuery(() => ({
 		queryKey: ['citation-styles', 'preferences', styleQuery],
 		queryFn: () =>
-			apiRequest<{ styles: Array<{ key: string; name: string }> }>(
-				`/citation-styles?query=${encodeURIComponent(styleQuery)}&limit=30&include=${encodeURIComponent(preferences.citation.style)}`
-			)
+			apiRequest('GET', '/citation-styles', {
+				params: {
+					query: { query: styleQuery, limit: 30, include: preferences.citation.style }
+				}
+			})
 	}));
 	const citationPreview = createQuery(() => ({
 		queryKey: ['citation-key-preview', citationKeyFormula, citationKeyForceAscii],
@@ -32,9 +34,9 @@
 			const formula = String(queryKey[1]);
 			const forceAscii = queryKey[2] === true;
 			return {
-				...(await apiRequest<{ key: string }>(
-					`/citation-key-preview?formula=${encodeURIComponent(formula)}&force_ascii=${forceAscii}`
-				)),
+				...(await apiRequest('GET', '/citation-key-preview', {
+					params: { query: { formula, force_ascii: forceAscii } }
+				})),
 				formula,
 				forceAscii
 			};

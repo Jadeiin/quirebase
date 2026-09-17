@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { apiRequest, type ItemSummary } from '$lib/api/client';
+	import { apiRequest } from '$lib/api/client';
 	import RichText from '$lib/design/RichText.svelte';
 	import { t } from '$lib/i18n';
 
@@ -28,19 +28,19 @@
 
 	const tags = createQuery(() => ({
 		queryKey: ['tags'],
-		queryFn: () => apiRequest<Tag[]>('/tags')
+		queryFn: () => apiRequest('GET', '/tags')
 	}));
 	const duplicates = createQuery(() => ({
 		queryKey: ['duplicates', scannedMode],
-		queryFn: () => apiRequest<{ groups: ItemSummary[][] }>(`/duplicates?mode=${scannedMode}`),
+		queryFn: () => apiRequest('GET', '/duplicates', { params: { query: { mode: scannedMode } } }),
 		enabled: Boolean(scannedMode)
 	}));
 	const citationStyles = createQuery(() => ({
 		queryKey: ['citation-styles', styleQuery],
 		queryFn: () =>
-			apiRequest<{ styles: CitationStyle[] }>(
-				`/citation-styles?query=${encodeURIComponent(styleQuery)}&limit=50`
-			)
+			apiRequest('GET', '/citation-styles', {
+				params: { query: { query: styleQuery, limit: 50 } }
+			})
 	}));
 
 	const filteredTags = $derived(
@@ -75,7 +75,11 @@
 		const name = window.prompt($t('New Tag name'), tag.name);
 		if (name && name !== tag.name) {
 			void tagMutation(
-				() => apiRequest(`/tags/${tag.id}`, { method: 'PATCH', body: { name } }),
+				() =>
+					apiRequest('PATCH', '/tags/{tag_id}', {
+						params: { path: { tag_id: tag.id } },
+						body: { name }
+					}),
 				$t('Tag renamed')
 			);
 		}
@@ -84,7 +88,10 @@
 	function deleteTag(tag: Tag) {
 		if (window.confirm($t('Delete this Tag from all accessible Items?'))) {
 			void tagMutation(
-				() => apiRequest(`/tags/${tag.id}`, { method: 'DELETE' }),
+				() =>
+					apiRequest('DELETE', '/tags/{tag_id}', {
+						params: { path: { tag_id: tag.id } }
+					}),
 				$t('Tag deleted')
 			);
 		}
@@ -94,8 +101,7 @@
 		if (!sourceTag || !targetTag || sourceTag === targetTag) return;
 		void tagMutation(
 			() =>
-				apiRequest('/tags/merge', {
-					method: 'POST',
+				apiRequest('POST', '/tags/merge', {
 					body: { source_tag_id: sourceTag, target_tag_id: targetTag }
 				}),
 			$t('Tags merged')
@@ -128,8 +134,7 @@
 		error = '';
 		notice = '';
 		try {
-			await apiRequest('/citation-styles', {
-				method: 'POST',
+			await apiRequest('POST', '/citation-styles', {
 				body: { name: styleName, csl: styleCsl }
 			});
 			styleName = '';
@@ -147,7 +152,9 @@
 		busy = true;
 		error = '';
 		try {
-			await apiRequest(`/citation-styles/${style.key}`, { method: 'DELETE' });
+			await apiRequest('DELETE', '/citation-styles/{style_id}', {
+				params: { path: { style_id: style.key } }
+			});
 			await queryClient.invalidateQueries({ queryKey: ['citation-styles'] });
 			notice = $t('Citation Style deleted');
 		} catch (reason) {

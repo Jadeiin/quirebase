@@ -29,6 +29,8 @@ Core PDF components:
 - `@zxcvbn-ts/core` 4.2.0, `@zxcvbn-ts/language-common` 4.1.3, and
   `@zxcvbn-ts/language-en` 4.1.1 — MIT, bundled into the local password-strength estimator.
 - httpx2 — BSD-3-Clause, HTTP transport client for outbound discovery metadata lookup and online search.
+- FastMCP 3.x — Apache-2.0, used to derive the curated MCP tool adapter from Quirebase's OpenAPI
+  contract. Its official MCP SDK dependency is MIT.
 - obstore — Apache-2.0, the native asynchronous Local/S3 object-storage data plane.
 - stream-zip — MIT, used to generate ZIP downloads incrementally without assembling an archive on disk.
 

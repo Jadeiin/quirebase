@@ -6,6 +6,14 @@ import {
 	PdfAnnotationSubtype,
 	type PdfAnnotationObject
 } from '@embedpdf/models';
+import type { components } from '$lib/api/schema';
+
+type AnnotationKind = components['schemas']['AnnotationKind'];
+type AnnotationView = components['schemas']['AnnotationView'];
+type AnnotationWrite = Pick<
+	components['schemas']['AnnotationCreate'],
+	'page_index' | 'kind' | 'body' | 'selected_text' | 'payload'
+>;
 
 export type Point = { x: number; y: number };
 export type CanonicalRect = Point & { width: number; height: number };
@@ -46,7 +54,7 @@ export type CanonicalAnnotation = {
 	id: string;
 	revision_id: string;
 	page_index: number;
-	kind: string;
+	kind: AnnotationKind;
 	scope: 'private' | 'project';
 	project_id: string | null;
 	body: string | null;
@@ -59,6 +67,25 @@ export type CanonicalAnnotation = {
 	updated_at: string;
 	replies: CanonicalReply[];
 };
+
+export function canonicalAnnotationFromView(view: AnnotationView): CanonicalAnnotation {
+	const style = view.payload.style;
+	return {
+		...view,
+		payload: {
+			...view.payload,
+			style: {
+				stroke_color: style?.stroke_color ?? null,
+				fill_color: style?.fill_color ?? null,
+				text_color: style?.text_color ?? null,
+				opacity: style?.opacity ?? 1,
+				stroke_width: style?.stroke_width ?? 1,
+				dash_pattern: style?.dash_pattern ?? []
+			}
+		},
+		replies: view.replies
+	};
+}
 
 type VendorRect = { origin: Point; size: { width: number; height: number } };
 type LooseAnnotation = PdfAnnotationObject & {
@@ -128,8 +155,8 @@ export function createAnnotationAdapter(pageGeometry: number[][]) {
 		stroke_width: object.strokeWidth ?? 1,
 		dash_pattern: object.strokeDashArray ?? []
 	});
-	const kindFromVendor = (object: LooseAnnotation) => {
-		const kinds: Partial<Record<PdfAnnotationSubtype, string>> = {
+	const kindFromVendor = (object: LooseAnnotation): AnnotationKind | undefined => {
+		const kinds: Partial<Record<PdfAnnotationSubtype, AnnotationKind>> = {
 			[PdfAnnotationSubtype.HIGHLIGHT]: 'highlight',
 			[PdfAnnotationSubtype.UNDERLINE]: 'underline',
 			[PdfAnnotationSubtype.STRIKEOUT]: 'strikeout',
@@ -154,7 +181,7 @@ export function createAnnotationAdapter(pageGeometry: number[][]) {
 		vendor: PdfAnnotationObject,
 		pageIndex: number,
 		existing?: CanonicalAnnotation
-	) => {
+	): AnnotationWrite => {
 		const object = vendor as LooseAnnotation;
 		const kind = kindFromVendor(object);
 		if (!kind || object.intent === 'FreeTextCallout' || object.inReplyToId) {
@@ -205,7 +232,7 @@ export function createAnnotationAdapter(pageGeometry: number[][]) {
 					? object.custom.text
 					: null),
 			payload
-		};
+		} as AnnotationWrite;
 	};
 
 	const vendorFromCanonical = (annotation: CanonicalAnnotation): PdfAnnotationObject => {

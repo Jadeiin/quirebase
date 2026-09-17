@@ -43,7 +43,7 @@ describe('canonical EmbedPDF annotation adapter', () => {
 		const canonical = adapter.canonicalFromVendor(vendor, 0, annotation);
 		expect(canonical.kind).toBe('highlight');
 		expect(canonical.payload.rect).toEqual(annotation.payload.rect);
-		expect(canonical.payload.segment_rects).toEqual(annotation.payload.segment_rects);
+		expect(canonical.payload).toMatchObject({ segment_rects: annotation.payload.segment_rects });
 		expect(canonical.selected_text).toBe('evidence');
 	});
 });

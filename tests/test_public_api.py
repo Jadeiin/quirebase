@@ -24,13 +24,10 @@ from quirebase.models import (
     SystemRole,
     User,
 )
-from quirebase.programmatic import (
-    DocumentListView,
-    ItemDetailView,
-    LibrarySearchView,
-    ProjectDetailView,
-)
-from quirebase.web.api.routes import router as programmatic_api_router
+from quirebase.web.api.annotation_schemas import DocumentListView
+from quirebase.web.api.library_schemas import ItemDetailView, LibrarySearchView
+from quirebase.web.api.project_schemas import ProjectDetailView
+from quirebase.web.api.routes import router as api_router
 from quirebase.web.app import create_app
 
 
@@ -54,6 +51,16 @@ async def api_client(factory):
 
 def bearer(raw_token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {raw_token}"}
+
+
+def api_routes(router):
+    routes = []
+    for route in router.routes:
+        if hasattr(route, "original_router"):
+            routes.extend(api_routes(route.original_router))
+        elif isinstance(route, APIRoute):
+            routes.append(route)
+    return routes
 
 
 @pytest.mark.anyio
@@ -82,7 +89,7 @@ async def test_http_api_requires_a_bearer_api_token_and_rejects_cookie_or_query_
 
 
 @pytest.mark.anyio
-async def test_http_api_includes_the_programmatic_capability_set(
+async def test_http_api_includes_the_public_capability_set(
     async_session_factory,
 ):
     expected = {
@@ -133,18 +140,16 @@ async def test_http_api_includes_the_programmatic_capability_set(
     async with api_client(async_session_factory) as (_client, _app):
         actual = {
             (method, route.path)
-            for route in programmatic_api_router.routes
-            if isinstance(route, APIRoute)
+            for route in api_routes(api_router)
             for method in route.methods or set()
         }
         response_models = {
             (next(iter(route.methods or set())), route.path): route.response_model
-            for route in programmatic_api_router.routes
-            if isinstance(route, APIRoute) and route.methods
+            for route in api_routes(api_router)
+            if route.methods
         }
 
-    # The unified router also owns browser session and UI-specific aggregate
-    # capabilities, while preserving every programmatic API route.
+    # The unified router also owns browser session and UI-specific aggregate capabilities.
     assert expected <= actual
     assert response_models["GET", "/api/v1/items"] is LibrarySearchView
     assert response_models["GET", "/api/v1/items/{item_id}"] is ItemDetailView
@@ -247,7 +252,7 @@ async def test_http_api_library_project_tag_and_discussion_lifecycle(
 
 
 @pytest.mark.anyio
-async def test_http_api_document_and_annotation_views_match_programmatic_contracts(
+async def test_http_api_document_and_annotation_views_match_api_contracts(
     async_db, async_session_factory
 ):
     db = async_db
@@ -343,6 +348,15 @@ async def test_http_api_document_and_annotation_views_match_programmatic_contrac
         assert listed.status_code == 200
         assert listed.json()[0]["id"] == annotation_id
         assert listed.json()[0]["replies"][0]["id"] == reply_id
+        review = await client.get(
+            f"/api/v1/items/{item_id}/annotations/review",
+            headers=headers,
+        )
+        assert review.status_code == 200
+        assert review.json()["revisions"] == [{"id": revision.id, "original_name": "api.pdf"}]
+        assert review.json()["annotations"][0]["id"] == annotation_id
+        assert review.json()["annotations"][0]["revision_name"] == "api.pdf"
+        assert review.json()["annotations"][0]["replies"][0]["id"] == reply_id
         updated_reply = await client.patch(
             f"/api/v1/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}",
             headers=headers,
@@ -474,6 +488,31 @@ async def test_administrator_can_update_and_delete_other_users_annotations_via_h
     headers = bearer(grant.raw_token)
 
     async with api_client(async_session_factory) as (client, _app):
+        review = await client.get(
+            f"/api/v1/items/{item.id}/annotations/review",
+            headers=headers,
+        )
+        assert review.status_code == 200
+        assert {entry["id"] for entry in review.json()["annotations"]} == {
+            annotation.id for annotation in annotations
+        }
+        assert review.json()["total"] == 2
+        assert review.json()["page"] == 1
+        assert review.json()["per_page"] == 50
+        paged_reviews = [
+            await client.get(
+                f"/api/v1/items/{item.id}/annotations/review",
+                headers=headers,
+                params={"page": page, "per_page": 1},
+            )
+            for page in (1, 2)
+        ]
+        assert all(response.status_code == 200 for response in paged_reviews)
+        assert {response.json()["annotations"][0]["id"] for response in paged_reviews} == {
+            annotation.id for annotation in annotations
+        }
+        assert all(response.json()["total"] == 2 for response in paged_reviews)
+
         for annotation in annotations:
             updated = await client.patch(
                 f"/api/v1/items/{item.id}/annotations/{annotation.id}",

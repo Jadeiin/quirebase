@@ -17,10 +17,11 @@
 	} from '@embedpdf/svelte-pdf-viewer';
 	import pdfiumWasmUrl from '@embedpdf/pdfium/pdfium.wasm?url';
 	import { i18n } from '@lingui/core';
-	import { SvelteMap, SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
+	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { apiRequest } from '$lib/api/client';
 	import { t } from '$lib/i18n';
 	import {
+		canonicalAnnotationFromView,
 		createAnnotationAdapter,
 		type CanonicalAnnotation,
 		type CanonicalReply
@@ -117,13 +118,19 @@
 		const generation = ++loadGeneration;
 		const requestedProject = selectedProject;
 		onstatus?.($t('Loading annotations…'), false);
-		const query = new SvelteURLSearchParams({ revision_id: documentId });
-		if (requestedProject) query.set('project_id', requestedProject);
 		let rows: CanonicalAnnotation[];
 		try {
-			rows = await apiRequest<CanonicalAnnotation[]>(
-				`/items/${itemId}/annotations?${query.toString()}`
-			);
+			rows = (
+				await apiRequest('GET', '/items/{item_id}/annotations', {
+					params: {
+						path: { item_id: itemId },
+						query: {
+							revision_id: documentId,
+							project_id: requestedProject || undefined
+						}
+					}
+				})
+			).map(canonicalAnnotationFromView);
 		} catch (reason) {
 			if (generation !== loadGeneration) return;
 			throw reason;
@@ -180,8 +187,7 @@
 					event,
 					itemId,
 					records,
-					tombstones: replyTombstones,
-					request: apiRequest
+					tombstones: replyTombstones
 				});
 				if (result?.reply) {
 					scope.syncAnnotationObject(
@@ -193,13 +199,15 @@
 				if (records.has(id)) return;
 				onstatus?.($t('Saving annotation…'), false);
 				const tombstone = tombstones.get(id);
-				const saved = tombstone
-					? await apiRequest<CanonicalAnnotation>(
-							`/items/${itemId}/annotations/${id}/restore?version=${tombstone.version}`,
-							{ method: 'POST' }
-						)
-					: await apiRequest<CanonicalAnnotation>(`/items/${itemId}/annotations`, {
-							method: 'POST',
+				const savedView = tombstone
+					? await apiRequest('POST', '/items/{item_id}/annotations/{annotation_id}/restore', {
+							params: {
+								path: { item_id: itemId, annotation_id: id },
+								query: { version: tombstone.version }
+							}
+						})
+					: await apiRequest('POST', '/items/{item_id}/annotations', {
+							params: { path: { item_id: itemId } },
 							body: {
 								id,
 								revision_id: documentId,
@@ -208,6 +216,7 @@
 								...adapter.canonicalFromVendor(event.annotation, event.pageIndex)
 							}
 						});
+				const saved = canonicalAnnotationFromView(savedView);
 				tombstones.delete(id);
 				records.set(id, saved);
 				importedIds.set(id, saved.page_index);
@@ -215,27 +224,32 @@
 				const existing = records.get(id);
 				if (!existing) return;
 				onstatus?.($t('Saving annotation…'), false);
-				const saved = await apiRequest<CanonicalAnnotation>(`/items/${itemId}/annotations/${id}`, {
-					method: 'PATCH',
-					body: {
-						version: existing.version,
-						scope: existing.scope,
-						project_id: existing.project_id,
-						...adapter.canonicalFromVendor(
-							{ ...event.annotation, ...event.patch } as PdfAnnotationObject,
-							event.pageIndex,
-							existing
-						)
-					}
-				});
+				const saved = canonicalAnnotationFromView(
+					await apiRequest('PATCH', '/items/{item_id}/annotations/{annotation_id}', {
+						params: { path: { item_id: itemId, annotation_id: id } },
+						body: {
+							version: existing.version,
+							scope: existing.scope,
+							project_id: existing.project_id,
+							...adapter.canonicalFromVendor(
+								{ ...event.annotation, ...event.patch } as PdfAnnotationObject,
+								event.pageIndex,
+								existing
+							)
+						}
+					})
+				);
 				records.set(id, saved);
 				scope.syncAnnotationObject(id, adapter.vendorFromCanonical(saved));
 			} else {
 				const existing = records.get(id);
 				if (!existing) return;
 				onstatus?.($t('Saving annotation…'), false);
-				await apiRequest(`/items/${itemId}/annotations/${id}?version=${existing.version}`, {
-					method: 'DELETE'
+				await apiRequest('DELETE', '/items/{item_id}/annotations/{annotation_id}', {
+					params: {
+						path: { item_id: itemId, annotation_id: id },
+						query: { version: existing.version }
+					}
 				});
 				tombstones.set(id, { ...existing, version: existing.version + 1 });
 				records.delete(id);

@@ -61,7 +61,7 @@ def test_sveltekit_filesystem_routes_own_application_navigation():
 
     assert not (ROOT / "frontend/src/routes/[...path]").exists()
     assert not (ROOT / "frontend/src/lib/App.svelte").exists()
-    assert "SessionView" in read("frontend/src/lib/AppShell.svelte")
+    assert "apiRequest('GET', '/session')" in read("frontend/src/lib/AppShell.svelte")
     assert "metadata" in read("frontend/src/params/itemSection.ts")
     assert "maintenance" in read("frontend/src/params/adminSection.ts")
 
@@ -84,8 +84,16 @@ def test_docker_builds_the_svelte_workspace_before_the_python_wheel():
     assert "COPY --from=assets /build/frontend/build ./frontend/build" in dockerfile
 
 
-def test_item_workspace_requires_project_scope_success_for_annotations():
+def test_item_workspace_uses_the_fixed_query_annotation_review_projection():
     workspace = read("frontend/src/lib/ItemWorkspace.svelte")
-    assert "annotationProjects.isSuccess" in workspace
-    assert "!annotationProjects.isPending" not in workspace
+    assert "'/items/{item_id}/annotations/review'" in workspace
+    assert "annotationProjects" not in workspace
     assert "annotationsError" in workspace
+
+
+def test_project_workspace_separates_administrator_lifecycle_from_membership_actions():
+    workspace = read("frontend/src/lib/ProjectWorkspace.svelte")
+    assert "const canManageLifecycle = $derived(isOwner || isAdministrator)" in workspace
+    assert "const canLeave = $derived(" in workspace
+    assert workspace.count("{#if canManageLifecycle}") == 2
+    assert "{:else if canLeave}" in workspace

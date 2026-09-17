@@ -76,7 +76,7 @@ async def update_project_settings(
         raise ValidationFailure("invalid project visibility") from error
 
     project = await lock_project_root(db, project_id)
-    if project is None or user.id != project.owner_id:
+    if project is None or (user.id != project.owner_id and user.role != "administrator"):
         raise ResourceUnavailable("project not found or owner role required")
     old_values = {
         "name": project.name,

@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import httpx2
 import pytest
+from sqlalchemy import select
 from test_http import authenticated_async_client
 
+from quirebase.accounts import create_api_token, create_login_session
 from quirebase.core.crypto import hash_password
 from quirebase.core.database import get_db
-from quirebase.models import User
+from quirebase.models import LoginSession, User
 from quirebase.web.app import create_app
 
 
@@ -159,3 +161,36 @@ async def test_login_and_logout_use_json_and_same_origin_policy(async_db, async_
     assert "httponly" in accepted.headers["set-cookie"].casefold()
     assert bootstrap.json()["user"]["username"] == "alice"
     assert logged_out.status_code == 204
+
+
+@pytest.mark.anyio
+async def test_logout_rejects_a_cookie_owned_by_another_authenticated_user(
+    async_db, async_session_factory
+):
+    bearer_user = User(username="bearer-user", password_hash="unused")
+    cookie_user = User(username="cookie-user", password_hash="unused")
+    async_db.add_all([bearer_user, cookie_user])
+    await async_db.commit()
+    grant = await create_api_token(async_db, bearer_user, "Mixed credentials", expires_in_days=1)
+    login, raw_session = await create_login_session(async_db, cookie_user, session_days=1)
+    login_id = login.id
+    test_app = create_app(mcp_session_factory=async_session_factory)
+
+    async def override_db():  # ruff: ignore[unused-async] - FastAPI yield dependency
+        yield async_db
+
+    test_app.dependency_overrides[get_db] = override_db
+    async with httpx2.AsyncClient(
+        transport=httpx2.ASGITransport(app=test_app),
+        base_url="http://testserver",
+        headers={"Origin": "http://testserver"},
+    ) as client:
+        client.cookies.set("quirebase_session", raw_session)
+        response = await client.delete(
+            "/api/v1/session", headers={"Authorization": f"Bearer {grant.raw_token}"}
+        )
+
+    assert response.status_code == 401
+    assert (
+        await async_db.scalar(select(LoginSession).where(LoginSession.id == login_id)) is not None
+    )

@@ -7,7 +7,6 @@
 	import Icon from '$lib/design/Icon.svelte';
 	import RichText from '$lib/design/RichText.svelte';
 	import { t } from '$lib/i18n';
-	import type { components } from '$lib/api/schema';
 	import EmbeddedPdfViewer from '$lib/pdf/EmbeddedPdfViewer.svelte';
 
 	let { itemId, revisionId } = $props<{ itemId: string; revisionId: string }>();
@@ -23,10 +22,12 @@
 		if (exportProjectId) parameters.set('project_id', exportProjectId);
 		return `/api/v1/items/${itemId}/revisions/${revisionId}/export?${parameters}`;
 	});
-	type ViewerView = components['schemas']['PdfViewerView'];
 	const viewer = createQuery(() => ({
 		queryKey: ['pdf-viewer', itemId, revisionId],
-		queryFn: () => apiRequest<ViewerView>(`/items/${itemId}/revisions/${revisionId}/viewer`)
+		queryFn: () =>
+			apiRequest('GET', '/items/{item_id}/revisions/{revision_id}/viewer', {
+				params: { path: { item_id: itemId, revision_id: revisionId } }
+			})
 	}));
 </script>
 

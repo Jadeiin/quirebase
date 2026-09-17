@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from quirebase.documents.annotations import (
+    AnnotationReview,
     DocumentNotReady,
     create_annotation_reply,
     create_document_annotation,
@@ -9,6 +10,7 @@ from quirebase.documents.annotations import (
     list_document_annotations,
     restore_annotation_reply,
     restore_document_annotation,
+    review_item_annotations,
     update_annotation_reply,
     update_document_annotation,
 )
@@ -42,9 +44,11 @@ from quirebase.documents.revisions import (
 )
 from quirebase.documents.schemas import (
     AnnotationCreate,
+    AnnotationKind,
     AnnotationPayload,
     AnnotationReplyCreate,
     AnnotationReplyUpdate,
+    AnnotationScope,
     AnnotationStyle,
     AnnotationUpdate,
     Point,
@@ -53,9 +57,12 @@ from quirebase.documents.schemas import (
 
 __all__ = [
     "AnnotationCreate",
+    "AnnotationKind",
     "AnnotationPayload",
     "AnnotationReplyCreate",
     "AnnotationReplyUpdate",
+    "AnnotationReview",
+    "AnnotationScope",
     "AnnotationStyle",
     "AnnotationUpdate",
     "DocumentNotReady",
@@ -89,6 +96,7 @@ __all__ = [
     "list_document_annotations",
     "restore_annotation_reply",
     "restore_document_annotation",
+    "review_item_annotations",
     "store_pdf_revision",
     "update_annotation_reply",
     "update_document_annotation",

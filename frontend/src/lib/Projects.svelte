@@ -2,12 +2,11 @@
 	import { resolve } from '$app/paths';
 	import { Dialog, Portal } from '@skeletonlabs/skeleton-svelte';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { apiRequest, type ProjectSummary } from '$lib/api/client';
+	import { apiRequest } from '$lib/api/client';
 	import Icon from '$lib/design/Icon.svelte';
 	import { domainLabel } from '$lib/domain-labels';
 	import { t } from '$lib/i18n';
 
-	type JoinableProject = Omit<ProjectSummary, 'role'>;
 	let createOpen = $state(false);
 	let name = $state('');
 	let description = $state('');
@@ -17,11 +16,11 @@
 	const queryClient = useQueryClient();
 	const projects = createQuery(() => ({
 		queryKey: ['projects'],
-		queryFn: () => apiRequest<ProjectSummary[]>('/projects')
+		queryFn: () => apiRequest('GET', '/projects')
 	}));
 	const joinable = createQuery(() => ({
 		queryKey: ['projects', 'joinable'],
-		queryFn: () => apiRequest<JoinableProject[]>('/projects/joinable')
+		queryFn: () => apiRequest('GET', '/projects/joinable')
 	}));
 
 	async function refresh() {
@@ -35,7 +34,7 @@
 		busy = true;
 		error = '';
 		try {
-			await apiRequest('/projects', { method: 'POST', body: { name, description, visibility } });
+			await apiRequest('POST', '/projects', { body: { name, description, visibility } });
 			name = '';
 			description = '';
 			visibility = 'private';
@@ -52,7 +51,9 @@
 		busy = true;
 		error = '';
 		try {
-			await apiRequest(`/projects/${projectId}/join`, { method: 'POST' });
+			await apiRequest('POST', '/projects/{project_id}/join', {
+				params: { path: { project_id: projectId } }
+			});
 			await refresh();
 		} catch (reason) {
 			error = reason instanceof Error ? reason.message : $t('Unable to join Project');

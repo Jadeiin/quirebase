@@ -93,23 +93,25 @@ describe('annotation write coordination', () => {
 	it('persists create, update, delete, and restore reply events', async () => {
 		const records = new Map([['annotation-1', parent()]]);
 		const tombstones = new Map<string, CanonicalReply>();
-		const request = vi.fn(async (path: string, options?: { method?: string; body?: unknown }) => {
-			if (path.endsWith('/restore?version=3')) return savedReply('Restored', 4);
-			if (options?.method === 'POST') return savedReply('First reply');
-			if (options?.method === 'PATCH') return savedReply('Edited reply', 2);
-			return undefined;
-		});
+		const api = {
+			create: vi.fn(async () => savedReply('First reply')),
+			restore: vi.fn(async () => savedReply('Restored', 4)),
+			update: vi.fn(async () => savedReply('Edited reply', 2)),
+			delete: vi.fn(async () => undefined)
+		};
 
 		await persistReplyEvent({
 			event: event('create', 'First reply'),
 			itemId: 'item-1',
 			records,
 			tombstones,
-			request
+			api
 		});
-		expect(request).toHaveBeenLastCalledWith('/items/item-1/annotations/annotation-1/replies', {
-			method: 'POST',
-			body: { id: 'reply-1', body: 'First reply' }
+		expect(api.create).toHaveBeenLastCalledWith({
+			itemId: 'item-1',
+			annotationId: 'annotation-1',
+			replyId: 'reply-1',
+			body: 'First reply'
 		});
 
 		await persistReplyEvent({
@@ -117,36 +119,43 @@ describe('annotation write coordination', () => {
 			itemId: 'item-1',
 			records,
 			tombstones,
-			request
+			api
 		});
-		expect(request).toHaveBeenLastCalledWith(
-			'/items/item-1/annotations/annotation-1/replies/reply-1',
-			{ method: 'PATCH', body: { version: 1, body: 'Edited reply' } }
-		);
+		expect(api.update).toHaveBeenLastCalledWith({
+			itemId: 'item-1',
+			annotationId: 'annotation-1',
+			replyId: 'reply-1',
+			version: 1,
+			body: 'Edited reply'
+		});
 
 		await persistReplyEvent({
 			event: event('delete', 'Edited reply'),
 			itemId: 'item-1',
 			records,
 			tombstones,
-			request
+			api
 		});
-		expect(request).toHaveBeenLastCalledWith(
-			'/items/item-1/annotations/annotation-1/replies/reply-1?version=2',
-			{ method: 'DELETE' }
-		);
+		expect(api.delete).toHaveBeenLastCalledWith({
+			itemId: 'item-1',
+			annotationId: 'annotation-1',
+			replyId: 'reply-1',
+			version: 2
+		});
 
 		await persistReplyEvent({
 			event: event('create', 'Restored'),
 			itemId: 'item-1',
 			records,
 			tombstones,
-			request
+			api
 		});
-		expect(request).toHaveBeenLastCalledWith(
-			'/items/item-1/annotations/annotation-1/replies/reply-1/restore?version=3',
-			{ method: 'POST' }
-		);
+		expect(api.restore).toHaveBeenLastCalledWith({
+			itemId: 'item-1',
+			annotationId: 'annotation-1',
+			replyId: 'reply-1',
+			version: 3
+		});
 	});
 
 	it('tracks queued and active writes until they settle', async () => {

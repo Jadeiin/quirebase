@@ -7,6 +7,7 @@
 	import { SvelteMap } from 'svelte/reactivity';
 	import { apiRequest } from '$lib/api/client';
 	import type { components } from '$lib/api/schema';
+	import { waitForWorkflow } from '$lib/api/workflows';
 	import Icon from '$lib/design/Icon.svelte';
 	import RichText from '$lib/design/RichText.svelte';
 	import ItemMetadataForm from '$lib/ItemMetadataForm.svelte';
@@ -25,8 +26,7 @@
 	let pdfFiles = $state<File[]>([]);
 	let pdfInput: HTMLInputElement;
 	const pageSize = 20;
-	let pollTimer: number | undefined;
-	let pollGeneration = 0;
+	let pollingAbort: AbortController | null = null;
 	const queryClient = useQueryClient();
 	const emptyMetadata: components['schemas']['ItemMetadata-Input'] = {
 		title: '',
@@ -39,23 +39,27 @@
 	};
 
 	function stopPolling() {
-		pollGeneration += 1;
-		if (pollTimer !== undefined) window.clearTimeout(pollTimer);
-		pollTimer = undefined;
+		pollingAbort?.abort();
+		pollingAbort = null;
 	}
 
 	function acceptBatch(next: ImportBatch) {
 		stopPolling();
 		batch = next;
 		previewPage = 1;
-		if (next.status === 'pending') schedulePoll(next.id, pollGeneration);
+		if (next.status === 'pending' && next.workflow_id)
+			void followWorkflow(next.id, next.workflow_id);
 	}
 
 	async function loadBatch(batchId: string) {
 		busy = true;
 		error = '';
 		try {
-			acceptBatch(await apiRequest<ImportBatch>(`/imports/${batchId}`));
+			acceptBatch(
+				await apiRequest('GET', '/imports/{batch_id}', {
+					params: { path: { batch_id: batchId } }
+				})
+			);
 		} catch (reason) {
 			error = reason instanceof Error ? reason.message : $t('Unable to load Import preview');
 		} finally {
@@ -63,22 +67,27 @@
 		}
 	}
 
-	function schedulePoll(batchId: string, generation: number, delay = 0) {
-		pollTimer = window.setTimeout(async () => {
-			if (generation !== pollGeneration || batch?.id !== batchId) return;
-			try {
-				const refreshed = await apiRequest<ImportBatch>(`/imports/${batchId}`);
-				if (generation !== pollGeneration || batch?.id !== batchId) return;
-				batch = refreshed;
-				error = '';
-				if (refreshed.status === 'pending') schedulePoll(batchId, generation, 500);
-			} catch (reason) {
-				error = reason instanceof Error ? reason.message : $t('Unable to refresh Import preview');
-				if (generation === pollGeneration && batch?.id === batchId) {
-					schedulePoll(batchId, generation, 1_000);
-				}
-			}
-		}, delay);
+	async function followWorkflow(batchId: string, workflowId: string) {
+		const controller = new AbortController();
+		pollingAbort = controller;
+		try {
+			await waitForWorkflow(workflowId, { signal: controller.signal });
+		} catch (reason) {
+			if (controller.signal.aborted) return;
+			// The refreshed Import Batch owns the user-facing terminal diagnostic.
+			void reason;
+		}
+		if (controller.signal.aborted || batch?.id !== batchId) return;
+		try {
+			const refreshed = await apiRequest('GET', '/imports/{batch_id}', {
+				params: { path: { batch_id: batchId } }
+			});
+			if (controller.signal.aborted || batch?.id !== batchId) return;
+			acceptBatch(refreshed);
+			error = '';
+		} catch (reason) {
+			error = reason instanceof Error ? reason.message : $t('Unable to refresh Import preview');
+		}
 	}
 
 	async function importIdentifier() {
@@ -86,8 +95,7 @@
 		error = '';
 		try {
 			acceptBatch(
-				await apiRequest<ImportBatch>('/imports/identifier', {
-					method: 'POST',
+				await apiRequest('POST', '/imports/identifier', {
 					body: { identifier, provider }
 				})
 			);
@@ -108,12 +116,11 @@
 				body.delete('pdfs');
 				for (const file of pdfFiles) body.append('pdfs', file);
 			}
-			acceptBatch(
-				await apiRequest<ImportBatch>(`/imports/${kind}`, {
-					method: 'POST',
-					body
-				})
-			);
+			const uploaded =
+				kind === 'pdfs'
+					? await apiRequest('POST', '/imports/pdfs', { body })
+					: await apiRequest('POST', '/imports/bibliography', { body });
+			acceptBatch(uploaded);
 			if (kind === 'pdfs') {
 				pdfFiles = [];
 				pdfInput.value = '';
@@ -146,10 +153,9 @@
 		busy = true;
 		error = '';
 		try {
-			const result = await apiRequest<Pick<ImportBatch, 'id' | 'status' | 'workflow_id'>>(
-				`/imports/${batch.id}/retry`,
-				{ method: 'POST' }
-			);
+			const result = await apiRequest('POST', '/imports/{batch_id}/retry', {
+				params: { path: { batch_id: batch.id } }
+			});
 			acceptBatch({ ...batch, ...result, errors: [] });
 		} catch (reason) {
 			error = reason instanceof Error ? reason.message : $t('Unable to retry Import');
@@ -163,7 +169,9 @@
 		busy = true;
 		error = '';
 		try {
-			await apiRequest(`/imports/${batch.id}/commit`, { method: 'POST' });
+			await apiRequest('POST', '/imports/{batch_id}/commit', {
+				params: { path: { batch_id: batch.id } }
+			});
 			stopPolling();
 			await queryClient.invalidateQueries({ queryKey: ['library'] });
 			await goto(resolve('/library'));
@@ -179,7 +187,9 @@
 		busy = true;
 		error = '';
 		try {
-			await apiRequest(`/imports/${batch.id}`, { method: 'DELETE' });
+			await apiRequest('DELETE', '/imports/{batch_id}', {
+				params: { path: { batch_id: batch.id } }
+			});
 			stopPolling();
 			batch = null;
 		} catch (reason) {
@@ -193,7 +203,7 @@
 		busy = true;
 		error = '';
 		try {
-			const item = await apiRequest<{ id: string }>('/items', { method: 'POST', body: metadata });
+			const item = await apiRequest('POST', '/items', { body: metadata });
 			await queryClient.invalidateQueries({ queryKey: ['library'] });
 			await goto(resolve('/(app)/item/[itemId]', { itemId: item.id }));
 		} catch (reason) {

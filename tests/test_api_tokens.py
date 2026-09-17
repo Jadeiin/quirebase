@@ -324,6 +324,15 @@ async def test_mcp_http_preserves_web_allowed_host_semantics(
     monkeypatch.setenv("QUIREBASE_ALLOWED_HOSTS", allowed_hosts)
     get_settings.cache_clear()
     test_app = create_app(mcp_session_factory=async_session_factory)
+
+    async def override_db():
+        session = async_session_factory()
+        try:
+            yield session
+        finally:
+            await session.close()
+
+    test_app.dependency_overrides[get_db] = override_db
     initialize = {
         "jsonrpc": "2.0",
         "id": 1,
@@ -344,7 +353,19 @@ async def test_mcp_http_preserves_web_allowed_host_semantics(
     try:
         async with mcp_client(test_app) as client:
             response = await client.post("/mcp/", json=initialize, headers=headers)
+            called = await client.post(
+                "/mcp/",
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 2,
+                    "method": "tools/call",
+                    "params": {"name": "library.search", "arguments": {}},
+                },
+                headers=headers,
+            )
         assert response.status_code == 200
+        assert called.status_code == 200
+        assert called.json()["result"]["isError"] is False
     finally:
         get_settings.cache_clear()
 

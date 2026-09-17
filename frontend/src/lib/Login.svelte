@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { apiRequest, type SessionView } from '$lib/api/client';
+	import { apiRequest } from '$lib/api/client';
 	import { t } from '$lib/i18n';
 
 	let username = $state('');
@@ -11,8 +11,7 @@
 		busy = true;
 		error = '';
 		try {
-			await apiRequest<SessionView>('/session', {
-				method: 'POST',
+			await apiRequest('POST', '/session', {
 				body: { username, password }
 			});
 			window.location.assign('/');

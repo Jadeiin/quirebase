@@ -1,21 +1,20 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { SvelteURLSearchParams } from 'svelte/reactivity';
+	import { onDestroy } from 'svelte';
 	import {
 		apiDownloadGet,
 		apiRequest,
 		type ItemSummary,
-		type SessionView,
 		type WorkspaceView
 	} from '$lib/api/client';
+	import { waitForWorkflow } from '$lib/api/workflows';
 	import type { components } from '$lib/api/schema';
 	import RichText from '$lib/design/RichText.svelte';
 	import { domainLabel } from '$lib/domain-labels';
 	import ItemActions from '$lib/ItemActions.svelte';
 	import ItemMetadataForm from '$lib/ItemMetadataForm.svelte';
 	import { msg, t, type MessageKey } from '$lib/i18n';
-	import type { CanonicalAnnotation } from '$lib/pdf/annotation-adapter';
 
 	type ItemDetail = ItemSummary & {
 		metadata: components['schemas']['ItemMetadata-Input'];
@@ -25,7 +24,6 @@
 	type FilesView = components['schemas']['DocumentListView'];
 	type OrganizeView = components['schemas']['ItemOrganizeView'];
 	type Message = components['schemas']['DiscussionMessageView'];
-	type AnnotationRow = CanonicalAnnotation & { revision_name: string };
 
 	type ItemSection = 'overview' | 'metadata' | 'files' | 'organize' | 'annotations' | 'discussion';
 
@@ -34,108 +32,69 @@
 	let busy = $state(false);
 	let tagFilter = $state('');
 	let annotationRevision = $state('all');
+	let annotationPage = $state(1);
 	const queryClient = useQueryClient();
+	const workflowAbort = new AbortController();
+	onDestroy(() => workflowAbort.abort());
 
-	const endpoint = $derived(
-		section === 'overview'
-			? `/items/${itemId}/workspace`
-			: section === 'metadata'
-				? `/items/${itemId}`
-				: section === 'files'
-					? `/items/${itemId}/documents`
-					: section === 'organize'
-						? `/items/${itemId}/organize`
-						: section === 'discussion'
-							? `/items/${itemId}/discussions`
-							: `/items/${itemId}/workspace`
-	);
 	const shell = createQuery(() => ({
 		queryKey: ['item-shell', itemId],
-		queryFn: () => apiRequest<WorkspaceView>(`/items/${itemId}/workspace`)
+		queryFn: () =>
+			apiRequest('GET', '/items/{item_id}/workspace', {
+				params: { path: { item_id: itemId } }
+			})
 	}));
 	const session = createQuery(() => ({
 		queryKey: ['session'],
-		queryFn: () => apiRequest<SessionView>('/session')
+		queryFn: () => apiRequest('GET', '/session')
 	}));
 	const details = createQuery(() => ({
 		queryKey: ['item-details', itemId],
 		enabled: section === 'overview' || section === 'files',
-		queryFn: () => apiRequest<ItemDetail>(`/items/${itemId}`)
+		queryFn: () => apiRequest('GET', '/items/{item_id}', { params: { path: { item_id: itemId } } })
 	}));
 	const workspace = createQuery(() => ({
 		queryKey: section === 'overview' ? ['item-shell', itemId] : ['item-section', itemId, section],
-		queryFn: () => apiRequest<unknown>(endpoint)
-	}));
-	const annotationDocuments = createQuery(() => ({
-		queryKey: ['item-annotation-documents', itemId],
-		enabled: section === 'annotations',
-		queryFn: () => apiRequest<FilesView>(`/items/${itemId}/documents`)
-	}));
-	const annotationRevisions = $derived(
-		annotationDocuments.data?.files.filter((file) => file.kind === 'revision') ?? []
-	);
-	const annotationProjects = createQuery(() => ({
-		queryKey: ['item-annotation-scopes', itemId],
-		enabled: section === 'annotations',
-		queryFn: () => apiRequest<OrganizeView>(`/items/${itemId}/organize`)
-	}));
-	const annotationProjectIds = $derived(
-		(annotationProjects.data?.projects ?? [])
-			.filter((project) => project.assigned)
-			.map((project) => project.id)
-			.sort()
-	);
-	const annotations = createQuery(() => ({
-		queryKey: [
-			'item-annotations',
-			itemId,
-			annotationRevisions.map((revision) => revision.id).join(','),
-			annotationProjectIds.join(',')
-		],
-		enabled:
-			section === 'annotations' && annotationRevisions.length > 0 && annotationProjects.isSuccess,
-		queryFn: async () => {
-			if (!annotationProjects.isSuccess) {
-				throw (
-					annotationProjects.error ??
-					new Error('Unable to discover project scopes for annotations.')
-				);
+		queryFn: async (): Promise<unknown> => {
+			const params = { path: { item_id: itemId } };
+			switch (section) {
+				case 'metadata':
+					return apiRequest('GET', '/items/{item_id}', { params });
+				case 'files':
+					return apiRequest('GET', '/items/{item_id}/documents', { params });
+				case 'organize':
+					return apiRequest('GET', '/items/{item_id}/organize', { params });
+				case 'discussion':
+					return apiRequest('GET', '/items/{item_id}/discussions', { params });
+				default:
+					return apiRequest('GET', '/items/{item_id}/workspace', { params });
 			}
-			const scopes: Array<string | null> = [null, ...annotationProjectIds];
-			const responses = await Promise.all(
-				annotationRevisions.flatMap((revision) =>
-					scopes.map(async (projectId) => {
-						const parameters = new SvelteURLSearchParams({ revision_id: revision.id });
-						if (projectId) parameters.set('project_id', projectId);
-						return (
-							await apiRequest<CanonicalAnnotation[]>(`/items/${itemId}/annotations?${parameters}`)
-						).map((annotation) => ({
-							...annotation,
-							revision_name: revision.original_name
-						}));
-					})
-				)
-			);
-			const rows: Record<string, AnnotationRow> = {};
-			for (const annotation of responses.flat()) rows[annotation.id] = annotation;
-			return Object.values(rows);
 		}
 	}));
-	const displayedAnnotations = $derived(
-		(annotations.data ?? []).filter(
-			(annotation: AnnotationRow) =>
-				annotationRevision === 'all' || annotation.revision_id === annotationRevision
-		)
+	const annotations = createQuery(() => ({
+		queryKey: ['item-annotations-review', itemId, annotationRevision, annotationPage],
+		enabled: section === 'annotations',
+		queryFn: () =>
+			apiRequest('GET', '/items/{item_id}/annotations/review', {
+				params: {
+					path: { item_id: itemId },
+					query: {
+						page: annotationPage,
+						revision_id: annotationRevision === 'all' ? undefined : annotationRevision
+					}
+				}
+			})
+	}));
+	const annotationRevisions = $derived(annotations.data?.revisions ?? []);
+	const displayedAnnotations = $derived(annotations.data?.annotations ?? []);
+	const annotationPageCount = $derived(
+		Math.max(1, Math.ceil((annotations.data?.total ?? 0) / (annotations.data?.per_page ?? 50)))
 	);
-	const annotationsLoading = $derived(
-		annotationDocuments.isPending ||
-			(annotationRevisions.length > 0 &&
-				(annotationProjects.isPending || (annotationProjects.isSuccess && annotations.isPending)))
+	const annotationWorkspaceRevisionId = $derived(
+		annotationRevision === 'all' ? annotationRevisions[0]?.id : annotationRevision
 	);
-	const annotationsError = $derived(
-		annotationDocuments.isError ||
-			(annotationRevisions.length > 0 && (annotationProjects.isError || annotations.isError))
-	);
+	const annotationsLoading = $derived(annotations.isPending);
+	const annotationsError = $derived(annotations.isError);
 	const title = $derived(
 		(section === 'metadata' ? (workspace.data as ItemDetail | undefined)?.title_html : undefined) ??
 			(section === 'organize'
@@ -174,28 +133,22 @@
 		}
 	}
 
-	async function waitForWorkflow(workflowId: string) {
-		for (;;) {
-			const workflow = await apiRequest<{ state: string; error: string | null }>(
-				`/workflows/${workflowId}`
-			);
-			if (workflow.state === 'succeeded') return;
-			if (workflow.state === 'failed' || workflow.state === 'cancelled') {
-				throw new Error(workflow.error || $t('Document processing failed'));
-			}
-			await new Promise((resolveDelay) => window.setTimeout(resolveDelay, 500));
-		}
-	}
-
-	function upload(event: SubmitEvent, endpoint: string) {
+	function upload(event: SubmitEvent, kind: 'revision' | 'attachment') {
 		event.preventDefault();
 		const form = event.currentTarget as HTMLFormElement;
 		void mutate(async () => {
-			const workflow = await apiRequest<{ id: string }>(endpoint, {
-				method: 'POST',
+			const options = {
+				params: { path: { item_id: itemId } },
 				body: new FormData(form)
+			};
+			const workflow =
+				kind === 'revision'
+					? await apiRequest('POST', '/items/{item_id}/revisions', options)
+					: await apiRequest('POST', '/items/{item_id}/attachments', options);
+			await waitForWorkflow(workflow.id, {
+				signal: workflowAbort.signal,
+				failureMessage: $t('Document processing failed')
 			});
-			await waitForWorkflow(workflow.id);
 		}, form);
 	}
 
@@ -205,42 +158,58 @@
 		void mutate(async () => {
 			const fields = new FormData(form);
 			const source = String(fields.get('url'));
-			const workflow = await apiRequest<{ id: string }>(
-				`/items/${itemId}/${kind === 'revision' ? 'revisions' : 'attachments'}/remote`,
-				{
-					method: 'POST',
-					body: {
-						source,
-						...(kind === 'attachment'
-							? { graphical_abstract: fields.has('graphical_abstract') }
-							: {})
-					}
-				}
-			);
-			await waitForWorkflow(workflow.id);
+			const workflow =
+				kind === 'revision'
+					? await apiRequest('POST', '/items/{item_id}/revisions/remote', {
+							params: { path: { item_id: itemId } },
+							body: { source }
+						})
+					: await apiRequest('POST', '/items/{item_id}/attachments/remote', {
+							params: { path: { item_id: itemId } },
+							body: {
+								source,
+								graphical_abstract: fields.has('graphical_abstract')
+							}
+						});
+			await waitForWorkflow(workflow.id, {
+				signal: workflowAbort.signal,
+				failureMessage: $t('Document processing failed')
+			});
 		}, form);
 	}
 
 	function deleteFile(file: FileRow) {
 		if (!window.confirm($t('Delete this file permanently?'))) return;
-		const collection = file.kind === 'revision' ? 'revisions' : 'attachments';
 		void mutate(() =>
-			apiRequest(`/items/${itemId}/${collection}/${file.id}`, { method: 'DELETE' })
+			file.kind === 'revision'
+				? apiRequest('DELETE', '/items/{item_id}/revisions/{revision_id}', {
+						params: { path: { item_id: itemId, revision_id: file.id } }
+					})
+				: apiRequest('DELETE', '/items/{item_id}/attachments/{attachment_id}', {
+						params: { path: { item_id: itemId, attachment_id: file.id } }
+					})
 		);
 	}
 
 	function downloadFile(file: FileRow) {
-		const collection = file.kind === 'revision' ? 'revisions' : 'attachments';
 		mutationError = '';
-		void apiDownloadGet(`/items/${itemId}/${collection}/${file.id}/content`).catch((error) => {
+		const download =
+			file.kind === 'revision'
+				? apiDownloadGet('/items/{item_id}/revisions/{revision_id}/content', {
+						params: { path: { item_id: itemId, revision_id: file.id } }
+					})
+				: apiDownloadGet('/items/{item_id}/attachments/{attachment_id}/content', {
+						params: { path: { item_id: itemId, attachment_id: file.id } }
+					});
+		void download.catch((error) => {
 			mutationError = error instanceof Error ? error.message : $t('Unable to save changes');
 		});
 	}
 
 	function updateMetadata(item: ItemDetail, metadata: components['schemas']['ItemMetadata-Input']) {
 		void mutate(() =>
-			apiRequest(`/items/${itemId}`, {
-				method: 'PUT',
+			apiRequest('PUT', '/items/{item_id}', {
+				params: { path: { item_id: itemId } },
 				body: { expected_version: item.version, metadata }
 			})
 		);
@@ -248,9 +217,13 @@
 
 	function toggleProject(project: OrganizeView['projects'][number]) {
 		void mutate(() =>
-			apiRequest(`/projects/${project.id}/items/${itemId}`, {
-				method: project.assigned ? 'DELETE' : 'PUT'
-			})
+			project.assigned
+				? apiRequest('DELETE', '/projects/{project_id}/items/{item_id}', {
+						params: { path: { project_id: project.id, item_id: itemId } }
+					})
+				: apiRequest('PUT', '/projects/{project_id}/items/{item_id}', {
+						params: { path: { project_id: project.id, item_id: itemId } }
+					})
 		);
 	}
 
@@ -260,15 +233,19 @@
 		const name = String(new FormData(form).get('name') ?? '').trim();
 		if (name)
 			void mutate(
-				() => apiRequest(`/items/${itemId}/tags`, { method: 'POST', body: { name } }),
+				() =>
+					apiRequest('POST', '/items/{item_id}/tags', {
+						params: { path: { item_id: itemId } },
+						body: { name }
+					}),
 				form
 			);
 	}
 
 	function toggleTag(tagId: string, assigned: boolean) {
 		void mutate(() =>
-			apiRequest(`/items/${itemId}/tags`, {
-				method: 'PUT',
+			apiRequest('PUT', '/items/{item_id}/tags', {
+				params: { path: { item_id: itemId } },
 				body: {
 					add_tag_ids: assigned ? [] : [tagId],
 					remove_tag_ids: assigned ? [tagId] : [],
@@ -280,8 +257,8 @@
 
 	function addSuggestedTag(name: string) {
 		void mutate(() =>
-			apiRequest(`/items/${itemId}/tags`, {
-				method: 'PUT',
+			apiRequest('PUT', '/items/{item_id}/tags', {
+				params: { path: { item_id: itemId } },
 				body: { add_tag_ids: [], remove_tag_ids: [], new_names: [name] }
 			})
 		);
@@ -289,10 +266,10 @@
 
 	function refreshTagRecommendations() {
 		void mutate(async () => {
-			const workflow = await apiRequest<{ id: string }>(`/items/${itemId}/tag-recommendations`, {
-				method: 'POST'
+			const workflow = await apiRequest('POST', '/items/{item_id}/tag-recommendations', {
+				params: { path: { item_id: itemId } }
 			});
-			await waitForWorkflow(workflow.id);
+			await waitForWorkflow(workflow.id, { signal: workflowAbort.signal });
 		});
 	}
 
@@ -302,14 +279,20 @@
 		const body = String(new FormData(form).get('body') ?? '').trim();
 		if (body)
 			void mutate(
-				() => apiRequest(`/items/${itemId}/discussions`, { method: 'POST', body: { body } }),
+				() =>
+					apiRequest('POST', '/items/{item_id}/discussions', {
+						params: { path: { item_id: itemId } },
+						body: { body }
+					}),
 				form
 			);
 	}
 
 	function deleteDiscussion(messageId: string) {
 		void mutate(() =>
-			apiRequest(`/items/${itemId}/discussions/${messageId}`, { method: 'DELETE' })
+			apiRequest('DELETE', '/items/{item_id}/discussions/{message_id}', {
+				params: { path: { item_id: itemId, message_id: messageId } }
+			})
 		);
 	}
 </script>
@@ -602,7 +585,7 @@
 			{#if shell.data?.permissions.edit}<aside class="stack">
 					<form
 						class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm"
-						onsubmit={(event) => upload(event, `/items/${itemId}/revisions`)}
+						onsubmit={(event) => upload(event, 'revision')}
 					>
 						<h2>{$t('Add PDF revision')}</h2>
 						<input
@@ -635,7 +618,7 @@
 					</form>
 					<form
 						class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm"
-						onsubmit={(event) => upload(event, `/items/${itemId}/attachments`)}
+						onsubmit={(event) => upload(event, 'attachment')}
 					>
 						<h2>{$t('Add attachment')}</h2>
 						<input class="input" name="attachment" type="file" required />
@@ -817,7 +800,10 @@
 				<h2>{$t('Annotations')}</h2>
 				{#if annotationRevisions.length > 1}<label
 						class="flex items-center gap-2 text-sm text-surface-700"
-						>{$t('PDF revision')}<select class="compact input" bind:value={annotationRevision}
+						>{$t('PDF revision')}<select
+							class="compact input"
+							bind:value={annotationRevision}
+							onchange={() => (annotationPage = 1)}
 							><option value="all">{$t('All revisions')}</option
 							>{#each annotationRevisions as revision (revision.id)}<option value={revision.id}
 									>{revision.original_name}</option
@@ -846,17 +832,33 @@
 						</div>
 						<span>{annotation.body ?? annotation.selected_text ?? $t('No note text')}</span><span
 							class="text-surface-600"
-							>{annotation.author_display_name} · {annotation.revision_name} · {annotation.replies
-								.length}
+							>{annotation.author_display_name} · {annotation.revision_name} · {(
+								annotation.replies ?? []
+							).length}
 							{$t('replies')}</span
 						>
 					</div>{:else}<p class="text-surface-600">{$t('No annotations.')}</p>{/each}<a
 					class="btn preset-filled-primary-700-300 font-semibold"
 					href={resolve('/(app)/item/[itemId]/pdf/[revisionId]', {
 						itemId,
-						revisionId: annotationRevisions[0].id
+						revisionId: annotationWorkspaceRevisionId
 					})}>{$t('Open annotation workspace')}</a
 				>{/if}
+			{#if annotationPageCount > 1}
+				<nav class="pagination mt-4" aria-label={$t('Annotation pages')}>
+					<button
+						class="btn preset-tonal-surface font-semibold"
+						disabled={annotationPage <= 1 || annotations.isFetching}
+						onclick={() => (annotationPage -= 1)}>{$t('Previous')}</button
+					>
+					<span>{$t('Page')} {annotationPage} / {annotationPageCount}</span>
+					<button
+						class="btn preset-tonal-surface font-semibold"
+						disabled={annotationPage >= annotationPageCount || annotations.isFetching}
+						onclick={() => (annotationPage += 1)}>{$t('Next')}</button
+					>
+				</nav>
+			{/if}
 		</section>
 	{:else}
 		{@const messages = workspace.data as Message[]}

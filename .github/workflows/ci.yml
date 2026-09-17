@@ -16,7 +16,12 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.4.2"
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          version: "0.12.14"
+          python-version: "3.12"
       - run: bun install --frozen-lockfile
+      - run: bun run api:check
       - run: bun run i18n:check
       - run: git diff --exit-code -- src/lib/locales
       - run: bun run build

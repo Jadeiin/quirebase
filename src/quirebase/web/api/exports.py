@@ -14,15 +14,13 @@ from quirebase.library import (
     preview_citation_key,
     select_builtin_citation_styles,
 )
-from quirebase.programmatic import (
-    CitationStylesResponseView,
-    WorkflowStatusView,
-)
+from quirebase.web.api.common import WorkflowStatusView
 from quirebase.web.api.dependencies import ApiUser, Database
-from quirebase.web.api.schemas import (
+from quirebase.web.api.export_schemas import (
     AnnotationExportCreatedView,
     CitationKeyPreviewView,
 )
+from quirebase.web.api.library_schemas import CitationStylesResponseView
 
 router = APIRouter(prefix="/api/v1", tags=["HTTP API"])
 

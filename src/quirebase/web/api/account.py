@@ -15,10 +15,7 @@ from quirebase.accounts import (
     revoke_session,
 )
 from quirebase.core.config import get_settings
-from quirebase.programmatic import OkView
-from quirebase.web.api.auth import require_same_origin
-from quirebase.web.api.dependencies import ApiUser, Database
-from quirebase.web.api.schemas import (
+from quirebase.web.api.account_schemas import (
     AccountSummaryView,
     ApiTokenCreateRequest,
     ApiTokenGrantView,
@@ -26,9 +23,12 @@ from quirebase.web.api.schemas import (
     InvitationAcceptRequest,
     InvitationDetailsView,
     LocaleRequest,
-    LoginSessionView,
     PasswordChangeRequest,
 )
+from quirebase.web.api.auth import require_same_origin
+from quirebase.web.api.common import OkView
+from quirebase.web.api.dependencies import ApiUser, Database
+from quirebase.web.api.session_schemas import LoginSessionView
 from quirebase.web.locale import normalize_locale
 
 router = APIRouter(prefix="/api/v1", tags=["HTTP API"])

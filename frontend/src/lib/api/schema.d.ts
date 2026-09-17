@@ -65,10 +65,10 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Search Items */
-		get: operations['search_items_api_v1_items_get'];
+		get: operations['library.search'];
 		put?: never;
 		/** Create Library Item */
-		post: operations['create_library_item_api_v1_items_post'];
+		post: operations['library.create_item'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -83,9 +83,9 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Get Library Item */
-		get: operations['get_library_item_api_v1_items__item_id__get'];
+		get: operations['library.get_item'];
 		/** Update Library Item */
-		put: operations['update_library_item_api_v1_items__item_id__put'];
+		put: operations['library.update_item'];
 		post?: never;
 		/** Delete Library Item */
 		delete: operations['delete_library_item_api_v1_items__item_id__delete'];
@@ -102,10 +102,97 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Format Item Citation */
-		get: operations['format_item_citation_api_v1_items__item_id__citation_get'];
+		get: operations['citations.format_item'];
 		put?: never;
 		post?: never;
 		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/tags': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** List Tags */
+		get: operations['tags.list'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/items/{item_id}/tags': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Set Item Tag Selection */
+		put: operations['tags.set_for_item'];
+		/** Add Item Tag */
+		post: operations['tags.add_to_item'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/items/{item_id}/tags/{tag_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Remove Item Tag */
+		delete: operations['tags.remove_from_item'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/items/{item_id}/discussions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** List Discussions */
+		get: operations['discussions.list'];
+		put?: never;
+		/** Create Discussion */
+		post: operations['discussions.add'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/items/{item_id}/discussions/{message_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Delete Discussion */
+		delete: operations['discussions.delete'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -119,10 +206,10 @@ export interface paths {
 			cookie?: never;
 		};
 		/** List Projects */
-		get: operations['list_projects_api_v1_projects_get'];
+		get: operations['projects.list'];
 		put?: never;
 		/** Create User Project */
-		post: operations['create_user_project_api_v1_projects_post'];
+		post: operations['projects.create'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -154,15 +241,15 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Get Project */
-		get: operations['get_project_api_v1_projects__project_id__get'];
+		get: operations['projects.get'];
 		put?: never;
 		post?: never;
 		/** Delete User Project */
-		delete: operations['delete_user_project_api_v1_projects__project_id__delete'];
+		delete: operations['projects.delete'];
 		options?: never;
 		head?: never;
 		/** Update Project */
-		patch: operations['update_project_api_v1_projects__project_id__patch'];
+		patch: operations['projects.update_settings'];
 		trace?: never;
 	};
 	'/api/v1/projects/{project_id}/description': {
@@ -192,7 +279,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Archive Project */
-		post: operations['archive_project_api_v1_projects__project_id__archive_post'];
+		post: operations['projects.archive'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -209,7 +296,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Restore Project */
-		post: operations['restore_project_api_v1_projects__project_id__restore_post'];
+		post: operations['projects.restore'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -243,7 +330,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Leave User Project */
-		post: operations['leave_user_project_api_v1_projects__project_id__leave_post'];
+		post: operations['projects.leave'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -277,7 +364,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Transfer User Project */
-		post: operations['transfer_user_project_api_v1_projects__project_id__ownership__user_id__post'];
+		post: operations['projects.transfer_ownership'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -293,10 +380,10 @@ export interface paths {
 		};
 		get?: never;
 		/** Add Project Item */
-		put: operations['add_project_item_api_v1_projects__project_id__items__item_id__put'];
+		put: operations['projects.add_item'];
 		post?: never;
 		/** Remove Project Item */
-		delete: operations['remove_project_item_api_v1_projects__project_id__items__item_id__delete'];
+		delete: operations['projects.remove_item'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -311,7 +398,7 @@ export interface paths {
 		};
 		get?: never;
 		/** Set Project Member */
-		put: operations['set_project_member_api_v1_projects__project_id__members_put'];
+		put: operations['projects.set_member'];
 		post?: never;
 		delete?: never;
 		options?: never;
@@ -330,7 +417,7 @@ export interface paths {
 		put?: never;
 		post?: never;
 		/** Delete Project Member */
-		delete: operations['delete_project_member_api_v1_projects__project_id__members__user_id__delete'];
+		delete: operations['projects.remove_member'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -344,7 +431,24 @@ export interface paths {
 			cookie?: never;
 		};
 		/** List Documents */
-		get: operations['list_documents_api_v1_items__item_id__documents_get'];
+		get: operations['documents.list'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/items/{item_id}/annotations/review': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Review Annotations */
+		get: operations['review_annotations_api_v1_items__item_id__annotations_review_get'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -361,10 +465,10 @@ export interface paths {
 			cookie?: never;
 		};
 		/** List Annotations */
-		get: operations['list_annotations_api_v1_items__item_id__annotations_get'];
+		get: operations['annotations.list'];
 		put?: never;
 		/** Create Annotation */
-		post: operations['create_annotation_api_v1_items__item_id__annotations_post'];
+		post: operations['annotations.create'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -382,11 +486,11 @@ export interface paths {
 		put?: never;
 		post?: never;
 		/** Delete Annotation */
-		delete: operations['delete_annotation_api_v1_items__item_id__annotations__annotation_id__delete'];
+		delete: operations['annotations.delete'];
 		options?: never;
 		head?: never;
 		/** Update Annotation */
-		patch: operations['update_annotation_api_v1_items__item_id__annotations__annotation_id__patch'];
+		patch: operations['annotations.update'];
 		trace?: never;
 	};
 	'/api/v1/items/{item_id}/annotations/{annotation_id}/restore': {
@@ -416,7 +520,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Create Reply */
-		post: operations['create_reply_api_v1_items__item_id__annotations__annotation_id__replies_post'];
+		post: operations['annotation_replies.create'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -434,11 +538,11 @@ export interface paths {
 		put?: never;
 		post?: never;
 		/** Delete Reply */
-		delete: operations['delete_reply_api_v1_items__item_id__annotations__annotation_id__replies__reply_id__delete'];
+		delete: operations['annotation_replies.delete'];
 		options?: never;
 		head?: never;
 		/** Update Reply */
-		patch: operations['update_reply_api_v1_items__item_id__annotations__annotation_id__replies__reply_id__patch'];
+		patch: operations['annotation_replies.update'];
 		trace?: never;
 	};
 	'/api/v1/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}/restore': {
@@ -458,93 +562,6 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/tags': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** List Tags */
-		get: operations['list_tags_api_v1_tags_get'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/tags': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		/** Set Item Tag Selection */
-		put: operations['set_item_tag_selection_api_v1_items__item_id__tags_put'];
-		/** Add Item Tag */
-		post: operations['add_item_tag_api_v1_items__item_id__tags_post'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/tags/{tag_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		post?: never;
-		/** Remove Item Tag */
-		delete: operations['remove_item_tag_api_v1_items__item_id__tags__tag_id__delete'];
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/discussions': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** List Discussions */
-		get: operations['list_discussions_api_v1_items__item_id__discussions_get'];
-		put?: never;
-		/** Create Discussion */
-		post: operations['create_discussion_api_v1_items__item_id__discussions_post'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/discussions/{message_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		post?: never;
-		/** Delete Discussion */
-		delete: operations['delete_discussion_api_v1_items__item_id__discussions__message_id__delete'];
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
 	'/api/v1/discovery/search': {
 		parameters: {
 			query?: never;
@@ -555,7 +572,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Search Discovery */
-		post: operations['search_discovery_api_v1_discovery_search_post'];
+		post: operations['discovery.search'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -2082,6 +2099,69 @@ export interface components {
 			/** Updated At */
 			updated_at: string;
 		};
+		/** AnnotationReviewAnnotationView */
+		AnnotationReviewAnnotationView: {
+			/** Id */
+			id: string;
+			/** Revision Id */
+			revision_id: string;
+			/** Page Index */
+			page_index: number;
+			kind: components['schemas']['AnnotationKind'];
+			scope: components['schemas']['AnnotationScope'];
+			/** Project Id */
+			project_id: string | null;
+			/** Body */
+			body: string | null;
+			/** Selected Text */
+			selected_text: string | null;
+			/** Payload */
+			payload:
+				| components['schemas']['TextMarkupPayload']
+				| components['schemas']['NotePayload']
+				| components['schemas']['FreeTextPayload']
+				| components['schemas']['InkPayload']
+				| components['schemas']['RectanglePayload']
+				| components['schemas']['EllipsePayload']
+				| components['schemas']['LinePayload']
+				| components['schemas']['ArrowPayload'];
+			/** Version */
+			version: number;
+			/** Author Display Name */
+			author_display_name: string;
+			/** Mine */
+			mine: boolean;
+			/** Editable */
+			editable: boolean;
+			/** Created At */
+			created_at: string;
+			/** Updated At */
+			updated_at: string;
+			/** Replies */
+			replies: components['schemas']['AnnotationReplyView'][];
+			/** Revision Name */
+			revision_name: string;
+		};
+		/** AnnotationReviewRevisionView */
+		AnnotationReviewRevisionView: {
+			/** Id */
+			id: string;
+			/** Original Name */
+			original_name: string;
+		};
+		/** AnnotationReviewView */
+		AnnotationReviewView: {
+			/** Revisions */
+			revisions: components['schemas']['AnnotationReviewRevisionView'][];
+			/** Annotations */
+			annotations: components['schemas']['AnnotationReviewAnnotationView'][];
+			/** Total */
+			total: number;
+			/** Page */
+			page: number;
+			/** Per Page */
+			per_page: number;
+		};
 		/**
 		 * AnnotationScope
 		 * @enum {string}
@@ -2141,10 +2221,8 @@ export interface components {
 			revision_id: string;
 			/** Page Index */
 			page_index: number;
-			/** Kind */
-			kind: string;
-			/** Scope */
-			scope: string;
+			kind: components['schemas']['AnnotationKind'];
+			scope: components['schemas']['AnnotationScope'];
 			/** Project Id */
 			project_id: string | null;
 			/** Body */
@@ -2174,7 +2252,7 @@ export interface components {
 			/** Updated At */
 			updated_at: string;
 			/** Replies */
-			replies?: components['schemas']['AnnotationReplyView'][];
+			replies: components['schemas']['AnnotationReplyView'][];
 		};
 		/** ApiTokenCreateRequest */
 		ApiTokenCreateRequest: {
@@ -3784,7 +3862,7 @@ export interface operations {
 			};
 		};
 	};
-	search_items_api_v1_items_get: {
+	'library.search': {
 		parameters: {
 			query?: {
 				query?: string;
@@ -3821,7 +3899,7 @@ export interface operations {
 			};
 		};
 	};
-	create_library_item_api_v1_items_post: {
+	'library.create_item': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -3854,7 +3932,7 @@ export interface operations {
 			};
 		};
 	};
-	get_library_item_api_v1_items__item_id__get: {
+	'library.get_item': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -3885,7 +3963,7 @@ export interface operations {
 			};
 		};
 	};
-	update_library_item_api_v1_items__item_id__put: {
+	'library.update_item': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -3955,7 +4033,7 @@ export interface operations {
 			};
 		};
 	};
-	format_item_citation_api_v1_items__item_id__citation_get: {
+	'citations.format_item': {
 		parameters: {
 			query?: {
 				style?: string;
@@ -3989,7 +4067,227 @@ export interface operations {
 			};
 		};
 	};
-	list_projects_api_v1_projects_get: {
+	'tags.list': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TagView'][];
+				};
+			};
+		};
+	};
+	'tags.set_for_item': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['TagSetRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['HTTPValidationError'];
+				};
+			};
+		};
+	};
+	'tags.add_to_item': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['NameRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WriteResult'];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['HTTPValidationError'];
+				};
+			};
+		};
+	};
+	'tags.remove_from_item': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				item_id: string;
+				tag_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['HTTPValidationError'];
+				};
+			};
+		};
+	};
+	'discussions.list': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['DiscussionMessageView'][];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['HTTPValidationError'];
+				};
+			};
+		};
+	};
+	'discussions.add': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['DiscussionRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WriteResult'];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['HTTPValidationError'];
+				};
+			};
+		};
+	};
+	'discussions.delete': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				item_id: string;
+				message_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['HTTPValidationError'];
+				};
+			};
+		};
+	};
+	'projects.list': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4009,7 +4307,7 @@ export interface operations {
 			};
 		};
 	};
-	create_user_project_api_v1_projects_post: {
+	'projects.create': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4062,7 +4360,7 @@ export interface operations {
 			};
 		};
 	};
-	get_project_api_v1_projects__project_id__get: {
+	'projects.get': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4093,7 +4391,7 @@ export interface operations {
 			};
 		};
 	};
-	delete_user_project_api_v1_projects__project_id__delete: {
+	'projects.delete': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4128,7 +4426,7 @@ export interface operations {
 			};
 		};
 	};
-	update_project_api_v1_projects__project_id__patch: {
+	'projects.update_settings': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4198,7 +4496,7 @@ export interface operations {
 			};
 		};
 	};
-	archive_project_api_v1_projects__project_id__archive_post: {
+	'projects.archive': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4229,7 +4527,7 @@ export interface operations {
 			};
 		};
 	};
-	restore_project_api_v1_projects__project_id__restore_post: {
+	'projects.restore': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4295,7 +4593,7 @@ export interface operations {
 			};
 		};
 	};
-	leave_user_project_api_v1_projects__project_id__leave_post: {
+	'projects.leave': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4357,7 +4655,7 @@ export interface operations {
 			};
 		};
 	};
-	transfer_user_project_api_v1_projects__project_id__ownership__user_id__post: {
+	'projects.transfer_ownership': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4389,7 +4687,7 @@ export interface operations {
 			};
 		};
 	};
-	add_project_item_api_v1_projects__project_id__items__item_id__put: {
+	'projects.add_item': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4421,7 +4719,7 @@ export interface operations {
 			};
 		};
 	};
-	remove_project_item_api_v1_projects__project_id__items__item_id__delete: {
+	'projects.remove_item': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4453,7 +4751,7 @@ export interface operations {
 			};
 		};
 	};
-	set_project_member_api_v1_projects__project_id__members_put: {
+	'projects.set_member': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4488,7 +4786,7 @@ export interface operations {
 			};
 		};
 	};
-	delete_project_member_api_v1_projects__project_id__members__user_id__delete: {
+	'projects.remove_member': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4520,7 +4818,7 @@ export interface operations {
 			};
 		};
 	};
-	list_documents_api_v1_items__item_id__documents_get: {
+	'documents.list': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4551,7 +4849,42 @@ export interface operations {
 			};
 		};
 	};
-	list_annotations_api_v1_items__item_id__annotations_get: {
+	review_annotations_api_v1_items__item_id__annotations_review_get: {
+		parameters: {
+			query?: {
+				page?: number;
+				per_page?: number;
+				revision_id?: string | null;
+			};
+			header?: never;
+			path: {
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AnnotationReviewView'];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['HTTPValidationError'];
+				};
+			};
+		};
+	};
+	'annotations.list': {
 		parameters: {
 			query: {
 				revision_id: string;
@@ -4585,7 +4918,7 @@ export interface operations {
 			};
 		};
 	};
-	create_annotation_api_v1_items__item_id__annotations_post: {
+	'annotations.create': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4620,7 +4953,7 @@ export interface operations {
 			};
 		};
 	};
-	delete_annotation_api_v1_items__item_id__annotations__annotation_id__delete: {
+	'annotations.delete': {
 		parameters: {
 			query: {
 				version: number;
@@ -4654,7 +4987,7 @@ export interface operations {
 			};
 		};
 	};
-	update_annotation_api_v1_items__item_id__annotations__annotation_id__patch: {
+	'annotations.update': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4724,7 +5057,7 @@ export interface operations {
 			};
 		};
 	};
-	create_reply_api_v1_items__item_id__annotations__annotation_id__replies_post: {
+	'annotation_replies.create': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4760,7 +5093,7 @@ export interface operations {
 			};
 		};
 	};
-	delete_reply_api_v1_items__item_id__annotations__annotation_id__replies__reply_id__delete: {
+	'annotation_replies.delete': {
 		parameters: {
 			query: {
 				version: number;
@@ -4795,7 +5128,7 @@ export interface operations {
 			};
 		};
 	};
-	update_reply_api_v1_items__item_id__annotations__annotation_id__replies__reply_id__patch: {
+	'annotation_replies.update': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4867,227 +5200,7 @@ export interface operations {
 			};
 		};
 	};
-	list_tags_api_v1_tags_get: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['TagView'][];
-				};
-			};
-		};
-	};
-	set_item_tag_selection_api_v1_items__item_id__tags_put: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['TagSetRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Validation Error */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
-				};
-			};
-		};
-	};
-	add_item_tag_api_v1_items__item_id__tags_post: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['NameRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['WriteResult'];
-				};
-			};
-			/** @description Validation Error */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
-				};
-			};
-		};
-	};
-	remove_item_tag_api_v1_items__item_id__tags__tag_id__delete: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-				tag_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Validation Error */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
-				};
-			};
-		};
-	};
-	list_discussions_api_v1_items__item_id__discussions_get: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['DiscussionMessageView'][];
-				};
-			};
-			/** @description Validation Error */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
-				};
-			};
-		};
-	};
-	create_discussion_api_v1_items__item_id__discussions_post: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['DiscussionRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			201: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['WriteResult'];
-				};
-			};
-			/** @description Validation Error */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
-				};
-			};
-		};
-	};
-	delete_discussion_api_v1_items__item_id__discussions__message_id__delete: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-				message_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Validation Error */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
-				};
-			};
-		};
-	};
-	search_discovery_api_v1_discovery_search_post: {
+	'discovery.search': {
 		parameters: {
 			query?: never;
 			header?: never;

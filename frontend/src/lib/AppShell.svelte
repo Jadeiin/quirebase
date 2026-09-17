@@ -4,7 +4,7 @@
 	import { Menu, Portal } from '@skeletonlabs/skeleton-svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { onMount, type Snippet } from 'svelte';
-	import { apiRequest, type SessionView } from '$lib/api/client';
+	import { apiRequest } from '$lib/api/client';
 	import Icon from '$lib/design/Icon.svelte';
 	import { domainLabel } from '$lib/domain-labels';
 	import { activateLocale, msg, t } from '$lib/i18n';
@@ -14,7 +14,7 @@
 
 	const session = createQuery(() => ({
 		queryKey: ['session'],
-		queryFn: () => apiRequest<SessionView>('/session'),
+		queryFn: () => apiRequest('GET', '/session'),
 		retry: false
 	}));
 	const nav = [
@@ -43,7 +43,7 @@
 		actionBusy = true;
 		actionError = '';
 		try {
-			await apiRequest('/session', { method: 'DELETE' });
+			await apiRequest('DELETE', '/session');
 			location.assign('/');
 		} catch (reason) {
 			actionError = reason instanceof Error ? reason.message : $t('Account action failed');

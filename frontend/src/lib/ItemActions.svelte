@@ -4,7 +4,7 @@
 	import { Dialog, Portal } from '@skeletonlabs/skeleton-svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { onMount } from 'svelte';
-	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { apiDownloadGet, apiRequest, apiText, type WorkspaceView } from '$lib/api/client';
 	import Icon from '$lib/design/Icon.svelte';
 	import { domainLabel } from '$lib/domain-labels';
@@ -15,13 +15,6 @@
 	} from '$lib/export-preferences';
 	import { t } from '$lib/i18n';
 
-	type FileRow = {
-		id: string;
-		original_name: string;
-	} & (
-		| { kind: 'revision'; processing_state: 'pending' | 'ready' }
-		| { kind: 'attachment'; processing_state: null }
-	);
 	type ActionSection = 'documents' | 'citation' | 'sources' | 'danger';
 
 	let { itemId, workspace, userId, onchanged } = $props<{
@@ -43,7 +36,10 @@
 	const files = createQuery(() => ({
 		queryKey: ['item-actions-files', itemId],
 		enabled: open && section === 'documents',
-		queryFn: () => apiRequest<{ files: FileRow[] }>(`/items/${itemId}/documents`)
+		queryFn: () =>
+			apiRequest('GET', '/items/{item_id}/documents', {
+				params: { path: { item_id: itemId } }
+			})
 	}));
 	const revisions = $derived(files.data?.files.filter((file) => file.kind === 'revision') ?? []);
 
@@ -67,13 +63,13 @@
 
 	function bibliographyParameters() {
 		const citation = preferences.citation;
-		const parameters = new SvelteURLSearchParams({
+		return {
 			file_format: format,
 			style: citation.style,
-			include_abstract: String(citation.includeAbstract),
-			preserve_case: String(citation.preserveCase),
-			include_identifiers: String(citation.includeIdentifiers),
-			include_custom_fields: String(citation.includeCustomFields),
+			include_abstract: citation.includeAbstract,
+			preserve_case: citation.preserveCase,
+			include_identifiers: citation.includeIdentifiers,
+			include_custom_fields: citation.includeCustomFields,
 			encoding: citation.encoding,
 			journal_mode: citation.journalMode,
 			doi_policy: citation.doiPolicy,
@@ -81,9 +77,8 @@
 			excluded_fields: citation.excludedFields,
 			sort_by: citation.sortBy,
 			citation_key_formula: citation.citationKeyFormula,
-			citation_key_force_ascii: String(citation.citationKeyForceAscii)
-		});
-		return parameters.toString();
+			citation_key_force_ascii: citation.citationKeyForceAscii
+		};
 	}
 
 	async function action(operation: () => Promise<unknown>, success: string) {
@@ -102,37 +97,43 @@
 
 	function downloadBibliography() {
 		void action(
-			() => apiDownloadGet(`/items/${itemId}/bibliography?${bibliographyParameters()}`),
+			() =>
+				apiDownloadGet('/items/{item_id}/bibliography', {
+					params: { path: { item_id: itemId }, query: bibliographyParameters() }
+				}),
 			$t('Bibliography downloaded')
 		);
 	}
 
 	function copyBibliography() {
 		void action(async () => {
-			const content = await apiText(
-				`/items/${itemId}/bibliography/content?${bibliographyParameters()}`
-			);
+			const content = await apiText('/items/{item_id}/bibliography/content', {
+				params: { path: { item_id: itemId }, query: bibliographyParameters() }
+			});
 			await navigator.clipboard.writeText(content);
 		}, $t('Copied to clipboard'));
 	}
 
 	function downloadDocuments() {
-		const parameters = new SvelteURLSearchParams({
+		const parameters = {
 			revisions: [...selectedRevisions].join(','),
-			include_annotations: String(preferences.document.includeAnnotations),
-			include_supplements: String(preferences.document.includeSupplements),
+			include_annotations: preferences.document.includeAnnotations,
+			include_supplements: preferences.document.includeSupplements,
 			timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
-		});
+		};
 		void action(
-			() => apiDownloadGet(`/items/${itemId}/archive?${parameters}`),
+			() =>
+				apiDownloadGet('/items/{item_id}/archive', {
+					params: { path: { item_id: itemId }, query: parameters }
+				}),
 			$t('Document bundle downloaded')
 		);
 	}
 
 	function synchronize(provider: string, uid: string) {
 		void action(async () => {
-			await apiRequest(`/items/${itemId}/metadata/sync`, {
-				method: 'POST',
+			await apiRequest('POST', '/items/{item_id}/metadata/sync', {
+				params: { path: { item_id: itemId } },
 				body: { expected_version: workspace.item.version, provider, uid }
 			});
 			await onchanged();
@@ -141,14 +142,18 @@
 
 	function regenerateCitationKey() {
 		void action(async () => {
-			await apiRequest(`/items/${itemId}/citation-key/regenerate`, { method: 'POST' });
+			await apiRequest('POST', '/items/{item_id}/citation-key/regenerate', {
+				params: { path: { item_id: itemId } }
+			});
 			await onchanged();
 		}, $t('Citation key updated'));
 	}
 
 	function rescanDoi() {
 		void action(async () => {
-			await apiRequest(`/items/${itemId}/doi/rescan`, { method: 'POST' });
+			await apiRequest('POST', '/items/{item_id}/doi/rescan', {
+				params: { path: { item_id: itemId } }
+			});
 			await onchanged();
 		}, $t('PDF scanned for a DOI'));
 	}
@@ -156,8 +161,8 @@
 	function deleteItem() {
 		if (!window.confirm($t('Delete this Item permanently?'))) return;
 		void action(async () => {
-			await apiRequest(`/items/${itemId}`, {
-				method: 'DELETE',
+			await apiRequest('DELETE', '/items/{item_id}', {
+				params: { path: { item_id: itemId } },
 				body: { confirmation: 'delete' }
 			});
 			await goto(resolve('/library'));
@@ -285,7 +290,7 @@
 												: selectedRevisions.add(revision.id)}
 									/><span
 										><strong>{revision.original_name}</strong><small class="block text-surface-600"
-											>{$t(domainLabel(revision.processing_state))}</small
+											>{$t(domainLabel(revision.processing_state ?? 'pending'))}</small
 										></span
 									></label
 								>{/each}
