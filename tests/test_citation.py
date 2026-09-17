@@ -190,6 +190,7 @@ async def test_citation_copy_endpoint_accepts_export_options(
             },
         )
         assert response.status_code == 200
+        assert response.headers["content-type"] == "text/plain; charset=utf-8"
         assert "abstract" not in response.text
         assert "title = {{P}aper}" in response.text
     finally:

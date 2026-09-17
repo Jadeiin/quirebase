@@ -144,7 +144,13 @@ async def export_item_bibliography(
 @router.get(
     "/items/{item_id}/bibliography/content",
     response_class=Response,
-    responses={200: {"content": BIBLIOGRAPHY_CONTENT_TYPES}},
+    responses={
+        200: {
+            "content": {
+                "text/plain": {"schema": {"type": "string"}},
+            }
+        }
+    },
 )
 async def copy_citation(
     item_id: str,

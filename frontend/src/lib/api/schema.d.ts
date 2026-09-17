@@ -6106,9 +6106,6 @@ export interface operations {
 				};
 				content: {
 					'text/plain': string;
-					'application/x-bibtex': string;
-					'application/x-research-info-systems': string;
-					'application/x-endnote-refer': string;
 				};
 			};
 			/** @description Validation Error */
