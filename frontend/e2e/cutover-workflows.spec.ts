@@ -251,18 +251,51 @@ test('Item annotation review spans every PDF revision', async ({ page }) => {
 			}
 		})
 	);
+	await page.route('**/api/v1/items/item-annotations/organize', (route) =>
+		route.fulfill({
+			json: {
+				item: { id: 'item-annotations', title_html: 'Annotated Item', version: 1 },
+				permissions: { edit: false, delete: false },
+				tags: [],
+				projects: [{ id: 'project-1', name: 'Shared', role: 'member', assigned: true }],
+				tag_matrix: {
+					groups: [],
+					assigned_ids: [],
+					recommended_ids: [],
+					suggested_names: [],
+					suggested_single_words: [],
+					suggested_phrases: [],
+					recommendation_state: 'idle',
+					recommendation_error: null
+				}
+			}
+		})
+	);
 	await page.route('**/api/v1/items/item-annotations/annotations?*', (route) => {
-		const revisionId = new URL(route.request().url()).searchParams.get('revision_id')!;
+		const parameters = new URL(route.request().url()).searchParams;
+		const revisionId = parameters.get('revision_id')!;
+		const privateAnnotation = {
+			id: `annotation-${revisionId}`,
+			revision_id: revisionId,
+			page_index: 0,
+			kind: 'note',
+			body: revisionId === 'revision-new' ? 'New revision note' : 'Old revision note',
+			selected_text: null,
+			author_display_name: 'reader',
+			replies: []
+		};
+		if (!parameters.get('project_id')) return route.fulfill({ json: [privateAnnotation] });
 		return route.fulfill({
 			json: [
+				privateAnnotation,
 				{
-					id: `annotation-${revisionId}`,
+					id: `shared-${revisionId}`,
 					revision_id: revisionId,
 					page_index: 0,
 					kind: 'note',
-					body: revisionId === 'revision-new' ? 'New revision note' : 'Old revision note',
+					body: 'Shared project note',
 					selected_text: null,
-					author_display_name: 'reader',
+					author_display_name: 'collaborator',
 					replies: []
 				}
 			]
@@ -273,9 +306,61 @@ test('Item annotation review spans every PDF revision', async ({ page }) => {
 
 	await expect(page.getByText('New revision note')).toBeVisible();
 	await expect(page.getByText('Old revision note')).toBeVisible();
+	await expect(page.getByText('New revision note')).toHaveCount(1);
+	await expect(page.getByText('Shared project note')).toHaveCount(2);
 	await page.getByLabel('PDF revision').selectOption('revision-old');
 	await expect(page.getByText('New revision note')).toHaveCount(0);
 	await expect(page.getByText('Old revision note')).toBeVisible();
+	await expect(page.getByText('Shared project note')).toHaveCount(1);
+});
+
+test('Item annotation review surfaces project-scope lookup failures', async ({ page }) => {
+	await mockSession(page);
+	await page.route('**/api/v1/items/item-annotations-error/workspace', (route) =>
+		route.fulfill({
+			json: {
+				item: { id: 'item-annotations-error', title_html: 'Annotated Item', version: 1 },
+				latest_revision: {
+					id: 'revision-new',
+					original_name: 'new.pdf',
+					size: 200,
+					page_count: 2,
+					processing_state: 'ready'
+				},
+				permissions: { edit: false, delete: false },
+				counts: { revisions: 1, attachments: 0, annotations: 1, discussion: 0 },
+				tags: [],
+				owner: { id: 'user-2', username: 'owner' },
+				identifiers: []
+			}
+		})
+	);
+	await page.route('**/api/v1/items/item-annotations-error/documents', (route) =>
+		route.fulfill({
+			json: {
+				item_id: 'item-annotations-error',
+				files: [
+					{
+						id: 'revision-new',
+						kind: 'revision',
+						original_name: 'new.pdf',
+						mime_type: 'application/pdf',
+						size: 200,
+						created_at: '2026-02-01T00:00:00Z',
+						processing_state: 'ready'
+					}
+				]
+			}
+		})
+	);
+	await page.route('**/api/v1/items/item-annotations-error/organize', (route) =>
+		route.fulfill({ status: 500, json: { detail: 'Internal Server Error' } })
+	);
+
+	await page.goto('/item/item-annotations-error/annotations');
+
+	await expect(page.getByText('Unable to load annotations.')).toBeVisible();
+	await expect(page.getByText('New revision note')).toHaveCount(0);
 });
 
 test('Item file uploads wait for durable processing before refreshing', async ({ page }) => {
@@ -427,13 +512,25 @@ test('Item Files acquires URL imports through the same-origin API', async ({ pag
 			source: 'https://papers.example/article.pdf'
 		});
 
-	await page.locator('input[name="url"]').nth(1).fill('https://papers.example/supplement.zip');
+	const attachmentUrl = page.locator('input[name="url"]').nth(1);
+	await attachmentUrl.fill('https://papers.example/supplement.zip');
 	await page.getByRole('button', { name: 'Download and add attachment' }).click();
 	await expect
 		.poll(() => attachmentImport)
 		.toEqual({
 			source: 'https://papers.example/supplement.zip',
 			graphical_abstract: false
+		});
+	await expect(page.getByRole('button', { name: 'Download and add attachment' })).toBeEnabled();
+
+	await attachmentUrl.fill('https://papers.example/figure.png');
+	await page.getByLabel('Use as Graphical Abstract').nth(1).check();
+	await page.getByRole('button', { name: 'Download and add attachment' }).click();
+	await expect
+		.poll(() => attachmentImport)
+		.toEqual({
+			source: 'https://papers.example/figure.png',
+			graphical_abstract: true
 		});
 
 	expect(browserRemoteRequests).toBe(0);
@@ -536,6 +633,18 @@ test('account settings expose credential and session security controls', async (
 	});
 
 	await page.goto('/account');
+	await page.getByText('Client connection guide').click();
+	await expect(page.getByText('Connect an MCP client')).toBeVisible();
+	const guideLayout = await page.locator('details').evaluate((element) => ({
+		clippedValues: [...element.querySelectorAll('dd')].filter(
+			(dd) => dd.scrollWidth > dd.clientWidth
+		).length,
+		clippedCode: [...element.querySelectorAll('pre')].filter(
+			(pre) => pre.scrollWidth > pre.clientWidth
+		).length
+	}));
+	expect(guideLayout).toEqual({ clippedValues: 0, clippedCode: 0 });
+
 	await page.getByLabel('Current password').fill('old-password');
 	await page.getByLabel('New password').fill('new-password-long');
 	await page.getByRole('button', { name: 'Change password' }).click();
@@ -932,6 +1041,76 @@ test('Item metadata editor preserves structured contributors and custom fields',
 		});
 });
 
+test('Metadata synchronization refreshes the editor draft and Overview details', async ({
+	page
+}) => {
+	await mockSession(page);
+	let version = 1;
+	let synchronized = false;
+	let synchronization: { provider?: string; uid?: string } | null = null;
+	const metadata = () => ({
+		title: synchronized ? 'Synchronized title' : 'Old title',
+		abstract: synchronized ? 'Synchronized abstract' : 'Old abstract',
+		keywords: [],
+		urls: [],
+		authors: [],
+		editors: [],
+		identifiers: [],
+		custom_fields: []
+	});
+	await page.route('**/api/v1/items/item-1/workspace', (route) =>
+		route.fulfill({
+			json: {
+				item: { id: 'item-1', title_html: metadata().title, version, doi: '10.1000/sync' },
+				permissions: { edit: true, delete: true },
+				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
+				tags: [],
+				owner: { id: 'user-1', username: 'reader' },
+				identifiers: [{ provider: 'doi', value: '10.1000/sync' }],
+				latest_revision: null
+			}
+		})
+	);
+	await page.route('**/api/v1/items/item-1/metadata/sync', (route) => {
+		synchronization = route.request().postDataJSON();
+		synchronized = true;
+		version += 1;
+		return route.fulfill({ json: { ok: true } });
+	});
+	await page.route('**/api/v1/items/item-1', (route) =>
+		route.fulfill({
+			json: {
+				id: 'item-1',
+				title_html: metadata().title,
+				version,
+				metadata: metadata(),
+				abstract_html: metadata().abstract
+			}
+		})
+	);
+
+	await page.goto('/item/item-1');
+	await expect(page.getByText('Old abstract')).toBeVisible();
+	await page.getByRole('link', { name: 'Edit metadata' }).click();
+	await expect(page).toHaveURL(/\/metadata$/);
+	await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Old title');
+
+	await page.getByRole('button', { name: 'Record tools' }).click();
+	await page.getByLabel('Provider').selectOption('datacite');
+	await page.getByRole('button', { name: 'Autoupdate' }).click();
+	await expect
+		.poll(() => synchronization)
+		.toMatchObject({ provider: 'datacite', uid: '10.1000/sync' });
+	await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Synchronized title');
+	await page
+		.getByRole('dialog', { name: 'Item actions' })
+		.getByRole('button', { name: 'Close' })
+		.click();
+
+	await page.getByRole('link', { name: 'Overview' }).click();
+	await expect(page.getByText('Synchronized abstract')).toBeVisible();
+});
+
 test('Item organization toggles the Tag matrix and waits for recommendations', async ({ page }) => {
 	await mockSession(page);
 	const mutations: Array<{ method: string; path: string; body: unknown }> = [];
@@ -1083,6 +1262,53 @@ test('Library page selection toggles and icon pagination reaches every boundary'
 	await page.getByRole('button', { name: 'Next page' }).click();
 	await expect(page).toHaveURL(/page=2/);
 	await expect(page.getByText('Page 2 Item 1')).toBeVisible();
+});
+
+test('Library history navigation restores filter drafts and clears selection', async ({ page }) => {
+	await mockSession(page);
+	await page.route('**/api/v1/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/projects', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/items?*', (route) => {
+		const query = new URL(route.request().url()).searchParams.get('query') ?? 'all';
+		return route.fulfill({
+			json: {
+				items: [
+					{
+						id: `item-${query}`,
+						title_html: `Result for ${query}`,
+						authors: 'A. Reader',
+						publication_date: '2026',
+						publication_title: null,
+						doi: null,
+						version: 1
+					}
+				],
+				total: 1,
+				page: 1,
+				per_page: 25
+			}
+		});
+	});
+
+	await page.goto('/library');
+	const search = page.getByPlaceholder('Search title, author, Tag, or full text');
+	await search.fill('foo');
+	await page.getByRole('button', { name: 'Search', exact: true }).click();
+	await expect(page).toHaveURL(/q=foo/);
+	await expect(page.getByText('Result for foo')).toBeVisible();
+
+	await search.fill('bar');
+	await page.getByRole('button', { name: 'Search', exact: true }).click();
+	await expect(page).toHaveURL(/q=bar/);
+	await expect(page.getByText('Result for bar')).toBeVisible();
+	await page.locator('article input[type="checkbox"]').check();
+	await expect(page.getByText('1 selected')).toBeVisible();
+
+	await page.goBack();
+	await expect(page).toHaveURL(/q=foo/);
+	await expect(page.getByText('Result for foo')).toBeVisible();
+	await expect(search).toHaveValue('foo');
+	await expect(page.getByText('1 selected')).toHaveCount(0);
 });
 
 test('adding a Library Item invalidates a previously opened Project', async ({ page }) => {
@@ -1278,6 +1504,42 @@ test('Tools exposes Tag maintenance and Citation Style installation', async ({ p
 		});
 });
 
+test('Tag page clamps after deleting the last page of Tags', async ({ page }) => {
+	await mockSession(page);
+	let tags = Array.from({ length: 21 }, (_, index) => ({
+		id: `tag-${index + 1}`,
+		name: `Tag ${String(index + 1).padStart(2, '0')}`,
+		accessible_item_count: 1
+	}));
+	await page.route('**/api/v1/tags**', (route) => {
+		const request = route.request();
+		if (request.method() === 'DELETE') {
+			tags = tags.filter((tag) => !request.url().endsWith(tag.id));
+			return route.fulfill({ json: { ok: true } });
+		}
+		return route.fulfill({ json: tags });
+	});
+	await page.route('**/api/v1/citation-styles*', (route) =>
+		route.fulfill({ json: { styles: [] } })
+	);
+
+	await page.goto('/tools');
+	await page.getByRole('tab', { name: 'Manage Tags' }).click();
+	await expect(page.getByText('21 Tags')).toBeVisible();
+	await page.getByRole('button', { name: 'Next' }).click();
+	await expect(page.getByText('Page 2 / 2')).toBeVisible();
+	const tagRow = (name: string) =>
+		page.locator('strong').filter({ hasText: new RegExp(`^${name}$`) });
+	await expect(tagRow('Tag 21')).toBeVisible();
+
+	page.once('dialog', (dialog) => dialog.accept());
+	await page.getByRole('button', { name: 'Delete' }).click();
+	await expect(page.getByText('20 Tags')).toBeVisible();
+	await expect(tagRow('Tag 21')).toHaveCount(0);
+	await expect(tagRow('Tag 20')).toBeVisible();
+	await expect(page.getByText('Page 2 / 2')).toHaveCount(0);
+});
+
 test('saved export preferences flow into Library bibliography requests', async ({ page }) => {
 	await mockSession(page);
 	await page.route('**/api/v1/account', (route) =>
@@ -1468,12 +1730,13 @@ test('Item actions export citations and synchronize upstream metadata', async ({
 	await page.getByRole('button', { name: 'Download file' }).click();
 	await expect.poll(() => exportQuery).toContain('file_format=bibtex');
 	await page.getByRole('button', { name: 'Metadata sources' }).click();
+	await page.getByLabel('Provider').selectOption('openalex');
 	await page.getByRole('button', { name: 'Autoupdate' }).first().click();
 	await expect
 		.poll(() => syncBody)
 		.toEqual({
 			expected_version: 3,
-			provider: 'doi',
+			provider: 'openalex',
 			uid: '10.1000/test'
 		});
 });
@@ -1580,50 +1843,12 @@ test('session locale activates navigation without an unrelated rerender', async 
 	await expect(page.getByPlaceholder('搜索标题、作者、标签或全文')).toBeVisible();
 });
 
-test('desktop PDF inspector persists annotation notes and replies', async ({ page }) => {
+test('PDF reader uses the built-in EmbedPDF viewer with Quirebase annotations', async ({
+	page
+}) => {
 	await page.setViewportSize({ width: 1280, height: 800 });
 	await mockSession(page);
-	const mutations: Array<{ method: string; path: string; body: unknown }> = [];
-	const annotation = {
-		id: 'annotation-1',
-		revision_id: 'revision-1',
-		page_index: 0,
-		kind: 'highlight',
-		scope: 'private',
-		project_id: null,
-		body: 'Original note',
-		selected_text: 'Evidence',
-		payload: {
-			type: 'highlight',
-			rect: { x: 20, y: 30, width: 80, height: 12 },
-			segment_rects: [{ x: 20, y: 30, width: 80, height: 12 }],
-			style: {
-				stroke_color: '#f59e0b',
-				fill_color: '#fde68a',
-				text_color: null,
-				opacity: 0.7,
-				stroke_width: 1,
-				dash_pattern: []
-			}
-		},
-		version: 1,
-		author_display_name: 'reader',
-		editable: true,
-		created_at: '2026-09-16T00:00:00Z',
-		updated_at: '2026-09-16T00:00:00Z',
-		replies: [
-			{
-				id: 'reply-1',
-				annotation_id: 'annotation-1',
-				body: 'Existing reply',
-				version: 1,
-				author_display_name: 'reader',
-				editable: true,
-				created_at: '2026-09-16T00:00:00Z',
-				updated_at: '2026-09-16T00:00:00Z'
-			}
-		]
-	};
+	const annotationRequests: string[] = [];
 	await page.route('**/api/v1/items/item-1/revisions/revision-1/viewer', (route) =>
 		route.fulfill({
 			json: {
@@ -1638,30 +1863,46 @@ test('desktop PDF inspector persists annotation notes and replies', async ({ pag
 					page_geometry: [[0, 0, 300, 400]],
 					content_url: '/api/v1/items/item-1/revisions/revision-1/content'
 				},
-				projects: []
+				projects: [{ id: 'project-1', name: 'Shared' }]
 			}
 		})
 	);
 	await page.route('**/api/v1/items/item-1/annotations**', (route) => {
-		const request = route.request();
-		if (request.method() === 'GET') return route.fulfill({ json: [annotation] });
-		mutations.push({
-			method: request.method(),
-			path: new URL(request.url()).pathname,
-			body: request.postDataJSON()
-		});
-		if (request.method() === 'PATCH' && request.url().includes('/replies/')) {
+		annotationRequests.push(new URL(route.request().url()).search);
+		if (route.request().method() === 'GET') {
 			return route.fulfill({
-				json: { ...annotation.replies[0], body: 'Edited reply', version: 2 }
+				json: [
+					{
+						id: 'annotation-1',
+						revision_id: 'revision-1',
+						page_index: 0,
+						kind: 'highlight',
+						scope: 'private',
+						project_id: null,
+						body: 'Important',
+						selected_text: 'evidence',
+						payload: {
+							type: 'highlight',
+							rect: { x: 20, y: 30, width: 80, height: 12 },
+							segment_rects: [{ x: 20, y: 30, width: 80, height: 12 }],
+							style: {
+								stroke_color: '#f59e0b',
+								fill_color: '#fde68a',
+								text_color: null,
+								opacity: 0.7,
+								stroke_width: 1,
+								dash_pattern: []
+							}
+						},
+						version: 1,
+						author_display_name: 'reader',
+						editable: true,
+						created_at: '2026-09-16T00:00:00Z',
+						updated_at: '2026-09-16T00:00:00Z',
+						replies: []
+					}
+				]
 			});
-		}
-		if (request.method() === 'POST' && request.url().endsWith('/replies')) {
-			return route.fulfill({
-				json: { ...annotation.replies[0], id: 'reply-2', body: 'New reply' }
-			});
-		}
-		if (request.method() === 'PATCH') {
-			return route.fulfill({ json: { ...annotation, body: 'Updated note', version: 2 } });
 		}
 		return route.fulfill({ json: { ok: true } });
 	});
@@ -1670,92 +1911,55 @@ test('desktop PDF inspector persists annotation notes and replies', async ({ pag
 	);
 
 	await page.goto('/item/item-1/pdf/revision-1');
-	await page.getByRole('button', { name: 'Annotations', exact: true }).click();
-	const inspector = page.getByRole('dialog', { name: 'Annotation inspector' });
-	await inspector.locator('textarea').first().fill('Updated note');
-	await inspector.getByRole('button', { name: 'Save note' }).click();
-	await expect
-		.poll(() => mutations)
-		.toContainEqual({
-			method: 'PATCH',
-			path: '/api/v1/items/item-1/annotations/annotation-1',
-			body: expect.objectContaining({ version: 1, body: 'Updated note' })
-		});
-	await inspector.getByPlaceholder('Write a reply').fill('New reply');
-	await inspector.getByRole('button', { name: 'Reply', exact: true }).click();
-	await expect
-		.poll(() =>
-			mutations.some((entry) => entry.method === 'POST' && entry.path.endsWith('/replies'))
-		)
-		.toBe(true);
-	await inspector.locator('textarea').nth(1).fill('Edited reply');
-	await inspector.getByRole('button', { name: 'Save reply' }).click();
-	await expect
-		.poll(() =>
-			mutations.some((entry) => entry.method === 'PATCH' && entry.path.endsWith('/reply-1'))
-		)
-		.toBe(true);
-	await inspector.getByRole('button', { name: 'Delete reply' }).click();
-	await expect
-		.poll(() =>
-			mutations.some((entry) => entry.method === 'DELETE' && entry.path.endsWith('/reply-1'))
-		)
-		.toBe(true);
-	page.once('dialog', (dialog) => dialog.accept());
-	await inspector.getByRole('button', { name: 'Delete Annotation' }).click();
-	await expect
-		.poll(() =>
-			mutations.some(
-				(entry) => entry.method === 'DELETE' && entry.path.endsWith('/annotations/annotation-1')
-			)
-		)
-		.toBe(true);
+	await expect(page.getByRole('button', { name: 'Document Menu' })).toBeVisible();
+	await expect(page.locator('[data-epdf-i="comment-button"]')).toBeAttached();
+	await expect(page.getByText('1 annotations loaded')).toBeVisible();
+	expect(annotationRequests.at(-1)).toContain('revision_id=revision-1');
+
+	await page.getByLabel('Annotation visibility').selectOption('project-1');
+	await expect.poll(() => annotationRequests.at(-1)).toContain('project_id=project-1');
 });
 
-test('mobile PDF annotation control opens the inspector', async ({ page }) => {
-	await page.setViewportSize({ width: 390, height: 844 });
-	await mockSession(page);
-	const pageErrors: string[] = [];
-	page.on('pageerror', (error) => pageErrors.push(error.message));
-	await page.route('**/api/v1/items/item-1/revisions/revision-1/viewer', (route) =>
-		route.fulfill({
-			json: {
-				item: {
-					id: 'item-1',
-					title_html: 'Reader item',
-					authors: null,
-					publication_date: null,
-					publication_title: null,
-					doi: null,
-					version: 1
-				},
-				editable: true,
-				annotation_author: 'reader',
-				revision: {
-					id: 'revision-1',
-					original_name: 'paper.pdf',
-					page_count: 1,
-					processing_state: 'ready',
-					page_geometry: [[0, 0, 300, 400]],
-					content_url: '/api/v1/items/item-1/revisions/revision-1/content'
-				},
-				projects: []
-			}
-		})
-	);
-	await page.route('**/api/v1/items/item-1/annotations?*', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/items/item-1/revisions/revision-1/content', (route) =>
-		route.fulfill({ contentType: 'application/pdf', body: minimalPdf() })
-	);
+test.describe('touch-first PDF reader', () => {
+	test.use({
+		viewport: { width: 390, height: 844 },
+		hasTouch: true,
+		isMobile: true,
+		deviceScaleFactor: 3
+	});
 
-	await page.goto('/item/item-1/pdf/revision-1');
-	await expect(page.getByLabel('PDF reader controls')).toBeVisible();
-	expect(pageErrors).toEqual([]);
-	await expect(page.getByLabel('Annotation color')).toBeVisible();
-	await expect(page.getByText('Opacity', { exact: true })).toBeVisible();
-	await page.getByRole('button', { name: 'Highlight' }).click();
-	await page.getByLabel('Annotation color').fill('#22c55e');
-	await page.getByRole('button', { name: 'Annotations Open inspector' }).click();
+	test('matches the built-in viewer annotation modes', async ({ page }) => {
+		await mockSession(page);
+		await page.route('**/api/v1/items/item-1/revisions/revision-1/viewer', (route) =>
+			route.fulfill({
+				json: {
+					item: { id: 'item-1', title_html: 'Reader item', version: 1 },
+					editable: true,
+					annotation_author: 'reader',
+					revision: {
+						id: 'revision-1',
+						original_name: 'paper.pdf',
+						page_count: 1,
+						processing_state: 'ready',
+						page_geometry: [[0, 0, 300, 400]],
+						content_url: '/api/v1/items/item-1/revisions/revision-1/content'
+					},
+					projects: []
+				}
+			})
+		);
+		await page.route('**/api/v1/items/item-1/annotations**', (route) =>
+			route.request().method() === 'GET'
+				? route.fulfill({ json: [] })
+				: route.fulfill({ json: { ok: true } })
+		);
+		await page.route('**/api/v1/items/item-1/revisions/revision-1/content', (route) =>
+			route.fulfill({ contentType: 'application/pdf', body: minimalPdf() })
+		);
 
-	await expect(page.getByRole('dialog', { name: 'Annotation inspector' })).toBeVisible();
+		await page.goto('/item/item-1/pdf/revision-1');
+		await expect(page.getByRole('button', { name: 'Document Menu' })).toBeVisible();
+		await page.locator('[data-epdf-i="mode-select-button"] button').click();
+		await expect(page.locator('[data-epdf-i="mode:annotate"]')).toBeVisible();
+	});
 });

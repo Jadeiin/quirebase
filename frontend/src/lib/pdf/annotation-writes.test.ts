@@ -1,4 +1,4 @@
-import type { AnnotationEvent } from '@embedpdf/plugin-annotation';
+import type { AnnotationEvent } from '@embedpdf/svelte-pdf-viewer';
 import {
 	PdfAnnotationName,
 	PdfAnnotationSubtype,

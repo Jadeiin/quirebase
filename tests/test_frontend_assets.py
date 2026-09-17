@@ -82,3 +82,10 @@ def test_docker_builds_the_svelte_workspace_before_the_python_wheel():
     assert "COPY frontend/package.json frontend/bun.lock ./" in dockerfile
     assert "COPY frontend ./" in dockerfile
     assert "COPY --from=assets /build/frontend/build ./frontend/build" in dockerfile
+
+
+def test_item_workspace_requires_project_scope_success_for_annotations():
+    workspace = read("frontend/src/lib/ItemWorkspace.svelte")
+    assert "annotationProjects.isSuccess" in workspace
+    assert "!annotationProjects.isPending" not in workspace
+    assert "annotationsError" in workspace

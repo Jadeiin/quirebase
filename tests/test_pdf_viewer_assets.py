@@ -15,55 +15,25 @@ def assert_import(source: str, module: str) -> None:
 
 
 def test_pdf_reader_uses_embedpdf_native_svelte_headless_components():
-    viewer = read("frontend/src/lib/pdf/HeadlessPdfViewer.svelte")
-    for module in (
-        "@embedpdf/core/svelte",
-        "@embedpdf/engines/svelte",
-        "@embedpdf/plugin-document-manager/svelte",
-        "@embedpdf/plugin-viewport/svelte",
-        "@embedpdf/plugin-scroll/svelte",
-        "@embedpdf/plugin-render/svelte",
-        "@embedpdf/plugin-interaction-manager/svelte",
-        "@embedpdf/plugin-selection/svelte",
-        "@embedpdf/plugin-history/svelte",
-        "@embedpdf/plugin-annotation/svelte",
-        "@embedpdf/plugin-pan/svelte",
-        "@embedpdf/plugin-rotate/svelte",
-        "@embedpdf/plugin-search/svelte",
-        "@embedpdf/plugin-spread/svelte",
-        "@embedpdf/plugin-thumbnail/svelte",
-        "@embedpdf/plugin-zoom/svelte",
-    ):
-        assert_import(viewer, module)
-    assert "<EmbedPDF" in viewer
-    assert "<DocumentContent" in viewer
-    assert "<Viewport" in viewer
-    assert "<Scroller" in viewer
-    assert "<RenderLayer" in viewer
-    assert "<GlobalPointerProvider" in viewer
-    assert "<PagePointerProvider" in viewer
-    assert "<SelectionLayer" in viewer
-    assert "<AnnotationLayer" in viewer
-    annotation = "createPluginRegistration(AnnotationPluginPackage"
-    assert viewer.index("createPluginRegistration(InteractionManagerPluginPackage)") < viewer.index(
-        annotation
-    )
-    assert viewer.index("createPluginRegistration(SelectionPluginPackage)") < viewer.index(
-        annotation
-    )
-    assert viewer.index("createPluginRegistration(HistoryPluginPackage)") < viewer.index(annotation)
+    viewer = read("frontend/src/lib/pdf/EmbeddedPdfViewer.svelte")
+    assert_import(viewer, "@embedpdf/svelte-pdf-viewer")
+    assert "<PDFViewer" in viewer
+    assert "AnnotationPlugin" in viewer
+    assert "DocumentManagerPlugin" in viewer
+    assert "UIPlugin" in viewer
+    assert "CommandsPlugin" in viewer
 
 
 def test_pdfium_is_a_vite_managed_same_origin_asset():
-    viewer = read("frontend/src/lib/pdf/HeadlessPdfViewer.svelte")
+    viewer = read("frontend/src/lib/pdf/EmbeddedPdfViewer.svelte")
     assert_import(viewer, "@embedpdf/pdfium/pdfium.wasm?url")
-    assert "usePdfiumEngine({ wasmUrl, fontFallback: null })" in viewer
+    assert "wasmUrl: pdfiumWasmUrl" in viewer
     assert not (ROOT / "scripts/install-frontend.mjs").exists()
     assert not (ROOT / "scripts/build-assets.mjs").exists()
 
 
 def test_pdf_requests_include_login_session_credentials():
-    viewer = read("frontend/src/lib/pdf/HeadlessPdfViewer.svelte")
+    viewer = read("frontend/src/lib/pdf/EmbeddedPdfViewer.svelte")
     assert re.search(
         r"requestOptions\s*:\s*\{\s*credentials\s*:\s*(['\"])same-origin\1\s*\}",
         viewer,
@@ -71,30 +41,28 @@ def test_pdf_requests_include_login_session_credentials():
 
 
 def test_pdf_annotations_are_bridged_inside_the_svelte_plugin_context():
-    viewer = read("frontend/src/lib/pdf/HeadlessPdfViewer.svelte")
-    sync = read("frontend/src/lib/pdf/AnnotationSync.svelte")
-    assert "<AnnotationSync" in viewer
-    assert "useAnnotation(() => documentId)" in sync
-    assert "onAnnotationEvent" in sync
-    assert "/annotations" in sync
-    assert "vendorFromCanonical" in sync
-    assert "canonicalFromVendor" in sync
+    viewer = read("frontend/src/lib/pdf/EmbeddedPdfViewer.svelte")
+    assert "onAnnotationEvent" in viewer
+    assert "/annotations" in viewer
+    assert "vendorFromCanonical" in viewer
+    assert "canonicalFromVendor" in viewer
 
 
 def test_pdf_annotation_replies_and_pending_writes_are_persisted():
-    sync = read("frontend/src/lib/pdf/AnnotationSync.svelte")
+    viewer = read("frontend/src/lib/pdf/EmbeddedPdfViewer.svelte")
     writes = read("frontend/src/lib/pdf/annotation-writes.ts")
-    assert "persistReplyEvent" in sync
+    assert "persistReplyEvent" in viewer
     assert "/replies" in writes
-    assert re.search(r"window\.addEventListener\(\s*(['\"])beforeunload\1", sync)
-    assert "writeQueue.hasPending()" in sync
+    assert re.search(r"window\.addEventListener\(\s*(['\"])beforeunload\1", viewer)
+    assert "writeQueue.hasPending()" in viewer
 
 
 def test_pdf_workspace_has_distinct_phone_information_architecture():
     component = read("frontend/src/lib/PdfWorkspace.svelte")
-    assert "<Dialog.Trigger" in component
-    assert "Open inspector" in component
-    assert re.search(r"<Dialog\.Trigger\b[^>]*\bsm:hidden\b", component, re.DOTALL)
+    assert "hidden sm:inline" in component
+    assert "max-w-32" in component
+    assert 'role="alert"' in component
+    assert "EmbeddedPdfViewer" in component
 
 
 def test_sveltekit_csp_allows_embedpdf_worker_without_remote_scripts():
@@ -107,3 +75,20 @@ def test_sveltekit_csp_allows_embedpdf_worker_without_remote_scripts():
         r"(['\"])script-src\1\s*:\s*\[\s*(['\"])self\2\s*,\s*(['\"])wasm-unsafe-eval\3\s*\]",
         config,
     )
+
+
+def test_pdf_viewer_catches_document_load_failures_and_guards_destruction():
+    viewer = read("frontend/src/lib/pdf/EmbeddedPdfViewer.svelte")
+    assert "waitForDocument()" in viewer
+    assert "cancelDocumentWait" in viewer
+    assert "destroyed = true" in viewer
+    assert (
+        "onstatus?.(error instanceof Error ? error.message : $t('Unable to open this PDF.'), true)"
+        in viewer
+    )
+
+
+def test_adr_0012_reconciles_bundled_svelte_viewer_package():
+    adr = read("docs/adr/0012-svelte-application-and-http-boundary.md")
+    assert "@embedpdf/svelte-pdf-viewer" in adr
+    assert "Manual headless EmbedPDF component composition was rejected" in adr

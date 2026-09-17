@@ -183,6 +183,11 @@ h1 {
 	width: auto;
 	min-width: 9rem;
 }
+.btn.btn-sm {
+	--btn-size: var(--text-sm);
+	font-size: var(--text-sm);
+	line-height: var(--text-sm);
+}
 .list-panel {
 	margin-top: 1rem;
 }

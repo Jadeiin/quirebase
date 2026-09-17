@@ -374,28 +374,28 @@
 								'Use the versioned JSON API and send your API Token in the Authorization header.'
 							)}
 						</p>
-						<dl class="grid min-w-0 gap-3 text-sm sm:grid-cols-[7rem_minmax(0,1fr)]">
-							<div>
-								<dt>{$t('Base endpoint')}</dt>
-								<dd class="m-0 break-all"><code>{externalOrigin}/api/v1</code></dd>
-							</div>
-							<div>
-								<dt>{$t('OpenAPI')}</dt>
-								<dd class="m-0 break-all">
-									<button
-										class="cursor-pointer border-0 bg-transparent p-0 underline"
-										onclick={() => location.assign(`${externalOrigin}/docs`)}
-										><code>{externalOrigin}/docs</code></button
-									>
-								</dd>
-							</div>
-							<div>
-								<dt>{$t('Header')}</dt>
-								<dd class="m-0 break-all"><code>Authorization: Bearer YOUR_API_TOKEN</code></dd>
-							</div>
+						<dl class="grid min-w-0 gap-x-3 gap-y-2 text-sm sm:grid-cols-[7rem_minmax(0,1fr)]">
+							<dt class="text-surface-600">{$t('Base endpoint')}</dt>
+							<dd class="m-0 min-w-0 break-all">
+								<code class="whitespace-normal">{externalOrigin}/api/v1</code>
+							</dd>
+							<dt class="text-surface-600">{$t('OpenAPI')}</dt>
+							<dd class="m-0 min-w-0 break-all">
+								<button
+									type="button"
+									class="cursor-pointer border-0 bg-transparent p-0 text-left underline"
+									onclick={() => location.assign(`${externalOrigin}/docs`)}
+									><code class="whitespace-normal">{externalOrigin}/docs</code></button
+								>
+							</dd>
+							<dt class="text-surface-600">{$t('Header')}</dt>
+							<dd class="m-0 min-w-0 break-all">
+								<code class="whitespace-normal">Authorization: Bearer YOUR_API_TOKEN</code>
+							</dd>
 						</dl>
 						<pre
 							class="overflow-x-auto rounded-lg border border-surface-300 bg-surface-200 p-3 text-xs"><code
+								class="block bg-transparent p-0 [overflow-wrap:anywhere] whitespace-pre-wrap"
 								>curl \
   -H 'Authorization: Bearer YOUR_API_TOKEN' \
   '{externalOrigin}/api/v1/items'</code
@@ -408,6 +408,7 @@
 						</p>
 						<pre
 							class="overflow-x-auto rounded-lg border border-surface-300 bg-surface-200 p-3 text-xs"><code
+								class="block bg-transparent p-0 [overflow-wrap:anywhere] whitespace-pre-wrap"
 								>{`{
   "mcpServers": {
     "quirebase": {

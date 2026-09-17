@@ -59,11 +59,13 @@ legacy asset tree are removed. Application deep links are handled by the static 
 This is an alpha, forward-only cutover and does not retain compatibility routes for deleted page
 or form URLs.
 
-The PDF reader uses EmbedPDF's native Svelte headless packages and Svelte lifecycle. PDFium is a
-declared frontend dependency imported as a Vite asset URL; Vite emits a content-hashed,
-same-origin WASM asset. Quirebase does not copy PDFium to a fixed vendor path or manage the
-EmbedPDF engine lifecycle imperatively. EmbedPDF remains isolated under `src/lib/pdf`; its domain-
-specific viewer controls may compose Skeleton primitives but do not become a second design system.
+The PDF reader uses EmbedPDF's bundled Svelte viewer package (`@embedpdf/svelte-pdf-viewer`) and Svelte
+lifecycle, superseding custom headless plugin assembly. PDFium is a declared frontend dependency
+imported as a Vite asset URL; Vite emits a content-hashed, same-origin WASM asset. Quirebase does not
+copy PDFium to a fixed vendor path or manage the EmbedPDF engine lifecycle imperatively. EmbedPDF
+remains isolated under `src/lib/pdf`; its domain-specific viewer controls and UI schemas are customized
+to disable unsupported commands (such as callout annotations) and keep search and page navigation
+integrated with the Svelte workspace, but do not become a second general-purpose design system.
 
 ## Consequences
 
@@ -102,3 +104,7 @@ specific viewer controls may compose Skeleton primitives but do not become a sec
   upgrade ownership into this repository, which is not useful differentiation for Quirebase.
 - CSS-only component kits were rejected because dialogs, menus, tooltips and other composite
   controls still need a separate accessible behavior layer.
+- Manual headless EmbedPDF component composition was rejected in favor of `@embedpdf/svelte-pdf-viewer`
+  because the bundled viewer provides standard responsive viewing layouts, thumbnails, zoom and
+  navigation while still exposing the plugin registry for Quirebase's annotation bridging, write
+  queues and command filtering.

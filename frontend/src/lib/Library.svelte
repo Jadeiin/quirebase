@@ -52,6 +52,20 @@
 		queryFn: () => apiRequest<SessionView>('/session')
 	}));
 
+	let previousSearch = page.url.search;
+	$effect(() => {
+		const search = page.url.search;
+		if (search === previousSearch) return;
+		previousSearch = search;
+		query = page.url.searchParams.get('q') ?? '';
+		tag = page.url.searchParams.get('tag') ?? '';
+		project = page.url.searchParams.get('project') ?? '';
+		year = page.url.searchParams.get('year') ?? '';
+		keyword = page.url.searchParams.get('keyword') ?? '';
+		author = page.url.searchParams.get('author') ?? '';
+		selected.clear();
+	});
+
 	const library = createQuery(() => ({
 		queryKey: ['library', submitted, pageNumber],
 		queryFn: () => {

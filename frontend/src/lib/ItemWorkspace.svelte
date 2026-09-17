@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { createQuery } from '@tanstack/svelte-query';
+	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import {
 		apiDownloadGet,
 		apiRequest,
@@ -66,6 +67,7 @@
 	let busy = $state(false);
 	let tagFilter = $state('');
 	let annotationRevision = $state('all');
+	const queryClient = useQueryClient();
 
 	const endpoint = $derived(
 		section === 'overview'
@@ -105,34 +107,67 @@
 	const annotationRevisions = $derived(
 		annotationDocuments.data?.files.filter((file) => file.kind === 'revision') ?? []
 	);
+	const annotationProjects = createQuery(() => ({
+		queryKey: ['item-annotation-scopes', itemId],
+		enabled: section === 'annotations',
+		queryFn: () => apiRequest<OrganizeView>(`/items/${itemId}/organize`)
+	}));
+	const annotationProjectIds = $derived(
+		(annotationProjects.data?.projects ?? [])
+			.filter((project) => project.assigned)
+			.map((project) => project.id)
+			.sort()
+	);
 	const annotations = createQuery(() => ({
 		queryKey: [
 			'item-annotations',
 			itemId,
-			annotationRevisions.map((revision) => revision.id).join(',')
+			annotationRevisions.map((revision) => revision.id).join(','),
+			annotationProjectIds.join(',')
 		],
-		enabled: section === 'annotations' && annotationRevisions.length > 0,
-		queryFn: async () =>
-			(
-				await Promise.all(
-					annotationRevisions.map(async (revision) =>
-						(
-							await apiRequest<CanonicalAnnotation[]>(
-								`/items/${itemId}/annotations?revision_id=${revision.id}`
-							)
+		enabled:
+			section === 'annotations' && annotationRevisions.length > 0 && annotationProjects.isSuccess,
+		queryFn: async () => {
+			if (!annotationProjects.isSuccess) {
+				throw (
+					annotationProjects.error ??
+					new Error('Unable to discover project scopes for annotations.')
+				);
+			}
+			const scopes: Array<string | null> = [null, ...annotationProjectIds];
+			const responses = await Promise.all(
+				annotationRevisions.flatMap((revision) =>
+					scopes.map(async (projectId) => {
+						const parameters = new SvelteURLSearchParams({ revision_id: revision.id });
+						if (projectId) parameters.set('project_id', projectId);
+						return (
+							await apiRequest<CanonicalAnnotation[]>(`/items/${itemId}/annotations?${parameters}`)
 						).map((annotation) => ({
 							...annotation,
 							revision_name: revision.original_name
-						}))
-					)
+						}));
+					})
 				)
-			).flat()
+			);
+			const rows: Record<string, AnnotationRow> = {};
+			for (const annotation of responses.flat()) rows[annotation.id] = annotation;
+			return Object.values(rows);
+		}
 	}));
 	const displayedAnnotations = $derived(
 		(annotations.data ?? []).filter(
 			(annotation: AnnotationRow) =>
 				annotationRevision === 'all' || annotation.revision_id === annotationRevision
 		)
+	);
+	const annotationsLoading = $derived(
+		annotationDocuments.isPending ||
+			(annotationRevisions.length > 0 &&
+				(annotationProjects.isPending || (annotationProjects.isSuccess && annotations.isPending)))
+	);
+	const annotationsError = $derived(
+		annotationDocuments.isError ||
+			(annotationRevisions.length > 0 && (annotationProjects.isError || annotations.isError))
 	);
 	const title = $derived(
 		(section === 'metadata' ? (workspace.data as ItemDetail | undefined)?.title_html : undefined) ??
@@ -159,7 +194,11 @@
 		mutationError = '';
 		try {
 			await operation();
-			await Promise.all([workspace.refetch(), shell.refetch()]);
+			await Promise.all([
+				workspace.refetch(),
+				shell.refetch(),
+				queryClient.invalidateQueries({ queryKey: ['item-details', itemId] })
+			]);
 			form?.reset();
 		} catch (error) {
 			mutationError = error instanceof Error ? error.message : $t('Unable to save changes');
@@ -206,7 +245,7 @@
 					body: {
 						source,
 						...(kind === 'attachment'
-							? { graphical_abstract: fields.get('graphical_abstract') === 'on' }
+							? { graphical_abstract: fields.has('graphical_abstract') }
 							: {})
 					}
 				}
@@ -327,7 +366,12 @@
 				{itemId}
 				workspace={shell.data}
 				userId={session.data.user.id}
-				onchanged={() => Promise.all([shell.refetch(), workspace.refetch(), details.refetch()])}
+				onchanged={() =>
+					Promise.all([
+						shell.refetch(),
+						workspace.refetch(),
+						queryClient.invalidateQueries({ queryKey: ['item-details', itemId] })
+					])}
 			/>{/key}{/if}
 </div>
 <nav
@@ -356,7 +400,7 @@
 {:else if workspace.data}
 	{#if section === 'overview'}
 		{@const data = workspace.data as WorkspaceView}
-		<div class="grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(17rem,0.5fr)]">
+		<div class="grid items-start gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(17rem,0.5fr)]">
 			<div class="stack">
 				<section
 					class="overflow-hidden rounded-xl border border-surface-300 bg-surface-50 shadow-sm"
@@ -510,7 +554,7 @@
 		{@const item = workspace.data as ItemDetail}
 		<section class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm">
 			<h2>{$t('Metadata')}</h2>
-			{#if shell.data?.permissions.edit}{#key item.id}<ItemMetadataForm
+			{#if shell.data?.permissions.edit}{#key `${item.id}:${item.version}`}<ItemMetadataForm
 						metadata={item.metadata}
 						{busy}
 						submitLabel={$t('Save metadata')}
@@ -660,102 +704,145 @@
 		</div>
 	{:else if section === 'organize'}
 		{@const data = workspace.data as OrganizeView}
-		<div class="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(20rem,0.8fr)]">
-			<div class="stack">
-				<section class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm">
-					<h2>{$t('Projects')}</h2>
-					{#each data.projects as project (project.id)}<div class="toolbar">
-							<button
-								class="btn preset-tonal-surface font-semibold"
-								disabled={busy || !data.permissions.edit}
-								onclick={() => toggleProject(project)}
-								>{project.assigned ? $t('Remove') : $t('Add')}</button
-							><span>{project.name}</span><span class="text-surface-600"
-								>{$t(domainLabel(project.role))}</span
-							>
-						</div>{:else}<p class="text-surface-600">{$t('No available projects.')}</p>{/each}
-				</section>
-				<section class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm">
-					<div class="workspace-header mb-2">
+		{@const canEdit = data.permissions.edit}
+		{@const groups = data.tag_matrix.groups
+			.map((group) => ({
+				letter: group.letter,
+				tags: group.tags.filter((tag) =>
+					tag.name.toLocaleLowerCase().includes(tagFilter.toLocaleLowerCase())
+				)
+			}))
+			.filter((group) => group.tags.length)}
+		<div class="grid items-start gap-4 xl:grid-cols-[minmax(0,1.75fr)_minmax(19rem,1fr)]">
+			<div class="grid gap-4">
+				<section class="card border border-surface-300 bg-surface-50 p-5 shadow-sm">
+					<div class="mb-4 flex flex-wrap items-start justify-between gap-3">
 						<div>
-							<h2>{$t('Tag matrix')}</h2>
-							<p class="text-surface-600">{$t('Browse the complete accessible taxonomy.')}</p>
+							<h2 class="m-0">{$t('Tag matrix')}</h2>
+							<p class="m-0 text-sm text-surface-600">
+								{$t('Browse the complete accessible taxonomy.')}
+							</p>
 						</div>
-						<input class="compact input" bind:value={tagFilter} placeholder={$t('Filter Tags')} />
+						<input
+							class="compact input border border-surface-300 field-sm"
+							bind:value={tagFilter}
+							placeholder={$t('Filter Tags')}
+						/>
 					</div>
-					{#each data.tag_matrix.groups as group (group.letter)}
-						{@const visibleTags = group.tags.filter((tag) =>
-							tag.name.toLocaleLowerCase().includes(tagFilter.toLocaleLowerCase())
-						)}
-						{#if visibleTags.length}<div>
-								<h3 class="text-sm text-surface-600">{group.letter}</h3>
-								<div class="flex flex-wrap gap-2">
-									{#each visibleTags as tag (tag.id)}{@const assigned =
-											data.tag_matrix.assigned_ids.includes(tag.id)}<button
+					<div class="gap-x-6 sm:columns-2 2xl:columns-3">
+						{#each groups as group (group.letter)}
+							<div class="mb-4 break-inside-avoid last:mb-0">
+								<h3 class="mb-2 text-xs font-bold tracking-[0.12em] text-surface-600 uppercase">
+									{group.letter}
+								</h3>
+								<div class="flex flex-wrap gap-1.5">
+									{#each group.tags as tag (tag.id)}
+										{@const assigned = data.tag_matrix.assigned_ids.includes(tag.id)}
+										<button
 											class={`badge cursor-pointer border ${assigned ? 'border-primary-700 preset-tonal-primary' : 'border-surface-300 preset-tonal-surface'}`}
-											disabled={busy || !data.permissions.edit}
+											disabled={busy || !canEdit}
 											aria-pressed={assigned}
 											onclick={() => toggleTag(tag.id, assigned)}
 											>{tag.name}{data.tag_matrix.recommended_ids.includes(tag.id)
 												? ' ★'
 												: ''}</button
-										>{/each}
+										>
+									{/each}
 								</div>
-							</div>{/if}
-					{/each}
+							</div>
+						{/each}
+					</div>
+					{#if !groups.length}<p class="m-0 text-sm text-surface-600">{$t('No tags')}</p>{/if}
+				</section>
+				<section class="card border border-surface-300 bg-surface-50 p-5 shadow-sm">
+					<h2 class="m-0 mb-2">{$t('Projects')}</h2>
+					<div class="divide-y divide-surface-300">
+						{#each data.projects as project (project.id)}
+							<div class="flex items-center justify-between gap-3 py-2">
+								<div class="flex min-w-0 items-center gap-2">
+									<strong class="truncate text-sm font-semibold">{project.name}</strong>
+									<span class="badge shrink-0 border border-surface-300 preset-tonal-surface"
+										>{$t(domainLabel(project.role))}</span
+									>
+								</div>
+								<button
+									class={`btn shrink-0 border font-semibold btn-sm ${project.assigned ? 'border-surface-300 preset-tonal-surface' : 'border-primary-700/30 preset-tonal-primary'}`}
+									disabled={busy || !canEdit}
+									onclick={() => toggleProject(project)}
+									>{project.assigned ? $t('Remove') : $t('Add')}</button
+								>
+							</div>
+						{:else}
+							<p class="m-0 text-sm text-surface-600">{$t('No available projects.')}</p>
+						{/each}
+					</div>
 				</section>
 			</div>
-			<aside class="stack">
-				<section class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm">
-					<div class="workspace-header mb-2">
-						<div>
-							<h2>{$t('Item Tags')}</h2>
-							<p class="text-surface-600">{$t('Tags currently assigned to this Item.')}</p>
-						</div>
-					</div>
-					<div class="flex flex-wrap gap-2">
-						{#each data.tags as tag (tag.id)}<button
+			<div class="grid gap-4">
+				<section class="card border border-surface-300 bg-surface-50 p-5 shadow-sm">
+					<h2 class="m-0">{$t('Item Tags')}</h2>
+					<p class="mt-1 mb-3 text-sm text-surface-600">
+						{$t('Tags currently assigned to this Item.')}
+					</p>
+					<div class="flex flex-wrap gap-1.5">
+						{#each data.tags as tag (tag.id)}
+							<button
 								class="badge cursor-pointer border border-primary-700/20 preset-tonal-primary"
-								disabled={busy || !data.permissions.edit}
+								disabled={busy || !canEdit}
 								onclick={() => toggleTag(tag.id, true)}>{tag.name} ×</button
-							>{:else}<span class="text-surface-600">{$t('No tags')}</span>{/each}
+							>
+						{:else}
+							<span class="text-sm text-surface-600">{$t('No tags')}</span>
+						{/each}
 					</div>
-					<form class="toolbar" onsubmit={addTag}>
-						<input class="input grow" name="name" placeholder={$t('New tag')} required /><button
-							class="btn preset-tonal-surface font-semibold"
-							disabled={busy || !data.permissions.edit}>{$t('Add tag')}</button
+					<form class="mt-3 flex items-center gap-2" onsubmit={addTag}>
+						<input
+							class="input min-w-0 flex-1 border border-surface-300 field-sm"
+							name="name"
+							placeholder={$t('New tag')}
+							required
+						/><button
+							class="btn shrink-0 border border-surface-300 preset-tonal-surface font-semibold btn-sm"
+							disabled={busy || !canEdit}>{$t('Add tag')}</button
 						>
 					</form>
 				</section>
-				<section class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm">
-					<div class="workspace-header mb-2">
-						<div>
-							<h2>{$t('Tag Recommendations')}</h2>
-							<p class="text-surface-600">
-								{$t('Suggestions derived from metadata and the latest ready PDF.')}
-							</p>
-						</div>
+				<section class="card border border-surface-300 bg-surface-50 p-5 shadow-sm">
+					<div class="flex items-start justify-between gap-3">
+						<h2 class="m-0">{$t('Tag Recommendations')}</h2>
 						<button
-							class="btn preset-tonal-surface font-semibold"
-							disabled={busy || !data.permissions.edit}
+							class="btn shrink-0 border border-surface-300 preset-tonal-surface font-semibold btn-sm"
+							disabled={busy || !canEdit}
 							onclick={refreshTagRecommendations}>{$t('Refresh')}</button
 						>
 					</div>
-					<p class="text-sm text-surface-600">
-						{$t('State')}: {$t(domainLabel(data.tag_matrix.recommendation_state))}
+					<p class="mt-1 mb-3 text-sm text-surface-600">
+						{$t('Suggestions derived from metadata and the latest ready PDF.')}
 					</p>
 					{#if data.tag_matrix.recommendation_error}<p class="text-error-700">
 							{data.tag_matrix.recommendation_error}
 						</p>{/if}
-					<div class="flex flex-wrap gap-2">
-						{#each data.tag_matrix.suggested_names as name (name)}<button
+					<div class="flex flex-wrap gap-1.5">
+						{#each data.tag_matrix.suggested_names as name (name)}
+							<button
 								class="badge cursor-pointer border border-warning-700/30 preset-tonal-warning"
-								disabled={busy || !data.permissions.edit}
+								disabled={busy || !canEdit}
 								onclick={() => addSuggestedTag(name)}>+ {name}</button
-							>{:else}<span class="text-surface-600">{$t('No new Tag suggestions.')}</span>{/each}
+							>
+						{:else}
+							<span class="text-sm text-surface-600">{$t('No new Tag suggestions.')}</span>
+						{/each}
+					</div>
+					<div
+						class="mt-3 flex items-center gap-2 border-t border-surface-300 pt-3 text-xs text-surface-600"
+					>
+						{$t('State')}
+						<span class="badge border border-surface-300 preset-tonal-surface"
+							>{$t(domainLabel(data.tag_matrix.recommendation_state))}</span
+						>
 					</div>
 				</section>
-			</aside>
+			</div>
 		</div>
 	{:else if section === 'annotations'}
 		<section class="list-panel card border border-surface-300 bg-surface-50 p-5 shadow-sm">
@@ -771,14 +858,12 @@
 						></label
 					>{/if}
 			</div>
-			{#if annotationDocuments.isPending}<p class="text-surface-600">
+			{#if annotationsLoading}<p class="text-surface-600">
 					{$t('Loading annotations…')}
+				</p>{:else if annotationsError}<p class="text-error-700">
+					{$t('Unable to load annotations.')}
 				</p>{:else if annotationRevisions.length === 0}<p class="text-surface-600">
 					{$t('Add a PDF revision to begin annotating.')}
-				</p>{:else if annotations.isPending}<p class="text-surface-600">
-					{$t('Loading annotations…')}
-				</p>{:else if annotations.isError}<p class="text-error-700">
-					{$t('Unable to load annotations.')}
 				</p>{:else}{#each displayedAnnotations as annotation (annotation.id)}<div class="item-row">
 						<div class="toolbar justify-between">
 							<strong

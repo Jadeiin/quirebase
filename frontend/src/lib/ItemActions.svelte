@@ -37,6 +37,7 @@
 	let notice = $state('');
 	let format = $state<ExportPreferences['citation']['format']>('csl');
 	let preferences = $state<ExportPreferences>(structuredClone(defaultExportPreferences));
+	let doiProvider = $state('auto');
 	let selectedRevisions = new SvelteSet<string>();
 	let revisionSelectionInitialized = false;
 	const files = createQuery(() => ({
@@ -323,12 +324,24 @@
 											>{workspace.item.doi}</span
 										>
 									</div>
-									<button
-										class="btn preset-tonal-surface font-semibold"
-										disabled={busy}
-										onclick={() => synchronize('doi', workspace.item.doi!)}
-										>{$t('Autoupdate')}</button
-									>
+									<div class="toolbar items-center">
+										<select
+											class="compact input border border-surface-300"
+											bind:value={doiProvider}
+											aria-label={$t('Provider')}
+										>
+											<option value="auto">{$t('Auto detect')}</option>
+											<option value="crossref">Crossref</option>
+											<option value="openalex">OpenAlex</option>
+											<option value="datacite">DataCite</option>
+										</select>
+										<button
+											class="btn preset-tonal-surface font-semibold"
+											disabled={busy}
+											onclick={() => synchronize(doiProvider, workspace.item.doi!)}
+											>{$t('Autoupdate')}</button
+										>
+									</div>
 								</div>{:else if workspace.latest_revision}<button
 									class="btn preset-tonal-surface font-semibold"
 									disabled={busy}

@@ -1,4 +1,4 @@
-import type { AnnotationEvent } from '@embedpdf/plugin-annotation';
+import type { AnnotationEvent } from '@embedpdf/svelte-pdf-viewer';
 import type { CanonicalAnnotation, CanonicalReply } from '$lib/pdf/annotation-adapter';
 
 type WritableAnnotationEvent = Exclude<AnnotationEvent, { type: 'loaded' }>;

@@ -49,7 +49,10 @@
 		)
 	);
 	const tagPageCount = $derived(Math.max(1, Math.ceil(filteredTags.length / pageSize)));
-	const visibleTags = $derived(filteredTags.slice((tagPage - 1) * pageSize, tagPage * pageSize));
+	const currentTagPage = $derived(Math.min(tagPage, tagPageCount));
+	const visibleTags = $derived(
+		filteredTags.slice((currentTagPage - 1) * pageSize, currentTagPage * pageSize)
+	);
 
 	async function tagMutation(operation: () => Promise<unknown>, success: string): Promise<boolean> {
 		busy = true;
@@ -346,14 +349,14 @@
 				<nav class="pagination" aria-label={$t('Tag pages')}>
 					<button
 						class="btn preset-tonal-surface font-semibold"
-						disabled={tagPage === 1}
-						onclick={() => (tagPage -= 1)}>{$t('Previous')}</button
+						disabled={currentTagPage === 1}
+						onclick={() => (tagPage = currentTagPage - 1)}>{$t('Previous')}</button
 					>
-					<span>{$t('Page')} {tagPage} / {tagPageCount}</span>
+					<span>{$t('Page')} {currentTagPage} / {tagPageCount}</span>
 					<button
 						class="btn preset-tonal-surface font-semibold"
-						disabled={tagPage === tagPageCount}
-						onclick={() => (tagPage += 1)}>{$t('Next')}</button
+						disabled={currentTagPage === tagPageCount}
+						onclick={() => (tagPage = currentTagPage + 1)}>{$t('Next')}</button
 					>
 				</nav>
 			{/if}

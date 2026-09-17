@@ -70,7 +70,7 @@ tokens with `list-api-tokens USERNAME` and `revoke-api-token USERNAME TOKEN_ID`.
 
 ## PDF architecture
 
-- EmbedPDF's Svelte headless components and bundled PDFium engine render the document, text and annotation layers in the browser.
+- EmbedPDF's Svelte viewer components and bundled PDFium engine render the document, text and annotation layers in the browser.
 - PyMuPDF validates PDFs, extracts text, creates thumbnails, and writes database-backed highlights and notes into temporary export copies.
 - Original PDFs are content-addressed and never modified.
 
