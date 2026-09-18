@@ -34,6 +34,7 @@
 	let doiProvider = $state('auto');
 	let selectedRevisions = new SvelteSet<string>();
 	let revisionSelectionInitialized = false;
+	let deleteArmed = $state(false);
 	const files = createQuery(() => ({
 		queryKey: ['item-actions-files', itemId],
 		enabled: open && section === 'documents',
@@ -57,6 +58,7 @@
 
 	function show(next: ActionSection) {
 		section = next;
+		deleteArmed = false;
 		error = '';
 		notice = '';
 		open = true;
@@ -160,7 +162,11 @@
 	}
 
 	function deleteItem() {
-		if (!window.confirm($t('Delete this Item permanently?'))) return;
+		deleteArmed = true;
+	}
+
+	function confirmDeleteItem() {
+		deleteArmed = false;
 		void action(async () => {
 			await apiRequest('DELETE', '/items/{item_id}', {
 				params: { path: { item_id: itemId } },
@@ -387,11 +393,29 @@
 									)}
 								</p>
 							</div>
-							<button
-								class="btn preset-tonal-error font-semibold"
-								disabled={busy}
-								onclick={deleteItem}>{$t('Delete Item permanently')}</button
-							>
+							{#if deleteArmed}
+								<p class="text-sm text-error-700-300" role="alert">
+									{$t('This cannot be undone. Delete this Item permanently?')}
+								</p>
+								<div class="toolbar">
+									<button
+										class="btn preset-tonal-surface font-semibold"
+										disabled={busy}
+										onclick={() => (deleteArmed = false)}>{$t('Cancel')}</button
+									>
+									<button
+										class="btn preset-filled-error-700-300 font-semibold"
+										disabled={busy}
+										onclick={confirmDeleteItem}>{$t('Delete Item permanently')}</button
+									>
+								</div>
+							{:else}
+								<button
+									class="btn preset-tonal-error font-semibold"
+									disabled={busy}
+									onclick={deleteItem}>{$t('Delete Item permanently')}</button
+								>
+							{/if}
 						</div>
 					{/if}
 				</div>

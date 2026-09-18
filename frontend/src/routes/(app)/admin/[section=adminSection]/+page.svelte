@@ -1,5 +1,5 @@
 <script lang="ts">
-	import Admin from '$lib/Admin.svelte';
+	import Admin from '$lib/features/admin/Admin.svelte';
 	import type { PageProps } from './$types';
 
 	let { params }: PageProps = $props();

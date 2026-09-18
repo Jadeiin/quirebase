@@ -67,10 +67,10 @@ async def test_generated_tools_match_the_fixed_allowlist_and_annotations(async_s
         "session" in name or "content" in name or "upload" in name for name in TOOL_ALLOWLIST
     )
     annotations = {tool.name: tool.annotations for tool in tools}
-    assert annotations["discovery.search"].openWorldHint is True
-    assert annotations["documents.list"].readOnlyHint is True
-    assert annotations["annotations.delete"].destructiveHint is True
-    assert annotations["annotation_replies.delete"].destructiveHint is True
+    assert annotations["discovery.search_discovery"].openWorldHint is True
+    assert annotations["documents.list_documents"].readOnlyHint is True
+    assert annotations["annotations.delete_annotation"].destructiveHint is True
+    assert annotations["annotations.delete_reply"].destructiveHint is True
 
 
 @pytest.mark.anyio
@@ -78,7 +78,7 @@ async def test_generated_tool_schemas_come_from_the_api_contract(async_session_f
     async with mcp_client(async_session_factory) as (_client, app):
         tools = {tool.name: tool for tool in await app.state.mcp_server.list_tools()}
 
-    assert set(tools["library.search"].parameters["properties"]) == {
+    assert set(tools["library.search_items"].parameters["properties"]) == {
         "query",
         "tag",
         "project",
@@ -87,13 +87,13 @@ async def test_generated_tool_schemas_come_from_the_api_contract(async_session_f
         "author",
         "page",
     }
-    assert set(tools["projects.update_settings"].parameters["properties"]) == {
+    assert set(tools["projects.update_project"].parameters["properties"]) == {
         "project_id",
         "name",
         "description",
         "visibility",
     }
-    assert set(tools["annotations.update"].parameters["properties"]) == {
+    assert set(tools["annotations.update_annotation"].parameters["properties"]) == {
         "item_id",
         "annotation_id",
         "version",
@@ -120,7 +120,7 @@ async def test_generated_library_tool_calls_api_and_preserves_mcp_audit_provenan
         response = await _call(
             client,
             grant.raw_token,
-            "library.create_item",
+            "library.create_library_item",
             {"title": "Created through generated MCP", "doi": "10.1/generated"},
         )
 
@@ -140,7 +140,7 @@ async def test_generated_library_tool_calls_api_and_preserves_mcp_audit_provenan
     assert json.loads(event.detail) == {
         "invocation": {
             "protocol": "mcp",
-            "operation": "library.create_item",
+            "operation": "library.create_library_item",
             "api_token_id": grant.token_id,
             "client_id": f"quirebase-api-token:{grant.token_id}",
         }
@@ -160,7 +160,7 @@ async def test_generated_tool_returns_api_version_conflict_as_mcp_error(
         created = await _call(
             client,
             grant.raw_token,
-            "library.create_item",
+            "library.create_library_item",
             {"title": "Versioned Item"},
         )
         item_id = created.json()["result"]["structuredContent"]["id"]
@@ -169,8 +169,8 @@ async def test_generated_tool_returns_api_version_conflict_as_mcp_error(
             "expected_version": 1,
             "metadata": {"title": "First update"},
         }
-        first = await _call(client, grant.raw_token, "library.update_item", arguments, 2)
-        conflict = await _call(client, grant.raw_token, "library.update_item", arguments, 3)
+        first = await _call(client, grant.raw_token, "library.update_library_item", arguments, 2)
+        conflict = await _call(client, grant.raw_token, "library.update_library_item", arguments, 3)
 
     assert first.json()["result"]["isError"] is False
     conflict_result = conflict.json()["result"]
@@ -198,10 +198,10 @@ async def test_generated_tool_does_not_fall_back_to_cookie_auth(async_db, async_
                 "jsonrpc": "2.0",
                 "id": 1,
                 "method": "tools/call",
-                "params": {"name": "library.search", "arguments": {}},
+                "params": {"name": "library.search_items", "arguments": {}},
             },
         )
-        invalid = await _call(client, "invalid", "library.search", {})
+        invalid = await _call(client, "invalid", "library.search_items", {})
 
     assert missing.status_code == 401
     assert invalid.status_code == 401

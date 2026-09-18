@@ -31,7 +31,12 @@ parallel application-wide button, field, card, menu, dialog, tooltip, or status 
 filesystem router owns application URL matching and parameter parsing; a persistent authenticated
 route layout owns the Login Session, locale and application shell. Route pages remain thin
 adapters over feature views instead of reimplementing domain behavior or maintaining a catch-all
-client dispatcher. Frontend localization is owned by Lingui. Committed gettext PO catalogs are the
+client dispatcher. Feature views live under `src/lib/features/<feature>` as typed TanStack queries,
+mutations and presentational components (`Library`, `ItemWorkspace` and `Admin` are feature
+orchestrators, not root-level views); cross-feature product patterns (`ConfirmDialog`,
+`PromptDialog`, `StatusNotice`, `EmptyState`, `Toast`) live in `src/lib/design`. Destructive or
+text-confirmed actions use those dialog patterns; `window.confirm` and `window.prompt` are not
+used. Frontend localization is owned by Lingui. Committed gettext PO catalogs are the
 translation source of truth; a strict Svelte extractor records literal messages and marked dynamic
 labels, and Lingui generates runtime catalogs during checks and builds. Python gettext catalogs
 and template localization helpers are removed.
@@ -50,6 +55,13 @@ Both browsers and programmatic clients use `/api/v1`:
 - Bearer requests do not require an Origin and retain programmatic Audit Event provenance.
 - Browser code never stores an API Token. Login Session cookies remain HTTP-only.
 
+The version prefix is owned by the API composition root in web/api/routes.py; capability
+routers declare relative paths, with administration composed below /api/v1/admin. OpenAPI
+operation IDs are generated centrally through FastAPI's generate_unique_id_function as
+<capability module>.<endpoint function>. Endpoint decorators do not hand-author operation IDs,
+so the same generated identifier is consumed by OpenAPI, frontend tooling and the curated MCP
+projection.
+
 Every `/api/v1` failure uses one JSON contract containing a stable machine-readable `code`, an
 English `message` for programmatic clients, optional validation `fields`, and optional structured
 `meta`. Request validation never echoes submitted input values. The Svelte adapter translates known
@@ -59,6 +71,19 @@ it does not display backend messages directly.
 The public session and Invitation endpoints use the same Origin rule for unsafe requests. API
 responses may aggregate several domain read models when a workspace needs one coherent initial
 payload; business behavior remains behind the existing Module interfaces.
+
+Durable workflows are UI first-class citizens through a global Workflow Center owned by the
+application shell: feature code registers a started workflow ID with a label instead of awaiting
+it inside the initiating component, a shell-level tray polls the typed workflow status query and
+keeps the job visible across client-side navigation, and terminal failures surface through the
+global toast pattern. Callers that need post-completion refreshes await the center's settled
+promise, which resolves from the same polled status; dismissing a job hands remaining waiters
+back to direct polling so local busy states always settle. The tray limit only ever prunes
+terminal jobs: active jobs are retained regardless of the cap, so a tracked workflow with
+outstanding waiters can never be evicted from the polling set. Status polling whose retries are
+exhausted fails the job through the same settled path, so a missing workflow or persistent
+server error rejects waiters and surfaces a failure toast instead of leaving the initiating
+mutation busy indefinitely.
 
 Jinja, templates, HTML form routes, CSRF synchronizer tokens, `web/views`, `web/json` and the
 legacy asset tree are removed. Application deep links are handled by the static SPA fallback.
@@ -86,9 +111,14 @@ integrated with the Svelte workspace, but do not become a second general-purpose
 - Quirebase owns one named Skeleton theme, including the complete semantic color ramps,
   typography and radii. Product code consumes those tokens instead of raw palette values for
   general interface states.
+- Reactive Svelte state (runes) lives in `.svelte`, `.svelte.js` or `.svelte.ts` modules only;
+  plain TypeScript modules never use runes, so the static build cannot ship an initializer that
+  crashes the application shell at startup.
 - Skeleton Svelte brings Zag's state machines and a broader dependency graph. Production builds
   must continue to tree-shake unused components, and frontend upgrades must check generated JS and
-  CSS sizes as well as accessibility behavior.
+  CSS sizes as well as accessibility behavior. The application-shell bundle budget in
+  `frontend/scripts/check-bundle-budget.ts` was raised once, deliberately, to cover the Toast,
+  Popover and Tabs state machines that replaced hand-rolled equivalents.
 - This alpha cutover is forward-only: the former Bits UI dependency and global `.button`, `.field`,
   `.panel` and related compatibility classes are removed in the same change.
 

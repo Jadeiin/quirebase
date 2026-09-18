@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onNavigate } from '$app/navigation';
 	import { onDestroy } from 'svelte';
 	import {
 		AnnotationPlugin,
@@ -385,6 +386,16 @@
 		return () => {
 			window.removeEventListener('beforeunload', guardPendingWrites);
 		};
+	});
+
+	// Client-side navigation does not fire beforeunload. Keep the viewer mounted
+	// until every queued annotation write has settled before SvelteKit tears it down.
+	onNavigate(({ willUnload }) => {
+		if (willUnload || !writeQueue.hasPending()) return;
+		return writeQueue.flush().catch((reason) => {
+			onstatus?.(apiErrorMessage(reason, $t('Annotation sync failed')), true);
+			throw reason;
+		});
 	});
 
 	let previousProject = selectedProject;

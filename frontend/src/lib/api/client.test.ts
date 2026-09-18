@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { ApiError, apiDownloadGet, apiRequest, apiText, downloadFilename } from './client';
+import {
+	ApiError,
+	apiDownloadGet,
+	apiRequest,
+	apiText,
+	downloadFilename,
+	onAuthenticationRequired
+} from './client';
 
 describe('apiRequest', () => {
 	it('uses the shared API and browser credentials without a CSRF token', async () => {
@@ -128,6 +135,25 @@ describe('non-JSON API errors', () => {
 });
 
 describe('structured API errors', () => {
+	it('notifies the session owner for authentication failures', async () => {
+		let notified = 0;
+		const unregister = onAuthenticationRequired(() => {
+			notified += 1;
+		});
+		const fetcher = (async () =>
+			new Response(JSON.stringify({ code: 'authentication_required', message: 'expired' }), {
+				status: 401,
+				headers: { 'Content-Type': 'application/json' }
+			})) as typeof fetch;
+
+		await expect(apiRequest('GET', '/items', undefined, fetcher)).rejects.toMatchObject({
+			status: 401,
+			code: 'authentication_required'
+		});
+		expect(notified).toBe(1);
+		unregister();
+	});
+
 	it('preserves the code, field errors, and metadata', async () => {
 		const fetcher = (async () =>
 			new Response(

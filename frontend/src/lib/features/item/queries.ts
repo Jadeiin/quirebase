@@ -34,24 +34,55 @@ export function itemDetailsQuery(itemId: string, enabled: boolean) {
 	});
 }
 
-export function itemSectionQuery(itemId: string, section: ItemSection) {
+export function itemOverviewQuery(itemId: string, enabled = true) {
 	return queryOptions({
-		queryKey: itemKeys.section(itemId, section),
-		queryFn: async (): Promise<unknown> => {
-			const params = { path: { item_id: itemId } };
-			switch (section) {
-				case 'metadata':
-					return apiRequest('GET', '/items/{item_id}', { params });
-				case 'files':
-					return apiRequest('GET', '/items/{item_id}/documents', { params });
-				case 'organize':
-					return apiRequest('GET', '/items/{item_id}/organize', { params });
-				case 'discussion':
-					return apiRequest('GET', '/items/{item_id}/discussions', { params });
-				default:
-					return apiRequest('GET', '/items/{item_id}/workspace', { params });
-			}
-		}
+		queryKey: itemKeys.section(itemId, 'overview'),
+		enabled,
+		queryFn: () =>
+			apiRequest('GET', '/items/{item_id}/workspace', {
+				params: { path: { item_id: itemId } }
+			})
+	});
+}
+
+export function itemMetadataQuery(itemId: string, enabled = true) {
+	return queryOptions({
+		queryKey: itemKeys.section(itemId, 'metadata'),
+		enabled,
+		queryFn: () => apiRequest('GET', '/items/{item_id}', { params: { path: { item_id: itemId } } })
+	});
+}
+
+export function itemFilesQuery(itemId: string, enabled = true) {
+	return queryOptions({
+		queryKey: itemKeys.section(itemId, 'files'),
+		enabled,
+		queryFn: () =>
+			apiRequest('GET', '/items/{item_id}/documents', {
+				params: { path: { item_id: itemId } }
+			})
+	});
+}
+
+export function itemOrganizeQuery(itemId: string, enabled = true) {
+	return queryOptions({
+		queryKey: itemKeys.section(itemId, 'organize'),
+		enabled,
+		queryFn: () =>
+			apiRequest('GET', '/items/{item_id}/organize', {
+				params: { path: { item_id: itemId } }
+			})
+	});
+}
+
+export function itemDiscussionQuery(itemId: string, enabled = true) {
+	return queryOptions({
+		queryKey: itemKeys.section(itemId, 'discussion'),
+		enabled,
+		queryFn: () =>
+			apiRequest('GET', '/items/{item_id}/discussions', {
+				params: { path: { item_id: itemId } }
+			})
 	});
 }
 

@@ -47,12 +47,12 @@ The server exposes a fixed allowlist covering the ordinary User's core research 
 
 | Capability | Tools | Deliberate limits |
 | --- | --- | --- |
-| Library | `library.search`, `library.get_item`, `library.create_item`, `library.update_item` | Search is limited to 25 Items per page; writes reuse Item ownership and optimistic version checks |
-| Projects | `projects.list`, `projects.get`, `projects.create`, `projects.update_settings`, lifecycle, item and membership tools | Project Role checks remain authoritative, including owner-only membership changes |
-| Documents | `documents.list` | Returns revision and attachment metadata, never object keys, bytes or extracted text |
-| Annotations | `annotations.list`, `annotations.create`, `annotations.update`, `annotations.delete` | Reuses revision, Item and Project visibility plus annotation ownership/version rules |
-| Organization | `tags.list`, `tags.add_to_item`, `tags.remove_from_item`, `tags.set_for_item`, `discussions.list`, `discussions.add`, `discussions.delete` | Reuses editable-Item and message ownership rules |
-| Discovery and citation | `discovery.search`, `citations.format_item` | Discovery is marked open-world and never receives the inbound API Token |
+| Library | `library.search_items`, `library.get_library_item`, `library.create_library_item`, `library.update_library_item` | Search is limited to 25 Items per page; writes reuse Item ownership and optimistic version checks |
+| Projects | `projects.list_projects`, `projects.get_project`, `projects.create_user_project`, `projects.update_project`, lifecycle, item and membership tools | Project Role checks remain authoritative, including owner-only membership changes |
+| Documents | `documents.list_documents` | Returns revision and attachment metadata, never object keys, bytes or extracted text |
+| Annotations | `annotations.list_annotations`, `annotations.create_annotation`, `annotations.update_annotation`, `annotations.delete_annotation` | Reuses revision, Item and Project visibility plus annotation ownership/version rules |
+| Organization | `library.list_tags`, `library.add_item_tag`, `library.remove_item_tag`, `library.set_item_tag_selection`, `library.list_discussions`, `library.create_discussion`, `library.delete_discussion` | Reuses editable-Item and message ownership rules |
+| Discovery and citation | `discovery.search_discovery`, `library.format_item_citation` | Discovery is marked open-world and never receives the inbound API Token |
 
 The allowlist deliberately omits administrative and operational capabilities. It also omits file
 upload/download and extracted full text: the current full text is an unstructured plain-text field

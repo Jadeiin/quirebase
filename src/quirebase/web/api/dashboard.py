@@ -6,7 +6,7 @@ from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.library_schemas import item_search_view
 from quirebase.web.api.serialization import enum_value
 
-router = APIRouter(prefix="/api/v1", tags=["Dashboard"])
+router = APIRouter(tags=["Dashboard"])
 
 
 @router.get("/dashboard", response_model=DashboardView)

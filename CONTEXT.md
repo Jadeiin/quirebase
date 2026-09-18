@@ -159,6 +159,23 @@ _Avoid_: Login Session, OAuth Access Token, API Key
 **Audit Event**:
 An immutable record of a security-sensitive or data-changing action.
 
+## API mutation verbs
+
+The HTTP API and its generated operation IDs use these verbs deliberately:
+
+- **Delete** removes a first-class resource from its owning lifecycle. Use delete for an
+  Item, Project, Annotation, File Revision, Attachment, Discussion Message or other resource
+  whose identity is being destroyed (including a soft-deleted resource whose normal projection
+  no longer exposes it).
+- **Remove** detaches an association while preserving both resources. Use remove for an
+  Item–Tag, Project–Item or Project–member relationship; neither the Item, Tag, Project nor User
+  is deleted.
+
+An HTTP DELETE method can therefore generate either a delete_* or remove_* operation ID:
+the method describes the transport, while the verb describes the domain effect. discard is
+reserved for abandoning staged transient work such as an Import Batch, and revoke is reserved
+for invalidating a Login Session or API Token without deleting its audit/persistence record.
+
 ## Relationships
 
 - A User is the Item Owner of zero or more Items, owns zero or more Login Sessions and API Tokens,

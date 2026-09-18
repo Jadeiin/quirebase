@@ -5,12 +5,16 @@
 	import { Menu, Portal } from '@skeletonlabs/skeleton-svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { onMount, type Snippet } from 'svelte';
-	import { apiRequest } from '$lib/api/client';
+	import { apiRequest, onAuthenticationRequired } from '$lib/api/client';
 	import { apiErrorMessage } from '$lib/api/errors';
 	import Icon from '$lib/design/Icon.svelte';
+	import Toast from '$lib/design/Toast.svelte';
 	import { domainLabel } from '$lib/domain-labels';
 	import { activateLocale, msg, t } from '$lib/i18n';
 	import Login from '$lib/Login.svelte';
+	import { sessionQuery, setSession } from '$lib/session';
+	import { WorkflowCenter, setWorkflowCenter } from '$lib/features/workflows/center.svelte';
+	import WorkflowTray from '$lib/features/workflows/WorkflowTray.svelte';
 	import {
 		applyTheme,
 		readThemePreference,
@@ -20,11 +24,9 @@
 
 	let { children } = $props<{ children: Snippet }>();
 
-	const session = createQuery(() => ({
-		queryKey: ['session'],
-		queryFn: () => apiRequest('GET', '/session'),
-		retry: false
-	}));
+	const session = createQuery(() => sessionQuery());
+	setSession({ query: session, logout });
+	setWorkflowCenter(new WorkflowCenter());
 	const nav = [
 		['/', msg('Dashboard'), 'dashboard'],
 		['/library', msg('Library'), 'library'],
@@ -58,6 +60,9 @@
 	let themePreference = $state<ThemePreference>('system');
 	let colorSchemeQuery: MediaQueryList | undefined;
 	onMount(() => {
+		const unregisterAuthenticationHandler = onAuthenticationRequired(() => {
+			void session.refetch();
+		});
 		sidebarCollapsed = localStorage.getItem('quirebase:sidebar-collapsed') === 'true';
 		themePreference = readThemePreference();
 		colorSchemeQuery = matchMedia('(prefers-color-scheme: dark)');
@@ -67,7 +72,10 @@
 				applyTheme(themePreference, colorSchemeQuery.matches);
 		};
 		colorSchemeQuery.addEventListener('change', handleColorSchemeChange);
-		return () => colorSchemeQuery?.removeEventListener('change', handleColorSchemeChange);
+		return () => {
+			unregisterAuthenticationHandler();
+			colorSchemeQuery?.removeEventListener('change', handleColorSchemeChange);
+		};
 	});
 	function toggleSidebar() {
 		sidebarCollapsed = !sidebarCollapsed;
@@ -101,6 +109,7 @@
 {:else if !session.data?.authenticated}
 	<Login />
 {:else}
+	<WorkflowTray />
 	<div
 		class={`sticky top-0 z-40 items-center justify-between bg-primary-950 px-4 py-3 text-white md:hidden ${readerRoute ? 'hidden' : 'flex'}`}
 	>
@@ -310,3 +319,4 @@
 		</Menu>
 	</nav>
 {/if}
+<Toast />

@@ -10,12 +10,12 @@ from quirebase.library import (
     export_accessible_bibliography,
     export_selected_bibliography,
 )
-from quirebase.web.api.content import BIBLIOGRAPHY_CONTENT_TYPES
+from quirebase.web.api.citations import BIBLIOGRAPHY_CONTENT_TYPES
 from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.export_schemas import BibliographyExportRequest, DocumentArchiveRequest
 from quirebase.web.responses import content_disposition
 
-router = APIRouter(prefix="/api/v1", tags=["Library exports"])
+router = APIRouter(tags=["Library exports"])
 
 
 def _bibliography_options(data: BibliographyExportRequest) -> BibliographyExportOptions:

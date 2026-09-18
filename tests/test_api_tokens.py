@@ -257,7 +257,7 @@ async def test_mcp_http_accepts_only_a_valid_bearer_api_token(async_db, async_se
                 "jsonrpc": "2.0",
                 "id": 2,
                 "method": "tools/call",
-                "params": {"name": "library.search", "arguments": {"query": ""}},
+                "params": {"name": "library.search_items", "arguments": {"query": ""}},
             },
             headers={**headers, "Authorization": f"Bearer {grant.raw_token}"},
         )
@@ -291,7 +291,7 @@ async def test_mcp_http_rejects_malformed_arguments_without_protocol_audit(
                 "jsonrpc": "2.0",
                 "id": 1,
                 "method": "tools/call",
-                "params": {"name": "library.get_item", "arguments": {}},
+                "params": {"name": "library.get_library_item", "arguments": {}},
             },
             headers=headers,
         )
@@ -359,7 +359,7 @@ async def test_mcp_http_preserves_web_allowed_host_semantics(
                     "jsonrpc": "2.0",
                     "id": 2,
                     "method": "tools/call",
-                    "params": {"name": "library.search", "arguments": {}},
+                    "params": {"name": "library.search_items", "arguments": {}},
                 },
                 headers=headers,
             )

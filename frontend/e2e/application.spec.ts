@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { mockSession } from './helpers';
 
 test('authenticated shell loads dashboard and navigates to Library', async ({ page }) => {
 	const pageErrors: string[] = [];
@@ -120,4 +121,39 @@ test('account menu keeps the active theme during client-side navigation', async 
 	await expect(page.getByRole('heading', { name: 'Account' })).toBeVisible();
 	await expect(page.locator('html')).toHaveAttribute('data-mode', 'dark');
 	await expect.poll(() => documentRequests).toBe(1);
+});
+
+test('mobile navigation keeps primary destinations visible and moves utilities into More', async ({
+	page
+}) => {
+	await page.setViewportSize({ width: 390, height: 844 });
+	await mockSession(page, 'administrator');
+	await page.goto('/library');
+
+	const navigation = page.getByRole('navigation', { name: 'Mobile navigation' });
+	await expect(navigation.getByRole('link', { name: 'Library' })).toBeVisible();
+	await expect(navigation.getByRole('link', { name: 'Discovery' })).toBeVisible();
+	await expect(navigation.getByRole('link', { name: 'Projects' })).toBeVisible();
+	await navigation.getByRole('button', { name: 'More' }).click();
+	await expect(page.getByRole('menuitem', { name: 'Import' })).toBeVisible();
+	await expect(page.getByRole('menuitem', { name: 'Tools' })).toBeVisible();
+	await expect(page.getByRole('menuitem', { name: 'Administration' })).toBeVisible();
+});
+
+test('desktop sidebar collapse persists across navigation reloads', async ({ page }) => {
+	await page.setViewportSize({ width: 1280, height: 800 });
+	await mockSession(page);
+	await page.route('**/api/v1/dashboard', (route) =>
+		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 1 } })
+	);
+
+	await page.goto('/');
+	await page.getByRole('button', { name: 'Collapse sidebar' }).click();
+	await expect(page.getByRole('button', { name: 'Expand sidebar' })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Library', exact: true })).toHaveAttribute(
+		'title',
+		'Library'
+	);
+	await page.reload();
+	await expect(page.getByRole('button', { name: 'Expand sidebar' })).toBeVisible();
 });

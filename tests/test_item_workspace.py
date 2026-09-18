@@ -41,7 +41,7 @@ from quirebase.models import (
     Tag,
     User,
 )
-from quirebase.web.api import items as items_api
+from quirebase.web.api import documents as documents_api
 
 
 @pytest.mark.anyio
@@ -216,12 +216,10 @@ async def test_remote_documents_are_acquired_server_side_before_upload(
 
     store_revision = AsyncMock(return_value=SimpleNamespace(workflow_id="revision-workflow"))
     store_attachment = AsyncMock(return_value=SimpleNamespace(workflow_id="attachment-workflow"))
-    monkeypatch.setattr(items_api, "acquire_remote_pdf", acquire_remote_pdf, raising=False)
-    monkeypatch.setattr(
-        items_api, "acquire_remote_attachment", acquire_remote_attachment, raising=False
-    )
-    monkeypatch.setattr(items_api, "store_pdf_revision", store_revision)
-    monkeypatch.setattr(items_api, "create_attachment", store_attachment)
+    monkeypatch.setattr(documents_api, "acquire_remote_pdf", acquire_remote_pdf)
+    monkeypatch.setattr(documents_api, "acquire_remote_attachment", acquire_remote_attachment)
+    monkeypatch.setattr(documents_api, "store_pdf_revision", store_revision)
+    monkeypatch.setattr(documents_api, "create_attachment", store_attachment)
 
     try:
         revision = await client.post(

@@ -15,7 +15,7 @@ from quirebase.web.api.session_schemas import LoginRequest, SessionView
 from quirebase.web.errors import ApiHTTPException
 from quirebase.web.locale import resolve_request_locale
 
-router = APIRouter(prefix="/api/v1", tags=["Session"])
+router = APIRouter(tags=["Session"])
 
 
 @router.get("/session", response_model=SessionView)

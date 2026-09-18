@@ -24,114 +24,138 @@ class McpToolDefinition:
 
 _DEFINITIONS = (
     McpToolDefinition(
-        "library.search",
+        "library.search_items",
         "Search bibliographic Items visible to the authenticated User.",
         ToolEffect.READ,
     ),
     McpToolDefinition(
-        "library.get_item",
+        "library.get_library_item",
         "Get bibliographic metadata for one visible Item; never returns file content.",
         ToolEffect.READ,
     ),
     McpToolDefinition(
-        "library.create_item",
+        "library.create_library_item",
         "Create a bibliographic Item owned by the authenticated User.",
         ToolEffect.WRITE,
     ),
     McpToolDefinition(
-        "library.update_item",
+        "library.update_library_item",
         "Replace editable Item metadata using optimistic version checking.",
         ToolEffect.WRITE,
     ),
     McpToolDefinition(
-        "citations.format_item",
+        "library.format_item_citation",
         "Render a visible Item as a plain-text or HTML citation.",
         ToolEffect.READ,
     ),
-    McpToolDefinition("projects.list", "List joined Projects.", ToolEffect.READ),
+    McpToolDefinition("projects.list_projects", "List joined Projects.", ToolEffect.READ),
     McpToolDefinition(
-        "projects.get",
+        "projects.get_project",
         "Get one joined Project, its members, and bibliographic Items.",
         ToolEffect.READ,
     ),
     McpToolDefinition(
-        "projects.create", "Create a Project owned by the authenticated User.", ToolEffect.WRITE
+        "projects.create_user_project",
+        "Create a Project owned by the authenticated User.",
+        ToolEffect.WRITE,
     ),
     McpToolDefinition(
-        "projects.update_settings",
+        "projects.update_project",
         "Update a Project's name, description, and visibility in one operation.",
         ToolEffect.WRITE,
     ),
-    McpToolDefinition("projects.delete", "Permanently delete a Project.", ToolEffect.DESTRUCTIVE),
-    McpToolDefinition("projects.archive", "Archive a Project.", ToolEffect.WRITE),
-    McpToolDefinition("projects.restore", "Restore an archived Project.", ToolEffect.WRITE),
-    McpToolDefinition("projects.leave", "Leave a Project.", ToolEffect.WRITE),
     McpToolDefinition(
-        "projects.transfer_ownership",
+        "projects.delete_user_project", "Permanently delete a Project.", ToolEffect.DESTRUCTIVE
+    ),
+    McpToolDefinition("projects.archive_project", "Archive a Project.", ToolEffect.WRITE),
+    McpToolDefinition("projects.restore_project", "Restore an archived Project.", ToolEffect.WRITE),
+    McpToolDefinition("projects.leave_user_project", "Leave a Project.", ToolEffect.WRITE),
+    McpToolDefinition(
+        "projects.transfer_user_project",
         "Transfer Project ownership to an existing member.",
         ToolEffect.WRITE,
     ),
-    McpToolDefinition("projects.add_item", "Add a visible Item to a Project.", ToolEffect.WRITE),
     McpToolDefinition(
-        "projects.remove_item", "Remove an Item from a Project.", ToolEffect.DESTRUCTIVE
+        "projects.add_project_item", "Add a visible Item to a Project.", ToolEffect.WRITE
     ),
     McpToolDefinition(
-        "projects.set_member", "Add or change a Project editor or viewer.", ToolEffect.WRITE
+        "projects.remove_project_item", "Remove an Item from a Project.", ToolEffect.DESTRUCTIVE
     ),
-    McpToolDefinition("projects.remove_member", "Remove a Project member.", ToolEffect.DESTRUCTIVE),
     McpToolDefinition(
-        "documents.list",
+        "projects.set_project_member",
+        "Add or change a Project editor or viewer.",
+        ToolEffect.WRITE,
+    ),
+    McpToolDefinition(
+        "projects.remove_project_member", "Remove a Project member.", ToolEffect.DESTRUCTIVE
+    ),
+    McpToolDefinition(
+        "documents.list_documents",
         "List revision and attachment metadata for a visible Item; no file bytes or text.",
         ToolEffect.READ,
     ),
     McpToolDefinition(
-        "annotations.list", "List visible Annotations for one File Revision.", ToolEffect.READ
+        "annotations.list_annotations",
+        "List visible Annotations for one File Revision.",
+        ToolEffect.READ,
     ),
     McpToolDefinition(
-        "annotations.create", "Create a private or Project-visible Annotation.", ToolEffect.WRITE
+        "annotations.create_annotation",
+        "Create a private or Project-visible Annotation.",
+        ToolEffect.WRITE,
     ),
     McpToolDefinition(
-        "annotations.update",
+        "annotations.update_annotation",
         "Update an editable Annotation using optimistic version checking.",
         ToolEffect.WRITE,
     ),
     McpToolDefinition(
-        "annotations.delete", "Soft-delete an editable Annotation.", ToolEffect.DESTRUCTIVE
+        "annotations.delete_annotation",
+        "Soft-delete an editable Annotation.",
+        ToolEffect.DESTRUCTIVE,
     ),
     McpToolDefinition(
-        "annotation_replies.create", "Reply to a visible Annotation.", ToolEffect.WRITE
+        "annotations.create_reply", "Reply to a visible Annotation.", ToolEffect.WRITE
     ),
     McpToolDefinition(
-        "annotation_replies.update",
+        "annotations.update_reply",
         "Update an editable Annotation Reply using optimistic version checking.",
         ToolEffect.WRITE,
     ),
     McpToolDefinition(
-        "annotation_replies.delete",
+        "annotations.delete_reply",
         "Soft-delete an editable Annotation Reply.",
         ToolEffect.DESTRUCTIVE,
     ),
-    McpToolDefinition("tags.list", "List Tags with visible Item counts.", ToolEffect.READ),
-    McpToolDefinition("tags.add_to_item", "Add a Tag to an editable Item.", ToolEffect.WRITE),
+    McpToolDefinition("library.list_tags", "List Tags with visible Item counts.", ToolEffect.READ),
+    McpToolDefinition("library.add_item_tag", "Add a Tag to an editable Item.", ToolEffect.WRITE),
     McpToolDefinition(
-        "tags.remove_from_item", "Remove a Tag from an editable Item.", ToolEffect.DESTRUCTIVE
+        "library.remove_item_tag",
+        "Remove a Tag from an editable Item.",
+        ToolEffect.DESTRUCTIVE,
     ),
     McpToolDefinition(
-        "tags.set_for_item", "Reconcile the Tag selection for an editable Item.", ToolEffect.WRITE
+        "library.set_item_tag_selection",
+        "Reconcile the Tag selection for an editable Item.",
+        ToolEffect.WRITE,
     ),
     McpToolDefinition(
-        "discussions.list", "List Discussion Messages for a visible Item.", ToolEffect.READ
+        "library.list_discussions",
+        "List Discussion Messages for a visible Item.",
+        ToolEffect.READ,
     ),
     McpToolDefinition(
-        "discussions.add", "Add a Discussion Message to a visible Item.", ToolEffect.WRITE
+        "library.create_discussion",
+        "Add a Discussion Message to a visible Item.",
+        ToolEffect.WRITE,
     ),
     McpToolDefinition(
-        "discussions.delete",
+        "library.delete_discussion",
         "Delete the User's own Discussion Message.",
         ToolEffect.DESTRUCTIVE,
     ),
     McpToolDefinition(
-        "discovery.search",
+        "discovery.search_discovery",
         "Search an external scholarly metadata Provider; never forwards the API Token upstream.",
         ToolEffect.OPEN_WORLD_READ,
     ),

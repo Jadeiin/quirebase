@@ -2,7 +2,7 @@
 
 ## Supported platforms
 
-Python 3.12+ wheels are the common installation path on Windows, macOS and Linux. Install with `uv tool install` or in a virtual environment, then run `quirebase init-db`, `quirebase create-admin`, `quirebase serve`, and a separate `quirebase worker` process. PDF.js and UI assets are already included in release wheels.
+Python 3.12+ wheels are the common installation path on Windows, macOS and Linux. Install with `uv tool install` or in a virtual environment, then run `quirebase init-db`, `quirebase create-admin`, `quirebase serve`, and a separate `quirebase worker` process. EmbedPDF/PDFium and UI assets are already included in release wheels.
 
 Quirebase, `inquiro` and `rubrica` are versioned together and published to the same Python package
 index. A release publishes the two standalone workspace packages before the matching Quirebase

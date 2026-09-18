@@ -1,6 +1,49 @@
 from __future__ import annotations
 
+from fastapi.routing import APIRoute
+
+from quirebase.web.api.routes import CAPABILITY_ROUTERS, generate_operation_id
+from quirebase.web.api.routes import router as api_router
 from quirebase.web.app import create_app
+
+
+def test_api_version_prefix_is_owned_by_composition_root() -> None:
+    """Capability routers stay relative; only the composition root owns /api/v1."""
+    assert api_router.prefix == "/api/v1"
+    assert {router.prefix for router in CAPABILITY_ROUTERS} <= {"", "/admin"}
+    admin_router_prefixes = [router.prefix for router in CAPABILITY_ROUTERS if router.prefix]
+    assert admin_router_prefixes == ["/admin"]
+
+
+def test_api_routes_have_unique_stable_operation_ids() -> None:
+    """Every versioned API operation has an identifier for OpenAPI and MCP consumers."""
+    app = create_app()
+    paths = app.openapi()["paths"]
+    operation_ids: list[str] = []
+
+    for path, methods in paths.items():
+        if not path.startswith("/api/v1/"):
+            continue
+        for method, operation in methods.items():
+            if method not in {"get", "post", "put", "delete", "patch"}:
+                continue
+            operation_id = operation.get("operationId")
+            assert isinstance(operation_id, str) and operation_id, (
+                f"Missing operationId for {method.upper()} {path}"
+            )
+            operation_ids.append(operation_id)
+
+    assert len(operation_ids) == len(set(operation_ids)), "Duplicate OpenAPI operation IDs"
+    assert all("." in operation_id for operation_id in operation_ids)
+
+    expected_ids = {
+        generate_operation_id(route)
+        for capability_router in CAPABILITY_ROUTERS
+        for route in capability_router.routes
+        if isinstance(route, APIRoute)
+    }
+    assert set(operation_ids) == expected_ids
+    assert api_router.generate_unique_id_function is generate_operation_id
 
 
 def test_openapi_contract_has_no_untyped_endpoints() -> None:

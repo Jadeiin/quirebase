@@ -3,15 +3,12 @@
 	import { apiRequest } from '$lib/api/client';
 	import { apiErrorMessage } from '$lib/api/errors';
 	import { activateLocale, t } from '$lib/i18n';
+	import { sessionQuery } from '$lib/session';
 	let { token } = $props<{ token: string }>();
 	let password = $state('');
 	let error = $state('');
 	let busy = $state(false);
-	const session = createQuery(() => ({
-		queryKey: ['session'],
-		queryFn: () => apiRequest('GET', '/session'),
-		retry: false
-	}));
+	const session = createQuery(() => sessionQuery());
 	const invitation = createQuery(() => ({
 		queryKey: ['invitation', token],
 		queryFn: () => apiRequest('GET', '/invitations/{token}', { params: { path: { token } } }),

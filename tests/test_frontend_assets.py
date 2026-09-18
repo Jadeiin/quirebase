@@ -67,7 +67,8 @@ def test_sveltekit_filesystem_routes_own_application_navigation():
 
     assert not (ROOT / "frontend/src/routes/[...path]").exists()
     assert not (ROOT / "frontend/src/lib/App.svelte").exists()
-    assert "apiRequest('GET', '/session')" in read("frontend/src/lib/AppShell.svelte")
+    assert "sessionQuery" in read("frontend/src/lib/AppShell.svelte")
+    assert "apiRequest('GET', '/session')" in read("frontend/src/lib/session.ts")
     assert "metadata" in read("frontend/src/params/itemSection.ts")
     assert "maintenance" in read("frontend/src/params/adminSection.ts")
 
@@ -91,7 +92,7 @@ def test_docker_builds_the_svelte_workspace_before_the_python_wheel():
 
 
 def test_item_workspace_uses_the_fixed_query_annotation_review_projection():
-    workspace = read("frontend/src/lib/ItemWorkspace.svelte")
+    workspace = read("frontend/src/lib/features/item/ItemWorkspace.svelte")
     annotations = read("frontend/src/lib/features/item/ItemAnnotationsSection.svelte")
     queries = read("frontend/src/lib/features/item/queries.ts")
     assert "itemAnnotationsReviewQuery" in annotations

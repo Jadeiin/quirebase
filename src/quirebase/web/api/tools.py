@@ -25,7 +25,7 @@ from quirebase.web.api.tool_schemas import (
     TagMergeRequest,
 )
 
-router = APIRouter(prefix="/api/v1", tags=["Library tools"])
+router = APIRouter(tags=["Library tools"])
 
 
 @router.get("/citation-key-preview", response_model=CitationKeyPreviewView)

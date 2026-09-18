@@ -7,10 +7,10 @@ from quirebase.operations.settings import get_effective_settings_model
 from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.discovery_schemas import DiscoveryProviderView, DiscoverySearchRequest
 
-router = APIRouter(prefix="/api/v1", tags=["Discovery"])
+router = APIRouter(tags=["Discovery"])
 
 
-@router.post("/discovery/search", response_model=CandidatePageView, operation_id="discovery.search")
+@router.post("/discovery/search", response_model=CandidatePageView)
 async def search_discovery(
     data: DiscoverySearchRequest,
     user: ApiUser,

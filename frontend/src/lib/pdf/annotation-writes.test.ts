@@ -173,4 +173,37 @@ describe('annotation write coordination', () => {
 		await write;
 		expect(queue.hasPending()).toBe(false);
 	});
+
+	it('flush waits for every serialized write, including writes queued behind an active one', async () => {
+		let finishFirst!: () => void;
+		let finishSecond!: () => void;
+		const queue = createWriteQueue();
+		const first = queue.enqueue(
+			() =>
+				new Promise<void>((resolve) => {
+					finishFirst = resolve;
+				})
+		);
+		const second = queue.enqueue(
+			() =>
+				new Promise<void>((resolve) => {
+					finishSecond = resolve;
+				})
+		);
+		let flushed = false;
+		const flush = queue.flush().then(() => {
+			flushed = true;
+		});
+
+		finishFirst();
+		await first;
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(flushed).toBe(false);
+
+		finishSecond();
+		await second;
+		await flush;
+		expect(flushed).toBe(true);
+		expect(queue.hasPending()).toBe(false);
+	});
 });

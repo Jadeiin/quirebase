@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { createMutation, createQuery } from '@tanstack/svelte-query';
-	import { onDestroy } from 'svelte';
 	import { apiRequest } from '$lib/api/client';
 	import { apiErrorMessage } from '$lib/api/errors';
-	import { waitForWorkflow } from '$lib/api/workflows';
+	import ConfirmDialog from '$lib/design/ConfirmDialog.svelte';
+	import { getWorkflowCenter } from '$lib/features/workflows/center.svelte';
 	import AdminAudit from '$lib/features/admin/AdminAudit.svelte';
 	import AdminItems from '$lib/features/admin/AdminItems.svelte';
 	import AdminMaintenance from '$lib/features/admin/AdminMaintenance.svelte';
@@ -14,7 +14,18 @@
 	import AdminUsers from '$lib/features/admin/AdminUsers.svelte';
 	import AdminWorkflows from '$lib/features/admin/AdminWorkflows.svelte';
 	import { adminMutationOptions } from '$lib/features/admin/mutations';
-	import { adminSectionQuery, type AdminSection } from '$lib/features/admin/queries';
+	import {
+		adminAuditQuery,
+		adminItemsQuery,
+		adminMaintenanceQuery,
+		adminOverviewQuery,
+		adminProjectsQuery,
+		adminSettingsQuery,
+		adminUsersQuery,
+		adminWorkflowsQuery,
+		type AdminFilters,
+		type AdminSection
+	} from '$lib/features/admin/queries';
 	import { msg, t, type MessageKey } from '$lib/i18n';
 	import type { components } from '$lib/api/schema';
 
@@ -33,8 +44,9 @@
 	let appliedFilterA = $state('');
 	let filterB = $state('');
 	let appliedFilterB = $state('');
-	const workflowAbort = new AbortController();
-	onDestroy(() => workflowAbort.abort());
+	let pendingItemId = $state<string | null>(null);
+	let confirmDeleteOpen = $state(false);
+	const workflowCenter = getWorkflowCenter();
 	const labels: Record<AdminSection, MessageKey> = {
 		overview: msg('Overview'),
 		users: msg('Users'),
@@ -67,19 +79,102 @@
 		['recommend_tags_all', msg('Recommend Tags for all Items')]
 	] as const;
 	const sectionLabel = $derived(labels[section as AdminSection]);
-	const data = createQuery(() =>
-		adminSectionQuery(section, {
+	function filters(): AdminFilters {
+		return {
 			page: adminPage,
 			search: appliedSearch,
 			filterA: appliedFilterA,
 			filterB: appliedFilterB
-		})
+		};
+	}
+	const overview = createQuery(() => adminOverviewQuery(filters(), section === 'overview'));
+	const users = createQuery(() => adminUsersQuery(filters(), section === 'users'));
+	const projects = createQuery(() => adminProjectsQuery(filters(), section === 'projects'));
+	const items = createQuery(() => adminItemsQuery(filters(), section === 'items'));
+	const audit = createQuery(() => adminAuditQuery(filters(), section === 'audit'));
+	const workflows = createQuery(() => adminWorkflowsQuery(filters(), section === 'workflows'));
+	const settings = createQuery(() => adminSettingsQuery(filters(), section === 'settings'));
+	const maintenance = createQuery(() =>
+		adminMaintenanceQuery(filters(), section === 'maintenance')
 	);
-	const adminMutation = createMutation(() => adminMutationOptions(section, () => data.refetch()));
+	function refetchSection(): Promise<unknown> {
+		switch (section) {
+			case 'overview':
+				return overview.refetch();
+			case 'users':
+				return users.refetch();
+			case 'projects':
+				return projects.refetch();
+			case 'items':
+				return items.refetch();
+			case 'audit':
+				return audit.refetch();
+			case 'workflows':
+				return workflows.refetch();
+			case 'settings':
+				return settings.refetch();
+			case 'maintenance':
+				return maintenance.refetch();
+			default:
+				return Promise.resolve();
+		}
+	}
+	const adminMutation = createMutation(() => adminMutationOptions(section, refetchSection));
 	const busy = $derived(adminMutation.isPending);
-	const pagination = $derived(
-		data.data as { total?: number; page?: number; per_page?: number } | undefined
-	);
+	const sectionPending = $derived.by(() => {
+		switch (section) {
+			case 'overview':
+				return overview.isPending;
+			case 'users':
+				return users.isPending;
+			case 'projects':
+				return projects.isPending;
+			case 'items':
+				return items.isPending;
+			case 'audit':
+				return audit.isPending;
+			case 'workflows':
+				return workflows.isPending;
+			case 'settings':
+				return settings.isPending;
+			case 'maintenance':
+				return maintenance.isPending;
+		}
+	});
+	const sectionError = $derived.by(() => {
+		switch (section) {
+			case 'overview':
+				return overview.isError;
+			case 'users':
+				return users.isError;
+			case 'projects':
+				return projects.isError;
+			case 'items':
+				return items.isError;
+			case 'audit':
+				return audit.isError;
+			case 'workflows':
+				return workflows.isError;
+			case 'settings':
+				return settings.isError;
+			case 'maintenance':
+				return maintenance.isError;
+		}
+	});
+	const pagination = $derived.by(() => {
+		switch (section) {
+			case 'users':
+				return users.data;
+			case 'projects':
+				return projects.data;
+			case 'items':
+				return items.data;
+			case 'audit':
+				return audit.data;
+			default:
+				return undefined;
+		}
+	});
 	const pageCount = $derived(
 		pagination?.total && pagination.per_page
 			? Math.max(1, Math.ceil(pagination.total / pagination.per_page))
@@ -234,10 +329,11 @@
 				const started = await apiRequest('POST', '/admin/maintenance/{operation}', {
 					params: { path: { operation } }
 				});
-				await waitForWorkflow(started.id, {
-					signal: workflowAbort.signal,
+				await workflowCenter.track(started.id, {
+					label: `${$t('Maintenance')}: ${$t(maintenanceOperations.find(([key]) => key === operation)?.[1] ?? operation)}`,
+					successMessage: $t('Maintenance operation completed'),
 					failureMessage: $t('Maintenance operation failed')
-				});
+				}).settled;
 			},
 			msg('Maintenance operation completed'),
 			undefined,
@@ -248,7 +344,15 @@
 	}
 
 	function deleteAdminItem(itemId: string) {
-		if (!window.confirm($t('Permanently delete this Item?'))) return;
+		pendingItemId = itemId;
+		confirmDeleteOpen = true;
+	}
+
+	function confirmDeleteAdminItem() {
+		const itemId = pendingItemId;
+		pendingItemId = null;
+		confirmDeleteOpen = false;
+		if (!itemId) return;
 		void mutate(
 			() =>
 				apiRequest('DELETE', '/admin/items/{item_id}', {
@@ -348,17 +452,17 @@
 	>
 		{$t(notice)}
 	</p>{/if}
-{#if data.isPending}<p class="text-surface-600-400">
+{#if sectionPending}<p class="text-surface-600-400">
 		{$t('Loading')}
 		{$t(sectionLabel).toLowerCase()}…
 	</p>
-{:else if data.isError}<p class="text-error-700-300">{$t('Unable to load administration.')}</p>
-{:else if data.data}
+{:else if sectionError}<p class="text-error-700-300">{$t('Unable to load administration.')}</p>
+{:else}
 	{#if section === 'overview'}
-		<AdminOverview overview={data.data as components['schemas']['AdminOverviewView']} />
+		<AdminOverview overview={overview.data!} />
 	{:else if section === 'users'}
 		<AdminUsers
-			users={data.data as components['schemas']['AdminUsersView']}
+			users={users.data!}
 			{busy}
 			{invitationUrl}
 			onCreateUser={createUser}
@@ -369,35 +473,26 @@
 			onRevokeUserSessions={revokeUserSessions}
 		/>
 	{:else if section === 'projects'}
-		<AdminProjects
-			projects={(
-				data.data as {
-					projects: components['schemas']['AdminProjectItemView'][];
-				}
-			).projects}
-		/>
+		<AdminProjects projects={projects.data!.projects} />
 	{:else if section === 'items'}
-		<AdminItems
-			items={data.data as components['schemas']['AdminItemsView']}
+		<AdminItems items={items.data!} {busy} onDelete={deleteAdminItem} />
+		<ConfirmDialog
+			bind:open={confirmDeleteOpen}
+			title={$t('Permanently delete this Item?')}
+			body={$t('This cannot be undone.')}
+			confirmLabel={$t('Permanently delete')}
 			{busy}
-			onDelete={deleteAdminItem}
+			onConfirm={confirmDeleteAdminItem}
 		/>
 	{:else if section === 'audit'}
-		<AdminAudit events={(data.data as components['schemas']['AdminAuditView']).events} />
+		<AdminAudit events={audit.data!.events} />
 	{:else if section === 'workflows'}
-		<AdminWorkflows
-			workflows={(data.data as components['schemas']['AdminWorkflowsView']).workflows}
-		/>
+		<AdminWorkflows workflows={workflows.data!.workflows} />
 	{:else if section === 'settings'}
-		<AdminSettings
-			settings={data.data as Settings}
-			fields={settingFields}
-			{busy}
-			onSave={saveSettings}
-		/>
+		<AdminSettings settings={settings.data!} fields={settingFields} {busy} onSave={saveSettings} />
 	{:else}
 		<AdminMaintenance
-			maintenance={data.data as components['schemas']['AdminMaintenanceView']}
+			maintenance={maintenance.data!}
 			operations={maintenanceOperations}
 			{busy}
 			onRun={runMaintenance}

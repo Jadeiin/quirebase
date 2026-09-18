@@ -32,7 +32,7 @@ from quirebase.web.api.session_schemas import LoginSessionView
 from quirebase.web.errors import ApiHTTPException
 from quirebase.web.locale import normalize_locale
 
-router = APIRouter(prefix="/api/v1", tags=["HTTP API"])
+router = APIRouter(tags=["HTTP API"])
 
 
 @router.get("/invitations/{token}", response_model=InvitationDetailsView)

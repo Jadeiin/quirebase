@@ -20,7 +20,8 @@ from quirebase.accounts import (
 from quirebase.audit import query_events
 from quirebase.core.errors import ResourceNotFound, ValidationFailure
 from quirebase.core.workflows import durable_operations
-from quirebase.library import admin_delete_item, get_storage_metrics, list_global_items
+from quirebase.library import admin_delete_item as delete_item_as_admin
+from quirebase.library import get_storage_metrics, list_global_items
 from quirebase.models import User
 from quirebase.operations import (
     dispatch_maintenance_workflow,
@@ -67,7 +68,7 @@ def require_api_admin(user: ApiUser) -> User:
 
 AdminUser = Annotated[User, Depends(require_api_admin)]
 router = APIRouter(
-    prefix="/api/v1/admin",
+    prefix="/admin",
     tags=["HTTP API administration"],
 )
 
@@ -253,8 +254,8 @@ async def admin_items(
 
 
 @router.delete("/items/{item_id}", response_model=OkView)
-async def admin_remove_item(item_id: str, user: AdminUser, db: Database) -> OkView:
-    await admin_delete_item(db, user, item_id)
+async def admin_delete_item(item_id: str, user: AdminUser, db: Database) -> OkView:
+    await delete_item_as_admin(db, user, item_id)
     return OkView()
 
 

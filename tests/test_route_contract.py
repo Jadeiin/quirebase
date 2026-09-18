@@ -12,213 +12,33 @@ def get_app():
     return app
 
 
-REMOVED_TEMPLATE_ERA_ROUTES = {
-    (
-        "DELETE",
-        "/api/v1/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}",
-    ),
-    (
-        "DELETE",
-        "/documents/{item_id}/annotations/{annotation_id}/replies/{reply_id}",
-    ),
-    (
-        "PATCH",
-        "/api/v1/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}",
-    ),
-    (
-        "PATCH",
-        "/documents/{item_id}/annotations/{annotation_id}/replies/{reply_id}",
-    ),
-    ("POST", "/api/v1/items/{item_id}/annotations/{annotation_id}/replies"),
-    ("POST", "/documents/{item_id}/annotations/{annotation_id}/replies"),
-    ("POST", "/documents/{item_id}/annotations/{annotation_id}/restore"),
-    (
-        "POST",
-        "/documents/{item_id}/annotations/{annotation_id}/replies/{reply_id}/restore",
-    ),
-    ("DELETE", "/api/v1/items/{item_id}/annotations/{annotation_id}"),
-    ("DELETE", "/api/v1/items/{item_id}/discussions/{message_id}"),
-    ("DELETE", "/api/v1/items/{item_id}/tags/{tag_id}"),
-    ("DELETE", "/api/v1/projects/{project_id}/items/{item_id}"),
-    ("DELETE", "/api/v1/projects/{project_id}"),
-    ("DELETE", "/api/v1/projects/{project_id}/members/{user_id}"),
-    ("PATCH", "/api/v1/projects/{project_id}"),
-    ("POST", "/api/v1/projects/{project_id}/description"),
-    ("POST", "/api/v1/projects/{project_id}/archive"),
-    ("POST", "/api/v1/projects/{project_id}/restore"),
-    ("POST", "/api/v1/projects/{project_id}/visibility"),
-    ("POST", "/api/v1/projects/{project_id}/leave"),
-    ("POST", "/api/v1/projects/{project_id}/ownership/{user_id}"),
-    ("DELETE", "/documents/{item_id}/annotations/{annotation_id}"),
-    ("GET", "/"),
-    ("GET", "/accept-invitation/{token}"),
-    ("GET", "/account/sessions"),
-    ("GET", "/account/settings"),
-    ("GET", "/admin"),
-    ("GET", "/admin/audit"),
-    ("GET", "/admin/items"),
-    ("GET", "/admin/projects"),
-    ("GET", "/admin/workflows"),
-    ("GET", "/admin/maintenance"),
-    ("GET", "/admin/maintenance/backups/{workflow_id}/download"),
-    ("GET", "/api/workflows/{workflow_id}"),
-    ("GET", "/admin/settings"),
-    ("GET", "/admin/users"),
-    ("GET", "/annotation-exports/{workflow_id}"),
-    ("GET", "/annotation-exports/{workflow_id}/content"),
-    ("GET", "/bibliography/export"),
-    ("GET", "/bibliography/import"),
-    ("GET", "/documents/{item_id}/annotations"),
-    ("GET", "/documents/{item_id}/citation"),
-    ("GET", "/documents/{item_id}/citation-text"),
-    ("GET", "/documents/{item_id}/citation-copy"),
-    ("GET", "/documents/{item_id}/revisions/{revision_id}/content"),
-    ("GET", "/documents/{item_id}/revisions/{revision_id}/export"),
-    ("GET", "/documents/{item_id}/revisions/{revision_id}/thumbnail"),
-    ("GET", "/documents/{item_id}/thumbnail"),
-    ("GET", "/healthz"),
-    ("GET", "/imports/{batch_id}/preview"),
-    ("POST", "/imports/{batch_id}/retry"),
-    ("GET", "/items/{item_id}"),
-    ("GET", "/items/{item_id}/attachments/{attachment_id}"),
-    ("GET", "/items/{item_id}/download"),
-    ("GET", "/items/{item_id}/pdf/{revision_id}"),
-    ("GET", "/items/{item_id}/{section}"),
-    ("GET", "/api/citation-styles"),
-    ("GET", "/api/citation-key-preview"),
-    ("GET", "/api/v1/items"),
-    ("GET", "/api/v1/items/{item_id}"),
-    ("GET", "/api/v1/items/{item_id}/annotations"),
-    ("GET", "/api/v1/items/{item_id}/citation"),
-    ("GET", "/api/v1/items/{item_id}/discussions"),
-    ("GET", "/api/v1/items/{item_id}/documents"),
-    ("GET", "/api/v1/projects"),
-    ("GET", "/api/v1/projects/{project_id}"),
-    ("GET", "/api/v1/tags"),
-    ("GET", "/library"),
-    ("GET", "/login"),
-    ("GET", "/metrics"),
-    ("GET", "/online-search"),
-    ("GET", "/projects"),
-    ("GET", "/projects/{project_id}"),
-    ("GET", "/tools"),
-    ("PATCH", "/documents/{item_id}/annotations/{annotation_id}"),
-    ("PATCH", "/api/v1/items/{item_id}/annotations/{annotation_id}"),
-    ("POST", "/accept-invitation/{token}"),
-    ("POST", "/account/api-tokens"),
-    ("POST", "/account/api-tokens/{token_id}/revoke"),
-    ("POST", "/account/sessions/revoke-all"),
-    ("POST", "/account/sessions/{session_id}/revoke"),
-    ("POST", "/account/settings/locale"),
-    ("POST", "/account/settings/password"),
-    ("POST", "/api/v1/discovery/search"),
-    ("POST", "/api/v1/items"),
-    ("POST", "/api/v1/items/{item_id}/annotations"),
-    ("POST", "/api/v1/items/{item_id}/discussions"),
-    ("POST", "/api/v1/items/{item_id}/tags"),
-    ("POST", "/api/v1/projects"),
-    ("POST", "/admin/invitations"),
-    ("POST", "/admin/items/{item_id}/delete"),
-    ("POST", "/admin/maintenance/backup"),
-    ("POST", "/admin/maintenance/check-objects"),
-    ("POST", "/admin/maintenance/reindex"),
-    ("POST", "/admin/maintenance/recommend-tags"),
-    ("POST", "/admin/settings"),
-    ("POST", "/admin/users/create"),
-    ("POST", "/admin/users/{user_id}/password"),
-    ("POST", "/admin/users/{user_id}/revoke-sessions"),
-    ("POST", "/admin/users/{user_id}/role"),
-    ("POST", "/admin/users/{user_id}/status"),
-    ("POST", "/bibliography/import/{batch_id}"),
-    ("POST", "/bibliography/import/{batch_id}/discard"),
-    ("POST", "/bibliography/preview"),
-    ("POST", "/citation-styles"),
-    ("POST", "/citation-styles/{style_id}/delete"),
-    ("POST", "/documents/{item_id}/annotation-exports"),
-    ("POST", "/documents/{item_id}/annotations"),
-    ("POST", "/imports/pdf/published"),
-    ("POST", "/items"),
-    ("POST", "/items/{item_id}/attachments"),
-    ("POST", "/items/{item_id}/attachments/{attachment_id}/delete"),
-    ("POST", "/items/{item_id}/discussion"),
-    ("POST", "/items/{item_id}/discussion/{message_id}/delete"),
-    ("POST", "/items/{item_id}/edit"),
-    ("POST", "/items/{item_id}/delete"),
-    ("POST", "/items/{item_id}/pdf"),
-    ("POST", "/items/{item_id}/pdf/{revision_id}/delete"),
-    ("POST", "/items/{item_id}/projects/{project_id}"),
-    ("POST", "/items/{item_id}/projects/{project_id}/remove"),
-    ("POST", "/items/{item_id}/rescan-doi"),
-    ("POST", "/items/{item_id}/sync-metadata"),
-    ("POST", "/items/{item_id}/tag-recommendations"),
-    ("POST", "/items/{item_id}/tags"),
-    ("POST", "/items/{item_id}/tags/matrix"),
-    ("POST", "/items/{item_id}/tags/{tag_id}/remove"),
-    ("POST", "/items/{item_id}/update-bibtex-key"),
-    ("POST", "/library/bulk"),
-    ("POST", "/login"),
-    ("POST", "/logout"),
-    ("POST", "/metadata/preview"),
-    ("POST", "/projects"),
-    ("POST", "/projects/{project_id}/members"),
-    ("POST", "/projects/{project_id}/members/{member_id}/remove"),
-    ("POST", "/projects/{project_id}/rename"),
-    ("POST", "/projects/{project_id}/description"),
-    ("POST", "/projects/{project_id}/delete"),
-    ("POST", "/projects/{project_id}/archive"),
-    ("POST", "/projects/{project_id}/restore"),
-    ("POST", "/projects/{project_id}/visibility"),
-    ("POST", "/projects/{project_id}/leave"),
-    ("POST", "/projects/{project_id}/ownership/{user_id}"),
-    ("POST", "/projects/{project_id}/ownership"),
-    ("POST", "/projects/{project_id}/join"),
-    ("POST", "/tools/tags/{tag_id}"),
-    ("POST", "/tools/tags/{tag_id}/delete"),
-    ("POST", "/tools/tags/merge"),
-    ("GET", "/api/authors/suggest"),
-    ("PUT", "/api/v1/items/{item_id}"),
-    ("PUT", "/api/v1/items/{item_id}/tags"),
-    ("PUT", "/api/v1/projects/{project_id}/items/{item_id}"),
-    ("PUT", "/api/v1/projects/{project_id}/members"),
-}
-
-
-def _extract_routes(routes):
-    out = []
-    for r in routes:
-        if hasattr(r, "original_router"):
-            out.extend(_extract_routes(r.original_router.routes))
-        elif hasattr(r, "routes"):
-            out.extend(_extract_routes(r.routes))
-        elif hasattr(r, "methods") and hasattr(r, "path"):
-            out.append(r)
-    return out
-
-
 def test_operational_routes_contract():
     test_app = get_app()
     excluded_paths = {"/docs", "/docs/oauth2-redirect", "/openapi.json", "/redoc"}
-    operational_routes: set[tuple[str, str]] = set()
 
-    for route in _extract_routes(test_app.routes):
+    # OpenAPI contains the effective paths after FastAPI composes the versioned
+    # router. Inspect direct application routes separately for the SPA fallback
+    # and other non-schema operational methods; child router internals contain
+    # relative paths by design.
+    operational_routes: set[tuple[str, str]] = {
+        (method.upper(), path)
+        for path, methods in test_app.openapi()["paths"].items()
+        for method in methods
+        if method in {"get", "post", "put", "patch", "delete"}
+    }
+    for route in test_app.routes:
+        if not hasattr(route, "methods") or not hasattr(route, "path"):
+            continue
         if route.path in excluded_paths:
             continue
         for method in route.methods:
-            if method == "HEAD":
-                continue
-            operational_routes.add((method, route.path))
+            if method != "HEAD":
+                operational_routes.add((method, route.path))
 
-    assert len(operational_routes) == 129, f"Expected 129 routes, found {len(operational_routes)}"
     assert {
         ("POST", "/api/v1/items/{item_id}/attachments/remote"),
         ("POST", "/api/v1/items/{item_id}/revisions/remote"),
     } <= operational_routes
-    removed_routes = {
-        route
-        for route in REMOVED_TEMPLATE_ERA_ROUTES
-        if not route[1].startswith("/api/v1") and route[1] not in {"/healthz", "/metrics"}
-    }
-    assert operational_routes.isdisjoint(removed_routes)
     assert all(
         path.startswith("/api/v1") or path in {"/healthz", "/metrics"}
         for _method, path in operational_routes

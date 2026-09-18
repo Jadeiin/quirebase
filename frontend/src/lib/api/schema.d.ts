@@ -46,12 +46,12 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Session Bootstrap */
-		get: operations['session_bootstrap_api_v1_session_get'];
+		get: operations['session.session_bootstrap'];
 		put?: never;
 		/** Login Session */
-		post: operations['login_session_api_v1_session_post'];
+		post: operations['session.login_session'];
 		/** Logout Session */
-		delete: operations['logout_session_api_v1_session_delete'];
+		delete: operations['session.logout_session'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -65,7 +65,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Dashboard */
-		get: operations['dashboard_api_v1_dashboard_get'];
+		get: operations['dashboard.dashboard'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -84,7 +84,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Apply Item Bulk Action */
-		post: operations['apply_item_bulk_action_api_v1_items_bulk_post'];
+		post: operations['library.apply_item_bulk_action'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -99,10 +99,10 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Search Items */
-		get: operations['library.search'];
+		get: operations['library.search_items'];
 		put?: never;
 		/** Create Library Item */
-		post: operations['library.create_item'];
+		post: operations['library.create_library_item'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -117,12 +117,12 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Get Library Item */
-		get: operations['library.get_item'];
+		get: operations['library.get_library_item'];
 		/** Update Library Item */
-		put: operations['library.update_item'];
+		put: operations['library.update_library_item'];
 		post?: never;
 		/** Delete Library Item */
-		delete: operations['delete_library_item_api_v1_items__item_id__delete'];
+		delete: operations['items.delete_library_item'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -136,7 +136,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Format Item Citation */
-		get: operations['citations.format_item'];
+		get: operations['library.format_item_citation'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -153,7 +153,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** List Tags */
-		get: operations['tags.list'];
+		get: operations['library.list_tags'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -171,9 +171,9 @@ export interface paths {
 		};
 		get?: never;
 		/** Set Item Tag Selection */
-		put: operations['tags.set_for_item'];
+		put: operations['library.set_item_tag_selection'];
 		/** Add Item Tag */
-		post: operations['tags.add_to_item'];
+		post: operations['library.add_item_tag'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -191,7 +191,7 @@ export interface paths {
 		put?: never;
 		post?: never;
 		/** Remove Item Tag */
-		delete: operations['tags.remove_from_item'];
+		delete: operations['library.remove_item_tag'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -205,10 +205,10 @@ export interface paths {
 			cookie?: never;
 		};
 		/** List Discussions */
-		get: operations['discussions.list'];
+		get: operations['library.list_discussions'];
 		put?: never;
 		/** Create Discussion */
-		post: operations['discussions.add'];
+		post: operations['library.create_discussion'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -226,7 +226,7 @@ export interface paths {
 		put?: never;
 		post?: never;
 		/** Delete Discussion */
-		delete: operations['discussions.delete'];
+		delete: operations['library.delete_discussion'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -242,7 +242,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Export Item Selection */
-		post: operations['export_item_selection_api_v1_items_bibliography_post'];
+		post: operations['library_exports.export_item_selection'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -259,7 +259,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Download Item Selection */
-		post: operations['download_item_selection_api_v1_items_documents_archive_post'];
+		post: operations['library_exports.download_item_selection'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -274,7 +274,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Export Library Bibliography */
-		get: operations['export_library_bibliography_api_v1_bibliography_get'];
+		get: operations['library_exports.export_library_bibliography'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -293,7 +293,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Stage Bibliography Import */
-		post: operations['stage_bibliography_import_api_v1_imports_bibliography_post'];
+		post: operations['imports.stage_bibliography_import'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -310,7 +310,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Stage Identifier Import */
-		post: operations['stage_identifier_import_api_v1_imports_identifier_post'];
+		post: operations['imports.stage_identifier_import'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -327,7 +327,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Stage Pdf Import */
-		post: operations['stage_pdf_import_api_v1_imports_pdfs_post'];
+		post: operations['imports.stage_pdf_import'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -342,11 +342,11 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Import Batch */
-		get: operations['import_batch_api_v1_imports__batch_id__get'];
+		get: operations['imports.import_batch'];
 		put?: never;
 		post?: never;
 		/** Discard Staged Import */
-		delete: operations['discard_staged_import_api_v1_imports__batch_id__delete'];
+		delete: operations['imports.discard_staged_import'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -362,7 +362,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Retry Import Batch */
-		post: operations['retry_import_batch_api_v1_imports__batch_id__retry_post'];
+		post: operations['imports.retry_import_batch'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -379,7 +379,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Commit Staged Import */
-		post: operations['commit_staged_import_api_v1_imports__batch_id__commit_post'];
+		post: operations['imports.commit_staged_import'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -394,10 +394,10 @@ export interface paths {
 			cookie?: never;
 		};
 		/** List Projects */
-		get: operations['projects.list'];
+		get: operations['projects.list_projects'];
 		put?: never;
 		/** Create User Project */
-		post: operations['projects.create'];
+		post: operations['projects.create_user_project'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -412,7 +412,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** List Projects Available To Join */
-		get: operations['list_projects_available_to_join_api_v1_projects_joinable_get'];
+		get: operations['projects.list_projects_available_to_join'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -429,15 +429,15 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Get Project */
-		get: operations['projects.get'];
+		get: operations['projects.get_project'];
 		put?: never;
 		post?: never;
 		/** Delete User Project */
-		delete: operations['projects.delete'];
+		delete: operations['projects.delete_user_project'];
 		options?: never;
 		head?: never;
 		/** Update Project */
-		patch: operations['projects.update_settings'];
+		patch: operations['projects.update_project'];
 		trace?: never;
 	};
 	'/api/v1/projects/{project_id}/description': {
@@ -450,7 +450,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Update Project Description Api */
-		post: operations['update_project_description_api_api_v1_projects__project_id__description_post'];
+		post: operations['projects.update_project_description_api'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -467,7 +467,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Archive Project */
-		post: operations['projects.archive'];
+		post: operations['projects.archive_project'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -484,7 +484,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Restore Project */
-		post: operations['projects.restore'];
+		post: operations['projects.restore_project'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -501,7 +501,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Set Project Visibility Api */
-		post: operations['set_project_visibility_api_api_v1_projects__project_id__visibility_post'];
+		post: operations['projects.set_project_visibility_api'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -518,7 +518,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Leave User Project */
-		post: operations['projects.leave'];
+		post: operations['projects.leave_user_project'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -535,7 +535,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Join Public Project */
-		post: operations['join_public_project_api_v1_projects__project_id__join_post'];
+		post: operations['projects.join_public_project'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -552,7 +552,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Transfer User Project */
-		post: operations['projects.transfer_ownership'];
+		post: operations['projects.transfer_user_project'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -568,10 +568,10 @@ export interface paths {
 		};
 		get?: never;
 		/** Add Project Item */
-		put: operations['projects.add_item'];
+		put: operations['projects.add_project_item'];
 		post?: never;
 		/** Remove Project Item */
-		delete: operations['projects.remove_item'];
+		delete: operations['projects.remove_project_item'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -586,7 +586,7 @@ export interface paths {
 		};
 		get?: never;
 		/** Set Project Member */
-		put: operations['projects.set_member'];
+		put: operations['projects.set_project_member'];
 		post?: never;
 		delete?: never;
 		options?: never;
@@ -604,25 +604,8 @@ export interface paths {
 		get?: never;
 		put?: never;
 		post?: never;
-		/** Delete Project Member */
-		delete: operations['projects.remove_member'];
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/documents': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** List Documents */
-		get: operations['documents.list'];
-		put?: never;
-		post?: never;
-		delete?: never;
+		/** Remove Project Member */
+		delete: operations['projects.remove_project_member'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -636,7 +619,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Review Annotations */
-		get: operations['review_annotations_api_v1_items__item_id__annotations_review_get'];
+		get: operations['annotations.review_annotations'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -653,10 +636,10 @@ export interface paths {
 			cookie?: never;
 		};
 		/** List Annotations */
-		get: operations['annotations.list'];
+		get: operations['annotations.list_annotations'];
 		put?: never;
 		/** Create Annotation */
-		post: operations['annotations.create'];
+		post: operations['annotations.create_annotation'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -674,11 +657,11 @@ export interface paths {
 		put?: never;
 		post?: never;
 		/** Delete Annotation */
-		delete: operations['annotations.delete'];
+		delete: operations['annotations.delete_annotation'];
 		options?: never;
 		head?: never;
 		/** Update Annotation */
-		patch: operations['annotations.update'];
+		patch: operations['annotations.update_annotation'];
 		trace?: never;
 	};
 	'/api/v1/items/{item_id}/annotations/{annotation_id}/restore': {
@@ -691,7 +674,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Restore Annotation */
-		post: operations['restore_annotation_api_v1_items__item_id__annotations__annotation_id__restore_post'];
+		post: operations['annotations.restore_annotation'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -708,7 +691,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Create Reply */
-		post: operations['annotation_replies.create'];
+		post: operations['annotations.create_reply'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -726,11 +709,11 @@ export interface paths {
 		put?: never;
 		post?: never;
 		/** Delete Reply */
-		delete: operations['annotation_replies.delete'];
+		delete: operations['annotations.delete_reply'];
 		options?: never;
 		head?: never;
 		/** Update Reply */
-		patch: operations['annotation_replies.update'];
+		patch: operations['annotations.update_reply'];
 		trace?: never;
 	};
 	'/api/v1/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}/restore': {
@@ -743,7 +726,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Restore Reply */
-		post: operations['restore_reply_api_v1_items__item_id__annotations__annotation_id__replies__reply_id__restore_post'];
+		post: operations['annotations.restore_reply'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -760,7 +743,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Search Discovery */
-		post: operations['discovery.search'];
+		post: operations['discovery.search_discovery'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -775,7 +758,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Discovery Providers */
-		get: operations['discovery_providers_api_v1_discovery_providers_get'];
+		get: operations['discovery.discovery_providers'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -792,7 +775,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Workflow Status */
-		get: operations['workflow_status_api_v1_workflows__workflow_id__get'];
+		get: operations['workflows.workflow_status'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -809,7 +792,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Invitation Details */
-		get: operations['invitation_details_api_v1_invitations__token__get'];
+		get: operations['account.invitation_details'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -828,7 +811,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Accept User Invitation */
-		post: operations['accept_user_invitation_api_v1_invitations__token__accept_post'];
+		post: operations['account.accept_user_invitation'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -843,7 +826,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Account Summary */
-		get: operations['account_summary_api_v1_account_get'];
+		get: operations['account.account_summary'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -862,7 +845,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Create Own Api Token */
-		post: operations['create_own_api_token_api_v1_account_api_tokens_post'];
+		post: operations['account.create_own_api_token'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -880,7 +863,7 @@ export interface paths {
 		put?: never;
 		post?: never;
 		/** Revoke Own Api Token */
-		delete: operations['revoke_own_api_token_api_v1_account_api_tokens__token_id__delete'];
+		delete: operations['account.revoke_own_api_token'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -895,7 +878,7 @@ export interface paths {
 		};
 		get?: never;
 		/** Update Locale */
-		put: operations['update_locale_api_v1_account_locale_put'];
+		put: operations['account.update_locale'];
 		post?: never;
 		delete?: never;
 		options?: never;
@@ -912,7 +895,7 @@ export interface paths {
 		};
 		get?: never;
 		/** Update Password */
-		put: operations['update_password_api_v1_account_password_put'];
+		put: operations['account.update_password'];
 		post?: never;
 		delete?: never;
 		options?: never;
@@ -931,7 +914,7 @@ export interface paths {
 		put?: never;
 		post?: never;
 		/** Revoke Own Session */
-		delete: operations['revoke_own_session_api_v1_account_sessions__session_id__delete'];
+		delete: operations['account.revoke_own_session'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -948,7 +931,7 @@ export interface paths {
 		put?: never;
 		post?: never;
 		/** Revoke All Own Sessions */
-		delete: operations['revoke_all_own_sessions_api_v1_account_sessions_delete'];
+		delete: operations['account.revoke_all_own_sessions'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -962,7 +945,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Admin Overview */
-		get: operations['admin_overview_api_v1_admin_overview_get'];
+		get: operations['admin.admin_overview'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -979,10 +962,10 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Admin Users */
-		get: operations['admin_users_api_v1_admin_users_get'];
+		get: operations['admin.admin_users'];
 		put?: never;
 		/** Admin Create User */
-		post: operations['admin_create_user_api_v1_admin_users_post'];
+		post: operations['admin.admin_create_user'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -998,7 +981,7 @@ export interface paths {
 		};
 		get?: never;
 		/** Admin Update User Status */
-		put: operations['admin_update_user_status_api_v1_admin_users__user_id__status_put'];
+		put: operations['admin.admin_update_user_status'];
 		post?: never;
 		delete?: never;
 		options?: never;
@@ -1015,7 +998,7 @@ export interface paths {
 		};
 		get?: never;
 		/** Admin Update User Role */
-		put: operations['admin_update_user_role_api_v1_admin_users__user_id__role_put'];
+		put: operations['admin.admin_update_user_role'];
 		post?: never;
 		delete?: never;
 		options?: never;
@@ -1032,7 +1015,7 @@ export interface paths {
 		};
 		get?: never;
 		/** Admin Reset Password */
-		put: operations['admin_reset_password_api_v1_admin_users__user_id__password_put'];
+		put: operations['admin.admin_reset_password'];
 		post?: never;
 		delete?: never;
 		options?: never;
@@ -1051,7 +1034,7 @@ export interface paths {
 		put?: never;
 		post?: never;
 		/** Admin Revoke Sessions */
-		delete: operations['admin_revoke_sessions_api_v1_admin_users__user_id__sessions_delete'];
+		delete: operations['admin.admin_revoke_sessions'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -1067,7 +1050,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Admin Create Invitation */
-		post: operations['admin_create_invitation_api_v1_admin_invitations_post'];
+		post: operations['admin.admin_create_invitation'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -1082,7 +1065,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Admin Projects */
-		get: operations['admin_projects_api_v1_admin_projects_get'];
+		get: operations['admin.admin_projects'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -1099,7 +1082,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Admin Items */
-		get: operations['admin_items_api_v1_admin_items_get'];
+		get: operations['admin.admin_items'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -1118,8 +1101,8 @@ export interface paths {
 		get?: never;
 		put?: never;
 		post?: never;
-		/** Admin Remove Item */
-		delete: operations['admin_remove_item_api_v1_admin_items__item_id__delete'];
+		/** Admin Delete Item */
+		delete: operations['admin.admin_delete_item'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -1133,7 +1116,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Admin Audit */
-		get: operations['admin_audit_api_v1_admin_audit_get'];
+		get: operations['admin.admin_audit'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -1150,7 +1133,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Admin Workflows */
-		get: operations['admin_workflows_api_v1_admin_workflows_get'];
+		get: operations['admin.admin_workflows'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -1167,9 +1150,9 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Admin Settings */
-		get: operations['admin_settings_api_v1_admin_settings_get'];
+		get: operations['admin.admin_settings'];
 		/** Admin Update Settings */
-		put: operations['admin_update_settings_api_v1_admin_settings_put'];
+		put: operations['admin.admin_update_settings'];
 		post?: never;
 		delete?: never;
 		options?: never;
@@ -1185,7 +1168,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Admin Maintenance */
-		get: operations['admin_maintenance_api_v1_admin_maintenance_get'];
+		get: operations['admin.admin_maintenance'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -1204,7 +1187,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Run Maintenance */
-		post: operations['run_maintenance_api_v1_admin_maintenance__operation__post'];
+		post: operations['admin.run_maintenance'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -1219,7 +1202,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Download Backup */
-		get: operations['download_backup_api_v1_admin_maintenance_backups__workflow_id__content_get'];
+		get: operations['admin.download_backup'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -1236,7 +1219,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Workflow Status */
-		get: operations['workflow_status_api_v1_admin_workflows__workflow_id__get'];
+		get: operations['admin.workflow_status'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -1253,7 +1236,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Export Item Bibliography */
-		get: operations['export_item_bibliography_api_v1_items__item_id__bibliography_get'];
+		get: operations['citations.export_item_bibliography'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -1270,7 +1253,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Copy Citation */
-		get: operations['copy_citation_api_v1_items__item_id__bibliography_content_get'];
+		get: operations['citations.copy_citation'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -1287,7 +1270,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Citation Text */
-		get: operations['citation_text_api_v1_items__item_id__citation_content_get'];
+		get: operations['citations.citation_text'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -1296,236 +1279,15 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/revisions/{revision_id}/content': {
+	'/api/v1/items/{item_id}/documents': {
 		parameters: {
 			query?: never;
 			header?: never;
 			path?: never;
 			cookie?: never;
 		};
-		/** Pdf Content */
-		get: operations['pdf_content_api_v1_items__item_id__revisions__revision_id__content_get'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/revisions/{revision_id}/thumbnail': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Pdf Thumbnail */
-		get: operations['pdf_thumbnail_api_v1_items__item_id__revisions__revision_id__thumbnail_get'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/thumbnail': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Item Thumbnail */
-		get: operations['item_thumbnail_api_v1_items__item_id__thumbnail_get'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/revisions/{revision_id}/export': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Export Revision Pdf Route */
-		get: operations['export_revision_pdf_route_api_v1_items__item_id__revisions__revision_id__export_get'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/annotation-exports': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Create Export */
-		post: operations['create_export_api_v1_items__item_id__annotation_exports_post'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/annotation-exports/{workflow_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Export Status */
-		get: operations['export_status_api_v1_annotation_exports__workflow_id__get'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/annotation-exports/{workflow_id}/content': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Export Content */
-		get: operations['export_content_api_v1_annotation_exports__workflow_id__content_get'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/workspace': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Item Workspace */
-		get: operations['item_workspace_api_v1_items__item_id__workspace_get'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/organize': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Item Organize Workspace */
-		get: operations['item_organize_workspace_api_v1_items__item_id__organize_get'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/metadata/sync': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Sync Item Metadata */
-		post: operations['sync_item_metadata_api_v1_items__item_id__metadata_sync_post'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/doi/rescan': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Rescan Item Doi */
-		post: operations['rescan_item_doi_api_v1_items__item_id__doi_rescan_post'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/citation-key/regenerate': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Regenerate Item Citation Key */
-		post: operations['regenerate_item_citation_key_api_v1_items__item_id__citation_key_regenerate_post'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/tag-recommendations': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Regenerate Tag Recommendations */
-		post: operations['regenerate_tag_recommendations_api_v1_items__item_id__tag_recommendations_post'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/authors': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Suggest Authors */
-		get: operations['suggest_authors_api_v1_authors_get'];
+		/** List Documents */
+		get: operations['documents.list_documents'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -1542,7 +1304,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Download Item Archive */
-		get: operations['download_item_archive_api_v1_items__item_id__archive_get'];
+		get: operations['documents.download_item_archive'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -1561,7 +1323,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Upload Item Attachment */
-		post: operations['upload_item_attachment_api_v1_items__item_id__attachments_post'];
+		post: operations['documents.upload_item_attachment'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -1578,7 +1340,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Upload Remote Item Attachment */
-		post: operations['upload_remote_item_attachment_api_v1_items__item_id__attachments_remote_post'];
+		post: operations['documents.upload_remote_item_attachment'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -1593,7 +1355,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Download Item Attachment */
-		get: operations['download_item_attachment_api_v1_items__item_id__attachments__attachment_id__content_get'];
+		get: operations['documents.download_item_attachment'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -1613,7 +1375,7 @@ export interface paths {
 		put?: never;
 		post?: never;
 		/** Delete Item Attachment */
-		delete: operations['delete_item_attachment_api_v1_items__item_id__attachments__attachment_id__delete'];
+		delete: operations['documents.delete_item_attachment'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -1629,7 +1391,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Upload Item Pdf */
-		post: operations['upload_item_pdf_api_v1_items__item_id__revisions_post'];
+		post: operations['documents.upload_item_pdf'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -1646,7 +1408,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Upload Remote Item Pdf */
-		post: operations['upload_remote_item_pdf_api_v1_items__item_id__revisions_remote_post'];
+		post: operations['documents.upload_remote_item_pdf'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -1664,7 +1426,7 @@ export interface paths {
 		put?: never;
 		post?: never;
 		/** Delete Item Pdf */
-		delete: operations['delete_item_pdf_api_v1_items__item_id__revisions__revision_id__delete'];
+		delete: operations['documents.delete_item_pdf'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -1678,7 +1440,245 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Pdf Viewer Configuration */
-		get: operations['pdf_viewer_configuration_api_v1_items__item_id__revisions__revision_id__viewer_get'];
+		get: operations['documents.pdf_viewer_configuration'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/items/{item_id}/revisions/{revision_id}/content': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Pdf Content */
+		get: operations['documents.pdf_content'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/items/{item_id}/revisions/{revision_id}/thumbnail': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Pdf Thumbnail */
+		get: operations['documents.pdf_thumbnail'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/items/{item_id}/thumbnail': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Item Thumbnail */
+		get: operations['documents.item_thumbnail'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/items/{item_id}/revisions/{revision_id}/export': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Export Revision Pdf Route */
+		get: operations['documents.export_revision_pdf_route'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/items/{item_id}/annotation-exports': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Create Export */
+		post: operations['exports.create_export'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/annotation-exports/{workflow_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Export Status */
+		get: operations['exports.export_status'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/annotation-exports/{workflow_id}/content': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Export Content */
+		get: operations['exports.export_content'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/items/{item_id}/workspace': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Item Workspace */
+		get: operations['items.item_workspace'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/items/{item_id}/organize': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Item Organize Workspace */
+		get: operations['items.item_organize_workspace'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/items/{item_id}/metadata/sync': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Sync Item Metadata */
+		post: operations['items.sync_item_metadata'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/items/{item_id}/doi/rescan': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Rescan Item Doi */
+		post: operations['items.rescan_item_doi'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/items/{item_id}/citation-key/regenerate': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Regenerate Item Citation Key */
+		post: operations['items.regenerate_item_citation_key'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/items/{item_id}/tag-recommendations': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Regenerate Tag Recommendations */
+		post: operations['items.regenerate_tag_recommendations'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/authors': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Suggest Authors */
+		get: operations['items.suggest_authors'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -1695,7 +1695,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Citation Key Preview */
-		get: operations['citation_key_preview_api_v1_citation_key_preview_get'];
+		get: operations['tools.citation_key_preview'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -1712,10 +1712,10 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Citation Styles */
-		get: operations['citation_styles_api_v1_citation_styles_get'];
+		get: operations['tools.citation_styles'];
 		put?: never;
 		/** Create Citation Style */
-		post: operations['create_citation_style_api_v1_citation_styles_post'];
+		post: operations['tools.create_citation_style'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -1730,7 +1730,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Duplicate Items */
-		get: operations['duplicate_items_api_v1_duplicates_get'];
+		get: operations['tools.duplicate_items'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -1750,7 +1750,7 @@ export interface paths {
 		put?: never;
 		post?: never;
 		/** Delete Citation Style */
-		delete: operations['delete_citation_style_api_v1_citation_styles__style_id__delete'];
+		delete: operations['tools.delete_citation_style'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -1766,7 +1766,7 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/** Merge User Tags */
-		post: operations['merge_user_tags_api_v1_tags_merge_post'];
+		post: operations['tools.merge_user_tags'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -1784,11 +1784,11 @@ export interface paths {
 		put?: never;
 		post?: never;
 		/** Delete User Tag */
-		delete: operations['delete_user_tag_api_v1_tags__tag_id__delete'];
+		delete: operations['tools.delete_user_tag'];
 		options?: never;
 		head?: never;
 		/** Rename User Tag */
-		patch: operations['rename_user_tag_api_v1_tags__tag_id__patch'];
+		patch: operations['tools.rename_user_tag'];
 		trace?: never;
 	};
 }
@@ -2434,33 +2434,6 @@ export interface components {
 			 * @default false
 			 */
 			citation_key_force_ascii: boolean;
-		};
-		/** Body_stage_bibliography_import_api_v1_imports_bibliography_post */
-		Body_stage_bibliography_import_api_v1_imports_bibliography_post: {
-			/** Bibliography */
-			bibliography: string;
-			/** File Format */
-			file_format: string;
-		};
-		/** Body_stage_pdf_import_api_v1_imports_pdfs_post */
-		Body_stage_pdf_import_api_v1_imports_pdfs_post: {
-			/** Pdfs */
-			pdfs: string[];
-		};
-		/** Body_upload_item_attachment_api_v1_items__item_id__attachments_post */
-		Body_upload_item_attachment_api_v1_items__item_id__attachments_post: {
-			/** Attachment */
-			attachment: string;
-			/**
-			 * Graphical Abstract
-			 * @default false
-			 */
-			graphical_abstract: boolean;
-		};
-		/** Body_upload_item_pdf_api_v1_items__item_id__revisions_post */
-		Body_upload_item_pdf_api_v1_items__item_id__revisions_post: {
-			/** Pdf */
-			pdf: string;
 		};
 		/** BulkActionRequest */
 		BulkActionRequest: {
@@ -3754,6 +3727,33 @@ export interface components {
 			/** Version */
 			version?: number | null;
 		};
+		/** Body_imports.stage_bibliography_import */
+		stage_bibliography_import: {
+			/** Bibliography */
+			bibliography: string;
+			/** File Format */
+			file_format: string;
+		};
+		/** Body_imports.stage_pdf_import */
+		stage_pdf_import: {
+			/** Pdfs */
+			pdfs: string[];
+		};
+		/** Body_documents.upload_item_attachment */
+		upload_item_attachment: {
+			/** Attachment */
+			attachment: string;
+			/**
+			 * Graphical Abstract
+			 * @default false
+			 */
+			graphical_abstract: boolean;
+		};
+		/** Body_documents.upload_item_pdf */
+		upload_item_pdf: {
+			/** Pdf */
+			pdf: string;
+		};
 	};
 	responses: never;
 	parameters: never;
@@ -3803,7 +3803,7 @@ export interface operations {
 			};
 		};
 	};
-	session_bootstrap_api_v1_session_get: {
+	'session.session_bootstrap': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -3841,7 +3841,7 @@ export interface operations {
 			};
 		};
 	};
-	login_session_api_v1_session_post: {
+	'session.login_session': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -3883,7 +3883,7 @@ export interface operations {
 			};
 		};
 	};
-	logout_session_api_v1_session_delete: {
+	'session.logout_session': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -3919,7 +3919,7 @@ export interface operations {
 			};
 		};
 	};
-	dashboard_api_v1_dashboard_get: {
+	'dashboard.dashboard': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -3957,7 +3957,7 @@ export interface operations {
 			};
 		};
 	};
-	apply_item_bulk_action_api_v1_items_bulk_post: {
+	'library.apply_item_bulk_action': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -3999,7 +3999,7 @@ export interface operations {
 			};
 		};
 	};
-	'library.search': {
+	'library.search_items': {
 		parameters: {
 			query?: {
 				query?: string;
@@ -4045,7 +4045,7 @@ export interface operations {
 			};
 		};
 	};
-	'library.create_item': {
+	'library.create_library_item': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4087,7 +4087,7 @@ export interface operations {
 			};
 		};
 	};
-	'library.get_item': {
+	'library.get_library_item': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4127,7 +4127,7 @@ export interface operations {
 			};
 		};
 	};
-	'library.update_item': {
+	'library.update_library_item': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4171,7 +4171,7 @@ export interface operations {
 			};
 		};
 	};
-	delete_library_item_api_v1_items__item_id__delete: {
+	'items.delete_library_item': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4215,7 +4215,7 @@ export interface operations {
 			};
 		};
 	};
-	'citations.format_item': {
+	'library.format_item_citation': {
 		parameters: {
 			query?: {
 				style?: string;
@@ -4258,7 +4258,7 @@ export interface operations {
 			};
 		};
 	};
-	'tags.list': {
+	'library.list_tags': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4296,7 +4296,7 @@ export interface operations {
 			};
 		};
 	};
-	'tags.set_for_item': {
+	'library.set_item_tag_selection': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4340,7 +4340,7 @@ export interface operations {
 			};
 		};
 	};
-	'tags.add_to_item': {
+	'library.add_item_tag': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4384,7 +4384,7 @@ export interface operations {
 			};
 		};
 	};
-	'tags.remove_from_item': {
+	'library.remove_item_tag': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4425,7 +4425,7 @@ export interface operations {
 			};
 		};
 	};
-	'discussions.list': {
+	'library.list_discussions': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4465,7 +4465,7 @@ export interface operations {
 			};
 		};
 	};
-	'discussions.add': {
+	'library.create_discussion': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4509,7 +4509,7 @@ export interface operations {
 			};
 		};
 	};
-	'discussions.delete': {
+	'library.delete_discussion': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4550,7 +4550,7 @@ export interface operations {
 			};
 		};
 	};
-	export_item_selection_api_v1_items_bibliography_post: {
+	'library_exports.export_item_selection': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4595,7 +4595,7 @@ export interface operations {
 			};
 		};
 	};
-	download_item_selection_api_v1_items_documents_archive_post: {
+	'library_exports.download_item_selection': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4637,7 +4637,7 @@ export interface operations {
 			};
 		};
 	};
-	export_library_bibliography_api_v1_bibliography_get: {
+	'library_exports.export_library_bibliography': {
 		parameters: {
 			query: {
 				file_format: string;
@@ -4681,7 +4681,7 @@ export interface operations {
 			};
 		};
 	};
-	stage_bibliography_import_api_v1_imports_bibliography_post: {
+	'imports.stage_bibliography_import': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4690,7 +4690,7 @@ export interface operations {
 		};
 		requestBody: {
 			content: {
-				'multipart/form-data': components['schemas']['Body_stage_bibliography_import_api_v1_imports_bibliography_post'];
+				'multipart/form-data': components['schemas']['stage_bibliography_import'];
 			};
 		};
 		responses: {
@@ -4723,7 +4723,7 @@ export interface operations {
 			};
 		};
 	};
-	stage_identifier_import_api_v1_imports_identifier_post: {
+	'imports.stage_identifier_import': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4765,7 +4765,7 @@ export interface operations {
 			};
 		};
 	};
-	stage_pdf_import_api_v1_imports_pdfs_post: {
+	'imports.stage_pdf_import': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4774,7 +4774,7 @@ export interface operations {
 		};
 		requestBody: {
 			content: {
-				'multipart/form-data': components['schemas']['Body_stage_pdf_import_api_v1_imports_pdfs_post'];
+				'multipart/form-data': components['schemas']['stage_pdf_import'];
 			};
 		};
 		responses: {
@@ -4807,7 +4807,7 @@ export interface operations {
 			};
 		};
 	};
-	import_batch_api_v1_imports__batch_id__get: {
+	'imports.import_batch': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4847,7 +4847,7 @@ export interface operations {
 			};
 		};
 	};
-	discard_staged_import_api_v1_imports__batch_id__delete: {
+	'imports.discard_staged_import': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4887,7 +4887,7 @@ export interface operations {
 			};
 		};
 	};
-	retry_import_batch_api_v1_imports__batch_id__retry_post: {
+	'imports.retry_import_batch': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4927,7 +4927,7 @@ export interface operations {
 			};
 		};
 	};
-	commit_staged_import_api_v1_imports__batch_id__commit_post: {
+	'imports.commit_staged_import': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4967,7 +4967,7 @@ export interface operations {
 			};
 		};
 	};
-	'projects.list': {
+	'projects.list_projects': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -5005,7 +5005,7 @@ export interface operations {
 			};
 		};
 	};
-	'projects.create': {
+	'projects.create_user_project': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -5047,7 +5047,7 @@ export interface operations {
 			};
 		};
 	};
-	list_projects_available_to_join_api_v1_projects_joinable_get: {
+	'projects.list_projects_available_to_join': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -5085,7 +5085,7 @@ export interface operations {
 			};
 		};
 	};
-	'projects.get': {
+	'projects.get_project': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -5125,7 +5125,7 @@ export interface operations {
 			};
 		};
 	};
-	'projects.delete': {
+	'projects.delete_user_project': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -5169,7 +5169,7 @@ export interface operations {
 			};
 		};
 	};
-	'projects.update_settings': {
+	'projects.update_project': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -5213,7 +5213,7 @@ export interface operations {
 			};
 		};
 	};
-	update_project_description_api_api_v1_projects__project_id__description_post: {
+	'projects.update_project_description_api': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -5257,7 +5257,7 @@ export interface operations {
 			};
 		};
 	};
-	'projects.archive': {
+	'projects.archive_project': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -5297,7 +5297,7 @@ export interface operations {
 			};
 		};
 	};
-	'projects.restore': {
+	'projects.restore_project': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -5337,7 +5337,7 @@ export interface operations {
 			};
 		};
 	};
-	set_project_visibility_api_api_v1_projects__project_id__visibility_post: {
+	'projects.set_project_visibility_api': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -5381,7 +5381,7 @@ export interface operations {
 			};
 		};
 	};
-	'projects.leave': {
+	'projects.leave_user_project': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -5421,7 +5421,7 @@ export interface operations {
 			};
 		};
 	};
-	join_public_project_api_v1_projects__project_id__join_post: {
+	'projects.join_public_project': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -5461,7 +5461,7 @@ export interface operations {
 			};
 		};
 	};
-	'projects.transfer_ownership': {
+	'projects.transfer_user_project': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -5502,7 +5502,7 @@ export interface operations {
 			};
 		};
 	};
-	'projects.add_item': {
+	'projects.add_project_item': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -5543,7 +5543,7 @@ export interface operations {
 			};
 		};
 	};
-	'projects.remove_item': {
+	'projects.remove_project_item': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -5584,7 +5584,7 @@ export interface operations {
 			};
 		};
 	};
-	'projects.set_member': {
+	'projects.set_project_member': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -5628,7 +5628,7 @@ export interface operations {
 			};
 		};
 	};
-	'projects.remove_member': {
+	'projects.remove_project_member': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -5669,47 +5669,7 @@ export interface operations {
 			};
 		};
 	};
-	'documents.list': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['DocumentListView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	review_annotations_api_v1_items__item_id__annotations_review_get: {
+	'annotations.review_annotations': {
 		parameters: {
 			query?: {
 				page?: number;
@@ -5753,7 +5713,7 @@ export interface operations {
 			};
 		};
 	};
-	'annotations.list': {
+	'annotations.list_annotations': {
 		parameters: {
 			query: {
 				revision_id: string;
@@ -5796,7 +5756,7 @@ export interface operations {
 			};
 		};
 	};
-	'annotations.create': {
+	'annotations.create_annotation': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -5840,7 +5800,7 @@ export interface operations {
 			};
 		};
 	};
-	'annotations.delete': {
+	'annotations.delete_annotation': {
 		parameters: {
 			query: {
 				version: number;
@@ -5883,7 +5843,7 @@ export interface operations {
 			};
 		};
 	};
-	'annotations.update': {
+	'annotations.update_annotation': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -5928,7 +5888,7 @@ export interface operations {
 			};
 		};
 	};
-	restore_annotation_api_v1_items__item_id__annotations__annotation_id__restore_post: {
+	'annotations.restore_annotation': {
 		parameters: {
 			query: {
 				version: number;
@@ -5971,7 +5931,7 @@ export interface operations {
 			};
 		};
 	};
-	'annotation_replies.create': {
+	'annotations.create_reply': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -6016,7 +5976,7 @@ export interface operations {
 			};
 		};
 	};
-	'annotation_replies.delete': {
+	'annotations.delete_reply': {
 		parameters: {
 			query: {
 				version: number;
@@ -6060,7 +6020,7 @@ export interface operations {
 			};
 		};
 	};
-	'annotation_replies.update': {
+	'annotations.update_reply': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -6106,7 +6066,7 @@ export interface operations {
 			};
 		};
 	};
-	restore_reply_api_v1_items__item_id__annotations__annotation_id__replies__reply_id__restore_post: {
+	'annotations.restore_reply': {
 		parameters: {
 			query: {
 				version: number;
@@ -6150,7 +6110,7 @@ export interface operations {
 			};
 		};
 	};
-	'discovery.search': {
+	'discovery.search_discovery': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -6192,7 +6152,7 @@ export interface operations {
 			};
 		};
 	};
-	discovery_providers_api_v1_discovery_providers_get: {
+	'discovery.discovery_providers': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -6230,7 +6190,7 @@ export interface operations {
 			};
 		};
 	};
-	workflow_status_api_v1_workflows__workflow_id__get: {
+	'workflows.workflow_status': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -6270,7 +6230,7 @@ export interface operations {
 			};
 		};
 	};
-	invitation_details_api_v1_invitations__token__get: {
+	'account.invitation_details': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -6310,7 +6270,7 @@ export interface operations {
 			};
 		};
 	};
-	accept_user_invitation_api_v1_invitations__token__accept_post: {
+	'account.accept_user_invitation': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -6354,7 +6314,7 @@ export interface operations {
 			};
 		};
 	};
-	account_summary_api_v1_account_get: {
+	'account.account_summary': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -6392,7 +6352,7 @@ export interface operations {
 			};
 		};
 	};
-	create_own_api_token_api_v1_account_api_tokens_post: {
+	'account.create_own_api_token': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -6434,7 +6394,7 @@ export interface operations {
 			};
 		};
 	};
-	revoke_own_api_token_api_v1_account_api_tokens__token_id__delete: {
+	'account.revoke_own_api_token': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -6474,7 +6434,7 @@ export interface operations {
 			};
 		};
 	};
-	update_locale_api_v1_account_locale_put: {
+	'account.update_locale': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -6516,7 +6476,7 @@ export interface operations {
 			};
 		};
 	};
-	update_password_api_v1_account_password_put: {
+	'account.update_password': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -6558,7 +6518,7 @@ export interface operations {
 			};
 		};
 	};
-	revoke_own_session_api_v1_account_sessions__session_id__delete: {
+	'account.revoke_own_session': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -6598,7 +6558,7 @@ export interface operations {
 			};
 		};
 	};
-	revoke_all_own_sessions_api_v1_account_sessions_delete: {
+	'account.revoke_all_own_sessions': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -6636,7 +6596,7 @@ export interface operations {
 			};
 		};
 	};
-	admin_overview_api_v1_admin_overview_get: {
+	'admin.admin_overview': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -6674,7 +6634,7 @@ export interface operations {
 			};
 		};
 	};
-	admin_users_api_v1_admin_users_get: {
+	'admin.admin_users': {
 		parameters: {
 			query?: {
 				search?: string;
@@ -6717,7 +6677,7 @@ export interface operations {
 			};
 		};
 	};
-	admin_create_user_api_v1_admin_users_post: {
+	'admin.admin_create_user': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -6759,7 +6719,7 @@ export interface operations {
 			};
 		};
 	};
-	admin_update_user_status_api_v1_admin_users__user_id__status_put: {
+	'admin.admin_update_user_status': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -6803,7 +6763,7 @@ export interface operations {
 			};
 		};
 	};
-	admin_update_user_role_api_v1_admin_users__user_id__role_put: {
+	'admin.admin_update_user_role': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -6847,7 +6807,7 @@ export interface operations {
 			};
 		};
 	};
-	admin_reset_password_api_v1_admin_users__user_id__password_put: {
+	'admin.admin_reset_password': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -6891,7 +6851,7 @@ export interface operations {
 			};
 		};
 	};
-	admin_revoke_sessions_api_v1_admin_users__user_id__sessions_delete: {
+	'admin.admin_revoke_sessions': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -6931,7 +6891,7 @@ export interface operations {
 			};
 		};
 	};
-	admin_create_invitation_api_v1_admin_invitations_post: {
+	'admin.admin_create_invitation': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -6973,7 +6933,7 @@ export interface operations {
 			};
 		};
 	};
-	admin_projects_api_v1_admin_projects_get: {
+	'admin.admin_projects': {
 		parameters: {
 			query?: {
 				search?: string;
@@ -7016,7 +6976,7 @@ export interface operations {
 			};
 		};
 	};
-	admin_items_api_v1_admin_items_get: {
+	'admin.admin_items': {
 		parameters: {
 			query?: {
 				search?: string;
@@ -7058,7 +7018,7 @@ export interface operations {
 			};
 		};
 	};
-	admin_remove_item_api_v1_admin_items__item_id__delete: {
+	'admin.admin_delete_item': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -7098,7 +7058,7 @@ export interface operations {
 			};
 		};
 	};
-	admin_audit_api_v1_admin_audit_get: {
+	'admin.admin_audit': {
 		parameters: {
 			query?: {
 				search?: string;
@@ -7142,7 +7102,7 @@ export interface operations {
 			};
 		};
 	};
-	admin_workflows_api_v1_admin_workflows_get: {
+	'admin.admin_workflows': {
 		parameters: {
 			query?: {
 				state?: string;
@@ -7182,7 +7142,7 @@ export interface operations {
 			};
 		};
 	};
-	admin_settings_api_v1_admin_settings_get: {
+	'admin.admin_settings': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -7220,7 +7180,7 @@ export interface operations {
 			};
 		};
 	};
-	admin_update_settings_api_v1_admin_settings_put: {
+	'admin.admin_update_settings': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -7262,7 +7222,7 @@ export interface operations {
 			};
 		};
 	};
-	admin_maintenance_api_v1_admin_maintenance_get: {
+	'admin.admin_maintenance': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -7300,7 +7260,7 @@ export interface operations {
 			};
 		};
 	};
-	run_maintenance_api_v1_admin_maintenance__operation__post: {
+	'admin.run_maintenance': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -7340,7 +7300,7 @@ export interface operations {
 			};
 		};
 	};
-	download_backup_api_v1_admin_maintenance_backups__workflow_id__content_get: {
+	'admin.download_backup': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -7380,7 +7340,7 @@ export interface operations {
 			};
 		};
 	};
-	workflow_status_api_v1_admin_workflows__workflow_id__get: {
+	'admin.workflow_status': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -7420,7 +7380,7 @@ export interface operations {
 			};
 		};
 	};
-	export_item_bibliography_api_v1_items__item_id__bibliography_get: {
+	'citations.export_item_bibliography': {
 		parameters: {
 			query: {
 				file_format: string;
@@ -7478,7 +7438,7 @@ export interface operations {
 			};
 		};
 	};
-	copy_citation_api_v1_items__item_id__bibliography_content_get: {
+	'citations.copy_citation': {
 		parameters: {
 			query?: {
 				file_format?: string;
@@ -7533,7 +7493,7 @@ export interface operations {
 			};
 		};
 	};
-	citation_text_api_v1_items__item_id__citation_content_get: {
+	'citations.citation_text': {
 		parameters: {
 			query?: {
 				style?: string;
@@ -7577,7 +7537,432 @@ export interface operations {
 			};
 		};
 	};
-	pdf_content_api_v1_items__item_id__revisions__revision_id__content_get: {
+	'documents.list_documents': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['DocumentListView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'documents.download_item_archive': {
+		parameters: {
+			query?: {
+				revisions?: string | null;
+				include_annotations?: boolean;
+				include_supplements?: boolean;
+				timezone?: string | null;
+			};
+			header?: never;
+			path: {
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/zip': string;
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'documents.upload_item_attachment': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'multipart/form-data': components['schemas']['upload_item_attachment'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			202: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WriteResult'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'documents.upload_remote_item_attachment': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['RemoteAttachmentRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			202: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WriteResult'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'documents.download_item_attachment': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				item_id: string;
+				attachment_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/octet-stream': string;
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'documents.delete_item_attachment': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				item_id: string;
+				attachment_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'documents.upload_item_pdf': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'multipart/form-data': components['schemas']['upload_item_pdf'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			202: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WriteResult'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'documents.upload_remote_item_pdf': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['RemoteRevisionRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			202: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WriteResult'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'documents.delete_item_pdf': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				item_id: string;
+				revision_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'documents.pdf_viewer_configuration': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				item_id: string;
+				revision_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PdfViewerView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'documents.pdf_content': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -7627,7 +8012,7 @@ export interface operations {
 			};
 		};
 	};
-	pdf_thumbnail_api_v1_items__item_id__revisions__revision_id__thumbnail_get: {
+	'documents.pdf_thumbnail': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -7668,7 +8053,7 @@ export interface operations {
 			};
 		};
 	};
-	item_thumbnail_api_v1_items__item_id__thumbnail_get: {
+	'documents.item_thumbnail': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -7711,7 +8096,7 @@ export interface operations {
 			};
 		};
 	};
-	export_revision_pdf_route_api_v1_items__item_id__revisions__revision_id__export_get: {
+	'documents.export_revision_pdf_route': {
 		parameters: {
 			query?: {
 				include_annotations?: boolean;
@@ -7756,7 +8141,7 @@ export interface operations {
 			};
 		};
 	};
-	create_export_api_v1_items__item_id__annotation_exports_post: {
+	'exports.create_export': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -7800,7 +8185,7 @@ export interface operations {
 			};
 		};
 	};
-	export_status_api_v1_annotation_exports__workflow_id__get: {
+	'exports.export_status': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -7840,7 +8225,7 @@ export interface operations {
 			};
 		};
 	};
-	export_content_api_v1_annotation_exports__workflow_id__content_get: {
+	'exports.export_content': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -7880,7 +8265,7 @@ export interface operations {
 			};
 		};
 	};
-	item_workspace_api_v1_items__item_id__workspace_get: {
+	'items.item_workspace': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -7920,7 +8305,7 @@ export interface operations {
 			};
 		};
 	};
-	item_organize_workspace_api_v1_items__item_id__organize_get: {
+	'items.item_organize_workspace': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -7960,7 +8345,7 @@ export interface operations {
 			};
 		};
 	};
-	sync_item_metadata_api_v1_items__item_id__metadata_sync_post: {
+	'items.sync_item_metadata': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -8004,7 +8389,7 @@ export interface operations {
 			};
 		};
 	};
-	rescan_item_doi_api_v1_items__item_id__doi_rescan_post: {
+	'items.rescan_item_doi': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -8044,7 +8429,7 @@ export interface operations {
 			};
 		};
 	};
-	regenerate_item_citation_key_api_v1_items__item_id__citation_key_regenerate_post: {
+	'items.regenerate_item_citation_key': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -8084,7 +8469,7 @@ export interface operations {
 			};
 		};
 	};
-	regenerate_tag_recommendations_api_v1_items__item_id__tag_recommendations_post: {
+	'items.regenerate_tag_recommendations': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -8124,7 +8509,7 @@ export interface operations {
 			};
 		};
 	};
-	suggest_authors_api_v1_authors_get: {
+	'items.suggest_authors': {
 		parameters: {
 			query?: {
 				query?: string;
@@ -8164,392 +8549,7 @@ export interface operations {
 			};
 		};
 	};
-	download_item_archive_api_v1_items__item_id__archive_get: {
-		parameters: {
-			query?: {
-				revisions?: string | null;
-				include_annotations?: boolean;
-				include_supplements?: boolean;
-				timezone?: string | null;
-			};
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/zip': string;
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	upload_item_attachment_api_v1_items__item_id__attachments_post: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'multipart/form-data': components['schemas']['Body_upload_item_attachment_api_v1_items__item_id__attachments_post'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			202: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['WriteResult'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	upload_remote_item_attachment_api_v1_items__item_id__attachments_remote_post: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['RemoteAttachmentRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			202: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['WriteResult'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	download_item_attachment_api_v1_items__item_id__attachments__attachment_id__content_get: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-				attachment_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/octet-stream': string;
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	delete_item_attachment_api_v1_items__item_id__attachments__attachment_id__delete: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-				attachment_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	upload_item_pdf_api_v1_items__item_id__revisions_post: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'multipart/form-data': components['schemas']['Body_upload_item_pdf_api_v1_items__item_id__revisions_post'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			202: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['WriteResult'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	upload_remote_item_pdf_api_v1_items__item_id__revisions_remote_post: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['RemoteRevisionRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			202: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['WriteResult'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	delete_item_pdf_api_v1_items__item_id__revisions__revision_id__delete: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-				revision_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	pdf_viewer_configuration_api_v1_items__item_id__revisions__revision_id__viewer_get: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-				revision_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['PdfViewerView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	citation_key_preview_api_v1_citation_key_preview_get: {
+	'tools.citation_key_preview': {
 		parameters: {
 			query: {
 				formula: string;
@@ -8590,7 +8590,7 @@ export interface operations {
 			};
 		};
 	};
-	citation_styles_api_v1_citation_styles_get: {
+	'tools.citation_styles': {
 		parameters: {
 			query?: {
 				query?: string;
@@ -8632,7 +8632,7 @@ export interface operations {
 			};
 		};
 	};
-	create_citation_style_api_v1_citation_styles_post: {
+	'tools.create_citation_style': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -8674,7 +8674,7 @@ export interface operations {
 			};
 		};
 	};
-	duplicate_items_api_v1_duplicates_get: {
+	'tools.duplicate_items': {
 		parameters: {
 			query?: {
 				mode?: string;
@@ -8714,7 +8714,7 @@ export interface operations {
 			};
 		};
 	};
-	delete_citation_style_api_v1_citation_styles__style_id__delete: {
+	'tools.delete_citation_style': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -8754,7 +8754,7 @@ export interface operations {
 			};
 		};
 	};
-	merge_user_tags_api_v1_tags_merge_post: {
+	'tools.merge_user_tags': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -8796,7 +8796,7 @@ export interface operations {
 			};
 		};
 	};
-	delete_user_tag_api_v1_tags__tag_id__delete: {
+	'tools.delete_user_tag': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -8836,7 +8836,7 @@ export interface operations {
 			};
 		};
 	};
-	rename_user_tag_api_v1_tags__tag_id__patch: {
+	'tools.rename_user_tag': {
 		parameters: {
 			query?: never;
 			header?: never;

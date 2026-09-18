@@ -1,5 +1,5 @@
 <script lang="ts">
-	import ItemWorkspace from '$lib/ItemWorkspace.svelte';
+	import ItemWorkspace from '$lib/features/item/ItemWorkspace.svelte';
 	import type { PageProps } from './$types';
 
 	let { params }: PageProps = $props();

@@ -4,6 +4,7 @@
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { apiRequest } from '$lib/api/client';
 	import { apiErrorMessage } from '$lib/api/errors';
+	import PromptDialog from '$lib/design/PromptDialog.svelte';
 	import RichText from '$lib/design/RichText.svelte';
 	import { domainLabel } from '$lib/domain-labels';
 	import { t } from '$lib/i18n';
@@ -17,6 +18,7 @@
 	let busy = $state(false);
 	let error = $state('');
 	let notice = $state('');
+	let deleteDialogOpen = $state(false);
 	let loadedProjectId = '';
 	const queryClient = useQueryClient();
 	const project = createQuery(() => ({
@@ -131,14 +133,13 @@
 		}
 	}
 
-	async function deleteProject() {
-		const projectName = project.data?.name;
-		if (!projectName) return;
-		const confirmation = window.prompt(
-			`${$t('Permanently delete this Project?')}\n${projectName}`,
-			''
-		);
-		if (confirmation === null) return;
+	function requestDeleteProject() {
+		if (!project.data?.name) return;
+		deleteDialogOpen = true;
+	}
+
+	async function confirmDeleteProject(confirmation: string) {
+		deleteDialogOpen = false;
 		busy = true;
 		error = '';
 		try {
@@ -320,7 +321,7 @@
 					<button
 						class="btn preset-tonal-error font-semibold"
 						disabled={busy}
-						onclick={deleteProject}>{$t('Delete Project')}</button
+						onclick={requestDeleteProject}>{$t('Delete Project')}</button
 					>
 				{:else if canLeave}<button
 						class="btn preset-tonal-error font-semibold"
@@ -328,6 +329,17 @@
 						onclick={leaveProject}>{$t('Leave Project')}</button
 					>{/if}
 			</section>
+			<PromptDialog
+				bind:open={deleteDialogOpen}
+				title={$t('Permanently delete this Project?')}
+				body={$t('Type the Project name to confirm. This cannot be undone.')}
+				label={$t('Project name')}
+				placeholder={project.data?.name ?? ''}
+				requireMatch={project.data?.name ?? ''}
+				confirmLabel={$t('Delete Project')}
+				{busy}
+				onConfirm={(value) => void confirmDeleteProject(value)}
+			/>
 		</div>
 	</div>
 {/if}

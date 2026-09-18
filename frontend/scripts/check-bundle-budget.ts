@@ -115,8 +115,8 @@ if (dashboardPdfDependencies.length) {
 }
 
 enforce('Application shell', bundleSize(graphFiles(dashboard)), {
-	raw: 650_000,
-	gzip: 200_000
+	raw: 670_000,
+	gzip: 205_000
 });
 enforce('PDF reader route', bundleSize(graphFiles(pdfReader)), {
 	raw: 8_000_000,

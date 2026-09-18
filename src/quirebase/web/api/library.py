@@ -40,7 +40,7 @@ from quirebase.web.api.library_schemas import (
     item_search_view,
 )
 
-router = APIRouter(prefix="/api/v1", tags=["Library"])
+router = APIRouter(tags=["Library"])
 
 
 @router.post("/items/bulk", response_model=OkView)
@@ -57,7 +57,7 @@ async def apply_item_bulk_action(data: BulkActionRequest, user: ApiUser, db: Dat
     return OkView()
 
 
-@router.get("/items", response_model=LibrarySearchView, operation_id="library.search")
+@router.get("/items", response_model=LibrarySearchView)
 async def search_items(
     user: ApiUser,
     db: Database,
@@ -94,14 +94,13 @@ async def search_items(
     "/items",
     response_model=WriteResult,
     status_code=status.HTTP_201_CREATED,
-    operation_id="library.create_item",
 )
 async def create_library_item(metadata: ItemMetadata, user: ApiUser, db: Database) -> WriteResult:
     result = await create_item(db, user, metadata)
     return WriteResult(id=result.item_id, version=result.version)
 
 
-@router.get("/items/{item_id}", response_model=ItemDetailView, operation_id="library.get_item")
+@router.get("/items/{item_id}", response_model=ItemDetailView)
 async def get_library_item(item_id: str, user: ApiUser, db: Database) -> ItemDetailView:
     workspace = await open_item_workspace(db, user, item_id, WorkspaceSection.metadata)
     if not isinstance(workspace, MetadataWorkspace):  # pragma: no cover
@@ -109,7 +108,7 @@ async def get_library_item(item_id: str, user: ApiUser, db: Database) -> ItemDet
     return item_detail_view(workspace)
 
 
-@router.put("/items/{item_id}", response_model=WriteResult, operation_id="library.update_item")
+@router.put("/items/{item_id}", response_model=WriteResult)
 async def update_library_item(
     item_id: str, data: ItemUpdateRequest, user: ApiUser, db: Database
 ) -> WriteResult:
@@ -120,7 +119,6 @@ async def update_library_item(
 @router.get(
     "/items/{item_id}/citation",
     response_model=CitationView,
-    operation_id="citations.format_item",
 )
 async def format_item_citation(
     item_id: str,
@@ -135,13 +133,13 @@ async def format_item_citation(
     return CitationView(content=content, media_type=media_type)
 
 
-@router.get("/tags", response_model=list[TagView], operation_id="tags.list")
+@router.get("/tags", response_model=list[TagView])
 async def list_tags(user: ApiUser, db: Database) -> list[TagView]:
     rows = await list_accessible_tags_with_counts(db, user)
     return [TagView(id=tag.id, name=tag.name, accessible_item_count=count) for tag, count in rows]
 
 
-@router.post("/items/{item_id}/tags", response_model=WriteResult, operation_id="tags.add_to_item")
+@router.post("/items/{item_id}/tags", response_model=WriteResult)
 async def add_item_tag(item_id: str, data: NameRequest, user: ApiUser, db: Database) -> WriteResult:
     assignment = await add_tag_to_item(db, user, item_id, data.name)
     return WriteResult(id=assignment.tag_id)
@@ -150,14 +148,13 @@ async def add_item_tag(item_id: str, data: NameRequest, user: ApiUser, db: Datab
 @router.delete(
     "/items/{item_id}/tags/{tag_id}",
     response_model=OkView,
-    operation_id="tags.remove_from_item",
 )
 async def remove_item_tag(item_id: str, tag_id: str, user: ApiUser, db: Database) -> OkView:
     await remove_tag_from_item(db, user, item_id, tag_id)
     return OkView()
 
 
-@router.put("/items/{item_id}/tags", response_model=OkView, operation_id="tags.set_for_item")
+@router.put("/items/{item_id}/tags", response_model=OkView)
 async def set_item_tag_selection(
     item_id: str, data: TagSetRequest, user: ApiUser, db: Database
 ) -> OkView:
@@ -175,7 +172,6 @@ async def set_item_tag_selection(
 @router.get(
     "/items/{item_id}/discussions",
     response_model=list[DiscussionMessageView],
-    operation_id="discussions.list",
 )
 async def list_discussions(
     item_id: str, user: ApiUser, db: Database
@@ -190,7 +186,6 @@ async def list_discussions(
     "/items/{item_id}/discussions",
     response_model=WriteResult,
     status_code=status.HTTP_201_CREATED,
-    operation_id="discussions.add",
 )
 async def create_discussion(
     item_id: str, data: DiscussionRequest, user: ApiUser, db: Database
@@ -202,7 +197,6 @@ async def create_discussion(
 @router.delete(
     "/items/{item_id}/discussions/{message_id}",
     response_model=OkView,
-    operation_id="discussions.delete",
 )
 async def delete_discussion(item_id: str, message_id: str, user: ApiUser, db: Database) -> OkView:
     await delete_discussion_message(db, user, item_id, message_id)

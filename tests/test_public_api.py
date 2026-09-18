@@ -6,7 +6,6 @@ from uuid import uuid4
 
 import httpx2
 import pytest
-from fastapi.routing import APIRoute
 from sqlalchemy import select
 
 from quirebase.accounts import create_api_token
@@ -24,10 +23,6 @@ from quirebase.models import (
     SystemRole,
     User,
 )
-from quirebase.web.api.annotation_schemas import DocumentListView
-from quirebase.web.api.library_schemas import ItemDetailView, LibrarySearchView
-from quirebase.web.api.project_schemas import ProjectDetailView
-from quirebase.web.api.routes import router as api_router
 from quirebase.web.app import create_app
 
 
@@ -51,16 +46,6 @@ async def api_client(factory):
 
 def bearer(raw_token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {raw_token}"}
-
-
-def api_routes(router):
-    routes = []
-    for route in router.routes:
-        if hasattr(route, "original_router"):
-            routes.extend(api_routes(route.original_router))
-        elif isinstance(route, APIRoute):
-            routes.append(route)
-    return routes
 
 
 @pytest.mark.anyio
@@ -137,24 +122,29 @@ async def test_http_api_includes_the_public_capability_set(
         ("POST", "/api/v1/discovery/search"),
     }
 
-    async with api_client(async_session_factory) as (_client, _app):
+    async with api_client(async_session_factory) as (_client, app):
+        paths = app.openapi()["paths"]
         actual = {
-            (method, route.path)
-            for route in api_routes(api_router)
-            for method in route.methods or set()
-        }
-        response_models = {
-            (next(iter(route.methods or set())), route.path): route.response_model
-            for route in api_routes(api_router)
-            if route.methods
+            (method.upper(), path)
+            for path, methods in paths.items()
+            for method in methods
+            if method in {"get", "post", "put", "patch", "delete"}
         }
 
     # The unified router also owns browser session and UI-specific aggregate capabilities.
     assert expected <= actual
-    assert response_models["GET", "/api/v1/items"] is LibrarySearchView
-    assert response_models["GET", "/api/v1/items/{item_id}"] is ItemDetailView
-    assert response_models["GET", "/api/v1/projects/{project_id}"] is ProjectDetailView
-    assert response_models["GET", "/api/v1/items/{item_id}/documents"] is DocumentListView
+    assert paths["/api/v1/items"]["get"]["responses"]["200"]["content"]["application/json"][
+        "schema"
+    ] == {"$ref": "#/components/schemas/LibrarySearchView"}
+    assert paths["/api/v1/items/{item_id}"]["get"]["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"] == {"$ref": "#/components/schemas/ItemDetailView"}
+    assert paths["/api/v1/projects/{project_id}"]["get"]["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"] == {"$ref": "#/components/schemas/ProjectDetailView"}
+    assert paths["/api/v1/items/{item_id}/documents"]["get"]["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"] == {"$ref": "#/components/schemas/DocumentListView"}
 
 
 @pytest.mark.anyio

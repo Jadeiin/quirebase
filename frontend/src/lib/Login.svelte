@@ -15,7 +15,7 @@
 			await apiRequest('POST', '/session', {
 				body: { username, password }
 			});
-			window.location.assign('/');
+			window.location.reload();
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Unable to sign in'));
 		} finally {

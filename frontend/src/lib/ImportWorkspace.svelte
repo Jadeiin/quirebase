@@ -8,10 +8,10 @@
 	import { apiRequest } from '$lib/api/client';
 	import { apiErrorMessage } from '$lib/api/errors';
 	import type { components } from '$lib/api/schema';
-	import { waitForWorkflow } from '$lib/api/workflows';
 	import Icon from '$lib/design/Icon.svelte';
 	import RichText from '$lib/design/RichText.svelte';
 	import ItemMetadataForm from '$lib/ItemMetadataForm.svelte';
+	import { getWorkflowCenter } from '$lib/features/workflows/center.svelte';
 	import { domainLabel } from '$lib/domain-labels';
 	import { t } from '$lib/i18n';
 
@@ -29,6 +29,7 @@
 	const pageSize = 20;
 	let pollingAbort: AbortController | null = null;
 	const queryClient = useQueryClient();
+	const workflows = getWorkflowCenter();
 	const emptyMetadata: components['schemas']['ItemMetadata-Input'] = {
 		title: '',
 		keywords: [],
@@ -72,7 +73,11 @@
 		const controller = new AbortController();
 		pollingAbort = controller;
 		try {
-			await waitForWorkflow(workflowId, { signal: controller.signal });
+			await workflows.track(workflowId, {
+				label: $t('Import processing'),
+				successMessage: $t('Import processing completed'),
+				failureMessage: $t('Import processing failed')
+			}).settled;
 		} catch (reason) {
 			if (controller.signal.aborted) return;
 			// The refreshed Import Batch owns the user-facing terminal diagnostic.

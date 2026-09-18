@@ -14,12 +14,14 @@ from quirebase.projects import (
     list_user_projects,
     open_project_workspace,
     remove_item_from_project,
-    remove_project_member,
     set_project_state,
     set_project_visibility,
     transfer_project_ownership,
     update_project_description,
     update_project_settings,
+)
+from quirebase.projects import (
+    remove_project_member as remove_project_member_domain,
 )
 from quirebase.web.api.common import OkView, WriteResult
 from quirebase.web.api.dependencies import ApiUser, Database
@@ -37,10 +39,10 @@ from quirebase.web.api.project_schemas import (
     project_detail_view,
 )
 
-router = APIRouter(prefix="/api/v1", tags=["Projects"])
+router = APIRouter(tags=["Projects"])
 
 
-@router.get("/projects", response_model=list[ProjectSummaryView], operation_id="projects.list")
+@router.get("/projects", response_model=list[ProjectSummaryView])
 async def list_projects(user: ApiUser, db: Database) -> list[ProjectSummaryView]:
     rows = await list_user_projects(db, user)
     return [
@@ -77,7 +79,6 @@ async def list_projects_available_to_join(user: ApiUser, db: Database):
     "/projects",
     response_model=WriteResult,
     status_code=status.HTTP_201_CREATED,
-    operation_id="projects.create",
 )
 async def create_user_project(
     data: ProjectCreateRequest, user: ApiUser, db: Database
@@ -86,7 +87,7 @@ async def create_user_project(
     return WriteResult(id=project.id)
 
 
-@router.get("/projects/{project_id}", response_model=ProjectDetailView, operation_id="projects.get")
+@router.get("/projects/{project_id}", response_model=ProjectDetailView)
 async def get_project(project_id: str, user: ApiUser, db: Database) -> ProjectDetailView:
     return project_detail_view(await open_project_workspace(db, user, project_id))
 
@@ -94,7 +95,6 @@ async def get_project(project_id: str, user: ApiUser, db: Database) -> ProjectDe
 @router.patch(
     "/projects/{project_id}",
     response_model=WriteResult,
-    operation_id="projects.update_settings",
 )
 async def update_project(
     project_id: str, data: ProjectSettingsRequest, user: ApiUser, db: Database
@@ -118,7 +118,7 @@ async def update_project_description_api(
     return WriteResult(id=project.id)
 
 
-@router.delete("/projects/{project_id}", response_model=OkView, operation_id="projects.delete")
+@router.delete("/projects/{project_id}", response_model=OkView)
 async def delete_user_project(
     project_id: str, data: ProjectDeleteRequest, user: ApiUser, db: Database
 ) -> OkView:
@@ -126,17 +126,13 @@ async def delete_user_project(
     return OkView()
 
 
-@router.post(
-    "/projects/{project_id}/archive", response_model=OkView, operation_id="projects.archive"
-)
+@router.post("/projects/{project_id}/archive", response_model=OkView)
 async def archive_project(project_id: str, user: ApiUser, db: Database) -> OkView:
     await set_project_state(db, user, project_id, ProjectState.archived)
     return OkView()
 
 
-@router.post(
-    "/projects/{project_id}/restore", response_model=OkView, operation_id="projects.restore"
-)
+@router.post("/projects/{project_id}/restore", response_model=OkView)
 async def restore_project(project_id: str, user: ApiUser, db: Database) -> OkView:
     await set_project_state(db, user, project_id, ProjectState.active)
     return OkView()
@@ -150,7 +146,7 @@ async def set_project_visibility_api(
     return OkView()
 
 
-@router.post("/projects/{project_id}/leave", response_model=OkView, operation_id="projects.leave")
+@router.post("/projects/{project_id}/leave", response_model=OkView)
 async def leave_user_project(project_id: str, user: ApiUser, db: Database) -> OkView:
     await leave_project(db, user, project_id)
     return OkView()
@@ -165,7 +161,6 @@ async def join_public_project(project_id: str, user: ApiUser, db: Database) -> O
 @router.post(
     "/projects/{project_id}/ownership/{user_id}",
     response_model=OkView,
-    operation_id="projects.transfer_ownership",
 )
 async def transfer_user_project(
     project_id: str, user_id: str, user: ApiUser, db: Database
@@ -177,7 +172,6 @@ async def transfer_user_project(
 @router.put(
     "/projects/{project_id}/items/{item_id}",
     response_model=OkView,
-    operation_id="projects.add_item",
 )
 async def add_project_item(project_id: str, item_id: str, user: ApiUser, db: Database) -> OkView:
     await add_item_to_project(db, user, project_id, item_id)
@@ -187,7 +181,6 @@ async def add_project_item(project_id: str, item_id: str, user: ApiUser, db: Dat
 @router.delete(
     "/projects/{project_id}/items/{item_id}",
     response_model=OkView,
-    operation_id="projects.remove_item",
 )
 async def remove_project_item(project_id: str, item_id: str, user: ApiUser, db: Database) -> OkView:
     await remove_item_from_project(db, user, project_id, item_id)
@@ -197,7 +190,6 @@ async def remove_project_item(project_id: str, item_id: str, user: ApiUser, db: 
 @router.put(
     "/projects/{project_id}/members",
     response_model=ProjectMemberView,
-    operation_id="projects.set_member",
 )
 async def set_project_member(
     project_id: str, data: ProjectMemberRequest, user: ApiUser, db: Database
@@ -215,10 +207,9 @@ async def set_project_member(
 @router.delete(
     "/projects/{project_id}/members/{user_id}",
     response_model=OkView,
-    operation_id="projects.remove_member",
 )
-async def delete_project_member(
+async def remove_project_member(
     project_id: str, user_id: str, user: ApiUser, db: Database
 ) -> OkView:
-    await remove_project_member(db, user, project_id, user_id)
+    await remove_project_member_domain(db, user, project_id, user_id)
     return OkView()

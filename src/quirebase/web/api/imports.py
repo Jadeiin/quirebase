@@ -23,7 +23,7 @@ from quirebase.web.api.import_schemas import (
 )
 from quirebase.web.uploads import upload_chunks
 
-router = APIRouter(prefix="/api/v1", tags=["Imports"])
+router = APIRouter(tags=["Imports"])
 
 
 def _import_batch_view(batch, records: list[dict], errors: list[dict]) -> dict:

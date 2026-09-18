@@ -2,6 +2,13 @@ import type { components, paths } from '$lib/api/schema';
 
 type ApiErrorView = components['schemas']['ApiErrorView'];
 
+const authenticationRequiredHandlers = new Set<() => void>();
+
+export function onAuthenticationRequired(handler: () => void): () => void {
+	authenticationRequiredHandlers.add(handler);
+	return () => authenticationRequiredHandlers.delete(handler);
+}
+
 export class ApiError extends Error {
 	constructor(
 		readonly status: number,
@@ -116,7 +123,7 @@ export type ApiResponse<Path extends ApiPath, Method extends HttpMethod> = Respo
 
 async function responseError(response: Response): Promise<ApiError> {
 	const payload = (await response.json().catch(() => null)) as ApiErrorView | null;
-	return new ApiError(
+	const error = new ApiError(
 		response.status,
 		payload?.code && payload.message
 			? payload
@@ -125,6 +132,10 @@ async function responseError(response: Response): Promise<ApiError> {
 					message: response.statusText || `HTTP ${response.status}`
 				}
 	);
+	if (error.status === 401 && error.code === 'authentication_required') {
+		for (const handler of authenticationRequiredHandlers) handler();
+	}
+	return error;
 }
 
 function requestUrl(path: string, params: unknown): string {

@@ -20,30 +20,17 @@ from quirebase.documents import (
     update_annotation_reply,
     update_document_annotation,
 )
-from quirebase.library import FilesWorkspace, WorkspaceSection, open_item_workspace
 from quirebase.web.api.annotation_schemas import (
     AnnotationReplyView,
     AnnotationReviewAnnotationView,
     AnnotationReviewRevisionView,
     AnnotationReviewView,
     AnnotationView,
-    DocumentListView,
-    document_list_view,
 )
 from quirebase.web.api.common import OkView
 from quirebase.web.api.dependencies import ApiUser, Database
 
-router = APIRouter(prefix="/api/v1", tags=["Annotations"])
-
-
-@router.get(
-    "/items/{item_id}/documents", response_model=DocumentListView, operation_id="documents.list"
-)
-async def list_documents(item_id: str, user: ApiUser, db: Database) -> DocumentListView:
-    workspace = await open_item_workspace(db, user, item_id, WorkspaceSection.files)
-    if not isinstance(workspace, FilesWorkspace):  # pragma: no cover
-        raise TypeError("item files workspace mismatch")
-    return document_list_view(item_id, workspace)
+router = APIRouter(tags=["Annotations"])
 
 
 @router.get("/items/{item_id}/annotations/review", response_model=AnnotationReviewView)
@@ -85,7 +72,6 @@ async def review_annotations(
 @router.get(
     "/items/{item_id}/annotations",
     response_model=list[AnnotationView],
-    operation_id="annotations.list",
 )
 async def list_annotations(
     item_id: str,
@@ -104,7 +90,6 @@ async def list_annotations(
     "/items/{item_id}/annotations",
     response_model=AnnotationView,
     status_code=status.HTTP_201_CREATED,
-    operation_id="annotations.create",
 )
 async def create_annotation(
     item_id: str, data: AnnotationCreate, user: ApiUser, db: Database
@@ -115,7 +100,6 @@ async def create_annotation(
 @router.patch(
     "/items/{item_id}/annotations/{annotation_id}",
     response_model=AnnotationView,
-    operation_id="annotations.update",
 )
 async def update_annotation(
     item_id: str,
@@ -132,7 +116,6 @@ async def update_annotation(
 @router.delete(
     "/items/{item_id}/annotations/{annotation_id}",
     response_model=OkView,
-    operation_id="annotations.delete",
 )
 async def delete_annotation(
     item_id: str, annotation_id: str, version: int, user: ApiUser, db: Database
@@ -154,7 +137,6 @@ async def restore_annotation(
     "/items/{item_id}/annotations/{annotation_id}/replies",
     response_model=AnnotationReplyView,
     status_code=status.HTTP_201_CREATED,
-    operation_id="annotation_replies.create",
 )
 async def create_reply(
     item_id: str,
@@ -171,7 +153,6 @@ async def create_reply(
 @router.patch(
     "/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}",
     response_model=AnnotationReplyView,
-    operation_id="annotation_replies.update",
 )
 async def update_reply(
     item_id: str,
@@ -189,7 +170,6 @@ async def update_reply(
 @router.delete(
     "/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}",
     response_model=OkView,
-    operation_id="annotation_replies.delete",
 )
 async def delete_reply(
     item_id: str,

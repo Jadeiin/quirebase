@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { onDestroy } from 'svelte';
 	import { apiDownloadGet, apiRequest } from '$lib/api/client';
 	import { apiErrorMessage } from '$lib/api/errors';
-	import { waitForWorkflow } from '$lib/api/workflows';
+	import { getSession } from '$lib/session';
 	import type { components } from '$lib/api/schema';
+	import ConfirmDialog from '$lib/design/ConfirmDialog.svelte';
 	import RichText from '$lib/design/RichText.svelte';
+	import { getWorkflowCenter } from '$lib/features/workflows/center.svelte';
 	import ItemAnnotationsSection from '$lib/features/item/ItemAnnotationsSection.svelte';
 	import ItemDiscussionSection from '$lib/features/item/ItemDiscussionSection.svelte';
 	import ItemFilesSection from '$lib/features/item/ItemFilesSection.svelte';
@@ -16,43 +17,49 @@
 	import { itemMutationOptions } from '$lib/features/item/mutations';
 	import {
 		itemDetailsQuery,
+		itemDiscussionQuery,
+		itemFilesQuery,
 		itemKeys,
-		itemSectionQuery,
+		itemMetadataQuery,
+		itemOrganizeQuery,
+		itemOverviewQuery,
 		itemShellQuery,
 		type ItemSection
 	} from '$lib/features/item/queries';
-	import type {
-		DiscussionMessage,
-		FileRow,
-		FilesView,
-		ItemDetail,
-		OrganizeView
-	} from '$lib/features/item/types';
+	import type { FileRow, ItemDetail, OrganizeView } from '$lib/features/item/types';
 	import ItemActions from '$lib/ItemActions.svelte';
 	import { msg, t, type MessageKey } from '$lib/i18n';
 
 	let { itemId, section } = $props<{ itemId: string; section: ItemSection }>();
 	let mutationError = $state('');
+	let pendingFile = $state<FileRow | null>(null);
+	let confirmFileOpen = $state(false);
 	const queryClient = useQueryClient();
-	const workflowAbort = new AbortController();
-	onDestroy(() => workflowAbort.abort());
+	const { query: session } = getSession();
+	const workflows = getWorkflowCenter();
+
+	async function trackDocumentWorkflow(workflowId: string, label: string) {
+		await workflows.track(workflowId, {
+			label,
+			successMessage: $t('Document processing completed'),
+			failureMessage: $t('Document processing failed')
+		}).settled;
+	}
 
 	const shell = createQuery(() => itemShellQuery(itemId));
-	const session = createQuery(() => ({
-		queryKey: ['session'],
-		queryFn: () => apiRequest('GET', '/session')
-	}));
 	const details = createQuery(() =>
 		itemDetailsQuery(itemId, section === 'overview' || section === 'files')
 	);
-	const workspace = createQuery(() => itemSectionQuery(itemId, section));
+	const overview = createQuery(() => itemOverviewQuery(itemId, section === 'overview'));
+	const metadata = createQuery(() => itemMetadataQuery(itemId, section === 'metadata'));
+	const files = createQuery(() => itemFilesQuery(itemId, section === 'files'));
+	const organize = createQuery(() => itemOrganizeQuery(itemId, section === 'organize'));
+	const discussion = createQuery(() => itemDiscussionQuery(itemId, section === 'discussion'));
 	const itemMutation = createMutation(() => itemMutationOptions(itemId, queryClient));
 	const busy = $derived(itemMutation.isPending);
 	const title = $derived(
-		(section === 'metadata' ? (workspace.data as ItemDetail | undefined)?.title_html : undefined) ??
-			(section === 'organize'
-				? (workspace.data as OrganizeView | undefined)?.item.title_html
-				: undefined) ??
+		(section === 'metadata' ? metadata.data?.title_html : undefined) ??
+			(section === 'organize' ? organize.data?.item.title_html : undefined) ??
 			shell.data?.item.title_html
 	);
 	const labels: Record<ItemSection, MessageKey> = {
@@ -67,6 +74,26 @@
 		return key === 'overview' ? (`/item/${itemId}` as const) : (`/item/${itemId}/${key}` as const);
 	}
 	const sectionLabel = $derived(labels[section as ItemSection]);
+	function refetchSection() {
+		switch (section) {
+			case 'overview':
+				return overview.refetch();
+			case 'metadata':
+				return metadata.refetch();
+			case 'files':
+				return files.refetch();
+			case 'organize':
+				return organize.refetch();
+			case 'discussion':
+				return discussion.refetch();
+			case 'annotations':
+				return queryClient.invalidateQueries({
+					queryKey: ['item-annotations-review', itemId]
+				});
+			default:
+				return Promise.resolve();
+		}
+	}
 
 	function mutate(operation: () => Promise<unknown>, form?: HTMLFormElement) {
 		mutationError = '';
@@ -87,10 +114,7 @@
 				kind === 'revision'
 					? await apiRequest('POST', '/items/{item_id}/revisions', options)
 					: await apiRequest('POST', '/items/{item_id}/attachments', options);
-			await waitForWorkflow(workflow.id, {
-				signal: workflowAbort.signal,
-				failureMessage: $t('Document processing failed')
-			});
+			await trackDocumentWorkflow(workflow.id, $t('Document processing'));
 		}, form);
 	}
 
@@ -113,15 +137,20 @@
 								graphical_abstract: fields.has('graphical_abstract')
 							}
 						});
-			await waitForWorkflow(workflow.id, {
-				signal: workflowAbort.signal,
-				failureMessage: $t('Document processing failed')
-			});
+			await trackDocumentWorkflow(workflow.id, $t('Document processing'));
 		}, form);
 	}
 
 	function deleteFile(file: FileRow) {
-		if (!window.confirm($t('Delete this file permanently?'))) return;
+		pendingFile = file;
+		confirmFileOpen = true;
+	}
+
+	function confirmDeleteFile() {
+		const file = pendingFile;
+		pendingFile = null;
+		confirmFileOpen = false;
+		if (!file) return;
 		void mutate(() =>
 			file.kind === 'revision'
 				? apiRequest('DELETE', '/items/{item_id}/revisions/{revision_id}', {
@@ -211,7 +240,11 @@
 			const workflow = await apiRequest('POST', '/items/{item_id}/tag-recommendations', {
 				params: { path: { item_id: itemId } }
 			});
-			await waitForWorkflow(workflow.id, { signal: workflowAbort.signal });
+			await workflows.track(workflow.id, {
+				label: $t('Tag recommendation'),
+				successMessage: $t('Tag recommendations updated'),
+				failureMessage: $t('Tag recommendation failed')
+			}).settled;
 		});
 	}
 
@@ -261,7 +294,7 @@
 				onchanged={() =>
 					Promise.all([
 						shell.refetch(),
-						workspace.refetch(),
+						refetchSection(),
 						queryClient.invalidateQueries({ queryKey: itemKeys.details(itemId) })
 					])}
 			/>{/key}{/if}
@@ -282,23 +315,31 @@
 	>
 		{mutationError}
 	</p>{/if}
-{#if workspace.isPending}<div class="grid min-h-52 place-items-center text-surface-600-400">
+<ConfirmDialog
+	bind:open={confirmFileOpen}
+	title={$t('Delete this file permanently?')}
+	body={pendingFile?.original_name ?? ''}
+	confirmLabel={$t('Delete permanently')}
+	{busy}
+	onConfirm={confirmDeleteFile}
+/>
+{#if (section === 'overview' && overview.isPending) || (section === 'metadata' && metadata.isPending) || (section === 'files' && files.isPending) || (section === 'organize' && organize.isPending) || (section === 'discussion' && discussion.isPending)}<div
+		class="grid min-h-52 place-items-center text-surface-600-400"
+	>
 		{$t('Loading')}
 		{$t(sectionLabel).toLowerCase()}…
 	</div>
-{:else if workspace.isError}<div class="grid min-h-52 place-items-center text-error-700-300">
+{:else if (section === 'overview' && overview.isError) || (section === 'metadata' && metadata.isError) || (section === 'files' && files.isError) || (section === 'organize' && organize.isError) || (section === 'discussion' && discussion.isError)}<div
+		class="grid min-h-52 place-items-center text-error-700-300"
+	>
 		{$t('Unable to open this Item section.')}
 	</div>
-{:else if workspace.data}
+{:else}
 	{#if section === 'overview'}
-		<ItemOverviewSection
-			{itemId}
-			data={workspace.data as components['schemas']['ItemWorkspaceView']}
-			details={details.data as ItemDetail | undefined}
-		/>
+		<ItemOverviewSection {itemId} data={overview.data!} details={details.data} />
 	{:else if section === 'metadata'}
 		<ItemMetadataSection
-			item={workspace.data as ItemDetail}
+			item={metadata.data!}
 			canEdit={shell.data?.permissions.edit ?? false}
 			{busy}
 			onSubmit={updateMetadata}
@@ -306,8 +347,8 @@
 	{:else if section === 'files'}
 		<ItemFilesSection
 			{itemId}
-			data={workspace.data as FilesView}
-			details={details.data as ItemDetail | undefined}
+			data={files.data!}
+			details={details.data}
 			canEdit={shell.data?.permissions.edit ?? false}
 			{busy}
 			onUpload={upload}
@@ -317,7 +358,7 @@
 		/>
 	{:else if section === 'organize'}
 		<ItemOrganizeSection
-			data={workspace.data as OrganizeView}
+			data={organize.data!}
 			{busy}
 			onToggleProject={toggleProject}
 			onAddTag={addTag}
@@ -329,7 +370,7 @@
 		<ItemAnnotationsSection {itemId} />
 	{:else}
 		<ItemDiscussionSection
-			messages={workspace.data as DiscussionMessage[]}
+			messages={discussion.data!}
 			userId={session.data?.user?.id}
 			isAdministrator={session.data?.user?.role === 'administrator'}
 			{busy}
