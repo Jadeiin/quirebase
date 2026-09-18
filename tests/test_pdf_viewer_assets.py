@@ -42,23 +42,28 @@ def test_pdf_requests_include_login_session_credentials():
 
 def test_pdf_annotations_are_bridged_inside_the_svelte_plugin_context():
     viewer = read("frontend/src/lib/pdf/EmbeddedPdfViewer.svelte")
+    sync = read("frontend/src/lib/pdf/annotation-sync.svelte.ts")
+    adapter = read("frontend/src/lib/pdf/annotation-adapter.ts")
     assert "onAnnotationEvent" in viewer
-    assert "/annotations" in viewer
-    assert "vendorFromCanonical" in viewer
-    assert "canonicalFromVendor" in viewer
+    assert "createAnnotationSync" in viewer
+    assert "/annotations" in sync
+    assert "vendorFromCanonical" in adapter
+    assert "canonicalFromVendor" in adapter
 
 
 def test_pdf_annotation_replies_and_pending_writes_are_persisted():
     viewer = read("frontend/src/lib/pdf/EmbeddedPdfViewer.svelte")
+    sync = read("frontend/src/lib/pdf/annotation-sync.svelte.ts")
     writes = read("frontend/src/lib/pdf/annotation-writes.ts")
-    assert "persistReplyEvent" in viewer
+    assert "persistReplyEvent" in sync
     assert "/replies" in writes
     assert re.search(r"window\.addEventListener\(\s*(['\"])beforeunload\1", viewer)
-    assert "writeQueue.hasPending()" in viewer
+    assert "sync.hasPending()" in viewer
+    assert "writeQueue.hasPending()" in sync
 
 
 def test_pdf_workspace_has_distinct_phone_information_architecture():
-    component = read("frontend/src/lib/PdfWorkspace.svelte")
+    component = read("frontend/src/lib/features/pdf-reader/PdfWorkspace.svelte")
     assert "hidden sm:inline" in component
     assert "max-w-32" in component
     assert 'role="alert"' in component
