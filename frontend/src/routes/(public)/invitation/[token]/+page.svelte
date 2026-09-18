@@ -1,5 +1,5 @@
 <script lang="ts">
-	import Invitation from '$lib/Invitation.svelte';
+	import Invitation from '$lib/features/auth/Invitation.svelte';
 	import type { PageProps } from './$types';
 
 	let { params }: PageProps = $props();

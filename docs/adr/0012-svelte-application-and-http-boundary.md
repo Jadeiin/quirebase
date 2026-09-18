@@ -117,8 +117,10 @@ integrated with the Svelte workspace, but do not become a second general-purpose
 - Skeleton Svelte brings Zag's state machines and a broader dependency graph. Production builds
   must continue to tree-shake unused components, and frontend upgrades must check generated JS and
   CSS sizes as well as accessibility behavior. The application-shell bundle budget in
-  `frontend/scripts/check-bundle-budget.ts` was raised once, deliberately, to cover the Toast,
-  Popover and Tabs state machines that replaced hand-rolled equivalents.
+  `frontend/scripts/check-bundle-budget.ts` is raised deliberately when a maintained dependency
+  replaces hand-rolled code: once for the Toast, Popover and Tabs state machines, and once for
+  `openapi-fetch`, which replaced the hand-written API client plumbing while keeping the
+  `apiRequest` contract.
 - This alpha cutover is forward-only: the former Bits UI dependency and global `.button`, `.field`,
   `.panel` and related compatibility classes are removed in the same change.
 

@@ -1,16 +1,36 @@
 import { createContext } from 'svelte';
-import { SvelteMap } from 'svelte/reactivity';
+import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { waitForWorkflow } from '$lib/api/workflows';
+import { translate, type MessageKey } from '$lib/i18n';
 import { toaster } from '$lib/toaster';
 import type { WorkflowStatus } from './queries';
 
 export type TrackedJob = {
 	id: string;
 	label: string;
+	successMessage: MessageKey;
+	failureMessage: MessageKey;
+	startedAt: number;
+	outcome?: WorkflowStatus;
+};
+
+export type TrackedWorkflow = {
+	id: string;
+	label: string;
 	successMessage: string;
 	failureMessage: string;
 	startedAt: number;
-	outcome?: WorkflowStatus;
+};
+
+export type WorkflowLedger = {
+	read(): TrackedWorkflow[];
+	write(entries: TrackedWorkflow[]): void;
+};
+
+export type TrackOptions = {
+	label: string;
+	successMessage: MessageKey;
+	failureMessage: MessageKey;
 };
 
 type Waiter = {
@@ -19,14 +39,68 @@ type Waiter = {
 };
 
 const MAX_JOBS = 20;
+const SUCCESS_TOAST_DURATION = 6000;
+const workflowToastId = (workflowId: string) => `workflow-toast-${workflowId}`;
 
 export class WorkflowCenter {
 	jobs = $state<TrackedJob[]>([]);
 	private waiters = new SvelteMap<string, Waiter[]>();
+	private dismissed = new SvelteSet<string>();
+	private ledger: WorkflowLedger | undefined;
+
+	constructor(ledger?: WorkflowLedger) {
+		this.ledger = ledger;
+	}
+
+	bindLedger(ledger: WorkflowLedger) {
+		if (this.ledger === ledger) return;
+		if (this.jobs.length > 0 || this.waiters.size > 0) {
+			const reason = new Error('Workflow tracking moved to another account');
+			for (const pending of this.waiters.values())
+				for (const waiter of pending) waiter.reject(reason);
+			this.waiters.clear();
+			this.jobs = [];
+		}
+		this.dismissed.clear();
+		this.ledger = ledger;
+		this.restore();
+	}
+
+	restore() {
+		if (!this.ledger) return;
+		for (const entry of this.ledger.read()) {
+			if (this.dismissed.has(entry.id) || this.jobs.some((job) => job.id === entry.id)) continue;
+			const tracked = this.track(entry.id, {
+				label: entry.label,
+				successMessage: entry.successMessage as MessageKey,
+				failureMessage: entry.failureMessage as MessageKey
+			});
+			const stored = this.jobs.find((job) => job.id === entry.id);
+			if (stored) stored.startedAt = entry.startedAt;
+			void tracked.settled.catch(() => undefined);
+		}
+	}
+
+	private persist() {
+		if (!this.ledger) return;
+		// Persist every active job: the in-memory cap only ever prunes terminal
+		// jobs, so a fixed persistence cap would silently drop concurrent work.
+		this.ledger.write(
+			this.jobs
+				.filter((job) => !job.outcome)
+				.map((job) => ({
+					id: job.id,
+					label: job.label,
+					successMessage: job.successMessage,
+					failureMessage: job.failureMessage,
+					startedAt: job.startedAt
+				}))
+		);
+	}
 
 	track(
 		workflowId: string,
-		options: { label: string; successMessage: string; failureMessage: string }
+		options: TrackOptions
 	): { job: TrackedJob; settled: Promise<WorkflowStatus> } {
 		const existing = this.jobs.find((job) => job.id === workflowId);
 		if (existing?.outcome) {
@@ -37,7 +111,7 @@ export class WorkflowCenter {
 					existing.outcome.state === 'succeeded'
 						? terminal
 						: terminal.then(() => {
-								throw new Error(existing.outcome?.error || options.failureMessage);
+								throw new Error(existing.outcome?.error || translate(options.failureMessage));
 							})
 			};
 		}
@@ -67,6 +141,7 @@ export class WorkflowCenter {
 		// $state deeply proxies stored entries, so return the stored instance.
 		const stored = this.jobs.find((entry) => entry.id === workflowId);
 		if (!stored) throw new Error(`Workflow job missing after track: ${workflowId}`);
+		this.persist();
 		return { job: stored, settled };
 	}
 
@@ -78,20 +153,40 @@ export class WorkflowCenter {
 		this.waiters.delete(workflowId);
 		for (const waiter of pending) {
 			if (status.state === 'succeeded') waiter.resolve(status);
-			else waiter.reject(new Error(status.error || job?.failureMessage || 'Workflow failed'));
+			else
+				waiter.reject(
+					new Error(status.error || translate(job.failureMessage) || 'Workflow failed')
+				);
 		}
 		if (job && status.state !== 'succeeded') {
-			toaster.error({ title: status.error || job.failureMessage });
+			this.notify(job, {
+				type: 'error',
+				title: status.error || translate(job.failureMessage),
+				duration: Infinity
+			});
 		} else if (job) {
-			toaster.success({ title: job.successMessage });
-			// The toast carries the success signal; prune the job shortly after so the
-			// tray badge tracks live work and the tray hides itself at zero.
-			const succeededId = workflowId;
-			window.setTimeout(() => {
-				const entry = this.jobs.find((candidate) => candidate.id === succeededId);
-				if (entry?.outcome?.state === 'succeeded') this.dismiss(succeededId);
-			}, 5000);
+			this.notify(job, {
+				type: 'success',
+				title: translate(job.successMessage),
+				duration: SUCCESS_TOAST_DURATION
+			});
 		}
+		this.persist();
+	}
+
+	private notify(
+		job: TrackedJob,
+		options: { type: 'success' | 'error'; title: string; duration: number }
+	) {
+		toaster.create({
+			id: workflowToastId(job.id),
+			type: options.type,
+			title: options.title,
+			duration: options.duration,
+			onStatusChange: ({ status }) => {
+				if (status === 'dismissing') this.dismiss(job.id);
+			}
+		});
 	}
 
 	fail(workflowId: string, message: string) {
@@ -99,6 +194,7 @@ export class WorkflowCenter {
 	}
 
 	dismiss(workflowId: string) {
+		this.dismissed.add(workflowId);
 		// Hand waiters back to direct polling so local busy states always settle.
 		const pending = this.waiters.get(workflowId) ?? [];
 		this.waiters.delete(workflowId);
@@ -114,6 +210,8 @@ export class WorkflowCenter {
 			);
 		}
 		this.jobs = this.jobs.filter((job) => job.id !== workflowId);
+		this.persist();
+		toaster.dismiss(workflowToastId(workflowId));
 	}
 }
 

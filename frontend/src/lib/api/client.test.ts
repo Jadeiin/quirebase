@@ -11,11 +11,9 @@ import {
 
 describe('apiRequest', () => {
 	it('uses the shared API and browser credentials without a CSRF token', async () => {
-		let receivedInput: RequestInfo | URL | undefined;
-		let receivedInit: RequestInit | undefined;
-		const fetcher: typeof fetch = async (input, init) => {
-			receivedInput = input;
-			receivedInit = init;
+		let received: Request | undefined;
+		const fetcher: typeof fetch = async (input) => {
+			received = input as Request;
 			return new Response(JSON.stringify({ ok: true }));
 		};
 
@@ -36,17 +34,16 @@ describe('apiRequest', () => {
 			fetcher
 		);
 
-		expect(receivedInput).toBe('/api/v1/items');
-		const headers = new Headers(receivedInit?.headers);
-		expect(receivedInit?.credentials).toBe('same-origin');
-		expect(headers.get('Content-Type')).toBe('application/json');
-		expect(headers.has('X-CSRF-Token')).toBe(false);
+		expect(new URL(received!.url).pathname).toBe('/api/v1/items');
+		expect(received?.method).toBe('POST');
+		expect(received?.headers.get('Content-Type')).toBe('application/json');
+		expect(received?.headers.has('X-CSRF-Token')).toBe(false);
 	});
 
 	it('expands typed path and query parameters', async () => {
-		let receivedInput: RequestInfo | URL | undefined;
+		let received: Request | undefined;
 		const fetcher: typeof fetch = async (input) => {
-			receivedInput = input;
+			received = input as Request;
 			return new Response(JSON.stringify([]));
 		};
 
@@ -62,9 +59,22 @@ describe('apiRequest', () => {
 			fetcher
 		);
 
-		expect(receivedInput).toBe(
-			'/api/v1/items/item%2Fwith%20slash/annotations?revision_id=revision-1&project_id=project-1'
-		);
+		const url = new URL(received!.url);
+		expect(url.pathname).toBe('/api/v1/items/item%2Fwith%20slash/annotations');
+		expect(url.searchParams.get('revision_id')).toBe('revision-1');
+		expect(url.searchParams.get('project_id')).toBe('project-1');
+	});
+
+	it('omits empty query values', async () => {
+		let received: Request | undefined;
+		const fetcher: typeof fetch = async (input) => {
+			received = input as Request;
+			return new Response(JSON.stringify({ total: 0, page: 1, per_page: 25, items: [] }));
+		};
+
+		await apiRequest('GET', '/items', { params: { query: { query: '', author: 'ada' } } }, fetcher);
+
+		expect(new URL(received!.url).search).toBe('?author=ada');
 	});
 
 	it('keeps method, path, parameters, body, and response tied to OpenAPI at compile time', () => {

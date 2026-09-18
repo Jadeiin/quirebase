@@ -6,7 +6,8 @@ export type WorkflowStatus = components['schemas']['WorkflowStatusView'];
 export type WorkflowState = WorkflowStatus['state'];
 
 export const workflowKeys = {
-	status: (workflowId: string) => ['workflow', workflowId] as const
+	all: ['workflows'] as const,
+	status: (workflowId: string) => [...workflowKeys.all, workflowId] as const
 };
 
 export function isTerminalWorkflowState(state: WorkflowState | undefined): boolean {
@@ -16,9 +17,10 @@ export function isTerminalWorkflowState(state: WorkflowState | undefined): boole
 export function workflowStatusQuery(workflowId: string, shouldPoll?: () => boolean) {
 	return queryOptions({
 		queryKey: workflowKeys.status(workflowId),
-		queryFn: () =>
+		queryFn: ({ signal }) =>
 			apiRequest('GET', '/workflows/{workflow_id}', {
-				params: { path: { workflow_id: workflowId } }
+				params: { path: { workflow_id: workflowId } },
+				signal
 			}),
 		refetchInterval: (query) => {
 			if (shouldPoll && !shouldPoll()) return false;

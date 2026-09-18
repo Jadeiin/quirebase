@@ -20,7 +20,7 @@ export function adminOverviewQuery(filters: AdminFilters, enabled = true) {
 	return queryOptions({
 		queryKey: adminKeys.section('overview', filters),
 		enabled,
-		queryFn: () => apiRequest('GET', '/admin/overview')
+		queryFn: ({ signal }) => apiRequest('GET', '/admin/overview', { signal })
 	});
 }
 
@@ -28,7 +28,7 @@ export function adminUsersQuery(filters: AdminFilters, enabled = true) {
 	return queryOptions({
 		queryKey: adminKeys.section('users', filters),
 		enabled,
-		queryFn: () =>
+		queryFn: ({ signal }) =>
 			apiRequest('GET', '/admin/users', {
 				params: {
 					query: {
@@ -37,7 +37,8 @@ export function adminUsersQuery(filters: AdminFilters, enabled = true) {
 						role: filters.filterA,
 						active: filters.filterB ? filters.filterB === 'true' : undefined
 					}
-				}
+				},
+				signal
 			})
 	});
 }
@@ -46,7 +47,7 @@ export function adminProjectsQuery(filters: AdminFilters, enabled = true) {
 	return queryOptions({
 		queryKey: adminKeys.section('projects', filters),
 		enabled,
-		queryFn: () =>
+		queryFn: ({ signal }) =>
 			apiRequest('GET', '/admin/projects', {
 				params: {
 					query: {
@@ -55,7 +56,8 @@ export function adminProjectsQuery(filters: AdminFilters, enabled = true) {
 						state: filters.filterA,
 						visibility: filters.filterB
 					}
-				}
+				},
+				signal
 			})
 	});
 }
@@ -64,7 +66,7 @@ export function adminItemsQuery(filters: AdminFilters, enabled = true) {
 	return queryOptions({
 		queryKey: adminKeys.section('items', filters),
 		enabled,
-		queryFn: () =>
+		queryFn: ({ signal }) =>
 			apiRequest('GET', '/admin/items', {
 				params: {
 					query: {
@@ -72,7 +74,8 @@ export function adminItemsQuery(filters: AdminFilters, enabled = true) {
 						search: filters.search,
 						has_pdf: filters.filterA ? filters.filterA === 'true' : undefined
 					}
-				}
+				},
+				signal
 			})
 	});
 }
@@ -81,7 +84,7 @@ export function adminAuditQuery(filters: AdminFilters, enabled = true) {
 	return queryOptions({
 		queryKey: adminKeys.section('audit', filters),
 		enabled,
-		queryFn: () =>
+		queryFn: ({ signal }) =>
 			apiRequest('GET', '/admin/audit', {
 				params: {
 					query: {
@@ -90,7 +93,8 @@ export function adminAuditQuery(filters: AdminFilters, enabled = true) {
 						action: filters.filterA,
 						target_type: filters.filterB
 					}
-				}
+				},
+				signal
 			})
 	});
 }
@@ -99,9 +103,10 @@ export function adminWorkflowsQuery(filters: AdminFilters, enabled = true) {
 	return queryOptions({
 		queryKey: adminKeys.section('workflows', filters),
 		enabled,
-		queryFn: () =>
+		queryFn: ({ signal }) =>
 			apiRequest('GET', '/admin/workflows', {
-				params: { query: { state: filters.filterA } }
+				params: { query: { state: filters.filterA } },
+				signal
 			})
 	});
 }
@@ -110,7 +115,7 @@ export function adminSettingsQuery(filters: AdminFilters, enabled = true) {
 	return queryOptions({
 		queryKey: adminKeys.section('settings', filters),
 		enabled,
-		queryFn: () => apiRequest('GET', '/admin/settings')
+		queryFn: ({ signal }) => apiRequest('GET', '/admin/settings', { signal })
 	});
 }
 
@@ -118,7 +123,7 @@ export function adminMaintenanceQuery(filters: AdminFilters, enabled = true) {
 	return queryOptions({
 		queryKey: adminKeys.section('maintenance', filters),
 		enabled,
-		queryFn: () => apiRequest('GET', '/admin/maintenance')
+		queryFn: ({ signal }) => apiRequest('GET', '/admin/maintenance', { signal })
 	});
 }
 

@@ -14,11 +14,9 @@
 		libraryBulkMutationOptions,
 		type LibraryBulkAction
 	} from '$lib/features/library/mutations';
-	import {
-		libraryListQuery,
-		libraryProjectsQuery,
-		libraryTagsQuery
-	} from '$lib/features/library/queries';
+	import { libraryListQuery } from '$lib/features/library/queries';
+	import { projectListQuery } from '$lib/features/projects/queries';
+	import { tagsQuery } from '$lib/features/tags/queries';
 	import { getSession } from '$lib/session';
 	import {
 		defaultExportPreferences,
@@ -72,8 +70,8 @@
 	});
 
 	const library = createQuery(() => libraryListQuery(submitted, pageNumber));
-	const tags = createQuery(() => libraryTagsQuery());
-	const projects = createQuery(() => libraryProjectsQuery());
+	const tags = createQuery(() => tagsQuery());
+	const projects = createQuery(() => projectListQuery());
 	const totalPages = $derived(
 		Math.max(1, Math.ceil((library.data?.total ?? 0) / (library.data?.per_page ?? 25)))
 	);

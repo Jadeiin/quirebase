@@ -1,14 +1,16 @@
 <script lang="ts">
+	import Panel from '$lib/design/Panel.svelte';
 	import { t } from '$lib/i18n';
 	import type { components } from '$lib/api/schema';
+	import ItemRow from '$lib/design/ItemRow.svelte';
 
 	let { events } = $props<{ events: components['schemas']['AdminAuditEventView'][] }>();
 </script>
 
-<section class="list-panel card border border-surface-300-700 bg-surface-50-950 p-5 shadow-sm">
+<Panel class="mt-4">
 	<h2>{$t('Audit log')}</h2>
 	{#each events as event (event.id)}
-		<div class="item-row">
+		<ItemRow>
 			<strong>{event.action}</strong><span
 				>{event.target_type}{event.target_id ? ` · ${event.target_id}` : ''}</span
 			><span class="text-surface-600-400"
@@ -22,8 +24,8 @@
 						? event.detail
 						: JSON.stringify(event.detail, null, 2)}</pre>
 			{/if}
-		</div>
+		</ItemRow>
 	{:else}
 		<p class="text-surface-600-400">{$t('No audit events.')}</p>
 	{/each}
-</section>
+</Panel>

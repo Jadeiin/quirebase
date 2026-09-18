@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { Popover, Portal } from '@skeletonlabs/skeleton-svelte';
 	import Icon from '$lib/design/Icon.svelte';
+	import PopoverCloseButton from '$lib/design/PopoverCloseButton.svelte';
+	import PopoverTriggerButton from '$lib/design/PopoverTriggerButton.svelte';
 	import { getWorkflowCenter } from '$lib/features/workflows/center.svelte';
 	import WorkflowJobRow from '$lib/features/workflows/WorkflowJobRow.svelte';
 	import { t } from '$lib/i18n';
@@ -21,14 +23,15 @@
 			onOpenChange={(details) => (panelOpen = details.open)}
 			positioning={{ placement: 'top-end', gutter: 12 }}
 		>
-			<Popover.Trigger
-				class="flex h-12 items-center gap-2 rounded-full preset-filled-primary-700-300 pr-5 pl-4 font-semibold shadow-xl"
+			<PopoverTriggerButton
+				variant="filled"
+				class="h-12 rounded-full pr-5 pl-4 shadow-xl"
 				aria-label={`${$t('Background tasks')} (${badgeCount})`}
 			>
 				<Icon name="rotate" size={20} />
 				<span class="min-w-6 text-center text-sm tabular-nums" aria-hidden="true">{badgeCount}</span
 				>
-			</Popover.Trigger>
+			</PopoverTriggerButton>
 			<Portal>
 				<Popover.Positioner class="z-80">
 					<Popover.Content
@@ -38,9 +41,7 @@
 							class="flex items-center justify-between border-b border-surface-300-700 px-4 py-3"
 						>
 							<Popover.Title class="text-sm font-bold">{$t('Background tasks')}</Popover.Title>
-							<Popover.CloseTrigger class="btn-icon preset-tonal-surface" aria-label={$t('Close')}
-								><Icon name="close" size={14} /></Popover.CloseTrigger
-							>
+							<PopoverCloseButton />
 						</header>
 						<div class="max-h-80 divide-y divide-surface-300-700 overflow-auto">
 							{#each center.jobs as job (job.id)}

@@ -473,8 +473,7 @@ test('manual Item creation submits complete structured metadata', async ({ page 
 	await page.getByLabel('Publication title').fill('Journal of Testing');
 	await page.getByLabel('Keywords').fill('systems; reproducibility');
 	await page
-		.getByRole('heading', { name: 'Authors' })
-		.locator('..')
+		.locator('header', { has: page.getByRole('heading', { name: 'Authors' }) })
 		.getByRole('button', { name: 'Add contributor' })
 		.click();
 	await page.getByLabel('First name').fill('Ada');
@@ -550,8 +549,7 @@ test('Item metadata editor preserves structured contributors and custom fields',
 
 	await page.goto('/item/item-1/metadata');
 	await page
-		.getByRole('heading', { name: 'Authors' })
-		.locator('..')
+		.locator('header', { has: page.getByRole('heading', { name: 'Authors' }) })
 		.getByRole('button', { name: 'Add contributor' })
 		.click();
 	await page.getByLabel('First name').fill('Grace');

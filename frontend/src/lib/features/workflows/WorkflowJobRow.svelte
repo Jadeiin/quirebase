@@ -5,6 +5,7 @@
 	import { getWorkflowCenter, type TrackedJob } from '$lib/features/workflows/center.svelte';
 	import { isTerminalWorkflowState, workflowStatusQuery } from '$lib/features/workflows/queries';
 	import { t } from '$lib/i18n';
+	import Button from '$lib/design/Button.svelte';
 
 	let { job, visible = true } = $props<{ job: TrackedJob; visible?: boolean }>();
 	const center = getWorkflowCenter();
@@ -42,7 +43,7 @@
 			]}
 			aria-hidden="true"
 		></span>
-		<div class="grid min-w-0 flex-1 gap-0.5">
+		<div class="grid min-w-0 flex-1 grid-cols-1 gap-0.5">
 			<strong class="truncate text-sm">{job.label}</strong>
 			<span class="text-xs text-surface-600-400">
 				{#if job.outcome}{job.outcome.state}{#if job.outcome.error}: {job.outcome
@@ -50,11 +51,12 @@
 						{status.data.error}{/if}{:else}{$t('Starting…')}{/if}
 			</span>
 		</div>
-		<button
+		<Button
+			variant="icon"
+			class="shrink-0"
 			type="button"
-			class="btn-icon shrink-0 preset-tonal-surface"
 			aria-label={$t('Dismiss')}
-			onclick={() => center.dismiss(job.id)}><Icon name="close" size={14} /></button
+			onclick={() => center.dismiss(job.id)}><Icon name="close" size={14} /></Button
 		>
 	</div>
 {/if}

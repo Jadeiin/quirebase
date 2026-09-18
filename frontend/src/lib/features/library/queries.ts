@@ -12,15 +12,15 @@ export type LibraryFilters = {
 };
 
 export const libraryKeys = {
-	list: (filters: LibraryFilters, page: number) => ['library', filters, page] as const,
-	tags: () => ['tags'] as const,
-	projects: () => ['projects'] as const
+	all: ['library'] as const,
+	lists: () => [...libraryKeys.all, 'list'] as const,
+	list: (filters: LibraryFilters, page: number) => [...libraryKeys.lists(), filters, page] as const
 };
 
 export function libraryListQuery(filters: LibraryFilters, page: number) {
 	return queryOptions({
 		queryKey: libraryKeys.list(filters, page),
-		queryFn: () =>
+		queryFn: ({ signal }) =>
 			apiRequest('GET', '/items', {
 				params: {
 					query: {
@@ -32,22 +32,9 @@ export function libraryListQuery(filters: LibraryFilters, page: number) {
 						keyword: filters.keyword,
 						author: filters.author
 					}
-				}
+				},
+				signal
 			})
-	});
-}
-
-export function libraryTagsQuery() {
-	return queryOptions({
-		queryKey: libraryKeys.tags(),
-		queryFn: () => apiRequest('GET', '/tags')
-	});
-}
-
-export function libraryProjectsQuery() {
-	return queryOptions({
-		queryKey: libraryKeys.projects(),
-		queryFn: () => apiRequest('GET', '/projects')
 	});
 }
 

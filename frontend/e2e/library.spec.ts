@@ -310,3 +310,21 @@ test('saved export preferences flow into Library bibliography requests', async (
 			include_identifiers: true
 		});
 });
+
+test('library filters do not overflow narrow viewports', async ({ page }) => {
+	await page.setViewportSize({ width: 320, height: 720 });
+	await mockSession(page);
+	await page.route('**/api/v1/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/projects', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/items*', (route) =>
+		route.fulfill({ json: { items: [], total: 0, page: 1, per_page: 25 } })
+	);
+
+	await page.goto('/library');
+	await expect(page.getByPlaceholder('Search title, author, Tag, or full text')).toBeVisible();
+	const { scrollWidth, innerWidth } = await page.evaluate(() => ({
+		scrollWidth: document.documentElement.scrollWidth,
+		innerWidth: window.innerWidth
+	}));
+	expect(scrollWidth).toBeLessThanOrEqual(innerWidth);
+});

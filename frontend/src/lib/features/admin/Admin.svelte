@@ -4,6 +4,12 @@
 	import { apiRequest } from '$lib/api/client';
 	import { apiErrorMessage } from '$lib/api/errors';
 	import ConfirmDialog from '$lib/design/ConfirmDialog.svelte';
+	import Notice from '$lib/design/Notice.svelte';
+	import Panel from '$lib/design/Panel.svelte';
+	import Pagination from '$lib/design/Pagination.svelte';
+	import SectionTab from '$lib/design/SectionTab.svelte';
+	import SectionTabs from '$lib/design/SectionTabs.svelte';
+	import SectionHeader from '$lib/design/SectionHeader.svelte';
 	import { getWorkflowCenter } from '$lib/features/workflows/center.svelte';
 	import AdminAudit from '$lib/features/admin/AdminAudit.svelte';
 	import AdminItems from '$lib/features/admin/AdminItems.svelte';
@@ -28,6 +34,7 @@
 	} from '$lib/features/admin/queries';
 	import { msg, t, type MessageKey } from '$lib/i18n';
 	import type { components } from '$lib/api/schema';
+	import Button from '$lib/design/Button.svelte';
 
 	type User = components['schemas']['AdminUserView'];
 	type Settings = components['schemas']['AdminSettingsView'];
@@ -331,8 +338,8 @@
 				});
 				await workflowCenter.track(started.id, {
 					label: `${$t('Maintenance')}: ${$t(maintenanceOperations.find(([key]) => key === operation)?.[1] ?? operation)}`,
-					successMessage: $t('Maintenance operation completed'),
-					failureMessage: $t('Maintenance operation failed')
+					successMessage: msg('Maintenance operation completed'),
+					failureMessage: msg('Maintenance operation failed')
 				}).settled;
 			},
 			msg('Maintenance operation completed'),
@@ -367,50 +374,48 @@
 	}
 </script>
 
-<div class="workspace-header">
+<SectionHeader>
 	<div>
 		<h1>{$t('Administration')}</h1>
 		<p class="text-surface-700-300">
 			{$t('Users, storage, audit, settings, and durable operations.')}
 		</p>
 	</div>
-</div>
-<nav class="tabs" aria-label={$t('Administration sections')}>
-	{#each Object.entries(labels) as [key, label] (key)}<a
-			aria-current={section === key ? 'page' : undefined}
-			href={resolve(sectionPath(key))}>{$t(label)}</a
-		>{/each}
-</nav>
+</SectionHeader>
+<SectionTabs label={$t('Administration sections')}>
+	{#each Object.entries(labels) as [key, label] (key)}
+		<SectionTab href={resolve(sectionPath(key))} current={section === key}>{$t(label)}</SectionTab>
+	{/each}
+</SectionTabs>
 {#if ['users', 'projects', 'items', 'audit', 'workflows'].includes(section)}
-	<form
-		class="toolbar mb-4 items-end card border border-surface-300-700 bg-surface-50-950 p-5 shadow-sm"
-		onsubmit={applyFilters}
-	>
+	<Panel as="form" class="mb-4 flex flex-wrap items-end gap-2" onsubmit={applyFilters}>
 		{#if section !== 'workflows'}
-			<label class="grow">{$t('Search')}<input class="input" bind:value={searchInput} /></label>
+			<label class="grow basis-64"
+				>{$t('Search')}<input class="input" bind:value={searchInput} /></label
+			>
 		{/if}
 		{#if section === 'users'}
 			<label
-				>{$t('Role')}<select class="compact input" bind:value={filterA}
+				>{$t('Role')}<select class="input w-auto min-w-36" bind:value={filterA}
 					><option value="">{$t('All roles')}</option><option value="member">{$t('Member')}</option
 					><option value="administrator">{$t('Administrator')}</option></select
 				></label
 			>
 			<label
-				>{$t('Status')}<select class="compact input" bind:value={filterB}
+				>{$t('Status')}<select class="input w-auto min-w-36" bind:value={filterB}
 					><option value="">{$t('Any status')}</option><option value="true">{$t('Active')}</option
 					><option value="false">{$t('Disabled')}</option></select
 				></label
 			>
 		{:else if section === 'projects'}
 			<label
-				>{$t('State')}<select class="compact input" bind:value={filterA}
+				>{$t('State')}<select class="input w-auto min-w-36" bind:value={filterA}
 					><option value="">{$t('Any state')}</option><option value="active">{$t('Active')}</option
 					><option value="archived">{$t('Archived')}</option></select
 				></label
 			>
 			<label
-				>{$t('Visibility')}<select class="compact input" bind:value={filterB}
+				>{$t('Visibility')}<select class="input w-auto min-w-36" bind:value={filterB}
 					><option value="">{$t('Any visibility')}</option><option value="private"
 						>{$t('Private')}</option
 					><option value="public">{$t('Public')}</option></select
@@ -418,18 +423,18 @@
 			>
 		{:else if section === 'items'}
 			<label
-				>{$t('PDF availability')}<select class="compact input" bind:value={filterA}
+				>{$t('PDF availability')}<select class="input w-auto min-w-36" bind:value={filterA}
 					><option value="">{$t('Any')}</option><option value="true">{$t('Has PDF')}</option><option
 						value="false">{$t('Without PDF')}</option
 					></select
 				></label
 			>
 		{:else if section === 'audit'}
-			<label>{$t('Action')}<input class="compact input" bind:value={filterA} /></label>
-			<label>{$t('Target type')}<input class="compact input" bind:value={filterB} /></label>
+			<label>{$t('Action')}<input class="input w-auto min-w-36" bind:value={filterA} /></label>
+			<label>{$t('Target type')}<input class="input w-auto min-w-36" bind:value={filterB} /></label>
 		{:else}
 			<label
-				>{$t('State')}<select class="compact input" bind:value={filterA}
+				>{$t('State')}<select class="input w-auto min-w-36" bind:value={filterA}
 					><option value="">{$t('Any state')}</option><option value="pending"
 						>{$t('Pending')}</option
 					><option value="running">{$t('Running')}</option><option value="succeeded"
@@ -440,18 +445,13 @@
 				></label
 			>
 		{/if}
-		<button class="btn preset-filled-primary-700-300 font-semibold">{$t('Apply filters')}</button>
-		<button type="button" class="btn preset-tonal-surface font-semibold" onclick={clearFilters}
-			>{$t('Clear filters')}</button
-		>
-	</form>
+		<Button variant="filled">{$t('Apply filters')}</Button>
+		<Button type="button" onclick={clearFilters}>{$t('Clear filters')}</Button>
+	</Panel>
 {/if}
-{#if error}<p class="text-error-700-300" role="alert">{error}</p>{/if}{#if notice}<p
-		class="rounded-base border border-success-200-800 preset-tonal-success px-4 py-3 text-success-900-100"
-		role="status"
-	>
-		{$t(notice)}
-	</p>{/if}
+{#if error}<Notice variant="error">{error}</Notice>{/if}{#if notice}<Notice variant="success"
+		>{$t(notice)}</Notice
+	>{/if}
 {#if sectionPending}<p class="text-surface-600-400">
 		{$t('Loading')}
 		{$t(sectionLabel).toLowerCase()}…
@@ -500,16 +500,11 @@
 		/>
 	{/if}
 	{#if pagination?.total !== undefined && pageCount > 1}
-		<nav class="pagination" aria-label={$t('Administration pages')}>
-			<button
-				class="btn preset-tonal-surface font-semibold"
-				disabled={adminPage <= 1}
-				onclick={() => (adminPage -= 1)}>{$t('Previous')}</button
-			><span>{$t('Page')} {adminPage} / {pageCount}</span><button
-				class="btn preset-tonal-surface font-semibold"
-				disabled={adminPage >= pageCount}
-				onclick={() => (adminPage += 1)}>{$t('Next')}</button
-			>
-		</nav>
+		<Pagination
+			page={adminPage}
+			{pageCount}
+			label={$t('Administration pages')}
+			onPage={(next) => (adminPage = next)}
+		/>
 	{/if}
 {/if}

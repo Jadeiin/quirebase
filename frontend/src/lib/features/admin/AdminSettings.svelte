@@ -1,6 +1,8 @@
 <script lang="ts">
+	import Panel from '$lib/design/Panel.svelte';
 	import { t, type MessageKey } from '$lib/i18n';
 	import type { components } from '$lib/api/schema';
+	import Button from '$lib/design/Button.svelte';
 
 	type Settings = components['schemas']['AdminSettingsView'];
 
@@ -12,9 +14,9 @@
 	}>();
 </script>
 
-<section class="stack card border border-surface-300-700 bg-surface-50-950 p-5 shadow-sm">
+<Panel class="grid grid-cols-1 gap-3">
 	<h2>{$t('Runtime settings')}</h2>
-	<form class="stack" onsubmit={onSave}>
+	<form class="grid grid-cols-1 gap-3" onsubmit={onSave}>
 		{#each fields as [key, label] (key)}
 			<label
 				>{$t(label)}<input
@@ -29,8 +31,6 @@
 		<p class="text-surface-600-400">
 			Database: {settings.database_url}<br />Data directory: {settings.data_dir}
 		</p>
-		<button class="btn preset-filled-primary-700-300 font-semibold" disabled={busy}
-			>{$t('Save settings')}</button
-		>
+		<Button variant="filled" disabled={busy}>{$t('Save settings')}</Button>
 	</form>
-</section>
+</Panel>

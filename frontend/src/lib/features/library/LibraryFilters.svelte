@@ -1,7 +1,9 @@
 <script lang="ts">
 	import Icon from '$lib/design/Icon.svelte';
+	import Panel from '$lib/design/Panel.svelte';
 	import type { LibraryProject, LibraryTag } from '$lib/features/library/queries';
 	import { t } from '$lib/i18n';
+	import Button from '$lib/design/Button.svelte';
 
 	let {
 		query = $bindable(''),
@@ -30,30 +32,33 @@
 	}>();
 </script>
 
-<form
-	class="stack card border border-surface-300-700 bg-surface-50-950 p-5 shadow-sm"
+<Panel
+	as="form"
+	class="grid grid-cols-1 gap-3"
 	onsubmit={(event) => {
 		event.preventDefault();
 		onSearch();
 	}}
 >
-	<div class="flex items-center gap-2">
+	<div class="flex flex-wrap items-center gap-2">
 		<span class="ml-1 text-surface-600-400"><Icon name="search" /></span>
 		<input
-			class="min-w-0 flex-1 border-0 bg-transparent px-1 py-2 text-base outline-none placeholder:text-surface-600-400"
+			class="min-w-40 flex-1 border-0 bg-transparent px-1 py-2 text-base outline-none placeholder:text-surface-600-400"
 			bind:value={query}
 			placeholder={$t('Search title, author, Tag, or full text')}
 		/>
-		<button
+		<Button
 			type="button"
-			class="btn preset-tonal-surface font-semibold"
+			class="ml-auto"
 			aria-expanded={filtersOpen}
-			onclick={() => (filtersOpen = !filtersOpen)}>{$t('Filters')}</button
+			onclick={() => (filtersOpen = !filtersOpen)}>{$t('Filters')}</Button
 		>
-		<button class="btn preset-filled-primary-700-300 font-semibold">{$t('Search')}</button>
+		<Button variant="filled">{$t('Search')}</Button>
 	</div>
 	{#if filtersOpen}
-		<div class="grid gap-3 border-t border-surface-300-700 pt-4 sm:grid-cols-2 xl:grid-cols-5">
+		<div
+			class="grid grid-cols-1 gap-3 border-t border-surface-300-700 pt-4 sm:grid-cols-2 xl:grid-cols-5"
+		>
 			<label
 				>{$t('Tag')}<select class="select" bind:value={tag}
 					><option value="">{$t('All Tags')}</option>{#each tags as option (option.id)}<option
@@ -79,10 +84,8 @@
 			<label>{$t('Contributor')}<input class="input" bind:value={author} /></label>
 			<label>{$t('Keyword')}<input class="input" bind:value={keyword} /></label>
 		</div>
-		<div class="toolbar justify-end">
-			<button type="button" class="btn preset-tonal-surface font-semibold" onclick={onClear}
-				>{$t('Clear filters')}</button
-			>
+		<div class="flex flex-wrap justify-end gap-2">
+			<Button type="button" onclick={onClear}>{$t('Clear filters')}</Button>
 		</div>
 	{/if}
-</form>
+</Panel>

@@ -7,32 +7,17 @@
 		DocumentManagerPlugin,
 		LockModeType,
 		PDFViewer,
-		PdfAnnotationSubtype,
 		UIPlugin,
 		type AnnotationCapability,
-		type AnnotationEvent,
 		type PDFViewerConfig,
-		type PdfAnnotationObject,
 		type PluginRegistry,
 		type UICapability
 	} from '@embedpdf/svelte-pdf-viewer';
 	import pdfiumWasmUrl from '@embedpdf/pdfium/pdfium.wasm?url';
 	import { i18n } from '@lingui/core';
-	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-	import { apiRequest } from '$lib/api/client';
 	import { apiErrorMessage } from '$lib/api/errors';
 	import { t } from '$lib/i18n';
-	import {
-		canonicalAnnotationFromView,
-		createAnnotationAdapter,
-		type CanonicalAnnotation,
-		type CanonicalReply
-	} from '$lib/pdf/annotation-adapter';
-	import {
-		createWriteQueue,
-		persistReplyEvent,
-		selectNativeAnnotationIds
-	} from '$lib/pdf/annotation-writes';
+	import { createAnnotationSync, type AnnotationSyncStatus } from '$lib/pdf/annotation-sync.svelte';
 
 	let {
 		itemId,
@@ -101,191 +86,49 @@
 		}
 	};
 
-	// svelte-ignore state_referenced_locally
-	const adapter = createAnnotationAdapter(pageGeometry);
-	const writeQueue = createWriteQueue();
-	const records = new SvelteMap<string, CanonicalAnnotation>();
-	const importedIds = new SvelteMap<string, number>();
-	const tombstones = new SvelteMap<string, CanonicalAnnotation>();
-	const replyTombstones = new SvelteMap<string, CanonicalReply>();
-	const nativeIds = new SvelteSet<string>();
 	let registry: PluginRegistry | null = null;
 	let annotationApi: AnnotationCapability | null = null;
 	let uiApi: UICapability | null = null;
 	let unsubscribeEvents: (() => void) | null = null;
-	let loadGeneration = 0;
-
-	async function loadAnnotations() {
-		if (!annotationApi) return;
-		const generation = ++loadGeneration;
-		const requestedProject = selectedProject;
-		onstatus?.($t('Loading annotations…'), false);
-		let rows: CanonicalAnnotation[];
-		try {
-			rows = (
-				await apiRequest('GET', '/items/{item_id}/annotations', {
-					params: {
-						path: { item_id: itemId },
-						query: {
-							revision_id: documentId,
-							project_id: requestedProject || undefined
-						}
-					}
-				})
-			).map(canonicalAnnotationFromView);
-		} catch (reason) {
-			if (generation !== loadGeneration) return;
-			throw reason;
-		}
-		if (generation !== loadGeneration) return;
-		const scope = annotationApi.forDocument(documentId);
-		for (const [id, pageIndex] of importedIds) scope.purgeAnnotation(pageIndex, id);
-		importedIds.clear();
-		records.clear();
-		replyTombstones.clear();
-		for (const record of rows) {
-			records.set(record.id, record);
-			importedIds.set(record.id, record.page_index);
-			for (const reply of record.replies) importedIds.set(reply.id, record.page_index);
-		}
-		scope.importAnnotations(
-			rows.flatMap((record) => [
-				{ annotation: adapter.vendorFromCanonical(record) },
-				...record.replies.map((reply) => ({
-					annotation: adapter.vendorReplyFromCanonical(record, reply)
-				}))
-			])
-		);
-		onstatus?.(`${rows.length} ${$t('annotations loaded')}`, false);
-	}
-
-	function lockNativeAnnotations() {
-		if (!annotationApi) return;
-		const scope = annotationApi.forDocument(documentId);
-		const trackedById = new Map(
-			scope.getAnnotations().map((tracked) => [tracked.object.id, tracked] as const)
-		);
-		for (const id of selectNativeAnnotationIds(trackedById.keys(), importedIds)) {
-			const tracked = trackedById.get(id)!;
-			nativeIds.add(id);
-			scope.syncAnnotationObject(id, {
-				flags: [...new Set([...(tracked.object.flags ?? []), 'readOnly' as const])]
-			});
-		}
-	}
-
-	async function persist(
-		event: Exclude<AnnotationEvent, { type: 'loaded' }>,
-		scopeProject: string
-	) {
-		if (!annotationApi || event.documentId !== documentId || nativeIds.has(event.annotation.id))
-			return;
-		const id = event.annotation.id;
-		const scope = annotationApi.forDocument(documentId);
-		try {
-			if (event.annotation.inReplyToId) {
-				onstatus?.($t('Saving reply…'), false);
-				const result = await persistReplyEvent({
-					event,
-					itemId,
-					records,
-					tombstones: replyTombstones
-				});
-				if (result?.reply) {
-					scope.syncAnnotationObject(
-						result.reply.id,
-						adapter.vendorReplyFromCanonical(result.parent, result.reply)
-					);
-				}
-			} else if (event.type === 'create') {
-				if (records.has(id)) return;
-				onstatus?.($t('Saving annotation…'), false);
-				const tombstone = tombstones.get(id);
-				const savedView = tombstone
-					? await apiRequest('POST', '/items/{item_id}/annotations/{annotation_id}/restore', {
-							params: {
-								path: { item_id: itemId, annotation_id: id },
-								query: { version: tombstone.version }
-							}
-						})
-					: await apiRequest('POST', '/items/{item_id}/annotations', {
-							params: { path: { item_id: itemId } },
-							body: {
-								id,
-								revision_id: documentId,
-								scope: scopeProject ? 'project' : 'private',
-								project_id: scopeProject || null,
-								...adapter.canonicalFromVendor(event.annotation, event.pageIndex)
-							}
-						});
-				const saved = canonicalAnnotationFromView(savedView);
-				tombstones.delete(id);
-				records.set(id, saved);
-				importedIds.set(id, saved.page_index);
-			} else if (event.type === 'update') {
-				const existing = records.get(id);
-				if (!existing) return;
-				onstatus?.($t('Saving annotation…'), false);
-				const saved = canonicalAnnotationFromView(
-					await apiRequest('PATCH', '/items/{item_id}/annotations/{annotation_id}', {
-						params: { path: { item_id: itemId, annotation_id: id } },
-						body: {
-							version: existing.version,
-							scope: existing.scope,
-							project_id: existing.project_id,
-							...adapter.canonicalFromVendor(
-								{ ...event.annotation, ...event.patch } as PdfAnnotationObject,
-								event.pageIndex,
-								existing
-							)
-						}
-					})
-				);
-				records.set(id, saved);
-				scope.syncAnnotationObject(id, adapter.vendorFromCanonical(saved));
-			} else {
-				const existing = records.get(id);
-				if (!existing) return;
-				onstatus?.($t('Saving annotation…'), false);
-				await apiRequest('DELETE', '/items/{item_id}/annotations/{annotation_id}', {
-					params: {
-						path: { item_id: itemId, annotation_id: id },
-						query: { version: existing.version }
-					}
-				});
-				tombstones.set(id, { ...existing, version: existing.version + 1 });
-				records.delete(id);
-				importedIds.delete(id);
-			}
-			onstatus?.($t('Saved'), false);
-		} catch {
-			if (event.type === 'create') scope.purgeAnnotation(event.pageIndex, id);
-			onstatus?.($t('Annotation sync failed'), true);
-			await loadAnnotations().catch(() => undefined);
-		}
-	}
-
-	function handleAnnotationEvent(event: AnnotationEvent) {
-		if (!annotationApi || event.documentId !== documentId) return;
-		if (event.type === 'loaded') {
-			lockNativeAnnotations();
-			void loadAnnotations().catch(() => {
-				onstatus?.($t('Unable to load annotations'), true);
-			});
-			return;
-		}
-		if (nativeIds.has(event.annotation.id)) return;
-		if (event.type === 'create' && event.annotation.type === PdfAnnotationSubtype.TEXT) {
-			uiApi?.forDocument(documentId).setActiveSidebar('right', 'main', 'comment-panel');
-		}
-		// Capture the scope at event time so a queued create is not retargeted by a
-		// visibility change that happens while it waits for earlier writes.
-		const scopeProject = selectedProject;
-		void writeQueue.enqueue(() => persist(event, scopeProject));
-	}
-
 	let destroyed = false;
 	let cancelDocumentWait = () => {};
+	// svelte-ignore state_referenced_locally
+	const sync = createAnnotationSync({
+		itemId,
+		documentId,
+		pageGeometry,
+		initialProject: selectedProject,
+		onStatus: reportStatus,
+		onCommentPanel: () =>
+			uiApi?.forDocument(documentId).setActiveSidebar('right', 'main', 'comment-panel')
+	});
+
+	function reportStatus(status: AnnotationSyncStatus) {
+		if (!onstatus) return;
+		switch (status.state) {
+			case 'loading':
+				onstatus($t('Loading annotations…'), false);
+				break;
+			case 'loaded':
+				onstatus(`${status.count} ${$t('annotations loaded')}`, false);
+				break;
+			case 'saving-reply':
+				onstatus($t('Saving reply…'), false);
+				break;
+			case 'saving-annotation':
+				onstatus($t('Saving annotation…'), false);
+				break;
+			case 'saved':
+				onstatus($t('Saved'), false);
+				break;
+			case 'sync-failed':
+				onstatus($t('Annotation sync failed'), true);
+				break;
+			case 'load-failed':
+				onstatus($t('Unable to load annotations'), true);
+				break;
+		}
+	}
 
 	function waitForDocument() {
 		const documentManager = registry?.getPlugin<DocumentManagerPlugin>(DocumentManagerPlugin.id);
@@ -359,16 +202,15 @@
 				}
 			}
 			if (!annotationApi) return;
-			unsubscribeEvents = annotationApi.onAnnotationEvent(handleAnnotationEvent);
+			sync.attach(annotationApi);
+			unsubscribeEvents = annotationApi.onAnnotationEvent((event) => sync.handleEvent(event));
 			await ready.pluginsReady();
 			await waitForDocument();
 			if (destroyed) return;
 			if (!editable) annotationApi.setLocked({ type: LockModeType.All }, documentId);
-			lockNativeAnnotations();
-			await loadAnnotations().catch(() => {
-				if (!destroyed) {
-					onstatus?.($t('Unable to load annotations'), true);
-				}
+			sync.lockNative();
+			await sync.load(selectedProject).catch(() => {
+				if (!destroyed) reportStatus({ state: 'load-failed' });
 			});
 		} catch (error) {
 			if (destroyed) return;
@@ -378,7 +220,7 @@
 
 	$effect(() => {
 		const guardPendingWrites = (event: BeforeUnloadEvent) => {
-			if (!writeQueue.hasPending()) return;
+			if (!sync.hasPending()) return;
 			event.preventDefault();
 			event.returnValue = '';
 		};
@@ -391,8 +233,8 @@
 	// Client-side navigation does not fire beforeunload. Keep the viewer mounted
 	// until every queued annotation write has settled before SvelteKit tears it down.
 	onNavigate(({ willUnload }) => {
-		if (willUnload || !writeQueue.hasPending()) return;
-		return writeQueue.flush().catch((reason) => {
+		if (willUnload || !sync.hasPending()) return;
+		return sync.flush().catch((reason) => {
 			onstatus?.(apiErrorMessage(reason, $t('Annotation sync failed')), true);
 			throw reason;
 		});
@@ -402,20 +244,13 @@
 	$effect(() => {
 		if (selectedProject === previousProject) return;
 		previousProject = selectedProject;
-		void (async () => {
-			await writeQueue.flush().catch(() => undefined);
-			await loadAnnotations().catch(() => {
-				if (!destroyed) {
-					onstatus?.($t('Unable to load annotations'), true);
-				}
-			});
-		})();
+		sync.switchProject(selectedProject);
 	});
 
 	onDestroy(() => {
 		destroyed = true;
 		cancelDocumentWait();
-		loadGeneration += 1;
+		sync.dispose();
 		unsubscribeEvents?.();
 		void registry?.destroy();
 		registry = null;

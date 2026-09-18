@@ -1,5 +1,8 @@
 import { mutationOptions, type QueryClient } from '@tanstack/svelte-query';
 import { apiDownload, apiRequest } from '$lib/api/client';
+import { dashboardKeys } from '$lib/features/dashboard/queries';
+import { libraryKeys } from '$lib/features/library/queries';
+import { projectKeys } from '$lib/features/projects/queries';
 import type { ExportPreferences } from '$lib/export-preferences';
 
 export type LibraryBulkAction = 'add_project' | 'add_tag' | 'bibliography' | 'documents' | 'delete';
@@ -64,13 +67,13 @@ export async function runLibraryBulkMutation(
 		}
 	});
 	const invalidations = [
-		queryClient.invalidateQueries({ queryKey: ['library'] }),
-		queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+		queryClient.invalidateQueries({ queryKey: libraryKeys.all }),
+		queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
 	];
 	if (input.action === 'add_project' && input.projectId) {
 		invalidations.push(
-			queryClient.invalidateQueries({ queryKey: ['project', input.projectId] }),
-			queryClient.invalidateQueries({ queryKey: ['projects'] })
+			queryClient.invalidateQueries({ queryKey: projectKeys.detail(input.projectId) }),
+			queryClient.invalidateQueries({ queryKey: projectKeys.lists() })
 		);
 	}
 	await Promise.all(invalidations);

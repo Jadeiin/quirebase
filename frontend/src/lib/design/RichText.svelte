@@ -8,3 +8,9 @@
 <!-- This is the sole raw-render boundary: canonical HTML is rebuilt through the Web allowlist. -->
 <!-- eslint-disable-next-line svelte/no-at-html-tags -->
 <span class="rich-text">{@html projected}</span>
+
+<style>
+	.rich-text {
+		display: contents;
+	}
+</style>

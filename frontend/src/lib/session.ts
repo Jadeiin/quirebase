@@ -5,7 +5,7 @@ import { apiRequest, type SessionView } from '$lib/api/client';
 export function sessionQuery() {
 	return queryOptions({
 		queryKey: ['session'],
-		queryFn: () => apiRequest('GET', '/session'),
+		queryFn: ({ signal }) => apiRequest('GET', '/session', { signal }),
 		retry: false
 	});
 }
