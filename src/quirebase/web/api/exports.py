@@ -9,74 +9,11 @@ from quirebase.documents import (
     get_export_status,
 )
 from quirebase.documents.schemas import ExportCreate
-from quirebase.library import (
-    list_custom_citation_styles,
-    preview_citation_key,
-    select_builtin_citation_styles,
-)
 from quirebase.web.api.common import WorkflowStatusView
 from quirebase.web.api.dependencies import ApiUser, Database
-from quirebase.web.api.export_schemas import (
-    AnnotationExportCreatedView,
-    CitationKeyPreviewView,
-)
-from quirebase.web.api.library_schemas import CitationStylesResponseView
+from quirebase.web.api.export_schemas import AnnotationExportCreatedView
 
-router = APIRouter(prefix="/api/v1", tags=["HTTP API"])
-
-
-@router.get("/citation-key-preview", response_model=CitationKeyPreviewView)
-async def citation_key_preview(
-    formula: str,
-    _user: ApiUser,
-    force_ascii: bool = False,
-):
-    return {"key": preview_citation_key(formula, force_ascii=force_ascii)}
-
-
-@router.get("/citation-styles", response_model=CitationStylesResponseView)
-async def citation_styles(
-    user: ApiUser,
-    db: Database,
-    query: str = "",
-    limit: int = 50,
-    include: str = "",
-):
-    normalized = query.strip().casefold()
-    builtin_selection = select_builtin_citation_styles(query, limit=limit, include=include)
-    owned_custom_styles = await list_custom_citation_styles(db, user)
-    custom = [
-        {"key": style.id, "name": style.name, "scope": "custom"}
-        for style in owned_custom_styles
-        if style.id != include and (not normalized or normalized in style.name.casefold())
-    ]
-    exact_custom = next(
-        (
-            {"key": style.id, "name": style.name, "scope": "custom"}
-            for style in owned_custom_styles
-            if include and style.id == include
-        ),
-        None,
-    )
-    included = []
-    if builtin_selection.included is not None:
-        included.append({
-            "key": builtin_selection.included.key,
-            "name": builtin_selection.included.name,
-            "scope": "builtin",
-        })
-    if exact_custom is not None:
-        included.append(exact_custom)
-    styles = [
-        {"key": style.key, "name": style.name, "scope": "builtin"}
-        for style in builtin_selection.matches
-    ][:limit] + custom[:limit]
-    included = [
-        style for style in included if not any(style["key"] == item["key"] for item in styles)
-    ]
-    return {
-        "styles": styles + included,
-    }
+router = APIRouter(prefix="/api/v1", tags=["Document exports"])
 
 
 @router.post(

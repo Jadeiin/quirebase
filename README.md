@@ -18,12 +18,14 @@ For a quick local test, run:
 ./scripts/dev.sh
 ```
 
-This prepares dependencies and assets, initializes the development database, creates the
-`admin` account with password `quirebase-dev` on the first run, and starts both the web server
-and worker at <http://127.0.0.1:9060>. Override the defaults with
-`QUIREBASE_DEV_HOST`, `QUIREBASE_DEV_PORT`, `QUIREBASE_DEV_USERNAME`, and
-`QUIREBASE_DEV_PASSWORD`. Set `QUIREBASE_DEV_SKIP_SETUP=1` to skip dependency installation and
-asset rebuilding on later runs.
+This prepares dependencies, initializes the development database, creates the
+`admin` account with password `quirebase-dev` on the first run, and starts Vite with HMR at
+<http://127.0.0.1:5173>, FastAPI at <http://127.0.0.1:9060>, and the durable worker. Vite proxies
+API requests to FastAPI, and the development external origin is set to the Vite origin so
+cookie-authenticated mutations keep the production Origin policy. Override the defaults with
+`QUIREBASE_DEV_HOST`, `QUIREBASE_DEV_PORT`, `QUIREBASE_DEV_FRONTEND_PORT`,
+`QUIREBASE_DEV_USERNAME`, and `QUIREBASE_DEV_PASSWORD`. Set `QUIREBASE_DEV_SKIP_SETUP=1` to skip
+dependency installation on later runs.
 
 For manual setup:
 
@@ -68,6 +70,9 @@ uv run quirebase create-api-token USERNAME --name "Research client" --days 30
 The plaintext token is shown once. It has the User's current Quirebase permissions and no separate
 tool scopes. Do not place it in a URL; send `Authorization: Bearer qb_api_...`. Inspect or revoke
 tokens with `list-api-tokens USERNAME` and `revoke-api-token USERNAME TOKEN_ID`.
+
+API errors return a stable JSON object with `code` and `message`, plus optional `fields` for request
+validation and `meta` for structured conflict details.
 
 ## PDF architecture
 

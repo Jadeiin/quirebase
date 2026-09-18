@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Annotated
 from urllib.parse import urlsplit
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import (  # ruff: ignore[typing-only-third-party-import] - FastAPI resolves this dependency at runtime
     AsyncSession,
@@ -18,6 +18,7 @@ from quirebase.audit import (
 from quirebase.core.config import get_settings
 from quirebase.core.database import get_db
 from quirebase.models import User
+from quirebase.web.errors import ApiHTTPException
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -87,10 +88,11 @@ async def current_api_user(
     yield login.user
 
 
-def _authentication_required() -> HTTPException:
-    return HTTPException(
+def _authentication_required() -> ApiHTTPException:
+    return ApiHTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="authentication required",
+        code="authentication_required",
+        message="authentication required",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
@@ -123,7 +125,8 @@ def require_same_origin(request: Request) -> None:
     expected = get_settings().external_origin or str(request.base_url).rstrip("/")
     expected_origin = _normalized_origin(expected)
     if expected_origin is None or _normalized_origin(supplied) != expected_origin:
-        raise HTTPException(
+        raise ApiHTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="origin does not match request origin",
+            code="origin_mismatch",
+            message="origin does not match request origin",
         )

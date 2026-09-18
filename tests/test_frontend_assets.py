@@ -29,6 +29,12 @@ def test_frontend_build_stays_outside_the_python_source_tree():
     assert not (ROOT / "src/quirebase/static").exists()
 
 
+def test_development_proxy_keeps_fastapi_documentation_on_the_frontend_origin():
+    vite = read("frontend/vite.config.ts")
+    assert "'/docs': { target: apiOrigin }" in vite
+    assert "'/openapi.json': { target: apiOrigin }" in vite
+
+
 def test_wheel_and_sdist_include_generated_static_assets():
     pyproject = read("pyproject.toml")
     hook = read("scripts/hatch_build.py")
@@ -86,9 +92,12 @@ def test_docker_builds_the_svelte_workspace_before_the_python_wheel():
 
 def test_item_workspace_uses_the_fixed_query_annotation_review_projection():
     workspace = read("frontend/src/lib/ItemWorkspace.svelte")
-    assert "'/items/{item_id}/annotations/review'" in workspace
+    annotations = read("frontend/src/lib/features/item/ItemAnnotationsSection.svelte")
+    queries = read("frontend/src/lib/features/item/queries.ts")
+    assert "itemAnnotationsReviewQuery" in annotations
+    assert "'/items/{item_id}/annotations/review'" in queries
     assert "annotationProjects" not in workspace
-    assert "annotationsError" in workspace
+    assert "annotations.isError" in annotations
 
 
 def test_project_workspace_separates_administrator_lifecycle_from_membership_actions():

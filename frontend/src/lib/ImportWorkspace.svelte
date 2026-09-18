@@ -6,6 +6,7 @@
 	import { onDestroy, onMount } from 'svelte';
 	import { SvelteMap } from 'svelte/reactivity';
 	import { apiRequest } from '$lib/api/client';
+	import { apiErrorMessage } from '$lib/api/errors';
 	import type { components } from '$lib/api/schema';
 	import { waitForWorkflow } from '$lib/api/workflows';
 	import Icon from '$lib/design/Icon.svelte';
@@ -61,7 +62,7 @@
 				})
 			);
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : $t('Unable to load Import preview');
+			error = apiErrorMessage(reason, $t('Unable to load Import preview'));
 		} finally {
 			busy = false;
 		}
@@ -86,7 +87,7 @@
 			acceptBatch(refreshed);
 			error = '';
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : $t('Unable to refresh Import preview');
+			error = apiErrorMessage(reason, $t('Unable to refresh Import preview'));
 		}
 	}
 
@@ -100,7 +101,7 @@
 				})
 			);
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : $t('Import preview failed');
+			error = apiErrorMessage(reason, $t('Import preview failed'));
 		} finally {
 			busy = false;
 		}
@@ -126,7 +127,7 @@
 				pdfInput.value = '';
 			}
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : $t('Upload failed');
+			error = apiErrorMessage(reason, $t('Upload failed'));
 		} finally {
 			busy = false;
 		}
@@ -158,7 +159,7 @@
 			});
 			acceptBatch({ ...batch, ...result, errors: [] });
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : $t('Unable to retry Import');
+			error = apiErrorMessage(reason, $t('Unable to retry Import'));
 		} finally {
 			busy = false;
 		}
@@ -176,7 +177,7 @@
 			await queryClient.invalidateQueries({ queryKey: ['library'] });
 			await goto(resolve('/library'));
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : $t('Unable to commit Import');
+			error = apiErrorMessage(reason, $t('Unable to commit Import'));
 		} finally {
 			busy = false;
 		}
@@ -193,7 +194,7 @@
 			stopPolling();
 			batch = null;
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : $t('Unable to discard Import');
+			error = apiErrorMessage(reason, $t('Unable to discard Import'));
 		} finally {
 			busy = false;
 		}
@@ -207,7 +208,7 @@
 			await queryClient.invalidateQueries({ queryKey: ['library'] });
 			await goto(resolve('/(app)/item/[itemId]', { itemId: item.id }));
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : $t('Unable to create Item');
+			error = apiErrorMessage(reason, $t('Unable to create Item'));
 		} finally {
 			busy = false;
 		}
@@ -229,36 +230,36 @@
 
 <div class="mb-7 flex flex-wrap items-end justify-between gap-4">
 	<div>
-		<p class="mb-2 text-xs font-bold tracking-[0.12em] text-primary-700 uppercase">
+		<p class="mb-2 text-xs font-bold tracking-[0.12em] text-primary-700-300 uppercase">
 			{$t('Add to Library')}
 		</p>
 		<h1 class="mb-2">{$t('Import')}</h1>
-		<p class="mb-0 max-w-2xl text-surface-600">
+		<p class="mb-0 max-w-2xl text-surface-600-400">
 			{$t('Bring records into Quirebase from an identifier, a bibliography, or published PDFs.')}
 		</p>
 	</div>
 </div>
 <ol
-	class="mb-5 grid list-none gap-px overflow-hidden rounded-xl border border-surface-300 bg-surface-300 p-0 sm:grid-cols-3"
+	class="mb-5 grid list-none gap-px overflow-hidden rounded-xl border border-surface-300-700 bg-surface-300-700 p-0 sm:grid-cols-3"
 >
 	{#each [{ number: '1', title: $t('Choose a source'), text: $t('Identifier, file, or PDFs') }, { number: '2', title: $t('Review the preview'), text: $t('Check records and diagnostics') }, { number: '3', title: $t('Commit to Library'), text: $t('Save only when you approve') }] as step (step.number)}
-		<li class="flex items-center gap-3 bg-surface-50 px-4 py-3">
+		<li class="flex items-center gap-3 bg-surface-50-950 px-4 py-3">
 			<span
-				class="grid size-7 shrink-0 place-items-center rounded-full bg-primary-50 text-xs font-bold text-primary-800"
+				class="grid size-7 shrink-0 place-items-center rounded-full bg-primary-50-950 text-xs font-bold text-primary-800-200"
 				>{step.number}</span
 			>
 			<span class="min-w-0"
-				><strong class="block text-sm">{step.title}</strong><small class="text-surface-600"
+				><strong class="block text-sm">{step.title}</strong><small class="text-surface-600-400"
 					>{step.text}</small
 				></span
 			>
 		</li>
 	{/each}
 </ol>
-{#if error}<p class="text-error-700" role="alert">{error}</p>{/if}
+{#if error}<p class="text-error-700-300" role="alert">{error}</p>{/if}
 <div class="grid items-start gap-4 lg:grid-cols-3">
 	<form
-		class="stack h-full card border border-surface-300 bg-surface-50 p-5 shadow-sm"
+		class="stack h-full min-w-0 card border border-surface-300-700 bg-surface-50-950 p-5 shadow-sm"
 		onsubmit={(event) => {
 			event.preventDefault();
 			importIdentifier();
@@ -266,12 +267,12 @@
 	>
 		<div class="flex items-start gap-3">
 			<span
-				class="grid size-10 shrink-0 place-items-center rounded-lg bg-primary-50 text-primary-800"
+				class="grid size-10 shrink-0 place-items-center rounded-lg bg-primary-50-950 text-primary-800-200"
 				><Icon name="search" size={20} /></span
 			>
 			<div>
 				<h2 class="mb-1">{$t('Look up an identifier')}</h2>
-				<p class="mb-0 text-sm text-surface-600">
+				<p class="mb-0 text-sm text-surface-600-400">
 					{$t('Fetch one record from DOI, PubMed, arXiv, and other scholarly providers.')}
 				</p>
 			</div>
@@ -299,7 +300,7 @@
 		>
 	</form>
 	<form
-		class="stack h-full card border border-surface-300 bg-surface-50 p-5 shadow-sm"
+		class="stack h-full card border border-surface-300-700 bg-surface-50-950 p-5 shadow-sm"
 		onsubmit={(event) => {
 			event.preventDefault();
 			upload(event, 'bibliography');
@@ -307,12 +308,12 @@
 	>
 		<div class="flex items-start gap-3">
 			<span
-				class="grid size-10 shrink-0 place-items-center rounded-lg bg-primary-50 text-primary-800"
+				class="grid size-10 shrink-0 place-items-center rounded-lg bg-primary-50-950 text-primary-800-200"
 				><Icon name="library" size={20} /></span
 			>
 			<div>
 				<h2 class="mb-1">{$t('Upload a bibliography')}</h2>
-				<p class="mb-0 text-sm text-surface-600">
+				<p class="mb-0 text-sm text-surface-600-400">
 					{$t('Stage many records from a reference manager export.')}
 				</p>
 			</div>
@@ -336,7 +337,7 @@
 		>
 	</form>
 	<form
-		class="stack h-full card border border-surface-300 bg-surface-50 p-5 shadow-sm"
+		class="stack h-full min-w-0 card border border-surface-300-700 bg-surface-50-950 p-5 shadow-sm"
 		onsubmit={(event) => {
 			event.preventDefault();
 			upload(event, 'pdfs');
@@ -344,12 +345,12 @@
 	>
 		<div class="flex items-start gap-3">
 			<span
-				class="grid size-10 shrink-0 place-items-center rounded-lg bg-primary-50 text-primary-800"
+				class="grid size-10 shrink-0 place-items-center rounded-lg bg-primary-50-950 text-primary-800-200"
 				><Icon name="import" size={20} /></span
 			>
 			<div>
 				<h2 class="mb-1">{$t('Import published PDFs')}</h2>
-				<p class="mb-0 text-sm text-surface-600">
+				<p class="mb-0 text-sm text-surface-600-400">
 					{$t('Extract metadata and keep the papers together in one Import Batch.')}
 				</p>
 			</div>
@@ -366,16 +367,16 @@
 				onchange={addPdfFiles}
 			/></label
 		>
-		<p class="text-sm text-surface-600">
+		<p class="text-sm text-surface-600-400">
 			{$t('Choose PDFs more than once to add them to the same batch.')}
 		</p>
-		{#if pdfFiles.length}<ul class="m-0 grid list-none gap-2 p-0" aria-live="polite">
+		{#if pdfFiles.length}<ul class="m-0 grid min-w-0 list-none gap-2 p-0" aria-live="polite">
 				{#each pdfFiles as file (`${file.name}:${file.size}:${file.lastModified}`)}<li
-						class="flex items-center justify-between gap-3 rounded-lg border border-surface-300 px-3 py-2 text-sm"
+						class="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-surface-300-700 px-3 py-2 text-sm"
 					>
-						<span class="truncate">{file.name}</span><button
+						<span class="min-w-0 flex-1 truncate" title={file.name}>{file.name}</span><button
 							type="button"
-							class="btn preset-tonal-surface font-semibold"
+							class="btn shrink-0 preset-tonal-surface font-semibold"
 							onclick={() => removePdf(file)}>{$t('Remove')}</button
 						>
 					</li>{/each}
@@ -387,11 +388,11 @@
 	</form>
 </div>
 <section
-	class="bg-surface/60 mt-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-dashed border-surface-400 px-5 py-4"
+	class="bg-surface/60 mt-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-dashed border-surface-400-600 px-5 py-4"
 >
 	<div>
 		<h2 class="mb-1">{$t('Create an Item manually')}</h2>
-		<p class="mb-0 text-sm text-surface-600">
+		<p class="mb-0 text-sm text-surface-600-400">
 			{$t('Use the metadata editor when no import source is available.')}
 		</p>
 	</div>
@@ -400,7 +401,9 @@
 	>
 </section>
 {#if manualOpen}
-	<section class="list-panel stack card border border-surface-300 bg-surface-50 p-5 shadow-sm">
+	<section
+		class="list-panel stack card border border-surface-300-700 bg-surface-50-950 p-5 shadow-sm"
+	>
 		<div>
 			<p class="eyebrow">{$t('Manual creation')}</p>
 			<h2>{$t('New Item metadata')}</h2>
@@ -414,11 +417,11 @@
 	</section>
 {/if}
 {#if batch}
-	<section class="mt-6 card border border-surface-300 bg-surface-50 p-5 shadow-sm">
+	<section class="mt-6 card border border-surface-300-700 bg-surface-50-950 p-5 shadow-sm">
 		<div class="workspace-header">
 			<div>
 				<h2>{$t('Import preview')}</h2>
-				<p class="text-surface-600">
+				<p class="text-surface-600-400">
 					{batch.records.length}
 					{$t('records')} · {batch.errors.length}
 					{$t('diagnostics')} · {$t(domainLabel(batch.status))}
@@ -442,14 +445,14 @@
 		</div>
 		{#if batch.status === 'pending'}
 			<p
-				class="rounded-base border border-success-200 preset-tonal-success px-4 py-3 text-success-900"
+				class="rounded-base border border-success-200-800 preset-tonal-success px-4 py-3 text-success-900-100"
 				role="status"
 			>
 				{$t('Preparing uploaded PDFs…')}
 			</p>
 		{:else if batch.status === 'committed'}
 			<p
-				class="rounded-base border border-success-200 preset-tonal-success px-4 py-3 text-success-900"
+				class="rounded-base border border-success-200-800 preset-tonal-success px-4 py-3 text-success-900-100"
 				role="status"
 			>
 				{$t('This Import Batch has already been committed.')}
@@ -458,8 +461,8 @@
 		{#each previewRecords as record (record)}
 			<div class="item-row">
 				<strong><RichText html={String(record.title ?? $t('Untitled'))} /></strong>
-				<span class="text-surface-600">{String(record.authors ?? record.doi ?? '')}</span>
-				{#if record.original_name}<span class="text-surface-600"
+				<span class="text-surface-600-400">{String(record.authors ?? record.doi ?? '')}</span>
+				{#if record.original_name}<span class="text-surface-600-400"
 						>{String(record.original_name)}</span
 					>{/if}
 			</div>
@@ -483,7 +486,7 @@
 			<h3>{$t('Diagnostics')}</h3>
 		{/if}
 		{#each batch.errors as diagnostic (diagnostic)}
-			<div class="grid gap-1 text-error-700">
+			<div class="grid gap-1 text-error-700-300">
 				<strong>{String(diagnostic.message ?? diagnostic.code)}</strong>
 				{#if diagnostic.filename}<span>{String(diagnostic.filename)}</span>{/if}
 				{#if diagnostic.row || diagnostic.code}<small

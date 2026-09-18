@@ -28,6 +28,7 @@ from quirebase.documents.exports import (
 from quirebase.documents.remote import acquire_remote_attachment
 from quirebase.documents.revisions import (
     ItemThumbnail,
+    ItemThumbnailSource,
     UnsupportedMediaType,
     create_attachment,
     delete_attachment,
@@ -40,6 +41,7 @@ from quirebase.documents.revisions import (
     get_revision_file,
     get_revision_thumbnail,
     head_revision_file,
+    resolve_item_thumbnail,
     store_pdf_revision,
 )
 from quirebase.documents.schemas import (
@@ -68,6 +70,7 @@ __all__ = [
     "DocumentNotReady",
     "ItemDownloadBundle",
     "ItemThumbnail",
+    "ItemThumbnailSource",
     "Point",
     "Rect",
     "UnsupportedMediaType",
@@ -94,6 +97,7 @@ __all__ = [
     "get_revision_thumbnail",
     "head_revision_file",
     "list_document_annotations",
+    "resolve_item_thumbnail",
     "restore_annotation_reply",
     "restore_document_annotation",
     "review_item_annotations",

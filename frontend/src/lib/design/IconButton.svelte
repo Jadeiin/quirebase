@@ -20,7 +20,7 @@
 <Tooltip openDelay={450} closeDelay={100} positioning={{ placement: 'bottom', gutter: 7 }}>
 	<Tooltip.Trigger
 		type="button"
-		class={`inline-grid size-9 shrink-0 cursor-pointer place-items-center rounded-md border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${active ? 'border-surface-300 bg-primary-50 text-primary-800' : 'border-transparent bg-transparent text-current hover:border-surface-300 hover:bg-surface-200 hover:text-primary-800'}`}
+		class={`inline-grid size-9 shrink-0 cursor-pointer place-items-center rounded-md border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${active ? 'border-surface-300-700 bg-primary-50-950 text-primary-800-200' : 'border-transparent bg-transparent text-current hover:border-surface-300-700 hover:bg-surface-200-800 hover:text-primary-800-200'}`}
 		aria-label={label}
 		aria-pressed={active || undefined}
 		{disabled}

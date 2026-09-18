@@ -58,6 +58,11 @@ class ItemLatestRevisionView(BaseModel):
     processing_state: str
 
 
+class ItemThumbnailView(BaseModel):
+    source_kind: str
+    source_id: str
+
+
 class ItemWorkspaceView(BaseModel):
     item: ItemSearchView
     permissions: ItemWorkspacePermissionsView
@@ -66,6 +71,7 @@ class ItemWorkspaceView(BaseModel):
     owner: ItemOwnerView
     identifiers: list[ItemIdentifierView]
     latest_revision: ItemLatestRevisionView | None = None
+    thumbnail: ItemThumbnailView | None = None
 
 
 class ItemOrganizeProjectView(BaseModel):

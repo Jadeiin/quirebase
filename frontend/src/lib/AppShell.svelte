@@ -1,14 +1,22 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { Menu, Portal } from '@skeletonlabs/skeleton-svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { onMount, type Snippet } from 'svelte';
 	import { apiRequest } from '$lib/api/client';
+	import { apiErrorMessage } from '$lib/api/errors';
 	import Icon from '$lib/design/Icon.svelte';
 	import { domainLabel } from '$lib/domain-labels';
 	import { activateLocale, msg, t } from '$lib/i18n';
 	import Login from '$lib/Login.svelte';
+	import {
+		applyTheme,
+		readThemePreference,
+		saveThemePreference,
+		type ThemePreference
+	} from '$lib/theme';
 
 	let { children } = $props<{ children: Snippet }>();
 
@@ -25,18 +33,50 @@
 		['/projects', msg('Projects'), 'projects'],
 		['/tools', msg('Tools'), 'tools']
 	] as const;
+	const mobileNav = [
+		['/library', msg('Library'), 'library'],
+		['/discovery', msg('Discovery'), 'search'],
+		['/projects', msg('Projects'), 'projects']
+	] as const;
+	const mobileMoreNav = [
+		['/', msg('Dashboard'), 'dashboard'],
+		['/import', msg('Import'), 'import'],
+		['/tools', msg('Tools'), 'tools'],
+		['/account', msg('Account settings'), 'user']
+	] as const;
+	const themeOptions = [
+		['system', msg('System theme'), 'monitor'],
+		['light', msg('Light theme'), 'sun'],
+		['dark', msg('Dark theme'), 'moon']
+	] as const;
 	const routeIsActive = (route: string) =>
 		route === '/' ? page.url.pathname === route : page.url.pathname.startsWith(route);
 	const readerRoute = $derived(/\/item\/[^/]+\/pdf\/[^/]+$/.test(page.url.pathname));
 	let sidebarCollapsed = $state(false);
 	let actionError = $state('');
 	let actionBusy = $state(false);
+	let themePreference = $state<ThemePreference>('system');
+	let colorSchemeQuery: MediaQueryList | undefined;
 	onMount(() => {
 		sidebarCollapsed = localStorage.getItem('quirebase:sidebar-collapsed') === 'true';
+		themePreference = readThemePreference();
+		colorSchemeQuery = matchMedia('(prefers-color-scheme: dark)');
+		applyTheme(themePreference, colorSchemeQuery.matches);
+		const handleColorSchemeChange = () => {
+			if (themePreference === 'system' && colorSchemeQuery)
+				applyTheme(themePreference, colorSchemeQuery.matches);
+		};
+		colorSchemeQuery.addEventListener('change', handleColorSchemeChange);
+		return () => colorSchemeQuery?.removeEventListener('change', handleColorSchemeChange);
 	});
 	function toggleSidebar() {
 		sidebarCollapsed = !sidebarCollapsed;
 		localStorage.setItem('quirebase:sidebar-collapsed', String(sidebarCollapsed));
+	}
+	function setThemePreference(preference: ThemePreference) {
+		themePreference = preference;
+		saveThemePreference(preference);
+		applyTheme(preference, colorSchemeQuery?.matches ?? false);
 	}
 	async function logout() {
 		if (actionBusy) return;
@@ -46,7 +86,7 @@
 			await apiRequest('DELETE', '/session');
 			location.assign('/');
 		} catch (reason) {
-			actionError = reason instanceof Error ? reason.message : $t('Account action failed');
+			actionError = apiErrorMessage(reason, $t('Account action failed'));
 		} finally {
 			actionBusy = false;
 		}
@@ -57,7 +97,7 @@
 </script>
 
 {#if session.isPending}
-	<main class="workspace"><p class="text-surface-600">{$t('Loading Quirebase…')}</p></main>
+	<main class="workspace"><p class="text-surface-600-400">{$t('Loading Quirebase…')}</p></main>
 {:else if !session.data?.authenticated}
 	<Login />
 {:else}
@@ -72,7 +112,7 @@
 			Quirebase</a
 		>
 		<a
-			class="grid size-8 place-items-center rounded-full bg-[#d7eee3] font-extrabold text-primary-800 no-underline"
+			class="grid size-8 place-items-center rounded-full bg-primary-100 font-extrabold text-primary-800 no-underline"
 			href={resolve('/account')}>{session.data.user?.username.slice(0, 1).toUpperCase()}</a
 		>
 	</div>
@@ -80,14 +120,14 @@
 		class={`min-h-screen md:grid ${sidebarCollapsed ? 'md:grid-cols-[4.75rem_minmax(0,1fr)]' : 'md:grid-cols-[15.5rem_minmax(0,1fr)]'} ${readerRoute ? '' : 'pb-16 md:pb-0'}`}
 	>
 		<aside
-			class={`sticky top-0 hidden h-screen flex-col gap-4 bg-primary-950 py-5 text-[#edf5f1] transition-[padding] md:flex ${sidebarCollapsed ? 'px-2.5' : 'px-3.5'}`}
+			class={`sticky top-0 hidden h-screen flex-col gap-4 bg-primary-950 py-5 text-primary-50 transition-[padding] md:flex ${sidebarCollapsed ? 'px-2.5' : 'px-3.5'}`}
 		>
 			<div class="flex items-center gap-1 pb-3">
 				<a
 					class={`flex min-w-0 flex-1 items-center gap-3 text-xl font-extrabold tracking-tight text-white no-underline ${sidebarCollapsed ? 'justify-center' : 'px-2'}`}
 					href={resolve('/')}
 					><span
-						class="grid size-8 shrink-0 place-items-center rounded-xl bg-[#f1faf5] font-serif text-xl text-primary-800"
+						class="grid size-8 shrink-0 place-items-center rounded-xl bg-primary-50 font-serif text-xl text-primary-800"
 						>Q</span
 					>{#if !sidebarCollapsed}<span>Quirebase</span>{/if}</a
 				>
@@ -134,7 +174,7 @@
 						class="flex w-full cursor-pointer items-center gap-2.5 rounded-lg border-0 bg-white/7 p-2 text-white transition-colors hover:bg-white/12"
 					>
 						<span
-							class="grid size-8 shrink-0 place-items-center rounded-full bg-[#d7eee3] font-extrabold text-primary-800"
+							class="grid size-8 shrink-0 place-items-center rounded-full bg-primary-100 font-extrabold text-primary-800"
 							>{session.data.user?.username.slice(0, 1).toUpperCase()}</span
 						>
 						{#if !sidebarCollapsed}<span class="grid min-w-0 flex-1 text-left"
@@ -148,18 +188,37 @@
 					<Portal>
 						<Menu.Positioner class="z-100">
 							<Menu.Content
-								class="min-w-56 rounded-container border border-surface-300 bg-surface-50 p-1 shadow-xl"
+								class="min-w-56 rounded-container border border-surface-300-700 bg-surface-50-950 p-1 shadow-xl"
 							>
 								<Menu.Item
 									value="account-settings"
-									class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none data-[highlighted]:bg-primary-50 data-[highlighted]:text-primary-800"
-									onclick={() => location.assign(resolve('/account'))}
+									class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
+									onclick={() => goto(resolve('/account'))}
 									><Icon name="user" /> {$t('Account settings')}</Menu.Item
 								>
-								<Menu.Separator class="m-1 h-px bg-surface-300" />
+								<Menu.Separator class="m-1 h-px bg-surface-300-700" />
+								<div
+									class="px-2.5 py-1.5 text-xs font-bold tracking-wide text-surface-600-400 uppercase"
+								>
+									{$t('Appearance')}
+								</div>
+								{#each themeOptions as [preference, label, icon] (preference)}
+									<Menu.Item
+										value={`theme-${preference}`}
+										class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none data-[active=true]:bg-primary-50-950 data-[active=true]:text-primary-800-200 data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
+										data-active={themePreference === preference}
+										onclick={() => setThemePreference(preference)}
+										><Icon name={icon} />
+										<span>{$t(label)}</span>{#if themePreference === preference}<span
+												class="ml-auto"
+												aria-hidden="true">✓</span
+											>{/if}</Menu.Item
+									>
+								{/each}
+								<Menu.Separator class="m-1 h-px bg-surface-300-700" />
 								<Menu.Item
 									value="sign-out"
-									class="flex cursor-pointer items-center rounded-md px-2.5 py-2 text-sm text-error-700 outline-none data-[highlighted]:bg-red-50"
+									class="flex cursor-pointer items-center rounded-md px-2.5 py-2 text-sm text-error-700-300 outline-none data-[highlighted]:bg-error-50-950"
 									disabled={actionBusy}
 									onclick={logout}>{$t('Sign out')}</Menu.Item
 								>
@@ -174,29 +233,80 @@
 				? 'mx-auto min-h-0 w-full max-w-[100rem] min-w-0'
 				: 'mx-auto w-full max-w-[100rem] min-w-0 p-4 md:p-[clamp(1.25rem,3vw,2.75rem)]'}
 		>
-			{#if actionError}<p class="text-error-700" role="alert">{actionError}</p>{/if}
+			{#if actionError}<p class="text-error-700-300" role="alert">{actionError}</p>{/if}
 			{@render children()}
 		</main>
 	</div>
 	<nav
-		class={`fixed inset-x-0 bottom-0 z-50 overflow-x-auto bg-primary-950 text-[#dbe4f0] md:hidden ${readerRoute ? 'hidden' : 'flex'}`}
+		class={`fixed inset-x-0 bottom-0 z-50 overflow-x-auto bg-primary-950 text-surface-300 md:hidden ${readerRoute ? 'hidden' : 'flex'}`}
 		aria-label={$t('Mobile navigation')}
 	>
-		{#each nav as [route, label, icon] (route)}
+		{#each mobileNav as [route, label, icon] (route)}
 			<a
-				class="flex min-w-20 flex-1 flex-col items-center gap-1 px-1.5 py-2 text-xs no-underline aria-[current=page]:bg-white/10 aria-[current=page]:text-white"
+				class="flex min-w-18 flex-1 flex-col items-center gap-1 px-1.5 py-2 text-xs no-underline aria-[current=page]:bg-white/10 aria-[current=page]:text-white"
 				href={resolve(route)}
-				aria-current={routeIsActive(route) ? 'page' : undefined}
-				><Icon name={icon} size={19} /><span>{$t(label)}</span></a
+				aria-current={route === '/library'
+					? routeIsActive(route) || page.url.pathname.startsWith('/item/')
+						? 'page'
+						: undefined
+					: routeIsActive(route)
+						? 'page'
+						: undefined}><Icon name={icon} size={19} /><span>{$t(label)}</span></a
 			>
 		{/each}
-		{#if session.data.user?.role === 'administrator'}
-			<a
-				class="flex min-w-20 flex-1 flex-col items-center gap-1 px-1.5 py-2 text-xs no-underline aria-[current=page]:bg-white/10 aria-[current=page]:text-white"
-				href={resolve('/admin')}
-				aria-current={routeIsActive('/admin') ? 'page' : undefined}
-				><Icon name="admin" size={19} /><span>{$t('Administration')}</span></a
+		<Menu positioning={{ placement: 'top-end', gutter: 8 }}>
+			<Menu.Trigger
+				class="flex min-w-18 flex-1 cursor-pointer flex-col items-center gap-1 border-0 bg-transparent px-1.5 py-2 text-xs text-inherit aria-[current=page]:bg-white/10 aria-[current=page]:text-white"
+				aria-current={['/', '/import', '/tools', '/admin', '/account'].some((route) =>
+					routeIsActive(route)
+				)
+					? 'page'
+					: undefined}
 			>
-		{/if}
+				<Icon name="more" size={19} /><span>{$t('More')}</span>
+			</Menu.Trigger>
+			<Portal>
+				<Menu.Positioner class="z-100">
+					<Menu.Content
+						class="min-w-52 rounded-container border border-surface-300-700 bg-surface-50-950 p-1 text-surface-900-100 shadow-xl"
+					>
+						{#each mobileMoreNav as [route, label, icon] (route)}
+							<Menu.Item
+								value={route}
+								class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
+								onclick={() => goto(resolve(route))}><Icon name={icon} /> {$t(label)}</Menu.Item
+							>
+						{/each}
+						<Menu.Separator class="m-1 h-px bg-surface-300-700" />
+						<div
+							class="px-2.5 py-1.5 text-xs font-bold tracking-wide text-surface-600-400 uppercase"
+						>
+							{$t('Appearance')}
+						</div>
+						{#each themeOptions as [preference, label, icon] (preference)}
+							<Menu.Item
+								value={`mobile-theme-${preference}`}
+								class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none data-[active=true]:bg-primary-50-950 data-[active=true]:text-primary-800-200 data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
+								data-active={themePreference === preference}
+								onclick={() => setThemePreference(preference)}
+								><Icon name={icon} />
+								<span>{$t(label)}</span>{#if themePreference === preference}<span
+										class="ml-auto"
+										aria-hidden="true">✓</span
+									>{/if}</Menu.Item
+							>
+						{/each}
+						{#if session.data.user?.role === 'administrator'}
+							<Menu.Item
+								value="/admin"
+								class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
+								onclick={() => goto(resolve('/admin'))}
+								><Icon name="admin" /> {$t('Administration')}</Menu.Item
+							>
+						{/if}
+					</Menu.Content>
+				</Menu.Positioner>
+			</Portal>
+		</Menu>
 	</nav>
 {/if}

@@ -71,7 +71,7 @@ async def authenticated_async_client(db, session_factory, tmp_path, monkeypatch)
 
     test_app.dependency_overrides[get_db] = override_db
     client = httpx2.AsyncClient(
-        transport=httpx2.ASGITransport(app=test_app),
+        transport=httpx2.ASGITransport(app=test_app, raise_app_exceptions=False),
         base_url="http://testserver",
         headers={
             "Accept-Language": "zh-CN,zh;q=0.9",
@@ -293,11 +293,15 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
             "quirebase.documents.bundles.export_annotations",
             failing_export_annotations,
         )
-        with pytest.raises(RuntimeError, match="annotation export failed"):
-            await client.get(
-                f"/api/v1/items/{item.id}/revisions/{revision.id}/export",
-                params={"include_annotations": True},
-            )
+        failed_export = await client.get(
+            f"/api/v1/items/{item.id}/revisions/{revision.id}/export",
+            params={"include_annotations": True},
+        )
+        assert failed_export.status_code == 500
+        assert failed_export.json() == {
+            "code": "internal_error",
+            "message": "internal server error",
+        }
         assert len(failed_export_paths) == 1
         assert not failed_export_paths[0].exists()
 

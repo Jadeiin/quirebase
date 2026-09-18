@@ -3,6 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { apiRequest } from '$lib/api/client';
+	import { apiErrorMessage } from '$lib/api/errors';
 	import type { components } from '$lib/api/schema';
 	import RichText from '$lib/design/RichText.svelte';
 	import { t } from '$lib/i18n';
@@ -51,7 +52,7 @@
 				}
 			});
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : $t('Search failed');
+			error = apiErrorMessage(reason, $t('Search failed'));
 		} finally {
 			busy = false;
 		}
@@ -67,7 +68,7 @@
 			});
 			await goto(resolve(`/import?batch=${encodeURIComponent(batch.id)}`));
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : $t('Import preview failed');
+			error = apiErrorMessage(reason, $t('Import preview failed'));
 		} finally {
 			importing = '';
 		}
@@ -86,14 +87,14 @@
 	<div>
 		<p class="eyebrow">{$t('External metadata')}</p>
 		<h1>{$t('Discovery')}</h1>
-		<p class="text-surface-600">
+		<p class="text-surface-600-400">
 			{$t('Build a precise query, then review candidates before Import.')}
 		</p>
 	</div>
 </div>
 
 <form
-	class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm"
+	class="stack card border border-surface-300-700 bg-surface-50-950 p-5 shadow-sm"
 	onsubmit={(event) => {
 		event.preventDefault();
 		void search();
@@ -172,17 +173,17 @@
 	</div>
 </form>
 
-{#if error}<p class="mt-4 text-error-700" role="alert">{error}</p>{/if}
+{#if error}<p class="mt-4 text-error-700-300" role="alert">{error}</p>{/if}
 
-<section class="list-panel card border border-surface-300 bg-surface-50 p-5 shadow-sm">
+<section class="list-panel card border border-surface-300-700 bg-surface-50-950 p-5 shadow-sm">
 	<div class="workspace-header">
 		<div>
 			<h2>{$t('Candidate Records')}</h2>
-			{#if results}<p class="text-surface-600">{results.total} {$t('results')}</p>{/if}
+			{#if results}<p class="text-surface-600-400">{results.total} {$t('results')}</p>{/if}
 		</div>
 	</div>
 	{#each results?.results ?? [] as candidate (`${candidate.provider}:${candidate.identifier_provider}:${candidate.identifier}`)}
-		<article class="border-b border-surface-300 py-5 last:border-0">
+		<article class="border-b border-surface-300-700 py-5 last:border-0">
 			<div class="flex flex-wrap items-start justify-between gap-4">
 				<div class="min-w-0 flex-1">
 					<div class="flex flex-wrap items-center gap-2">
@@ -191,16 +192,16 @@
 								>{$t('Already in Library')}</span
 							>{/if}
 					</div>
-					<p class="mb-1 text-sm text-surface-700">
+					<p class="mb-1 text-sm text-surface-700-300">
 						{candidate.authors ?? $t('Unknown contributors')}
 					</p>
-					<p class="mb-2 text-sm text-surface-600">
+					<p class="mb-2 text-sm text-surface-600-400">
 						{candidate.publication_title ?? $t('Unknown publication')}
 						{#if candidate.publication_date}
 							· {candidate.publication_date}{/if}
 					</p>
 					{#if candidate.abstract}
-						<div class="line-clamp-3 text-sm text-surface-700">
+						<div class="line-clamp-3 text-sm text-surface-700-300">
 							<RichText html={candidate.abstract} />
 						</div>
 					{/if}
@@ -221,7 +222,7 @@
 			</div>
 		</article>
 	{:else}
-		<p class="text-surface-600">{$t('Search results will appear here.')}</p>
+		<p class="text-surface-600-400">{$t('Search results will appear here.')}</p>
 	{/each}
 	{#if results && pageCount > 1}
 		<nav class="pagination" aria-label={$t('Discovery result pages')}>

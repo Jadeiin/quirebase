@@ -13,6 +13,7 @@ from test_http import authenticated_async_client
 from quirebase.core.config import get_settings
 from quirebase.core.crypto import token_hash
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
+from quirebase.core.storage import ObjectSuffix, get_object_store
 from quirebase.library import (
     AnnotationsWorkspace,
     DiscussionWorkspace,
@@ -25,6 +26,7 @@ from quirebase.library import (
 )
 from quirebase.models import (
     Attachment,
+    AttachmentRole,
     AuditEvent,
     DiscussionMessage,
     Item,
@@ -132,6 +134,7 @@ async def test_item_workspace_separates_page_responsibilities(
         summary = await client.get(f"/api/v1/items/{item.id}/workspace")
         assert summary.status_code == 200
         assert summary.json()["latest_revision"]["id"] == revision.id
+        assert summary.json()["thumbnail"] is None
         assert summary.json()["tags"] == [{"id": tag.id, "name": "User priority"}]
         assert {tuple(row.values()) for row in summary.json()["identifiers"]} == {
             ("openalex", "W123"),
@@ -413,6 +416,59 @@ async def test_item_header_keeps_pdf_link_on_lightweight_sections(
         response = await client.get(f"/api/v1/items/{item.id}/revisions/{revision.id}/viewer")
         assert response.status_code == 200
         assert response.json()["revision"]["content_url"].endswith(f"/{revision.id}/content")
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_item_workspace_projection_includes_thumbnail_metadata(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    try:
+        response = await client.get(f"/api/v1/items/{item.id}/workspace")
+        assert response.status_code == 200
+        assert response.json()["thumbnail"] is None
+
+        store = get_object_store()
+        thumb = await store.put_object(
+            uuid4(), ObjectSuffix.PNG, b"\x89PNG\r\n\x1a\nthumb", max_bytes=100
+        )
+        revision.thumbnail_object_key = thumb.key
+        await db.commit()
+
+        response = await client.get(f"/api/v1/items/{item.id}/workspace")
+        assert response.status_code == 200
+        assert response.json()["thumbnail"] == {
+            "source_kind": "pdf_thumbnail",
+            "source_id": revision.id,
+        }
+
+        ga_obj = await store.put_object(
+            uuid4(), ObjectSuffix.PNG, b"\x89PNG\r\n\x1a\ngraphical", max_bytes=100
+        )
+        graphical_abstract = Attachment(
+            item_id=item.id,
+            object_key=ga_obj.key,
+            mime_type="image/png",
+            role=AttachmentRole.graphical_abstract,
+            size=ga_obj.size,
+            original_name="graphical_abstract.png",
+            created_by=revision.created_by,
+        )
+        db.add(graphical_abstract)
+        await db.commit()
+
+        response = await client.get(f"/api/v1/items/{item.id}/workspace")
+        assert response.status_code == 200
+        assert response.json()["thumbnail"] == {
+            "source_kind": "graphical_abstract",
+            "source_id": graphical_abstract.id,
+        }
     finally:
         await client.aclose()
         get_settings.cache_clear()

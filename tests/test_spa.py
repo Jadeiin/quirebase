@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import base64
+import hashlib
+import re
+
 import pytest
 from test_http import authenticated_async_client
 
@@ -16,6 +20,7 @@ async def test_frontend_routes_return_the_static_svelte_application(
     try:
         library = await client.get("/library", headers={"Accept": "text/html"})
         deep_link = await client.get("/item/example/metadata", headers={"Accept": "text/html"})
+        theme_bootstrap = await client.get("/theme.js")
         api = await client.get("/api/v1/items")
     finally:
         await client.aclose()
@@ -24,7 +29,22 @@ async def test_frontend_routes_return_the_static_svelte_application(
     assert deep_link.status_code == 200
     assert "Quirebase research library" in library.text
     assert "_app/immutable" in deep_link.text
-    assert "sha256-" in library.headers["content-security-policy"]
+    csp = library.headers["content-security-policy"]
+    assert "sha256-" in csp
+    inline_scripts = [
+        body
+        for attributes, body in re.findall(
+            r"<script([^>]*)>(.*?)</script>", library.text, flags=re.DOTALL
+        )
+        if "src=" not in attributes
+    ]
+    assert inline_scripts
+    for script in inline_scripts:
+        digest = base64.b64encode(hashlib.sha256(script.encode()).digest()).decode()
+        assert f"'sha256-{digest}'" in csp
+    assert '<script src="/theme.js"></script>' in library.text
+    assert theme_bootstrap.status_code == 200
+    assert theme_bootstrap.headers["content-type"].startswith("text/javascript")
     assert api.headers["content-type"].startswith("application/json")
 
 

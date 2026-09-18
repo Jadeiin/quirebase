@@ -6,6 +6,7 @@
 	import { onMount } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { apiDownloadGet, apiRequest, apiText, type WorkspaceView } from '$lib/api/client';
+	import { apiErrorMessage } from '$lib/api/errors';
 	import Icon from '$lib/design/Icon.svelte';
 	import { domainLabel } from '$lib/domain-labels';
 	import {
@@ -89,7 +90,7 @@
 			await operation();
 			notice = success;
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : $t('Item action failed');
+			error = apiErrorMessage(reason, $t('Item action failed'));
 		} finally {
 			busy = false;
 		}
@@ -199,43 +200,43 @@
 		<Dialog.Backdrop class="fixed inset-0 z-70 bg-surface-950/45 backdrop-blur-[2px]" />
 		<Dialog.Positioner class="fixed inset-0 z-71 grid place-items-center p-4">
 			<Dialog.Content
-				class="grid max-h-[min(46rem,calc(100dvh-2rem))] w-full max-w-3xl grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden rounded-container border border-surface-300 bg-surface-50 shadow-2xl"
+				class="grid max-h-[min(46rem,calc(100dvh-2rem))] w-full max-w-3xl grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden rounded-container border border-surface-300-700 bg-surface-50-950 shadow-2xl"
 			>
-				<header class="flex items-center justify-between border-b border-surface-300 px-5 py-4">
+				<header class="flex items-center justify-between border-b border-surface-300-700 px-5 py-4">
 					<Dialog.Title class="text-lg font-bold">{$t('Item actions')}</Dialog.Title>
 					<Dialog.CloseTrigger class="btn-icon preset-tonal-surface" aria-label={$t('Close')}
 						><Icon name="close" /></Dialog.CloseTrigger
 					>
 				</header>
 				<nav
-					class="flex gap-1 overflow-x-auto border-b border-surface-300 px-3 pt-2"
+					class="flex gap-1 overflow-x-auto border-b border-surface-300-700 px-3 pt-2"
 					aria-label={$t('Item actions')}
 				>
 					<button
-						class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold data-[active=true]:border-primary-700 data-[active=true]:text-primary-700"
+						class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold data-[active=true]:border-primary-700-300 data-[active=true]:text-primary-700-300"
 						data-active={section === 'citation'}
 						onclick={() => (section = 'citation')}>{$t('Citation')}</button
 					>
 					{#if workspace.latest_revision}<button
-							class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold data-[active=true]:border-primary-700 data-[active=true]:text-primary-700"
+							class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold data-[active=true]:border-primary-700-300 data-[active=true]:text-primary-700-300"
 							data-active={section === 'documents'}
 							onclick={() => (section = 'documents')}>{$t('Documents')}</button
 						>{/if}
 					{#if workspace.permissions.edit}<button
-							class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold data-[active=true]:border-primary-700 data-[active=true]:text-primary-700"
+							class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold data-[active=true]:border-primary-700-300 data-[active=true]:text-primary-700-300"
 							data-active={section === 'sources'}
 							onclick={() => (section = 'sources')}>{$t('Metadata sources')}</button
 						>{/if}
 					{#if workspace.permissions.delete}<button
-							class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold text-error-700 data-[active=true]:border-error-700"
+							class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold text-error-700-300 data-[active=true]:border-error-700-300"
 							data-active={section === 'danger'}
 							onclick={() => (section = 'danger')}>{$t('Danger zone')}</button
 						>{/if}
 				</nav>
 				<div class="overflow-auto p-5">
-					{#if error}<p class="text-error-700" role="alert">{error}</p>{/if}
+					{#if error}<p class="text-error-700-300" role="alert">{error}</p>{/if}
 					{#if notice}<p
-							class="rounded-base border border-success-200 preset-tonal-success px-4 py-3 text-success-900"
+							class="rounded-base border border-success-200-800 preset-tonal-success px-4 py-3 text-success-900-100"
 							role="status"
 						>
 							{notice}
@@ -244,7 +245,7 @@
 						<div class="stack">
 							<div>
 								<h2>{$t('Export bibliography')}</h2>
-								<p class="text-surface-600">
+								<p class="text-surface-600-400">
 									{$t('Uses the defaults saved in your Account export preferences.')}
 								</p>
 							</div>
@@ -275,12 +276,12 @@
 						<div class="stack">
 							<div>
 								<h2>{$t('Download documents')}</h2>
-								<p class="text-surface-600">
+								<p class="text-surface-600-400">
 									{$t('Choose PDF revisions to package with saved download preferences.')}
 								</p>
 							</div>
 							{#each revisions as revision (revision.id)}<label
-									class="flex items-center gap-3 rounded-lg border border-surface-300 p-3"
+									class="flex items-center gap-3 rounded-lg border border-surface-300-700 p-3"
 									><input
 										type="checkbox"
 										checked={selectedRevisions.has(revision.id)}
@@ -289,12 +290,13 @@
 												? selectedRevisions.delete(revision.id)
 												: selectedRevisions.add(revision.id)}
 									/><span
-										><strong>{revision.original_name}</strong><small class="block text-surface-600"
+										><strong>{revision.original_name}</strong><small
+											class="block text-surface-600-400"
 											>{$t(domainLabel(revision.processing_state ?? 'pending'))}</small
 										></span
 									></label
 								>{/each}
-							<p class="text-sm text-surface-600">
+							<p class="text-sm text-surface-600-400">
 								{$t('Annotations')}: {preferences.document.includeAnnotations
 									? $t('included')
 									: $t('excluded')}
@@ -317,21 +319,21 @@
 						<div class="stack">
 							<div>
 								<h2>{$t('Metadata sources')}</h2>
-								<p class="text-surface-600">
+								<p class="text-surface-600-400">
 									{$t('Refresh this record from an upstream identifier.')}
 								</p>
 							</div>
 							{#if workspace.item.doi}<div
-									class="grid gap-3 rounded-lg border border-surface-300 p-3 sm:grid-cols-[1fr_auto] sm:items-center"
+									class="grid gap-3 rounded-lg border border-surface-300-700 p-3 sm:grid-cols-[1fr_auto] sm:items-center"
 								>
 									<div>
-										<strong>DOI</strong><span class="block text-sm text-surface-600"
+										<strong>DOI</strong><span class="block text-sm text-surface-600-400"
 											>{workspace.item.doi}</span
 										>
 									</div>
 									<div class="toolbar items-center">
 										<select
-											class="compact input border border-surface-300"
+											class="compact input border border-surface-300-700"
 											bind:value={doiProvider}
 											aria-label={$t('Provider')}
 										>
@@ -353,11 +355,11 @@
 									onclick={rescanDoi}>{$t('Rescan PDF for DOI')}</button
 								>{/if}
 							{#each workspace.identifiers.filter((identifier: WorkspaceView['identifiers'][number]) => identifier.provider !== 'doi') as identifier (`${identifier.provider}:${identifier.value}`)}<div
-									class="grid gap-3 rounded-lg border border-surface-300 p-3 sm:grid-cols-[1fr_auto] sm:items-center"
+									class="grid gap-3 rounded-lg border border-surface-300-700 p-3 sm:grid-cols-[1fr_auto] sm:items-center"
 								>
 									<div>
 										<strong>{identifier.provider.toUpperCase()}</strong><span
-											class="block text-sm text-surface-600">{identifier.value}</span
+											class="block text-sm text-surface-600-400">{identifier.value}</span
 										>
 									</div>
 									<button
@@ -367,7 +369,7 @@
 										>{$t('Autoupdate')}</button
 									>
 								</div>{/each}
-							<div class="border-t border-surface-300 pt-4">
+							<div class="border-t border-surface-300-700 pt-4">
 								<button
 									class="btn preset-tonal-surface font-semibold"
 									disabled={busy}
@@ -378,8 +380,8 @@
 					{:else}
 						<div class="stack">
 							<div>
-								<h2 class="text-error-700">{$t('Delete Item')}</h2>
-								<p class="text-surface-600">
+								<h2 class="text-error-700-300">{$t('Delete Item')}</h2>
+								<p class="text-surface-600-400">
 									{$t(
 										'Associated files, annotations, and Project memberships will also be removed.'
 									)}

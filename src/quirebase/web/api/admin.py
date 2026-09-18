@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import FileResponse
 
 from quirebase.accounts import (
@@ -52,11 +52,16 @@ from quirebase.web.api.common import OkView, WriteResult
 from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.library_schemas import item_search_view
 from quirebase.web.api.serialization import enum_value
+from quirebase.web.errors import ApiHTTPException
 
 
 def require_api_admin(user: ApiUser) -> User:
     if user.role != "administrator":
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "resource not found")
+        raise ApiHTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "not_found",
+            "resource not found",
+        )
     return user
 
 

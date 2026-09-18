@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { apiDownloadGet, apiRequest, apiText, downloadFilename } from './client';
+import { ApiError, apiDownloadGet, apiRequest, apiText, downloadFilename } from './client';
 
 describe('apiRequest', () => {
 	it('uses the shared API and browser credentials without a CSRF token', async () => {
@@ -121,8 +121,51 @@ describe('non-JSON API errors', () => {
 
 		await expect(request(fetcher)).rejects.toMatchObject({
 			status: 502,
-			detail: 'Bad Gateway',
+			code: 'request_failed',
 			message: 'Bad Gateway'
 		});
+	});
+});
+
+describe('structured API errors', () => {
+	it('preserves the code, field errors, and metadata', async () => {
+		const fetcher = (async () =>
+			new Response(
+				JSON.stringify({
+					code: 'validation_failed',
+					message: 'request validation failed',
+					fields: [{ path: ['body', 'title'], code: 'missing', message: 'Field required' }],
+					meta: { request_id: 'request-1' }
+				}),
+				{ status: 422, headers: { 'Content-Type': 'application/json' } }
+			)) as typeof fetch;
+
+		let error: ApiError | undefined;
+		try {
+			await apiRequest(
+				'POST',
+				'/items',
+				{
+					body: {
+						title: 'Item',
+						keywords: [],
+						urls: [],
+						authors: [],
+						editors: [],
+						identifiers: [],
+						custom_fields: []
+					}
+				},
+				fetcher
+			);
+		} catch (reason) {
+			error = reason as ApiError;
+		}
+
+		expect(error).toMatchObject({ status: 422, code: 'validation_failed' });
+		expect(error?.fields).toEqual([
+			{ path: ['body', 'title'], code: 'missing', message: 'Field required' }
+		]);
+		expect(error?.meta).toEqual({ request_id: 'request-1' });
 	});
 });

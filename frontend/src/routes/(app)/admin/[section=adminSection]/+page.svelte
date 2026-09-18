@@ -5,4 +5,6 @@
 	let { params }: PageProps = $props();
 </script>
 
-<Admin section={params.section} />
+{#key params.section}
+	<Admin section={params.section} />
+{/key}

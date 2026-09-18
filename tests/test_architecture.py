@@ -620,8 +620,8 @@ def test_item_workspace_uses_typed_section_views():
 
 
 def test_multi_item_document_downloads_cross_the_library_bulk_seam():
-    library_routes = SRC_ROOT / "web" / "api" / "workspaces.py"
-    assert "quirebase.documents" not in imported_modules(library_routes)
+    export_routes = SRC_ROOT / "web" / "api" / "library_exports.py"
+    assert "quirebase.documents" not in imported_modules(export_routes)
 
     documents_bundle = SRC_ROOT / "documents" / "bundles.py"
     tree = ast.parse(documents_bundle.read_text(encoding="utf-8"))

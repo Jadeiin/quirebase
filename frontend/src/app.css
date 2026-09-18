@@ -1,11 +1,19 @@
 @import 'tailwindcss';
 @import '@skeletonlabs/skeleton';
+@custom-variant dark (&:where([data-mode='dark'], [data-mode='dark'] *));
 
 :root {
-	color-scheme: light;
 	font-family: var(--typo-base--font-family);
-	color: var(--color-surface-900);
-	background: var(--color-surface-100);
+	color: var(--color-surface-900-100);
+	background: var(--color-surface-100-900);
+}
+
+:root[data-mode='light'] {
+	color-scheme: light;
+}
+
+:root[data-mode='dark'] {
+	color-scheme: dark;
 }
 
 [data-theme='quirebase'] {
@@ -104,7 +112,7 @@ body {
 	margin: 0;
 	min-width: 320px;
 	min-height: 100vh;
-	background: var(--color-surface-100);
+	background: var(--color-surface-100-900);
 	line-height: 1.5;
 }
 button,
@@ -167,14 +175,14 @@ h1 {
 	display: grid;
 	gap: 0.25rem;
 	padding: 0.85rem 0;
-	border-bottom: 1px solid var(--color-surface-300);
+	border-bottom: 1px solid var(--color-surface-300-700);
 	text-decoration: none;
 }
 .item-row:last-child {
 	border-bottom: 0;
 }
 .item-row:hover:is(a) {
-	color: var(--color-primary-800);
+	color: var(--color-primary-800-200);
 }
 .grow {
 	flex: 1 1 16rem;
@@ -222,7 +230,7 @@ h1 {
 	display: flex;
 	gap: 0.25rem;
 	overflow-x: auto;
-	border-bottom: 1px solid var(--color-surface-300);
+	border-bottom: 1px solid var(--color-surface-300-700);
 	margin: 0 0 1rem;
 }
 .tabs a {
@@ -232,15 +240,15 @@ h1 {
 	border-bottom: 2px solid transparent;
 }
 .tabs a[aria-current='page'] {
-	border-color: var(--color-primary-700);
-	color: var(--color-primary-700);
+	border-color: var(--color-primary-700-300);
+	color: var(--color-primary-700-300);
 }
 .tabs a:hover {
-	color: var(--color-primary-700);
+	color: var(--color-primary-700-300);
 }
 .eyebrow {
 	display: inline-block;
-	color: var(--color-primary-700);
+	color: var(--color-primary-700-300);
 	font-size: 0.85rem;
 	margin-bottom: 0.35rem;
 	text-decoration: none;
@@ -251,7 +259,7 @@ h1 {
 	gap: 0.6rem 1rem;
 }
 .metadata-grid dt {
-	color: var(--color-surface-600);
+	color: var(--color-surface-600-400);
 }
 .metadata-grid dd {
 	margin: 0;
@@ -265,14 +273,14 @@ h1 {
 	display: grid;
 	gap: 0.2rem;
 	padding: 0.8rem;
-	background: var(--color-surface-200);
+	background: var(--color-surface-200-800);
 	border-radius: var(--radius-base);
 }
 .stat-grid strong {
 	font-size: 1.4rem;
 }
 .stat-grid span {
-	color: var(--color-surface-600);
+	color: var(--color-surface-700-300);
 	font-size: 0.8rem;
 }
 .admin-stats {
@@ -284,13 +292,13 @@ h1 {
 	flex-wrap: wrap;
 }
 .chips > span {
-	background: var(--color-surface-200);
+	background: var(--color-surface-200-800);
 	padding: 0.25rem 0.5rem;
 	border-radius: 999px;
 	font-size: 0.8rem;
 }
 .duplicate-group {
-	border: 1px solid var(--color-surface-300);
+	border: 1px solid var(--color-surface-300-700);
 	border-radius: var(--radius-base);
 	padding: 0 0.75rem;
 	margin-top: 0.75rem;
@@ -300,9 +308,9 @@ h1 {
 	gap: 0.5rem;
 	overflow-wrap: anywhere;
 	padding: 0.75rem;
-	border: 1px solid var(--color-warning-700);
+	border: 1px solid var(--color-warning-700-300);
 	border-radius: var(--radius-base);
-	background: #fff7ed;
+	background: var(--color-warning-50-950);
 }
 .auth-page {
 	max-width: 30rem;

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request, Response, status
+from fastapi import APIRouter, Request, Response, status
 
 from quirebase.accounts import get_login_session_by_token
 from quirebase.accounts.authentication import InvalidCredentials, authenticate_user
@@ -12,6 +12,7 @@ from quirebase.operations.settings import get_effective_setting
 from quirebase.web.api.auth import require_same_origin
 from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.session_schemas import LoginRequest, SessionView
+from quirebase.web.errors import ApiHTTPException
 from quirebase.web.locale import resolve_request_locale
 
 router = APIRouter(prefix="/api/v1", tags=["Session"])
@@ -51,9 +52,10 @@ async def login_session(
             session_days=session_days,
         )
     except InvalidCredentials as error:
-        raise HTTPException(
+        raise ApiHTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="invalid credentials",
+            code="invalid_credentials",
+            message="invalid credentials",
         ) from error
     response.set_cookie(
         get_settings().session_cookie,
@@ -66,7 +68,11 @@ async def login_session(
     response.headers["Cache-Control"] = "no-store"
     user = await db.get(User, login.user_id)
     if user is None:  # pragma: no cover - the Login Session foreign key guarantees this
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+        raise ApiHTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            code="authentication_required",
+            message="authentication required",
+        )
     return {
         "authenticated": True,
         "user": {"id": user.id, "username": user.username, "role": user.role},
@@ -79,6 +85,10 @@ async def logout_session(request: Request, response: Response, user: ApiUser, db
     raw_session = request.cookies.get(get_settings().session_cookie, "")
     login = await get_login_session_by_token(db, raw_session)
     if login is None or login.user_id != user.id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+        raise ApiHTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            code="authentication_required",
+            message="authentication required",
+        )
     await logout_op(db, user, login)
     response.delete_cookie(get_settings().session_cookie)

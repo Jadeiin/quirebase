@@ -3,6 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { apiRequest } from '$lib/api/client';
+	import { apiErrorMessage } from '$lib/api/errors';
 	import RichText from '$lib/design/RichText.svelte';
 	import { domainLabel } from '$lib/domain-labels';
 	import { t } from '$lib/i18n';
@@ -53,7 +54,7 @@
 			notice = success;
 			return true;
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : $t('Project action failed');
+			error = apiErrorMessage(reason, $t('Project action failed'));
 			return false;
 		} finally {
 			busy = false;
@@ -124,7 +125,7 @@
 			});
 			await goto(resolve('/projects'));
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : $t('Project action failed');
+			error = apiErrorMessage(reason, $t('Project action failed'));
 		} finally {
 			busy = false;
 		}
@@ -147,21 +148,21 @@
 			});
 			await goto(resolve('/projects'));
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : $t('Project action failed');
+			error = apiErrorMessage(reason, $t('Project action failed'));
 		} finally {
 			busy = false;
 		}
 	}
 </script>
 
-{#if project.isPending}<p class="text-surface-600">{$t('Loading Project…')}</p>
-{:else if project.isError}<p class="text-error-700">{$t('Unable to open this Project.')}</p>
+{#if project.isPending}<p class="text-surface-600-400">{$t('Loading Project…')}</p>
+{:else if project.isError}<p class="text-error-700-300">{$t('Unable to open this Project.')}</p>
 {:else if project.data}
 	<div class="workspace-header">
 		<div>
 			<a class="eyebrow" href={resolve('/projects')}>{$t('Projects')}</a>
 			<h1>{project.data.name}</h1>
-			<p class="text-surface-600">{project.data.description || $t('No description')}</p>
+			<p class="text-surface-600-400">{project.data.description || $t('No description')}</p>
 		</div>
 		<div class="toolbar">
 			<span class="badge preset-tonal-surface">{$t(domainLabel(project.data.role))}</span>
@@ -172,23 +173,24 @@
 			>
 		</div>
 	</div>
-	{#if error}<p class="text-error-700" role="alert">{error}</p>{/if}
+	{#if error}<p class="text-error-700-300" role="alert">{error}</p>{/if}
 	{#if notice}<p
-			class="rounded-base border border-success-200 preset-tonal-success px-4 py-3 text-success-900"
+			class="rounded-base border border-success-200-800 preset-tonal-success px-4 py-3 text-success-900-100"
 			role="status"
 		>
 			{notice}
 		</p>{/if}
 	<div class="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(20rem,1fr)]">
 		<div class="stack">
-			<section class="card border border-surface-300 bg-surface-50 p-5 shadow-sm">
+			<section class="card border border-surface-300-700 bg-surface-50-950 p-5 shadow-sm">
 				<h2>{$t('Items')}</h2>
 				{#each project.data.items as item (item.id)}
 					<div class="item-row grid-cols-[minmax(0,1fr)_auto] items-center">
 						<a
 							class="grid gap-1 no-underline"
 							href={resolve('/(app)/item/[itemId]', { itemId: item.id })}
-							><strong><RichText html={item.title_html} /></strong><span class="text-surface-600"
+							><strong><RichText html={item.title_html} /></strong><span
+								class="text-surface-600-400"
 								>{item.authors ?? ''}{#if item.publication_date}
 									· {item.publication_date}{/if}</span
 							></a
@@ -206,10 +208,10 @@
 									)}>{$t('Remove')}</button
 							>{/if}
 					</div>
-				{:else}<p class="text-surface-600">{$t('No Items in this Project.')}</p>{/each}
+				{:else}<p class="text-surface-600-400">{$t('No Items in this Project.')}</p>{/each}
 			</section>
 			{#if canManageLifecycle}
-				<section class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm">
+				<section class="stack card border border-surface-300-700 bg-surface-50-950 p-5 shadow-sm">
 					<h2>{$t('Project settings')}</h2>
 					<label>{$t('Name')}<input class="input" bind:value={name} /></label>
 					<label
@@ -232,7 +234,7 @@
 			{/if}
 		</div>
 		<div class="stack self-start">
-			<section class="card border border-surface-300 bg-surface-50 p-5 shadow-sm">
+			<section class="card border border-surface-300-700 bg-surface-50-950 p-5 shadow-sm">
 				<h2>{$t('Members')}</h2>
 				{#each project.data.members as member (member.user_id)}
 					<div class="item-row">
@@ -260,12 +262,12 @@
 									onclick={() => removeMember(member.user_id)}>{$t('Remove')}</button
 								>
 							</div>
-						{:else}<span class="text-surface-600">{$t(domainLabel(member.role))}</span>{/if}
+						{:else}<span class="text-surface-600-400">{$t(domainLabel(member.role))}</span>{/if}
 					</div>
 				{/each}
 				{#if isOwner}
 					<form
-						class="stack mt-4 border-t border-surface-300 pt-4"
+						class="stack mt-4 border-t border-surface-300-700 pt-4"
 						onsubmit={(event) => {
 							event.preventDefault();
 							addMember();
@@ -289,7 +291,7 @@
 					</form>
 				{/if}
 			</section>
-			<section class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm">
+			<section class="stack card border border-surface-300-700 bg-surface-50-950 p-5 shadow-sm">
 				<h2>{$t('Project lifecycle')}</h2>
 				{#if canManageLifecycle}
 					{#if project.data.state === 'archived'}<button

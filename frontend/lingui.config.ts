@@ -11,7 +11,11 @@ export default defineConfig({
 	catalogs: [
 		{
 			path: '<rootDir>/src/lib/locales/{locale}/messages',
-			include: ['<rootDir>/src/**/*.svelte', '<rootDir>/src/lib/domain-labels.ts']
+			include: [
+				'<rootDir>/src/**/*.svelte',
+				'<rootDir>/src/lib/domain-labels.ts',
+				'<rootDir>/src/lib/api/errors.ts'
+			]
 		}
 	],
 	extractors: [svelteExtractor, typescriptExtractor]

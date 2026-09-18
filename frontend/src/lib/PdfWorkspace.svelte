@@ -31,24 +31,26 @@
 	}));
 </script>
 
-<div class="grid h-dvh min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-[#dfe4e1]">
-	<header class="flex items-center gap-3 border-b border-surface-300 bg-surface-50 px-3 py-2">
+<div class="grid h-dvh min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-surface-300-700">
+	<header
+		class="flex items-center gap-3 border-b border-surface-300-700 bg-surface-50-950 px-3 py-2"
+	>
 		<a
-			class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-surface-300 bg-surface-50 px-2.5 py-1.5 text-sm font-semibold text-surface-700 no-underline transition-colors hover:bg-surface-200 hover:text-primary-800"
+			class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-surface-300-700 bg-surface-50-950 px-2.5 py-1.5 text-sm font-semibold text-surface-700-300 no-underline transition-colors hover:bg-surface-200-800 hover:text-primary-800-200"
 			href={resolve('/(app)/item/[itemId]', { itemId })}
 			><Icon name="chevron-left" /> <span>{$t('Item')}</span></a
 		>
 		<div class="grid min-w-0 flex-1">
 			<strong class="truncate text-sm"
 				><RichText html={viewer.data?.item.title_html ?? $t('PDF Reader')} /></strong
-			><span class="truncate text-xs text-surface-600"
+			><span class="truncate text-xs text-surface-600-400"
 				>{viewer.data?.revision.original_name ?? $t('Loading')}</span
 			>
 		</div>
 		{#if viewer.data}<label class="flex shrink-0 items-center">
 				<span class="sr-only">{$t('Annotation visibility')}</span>
 				<select
-					class="min-h-9 max-w-32 rounded-md border border-surface-300 bg-surface-100 px-2 py-1 text-xs text-surface-900 sm:max-w-48"
+					class="min-h-9 max-w-32 rounded-md border border-surface-300-700 bg-surface-100-900 px-2 py-1 text-xs text-surface-900-100 sm:max-w-48"
 					bind:value={selectedProject}
 				>
 					<option value="">{$t('Private annotations')}</option>
@@ -58,12 +60,12 @@
 				</select>
 			</label>{/if}
 		<span
-			class={`max-w-44 truncate text-xs ${annotationSyncFailed ? 'inline font-semibold text-error-700' : 'hidden text-surface-600 lg:inline'}`}
+			class={`max-w-44 truncate text-xs ${annotationSyncFailed ? 'inline font-semibold text-error-700-300' : 'hidden text-surface-600-400 lg:inline'}`}
 			>{annotationStatus}</span
 		>
 		<Menu positioning={{ placement: 'bottom-end', gutter: 6 }}>
 			<Menu.Trigger
-				class="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md border border-surface-300 bg-surface-50 px-2.5 py-1.5 text-sm font-semibold text-surface-700 transition-colors hover:bg-surface-200 hover:text-primary-800"
+				class="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md border border-surface-300-700 bg-surface-50-950 px-2.5 py-1.5 text-sm font-semibold text-surface-700-300 transition-colors hover:bg-surface-200-800 hover:text-primary-800-200"
 			>
 				<Icon name="download" /> <span class="hidden sm:inline">{$t('Download')}</span><Icon
 					name="chevron-down"
@@ -73,14 +75,14 @@
 			<Portal>
 				<Menu.Positioner class="z-100">
 					<Menu.Content
-						class="z-1000 w-[min(22rem,calc(100vw-1rem))] rounded-container border border-surface-300 bg-surface-50 p-1.5 shadow-xl"
+						class="z-1000 w-[min(22rem,calc(100vw-1rem))] rounded-container border border-surface-300-700 bg-surface-50-950 p-1.5 shadow-xl"
 					>
-						<div class="px-2.5 py-2 text-xs font-bold tracking-wide text-surface-600 uppercase">
+						<div class="px-2.5 py-2 text-xs font-bold tracking-wide text-surface-600-400 uppercase">
 							{$t('Current PDF')}
 						</div>
 						<Menu.Item
 							value="download-original"
-							class="flex cursor-pointer items-center rounded-md text-sm outline-none data-[highlighted]:bg-primary-50 data-[highlighted]:text-primary-800"
+							class="flex cursor-pointer items-center rounded-md text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
 						>
 							<a
 								class="w-full px-2.5 py-2 no-underline"
@@ -90,11 +92,11 @@
 								data-sveltekit-reload>{$t('Download original')}</a
 							>
 						</Menu.Item>
-						<div class="m-1 h-px bg-surface-300"></div>
-						<label class="grid gap-1.5 px-2.5 py-2 text-xs font-medium text-surface-700">
+						<div class="m-1 h-px bg-surface-300-700"></div>
+						<label class="grid gap-1.5 px-2.5 py-2 text-xs font-medium text-surface-700-300">
 							{$t('Annotations to include')}
 							<select
-								class="min-h-9 rounded-md border border-surface-300 bg-surface-100 px-2 text-sm text-surface-900"
+								class="min-h-9 rounded-md border border-surface-300-700 bg-surface-100-900 px-2 text-sm text-surface-900-100"
 								bind:value={exportProjectId}
 							>
 								<option value="">{$t('Private annotations only')}</option>
@@ -107,7 +109,7 @@
 						</label>
 						<Menu.Item
 							value="download-annotated"
-							class="flex cursor-pointer items-center rounded-md text-sm outline-none data-[highlighted]:bg-primary-50 data-[highlighted]:text-primary-800"
+							class="flex cursor-pointer items-center rounded-md text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
 						>
 							<a
 								class="w-full px-2.5 py-2 no-underline"
@@ -121,26 +123,26 @@
 			</Portal>
 		</Menu>
 	</header>
-	<div class="flex h-full min-h-0 flex-col overflow-hidden bg-[#dfe4e1]">
+	<div class="flex h-full min-h-0 flex-col overflow-hidden bg-surface-300-700">
 		{#if annotationSyncFailed && annotationStatus}
 			<aside
-				class="flex shrink-0 items-center justify-between gap-2 border-b border-error-300 bg-error-50 px-3 py-1.5 text-xs font-medium text-error-800"
+				class="flex shrink-0 items-center justify-between gap-2 border-b border-error-300-700 bg-error-50-950 px-3 py-1.5 text-xs font-medium text-error-800-200"
 				role="alert"
 			>
 				<span class="truncate">{annotationStatus}</span>
 				<button
 					type="button"
-					class="cursor-pointer font-semibold text-error-800 hover:underline"
+					class="cursor-pointer font-semibold text-error-800-200 hover:underline"
 					onclick={() => {
 						annotationSyncFailed = false;
 					}}>{$t('Dismiss')}</button
 				>
 			</aside>
 		{/if}
-		{#if viewer.isPending}<div class="grid min-h-0 flex-1 place-items-center text-surface-600">
+		{#if viewer.isPending}<div class="grid min-h-0 flex-1 place-items-center text-surface-600-400">
 				{$t('Loading reader configuration…')}
 			</div>
-		{:else if viewer.isError}<div class="grid min-h-0 flex-1 place-items-center text-error-700">
+		{:else if viewer.isError}<div class="grid min-h-0 flex-1 place-items-center text-error-700-300">
 				{$t('Unable to open this PDF.')}
 			</div>
 		{:else if viewer.data}{#key revisionId}<EmbeddedPdfViewer

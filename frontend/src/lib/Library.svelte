@@ -5,6 +5,7 @@
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
 	import { apiDownload, apiRequest } from '$lib/api/client';
+	import { apiErrorMessage } from '$lib/api/errors';
 	import Icon from '$lib/design/Icon.svelte';
 	import RichText from '$lib/design/RichText.svelte';
 	import {
@@ -209,7 +210,7 @@
 			}
 			notice = $t('Bulk action completed');
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : $t('Bulk action failed');
+			error = apiErrorMessage(reason, $t('Bulk action failed'));
 		} finally {
 			busy = false;
 		}
@@ -218,31 +219,31 @@
 
 <div class="mb-8 flex items-end justify-between gap-4">
 	<div>
-		<p class="mb-2 text-xs font-bold tracking-[0.12em] text-primary-700 uppercase">
+		<p class="mb-2 text-xs font-bold tracking-[0.12em] text-primary-700-300 uppercase">
 			{$t('Workspace')}
 		</p>
 		<h1 class="mb-2">{$t('Library')}</h1>
-		<p class="m-0 max-w-2xl text-surface-700">
+		<p class="m-0 max-w-2xl text-surface-700-300">
 			{$t('Search, select, organize, and export your scholarly Items.')}
 		</p>
 	</div>
 	{#if library.data}<span
-			class="hidden rounded-full border border-surface-300 bg-surface-50 px-3 py-1.5 text-xs font-semibold text-surface-600 sm:inline"
+			class="hidden rounded-full border border-surface-300-700 bg-surface-50-950 px-3 py-1.5 text-xs font-semibold text-surface-600-400 sm:inline"
 			>{library.data.total} {$t('Items')}</span
 		>{/if}
 </div>
 
 <form
-	class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm"
+	class="stack card border border-surface-300-700 bg-surface-50-950 p-5 shadow-sm"
 	onsubmit={(event) => {
 		event.preventDefault();
 		updateUrl();
 	}}
 >
 	<div class="flex items-center gap-2">
-		<span class="ml-1 text-surface-600"><Icon name="search" /></span>
+		<span class="ml-1 text-surface-600-400"><Icon name="search" /></span>
 		<input
-			class="min-w-0 flex-1 border-0 bg-transparent px-1 py-2 text-base outline-none placeholder:text-surface-600"
+			class="min-w-0 flex-1 border-0 bg-transparent px-1 py-2 text-base outline-none placeholder:text-surface-600-400"
 			bind:value={query}
 			placeholder={$t('Search title, author, Tag, or full text')}
 		/>
@@ -255,7 +256,7 @@
 		<button class="btn preset-filled-primary-700-300 font-semibold">{$t('Search')}</button>
 	</div>
 	{#if filtersOpen}
-		<div class="grid gap-3 border-t border-surface-300 pt-4 sm:grid-cols-2 xl:grid-cols-5">
+		<div class="grid gap-3 border-t border-surface-300-700 pt-4 sm:grid-cols-2 xl:grid-cols-5">
 			<label
 				>{$t('Tag')}<select class="select" bind:value={tag}
 					><option value="">{$t('All Tags')}</option
@@ -293,7 +294,7 @@
 
 {#if selected.size}
 	<section
-		class="sticky top-3 z-30 mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-primary-700/30 bg-surface-50 p-3 shadow-lg"
+		class="sticky top-3 z-30 mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-primary-700-300/30 bg-surface-50-950 p-3 shadow-lg"
 	>
 		<strong class="mr-2">{selected.size} {$t('selected')}</strong>
 		<select class="compact input" bind:value={bulkAction} aria-label={$t('Bulk action')}>
@@ -337,33 +338,36 @@
 	</section>
 {/if}
 
-{#if error}<p class="mt-4 text-error-700" role="alert">{error}</p>{/if}
+{#if error}<p class="mt-4 text-error-700-300" role="alert">{error}</p>{/if}
 {#if notice}<p
-		class="mt-4 rounded-base border border-success-200 preset-tonal-success px-4 py-3 text-success-900"
+		class="mt-4 rounded-base border border-success-200-800 preset-tonal-success px-4 py-3 text-success-900-100"
 		role="status"
 	>
 		{notice}
 	</p>{/if}
 
-<section class="mt-6 overflow-hidden rounded-xl border border-surface-300 bg-surface-50 shadow-sm">
-	{#if library.isPending}<div class="grid min-h-56 place-items-center text-surface-600">
+<section
+	class="mt-6 overflow-hidden rounded-xl border border-surface-300-700 bg-surface-50-950 shadow-sm"
+>
+	{#if library.isPending}<div class="grid min-h-56 place-items-center text-surface-600-400">
 			{$t('Loading Library…')}
 		</div>
-	{:else if library.isError}<div class="grid min-h-56 place-items-center text-error-700">
+	{:else if library.isError}<div class="grid min-h-56 place-items-center text-error-700-300">
 			{$t('Unable to load the Library.')}
 		</div>
 	{:else if !library.data?.items.length}<div
 			class="grid min-h-56 place-items-center gap-2 p-8 text-center"
 		>
-			<span class="grid size-12 place-items-center rounded-full bg-surface-200 text-surface-600"
+			<span
+				class="grid size-12 place-items-center rounded-full bg-surface-200-800 text-surface-600-400"
 				><Icon name="library" size={22} /></span
-			><strong>{$t('No Items found.')}</strong><span class="text-sm text-surface-600"
+			><strong>{$t('No Items found.')}</strong><span class="text-sm text-surface-600-400"
 				>{$t('Try a different Library Search.')}</span
 			>
 		</div>
 	{:else}
 		<div
-			class="bg-surface/60 flex items-center gap-3 border-b border-surface-300 px-5 py-3 text-sm"
+			class="bg-surface/60 flex items-center gap-3 border-b border-surface-300-700 px-5 py-3 text-sm"
 		>
 			<input
 				type="checkbox"
@@ -375,7 +379,7 @@
 		<div class="divide-line divide-y">
 			{#each library.data.items as item (item.id)}
 				<article
-					class="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-5 py-4 transition-colors hover:bg-primary-50/60"
+					class="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-5 py-4 transition-colors hover:bg-primary-50-950/60"
 				>
 					<input
 						type="checkbox"
@@ -387,27 +391,27 @@
 					<a
 						class="grid min-w-0 gap-1 no-underline"
 						href={resolve('/(app)/item/[itemId]', { itemId: item.id })}
-						><strong class="text-[0.98rem] leading-snug group-hover:text-primary-800"
+						><strong class="text-[0.98rem] leading-snug group-hover:text-primary-800-200"
 							><RichText html={item.title_html} /></strong
-						><span class="truncate text-sm text-surface-600"
+						><span class="truncate text-sm text-surface-600-400"
 							>{item.authors || $t('Unknown authors')}</span
-						>{#if item.publication_title}<span class="truncate text-xs text-surface-600"
+						>{#if item.publication_title}<span class="truncate text-xs text-surface-600-400"
 								>{item.publication_title}</span
 							>{/if}</a
 					>
-					<span class="flex items-center gap-2 text-xs text-surface-600"
+					<span class="flex items-center gap-2 text-xs text-surface-600-400"
 						>{item.publication_date || '—'}<Icon name="chevron-right" size={16} /></span
 					>
 				</article>
 			{/each}
 		</div>
 		<nav
-			class="bg-surface/60 flex items-center justify-center gap-1 border-t border-surface-300 px-4 py-3"
+			class="bg-surface/60 flex items-center justify-center gap-1 border-t border-surface-300-700 px-4 py-3"
 			aria-label={$t('Library pages')}
 		>
 			<button
 				type="button"
-				class="inline-grid size-9 place-items-center rounded-md border border-surface-300 bg-surface-50 text-surface-600 hover:bg-primary-50 hover:text-primary-800 disabled:opacity-35"
+				class="inline-grid size-9 place-items-center rounded-md border border-surface-300-700 bg-surface-50-950 text-surface-600-400 hover:bg-primary-50-950 hover:text-primary-800-200 disabled:opacity-35"
 				disabled={pageNumber <= 1}
 				aria-label={$t('First page')}
 				title={$t('First page')}
@@ -415,18 +419,18 @@
 			>
 			<button
 				type="button"
-				class="inline-grid size-9 place-items-center rounded-md border border-surface-300 bg-surface-50 text-surface-600 hover:bg-primary-50 hover:text-primary-800 disabled:opacity-35"
+				class="inline-grid size-9 place-items-center rounded-md border border-surface-300-700 bg-surface-50-950 text-surface-600-400 hover:bg-primary-50-950 hover:text-primary-800-200 disabled:opacity-35"
 				disabled={pageNumber <= 1}
 				aria-label={$t('Previous page')}
 				title={$t('Previous page')}
 				onclick={() => updateUrl(pageNumber - 1)}><Icon name="chevron-left" size={17} /></button
 			>
-			<span class="min-w-24 px-2 text-center text-xs font-medium text-surface-600 tabular-nums"
+			<span class="min-w-24 px-2 text-center text-xs font-medium text-surface-600-400 tabular-nums"
 				>{$t('Page')} {pageNumber} {$t('of')} {totalPages}</span
 			>
 			<button
 				type="button"
-				class="inline-grid size-9 place-items-center rounded-md border border-surface-300 bg-surface-50 text-surface-600 hover:bg-primary-50 hover:text-primary-800 disabled:opacity-35"
+				class="inline-grid size-9 place-items-center rounded-md border border-surface-300-700 bg-surface-50-950 text-surface-600-400 hover:bg-primary-50-950 hover:text-primary-800-200 disabled:opacity-35"
 				disabled={pageNumber >= totalPages}
 				aria-label={$t('Next page')}
 				title={$t('Next page')}
@@ -434,7 +438,7 @@
 			>
 			<button
 				type="button"
-				class="inline-grid size-9 place-items-center rounded-md border border-surface-300 bg-surface-50 text-surface-600 hover:bg-primary-50 hover:text-primary-800 disabled:opacity-35"
+				class="inline-grid size-9 place-items-center rounded-md border border-surface-300-700 bg-surface-50-950 text-surface-600-400 hover:bg-primary-50-950 hover:text-primary-800-200 disabled:opacity-35"
 				disabled={pageNumber >= totalPages}
 				aria-label={$t('Last page')}
 				title={$t('Last page')}

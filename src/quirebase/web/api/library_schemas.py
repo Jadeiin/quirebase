@@ -24,6 +24,14 @@ class LibrarySearchView(BaseModel):
     per_page: int
 
 
+class BulkActionRequest(BaseModel):
+    item_ids: list[str]
+    action: str
+    project_id: str = ""
+    tag_name: str = ""
+    confirmation: str = ""
+
+
 class ContributorView(BaseModel):
     first_name: str | None
     last_name: str

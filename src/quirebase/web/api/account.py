@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request, Response, status
+from fastapi import APIRouter, Request, Response, status
 
 from quirebase.accounts import (
     accept_invitation,
@@ -29,6 +29,7 @@ from quirebase.web.api.auth import require_same_origin
 from quirebase.web.api.common import OkView
 from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.session_schemas import LoginSessionView
+from quirebase.web.errors import ApiHTTPException
 from quirebase.web.locale import normalize_locale
 
 router = APIRouter(prefix="/api/v1", tags=["HTTP API"])
@@ -38,7 +39,11 @@ router = APIRouter(prefix="/api/v1", tags=["HTTP API"])
 async def invitation_details(token: str, db: Database):
     invitation = await get_valid_invitation(db, token)
     if invitation is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "invitation not found or expired")
+        raise ApiHTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "invitation_not_found",
+            "invitation not found or expired",
+        )
     return {
         "username": invitation.username,
         "role": invitation.role,

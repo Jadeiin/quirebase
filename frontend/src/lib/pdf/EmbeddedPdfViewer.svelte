@@ -19,6 +19,7 @@
 	import { i18n } from '@lingui/core';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { apiRequest } from '$lib/api/client';
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { t } from '$lib/i18n';
 	import {
 		canonicalAnnotationFromView,
@@ -370,7 +371,7 @@
 			});
 		} catch (error) {
 			if (destroyed) return;
-			onstatus?.(error instanceof Error ? error.message : $t('Unable to open this PDF.'), true);
+			onstatus?.(apiErrorMessage(error, $t('Unable to open this PDF.')), true);
 		}
 	}
 

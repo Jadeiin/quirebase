@@ -1,11 +1,25 @@
 import type { components, paths } from '$lib/api/schema';
 
+type ApiErrorView = components['schemas']['ApiErrorView'];
+
 export class ApiError extends Error {
 	constructor(
 		readonly status: number,
-		readonly detail: unknown
+		readonly error: ApiErrorView
 	) {
-		super(typeof detail === 'string' ? detail : `API request failed (${status})`);
+		super(error.message);
+	}
+
+	get code(): string {
+		return this.error.code;
+	}
+
+	get fields(): components['schemas']['ErrorField'][] {
+		return this.error.fields ?? [];
+	}
+
+	get meta(): Record<string, unknown> {
+		return this.error.meta ?? {};
 	}
 }
 
@@ -101,8 +115,16 @@ export type ApiResponse<Path extends ApiPath, Method extends HttpMethod> = Respo
 >;
 
 async function responseError(response: Response): Promise<ApiError> {
-	const payload = await response.json().catch(() => ({ detail: response.statusText }));
-	return new ApiError(response.status, payload.detail ?? payload);
+	const payload = (await response.json().catch(() => null)) as ApiErrorView | null;
+	return new ApiError(
+		response.status,
+		payload?.code && payload.message
+			? payload
+			: {
+					code: 'request_failed',
+					message: response.statusText || `HTTP ${response.status}`
+				}
+	);
 }
 
 function requestUrl(path: string, params: unknown): string {

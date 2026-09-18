@@ -50,6 +50,12 @@ Both browsers and programmatic clients use `/api/v1`:
 - Bearer requests do not require an Origin and retain programmatic Audit Event provenance.
 - Browser code never stores an API Token. Login Session cookies remain HTTP-only.
 
+Every `/api/v1` failure uses one JSON contract containing a stable machine-readable `code`, an
+English `message` for programmatic clients, optional validation `fields`, and optional structured
+`meta`. Request validation never echoes submitted input values. The Svelte adapter translates known
+error codes for the active locale and uses a feature-specific localized fallback for unknown codes;
+it does not display backend messages directly.
+
 The public session and Invitation endpoints use the same Origin rule for unsafe requests. API
 responses may aggregate several domain read models when a workspace needs one coherent initial
 payload; business behavior remains behind the existing Module interfaces.

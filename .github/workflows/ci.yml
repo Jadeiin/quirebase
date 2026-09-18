@@ -25,11 +25,13 @@ jobs:
       - run: bun run i18n:check
       - run: git diff --exit-code -- src/lib/locales
       - run: bun run build
+      - run: bun run bundle:check
       - run: bun run check
       - run: bun run lint
       - run: bun run test
       - run: bunx playwright install --with-deps chromium
       - run: bun run test:e2e
+      - run: bun run test:e2e:fullstack
   sqlite:
     strategy:
       matrix:

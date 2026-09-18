@@ -42,6 +42,14 @@
 		<path d="m14.7 6.3 3-3a4 4 0 0 1-5 5l-7.5 7.5a2.1 2.1 0 0 0 3 3l7.5-7.5a4 4 0 0 0 5-5l-3 3" />
 	{:else if name === 'admin'}
 		<path d="M12 3 4 7v5c0 5 3.4 8 8 9 4.6-1 8-4 8-9V7Z" /><path d="m9 12 2 2 4-4" />
+	{:else if name === 'more'}
+		<circle cx="5" cy="12" r="1" fill="currentColor" stroke="none" /><circle
+			cx="12"
+			cy="12"
+			r="1"
+			fill="currentColor"
+			stroke="none"
+		/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none" />
 	{:else if name === 'user'}
 		<circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" />
 	{:else if name === 'panel'}
@@ -76,5 +84,13 @@
 		<path d="M6 6l12 12M18 6 6 18" />
 	{:else if name === 'annotation'}
 		<path d="M4 4h16v13H8l-4 4Z" /><path d="M8 8h8M8 12h5" />
+	{:else if name === 'monitor'}
+		<rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8M12 17v4" />
+	{:else if name === 'sun'}
+		<circle cx="12" cy="12" r="4" /><path
+			d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"
+		/>
+	{:else if name === 'moon'}
+		<path d="M20.5 14.2A8 8 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z" />
 	{/if}
 </svg>

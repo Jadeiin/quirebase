@@ -9,8 +9,6 @@
 	});
 </script>
 
-<svelte:head><meta name="theme-color" content="#111827" /></svelte:head>
-
 <QueryClientProvider client={queryClient}>
 	{@render children()}
 </QueryClientProvider>

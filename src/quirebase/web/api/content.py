@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import Response, StreamingResponse
 
 from quirebase.documents import (
@@ -19,6 +19,7 @@ from quirebase.library import (
     get_item_citation_text_response,
 )
 from quirebase.web.api.dependencies import ApiUser, Database
+from quirebase.web.errors import ApiHTTPException
 from quirebase.web.responses import content_disposition
 
 router = APIRouter(prefix="/api/v1", tags=["HTTP API"])
@@ -49,10 +50,20 @@ async def ranged_object(request: Request, metadata, filename: str, object_get):
         return StreamingResponse(response.body, media_type="application/pdf", headers=headers)
     match = RANGE_PATTERN.fullmatch(value.strip())
     if not match:
-        raise HTTPException(416, headers={"Content-Range": f"bytes */{size}"})
+        raise ApiHTTPException(
+            416,
+            "range_not_satisfiable",
+            "requested byte range is not satisfiable",
+            headers={"Content-Range": f"bytes */{size}"},
+        )
     start_text, end_text = match.groups()
     if not start_text and not end_text:
-        raise HTTPException(416, headers={"Content-Range": f"bytes */{size}"})
+        raise ApiHTTPException(
+            416,
+            "range_not_satisfiable",
+            "requested byte range is not satisfiable",
+            headers={"Content-Range": f"bytes */{size}"},
+        )
     if not start_text:
         length = int(end_text)
         start, end = max(0, size - length), size - 1
@@ -60,7 +71,12 @@ async def ranged_object(request: Request, metadata, filename: str, object_get):
         start = int(start_text)
         end = min(int(end_text) if end_text else size - 1, size - 1)
     if start >= size or start > end:
-        raise HTTPException(416, headers={"Content-Range": f"bytes */{size}"})
+        raise ApiHTTPException(
+            416,
+            "range_not_satisfiable",
+            "requested byte range is not satisfiable",
+            headers={"Content-Range": f"bytes */{size}"},
+        )
 
     ranged = await object_get((start, end + 1))
     headers.update({

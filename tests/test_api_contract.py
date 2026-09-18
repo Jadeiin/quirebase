@@ -91,3 +91,18 @@ def test_openapi_media_type_contracts() -> None:
         "get"
     ]["responses"]["200"]["content"]
     assert set(attachment_content.keys()) == {"application/octet-stream"}
+
+
+def test_openapi_api_routes_share_the_structured_error_contract() -> None:
+    paths = create_app().openapi()["paths"]
+    expected_schema = {"$ref": "#/components/schemas/ApiErrorView"}
+
+    for path, methods in paths.items():
+        if not path.startswith("/api/v1/"):
+            continue
+        for method, operation in methods.items():
+            if method not in {"get", "post", "put", "delete", "patch"}:
+                continue
+            responses = operation["responses"]
+            assert responses["default"]["content"]["application/json"]["schema"] == expected_schema
+            assert responses["422"]["content"]["application/json"]["schema"] == expected_schema

@@ -57,6 +57,40 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/dashboard': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Dashboard */
+		get: operations['dashboard_api_v1_dashboard_get'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/items/bulk': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Apply Item Bulk Action */
+		post: operations['apply_item_bulk_action_api_v1_items_bulk_post'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/items': {
 		parameters: {
 			query?: never;
@@ -193,6 +227,160 @@ export interface paths {
 		post?: never;
 		/** Delete Discussion */
 		delete: operations['discussions.delete'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/items/bibliography': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Export Item Selection */
+		post: operations['export_item_selection_api_v1_items_bibliography_post'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/items/documents/archive': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Download Item Selection */
+		post: operations['download_item_selection_api_v1_items_documents_archive_post'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/bibliography': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Export Library Bibliography */
+		get: operations['export_library_bibliography_api_v1_bibliography_get'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/imports/bibliography': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Stage Bibliography Import */
+		post: operations['stage_bibliography_import_api_v1_imports_bibliography_post'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/imports/identifier': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Stage Identifier Import */
+		post: operations['stage_identifier_import_api_v1_imports_identifier_post'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/imports/pdfs': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Stage Pdf Import */
+		post: operations['stage_pdf_import_api_v1_imports_pdfs_post'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/imports/{batch_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Import Batch */
+		get: operations['import_batch_api_v1_imports__batch_id__get'];
+		put?: never;
+		post?: never;
+		/** Discard Staged Import */
+		delete: operations['discard_staged_import_api_v1_imports__batch_id__delete'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/imports/{batch_id}/retry': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Retry Import Batch */
+		post: operations['retry_import_batch_api_v1_imports__batch_id__retry_post'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/imports/{batch_id}/commit': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Commit Staged Import */
+		post: operations['commit_staged_import_api_v1_imports__batch_id__commit_post'];
+		delete?: never;
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -1176,41 +1364,6 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/citation-key-preview': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Citation Key Preview */
-		get: operations['citation_key_preview_api_v1_citation_key_preview_get'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/citation-styles': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Citation Styles */
-		get: operations['citation_styles_api_v1_citation_styles_get'];
-		put?: never;
-		/** Create Citation Style */
-		post: operations['create_citation_style_api_v1_citation_styles_post'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
 	'/api/v1/items/{item_id}/annotation-exports': {
 		parameters: {
 			query?: never;
@@ -1534,15 +1687,15 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/dashboard': {
+	'/api/v1/citation-key-preview': {
 		parameters: {
 			query?: never;
 			header?: never;
 			path?: never;
 			cookie?: never;
 		};
-		/** Dashboard */
-		get: operations['dashboard_api_v1_dashboard_get'];
+		/** Citation Key Preview */
+		get: operations['citation_key_preview_api_v1_citation_key_preview_get'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -1551,171 +1704,18 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/bulk': {
+	'/api/v1/citation-styles': {
 		parameters: {
 			query?: never;
 			header?: never;
 			path?: never;
 			cookie?: never;
 		};
-		get?: never;
+		/** Citation Styles */
+		get: operations['citation_styles_api_v1_citation_styles_get'];
 		put?: never;
-		/** Apply Item Bulk Action */
-		post: operations['apply_item_bulk_action_api_v1_items_bulk_post'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/bibliography': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Export Item Selection */
-		post: operations['export_item_selection_api_v1_items_bibliography_post'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/documents/archive': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Download Item Selection */
-		post: operations['download_item_selection_api_v1_items_documents_archive_post'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/bibliography': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Export Library Bibliography */
-		get: operations['export_library_bibliography_api_v1_bibliography_get'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/imports/bibliography': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Stage Bibliography Import */
-		post: operations['stage_bibliography_import_api_v1_imports_bibliography_post'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/imports/identifier': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Stage Identifier Import */
-		post: operations['stage_identifier_import_api_v1_imports_identifier_post'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/imports/pdfs': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Stage Pdf Import */
-		post: operations['stage_pdf_import_api_v1_imports_pdfs_post'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/imports/{batch_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Import Batch */
-		get: operations['import_batch_api_v1_imports__batch_id__get'];
-		put?: never;
-		post?: never;
-		/** Discard Staged Import */
-		delete: operations['discard_staged_import_api_v1_imports__batch_id__delete'];
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/imports/{batch_id}/retry': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Retry Import Batch */
-		post: operations['retry_import_batch_api_v1_imports__batch_id__retry_post'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/imports/{batch_id}/commit': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Commit Staged Import */
-		post: operations['commit_staged_import_api_v1_imports__batch_id__commit_post'];
+		/** Create Citation Style */
+		post: operations['create_citation_style_api_v1_citation_styles_post'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -2254,6 +2254,19 @@ export interface components {
 			/** Replies */
 			replies: components['schemas']['AnnotationReplyView'][];
 		};
+		/** ApiErrorView */
+		ApiErrorView: {
+			/** Code */
+			code: string;
+			/** Message */
+			message: string;
+			/** Fields */
+			fields?: components['schemas']['ErrorField'][] | null;
+			/** Meta */
+			meta?: {
+				[key: string]: unknown;
+			} | null;
+		};
 		/** ApiTokenCreateRequest */
 		ApiTokenCreateRequest: {
 			/** Name */
@@ -2722,6 +2735,15 @@ export interface components {
 			 */
 			type: 'ellipse';
 		};
+		/** ErrorField */
+		ErrorField: {
+			/** Path */
+			path: (string | number)[];
+			/** Code */
+			code: string;
+			/** Message */
+			message: string;
+		};
 		/** ExportCreate */
 		ExportCreate: {
 			/** Revision Id */
@@ -2793,11 +2815,6 @@ export interface components {
 			 * @enum {string}
 			 */
 			alignment: 'left' | 'center' | 'right';
-		};
-		/** HTTPValidationError */
-		HTTPValidationError: {
-			/** Detail */
-			detail?: components['schemas']['ValidationError'][];
 		};
 		/** HealthView */
 		HealthView: {
@@ -3124,6 +3141,13 @@ export interface components {
 			/** Name */
 			name: string;
 		};
+		/** ItemThumbnailView */
+		ItemThumbnailView: {
+			/** Source Kind */
+			source_kind: string;
+			/** Source Id */
+			source_id: string;
+		};
 		/** ItemUpdateRequest */
 		ItemUpdateRequest: {
 			/** Expected Version */
@@ -3159,6 +3183,7 @@ export interface components {
 			/** Identifiers */
 			identifiers: components['schemas']['ItemIdentifierView'][];
 			latest_revision?: components['schemas']['ItemLatestRevisionView'] | null;
+			thumbnail?: components['schemas']['ItemThumbnailView'] | null;
 		};
 		/** JoinableProjectView */
 		JoinableProjectView: {
@@ -3684,19 +3709,6 @@ export interface components {
 			/** Active */
 			active: boolean;
 		};
-		/** ValidationError */
-		ValidationError: {
-			/** Location */
-			loc: (string | number)[];
-			/** Message */
-			msg: string;
-			/** Error Type */
-			type: string;
-			/** Input */
-			input?: unknown;
-			/** Context */
-			ctx?: Record<string, never>;
-		};
 		/** WorkflowStatusView */
 		WorkflowStatusView: {
 			/** Id */
@@ -3809,6 +3821,24 @@ export interface operations {
 					'application/json': components['schemas']['SessionView'];
 				};
 			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
 		};
 	};
 	login_session_api_v1_session_post: {
@@ -3833,13 +3863,22 @@ export interface operations {
 					'application/json': components['schemas']['SessionView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -3859,6 +3898,104 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content?: never;
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	dashboard_api_v1_dashboard_get: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['DashboardView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	apply_item_bulk_action_api_v1_items_bulk_post: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['BulkActionRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
 			};
 		};
 	};
@@ -3888,13 +4025,22 @@ export interface operations {
 					'application/json': components['schemas']['LibrarySearchView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -3921,13 +4067,22 @@ export interface operations {
 					'application/json': components['schemas']['WriteResult'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -3952,13 +4107,22 @@ export interface operations {
 					'application/json': components['schemas']['ItemDetailView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -3987,13 +4151,22 @@ export interface operations {
 					'application/json': components['schemas']['WriteResult'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4022,13 +4195,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4056,13 +4238,22 @@ export interface operations {
 					'application/json': components['schemas']['CitationView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4083,6 +4274,24 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['TagView'][];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4111,13 +4320,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4146,13 +4364,22 @@ export interface operations {
 					'application/json': components['schemas']['WriteResult'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4178,13 +4405,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4209,13 +4445,22 @@ export interface operations {
 					'application/json': components['schemas']['DiscussionMessageView'][];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4244,13 +4489,22 @@ export interface operations {
 					'application/json': components['schemas']['WriteResult'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4276,13 +4530,439 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	export_item_selection_api_v1_items_bibliography_post: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['BibliographyExportRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'text/plain': string;
+					'application/x-bibtex': string;
+					'application/x-research-info-systems': string;
+					'application/x-endnote-refer': string;
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	download_item_selection_api_v1_items_documents_archive_post: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['DocumentArchiveRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/zip': string;
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	export_library_bibliography_api_v1_bibliography_get: {
+		parameters: {
+			query: {
+				file_format: string;
+				style?: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'text/plain': string;
+					'application/x-bibtex': string;
+					'application/x-research-info-systems': string;
+					'application/x-endnote-refer': string;
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	stage_bibliography_import_api_v1_imports_bibliography_post: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'multipart/form-data': components['schemas']['Body_stage_bibliography_import_api_v1_imports_bibliography_post'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ImportBatchView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	stage_identifier_import_api_v1_imports_identifier_post: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['IdentifierImportRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ImportBatchView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	stage_pdf_import_api_v1_imports_pdfs_post: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'multipart/form-data': components['schemas']['Body_stage_pdf_import_api_v1_imports_pdfs_post'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			202: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ImportBatchView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	import_batch_api_v1_imports__batch_id__get: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				batch_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ImportBatchView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	discard_staged_import_api_v1_imports__batch_id__delete: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				batch_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	retry_import_batch_api_v1_imports__batch_id__retry_post: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				batch_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ImportBatchRetryView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	commit_staged_import_api_v1_imports__batch_id__commit_post: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				batch_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4303,6 +4983,24 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['ProjectSummaryView'][];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4329,13 +5027,22 @@ export interface operations {
 					'application/json': components['schemas']['WriteResult'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4356,6 +5063,24 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['JoinableProjectView'][];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4380,13 +5105,22 @@ export interface operations {
 					'application/json': components['schemas']['ProjectDetailView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4415,13 +5149,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4450,13 +5193,22 @@ export interface operations {
 					'application/json': components['schemas']['WriteResult'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4485,13 +5237,22 @@ export interface operations {
 					'application/json': components['schemas']['WriteResult'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4516,13 +5277,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4547,13 +5317,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4582,13 +5361,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4613,13 +5401,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4644,13 +5441,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4676,13 +5482,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4708,13 +5523,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4740,13 +5564,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4775,13 +5608,22 @@ export interface operations {
 					'application/json': components['schemas']['ProjectMemberView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4807,13 +5649,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4838,13 +5689,22 @@ export interface operations {
 					'application/json': components['schemas']['DocumentListView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4873,13 +5733,22 @@ export interface operations {
 					'application/json': components['schemas']['AnnotationReviewView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4907,13 +5776,22 @@ export interface operations {
 					'application/json': components['schemas']['AnnotationView'][];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4942,13 +5820,22 @@ export interface operations {
 					'application/json': components['schemas']['AnnotationView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -4976,13 +5863,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5012,13 +5908,22 @@ export interface operations {
 					'application/json': components['schemas']['AnnotationView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5046,13 +5951,22 @@ export interface operations {
 					'application/json': components['schemas']['AnnotationView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5082,13 +5996,22 @@ export interface operations {
 					'application/json': components['schemas']['AnnotationReplyView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5117,13 +6040,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5154,13 +6086,22 @@ export interface operations {
 					'application/json': components['schemas']['AnnotationReplyView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5189,13 +6130,22 @@ export interface operations {
 					'application/json': components['schemas']['AnnotationReplyView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5222,13 +6172,22 @@ export interface operations {
 					'application/json': components['schemas']['CandidatePageView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5249,6 +6208,24 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['DiscoveryProviderView'][];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5273,13 +6250,22 @@ export interface operations {
 					'application/json': components['schemas']['WorkflowStatusView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5304,13 +6290,22 @@ export interface operations {
 					'application/json': components['schemas']['InvitationDetailsView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5339,13 +6334,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5366,6 +6370,24 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['AccountSummaryView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5392,13 +6414,22 @@ export interface operations {
 					'application/json': components['schemas']['ApiTokenGrantView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5423,13 +6454,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5456,13 +6496,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5489,13 +6538,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5520,13 +6578,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5549,6 +6616,24 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
 		};
 	};
 	admin_overview_api_v1_admin_overview_get: {
@@ -5567,6 +6652,24 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['AdminOverviewView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5594,13 +6697,22 @@ export interface operations {
 					'application/json': components['schemas']['AdminUsersView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5627,13 +6739,22 @@ export interface operations {
 					'application/json': components['schemas']['AdminUserView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5662,13 +6783,22 @@ export interface operations {
 					'application/json': components['schemas']['AdminUserView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5697,13 +6827,22 @@ export interface operations {
 					'application/json': components['schemas']['AdminUserView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5732,13 +6871,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5763,13 +6911,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5796,13 +6953,22 @@ export interface operations {
 					'application/json': components['schemas']['AdminInvitationCreatedView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5830,13 +6996,22 @@ export interface operations {
 					'application/json': components['schemas']['AdminProjectsView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5863,13 +7038,22 @@ export interface operations {
 					'application/json': components['schemas']['AdminItemsView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5894,13 +7078,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5929,13 +7122,22 @@ export interface operations {
 					'application/json': components['schemas']['AdminAuditView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5960,13 +7162,22 @@ export interface operations {
 					'application/json': components['schemas']['AdminWorkflowsView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -5987,6 +7198,24 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['AdminSettingsView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -6013,13 +7242,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -6040,6 +7278,24 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['AdminMaintenanceView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -6064,13 +7320,22 @@ export interface operations {
 					'application/json': components['schemas']['WriteResult'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -6095,13 +7360,22 @@ export interface operations {
 					'application/zip': string;
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -6126,13 +7400,22 @@ export interface operations {
 					'application/json': components['schemas']['WorkflowSummaryView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -6175,13 +7458,22 @@ export interface operations {
 					'application/x-endnote-refer': string;
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -6221,13 +7513,22 @@ export interface operations {
 					'text/plain': string;
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -6256,13 +7557,22 @@ export interface operations {
 					'text/html': string;
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -6297,13 +7607,22 @@ export interface operations {
 					'application/pdf': string;
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -6329,13 +7648,22 @@ export interface operations {
 					'image/png': string;
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -6363,13 +7691,22 @@ export interface operations {
 					'image/gif': string;
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -6399,111 +7736,22 @@ export interface operations {
 					'application/pdf': string;
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
-		};
-	};
-	citation_key_preview_api_v1_citation_key_preview_get: {
-		parameters: {
-			query: {
-				formula: string;
-				force_ascii?: boolean;
-			};
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
+			/** @description Default Response */
+			default: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['CitationKeyPreviewView'];
-				};
-			};
-			/** @description Validation Error */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
-				};
-			};
-		};
-	};
-	citation_styles_api_v1_citation_styles_get: {
-		parameters: {
-			query?: {
-				query?: string;
-				limit?: number;
-				include?: string;
-			};
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['CitationStylesResponseView'];
-				};
-			};
-			/** @description Validation Error */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
-				};
-			};
-		};
-	};
-	create_citation_style_api_v1_citation_styles_post: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['CitationStyleCreateRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			201: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['WriteResult'];
-				};
-			};
-			/** @description Validation Error */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -6532,13 +7780,22 @@ export interface operations {
 					'application/json': components['schemas']['AnnotationExportCreatedView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -6563,13 +7820,22 @@ export interface operations {
 					'application/json': components['schemas']['WorkflowStatusView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -6594,13 +7860,22 @@ export interface operations {
 					'application/pdf': string;
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -6625,13 +7900,22 @@ export interface operations {
 					'application/json': components['schemas']['ItemWorkspaceView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -6656,13 +7940,22 @@ export interface operations {
 					'application/json': components['schemas']['ItemOrganizeView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -6691,13 +7984,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -6722,13 +8024,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -6753,13 +8064,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -6784,13 +8104,22 @@ export interface operations {
 					'application/json': components['schemas']['WriteResult'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -6815,13 +8144,22 @@ export interface operations {
 					'application/json': components['schemas']['AuthorSuggestionView'][];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -6851,13 +8189,22 @@ export interface operations {
 					'application/zip': string;
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -6886,13 +8233,22 @@ export interface operations {
 					'application/json': components['schemas']['WriteResult'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -6921,13 +8277,22 @@ export interface operations {
 					'application/json': components['schemas']['WriteResult'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -6953,13 +8318,22 @@ export interface operations {
 					'application/octet-stream': string;
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -6985,13 +8359,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -7020,13 +8403,22 @@ export interface operations {
 					'application/json': components['schemas']['WriteResult'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -7055,13 +8447,22 @@ export interface operations {
 					'application/json': components['schemas']['WriteResult'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -7087,13 +8488,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -7119,144 +8529,31 @@ export interface operations {
 					'application/json': components['schemas']['PdfViewerView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
 	};
-	dashboard_api_v1_dashboard_get: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['DashboardView'];
-				};
-			};
-		};
-	};
-	apply_item_bulk_action_api_v1_items_bulk_post: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['BulkActionRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Validation Error */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
-				};
-			};
-		};
-	};
-	export_item_selection_api_v1_items_bibliography_post: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['BibliographyExportRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'text/plain': string;
-					'application/x-bibtex': string;
-					'application/x-research-info-systems': string;
-					'application/x-endnote-refer': string;
-				};
-			};
-			/** @description Validation Error */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
-				};
-			};
-		};
-	};
-	download_item_selection_api_v1_items_documents_archive_post: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['DocumentArchiveRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/zip': string;
-				};
-			};
-			/** @description Validation Error */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
-				};
-			};
-		};
-	};
-	export_library_bibliography_api_v1_bibliography_get: {
+	citation_key_preview_api_v1_citation_key_preview_get: {
 		parameters: {
 			query: {
-				file_format: string;
-				style?: string;
+				formula: string;
+				force_ascii?: boolean;
 			};
 			header?: never;
 			path?: never;
@@ -7270,24 +8567,72 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'text/plain': string;
-					'application/x-bibtex': string;
-					'application/x-research-info-systems': string;
-					'application/x-endnote-refer': string;
+					'application/json': components['schemas']['CitationKeyPreviewView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
 	};
-	stage_bibliography_import_api_v1_imports_bibliography_post: {
+	citation_styles_api_v1_citation_styles_get: {
+		parameters: {
+			query?: {
+				query?: string;
+				limit?: number;
+				include?: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CitationStylesResponseView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	create_citation_style_api_v1_citation_styles_post: {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -7296,7 +8641,7 @@ export interface operations {
 		};
 		requestBody: {
 			content: {
-				'multipart/form-data': components['schemas']['Body_stage_bibliography_import_api_v1_imports_bibliography_post'];
+				'application/json': components['schemas']['CitationStyleCreateRequest'];
 			};
 		};
 		responses: {
@@ -7306,206 +8651,25 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['ImportBatchView'];
+					'application/json': components['schemas']['WriteResult'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
-		};
-	};
-	stage_identifier_import_api_v1_imports_identifier_post: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['IdentifierImportRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			201: {
+			/** @description Default Response */
+			default: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['ImportBatchView'];
-				};
-			};
-			/** @description Validation Error */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
-				};
-			};
-		};
-	};
-	stage_pdf_import_api_v1_imports_pdfs_post: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'multipart/form-data': components['schemas']['Body_stage_pdf_import_api_v1_imports_pdfs_post'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			202: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ImportBatchView'];
-				};
-			};
-			/** @description Validation Error */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
-				};
-			};
-		};
-	};
-	import_batch_api_v1_imports__batch_id__get: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				batch_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ImportBatchView'];
-				};
-			};
-			/** @description Validation Error */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
-				};
-			};
-		};
-	};
-	discard_staged_import_api_v1_imports__batch_id__delete: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				batch_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Validation Error */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
-				};
-			};
-		};
-	};
-	retry_import_batch_api_v1_imports__batch_id__retry_post: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				batch_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ImportBatchRetryView'];
-				};
-			};
-			/** @description Validation Error */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
-				};
-			};
-		};
-	};
-	commit_staged_import_api_v1_imports__batch_id__commit_post: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				batch_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Validation Error */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -7530,13 +8694,22 @@ export interface operations {
 					'application/json': components['schemas']['DuplicatesReviewView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -7561,13 +8734,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -7594,13 +8776,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -7625,13 +8816,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};
@@ -7660,13 +8860,22 @@ export interface operations {
 					'application/json': components['schemas']['OkView'];
 				};
 			};
-			/** @description Validation Error */
+			/** @description Unprocessable Content */
 			422: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
 				};
 			};
 		};

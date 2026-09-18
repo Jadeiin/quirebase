@@ -79,7 +79,7 @@
 </script>
 
 <section
-	class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm"
+	class="stack card border border-surface-300-700 bg-surface-50-950 p-5 shadow-sm"
 	id="export-preferences"
 >
 	<div class="workspace-header">
@@ -91,11 +91,11 @@
 			>{$t('Reset to defaults')}</button
 		>
 	</div>
-	<p class="text-surface-600">
+	<p class="text-surface-600-400">
 		{$t('Configure defaults used by Library and Item export actions on this browser.')}
 	</p>
 	<div class="grid gap-4 xl:grid-cols-2">
-		<section class="stack rounded-lg border border-surface-300 p-3">
+		<section class="stack rounded-lg border border-surface-300-700 p-3">
 			<h3>{$t('General citation options')}</h3>
 			<label
 				>{$t('Default citation format')}<select
@@ -120,7 +120,7 @@
 					></label
 				>{/if}
 		</section>
-		<section class="stack rounded-lg border border-surface-300 p-3">
+		<section class="stack rounded-lg border border-surface-300-700 p-3">
 			<h3>{$t('Bibliography file options')}</h3>
 			<label
 				>{$t('Journal title')}<select class="select" bind:value={preferences.citation.journalMode}
@@ -157,7 +157,7 @@
 				></label
 			>
 		</section>
-		<section class="stack rounded-lg border border-surface-300 p-3">
+		<section class="stack rounded-lg border border-surface-300-700 p-3">
 			<h3>{$t('BibTeX and BibLaTeX options')}</h3>
 			<label
 				>{$t('Encoding')}<select class="select" bind:value={preferences.citation.encoding}
@@ -177,7 +177,7 @@
 				{$t('Include custom fields')}</label
 			>
 		</section>
-		<section class="stack rounded-lg border border-surface-300 p-3">
+		<section class="stack rounded-lg border border-surface-300-700 p-3">
 			<h3>{$t('Citation Key options')}</h3>
 			<label
 				>{$t('Citation Key formula')}<input class="input" bind:value={citationKeyFormula} /></label
@@ -191,11 +191,11 @@
 					>{citationPreview.data?.key ?? '—'}</output
 				></label
 			>
-			{#if citationPreview.isError}<p class="text-error-700">
+			{#if citationPreview.isError}<p class="text-error-700-300">
 					{$t('Invalid Citation Key formula')}
 				</p>{/if}
 		</section>
-		<section class="stack rounded-lg border border-surface-300 p-3 xl:col-span-2">
+		<section class="stack rounded-lg border border-surface-300-700 p-3 xl:col-span-2">
 			<h3>{$t('Document download options')}</h3>
 			<label class="flex gap-2"
 				><input type="checkbox" bind:checked={preferences.document.includeAnnotations} />
@@ -207,8 +207,8 @@
 			>
 		</section>
 	</div>
-	<p class="mb-0 text-sm text-surface-600">
+	<p class="mb-0 text-sm text-surface-600-400">
 		{$t('Preferences are automatically saved to your browser.')}
-		{#if saved}<span class="text-success-700">{$t('Saved')}</span>{/if}
+		{#if saved}<span class="text-success-700-300">{$t('Saved')}</span>{/if}
 	</p>
 </section>

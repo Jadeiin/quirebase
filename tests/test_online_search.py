@@ -168,7 +168,11 @@ async def test_discovery_search_rejects_invalid_years(
         )
 
         assert response.status_code == 422
-        assert response.json()["detail"][0]["type"] == expected_error
+        error = response.json()
+        assert error["code"] == "validation_failed"
+        assert error["fields"][0]["code"] == expected_error
+        assert error["fields"][0]["path"] == ["body", "year_from"]
+        assert "input" not in error["fields"][0]
     finally:
         await client.aclose()
         get_settings.cache_clear()

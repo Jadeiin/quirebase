@@ -209,7 +209,7 @@
 	</div>
 
 	{#each contributorGroups as group (group.label)}
-		<section class="rounded-lg border border-surface-300 p-3">
+		<section class="rounded-lg border border-surface-300-700 p-3">
 			<div class="workspace-header mb-3">
 				<h3>{$t(group.label)}</h3>
 				<button
@@ -226,7 +226,7 @@
 			</div>
 			{#each group.rows as row (row.key)}
 				<div
-					class="grid gap-2 border-t border-surface-300 py-3 first:border-0 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end"
+					class="grid gap-2 border-t border-surface-300-700 py-3 first:border-0 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end"
 				>
 					<label>{$t('First name')}<input class="input" bind:value={row.first_name} /></label>
 					<label
@@ -245,11 +245,11 @@
 						onclick={() => group.rows.splice(group.rows.indexOf(row), 1)}>{$t('Remove')}</button
 					>
 				</div>
-			{:else}<p class="text-surface-600">{$t('No contributors.')}</p>{/each}
+			{:else}<p class="text-surface-600-400">{$t('No contributors.')}</p>{/each}
 		</section>
 	{/each}
 
-	<section class="rounded-lg border border-surface-300 p-3">
+	<section class="rounded-lg border border-surface-300-700 p-3">
 		<div class="workspace-header mb-3">
 			<h3>{$t('Upstream identifiers')}</h3>
 			<button
@@ -260,7 +260,7 @@
 			>
 		</div>
 		{#each draft.identifiers as row (row.key)}<div
-				class="grid gap-2 border-t border-surface-300 py-3 first:border-0 sm:grid-cols-[1fr_2fr_auto] sm:items-end"
+				class="grid gap-2 border-t border-surface-300-700 py-3 first:border-0 sm:grid-cols-[1fr_2fr_auto] sm:items-end"
 			>
 				<label>{$t('Provider')}<input class="input" bind:value={row.provider} /></label><label
 					>{$t('Identifier')}<input class="input" bind:value={row.value} /></label
@@ -270,10 +270,10 @@
 					onclick={() => draft.identifiers.splice(draft.identifiers.indexOf(row), 1)}
 					>{$t('Remove')}</button
 				>
-			</div>{:else}<p class="text-surface-600">{$t('No upstream identifiers.')}</p>{/each}
+			</div>{:else}<p class="text-surface-600-400">{$t('No upstream identifiers.')}</p>{/each}
 	</section>
 
-	<section class="rounded-lg border border-surface-300 p-3">
+	<section class="rounded-lg border border-surface-300-700 p-3">
 		<div class="workspace-header mb-3">
 			<h3>{$t('Custom fields')}</h3>
 			<button
@@ -284,7 +284,7 @@
 			>
 		</div>
 		{#each draft.custom_fields as row (row.key)}<div
-				class="grid gap-2 border-t border-surface-300 py-3 first:border-0 sm:grid-cols-[1fr_2fr_auto] sm:items-end"
+				class="grid gap-2 border-t border-surface-300-700 py-3 first:border-0 sm:grid-cols-[1fr_2fr_auto] sm:items-end"
 			>
 				<label>{$t('Field name')}<input class="input" bind:value={row.name} /></label><label
 					>{$t('JSON or text value')}<input class="input" bind:value={row.value} /></label
@@ -294,7 +294,7 @@
 					onclick={() => draft.custom_fields.splice(draft.custom_fields.indexOf(row), 1)}
 					>{$t('Remove')}</button
 				>
-			</div>{:else}<p class="text-surface-600">{$t('No custom fields.')}</p>{/each}
+			</div>{:else}<p class="text-surface-600-400">{$t('No custom fields.')}</p>{/each}
 	</section>
 
 	<button class="btn preset-filled-primary-700-300 font-semibold" disabled={busy}

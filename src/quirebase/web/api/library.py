@@ -11,6 +11,7 @@ from quirebase.library import (
     WorkspaceSection,
     add_discussion_message,
     add_tag_to_item,
+    apply_bulk_item_action,
     apply_item_tag_selection,
     create_item,
     delete_discussion_message,
@@ -24,6 +25,7 @@ from quirebase.library import (
 from quirebase.web.api.common import OkView, WriteResult
 from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.library_schemas import (
+    BulkActionRequest,
     CitationView,
     DiscussionMessageView,
     DiscussionRequest,
@@ -39,6 +41,20 @@ from quirebase.web.api.library_schemas import (
 )
 
 router = APIRouter(prefix="/api/v1", tags=["Library"])
+
+
+@router.post("/items/bulk", response_model=OkView)
+async def apply_item_bulk_action(data: BulkActionRequest, user: ApiUser, db: Database) -> OkView:
+    await apply_bulk_item_action(
+        db,
+        user,
+        item_ids=data.item_ids,
+        action=data.action,
+        project_id=data.project_id,
+        tag_name=data.tag_name,
+        confirm_delete=data.confirmation,
+    )
+    return OkView()
 
 
 @router.get("/items", response_model=LibrarySearchView, operation_id="library.search")

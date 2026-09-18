@@ -82,10 +82,7 @@ def test_pdf_viewer_catches_document_load_failures_and_guards_destruction():
     assert "waitForDocument()" in viewer
     assert "cancelDocumentWait" in viewer
     assert "destroyed = true" in viewer
-    assert (
-        "onstatus?.(error instanceof Error ? error.message : $t('Unable to open this PDF.'), true)"
-        in viewer
-    )
+    assert "onstatus?.(apiErrorMessage(error, $t('Unable to open this PDF.')), true)" in viewer
 
 
 def test_adr_0012_reconciles_bundled_svelte_viewer_package():

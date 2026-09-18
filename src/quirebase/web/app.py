@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -12,6 +13,7 @@ from quirebase.core.config import get_settings
 from quirebase.core.database import AsyncSessionLocal, engine
 from quirebase.core.logging import configure_logging, log_context
 from quirebase.mcp import SessionFactory, create_mcp_http_mount
+from quirebase.web.api.common import API_ERROR_RESPONSES
 from quirebase.web.api.routes import router as api_router
 from quirebase.web.errors import register_error_handlers
 from quirebase.web.system import router as system_router
@@ -30,13 +32,17 @@ def _frontend_directory() -> Path:
     for directory in (SOURCE_FRONTEND_DIRECTORY, PACKAGED_FRONTEND_DIRECTORY):
         if (directory / "index.html").is_file():
             return directory
+    if os.environ.get("FASTAPI_ENV") == "development":
+        return SOURCE_FRONTEND_DIRECTORY
     raise RuntimeError(
         "frontend build not found; run `bun run --cwd frontend build` before starting Quirebase"
     )
 
 
-def _frontend_content_security_policy(directory: Path) -> str:
+def _frontend_content_security_policy(directory: Path) -> str | None:
     index = directory / "index.html"
+    if not index.is_file() and os.environ.get("FASTAPI_ENV") == "development":
+        return None
     match = _CSP_PATTERN.search(index.read_text(encoding="utf-8"))
     if match is None:
         raise RuntimeError(f"frontend build has no Content Security Policy: {index}")
@@ -64,7 +70,8 @@ def create_app(*, mcp_session_factory: SessionFactory = AsyncSessionLocal) -> Fa
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "same-origin"
         response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Content-Security-Policy"] = frontend_csp
+        if frontend_csp is not None:
+            response.headers["Content-Security-Policy"] = frontend_csp
         content_type = response.headers.get("content-type", "")
         if request.url.path == "/api/v1/session" or (
             request.url.path.startswith("/api/v1/") and settings.session_cookie in request.cookies
@@ -79,7 +86,7 @@ def create_app(*, mcp_session_factory: SessionFactory = AsyncSessionLocal) -> Fa
     register_error_handlers(app)
 
     app.include_router(system_router)
-    app.include_router(api_router)
+    app.include_router(api_router, responses=API_ERROR_RESPONSES)
 
     mcp_http = create_mcp_http_mount(
         app,
@@ -114,7 +121,12 @@ def create_app(*, mcp_session_factory: SessionFactory = AsyncSessionLocal) -> Fa
         raise HTTPException(status_code=404, detail="not found")
 
     app.mount("/mcp", mcp_http.app, name="mcp")
-    app.frontend("/", directory=frontend_directory, fallback="index.html")
+    app.frontend(
+        "/",
+        directory=frontend_directory,
+        fallback="index.html",
+        check_dir="auto",
+    )
 
     return app
 

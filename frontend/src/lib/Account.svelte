@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { apiRequest } from '$lib/api/client';
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { domainLabel } from '$lib/domain-labels';
 	import ExportPreferences from '$lib/ExportPreferences.svelte';
 	import { activateLocale, msg, t, type MessageKey } from '$lib/i18n';
@@ -44,7 +45,7 @@
 			form?.reset();
 			notice = success;
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : $t('Account action failed');
+			error = apiErrorMessage(reason, $t('Account action failed'));
 		} finally {
 			busy = false;
 		}
@@ -59,7 +60,7 @@
 			await operation();
 			location.assign('/');
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : $t('Account action failed');
+			error = apiErrorMessage(reason, $t('Account action failed'));
 		} finally {
 			busy = false;
 		}
@@ -77,7 +78,7 @@
 			tokenName = '';
 			await account.refetch();
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : $t('Unable to create token');
+			error = apiErrorMessage(reason, $t('Unable to create token'));
 		} finally {
 			busy = false;
 		}
@@ -112,7 +113,7 @@
 			activateLocale(selectedLocale);
 			notice = msg('Locale saved');
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : $t('Account action failed');
+			error = apiErrorMessage(reason, $t('Account action failed'));
 		} finally {
 			busy = false;
 		}
@@ -157,47 +158,47 @@
 
 <div class="mb-8 flex flex-wrap items-end justify-between gap-4">
 	<div>
-		<p class="mb-2 text-xs font-bold tracking-[0.12em] text-primary-700 uppercase">
+		<p class="mb-2 text-xs font-bold tracking-[0.12em] text-primary-700-300 uppercase">
 			{$t('Personal settings')}
 		</p>
 		<h1 class="mb-2">{$t('Account')}</h1>
-		<p class="mb-0 text-surface-600">{$t('Sessions, API Tokens, locale, and password.')}</p>
+		<p class="mb-0 text-surface-600-400">{$t('Sessions, API Tokens, locale, and password.')}</p>
 	</div>
 	<button class="btn preset-tonal-surface font-semibold" disabled={busy} onclick={logout}
 		>{$t('Sign out')}</button
 	>
 </div>
-{#if error}<p class="text-error-700" role="alert">{error}</p>{/if}
+{#if error}<p class="text-error-700-300" role="alert">{error}</p>{/if}
 {#if notice}<p
-		class="rounded-base border border-success-200 preset-tonal-success px-4 py-3 text-success-900"
+		class="rounded-base border border-success-200-800 preset-tonal-success px-4 py-3 text-success-900-100"
 		role="status"
 	>
 		{$t(notice)}
 	</p>{/if}
 {#if account.isPending}
-	<p class="text-surface-600">{$t('Loading account…')}</p>
+	<p class="text-surface-600-400">{$t('Loading account…')}</p>
 {:else if account.data}
 	<section
-		class="mb-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-surface-300 bg-surface-50 p-5 shadow-sm"
+		class="mb-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-surface-300-700 bg-surface-50-950 p-5 shadow-sm"
 	>
 		<div class="flex min-w-0 items-center gap-3">
 			<span
-				class="grid size-11 shrink-0 place-items-center rounded-full bg-primary-50 text-lg font-bold text-primary-800"
+				class="grid size-11 shrink-0 place-items-center rounded-full bg-primary-50-950 text-lg font-bold text-primary-800-200"
 				>{account.data.user.username.slice(0, 1).toUpperCase()}</span
 			>
 			<div class="min-w-0">
 				<h2 class="m-0 truncate text-lg">{account.data.user.username}</h2>
-				<p class="m-0 text-sm text-surface-600">{$t(domainLabel(account.data.user.role))}</p>
+				<p class="m-0 text-sm text-surface-600-400">{$t(domainLabel(account.data.user.role))}</p>
 			</div>
 		</div>
 		<span class="badge preset-tonal-surface">{$t('Signed in')}</span>
 	</section>
 	<div class="grid items-start gap-4 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.2fr)]">
 		<div class="grid min-w-0 content-start gap-4">
-			<section class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm">
+			<section class="stack card border border-surface-300-700 bg-surface-50-950 p-5 shadow-sm">
 				<div>
 					<h2>{$t('Preferences')}</h2>
-					<p class="mb-0 text-sm text-surface-600">
+					<p class="mb-0 text-sm text-surface-600-400">
 						{$t('Choose how Quirebase looks and speaks to you.')}
 					</p>
 				</div>
@@ -216,20 +217,20 @@
 						>
 					</div>
 				</form>
-				<label class="flex items-start gap-2 border-t border-surface-300 pt-4">
+				<label class="flex items-start gap-2 border-t border-surface-300-700 pt-4">
 					<input type="checkbox" bind:checked={sidebarCollapsed} onchange={saveSidebarPreference} />
 					<span
 						><strong>{$t('Collapse navigation sidebar by default')}</strong><small
-							class="block text-surface-600"
+							class="block text-surface-600-400"
 							>{$t('Free more horizontal space for reading and metadata work.')}</small
 						></span
 					>
 				</label>
 			</section>
-			<section class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm">
+			<section class="stack card border border-surface-300-700 bg-surface-50-950 p-5 shadow-sm">
 				<div>
 					<h2>{$t('Password')}</h2>
-					<p class="mb-0 text-sm text-surface-600">
+					<p class="mb-0 text-sm text-surface-600-400">
 						{$t('Use at least 12 characters for a strong password.')}
 					</p>
 				</div>
@@ -262,11 +263,13 @@
 			</section>
 		</div>
 		<div class="grid min-w-0 content-start gap-4">
-			<section class="stack min-w-0 card border border-surface-300 bg-surface-50 p-5 shadow-sm">
+			<section
+				class="stack min-w-0 card border border-surface-300-700 bg-surface-50-950 p-5 shadow-sm"
+			>
 				<div class="flex flex-wrap items-center justify-between gap-3">
 					<div>
 						<h2 class="mb-1">{$t('Sessions')}</h2>
-						<p class="mb-0 text-sm text-surface-600">
+						<p class="mb-0 text-sm text-surface-600-400">
 							{account.data.sessions.length}
 							{$t('active sessions')}
 						</p>
@@ -284,11 +287,11 @@
 						>
 							<div class="min-w-0">
 								<strong>{session.current ? $t('Current session') : $t('Session')}</strong>
-								<p class="m-0 text-sm text-surface-600">
+								<p class="m-0 text-sm text-surface-600-400">
 									{$t('Created')}
 									{new Date(session.created_at).toLocaleString()}
 								</p>
-								<p class="m-0 text-xs text-surface-600">
+								<p class="m-0 text-xs text-surface-600-400">
 									{$t('Expires')}
 									{new Date(session.expires_at).toLocaleString()}
 								</p>
@@ -301,16 +304,16 @@
 							>
 						</div>
 					{:else}
-						<p class="text-surface-600">{$t('No sessions.')}</p>
+						<p class="text-surface-600-400">{$t('No sessions.')}</p>
 					{/each}
 				</div>
 			</section>
 			<section
-				class="stack min-w-0 overflow-hidden card border border-surface-300 bg-surface-50 p-5 shadow-sm"
+				class="stack min-w-0 overflow-hidden card border border-surface-300-700 bg-surface-50-950 p-5 shadow-sm"
 			>
 				<div>
 					<h2 class="mb-1">{$t('API Tokens')}</h2>
-					<p class="mb-0 text-sm text-surface-600">
+					<p class="mb-0 text-sm text-surface-600-400">
 						{$t('Create revocable credentials for API and MCP clients.')}
 					</p>
 				</div>
@@ -343,11 +346,11 @@
 				{/if}
 				{#each account.data.api_tokens as token (token.id)}
 					<div
-						class="flex min-w-0 flex-wrap items-center justify-between gap-3 border-t border-surface-300 pt-3"
+						class="flex min-w-0 flex-wrap items-center justify-between gap-3 border-t border-surface-300-700 pt-3"
 					>
 						<div class="min-w-0">
 							<strong class="block truncate">{token.name}</strong><span
-								class="text-sm text-surface-600"
+								class="text-sm text-surface-600-400"
 								>{$t(domainLabel(token.status))} · {$t('Expires')}
 								{new Date(token.expires_at).toLocaleDateString()}</span
 							>
@@ -359,23 +362,23 @@
 						>
 					</div>
 				{:else}
-					<p class="text-surface-600">{$t('No API Tokens.')}</p>
+					<p class="text-surface-600-400">{$t('No API Tokens.')}</p>
 				{/each}
-				<details class="mt-2 min-w-0 border-t border-surface-300 pt-4">
+				<details class="mt-2 min-w-0 border-t border-surface-300-700 pt-4">
 					<summary class="cursor-pointer font-semibold">{$t('Client connection guide')}</summary>
 					<div class="mt-4 min-w-0">
 						<h3>{$t('Connect an HTTP API client')}</h3>
-						<p class="text-sm text-surface-600">
+						<p class="text-sm text-surface-600-400">
 							{$t(
 								'Use the versioned JSON API and send your API Token in the Authorization header.'
 							)}
 						</p>
 						<dl class="grid min-w-0 gap-x-3 gap-y-2 text-sm sm:grid-cols-[7rem_minmax(0,1fr)]">
-							<dt class="text-surface-600">{$t('Base endpoint')}</dt>
+							<dt class="text-surface-600-400">{$t('Base endpoint')}</dt>
 							<dd class="m-0 min-w-0 break-all">
 								<code class="whitespace-normal">{externalOrigin}/api/v1</code>
 							</dd>
-							<dt class="text-surface-600">{$t('OpenAPI')}</dt>
+							<dt class="text-surface-600-400">{$t('OpenAPI')}</dt>
 							<dd class="m-0 min-w-0 break-all">
 								<button
 									type="button"
@@ -384,26 +387,26 @@
 									><code class="whitespace-normal">{externalOrigin}/docs</code></button
 								>
 							</dd>
-							<dt class="text-surface-600">{$t('Header')}</dt>
+							<dt class="text-surface-600-400">{$t('Header')}</dt>
 							<dd class="m-0 min-w-0 break-all">
 								<code class="whitespace-normal">Authorization: Bearer YOUR_API_TOKEN</code>
 							</dd>
 						</dl>
 						<pre
-							class="overflow-x-auto rounded-lg border border-surface-300 bg-surface-200 p-3 text-xs"><code
+							class="overflow-x-auto rounded-lg border border-surface-300-700 bg-surface-200-800 p-3 text-xs"><code
 								class="block bg-transparent p-0 [overflow-wrap:anywhere] whitespace-pre-wrap"
 								>curl \
   -H 'Authorization: Bearer YOUR_API_TOKEN' \
   '{externalOrigin}/api/v1/items'</code
 							></pre>
 					</div>
-					<div class="mt-4 border-t border-surface-300 pt-4">
+					<div class="mt-4 border-t border-surface-300-700 pt-4">
 						<h3>{$t('Connect an MCP client')}</h3>
-						<p class="text-sm text-surface-600">
+						<p class="text-sm text-surface-600-400">
 							{$t('Use Streamable HTTP. Never put an API Token in the URL.')}
 						</p>
 						<pre
-							class="overflow-x-auto rounded-lg border border-surface-300 bg-surface-200 p-3 text-xs"><code
+							class="overflow-x-auto rounded-lg border border-surface-300-700 bg-surface-200-800 p-3 text-xs"><code
 								class="block bg-transparent p-0 [overflow-wrap:anywhere] whitespace-pre-wrap"
 								>{`{
   "mcpServers": {

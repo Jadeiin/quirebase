@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
 	import { apiRequest } from '$lib/api/client';
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { activateLocale, t } from '$lib/i18n';
 	let { token } = $props<{ token: string }>();
 	let password = $state('');
@@ -29,7 +30,7 @@
 			});
 			location.assign('/');
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : $t('Unable to accept invitation');
+			error = apiErrorMessage(reason, $t('Unable to accept invitation'));
 		} finally {
 			busy = false;
 		}
@@ -38,16 +39,16 @@
 
 <main class="workspace auth-page">
 	<form
-		class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm"
+		class="stack card border border-surface-300-700 bg-surface-50-950 p-5 shadow-sm"
 		onsubmit={(event) => {
 			event.preventDefault();
 			accept();
 		}}
 	>
 		<h1>{$t('Join Quirebase')}</h1>
-		{#if invitation.isPending}<p class="text-surface-600">
+		{#if invitation.isPending}<p class="text-surface-600-400">
 				{$t('Checking invitation…')}
-			</p>{:else if invitation.isError}<p class="text-error-700">
+			</p>{:else if invitation.isError}<p class="text-error-700-300">
 				{$t('This invitation is invalid or expired.')}
 			</p>{:else}<p>{$t('Create a password for')} <strong>{invitation.data?.username}</strong>.</p>
 			<label
@@ -59,7 +60,7 @@
 					autocomplete="new-password"
 					required
 				/></label
-			>{#if error}<p class="text-error-700">{error}</p>{/if}<button
+			>{#if error}<p class="text-error-700-300">{error}</p>{/if}<button
 				class="btn preset-filled-primary-700-300 font-semibold"
 				disabled={busy}>{$t('Create account')}</button
 			>{/if}

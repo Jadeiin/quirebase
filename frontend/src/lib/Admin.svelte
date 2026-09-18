@@ -1,37 +1,30 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { createQuery } from '@tanstack/svelte-query';
+	import { createMutation, createQuery } from '@tanstack/svelte-query';
 	import { onDestroy } from 'svelte';
-	import { SvelteURLSearchParams } from 'svelte/reactivity';
-	import { apiRequest, type ItemSummary } from '$lib/api/client';
+	import { apiRequest } from '$lib/api/client';
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { waitForWorkflow } from '$lib/api/workflows';
-	import RichText from '$lib/design/RichText.svelte';
-	import { domainLabel } from '$lib/domain-labels';
+	import AdminAudit from '$lib/features/admin/AdminAudit.svelte';
+	import AdminItems from '$lib/features/admin/AdminItems.svelte';
+	import AdminMaintenance from '$lib/features/admin/AdminMaintenance.svelte';
+	import AdminOverview from '$lib/features/admin/AdminOverview.svelte';
+	import AdminProjects from '$lib/features/admin/AdminProjects.svelte';
+	import AdminSettings from '$lib/features/admin/AdminSettings.svelte';
+	import AdminUsers from '$lib/features/admin/AdminUsers.svelte';
+	import AdminWorkflows from '$lib/features/admin/AdminWorkflows.svelte';
+	import { adminMutationOptions } from '$lib/features/admin/mutations';
+	import { adminSectionQuery, type AdminSection } from '$lib/features/admin/queries';
 	import { msg, t, type MessageKey } from '$lib/i18n';
 	import type { components } from '$lib/api/schema';
 
-	type Overview = components['schemas']['AdminOverviewView'];
 	type User = components['schemas']['AdminUserView'];
-	type Users = components['schemas']['AdminUsersView'];
-	type Project = components['schemas']['AdminProjectItemView'];
-	type AuditEvent = components['schemas']['AdminAuditEventView'];
-	type Workflow = components['schemas']['WorkflowSummaryView'];
 	type Settings = components['schemas']['AdminSettingsView'];
-
-	type AdminSection =
-		| 'overview'
-		| 'users'
-		| 'projects'
-		| 'items'
-		| 'audit'
-		| 'workflows'
-		| 'settings'
-		| 'maintenance';
+	type InvitationCreated = components['schemas']['AdminInvitationCreatedView'];
 
 	let { section } = $props<{ section: AdminSection }>();
 	let error = $state('');
 	let notice = $state<MessageKey | null>(null);
-	let busy = $state(false);
 	let invitationUrl = $state('');
 	let adminPage = $state(1);
 	let searchInput = $state('');
@@ -40,7 +33,6 @@
 	let appliedFilterA = $state('');
 	let filterB = $state('');
 	let appliedFilterB = $state('');
-	let activeSection = $state<AdminSection | null>(null);
 	const workflowAbort = new AbortController();
 	onDestroy(() => workflowAbort.abort());
 	const labels: Record<AdminSection, MessageKey> = {
@@ -75,79 +67,16 @@
 		['recommend_tags_all', msg('Recommend Tags for all Items')]
 	] as const;
 	const sectionLabel = $derived(labels[section as AdminSection]);
-	const queryString = $derived.by(() => {
-		const parameters = new SvelteURLSearchParams();
-		if (adminPage > 1) parameters.set('page', String(adminPage));
-		if (appliedSearch) parameters.set('search', appliedSearch);
-		if (section === 'users') {
-			if (appliedFilterA) parameters.set('role', appliedFilterA);
-			if (appliedFilterB) parameters.set('active', appliedFilterB);
-		} else if (section === 'projects') {
-			if (appliedFilterA) parameters.set('state', appliedFilterA);
-			if (appliedFilterB) parameters.set('visibility', appliedFilterB);
-		} else if (section === 'items') {
-			if (appliedFilterA) parameters.set('has_pdf', appliedFilterA);
-		} else if (section === 'audit') {
-			if (appliedFilterA) parameters.set('action', appliedFilterA);
-			if (appliedFilterB) parameters.set('target_type', appliedFilterB);
-		} else if (section === 'workflows' && appliedFilterA) {
-			parameters.set('state', appliedFilterA);
-		}
-		return parameters.toString();
-	});
-	const data = createQuery(() => ({
-		queryKey: ['admin', section, queryString],
-		queryFn: async (): Promise<unknown> => {
-			const common = { page: adminPage, search: appliedSearch };
-			switch (section) {
-				case 'users':
-					return apiRequest('GET', '/admin/users', {
-						params: {
-							query: {
-								...common,
-								role: appliedFilterA,
-								active: appliedFilterB ? appliedFilterB === 'true' : undefined
-							}
-						}
-					});
-				case 'projects':
-					return apiRequest('GET', '/admin/projects', {
-						params: {
-							query: { ...common, state: appliedFilterA, visibility: appliedFilterB }
-						}
-					});
-				case 'items':
-					return apiRequest('GET', '/admin/items', {
-						params: {
-							query: {
-								...common,
-								has_pdf: appliedFilterA ? appliedFilterA === 'true' : undefined
-							}
-						}
-					});
-				case 'audit':
-					return apiRequest('GET', '/admin/audit', {
-						params: {
-							query: {
-								...common,
-								action: appliedFilterA,
-								target_type: appliedFilterB
-							}
-						}
-					});
-				case 'workflows':
-					return apiRequest('GET', '/admin/workflows', {
-						params: { query: { state: appliedFilterA } }
-					});
-				case 'settings':
-					return apiRequest('GET', '/admin/settings');
-				case 'maintenance':
-					return apiRequest('GET', '/admin/maintenance');
-				default:
-					return apiRequest('GET', '/admin/overview');
-			}
-		}
-	}));
+	const data = createQuery(() =>
+		adminSectionQuery(section, {
+			page: adminPage,
+			search: appliedSearch,
+			filterA: appliedFilterA,
+			filterB: appliedFilterB
+		})
+	);
+	const adminMutation = createMutation(() => adminMutationOptions(section, () => data.refetch()));
+	const busy = $derived(adminMutation.isPending);
 	const pagination = $derived(
 		data.data as { total?: number; page?: number; per_page?: number } | undefined
 	);
@@ -156,22 +85,6 @@
 			? Math.max(1, Math.ceil(pagination.total / pagination.per_page))
 			: 1
 	);
-
-	$effect(() => {
-		if (activeSection === null) {
-			activeSection = section;
-			return;
-		}
-		if (section === activeSection) return;
-		activeSection = section;
-		searchInput = '';
-		appliedSearch = '';
-		filterA = '';
-		appliedFilterA = '';
-		filterB = '';
-		appliedFilterB = '';
-		adminPage = 1;
-	});
 
 	function applyFilters(event: SubmitEvent) {
 		event.preventDefault();
@@ -191,24 +104,25 @@
 		adminPage = 1;
 	}
 
-	async function mutate(
+	function mutate(
 		operation: () => Promise<unknown>,
 		success: MessageKey,
-		form?: HTMLFormElement
+		form?: HTMLFormElement,
+		onSuccess?: (result: unknown) => void,
+		failureMessage = $t('Administration action failed'),
+		pendingNotice: MessageKey | null = null
 	) {
-		busy = true;
 		error = '';
-		notice = null;
-		try {
-			await operation();
-			await data.refetch();
-			form?.reset();
-			notice = success;
-		} catch (reason) {
-			error = reason instanceof Error ? reason.message : $t('Administration action failed');
-		} finally {
-			busy = false;
-		}
+		notice = pendingNotice;
+		void adminMutation
+			.mutateAsync({ run: operation, form })
+			.then((result) => {
+				onSuccess?.(result);
+				notice = success;
+			})
+			.catch((reason) => {
+				error = apiErrorMessage(reason, failureMessage);
+			});
 	}
 
 	function createUser(event: SubmitEvent) {
@@ -278,30 +192,26 @@
 		);
 	}
 
-	async function createInvitation(event: SubmitEvent) {
+	function createInvitation(event: SubmitEvent) {
 		event.preventDefault();
 		const form = event.currentTarget as HTMLFormElement;
 		const values = new FormData(form);
-		busy = true;
-		error = '';
-		notice = null;
 		invitationUrl = '';
-		try {
-			const invitation = await apiRequest('POST', '/admin/invitations', {
-				body: {
-					username: String(values.get('username') ?? ''),
-					role: values.get('role') === 'administrator' ? 'administrator' : 'member'
-				}
-			});
-			invitationUrl = new URL(invitation.accept_path, window.location.origin).href;
-			await data.refetch();
-			form.reset();
-			notice = msg('Invitation created');
-		} catch (reason) {
-			error = reason instanceof Error ? reason.message : $t('Administration action failed');
-		} finally {
-			busy = false;
-		}
+		void mutate(
+			() =>
+				apiRequest('POST', '/admin/invitations', {
+					body: {
+						username: String(values.get('username') ?? ''),
+						role: values.get('role') === 'administrator' ? 'administrator' : 'member'
+					}
+				}),
+			msg('Invitation created'),
+			form,
+			(result) => {
+				const invitation = result as InvitationCreated;
+				invitationUrl = new URL(invitation.accept_path, window.location.origin).href;
+			}
+		);
 	}
 
 	function saveSettings(event: SubmitEvent) {
@@ -318,25 +228,23 @@
 		);
 	}
 
-	async function runMaintenance(operation: (typeof maintenanceOperations)[number][0]) {
-		busy = true;
-		error = '';
-		notice = msg('Maintenance operation started');
-		try {
-			const started = await apiRequest('POST', '/admin/maintenance/{operation}', {
-				params: { path: { operation } }
-			});
-			await waitForWorkflow(started.id, {
-				signal: workflowAbort.signal,
-				failureMessage: $t('Maintenance operation failed')
-			});
-			await data.refetch();
-			notice = msg('Maintenance operation completed');
-		} catch (reason) {
-			error = reason instanceof Error ? reason.message : $t('Maintenance operation failed');
-		} finally {
-			busy = false;
-		}
+	function runMaintenance(operation: (typeof maintenanceOperations)[number][0]) {
+		void mutate(
+			async () => {
+				const started = await apiRequest('POST', '/admin/maintenance/{operation}', {
+					params: { path: { operation } }
+				});
+				await waitForWorkflow(started.id, {
+					signal: workflowAbort.signal,
+					failureMessage: $t('Maintenance operation failed')
+				});
+			},
+			msg('Maintenance operation completed'),
+			undefined,
+			undefined,
+			$t('Maintenance operation failed'),
+			msg('Maintenance operation started')
+		);
 	}
 
 	function deleteAdminItem(itemId: string) {
@@ -358,7 +266,9 @@
 <div class="workspace-header">
 	<div>
 		<h1>{$t('Administration')}</h1>
-		<p class="text-surface-600">{$t('Users, storage, audit, settings, and durable operations.')}</p>
+		<p class="text-surface-700-300">
+			{$t('Users, storage, audit, settings, and durable operations.')}
+		</p>
 	</div>
 </div>
 <nav class="tabs" aria-label={$t('Administration sections')}>
@@ -369,7 +279,7 @@
 </nav>
 {#if ['users', 'projects', 'items', 'audit', 'workflows'].includes(section)}
 	<form
-		class="toolbar mb-4 items-end card border border-surface-300 bg-surface-50 p-5 shadow-sm"
+		class="toolbar mb-4 items-end card border border-surface-300-700 bg-surface-50-950 p-5 shadow-sm"
 		onsubmit={applyFilters}
 	>
 		{#if section !== 'workflows'}
@@ -432,271 +342,67 @@
 		>
 	</form>
 {/if}
-{#if error}<p class="text-error-700" role="alert">{error}</p>{/if}{#if notice}<p
-		class="rounded-base border border-success-200 preset-tonal-success px-4 py-3 text-success-900"
+{#if error}<p class="text-error-700-300" role="alert">{error}</p>{/if}{#if notice}<p
+		class="rounded-base border border-success-200-800 preset-tonal-success px-4 py-3 text-success-900-100"
 		role="status"
 	>
 		{$t(notice)}
 	</p>{/if}
-{#if data.isPending}<p class="text-surface-600">
+{#if data.isPending}<p class="text-surface-600-400">
 		{$t('Loading')}
 		{$t(sectionLabel).toLowerCase()}…
 	</p>
-{:else if data.isError}<p class="text-error-700">{$t('Unable to load administration.')}</p>
+{:else if data.isError}<p class="text-error-700-300">{$t('Unable to load administration.')}</p>
 {:else if data.data}
 	{#if section === 'overview'}
-		{@const overview = data.data as Overview}
-		<div class="stat-grid admin-stats">
-			<div><strong>{overview.user_count}</strong><span>{$t('Users')}</span></div>
-			<div>
-				<strong>{overview.pending_invitation_count}</strong><span>{$t('Pending invitations')}</span>
-			</div>
-			<div><strong>{overview.storage.items_count}</strong><span>{$t('Items')}</span></div>
-			<div>
-				<strong>{overview.failed_workflows.length}</strong><span>{$t('Failed workflows')}</span>
-			</div>
-		</div>
-		<section class="list-panel card border border-surface-300 bg-surface-50 p-5 shadow-sm">
-			<h2>{$t('Recent audit events')}</h2>
-			{#each overview.recent_events as event (event.id)}<div class="item-row">
-					<strong>{event.action}</strong><span class="text-surface-600"
-						>{event.target_type} · {new Date(event.created_at).toLocaleString()}</span
-					>
-				</div>{:else}<p class="text-surface-600">{$t('No audit events.')}</p>{/each}
-		</section>
+		<AdminOverview overview={data.data as components['schemas']['AdminOverviewView']} />
 	{:else if section === 'users'}
-		{@const users = data.data as Users}
-		<div class="item-layout">
-			<section class="list-panel card border border-surface-300 bg-surface-50 p-5 shadow-sm">
-				<h2>{$t('Users')} ({users.total})</h2>
-				{#each users.users as user (user.id)}
-					<div class="item-row admin-user-row">
-						<div>
-							<strong>{user.username}</strong><span class="text-surface-600"
-								>{$t(domainLabel(user.role))} · {user.active ? $t('active') : $t('disabled')}</span
-							>
-						</div>
-						<div class="admin-user-actions">
-							<form class="toolbar" onsubmit={(event) => updateUserRole(event, user.id)}>
-								<label
-									><span class="sr-only">{$t('Role for')} {user.username}</span><select
-										class="compact input"
-										name="role"
-										value={user.role}
-										><option value="member">{$t('Member')}</option><option value="administrator"
-											>{$t('Administrator')}</option
-										></select
-									></label
-								><button class="btn preset-tonal-surface font-semibold" disabled={busy}
-									>{$t('Save role')}</button
-								>
-							</form>
-							<button
-								class="btn preset-tonal-surface font-semibold"
-								disabled={busy}
-								onclick={() => updateUserStatus(user)}
-								>{user.active ? $t('Disable user') : $t('Enable user')}</button
-							>
-							<form class="toolbar" onsubmit={(event) => resetUserPassword(event, user.id)}>
-								<label
-									><span class="sr-only">{$t('New password for')} {user.username}</span><input
-										class="compact input"
-										name="password"
-										type="password"
-										autocomplete="new-password"
-										minlength="12"
-										placeholder={$t('New password')}
-										required
-									/></label
-								><button class="btn preset-tonal-surface font-semibold" disabled={busy}
-									>{$t('Reset password')}</button
-								>
-							</form>
-							<button
-								class="btn preset-tonal-surface font-semibold"
-								disabled={busy}
-								onclick={() => revokeUserSessions(user.id)}>{$t('Revoke sessions')}</button
-							>
-						</div>
-					</div>
-				{:else}
-					<p class="text-surface-600">{$t('No users.')}</p>
-				{/each}
-				<h2>{$t('Invitations')}</h2>
-				{#each users.invitations as invitation (invitation.id)}<div class="item-row">
-						<strong>{invitation.username}</strong><span class="text-surface-600"
-							>{$t(domainLabel(invitation.role))} · {invitation.accepted_at
-								? $t('accepted')
-								: $t('pending')}</span
-						>
-					</div>{:else}<p class="text-surface-600">{$t('No invitations.')}</p>{/each}
-			</section>
-			<aside class="stack">
-				<form
-					class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm"
-					onsubmit={createUser}
-				>
-					<h2>{$t('Create user')}</h2>
-					<input class="input" name="username" placeholder={$t('Username')} required /><input
-						class="input"
-						name="password"
-						type="password"
-						minlength="12"
-						placeholder={$t('Password')}
-						required
-					/><select class="select" name="role"
-						><option value="member">{$t('Member')}</option><option value="administrator"
-							>{$t('Administrator')}</option
-						></select
-					><button class="btn preset-tonal-surface font-semibold" disabled={busy}
-						>{$t('Create user')}</button
-					>
-				</form>
-				<form
-					class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm"
-					onsubmit={createInvitation}
-				>
-					<h2>{$t('Invite user')}</h2>
-					<input class="input" name="username" placeholder={$t('Username')} required /><select
-						class="select"
-						name="role"
-						><option value="member">{$t('Member')}</option><option value="administrator"
-							>{$t('Administrator')}</option
-						></select
-					><button class="btn preset-tonal-surface font-semibold" disabled={busy}
-						>{$t('Create invitation')}</button
-					>
-					{#if invitationUrl}<div class="secret" role="status">
-							<strong>{$t('Copy this invitation URL now')}</strong><a
-								href={invitationUrl}
-								rel="external">{invitationUrl}</a
-							>
-						</div>{/if}
-				</form>
-			</aside>
-		</div>
+		<AdminUsers
+			users={data.data as components['schemas']['AdminUsersView']}
+			{busy}
+			{invitationUrl}
+			onCreateUser={createUser}
+			onCreateInvitation={createInvitation}
+			onUpdateUserRole={updateUserRole}
+			onUpdateUserStatus={updateUserStatus}
+			onResetUserPassword={resetUserPassword}
+			onRevokeUserSessions={revokeUserSessions}
+		/>
 	{:else if section === 'projects'}
-		{@const projects = (data.data as { projects: Project[]; total: number }).projects}
-		<section class="list-panel card border border-surface-300 bg-surface-50 p-5 shadow-sm">
-			<h2>{$t('Projects')}</h2>
-			{#each projects as project (project.id)}<div class="item-row">
-					<strong>{project.name}</strong><span>{project.description}</span><span
-						class="text-surface-600"
-						>{$t(domainLabel(project.visibility))} · {$t(domainLabel(project.state))} · {project.member_count}
-						{$t('members')} · {project.item_count}
-						{$t('Items')} · {project.creator.username}</span
-					>
-				</div>{:else}<p class="text-surface-600">{$t('No projects.')}</p>{/each}
-		</section>
+		<AdminProjects
+			projects={(
+				data.data as {
+					projects: components['schemas']['AdminProjectItemView'][];
+				}
+			).projects}
+		/>
 	{:else if section === 'items'}
-		{@const items = data.data as {
-			items: ItemSummary[];
-			total: number;
-			storage: { total_disk_bytes: number };
-		}}
-		<section class="list-panel card border border-surface-300 bg-surface-50 p-5 shadow-sm">
-			<h2>{$t('Items')} ({items.total})</h2>
-			<p class="text-surface-600">
-				{Math.ceil(items.storage.total_disk_bytes / 1048576)} MB stored
-			</p>
-			{#each items.items as item (item.id)}<div
-					class="item-row grid-cols-[minmax(0,1fr)_auto] items-center"
-				>
-					<a
-						class="grid gap-1 no-underline"
-						href={resolve('/(app)/item/[itemId]', { itemId: item.id })}
-						><strong><RichText html={item.title_html} /></strong><span class="text-surface-600"
-							>{item.authors ?? $t('Unknown authors')}</span
-						></a
-					><button
-						class="btn preset-tonal-error font-semibold"
-						disabled={busy}
-						onclick={() => deleteAdminItem(item.id)}>{$t('Delete')}</button
-					>
-				</div>{:else}<p class="text-surface-600">{$t('No Items.')}</p>{/each}
-		</section>
+		<AdminItems
+			items={data.data as components['schemas']['AdminItemsView']}
+			{busy}
+			onDelete={deleteAdminItem}
+		/>
 	{:else if section === 'audit'}
-		{@const events = (data.data as { events: AuditEvent[] }).events}
-		<section class="list-panel card border border-surface-300 bg-surface-50 p-5 shadow-sm">
-			<h2>{$t('Audit log')}</h2>
-			{#each events as event (event.id)}<div class="item-row">
-					<strong>{event.action}</strong><span
-						>{event.target_type}{event.target_id ? ` · ${event.target_id}` : ''}</span
-					><span class="text-surface-600"
-						>{event.actor_id ? `${$t('Actor')} ${event.actor_id} · ` : ''}{new Date(
-							event.created_at
-						).toLocaleString()}</span
-					>
-					{#if event.detail}<pre
-							class="overflow-x-auto rounded bg-surface-200 p-2 text-xs">{typeof event.detail ===
-							'string'
-								? event.detail
-								: JSON.stringify(event.detail, null, 2)}</pre>{/if}
-				</div>{:else}<p class="text-surface-600">{$t('No audit events.')}</p>{/each}
-		</section>
+		<AdminAudit events={(data.data as components['schemas']['AdminAuditView']).events} />
 	{:else if section === 'workflows'}
-		{@const workflows = (data.data as { workflows: Workflow[] }).workflows}
-		<section class="list-panel card border border-surface-300 bg-surface-50 p-5 shadow-sm">
-			<h2>{$t('Durable workflows')}</h2>
-			{#each workflows as workflow (workflow.id)}<div class="item-row">
-					<strong>{workflow.name || workflow.id || $t('Workflow')}</strong><span
-						class="text-surface-600"
-						>{$t(domainLabel(workflow.state))}{workflow.error ? ` · ${workflow.error}` : ''}</span
-					>
-				</div>{:else}<p class="text-surface-600">{$t('No workflows.')}</p>{/each}
-		</section>
+		<AdminWorkflows
+			workflows={(data.data as components['schemas']['AdminWorkflowsView']).workflows}
+		/>
 	{:else if section === 'settings'}
-		{@const settings = data.data as Settings}
-		<section class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm">
-			<h2>{$t('Runtime settings')}</h2>
-			<form class="stack" onsubmit={saveSettings}>
-				{#each settingFields as [key, label] (key)}<label
-						>{$t(label)}<input
-							class="input"
-							name={key}
-							type={typeof settings[key] === 'number' ? 'number' : 'text'}
-							value={settings[key]}
-							required={typeof settings[key] === 'number'}
-						/></label
-					>{/each}
-				<p class="text-surface-600">
-					Database: {settings.database_url}<br />Data directory: {settings.data_dir}
-				</p>
-				<button class="btn preset-filled-primary-700-300 font-semibold" disabled={busy}
-					>{$t('Save settings')}</button
-				>
-			</form>
-		</section>
+		<AdminSettings
+			settings={data.data as Settings}
+			fields={settingFields}
+			{busy}
+			onSave={saveSettings}
+		/>
 	{:else}
-		{@const maintenance = data.data as {
-			storage: { items_count: number; total_disk_bytes: number };
-			workflows: Workflow[];
-		}}
-		<section class="stack card border border-surface-300 bg-surface-50 p-5 shadow-sm">
-			<h2>{$t('Maintenance')}</h2>
-			<p>
-				{maintenance.storage.items_count} Items · {Math.ceil(
-					maintenance.storage.total_disk_bytes / 1048576
-				)} MB
-			</p>
-			<div class="toolbar">
-				{#each maintenanceOperations as [operation, label] (operation)}<button
-						class="btn preset-tonal-surface font-semibold"
-						disabled={busy}
-						onclick={() => runMaintenance(operation)}>{$t(label)}</button
-					>{/each}
-			</div>
-			<h3>{$t('Recent operations')}</h3>
-			{#each maintenance.workflows as workflow (workflow.id)}<div class="item-row">
-					<strong>{workflow.name || workflow.id || $t('Operation')}</strong><span
-						class="text-surface-600">{$t(domainLabel(workflow.state))}</span
-					>
-					{#if workflow.state === 'succeeded' && (workflow.name ?? '').includes('backup') && workflow.id}<button
-							class="btn preset-tonal-surface font-semibold"
-							onclick={() => downloadBackup(workflow.id)}>{$t('Download backup')}</button
-						>{/if}
-				</div>{:else}<p class="text-surface-600">{$t('No maintenance workflows.')}</p>{/each}
-		</section>
+		<AdminMaintenance
+			maintenance={data.data as components['schemas']['AdminMaintenanceView']}
+			operations={maintenanceOperations}
+			{busy}
+			onRun={runMaintenance}
+			onDownloadBackup={downloadBackup}
+		/>
 	{/if}
 	{#if pagination?.total !== undefined && pageCount > 1}
 		<nav class="pagination" aria-label={$t('Administration pages')}>

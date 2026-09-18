@@ -36,6 +36,23 @@ function minimalPdf(): Buffer {
 	return Buffer.from(body);
 }
 
+test('mobile navigation keeps primary destinations visible and moves utilities into More', async ({
+	page
+}) => {
+	await page.setViewportSize({ width: 390, height: 844 });
+	await mockSession(page, 'administrator');
+	await page.goto('/library');
+
+	const navigation = page.getByRole('navigation', { name: 'Mobile navigation' });
+	await expect(navigation.getByRole('link', { name: 'Library' })).toBeVisible();
+	await expect(navigation.getByRole('link', { name: 'Discovery' })).toBeVisible();
+	await expect(navigation.getByRole('link', { name: 'Projects' })).toBeVisible();
+	await navigation.getByRole('button', { name: 'More' }).click();
+	await expect(page.getByRole('menuitem', { name: 'Import' })).toBeVisible();
+	await expect(page.getByRole('menuitem', { name: 'Tools' })).toBeVisible();
+	await expect(page.getByRole('menuitem', { name: 'Administration' })).toBeVisible();
+});
+
 test('pending PDF imports refresh until they can be committed', async ({ page }) => {
 	await mockSession(page);
 	let previewRequests = 0;
@@ -224,81 +241,46 @@ test('Item annotation review spans every PDF revision', async ({ page }) => {
 			}
 		})
 	);
-	await page.route('**/api/v1/items/item-annotations/documents', (route) =>
-		route.fulfill({
-			json: {
-				item_id: 'item-annotations',
-				files: [
-					{
-						id: 'revision-new',
-						kind: 'revision',
-						original_name: 'new.pdf',
-						mime_type: 'application/pdf',
-						size: 200,
-						created_at: '2026-02-01T00:00:00Z',
-						processing_state: 'ready'
-					},
-					{
-						id: 'revision-old',
-						kind: 'revision',
-						original_name: 'old.pdf',
-						mime_type: 'application/pdf',
-						size: 100,
-						created_at: '2026-01-01T00:00:00Z',
-						processing_state: 'ready'
-					}
-				]
+	await page.route('**/api/v1/items/item-annotations/annotations/review*', (route) => {
+		const revisionId = new URL(route.request().url()).searchParams.get('revision_id');
+		const annotations = ['revision-new', 'revision-old'].flatMap((currentRevision) => [
+			{
+				id: `annotation-${currentRevision}`,
+				revision_id: currentRevision,
+				revision_name: currentRevision === 'revision-new' ? 'new.pdf' : 'old.pdf',
+				page_index: 0,
+				kind: 'note',
+				body: currentRevision === 'revision-new' ? 'New revision note' : 'Old revision note',
+				selected_text: null,
+				author_display_name: 'reader',
+				replies: []
+			},
+			{
+				id: `shared-${currentRevision}`,
+				revision_id: currentRevision,
+				revision_name: currentRevision === 'revision-new' ? 'new.pdf' : 'old.pdf',
+				page_index: 0,
+				kind: 'note',
+				body: 'Shared project note',
+				selected_text: null,
+				author_display_name: 'collaborator',
+				replies: []
 			}
-		})
-	);
-	await page.route('**/api/v1/items/item-annotations/organize', (route) =>
-		route.fulfill({
-			json: {
-				item: { id: 'item-annotations', title_html: 'Annotated Item', version: 1 },
-				permissions: { edit: false, delete: false },
-				tags: [],
-				projects: [{ id: 'project-1', name: 'Shared', role: 'member', assigned: true }],
-				tag_matrix: {
-					groups: [],
-					assigned_ids: [],
-					recommended_ids: [],
-					suggested_names: [],
-					suggested_single_words: [],
-					suggested_phrases: [],
-					recommendation_state: 'idle',
-					recommendation_error: null
-				}
-			}
-		})
-	);
-	await page.route('**/api/v1/items/item-annotations/annotations?*', (route) => {
-		const parameters = new URL(route.request().url()).searchParams;
-		const revisionId = parameters.get('revision_id')!;
-		const privateAnnotation = {
-			id: `annotation-${revisionId}`,
-			revision_id: revisionId,
-			page_index: 0,
-			kind: 'note',
-			body: revisionId === 'revision-new' ? 'New revision note' : 'Old revision note',
-			selected_text: null,
-			author_display_name: 'reader',
-			replies: []
-		};
-		if (!parameters.get('project_id')) return route.fulfill({ json: [privateAnnotation] });
+		]);
+		const visible = revisionId
+			? annotations.filter((annotation) => annotation.revision_id === revisionId)
+			: annotations;
 		return route.fulfill({
-			json: [
-				privateAnnotation,
-				{
-					id: `shared-${revisionId}`,
-					revision_id: revisionId,
-					page_index: 0,
-					kind: 'note',
-					body: 'Shared project note',
-					selected_text: null,
-					author_display_name: 'collaborator',
-					replies: []
-				}
-			]
+			json: {
+				revisions: [
+					{ id: 'revision-new', original_name: 'new.pdf' },
+					{ id: 'revision-old', original_name: 'old.pdf' }
+				],
+				annotations: visible,
+				total: visible.length,
+				page: 1,
+				per_page: 50
+			}
 		});
 	});
 
@@ -314,7 +296,7 @@ test('Item annotation review spans every PDF revision', async ({ page }) => {
 	await expect(page.getByText('Shared project note')).toHaveCount(1);
 });
 
-test('Item annotation review surfaces project-scope lookup failures', async ({ page }) => {
+test('Item annotation review surfaces aggregate lookup failures', async ({ page }) => {
 	await mockSession(page);
 	await page.route('**/api/v1/items/item-annotations-error/workspace', (route) =>
 		route.fulfill({
@@ -335,26 +317,14 @@ test('Item annotation review surfaces project-scope lookup failures', async ({ p
 			}
 		})
 	);
-	await page.route('**/api/v1/items/item-annotations-error/documents', (route) =>
+	await page.route('**/api/v1/items/item-annotations-error/annotations/review*', (route) =>
 		route.fulfill({
+			status: 502,
 			json: {
-				item_id: 'item-annotations-error',
-				files: [
-					{
-						id: 'revision-new',
-						kind: 'revision',
-						original_name: 'new.pdf',
-						mime_type: 'application/pdf',
-						size: 200,
-						created_at: '2026-02-01T00:00:00Z',
-						processing_state: 'ready'
-					}
-				]
+				code: 'upstream_service_error',
+				message: 'annotation projection failed'
 			}
 		})
-	);
-	await page.route('**/api/v1/items/item-annotations-error/organize', (route) =>
-		route.fulfill({ status: 500, json: { detail: 'Internal Server Error' } })
 	);
 
 	await page.goto('/item/item-annotations-error/annotations');
@@ -457,9 +427,11 @@ test('Item Files acquires URL imports through the same-origin API', async ({ pag
 			}
 		})
 	);
-	await page.route('**/api/v1/items/item-remote/documents', (route) =>
-		route.fulfill({ json: { item_id: 'item-remote', files: [] } })
-	);
+	let documentReads = 0;
+	await page.route('**/api/v1/items/item-remote/documents', (route) => {
+		documentReads += 1;
+		return route.fulfill({ json: { item_id: 'item-remote', files: [] } });
+	});
 	await page.route('**/api/v1/items/item-remote', (route) =>
 		route.fulfill({
 			json: {
@@ -511,6 +483,7 @@ test('Item Files acquires URL imports through the same-origin API', async ({ pag
 		.toEqual({
 			source: 'https://papers.example/article.pdf'
 		});
+	await expect.poll(() => documentReads).toBeGreaterThan(1);
 
 	const attachmentUrl = page.locator('input[name="url"]').nth(1);
 	await attachmentUrl.fill('https://papers.example/supplement.zip');
@@ -521,10 +494,12 @@ test('Item Files acquires URL imports through the same-origin API', async ({ pag
 			source: 'https://papers.example/supplement.zip',
 			graphical_abstract: false
 		});
-	await expect(page.getByRole('button', { name: 'Download and add attachment' })).toBeEnabled();
+	await expect(attachmentUrl).toHaveValue('');
+	await expect.poll(() => documentReads).toBeGreaterThan(2);
 
 	await attachmentUrl.fill('https://papers.example/figure.png');
-	await page.getByLabel('Use as Graphical Abstract').nth(1).check();
+	const graphicalAbstract = page.getByLabel('Use as Graphical Abstract').nth(1);
+	await graphicalAbstract.check();
 	await page.getByRole('button', { name: 'Download and add attachment' }).click();
 	await expect
 		.poll(() => attachmentImport)
@@ -532,6 +507,8 @@ test('Item Files acquires URL imports through the same-origin API', async ({ pag
 			source: 'https://papers.example/figure.png',
 			graphical_abstract: true
 		});
+	await expect(attachmentUrl).toHaveValue('');
+	await expect(graphicalAbstract).not.toBeChecked();
 
 	expect(browserRemoteRequests).toBe(0);
 });
@@ -724,8 +701,11 @@ test('administrators can respond to compromised user accounts', async ({ page })
 			path: '/api/v1/admin/users/user-2/role',
 			body: { role: 'administrator' }
 		});
+	await expect(page.getByRole('status')).toHaveText('User role saved');
 
-	await page.getByRole('button', { name: 'Disable user' }).click();
+	const statusButton = page.getByRole('button', { name: 'Disable user' });
+	await expect(statusButton).toBeEnabled();
+	await statusButton.click();
 	await expect
 		.poll(() => mutations)
 		.toContainEqual({
@@ -733,9 +713,12 @@ test('administrators can respond to compromised user accounts', async ({ page })
 			path: '/api/v1/admin/users/user-2/status',
 			body: { active: false }
 		});
+	await expect(page.getByRole('status')).toHaveText('User disabled');
 
 	await page.getByLabel('New password for curator').fill('replacement-password');
-	await page.getByRole('button', { name: 'Reset password' }).click();
+	const resetPasswordButton = page.getByRole('button', { name: 'Reset password' });
+	await expect(resetPasswordButton).toBeEnabled();
+	await resetPasswordButton.click();
 	await expect
 		.poll(() => mutations)
 		.toContainEqual({
@@ -743,8 +726,11 @@ test('administrators can respond to compromised user accounts', async ({ page })
 			path: '/api/v1/admin/users/user-2/password',
 			body: { password: 'replacement-password' }
 		});
+	await expect(page.getByRole('status')).toHaveText('User password reset');
 
-	await page.getByRole('button', { name: 'Revoke sessions' }).click();
+	const revokeSessionsButton = page.getByRole('button', { name: 'Revoke sessions' });
+	await expect(revokeSessionsButton).toBeEnabled();
+	await revokeSessionsButton.click();
 	await expect
 		.poll(() => mutations)
 		.toContainEqual({
@@ -1794,7 +1780,7 @@ test('administration resets section-specific filters during navigation', async (
 	await expect.poll(() => projectRequest).not.toBe('');
 	expect(new URL(projectRequest).searchParams.get('state')).toBeNull();
 	expect(new URL(projectRequest).searchParams.get('visibility')).toBeNull();
-	expect(new URL(projectRequest).searchParams.get('page')).toBeNull();
+	expect(new URL(projectRequest).searchParams.get('page')).toBe('1');
 });
 
 test('admin workflow rows render their state contract', async ({ page }) => {

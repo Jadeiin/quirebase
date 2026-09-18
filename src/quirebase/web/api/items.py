@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import suppress
 from typing import Annotated
 
 from fastapi import APIRouter, File, Form, UploadFile, status
@@ -8,7 +9,7 @@ from fastapi.responses import StreamingResponse
 
 from quirebase.access.items import require_editable_item
 from quirebase.core.config import get_settings
-from quirebase.core.errors import ValidationFailure
+from quirebase.core.errors import ResourceNotFound, ValidationFailure
 from quirebase.documents import (
     acquire_remote_attachment,
     create_attachment,
@@ -17,6 +18,7 @@ from quirebase.documents import (
     delete_file_revision,
     get_attachment_file,
     get_pdf_viewer_data,
+    resolve_item_thumbnail,
     store_pdf_revision,
 )
 from quirebase.library import (
@@ -59,6 +61,13 @@ async def item_workspace(item_id: str, user: ApiUser, db: Database):
     if not isinstance(workspace, SummaryWorkspace):  # pragma: no cover
         raise TypeError("item summary workspace mismatch")
     latest = workspace.revisions[0] if workspace.revisions else None
+    thumbnail = None
+    with suppress(ResourceNotFound):
+        resolved = await resolve_item_thumbnail(db, user, item_id)
+        thumbnail = {
+            "source_kind": resolved.source_kind,
+            "source_id": resolved.source_id,
+        }
     return {
         "item": item_search_view(workspace.item),
         "permissions": {"edit": workspace.can_edit, "delete": workspace.can_delete},
@@ -85,6 +94,7 @@ async def item_workspace(item_id: str, user: ApiUser, db: Database):
             if latest
             else None
         ),
+        "thumbnail": thumbnail,
     }
 
 
