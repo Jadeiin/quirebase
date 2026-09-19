@@ -127,7 +127,9 @@ _DEFINITIONS = (
         "Soft-delete an editable Annotation Reply.",
         ToolEffect.DESTRUCTIVE,
     ),
-    McpToolDefinition("library.list_tags", "List Tags with visible Item counts.", ToolEffect.READ),
+    McpToolDefinition(
+        "library.list_tags", "List visible Tags with visible Item counts.", ToolEffect.READ
+    ),
     McpToolDefinition("library.add_item_tag", "Add a Tag to an editable Item.", ToolEffect.WRITE),
     McpToolDefinition(
         "library.remove_item_tag",

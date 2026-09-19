@@ -170,6 +170,32 @@ async def test_tag_delete_conceals_missing_and_foreign_tags(
 
 
 @pytest.mark.anyio
+async def test_tag_list_conceals_tags_without_accessible_items(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    other_user = User(username="prolific-tagger", password_hash="unused")
+    db.add(other_user)
+    await db.flush()
+    foreign_tag = Tag(name="Foreign private taxonomy", created_by=other_user.id)
+    own_tag = Tag(name="Own empty taxonomy", created_by=item.created_by)
+    db.add_all([foreign_tag, own_tag])
+    await db.commit()
+    try:
+        listing = await client.get("/api/v1/tags")
+
+        assert listing.status_code == 200
+        names = [row["name"] for row in listing.json()]
+        assert "Foreign private taxonomy" not in names
+        assert "Own empty taxonomy" in names
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.anyio
 async def test_discussion_delete_conceals_missing_and_foreign_messages(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):

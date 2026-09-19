@@ -118,7 +118,7 @@ describe('GET downloads', () => {
 		const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
 		const fetcher = vi.fn(async (input: RequestInfo | URL) => {
 			expect((input as Request).method).toBe('GET');
-			return new Response(new Blob(['content']), {
+			return new Response('content', {
 				status: 200,
 				headers: { 'Content-Disposition': 'attachment; filename="paper.pdf"' }
 			});

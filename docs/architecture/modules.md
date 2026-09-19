@@ -11,7 +11,7 @@ Planned deepening work is ordered in `docs/architecture/deep-module-roadmap.md`.
 | Package | Role | Owns |
 | --- | --- | --- |
 | `accounts` | Business Module | User authentication, Invitations, Login Sessions, API Tokens and login throttling |
-| `access` | Domain-policy Module | Authorization decisions over Items, Projects, Documents and Annotations |
+| `access` | Domain-policy Module | Authorization decisions over Items, Tags, Projects, Documents and Annotations |
 | `audit` | Business Module | Audit Event construction, programmatic invocation provenance, detail serialization and administrative queries |
 | `library` | Business Module | Items, Authors, Identifiers, Tags, Item Tag Recommendations, Discussion Messages, Import Batches and Citation Styles |
 | `projects` | Business Module | Projects, Project membership and Item assignment |
@@ -161,7 +161,9 @@ translated only inside the Web asset and never enter Documents persistence or AP
 Tag selection is presented by the Item Workspace and committed through additive/remove commands
 (`add_tag_to_item` and `remove_tag_from_item`). Existing Tags may be matched case-insensitively
 against an Item Tag Recommendation, while candidates absent from the taxonomy are returned as
-suggested names. Taxonomy maintenance crosses the Library interface through rename, delete and
+suggested names. Tag reads expose only Tags the User authored or that label an accessible Item, so
+foreign Tags without accessible Items stay concealed; administrators see the full taxonomy.
+Taxonomy maintenance crosses the Library interface through rename, delete and
 `merge_tags`; these operations mutate only Tag and association rows and never invalidate Search.
 
 Item Tag Recommendation generation crosses the Library Interface through generation-request and

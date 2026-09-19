@@ -108,6 +108,32 @@ async def test_get_tag_matrix_for_item(async_db):
 
 
 @pytest.mark.anyio
+async def test_tag_matrix_conceals_foreign_tags_without_accessible_items(async_db):
+    db = async_db
+    viewer = User(username="matrix_viewer", password_hash="hash")
+    author = User(username="matrix_author", password_hash="hash")
+    db.add_all([viewer, author])
+    await db.flush()
+    attached_tag = Tag(name="Attached to visible item", created_by=author.id)
+    foreign_orphan = Tag(name="Foreign orphan", created_by=author.id)
+    own_orphan = Tag(name="Own orphan", created_by=viewer.id)
+    db.add_all([attached_tag, foreign_orphan, own_orphan])
+    await db.flush()
+    item = Item(title="Viewer item", created_by=viewer.id)
+    db.add(item)
+    await db.flush()
+    db.add(ItemTag(item_id=item.id, tag_id=attached_tag.id))
+    await db.commit()
+
+    matrix = await get_tag_matrix_for_item(db, viewer, item.id)
+
+    names = {tag.name for group in matrix["groups"] for tag in group["tags"]}
+    assert "Attached to visible item" in names
+    assert "Own orphan" in names
+    assert "Foreign orphan" not in names
+
+
+@pytest.mark.anyio
 async def test_merge_tags_relinks_items_and_rejects_self_merge(async_db):
     db = async_db
     admin = User(username="admin_merge", password_hash="hash", role="administrator")
