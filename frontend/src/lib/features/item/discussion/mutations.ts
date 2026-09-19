@@ -1,6 +1,6 @@
 import { mutationOptions, type QueryClient } from '@tanstack/svelte-query';
 import { apiRequest } from '$lib/api/client';
-import { itemKeys } from '../queries';
+import { invalidateItemDiscussion } from '$lib/query/invalidation';
 
 export type DiscussionCreateMutation = {
 	form: HTMLFormElement;
@@ -10,13 +10,6 @@ export type DiscussionCreateMutation = {
 export type DiscussionDeleteMutation = {
 	messageId: string;
 };
-
-function invalidateDiscussion(queryClient: QueryClient, itemId: string) {
-	return Promise.all([
-		queryClient.invalidateQueries({ queryKey: itemKeys.discussion(itemId) }),
-		queryClient.invalidateQueries({ queryKey: itemKeys.workspace(itemId) })
-	]);
-}
 
 export function discussionCreateMutationOptions(itemId: string, queryClient: QueryClient) {
 	return mutationOptions({
@@ -28,7 +21,7 @@ export function discussionCreateMutationOptions(itemId: string, queryClient: Que
 			}),
 		onSuccess: async (_saved, { form }) => {
 			form.reset();
-			await invalidateDiscussion(queryClient, itemId);
+			await invalidateItemDiscussion(queryClient, itemId);
 		}
 	});
 }
@@ -40,6 +33,6 @@ export function discussionDeleteMutationOptions(itemId: string, queryClient: Que
 			apiRequest('DELETE', '/items/{item_id}/discussions/{message_id}', {
 				params: { path: { item_id: itemId, message_id: messageId } }
 			}),
-		onSuccess: () => invalidateDiscussion(queryClient, itemId)
+		onSuccess: () => invalidateItemDiscussion(queryClient, itemId)
 	});
 }

@@ -11,10 +11,11 @@
 	import RichText from '$lib/design/RichText.svelte';
 	import SectionHeader from '$lib/design/SectionHeader.svelte';
 	import { domainLabel } from '$lib/domain-labels';
-	import { projectDetailQuery, projectKeys } from '$lib/features/projects/queries';
+	import { projectDetailQuery } from '$lib/features/projects/queries';
 	import { t } from '$lib/i18n';
 	import Button from '$lib/design/Button.svelte';
 	import ItemRow from '$lib/design/ItemRow.svelte';
+	import { invalidateProject } from '$lib/query/invalidation';
 
 	let { projectId } = $props<{ projectId: string }>();
 	let name = $state('');
@@ -50,10 +51,7 @@
 		notice = '';
 		try {
 			await operation();
-			await Promise.all([
-				queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) }),
-				queryClient.invalidateQueries({ queryKey: projectKeys.lists() })
-			]);
+			await invalidateProject(queryClient, projectId);
 			notice = success;
 			return true;
 		} catch (reason) {

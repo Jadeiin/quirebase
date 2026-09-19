@@ -72,7 +72,10 @@ async def export_item_bibliography(
     return Response(
         contents,
         media_type=f"{media_type}; charset=utf-8",
-        headers={"Content-Disposition": content_disposition(filename)},
+        headers={
+            "Content-Disposition": content_disposition(filename),
+            "Cache-Control": "private, no-store",
+        },
     )
 
 

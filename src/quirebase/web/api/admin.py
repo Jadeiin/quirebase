@@ -357,7 +357,12 @@ async def run_maintenance(
 )
 async def download_backup(workflow_id: str, user: AdminUser, db: Database) -> FileResponse:
     path, filename = await get_backup_artifact(db, user, workflow_id)
-    return FileResponse(str(path), media_type="application/zip", filename=filename)
+    return FileResponse(
+        str(path),
+        media_type="application/zip",
+        filename=filename,
+        headers={"Cache-Control": "private, no-store"},
+    )
 
 
 @router.get("/workflows/{workflow_id}", response_model=WorkflowSummaryView)

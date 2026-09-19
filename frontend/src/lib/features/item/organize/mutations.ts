@@ -1,6 +1,6 @@
 import { mutationOptions, type QueryClient } from '@tanstack/svelte-query';
 import { apiRequest } from '$lib/api/client';
-import { itemKeys } from '../queries';
+import { invalidateItemOrganize } from '$lib/query/invalidation';
 import type { OrganizeView } from '../types';
 
 export type ProjectMembershipMutation = {
@@ -23,13 +23,6 @@ export type SuggestedTagMutation = {
 
 type TagTracker = (workflowId: string) => Promise<unknown>;
 
-function invalidateOrganize(queryClient: QueryClient, itemId: string) {
-	return Promise.all([
-		queryClient.invalidateQueries({ queryKey: itemKeys.organize(itemId) }),
-		queryClient.invalidateQueries({ queryKey: itemKeys.workspace(itemId) })
-	]);
-}
-
 export function projectMembershipMutationOptions(itemId: string, queryClient: QueryClient) {
 	return mutationOptions({
 		mutationKey: ['item-project-membership', itemId],
@@ -41,7 +34,7 @@ export function projectMembershipMutationOptions(itemId: string, queryClient: Qu
 				: apiRequest('PUT', '/projects/{project_id}/items/{item_id}', {
 						params: { path: { project_id: project.id, item_id: itemId } }
 					}),
-		onSuccess: () => invalidateOrganize(queryClient, itemId)
+		onSuccess: () => invalidateItemOrganize(queryClient, itemId)
 	});
 }
 
@@ -55,7 +48,7 @@ export function addTagMutationOptions(itemId: string, queryClient: QueryClient) 
 			}),
 		onSuccess: async (_saved, { form }) => {
 			form.reset();
-			await invalidateOrganize(queryClient, itemId);
+			await invalidateItemOrganize(queryClient, itemId);
 		}
 	});
 }
@@ -72,7 +65,7 @@ export function toggleTagMutationOptions(itemId: string, queryClient: QueryClien
 					new_names: []
 				}
 			}),
-		onSuccess: () => invalidateOrganize(queryClient, itemId)
+		onSuccess: () => invalidateItemOrganize(queryClient, itemId)
 	});
 }
 
@@ -84,7 +77,7 @@ export function suggestedTagMutationOptions(itemId: string, queryClient: QueryCl
 				params: { path: { item_id: itemId } },
 				body: { add_tag_ids: [], remove_tag_ids: [], new_names: [name] }
 			}),
-		onSuccess: () => invalidateOrganize(queryClient, itemId)
+		onSuccess: () => invalidateItemOrganize(queryClient, itemId)
 	});
 }
 
@@ -101,6 +94,6 @@ export function tagRecommendationsMutationOptions(
 			});
 			await trackRecommendations(workflow.id);
 		},
-		onSuccess: () => invalidateOrganize(queryClient, itemId)
+		onSuccess: () => invalidateItemOrganize(queryClient, itemId)
 	});
 }

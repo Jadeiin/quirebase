@@ -1,7 +1,7 @@
 import { mutationOptions, type QueryClient } from '@tanstack/svelte-query';
 import { apiRequest } from '$lib/api/client';
 import type { components } from '$lib/api/schema';
-import { itemKeys } from '../queries';
+import { invalidateItem } from '$lib/query/invalidation';
 import type { ItemDetail } from '../types';
 
 export type MetadataMutation = {
@@ -20,10 +20,7 @@ export function metadataMutationOptions(itemId: string, queryClient: QueryClient
 			}),
 		onSuccess: async (_saved, { form }) => {
 			form?.reset();
-			await Promise.all([
-				queryClient.invalidateQueries({ queryKey: itemKeys.detail(itemId) }),
-				queryClient.invalidateQueries({ queryKey: itemKeys.workspace(itemId) })
-			]);
+			await invalidateItem(queryClient, itemId);
 		}
 	});
 }

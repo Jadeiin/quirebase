@@ -5,7 +5,7 @@ import re
 from typing import Annotated
 
 from fastapi import APIRouter, File, Form, Request, UploadFile, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 
 from quirebase.access.items import require_editable_item
 from quirebase.core.config import get_settings
@@ -21,7 +21,11 @@ from quirebase.documents import (
     get_pdf_viewer_data,
     get_revision_file,
     get_revision_thumbnail,
+    head_attachment_file,
+    head_item_thumbnail,
     head_revision_file,
+    head_revision_thumbnail,
+    resolve_item_thumbnail,
     store_pdf_revision,
 )
 from quirebase.library import (
@@ -66,13 +70,71 @@ def _etag_header(metadata) -> str:
     return f'"{value}"'
 
 
+def _if_none_match_matches(value: str | None, etag: str) -> bool:
+    if value is None:
+        return False
+    value = value.strip()
+    if value == "*":
+        return True
+
+    validators: list[str] = []
+    position = 0
+    while position < len(value):
+        while position < len(value) and value[position] in " \t":
+            position += 1
+        if validators:
+            if position >= len(value) or value[position] != ",":
+                return False
+            position += 1
+            while position < len(value) and value[position] in " \t":
+                position += 1
+
+        start = position
+        if value.startswith("W/", position):
+            position += 2
+        if position >= len(value) or value[position] != '"':
+            return False
+        position += 1
+        while position < len(value) and value[position] != '"':
+            character = ord(value[position])
+            if (
+                character != 0x21
+                and not 0x23 <= character <= 0x7E
+                and not 0x80 <= character <= 0xFF
+            ):
+                return False
+            position += 1
+        if position >= len(value):
+            return False
+        position += 1
+        validators.append(value[start:position])
+
+        while position < len(value) and value[position] in " \t":
+            position += 1
+
+    weak_etag = etag.removeprefix("W/")
+    return any(candidate.removeprefix("W/") == weak_etag for candidate in validators)
+
+
+def _not_modified(request: Request, metadata) -> Response | None:
+    etag = _etag_header(metadata)
+    if _if_none_match_matches(request.headers.get("if-none-match"), etag):
+        return Response(
+            status_code=304, headers={"ETag": etag, "Cache-Control": "private, no-cache"}
+        )
+    return None
+
+
 async def ranged_object(request: Request, metadata, filename: str, object_get):
     size = metadata.size
     headers = {
         "Accept-Ranges": "bytes",
         "ETag": _etag_header(metadata),
+        "Cache-Control": "private, no-cache",
         "Content-Disposition": content_disposition(filename, "inline"),
     }
+    if (not_modified := _not_modified(request, metadata)) is not None:
+        return not_modified
     value = request.headers.get("range")
     if not value:
         response = await object_get(None)
@@ -161,7 +223,10 @@ async def download_item_archive(
     return StreamingResponse(
         bundle.body,
         media_type="application/zip",
-        headers={"Content-Disposition": content_disposition(bundle.filename)},
+        headers={
+            "Content-Disposition": content_disposition(bundle.filename),
+            "Cache-Control": "private, no-store",
+        },
     )
 
 
@@ -229,15 +294,25 @@ async def upload_remote_item_attachment(
     },
 )
 async def download_item_attachment(
-    item_id: str, attachment_id: str, user: ApiUser, db: Database
-) -> StreamingResponse:
-    response, original_name, media_type = await get_attachment_file(
+    request: Request, item_id: str, attachment_id: str, user: ApiUser, db: Database
+) -> Response:
+    metadata, original_name, media_type = await head_attachment_file(
+        db, user, item_id, attachment_id
+    )
+    if (not_modified := _not_modified(request, metadata)) is not None:
+        return not_modified
+    response, _original_name, _media_type = await get_attachment_file(
         db, user, item_id, attachment_id
     )
     return StreamingResponse(
         response.body,
         media_type=media_type,
-        headers={"Content-Disposition": content_disposition(original_name)},
+        headers={
+            "Content-Disposition": content_disposition(original_name),
+            "Cache-Control": "private, no-cache",
+            "ETag": _etag_header(metadata),
+            "Content-Length": str(metadata.size),
+        },
     )
 
 
@@ -359,13 +434,25 @@ async def pdf_content(
     },
 )
 async def pdf_thumbnail(
+    request: Request,
     item_id: str,
     revision_id: str,
     user: ApiUser,
     db: Database,
 ):
+    metadata = await head_revision_thumbnail(db, user, item_id, revision_id)
+    if (not_modified := _not_modified(request, metadata)) is not None:
+        return not_modified
     response = await get_revision_thumbnail(db, user, item_id, revision_id)
-    return StreamingResponse(response.body, media_type="image/png")
+    return StreamingResponse(
+        response.body,
+        media_type="image/png",
+        headers={
+            "Cache-Control": "private, no-cache",
+            "ETag": _etag_header(metadata),
+            "Content-Length": str(metadata.size),
+        },
+    )
 
 
 @router.get(
@@ -374,12 +461,26 @@ async def pdf_thumbnail(
     responses={200: {"content": THUMBNAIL_CONTENT_TYPES}},
 )
 async def item_thumbnail(
+    request: Request,
     item_id: str,
     user: ApiUser,
     db: Database,
 ):
-    thumbnail = await get_item_thumbnail(db, user, item_id)
-    return StreamingResponse(thumbnail.response.body, media_type=thumbnail.media_type)
+    source = await resolve_item_thumbnail(db, user, item_id)
+    metadata = await head_item_thumbnail(source)
+    if (not_modified := _not_modified(request, metadata)) is not None:
+        return not_modified
+    thumbnail = await get_item_thumbnail(source)
+    response = thumbnail.response
+    return StreamingResponse(
+        response.body,
+        media_type=source.media_type,
+        headers={
+            "Cache-Control": "private, no-cache",
+            "ETag": _etag_header(metadata),
+            "Content-Length": str(metadata.size),
+        },
+    )
 
 
 @router.get(
@@ -414,5 +515,8 @@ async def export_revision_pdf_route(
     return StreamingResponse(
         exported.body,
         media_type=exported.media_type,
-        headers={"Content-Disposition": content_disposition(exported.filename)},
+        headers={
+            "Content-Disposition": content_disposition(exported.filename),
+            "Cache-Control": "private, no-store",
+        },
     )

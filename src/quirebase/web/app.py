@@ -73,10 +73,12 @@ def create_app(*, mcp_session_factory: SessionFactory = AsyncSessionLocal) -> Fa
         if frontend_csp is not None:
             response.headers["Content-Security-Policy"] = frontend_csp
         content_type = response.headers.get("content-type", "")
-        if request.url.path == "/api/v1/session" or (
+        authenticated_api_response = request.url.path == "/api/v1/session" or (
             request.url.path.startswith("/api/v1/") and settings.session_cookie in request.cookies
-        ):
-            response.headers["Cache-Control"] = "private, no-store"
+        )
+        if authenticated_api_response:
+            if response.headers.get("cache-control") != "private, no-cache":
+                response.headers["Cache-Control"] = "private, no-store"
         elif content_type.startswith("text/html"):
             response.headers["Cache-Control"] = "no-cache"
         elif request.url.path.startswith("/_app/immutable/"):

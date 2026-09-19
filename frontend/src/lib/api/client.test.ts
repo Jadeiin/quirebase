@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
 	ApiError,
@@ -105,6 +105,57 @@ describe('downloadFilename', () => {
 	it('falls back to filename and then the export default', () => {
 		expect(downloadFilename('attachment; filename="records.zip"')).toBe('records.zip');
 		expect(downloadFilename('attachment')).toBe('quirebase-export');
+	});
+});
+
+describe('GET downloads', () => {
+	it('waits for the GET response before saving the returned content', async () => {
+		const link = document.createElement('a');
+		const click = vi.spyOn(link, 'click').mockImplementation(() => undefined);
+		const createElement = vi.spyOn(document, 'createElement').mockReturnValue(link);
+		const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:download');
+		const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+		const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+			expect((input as Request).method).toBe('GET');
+			return new Response(new Blob(['content']), {
+				status: 200,
+				headers: { 'Content-Disposition': 'attachment; filename="paper.pdf"' }
+			});
+		}) as typeof fetch;
+
+		await apiDownloadGet(
+			'/items/{item_id}/attachments/{attachment_id}/content',
+			{ params: { path: { item_id: 'item-1', attachment_id: 'attachment-1' } } },
+			fetcher
+		);
+
+		expect(fetcher).toHaveBeenCalledOnce();
+		expect(link.download).toBe('paper.pdf');
+		expect(link.href).toBe('blob:download');
+		expect(click).toHaveBeenCalledOnce();
+		expect(revokeObjectURL).toHaveBeenCalledWith('blob:download');
+		revokeObjectURL.mockRestore();
+		createObjectURL.mockRestore();
+		createElement.mockRestore();
+		click.mockRestore();
+	});
+
+	it('preserves structured errors returned by the GET', async () => {
+		const fetcher = vi.fn(
+			async () =>
+				new Response(JSON.stringify({ code: 'document_not_ready', message: 'not ready' }), {
+					status: 409,
+					headers: { 'Content-Type': 'application/json' }
+				})
+		) as typeof fetch;
+
+		await expect(
+			apiDownloadGet(
+				'/items/{item_id}/revisions/{revision_id}/export',
+				{ params: { path: { item_id: 'item-1', revision_id: 'revision-1' } } },
+				fetcher
+			)
+		).rejects.toMatchObject({ status: 409, code: 'document_not_ready', message: 'not ready' });
 	});
 });
 

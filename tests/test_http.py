@@ -487,6 +487,90 @@ async def test_item_overview_uses_the_ready_revision_thumbnail(
 
 
 @pytest.mark.anyio
+async def test_item_thumbnail_revalidates_all_if_none_match_forms(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    client, item, revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    thumbnail = await get_object_store().put_object(
+        uuid4(), ObjectSuffix.PNG, b"cached-thumbnail", max_bytes=100
+    )
+    revision.thumbnail_object_key = thumbnail.key
+    await async_db.commit()
+    thumbnail_url = f"/api/v1/items/{item.id}/thumbnail"
+
+    try:
+        initial = await client.get(thumbnail_url)
+        etag = initial.headers["etag"]
+
+        for validator in (
+            "*",
+            f'"other", {etag}',
+            f"W/{etag}",
+            f'"opaque,tag", W/{etag}',
+        ):
+            response = await client.get(thumbnail_url, headers={"If-None-Match": validator})
+            assert response.status_code == 304
+            assert response.headers["etag"] == etag
+            assert response.headers["cache-control"] == "private, no-cache"
+            assert response.content == b""
+
+        mismatch = await client.get(
+            thumbnail_url,
+            headers={"If-None-Match": '"first", W/"second"'},
+        )
+        assert mismatch.status_code == 200
+        assert mismatch.content == b"cached-thumbnail"
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_item_thumbnail_fetches_the_source_checked_for_cache_metadata(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    from quirebase.web.api import documents as documents_api
+
+    client, item, revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    original = await get_object_store().put_object(
+        uuid4(), ObjectSuffix.PNG, b"original-thumbnail", max_bytes=100
+    )
+    replacement = await get_object_store().put_object(
+        uuid4(), ObjectSuffix.PNG, b"newer-thumbnail-with-a-different-size", max_bytes=100
+    )
+    revision.thumbnail_object_key = original.key
+    await async_db.commit()
+    checked_metadata: ObjectMetadata | None = None
+    original_head = documents_api.head_item_thumbnail
+
+    async def switch_source_after_head(source):
+        nonlocal checked_metadata
+        checked_metadata = await original_head(source)
+        revision.thumbnail_object_key = replacement.key
+        await async_db.flush()
+        return checked_metadata
+
+    monkeypatch.setattr(documents_api, "head_item_thumbnail", switch_source_after_head)
+
+    try:
+        response = await client.get(f"/api/v1/items/{item.id}/thumbnail")
+
+        assert checked_metadata is not None
+        assert response.status_code == 200
+        assert response.content == b"original-thumbnail"
+        assert response.headers["content-length"] == str(checked_metadata.size)
+        assert response.headers["etag"] == checked_metadata.etag
+        assert response.headers["cache-control"] == "private, no-cache"
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
 async def test_item_overview_omits_a_missing_thumbnail(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):

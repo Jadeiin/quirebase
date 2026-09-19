@@ -54,7 +54,10 @@ async def export_item_selection(
     return Response(
         contents,
         media_type=f"{media_type}; charset=utf-8",
-        headers={"Content-Disposition": content_disposition(filename)},
+        headers={
+            "Content-Disposition": content_disposition(filename),
+            "Cache-Control": "private, no-store",
+        },
     )
 
 
@@ -83,7 +86,10 @@ async def download_item_selection(
     return StreamingResponse(
         archive.body,
         media_type="application/zip",
-        headers={"Content-Disposition": content_disposition(archive.filename)},
+        headers={
+            "Content-Disposition": content_disposition(archive.filename),
+            "Cache-Control": "private, no-store",
+        },
     )
 
 
@@ -101,5 +107,8 @@ async def export_library_bibliography(
     return Response(
         contents,
         media_type=f"{media_type}; charset=utf-8",
-        headers={"Content-Disposition": content_disposition(filename)},
+        headers={
+            "Content-Disposition": content_disposition(filename),
+            "Cache-Control": "private, no-store",
+        },
     )

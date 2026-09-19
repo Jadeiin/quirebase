@@ -56,5 +56,8 @@ async def export_content(workflow_id: str, user: ApiUser, db: Database):
     return StreamingResponse(
         response.body,
         media_type="application/pdf",
-        headers={"Content-Disposition": 'attachment; filename="annotated.pdf"'},
+        headers={
+            "Content-Disposition": 'attachment; filename="annotated.pdf"',
+            "Cache-Control": "private, no-store",
+        },
     )

@@ -14,8 +14,7 @@
 	import ImportSourceForm from '$lib/features/import/ImportSourceForm.svelte';
 	import ItemMetadataForm from '$lib/features/item/ItemMetadataForm.svelte';
 	import { getWorkflowCenter } from '$lib/features/workflows/center.svelte';
-	import { dashboardKeys } from '$lib/features/dashboard/queries';
-	import { libraryKeys } from '$lib/features/library/queries';
+	import { invalidateLibrary } from '$lib/query/invalidation';
 	import { msg, t } from '$lib/i18n';
 	import Button from '$lib/design/Button.svelte';
 
@@ -182,10 +181,7 @@
 				params: { path: { batch_id: batch.id } }
 			});
 			stopPolling();
-			await Promise.all([
-				queryClient.invalidateQueries({ queryKey: libraryKeys.all }),
-				queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
-			]);
+			await invalidateLibrary(queryClient);
 			await goto(resolve('/library'));
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Unable to commit Import'));
@@ -216,10 +212,7 @@
 		error = '';
 		try {
 			const item = await apiRequest('POST', '/items', { body: metadata });
-			await Promise.all([
-				queryClient.invalidateQueries({ queryKey: libraryKeys.all }),
-				queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
-			]);
+			await invalidateLibrary(queryClient);
 			await goto(resolve('/(app)/item/[itemId]', { itemId: item.id }));
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Unable to create Item'));

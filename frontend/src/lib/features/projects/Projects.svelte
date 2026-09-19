@@ -13,12 +13,8 @@
 	import Panel from '$lib/design/Panel.svelte';
 	import SectionHeader from '$lib/design/SectionHeader.svelte';
 	import { domainLabel } from '$lib/domain-labels';
-	import { dashboardKeys } from '$lib/features/dashboard/queries';
-	import {
-		joinableProjectsQuery,
-		projectKeys,
-		projectListQuery
-	} from '$lib/features/projects/queries';
+	import { invalidateLibrary, invalidateProject } from '$lib/query/invalidation';
+	import { joinableProjectsQuery, projectListQuery } from '$lib/features/projects/queries';
 	import { t } from '$lib/i18n';
 	import ItemRow from '$lib/design/ItemRow.svelte';
 
@@ -33,10 +29,7 @@
 	const joinable = createQuery(() => joinableProjectsQuery());
 
 	async function refresh() {
-		await Promise.all([
-			queryClient.invalidateQueries({ queryKey: projectKeys.all }),
-			queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
-		]);
+		await Promise.all([invalidateProject(queryClient), invalidateLibrary(queryClient)]);
 	}
 
 	async function createProject() {

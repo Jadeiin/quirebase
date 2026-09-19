@@ -1,6 +1,6 @@
 import { mutationOptions, type QueryClient } from '@tanstack/svelte-query';
 import { apiRequest } from '$lib/api/client';
-import { itemKeys } from '../queries';
+import { invalidateItemFiles } from '$lib/query/invalidation';
 import type { FileRow } from '../types';
 
 export type FileUploadMutation = {
@@ -15,13 +15,6 @@ export type FileDeleteMutation = {
 };
 
 type DocumentTracker = (workflowId: string) => Promise<unknown>;
-
-function invalidateFiles(queryClient: QueryClient, itemId: string) {
-	return Promise.all([
-		queryClient.invalidateQueries({ queryKey: itemKeys.files(itemId) }),
-		queryClient.invalidateQueries({ queryKey: itemKeys.workspace(itemId) })
-	]);
-}
 
 export function fileUploadMutationOptions(
 	itemId: string,
@@ -43,7 +36,7 @@ export function fileUploadMutationOptions(
 		},
 		onSuccess: async (_result, { form }) => {
 			form.reset();
-			await invalidateFiles(queryClient, itemId);
+			await invalidateItemFiles(queryClient, itemId);
 		}
 	});
 }
@@ -75,7 +68,7 @@ export function fileRemoteUploadMutationOptions(
 		},
 		onSuccess: async (_result, { form }) => {
 			form.reset();
-			await invalidateFiles(queryClient, itemId);
+			await invalidateItemFiles(queryClient, itemId);
 		}
 	});
 }
@@ -91,6 +84,6 @@ export function fileDeleteMutationOptions(itemId: string, queryClient: QueryClie
 				: apiRequest('DELETE', '/items/{item_id}/attachments/{attachment_id}', {
 						params: { path: { item_id: itemId, attachment_id: file.id } }
 					}),
-		onSuccess: () => invalidateFiles(queryClient, itemId)
+		onSuccess: () => invalidateItemFiles(queryClient, itemId)
 	});
 }

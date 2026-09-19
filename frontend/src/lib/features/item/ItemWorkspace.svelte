@@ -1,29 +1,22 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
 	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { apiDownloadGet } from '$lib/api/client';
 	import { apiErrorMessage } from '$lib/api/errors';
 	import type { components } from '$lib/api/schema';
 	import ConfirmDialog from '$lib/design/ConfirmDialog.svelte';
 	import Notice from '$lib/design/Notice.svelte';
-	import RichText from '$lib/design/RichText.svelte';
 	import { getWorkflowCenter } from '$lib/features/workflows/center.svelte';
-	import ItemActions from '$lib/features/item/ItemActions.svelte';
-	import ItemAnnotationsSection from '$lib/features/item/annotations/ItemAnnotationsSection.svelte';
-	import ItemDiscussionSection from '$lib/features/item/discussion/ItemDiscussionSection.svelte';
+	import ItemWorkspaceHeader from '$lib/features/item/ItemWorkspaceHeader.svelte';
 	import {
 		discussionCreateMutationOptions,
 		discussionDeleteMutationOptions
 	} from '$lib/features/item/discussion/mutations';
-	import ItemFilesSection from '$lib/features/item/files/ItemFilesSection.svelte';
 	import {
 		fileDeleteMutationOptions,
 		fileRemoteUploadMutationOptions,
 		fileUploadMutationOptions
 	} from '$lib/features/item/files/mutations';
-	import ItemMetadataSection from '$lib/features/item/metadata/ItemMetadataSection.svelte';
 	import { metadataMutationOptions } from '$lib/features/item/metadata/mutations';
-	import ItemOrganizeSection from '$lib/features/item/organize/ItemOrganizeSection.svelte';
 	import {
 		addTagMutationOptions,
 		projectMembershipMutationOptions,
@@ -31,18 +24,18 @@
 		tagRecommendationsMutationOptions,
 		toggleTagMutationOptions
 	} from '$lib/features/item/organize/mutations';
-	import ItemOverviewSection from '$lib/features/item/overview/ItemOverviewSection.svelte';
+	import ItemWorkspaceContent from '$lib/features/item/ItemWorkspaceContent.svelte';
 	import {
 		itemDetailsQuery,
 		itemDiscussionQuery,
 		itemFilesQuery,
-		itemKeys,
 		itemOrganizeQuery,
 		itemWorkspaceQuery,
 		type ItemSection
 	} from '$lib/features/item/queries';
 	import type { FileRow, ItemDetail, OrganizeView } from '$lib/features/item/types';
-	import { msg, t, type MessageKey } from '$lib/i18n';
+	import { invalidateItem } from '$lib/query/invalidation';
+	import { msg, t } from '$lib/i18n';
 	import { getSession } from '$lib/session';
 
 	let { itemId, section } = $props<{ itemId: string; section: ItemSection }>();
@@ -115,23 +108,20 @@
 			tagRecommendationsMutation.isPending
 	);
 	const discussionBusy = $derived(discussionCreate.isPending || discussionDelete.isPending);
-	const title = $derived(
-		(section === 'metadata' ? details.data?.title_html : undefined) ??
-			(section === 'organize' ? organize.data?.item.title_html : undefined) ??
-			workspace.data?.item.title_html
+	const sectionLoading = $derived(
+		(section === 'overview' && workspace.isPending) ||
+			(section === 'metadata' && details.isPending) ||
+			(section === 'files' && (files.isPending || details.isPending)) ||
+			(section === 'organize' && organize.isPending) ||
+			(section === 'discussion' && discussion.isPending)
 	);
-	const labels: Record<ItemSection, MessageKey> = {
-		overview: msg('Overview'),
-		metadata: msg('Metadata'),
-		files: msg('Files'),
-		organize: msg('Organize'),
-		annotations: msg('Annotations'),
-		discussion: msg('Discussion')
-	};
-	function sectionPath(key: string) {
-		return key === 'overview' ? (`/item/${itemId}` as const) : (`/item/${itemId}/${key}` as const);
-	}
-	const sectionLabel = $derived(labels[section as ItemSection]);
+	const sectionFailed = $derived(
+		(section === 'overview' && workspace.isError) ||
+			(section === 'metadata' && details.isError) ||
+			(section === 'files' && (files.isError || details.isError)) ||
+			(section === 'organize' && organize.isError) ||
+			(section === 'discussion' && discussion.isError)
+	);
 
 	function track(promise: Promise<unknown>) {
 		mutationError = '';
@@ -216,46 +206,19 @@
 	}
 
 	function refetchItem() {
-		return Promise.all([
-			queryClient.invalidateQueries({ queryKey: itemKeys.workspace(itemId) }),
-			queryClient.invalidateQueries({ queryKey: itemKeys.detail(itemId) })
-		]);
+		return invalidateItem(queryClient, itemId);
 	}
 </script>
 
-<div class="mb-6 flex flex-wrap items-end justify-between gap-4">
-	<div class="min-w-0">
-		<a
-			class="mb-2 inline-flex items-center gap-1 text-xs font-bold tracking-[0.1em] text-primary-700-300 uppercase no-underline hover:text-primary-800-200"
-			href={resolve('/library')}>{$t('Library')}</a
-		>
-		<h1 class="max-w-4xl text-balance">
-			{#if title}<RichText html={title} />{:else}{$t('Item workspace')}{/if}
-		</h1>
-		{#if workspace.data}<p class="mt-2 text-sm text-surface-700-300">
-				{workspace.data.item.authors ||
-					$t('Unknown authors')}{#if workspace.data.item.publication_title}
-					· {workspace.data.item.publication_title}{/if}{#if workspace.data.item.publication_date}
-					· {workspace.data.item.publication_date}{/if}
-			</p>{/if}
-	</div>
-	{#if workspace.data && session.data?.user}{#key itemId}<ItemActions
-				{itemId}
-				workspace={workspace.data}
-				userId={session.data.user.id}
-				onchanged={refetchItem}
-			/>{/key}{/if}
-</div>
-<nav
-	class="mb-6 flex gap-1 overflow-x-auto border-b border-surface-300-700"
-	aria-label={$t('Item workspace')}
->
-	{#each Object.entries(labels) as [key, label] (key)}<a
-			class="border-b-2 border-transparent px-3 py-2.5 text-sm font-semibold whitespace-nowrap text-surface-700-300 no-underline transition-colors hover:text-primary-700-300 aria-[current=page]:border-primary-700-300 aria-[current=page]:text-primary-700-300"
-			aria-current={section === key ? 'page' : undefined}
-			href={resolve(sectionPath(key))}>{$t(label)}</a
-		>{/each}
-</nav>
+<ItemWorkspaceHeader
+	{itemId}
+	{section}
+	workspace={workspace.data}
+	details={details.data}
+	organize={organize.data}
+	user={session.data?.user}
+	onChanged={refetchItem}
+/>
 {#if mutationError}<Notice variant="error">{mutationError}</Notice>{/if}
 <ConfirmDialog
 	bind:open={confirmFileOpen}
@@ -265,59 +228,33 @@
 	busy={fileDelete.isPending}
 	onConfirm={confirmDeleteFile}
 />
-{#if (section === 'overview' && workspace.isPending) || (section === 'metadata' && details.isPending) || (section === 'files' && (files.isPending || details.isPending)) || (section === 'organize' && organize.isPending) || (section === 'discussion' && discussion.isPending)}<div
-		class="grid min-h-52 grid-cols-1 place-items-center text-surface-600-400"
-	>
-		{$t('Loading')}
-		{$t(sectionLabel).toLowerCase()}…
-	</div>
-{:else if (section === 'overview' && workspace.isError) || (section === 'metadata' && details.isError) || (section === 'files' && (files.isError || details.isError)) || (section === 'organize' && organize.isError) || (section === 'discussion' && discussion.isError)}<div
-		class="grid min-h-52 grid-cols-1 place-items-center text-error-700-300"
-	>
-		{$t('Unable to open this Item section.')}
-	</div>
-{:else}
-	{#if section === 'overview'}
-		<ItemOverviewSection {itemId} data={workspace.data!} details={details.data} />
-	{:else if section === 'metadata'}
-		<ItemMetadataSection
-			item={details.data!}
-			canEdit={workspace.data?.permissions.edit ?? false}
-			busy={metadataBusy}
-			onSubmit={updateMetadata}
-		/>
-	{:else if section === 'files'}
-		<ItemFilesSection
-			{itemId}
-			data={files.data!}
-			details={details.data}
-			canEdit={workspace.data?.permissions.edit ?? false}
-			busy={filesBusy}
-			onUpload={upload}
-			onUploadFromUrl={uploadFromUrl}
-			onDownload={downloadFile}
-			onDelete={deleteFile}
-		/>
-	{:else if section === 'organize'}
-		<ItemOrganizeSection
-			data={organize.data!}
-			busy={organizeBusy}
-			onToggleProject={toggleProject}
-			onAddTag={addTag}
-			onToggleTag={toggleTagAssignment}
-			onAddSuggestedTag={addSuggestedTag}
-			onRefresh={refreshTagRecommendations}
-		/>
-	{:else if section === 'annotations'}
-		<ItemAnnotationsSection {itemId} />
-	{:else}
-		<ItemDiscussionSection
-			messages={discussion.data!}
-			userId={session.data?.user?.id}
-			isAdministrator={session.data?.user?.role === 'administrator'}
-			busy={discussionBusy}
-			onAdd={addDiscussion}
-			onDelete={deleteDiscussion}
-		/>
-	{/if}
-{/if}
+<ItemWorkspaceContent
+	{itemId}
+	{section}
+	workspace={workspace.data}
+	details={details.data}
+	files={files.data}
+	organize={organize.data}
+	discussion={discussion.data}
+	loading={sectionLoading}
+	failed={sectionFailed}
+	canEdit={workspace.data?.permissions.edit ?? false}
+	{metadataBusy}
+	{filesBusy}
+	{organizeBusy}
+	{discussionBusy}
+	onMetadata={updateMetadata}
+	onUpload={upload}
+	onUploadFromUrl={uploadFromUrl}
+	onDownload={downloadFile}
+	onDelete={deleteFile}
+	onToggleProject={toggleProject}
+	onAddTag={addTag}
+	onToggleTag={toggleTagAssignment}
+	onAddSuggestedTag={addSuggestedTag}
+	onRefresh={refreshTagRecommendations}
+	onAddDiscussion={addDiscussion}
+	onDeleteDiscussion={deleteDiscussion}
+	userId={session.data?.user?.id}
+	isAdministrator={session.data?.user?.role === 'administrator'}
+/>
