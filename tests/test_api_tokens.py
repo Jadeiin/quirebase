@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import httpx2
 import pytest
+from app_helpers import create_web_test_app
 from sqlalchemy import select
 from typer.testing import CliRunner
 
@@ -51,7 +52,7 @@ async def account_client(db, session_factory, tmp_path, monkeypatch):
     login.token_hash = token_hash(raw_token)
     await db.commit()
 
-    test_app = create_app(mcp_session_factory=session_factory)
+    test_app = create_web_test_app(mcp_session_factory=session_factory)
 
     async def override_db():
         await asyncio.sleep(0)

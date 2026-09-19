@@ -1,10 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+// @vitest-environment jsdom
+
+import { describe, expect, it, vi } from 'vitest';
 
 import { waitForWorkflow } from './workflows';
-
-afterEach(() => {
-	vi.unstubAllGlobals();
-});
 
 describe('waitForWorkflow', () => {
 	it('returns a terminal workflow through the typed status endpoint', async () => {

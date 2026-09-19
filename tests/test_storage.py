@@ -88,10 +88,10 @@ async def test_equal_concurrent_uploads_have_independent_keys(object_store):
     content = b"same immutable content" * 10_000
     first, second = await asyncio.gather(
         object_store.put_object(
-            uuid4(), ObjectSuffix.BINARY, chunks(content), max_bytes=len(content)
+            uuid4(), ObjectSuffix.BINARY, chunks(content, 4096), max_bytes=len(content)
         ),
         object_store.put_object(
-            uuid4(), ObjectSuffix.BINARY, chunks(content), max_bytes=len(content)
+            uuid4(), ObjectSuffix.BINARY, chunks(content, 4096), max_bytes=len(content)
         ),
     )
     assert first.key != second.key

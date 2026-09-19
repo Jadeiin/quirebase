@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import httpx2
 import pytest
+from app_helpers import create_web_test_app
 from sqlalchemy import func, select
 from storage_helpers import local_object_path, put_pdf_object
 
@@ -31,7 +32,6 @@ from quirebase.models import (
     User,
 )
 from quirebase.search import search_index
-from quirebase.web.app import create_app
 
 
 async def authenticated_async_client(db, session_factory, tmp_path, monkeypatch):
@@ -63,7 +63,7 @@ async def authenticated_async_client(db, session_factory, tmp_path, monkeypatch)
     db.add(revision)
     await db.commit()
 
-    test_app = create_app(mcp_session_factory=session_factory)
+    test_app = create_web_test_app(mcp_session_factory=session_factory)
 
     async def override_db():
         await asyncio.sleep(0)

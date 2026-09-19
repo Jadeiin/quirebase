@@ -177,6 +177,10 @@ describe('annotation write coordination', () => {
 	it('flush waits for every serialized write, including writes queued behind an active one', async () => {
 		let finishFirst!: () => void;
 		let finishSecond!: () => void;
+		let markSecondStarted!: () => void;
+		const secondStarted = new Promise<void>((resolve) => {
+			markSecondStarted = resolve;
+		});
 		const queue = createWriteQueue();
 		const first = queue.enqueue(
 			() =>
@@ -184,12 +188,12 @@ describe('annotation write coordination', () => {
 					finishFirst = resolve;
 				})
 		);
-		const second = queue.enqueue(
-			() =>
-				new Promise<void>((resolve) => {
-					finishSecond = resolve;
-				})
-		);
+		const second = queue.enqueue(() => {
+			markSecondStarted();
+			return new Promise<void>((resolve) => {
+				finishSecond = resolve;
+			});
+		});
 		let flushed = false;
 		const flush = queue.flush().then(() => {
 			flushed = true;
@@ -197,7 +201,7 @@ describe('annotation write coordination', () => {
 
 		finishFirst();
 		await first;
-		await new Promise((resolve) => setTimeout(resolve, 0));
+		await secondStarted;
 		expect(flushed).toBe(false);
 
 		finishSecond();

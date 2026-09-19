@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import httpx2
 import pytest
+from app_helpers import create_web_test_app
 from sqlalchemy import select
 
 from quirebase.accounts import (
@@ -18,11 +19,10 @@ from quirebase.core.crypto import hash_password, token_hash, verify_password
 from quirebase.core.database import get_db
 from quirebase.core.errors import ValidationFailure
 from quirebase.models import AuditEvent, LoginSession, User
-from quirebase.web.app import create_app
 
 
 async def web_client(db, session_factory, *, authenticated: bool = False):
-    test_app = create_app(mcp_session_factory=session_factory)
+    test_app = create_web_test_app(mcp_session_factory=session_factory)
 
     async def override_db():
         await asyncio.sleep(0)

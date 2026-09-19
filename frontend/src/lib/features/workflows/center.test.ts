@@ -1,4 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+// @vitest-environment jsdom
+
+import { describe, expect, it, vi } from 'vitest';
 
 import { msg } from '$lib/i18n';
 import { toaster } from '$lib/toaster';
@@ -21,9 +23,8 @@ type ToastOptions = {
 };
 
 function lastToast(): ToastOptions {
-	const call = createToast.mock.calls.at(-1);
-	if (!call) throw new Error('no toast was created');
-	return call[0] as ToastOptions;
+	expect(createToast).toHaveBeenCalled();
+	return createToast.mock.lastCall![0] as ToastOptions;
 }
 
 function status(overrides: Partial<WorkflowStatus> = {}): WorkflowStatus {
@@ -48,11 +49,6 @@ function memoryLedger() {
 	};
 	return { ledger, entries: () => entries };
 }
-
-afterEach(() => {
-	vi.clearAllMocks();
-	vi.unstubAllGlobals();
-});
 
 describe('WorkflowCenter', () => {
 	it('resolves waiters and shows a success toast with the job duration', async () => {
@@ -116,11 +112,11 @@ describe('WorkflowCenter', () => {
 		expect(center.jobs).toHaveLength(0);
 	});
 
-	it('keeps failed jobs until their toast is dismissed', () => {
+	it('keeps failed jobs until their toast is dismissed', async () => {
 		const center = new WorkflowCenter();
 		const { settled } = center.track('workflow-1', trackOptions());
-		void settled.catch(() => undefined);
 		center.resolve('workflow-1', status({ state: 'failed', error: 'boom' }));
+		await expect(settled).rejects.toThrow('boom');
 		expect(center.jobs).toHaveLength(1);
 
 		lastToast().onStatusChange?.({ status: 'dismissing' });
@@ -137,8 +133,7 @@ describe('WorkflowCenter', () => {
 			)
 		);
 		const center = new WorkflowCenter();
-		const { settled } = center.track('workflow-1', trackOptions());
-		void settled.catch(() => undefined);
+		center.track('workflow-1', trackOptions());
 
 		center.dismiss('workflow-1');
 
@@ -146,18 +141,14 @@ describe('WorkflowCenter', () => {
 		await Promise.resolve();
 	});
 
-	it('fails jobs with a synthesized terminal status', () => {
+	it('fails jobs with a synthesized terminal status', async () => {
 		const center = new WorkflowCenter();
 		const { job, settled } = center.track('workflow-1', trackOptions());
-		void settled.then(
-			() => undefined,
-			() => undefined
-		);
 
 		center.fail('workflow-1', 'Document processing failed');
 		expect(job.outcome).toMatchObject({ id: 'workflow-1', state: 'failed' });
 		expect(lastToast()).toMatchObject({ type: 'error', title: 'Document processing failed' });
-		return expect(settled).rejects.toThrow('Document processing failed');
+		await expect(settled).rejects.toThrow('Document processing failed');
 	});
 
 	it('hands dismissed waiters back to direct polling', async () => {
@@ -179,8 +170,7 @@ describe('WorkflowCenter', () => {
 	it('restores active jobs from the ledger without duplicating tracked work', () => {
 		const { ledger } = memoryLedger();
 		const first = new WorkflowCenter(ledger);
-		const { settled } = first.track('workflow-1', trackOptions());
-		void settled.catch(() => undefined);
+		first.track('workflow-1', trackOptions());
 
 		const reloaded = new WorkflowCenter(ledger);
 		reloaded.restore();
@@ -196,8 +186,7 @@ describe('WorkflowCenter', () => {
 	it('drops settled jobs from the ledger', () => {
 		const { ledger, entries } = memoryLedger();
 		const center = new WorkflowCenter(ledger);
-		const { settled } = center.track('workflow-1', trackOptions());
-		void settled.catch(() => undefined);
+		center.track('workflow-1', trackOptions());
 
 		center.resolve('workflow-1', status());
 		expect(entries()).toEqual([]);
@@ -213,8 +202,7 @@ describe('WorkflowCenter', () => {
 		);
 		const { ledger, entries } = memoryLedger();
 		const first = new WorkflowCenter(ledger);
-		const { settled } = first.track('workflow-1', trackOptions());
-		void settled.catch(() => undefined);
+		first.track('workflow-1', trackOptions());
 
 		first.dismiss('workflow-1');
 		expect(entries()).toEqual([]);
@@ -227,8 +215,7 @@ describe('WorkflowCenter', () => {
 	it('shows the success toast when a restored job settles', () => {
 		const { ledger } = memoryLedger();
 		const first = new WorkflowCenter(ledger);
-		const { settled } = first.track('workflow-1', trackOptions());
-		void settled.catch(() => undefined);
+		first.track('workflow-1', trackOptions());
 
 		const restored = new WorkflowCenter(ledger);
 		restored.restore();
@@ -240,8 +227,7 @@ describe('WorkflowCenter', () => {
 		const { ledger } = memoryLedger();
 		const center = new WorkflowCenter(ledger);
 		for (let index = 0; index < 25; index++) {
-			const { settled } = center.track(`workflow-${index}`, trackOptions());
-			void settled.catch(() => undefined);
+			center.track(`workflow-${index}`, trackOptions());
 		}
 
 		expect(ledger.read().map((entry) => entry.id)).toEqual(
@@ -249,12 +235,11 @@ describe('WorkflowCenter', () => {
 		);
 	});
 
-	it('binds a ledger per account and restores that account jobs', () => {
+	it('binds a ledger per account and restores that account jobs', async () => {
 		const first = memoryLedger();
 		const second = memoryLedger();
 		const center = new WorkflowCenter(first.ledger);
 		const { settled } = center.track('workflow-a', trackOptions());
-		void settled.catch(() => undefined);
 		second.ledger.write([
 			{
 				id: 'workflow-b',
@@ -266,6 +251,7 @@ describe('WorkflowCenter', () => {
 		]);
 
 		center.bindLedger(second.ledger);
+		await expect(settled).rejects.toThrow('Workflow tracking moved to another account');
 
 		expect(center.jobs.map((job) => job.id)).toEqual(['workflow-b']);
 		expect(first.entries().map((entry) => entry.id)).toEqual(['workflow-a']);
@@ -285,22 +271,14 @@ describe('WorkflowCenter', () => {
 	it('never evicts active jobs when enforcing the tray limit', () => {
 		const center = new WorkflowCenter();
 		for (let index = 0; index < 25; index++) {
-			const { settled } = center.track(`workflow-${index}`, trackOptions());
-			void settled.then(
-				() => undefined,
-				() => undefined
-			);
+			center.track(`workflow-${index}`, trackOptions());
 		}
 		expect(center.jobs).toHaveLength(25);
 		for (let index = 0; index < 10; index++) {
 			center.resolve(`workflow-${index}`, status({ id: `workflow-${index}` }));
 		}
 		for (let index = 25; index < 30; index++) {
-			const { settled } = center.track(`workflow-${index}`, trackOptions());
-			void settled.then(
-				() => undefined,
-				() => undefined
-			);
+			center.track(`workflow-${index}`, trackOptions());
 		}
 		const ids = center.jobs.map((job) => job.id);
 		expect(ids.length).toBeLessThanOrEqual(20);

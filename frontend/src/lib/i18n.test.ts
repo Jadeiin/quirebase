@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { afterEach, describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
 import { activateLocale, msg, setLocale, t } from '$lib/i18n';

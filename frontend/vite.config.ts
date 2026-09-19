@@ -21,7 +21,12 @@ export default defineConfig({
 		proxy: {}
 	},
 	test: {
-		environment: 'jsdom',
-		include: ['src/**/*.test.ts']
+		environment: 'node',
+		include: ['src/**/*.test.ts'],
+		// Cache transforms while retaining Vitest's default per-file module isolation.
+		fsModuleCache: true,
+		clearMocks: true,
+		restoreMocks: true,
+		unstubGlobals: true
 	}
 });

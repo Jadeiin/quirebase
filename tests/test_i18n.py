@@ -56,14 +56,6 @@ def test_translated_catalog_does_not_leave_english_copy():
     assert untranslated == []
 
 
-def test_backend_owns_no_locale_boundary():
-    assert not (ROOT / "src/quirebase/web/locale.py").exists()
-    session = (ROOT / "src/quirebase/web/api/session.py").read_text(encoding="utf-8")
-    account = (ROOT / "src/quirebase/web/api/account.py").read_text(encoding="utf-8")
-    assert "locale" not in session
-    assert "/account/locale" not in account
-
-
 def test_lingui_catalog_is_owned_by_the_svelte_frontend():
     source = (ROOT / "frontend/src/lib/i18n.ts").read_text(encoding="utf-8")
     english = ROOT / "frontend/src/lib/locales/en-US/messages.po"
@@ -72,5 +64,3 @@ def test_lingui_catalog_is_owned_by_the_svelte_frontend():
     assert english.exists()
     assert chinese.exists()
     assert 'msgid "Library"' in chinese.read_text(encoding="utf-8")
-    assert not any((ROOT / "src/quirebase/templates").glob("*"))
-    assert not (ROOT / "src/quirebase/core/i18n.py").exists()

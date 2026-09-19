@@ -1,7 +1,8 @@
+// @vitest-environment jsdom
+
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-	ApiError,
 	apiDownloadGet,
 	apiRequest,
 	apiText,
@@ -112,8 +113,8 @@ describe('GET downloads', () => {
 	it('waits for the GET response before saving the returned content', async () => {
 		const link = document.createElement('a');
 		const click = vi.spyOn(link, 'click').mockImplementation(() => undefined);
-		const createElement = vi.spyOn(document, 'createElement').mockReturnValue(link);
-		const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:download');
+		vi.spyOn(document, 'createElement').mockReturnValue(link);
+		vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:download');
 		const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
 		const fetcher = vi.fn(async (input: RequestInfo | URL) => {
 			expect((input as Request).method).toBe('GET');
@@ -134,10 +135,6 @@ describe('GET downloads', () => {
 		expect(link.href).toBe('blob:download');
 		expect(click).toHaveBeenCalledOnce();
 		expect(revokeObjectURL).toHaveBeenCalledWith('blob:download');
-		revokeObjectURL.mockRestore();
-		createObjectURL.mockRestore();
-		createElement.mockRestore();
-		click.mockRestore();
 	});
 
 	it('preserves structured errors returned by the GET', async () => {
@@ -227,9 +224,8 @@ describe('structured API errors', () => {
 				{ status: 422, headers: { 'Content-Type': 'application/json' } }
 			)) as typeof fetch;
 
-		let error: ApiError | undefined;
-		try {
-			await apiRequest(
+		await expect(
+			apiRequest(
 				'POST',
 				'/items',
 				{
@@ -244,15 +240,12 @@ describe('structured API errors', () => {
 					}
 				},
 				fetcher
-			);
-		} catch (reason) {
-			error = reason as ApiError;
-		}
-
-		expect(error).toMatchObject({ status: 422, code: 'validation_failed' });
-		expect(error?.fields).toEqual([
-			{ path: ['body', 'title'], code: 'missing', message: 'Field required' }
-		]);
-		expect(error?.meta).toEqual({ request_id: 'request-1' });
+			)
+		).rejects.toMatchObject({
+			status: 422,
+			code: 'validation_failed',
+			fields: [{ path: ['body', 'title'], code: 'missing', message: 'Field required' }],
+			meta: { request_id: 'request-1' }
+		});
 	});
 });

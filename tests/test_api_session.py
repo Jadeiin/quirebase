@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import httpx2
 import pytest
+from app_helpers import create_web_test_app
 from sqlalchemy import select
 from test_http import authenticated_async_client
 
@@ -9,7 +10,6 @@ from quirebase.accounts import create_api_token, create_login_session
 from quirebase.core.crypto import hash_password
 from quirebase.core.database import get_db
 from quirebase.models import LoginSession, User
-from quirebase.web.app import create_app
 
 
 @pytest.mark.anyio
@@ -127,7 +127,7 @@ async def test_session_bootstrap_returns_the_browser_identity(
 async def test_login_and_logout_use_json_and_same_origin_policy(async_db, async_session_factory):
     async_db.add(User(username="alice", password_hash=hash_password("correct horse battery")))
     await async_db.commit()
-    test_app = create_app(mcp_session_factory=async_session_factory)
+    test_app = create_web_test_app(mcp_session_factory=async_session_factory)
 
     async def override_db():  # ruff: ignore[unused-async] - FastAPI yield dependency
         yield async_db
@@ -173,7 +173,7 @@ async def test_logout_rejects_a_cookie_owned_by_another_authenticated_user(
     grant = await create_api_token(async_db, bearer_user, "Mixed credentials", expires_in_days=1)
     login, raw_session = await create_login_session(async_db, cookie_user, session_days=1)
     login_id = login.id
-    test_app = create_app(mcp_session_factory=async_session_factory)
+    test_app = create_web_test_app(mcp_session_factory=async_session_factory)
 
     async def override_db():  # ruff: ignore[unused-async] - FastAPI yield dependency
         yield async_db

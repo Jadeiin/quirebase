@@ -158,7 +158,6 @@ def test_builtin_style_selection_reuses_one_catalog_snapshot(monkeypatch):
         catalog_calls += 1
         return catalog
 
-    styles.builtin_style_catalog.cache_clear()
     monkeypatch.setattr(styles, "builtin_style_catalog", load_catalog)
 
     selection = citations.select_builtin_citation_styles("matching", limit=1, include="saved")

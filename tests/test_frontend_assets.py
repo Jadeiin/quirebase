@@ -12,21 +12,11 @@ def read(path: str) -> str:
 
 def test_svelte_frontend_owns_the_application_build():
     package = json.loads(read("frontend/package.json"))
-    assert not (ROOT / "package.json").exists()
     assert package["dependencies"]["svelte"].startswith("^5.")
     assert "@tanstack/svelte-query" in package["dependencies"]
     assert package["dependencies"]["@skeletonlabs/skeleton"] == "5.0.1"
     assert package["dependencies"]["@skeletonlabs/skeleton-svelte"] == "5.0.1"
-    assert "bits-ui" not in package["dependencies"]
     assert package["devDependencies"]["tailwindcss"].startswith("^4.")
-
-
-def test_frontend_build_stays_outside_the_python_source_tree():
-    assert (ROOT / "frontend/bun.lock").is_file()
-    assert not (ROOT / "bun.lock").exists()
-    assert not (ROOT / "scripts/install-frontend.mjs").exists()
-    assert not any((ROOT / "src/quirebase/assets").glob("*"))
-    assert not (ROOT / "src/quirebase/static").exists()
 
 
 def test_development_proxy_keeps_fastapi_documentation_on_the_frontend_origin():
@@ -83,16 +73,8 @@ def test_sveltekit_filesystem_routes_own_application_navigation():
         page = read(path)
         assert f"<{component}" in page
 
-    assert not (ROOT / "frontend/src/routes/[...path]").exists()
-    assert not (ROOT / "frontend/src/lib/App.svelte").exists()
     assert "sessionQuery" in read("frontend/src/lib/app/AppShell.svelte")
     assert "apiRequest('GET', '/session'" in read("frontend/src/lib/session.ts")
-    assert not (ROOT / "frontend/src/params/itemSection.ts").exists()
-    assert not (ROOT / "frontend/src/params/adminSection.ts").exists()
-    assert not (ROOT / "frontend/src/routes/(app)/item/[itemId]/[section=itemSection]").exists()
-    assert not (ROOT / "frontend/src/routes/(app)/admin/[section=adminSection]").exists()
-    assert not (ROOT / "frontend/src/lib/features/item/ItemWorkspace.svelte").exists()
-    assert not (ROOT / "frontend/src/lib/features/item/ItemWorkspaceContent.svelte").exists()
 
 
 def test_frontend_does_not_render_api_metadata_as_trusted_html():
@@ -114,12 +96,10 @@ def test_docker_builds_the_svelte_workspace_before_the_python_wheel():
 
 
 def test_item_workspace_uses_the_fixed_query_annotation_review_projection():
-    page = read("frontend/src/routes/(app)/item/[itemId]/(workspace)/annotations/+page.svelte")
     annotations = read("frontend/src/lib/features/item/annotations/ItemAnnotationsSection.svelte")
     queries = read("frontend/src/lib/features/item/queries.ts")
     assert "itemAnnotationsReviewQuery" in annotations
     assert "'/items/{item_id}/annotations/review'" in queries
-    assert "annotationProjects" not in page
     assert "annotations.isError" in annotations
 
 

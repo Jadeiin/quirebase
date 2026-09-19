@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from app_helpers import create_web_test_app
 from fastapi.routing import APIRoute
 
 from quirebase.web.api.routes import CAPABILITY_ROUTERS, generate_operation_id
 from quirebase.web.api.routes import router as api_router
-from quirebase.web.app import create_app
+
+OPENAPI = create_web_test_app().openapi()
 
 
 def test_api_version_prefix_is_owned_by_composition_root() -> None:
@@ -17,8 +19,7 @@ def test_api_version_prefix_is_owned_by_composition_root() -> None:
 
 def test_api_routes_have_unique_stable_operation_ids() -> None:
     """Every versioned API operation has an identifier for OpenAPI and MCP consumers."""
-    app = create_app()
-    paths = app.openapi()["paths"]
+    paths = OPENAPI["paths"]
     operation_ids: list[str] = []
 
     for path, methods in paths.items():
@@ -48,8 +49,7 @@ def test_api_routes_have_unique_stable_operation_ids() -> None:
 
 def test_openapi_contract_has_no_untyped_endpoints() -> None:
     """Every 2xx API route must declare an explicit, typed response schema or media-type."""
-    openapi = create_app().openapi()
-    paths = openapi.get("paths", {})
+    paths = OPENAPI.get("paths", {})
     untyped: list[tuple[str, str, str, str]] = []
 
     for path, methods in paths.items():
@@ -94,7 +94,7 @@ def test_openapi_contract_has_no_untyped_endpoints() -> None:
 
 def test_openapi_media_type_contracts() -> None:
     """Verify that multi-content-type endpoints expose all runtime media types in OpenAPI."""
-    paths = create_app().openapi().get("paths", {})
+    paths = OPENAPI.get("paths", {})
 
     bib_expected = {
         "text/plain",
@@ -137,7 +137,7 @@ def test_openapi_media_type_contracts() -> None:
 
 
 def test_openapi_api_routes_share_the_structured_error_contract() -> None:
-    paths = create_app().openapi()["paths"]
+    paths = OPENAPI["paths"]
     expected_schema = {"$ref": "#/components/schemas/ApiErrorView"}
 
     for path, methods in paths.items():

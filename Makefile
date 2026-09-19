@@ -93,7 +93,7 @@ type-check:
 	$(MYPY) $(SRC_DIR)
 
 test-all:
-	$(PYTEST) -q -m "not oa"
+	$(PYTEST) -q -m "not oa" -n 4 --dist loadscope
 
 test-oa:
 	$(PYTEST) -q -m oa

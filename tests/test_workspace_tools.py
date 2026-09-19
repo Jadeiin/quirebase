@@ -73,6 +73,8 @@ async def test_tools_detect_duplicates_and_manage_owned_tags(
         assert tools.status_code == 200
         assert len(tools.json()["groups"]) == 1
         assert {row["id"] for row in tools.json()["groups"][0]} == {item.id, duplicate.id}
+        invalid_mode = await client.get("/api/v1/duplicates?mode=unknown")
+        assert invalid_mode.status_code == 422
         tags = await client.get("/api/v1/tags")
         assert tags.json()[0]["name"] == "Old tag"
         assert tags.json()[0]["accessible_item_count"] == 1

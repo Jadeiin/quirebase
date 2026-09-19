@@ -45,6 +45,7 @@ if TYPE_CHECKING:
 
 pytestmark = [
     pytest.mark.anyio,
+    pytest.mark.shared_postgres,
     pytest.mark.skipif(
         not os.getenv("QUIREBASE_TEST_POSTGRES_URL"), reason="PostgreSQL is not configured"
     ),

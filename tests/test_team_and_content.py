@@ -66,24 +66,6 @@ async def test_csp_allows_browser_pdf_downloads_from_external_http_sources(
 
 
 @pytest.mark.anyio
-async def test_tools_no_longer_exposes_pdf_duplicate_detection(
-    async_db, async_session_factory, tmp_path, monkeypatch
-):
-    client, _item, _revision = await authenticated_async_client(
-        async_db, async_session_factory, tmp_path, monkeypatch
-    )
-    try:
-        tools = await client.get("/api/v1/duplicates")
-        removed_mode = await client.get("/api/v1/duplicates", params={"mode": "pdf"})
-
-        assert tools.json() == {"groups": []}
-        assert removed_mode.status_code == 422
-    finally:
-        await client.aclose()
-        get_settings.cache_clear()
-
-
-@pytest.mark.anyio
 async def test_durable_login_throttle(async_db):
     db = async_db
     identity = "a" * 64

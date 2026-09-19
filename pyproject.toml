@@ -53,6 +53,7 @@ dev = [
   "prek>=0.3,<1",
   "pytest>=8.4,<9",
   "pytest-cov>=6.2,<7",
+  "pytest-xdist>=3.8,<4",
   "ruff>=0.16,<1",
 ]
 
@@ -93,7 +94,10 @@ artifacts = ["frontend/build"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "packages/inquiro/tests", "packages/rubrica/tests"]
-markers = ["oa: tests using the separately downloaded open-access PDF corpus"]
+markers = [
+  "oa: tests using the separately downloaded open-access PDF corpus",
+  "shared_postgres: tests that mutate the configured shared PostgreSQL database",
+]
 
 [tool.ruff]
 line-length = 100

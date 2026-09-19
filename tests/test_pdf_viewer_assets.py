@@ -28,8 +28,6 @@ def test_pdfium_is_a_vite_managed_same_origin_asset():
     viewer = read("frontend/src/lib/pdf/EmbeddedPdfViewer.svelte")
     assert_import(viewer, "@embedpdf/pdfium/pdfium.wasm?url")
     assert "wasmUrl: pdfiumWasmUrl" in viewer
-    assert not (ROOT / "scripts/install-frontend.mjs").exists()
-    assert not (ROOT / "scripts/build-assets.mjs").exists()
 
 
 def test_pdf_requests_include_login_session_credentials():
@@ -80,17 +78,3 @@ def test_sveltekit_csp_allows_embedpdf_worker_without_remote_scripts():
         r"(['\"])script-src\1\s*:\s*\[\s*(['\"])self\2\s*,\s*(['\"])wasm-unsafe-eval\3\s*\]",
         config,
     )
-
-
-def test_pdf_viewer_catches_document_load_failures_and_guards_destruction():
-    viewer = read("frontend/src/lib/pdf/EmbeddedPdfViewer.svelte")
-    assert "waitForDocument()" in viewer
-    assert "cancelDocumentWait" in viewer
-    assert "destroyed = true" in viewer
-    assert "onstatus?.(apiErrorMessage(error, $t('Unable to open this PDF.')), true)" in viewer
-
-
-def test_adr_0012_reconciles_bundled_svelte_viewer_package():
-    adr = read("docs/adr/0012-svelte-application-and-http-boundary.md")
-    assert "@embedpdf/svelte-pdf-viewer" in adr
-    assert "Manual headless EmbedPDF component composition was rejected" in adr

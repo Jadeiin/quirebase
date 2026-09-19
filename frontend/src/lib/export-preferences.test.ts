@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -10,7 +12,6 @@ import {
 describe('export preference storage', () => {
 	afterEach(() => {
 		localStorage.clear();
-		vi.restoreAllMocks();
 	});
 
 	it('falls back to defaults when stored JSON is malformed', () => {

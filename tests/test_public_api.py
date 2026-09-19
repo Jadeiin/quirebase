@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import httpx2
 import pytest
+from app_helpers import create_web_test_app
 from sqlalchemy import select
 
 from quirebase.accounts import create_api_token
@@ -23,12 +24,11 @@ from quirebase.models import (
     SystemRole,
     User,
 )
-from quirebase.web.app import create_app
 
 
 @asynccontextmanager
 async def api_client(factory):
-    app = create_app(mcp_session_factory=factory)
+    app = create_web_test_app(mcp_session_factory=factory)
 
     async def override_db():
         session = factory()

@@ -55,7 +55,7 @@ jobs:
       - run: bun run --cwd frontend build
       - run: uv run prek run --all-files
       - run: uv run mypy src/quirebase
-      - run: uv run pytest -q -m "not oa"
+      - run: uv run pytest -q -m "not oa" -n 4 --dist loadscope
       - run: uv run quirebase init-db
       - run: uv run quirebase doctor
       - run: uv build --all-packages --no-sources
