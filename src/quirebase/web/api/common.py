@@ -18,7 +18,9 @@ class ApiErrorView(BaseModel):
 
 API_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     "default": {"model": ApiErrorView},
-    422: {"model": ApiErrorView},
+    # Python 3.12 and 3.14 use different HTTPStatus phrases for 422. Keep the
+    # generated OpenAPI contract deterministic across supported runtimes.
+    422: {"model": ApiErrorView, "description": "Unprocessable Content"},
 }
 
 

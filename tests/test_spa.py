@@ -44,7 +44,10 @@ async def test_frontend_routes_return_the_static_svelte_application(
         assert f"'sha256-{digest}'" in csp
     assert '<script src="/theme.js"></script>' in library.text
     assert theme_bootstrap.status_code == 200
-    assert theme_bootstrap.headers["content-type"].startswith("text/javascript")
+    assert theme_bootstrap.headers["content-type"].split(";", 1)[0] in {
+        "application/javascript",
+        "text/javascript",
+    }
     assert api.headers["content-type"].startswith("application/json")
 
 
