@@ -71,7 +71,7 @@ test('PDF reader uses the built-in EmbedPDF viewer with Quirebase annotations', 
 	await page.goto('/item/item-1/pdf/revision-1');
 	await expect(page.getByRole('button', { name: 'Document Menu' })).toBeVisible();
 	await expect(page.locator('[data-epdf-i="comment-button"]')).toBeAttached();
-	await expect(page.getByText('1 annotations loaded')).toBeVisible();
+	await expect(page.getByText('1 annotation loaded')).toBeVisible();
 	expect(annotationRequests.at(-1)).toContain('revision_id=revision-1');
 
 	await page.getByLabel('Annotation visibility').selectOption('project-1');

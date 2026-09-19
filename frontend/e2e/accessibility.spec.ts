@@ -6,7 +6,6 @@ async function mockSession(page: Page, role: 'member' | 'administrator' = 'membe
 		route.fulfill({
 			json: {
 				authenticated: true,
-				locale: 'en-US',
 				user: { id: 'user-1', username: 'reader', role }
 			}
 		})
@@ -34,7 +33,7 @@ async function expectNoHighImpactViolations(page: Page) {
 
 test('login has no high-impact accessibility violations', async ({ page }) => {
 	await page.route('**/api/v1/session', (route) =>
-		route.fulfill({ json: { authenticated: false, locale: 'en-US', user: null } })
+		route.fulfill({ json: { authenticated: false, user: null } })
 	);
 
 	await page.goto('/');

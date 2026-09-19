@@ -46,10 +46,8 @@
 				<div class="flex flex-wrap items-center gap-2">
 					<form class="flex flex-wrap gap-2" onsubmit={(event) => onUpdateUserRole(event, user.id)}>
 						<label
-							><span class="sr-only">{$t('Role for')} {user.username}</span><select
-								class="input w-auto min-w-36"
-								name="role"
-								value={user.role}
+							><span class="sr-only">{$t('Role for {username}', { username: user.username })}</span
+							><select class="input w-auto min-w-36" name="role" value={user.role}
 								><option value="member">{$t('Member')}</option><option value="administrator"
 									>{$t('Administrator')}</option
 								></select
@@ -64,7 +62,9 @@
 						onsubmit={(event) => onResetUserPassword(event, user.id)}
 					>
 						<label
-							><span class="sr-only">{$t('New password for')} {user.username}</span><input
+							><span class="sr-only"
+								>{$t('New password for {username}', { username: user.username })}</span
+							><input
 								class="input w-auto min-w-36"
 								name="password"
 								type="password"

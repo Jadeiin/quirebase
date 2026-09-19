@@ -1,5 +1,3 @@
-import temml from 'temml';
-
 const RICH_TEXT_TAGS = new Set(['b', 'i', 'sub', 'sup']);
 const DROP_CONTENT_TAGS = new Set(['script', 'style', 'template']);
 const MATHML_NAMESPACE = 'http://www.w3.org/1998/Math/MathML';
@@ -138,57 +136,78 @@ function rebuildMathNode(source: Node): Node | null {
 	return target;
 }
 
-function projectMath(tex: string): Node | null {
-	// Temml intentionally rejects link commands. Preserve the visible body while
-	// discarding the URL before parsing, matching the server Web projection.
-	const inertTex = tex.replace(/\\href\s*\{[^{}]*\}\s*\{([^{}]*)\}/g, '$1');
+export type MathRenderer = (tex: string) => Node | null;
+
+function projectMath(tex: string, renderMath: MathRenderer): Node | null {
 	try {
-		const rendered = temml.renderToString(inertTex, {
-			annotate: false,
-			displayMode: false,
-			maxExpand: 1000,
-			maxSize: [10, 10],
-			strict: true,
-			throwOnError: true,
-			trust: false
-		});
-		const parsed = new DOMParser().parseFromString(rendered, 'text/html');
-		const root = parsed.body.firstElementChild;
-		return root?.localName === 'math' ? rebuildMathNode(root) : null;
+		return renderMath(tex);
 	} catch {
 		return null;
 	}
 }
 
-function appendTextProjection(value: string, target: Node): void {
+function appendTextProjection(value: string, target: Node, renderMath: MathRenderer): void {
 	for (const segment of mathSegments(value)) {
 		if (!segment.math) {
 			target.appendChild(document.createTextNode(segment.value));
 			continue;
 		}
-		const math = projectMath(segment.value);
+		const math = projectMath(segment.value, renderMath);
 		target.appendChild(math ?? document.createTextNode(`$${segment.value}$`));
 	}
 }
 
-function appendCanonicalNode(source: Node, target: Node): void {
+function appendCanonicalNode(source: Node, target: Node, renderMath: MathRenderer): void {
 	if (source.nodeType === Node.TEXT_NODE) {
-		appendTextProjection(source.textContent ?? '', target);
+		appendTextProjection(source.textContent ?? '', target, renderMath);
 		return;
 	}
 	if (!(source instanceof Element) || DROP_CONTENT_TAGS.has(source.localName)) return;
 	if (RICH_TEXT_TAGS.has(source.localName)) {
 		const element = document.createElement(source.localName);
-		for (const child of Array.from(source.childNodes)) appendCanonicalNode(child, element);
+		for (const child of Array.from(source.childNodes))
+			appendCanonicalNode(child, element, renderMath);
 		target.appendChild(element);
 		return;
 	}
-	for (const child of Array.from(source.childNodes)) appendCanonicalNode(child, target);
+	for (const child of Array.from(source.childNodes)) appendCanonicalNode(child, target, renderMath);
 }
 
-export function projectRichText(canonicalHtml: string): string {
+export function projectRichText(canonicalHtml: string, renderMath?: MathRenderer): string {
 	const parsed = new DOMParser().parseFromString(canonicalHtml, 'text/html');
 	const output = document.createElement('span');
-	for (const child of Array.from(parsed.body.childNodes)) appendCanonicalNode(child, output);
+	const renderer = renderMath ?? (() => null);
+	for (const child of Array.from(parsed.body.childNodes))
+		appendCanonicalNode(child, output, renderer);
 	return output.innerHTML;
+}
+
+export function hasInlineMath(canonicalHtml: string): boolean {
+	const parsed = new DOMParser().parseFromString(canonicalHtml, 'text/html');
+	const walker = parsed.createTreeWalker(parsed.body, NodeFilter.SHOW_TEXT);
+	while (walker.nextNode()) {
+		const parent = walker.currentNode.parentElement;
+		if (parent && DROP_CONTENT_TAGS.has(parent.localName)) continue;
+		const segments = mathSegments(walker.currentNode.textContent ?? '');
+		if (segments.some((segment) => segment.math)) return true;
+	}
+	return false;
+}
+
+let pendingMathRenderer: Promise<MathRenderer> | undefined;
+
+function loadMathRenderer(): Promise<MathRenderer> {
+	pendingMathRenderer ??= import('$lib/design/rich-text-math').then(
+		({ renderMathHtml }) =>
+			(tex: string) => {
+				const parsed = new DOMParser().parseFromString(renderMathHtml(tex), 'text/html');
+				const root = parsed.body.firstElementChild;
+				return root?.localName === 'math' ? rebuildMathNode(root) : null;
+			}
+	);
+	return pendingMathRenderer;
+}
+
+export async function projectRichTextAsync(canonicalHtml: string): Promise<string> {
+	return projectRichText(canonicalHtml, await loadMathRenderer());
 }

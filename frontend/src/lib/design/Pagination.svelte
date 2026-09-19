@@ -21,7 +21,7 @@
 
 <nav class={`flex items-center justify-center gap-3 pt-4 ${className}`.trim()} aria-label={label}>
 	<Button disabled={busy || page <= 1} onclick={() => onPage(page - 1)}>{$t('Previous')}</Button>
-	<span>{$t('Page')} {page} / {pageCount}</span>
+	<span>{$t('Page {page} of {pageCount}', { page, pageCount })}</span>
 	<Button disabled={busy || page >= pageCount} onclick={() => onPage(page + 1)}>{$t('Next')}</Button
 	>
 </nav>

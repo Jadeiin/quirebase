@@ -3,6 +3,7 @@
 	import type { ItemSummary } from '$lib/api/client';
 	import Panel from '$lib/design/Panel.svelte';
 	import RichText from '$lib/design/RichText.svelte';
+	import { megabytes, numberFormat } from '$lib/format';
 	import { t } from '$lib/i18n';
 	import Button from '$lib/design/Button.svelte';
 	import ItemRow from '$lib/design/ItemRow.svelte';
@@ -17,7 +18,9 @@
 <Panel class="mt-4">
 	<h2>{$t('Items')} ({items.total})</h2>
 	<p class="text-surface-600-400">
-		{Math.ceil(items.storage.total_disk_bytes / 1048576)} MB stored
+		{$t('{size} MB stored', {
+			size: $numberFormat.format(megabytes(items.storage.total_disk_bytes))
+		})}
 	</p>
 	{#each items.items as item (item.id)}
 		<ItemRow class="grid-cols-[minmax(0,1fr)_auto] items-center">

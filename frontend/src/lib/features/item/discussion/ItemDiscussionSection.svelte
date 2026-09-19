@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Panel from '$lib/design/Panel.svelte';
+	import { dateTimeFormat } from '$lib/format';
 	import { t } from '$lib/i18n';
 	import type { DiscussionMessage } from '../types';
 	import Button from '$lib/design/Button.svelte';
@@ -28,7 +29,7 @@
 				{/if}
 			</div>
 			<span>{message.body}</span><span class="text-surface-600-400"
-				>{new Date(message.created_at).toLocaleString()}</span
+				>{$dateTimeFormat.format(new Date(message.created_at))}</span
 			>
 		</ItemRow>
 	{:else}

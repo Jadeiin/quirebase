@@ -1,6 +1,7 @@
 import prettier from 'eslint-config-prettier';
 import path from 'node:path';
 import js from '@eslint/js';
+import lingui from 'eslint-plugin-lingui';
 import svelte from 'eslint-plugin-svelte';
 import { defineConfig, includeIgnoreFile } from 'eslint/config';
 import globals from 'globals';
@@ -33,6 +34,39 @@ export default defineConfig(
 				parser: ts.parser,
 				svelteConfig
 			}
+		}
+	},
+	{
+		files: ['src/**/*.ts'],
+		ignores: ['src/**/*.test.ts', 'src/lib/api/schema.d.ts'],
+		plugins: { lingui },
+		rules: {
+			'lingui/no-unlocalized-strings': [
+				'warn',
+				{
+					ignore: [
+						'^(?![A-Z])\\S+$',
+						'^[A-Z0-9_-]+$',
+						'^[A-Z][A-Za-z0-9]*$',
+						'^Content-Disposition$',
+						'^btn\\b',
+						'^auth\\.capitalize',
+						'^Times-Roman$'
+					],
+					ignoreNames: [
+						'className',
+						'styleName',
+						'src',
+						'data-testid',
+						'type',
+						'name',
+						'message',
+						'comment',
+						'key'
+					],
+					ignoreFunctions: ['console.*', '$t', 'translate', 'Error', 'DOMException']
+				}
+			]
 		}
 	}
 );

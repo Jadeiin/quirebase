@@ -31,15 +31,26 @@ parallel application-wide button, field, card, menu, dialog, tooltip, or status 
 filesystem router owns application URL matching and parameter parsing; a persistent authenticated
 route layout owns the Login Session, locale and application shell. Route pages remain thin
 adapters over feature views instead of reimplementing domain behavior or maintaining a catch-all
-client dispatcher. Feature views live under `src/lib/features/<feature>` as typed TanStack queries,
-mutations and presentational components (`Library`, `ItemWorkspace` and `Admin` are feature
-orchestrators, not root-level views); cross-feature product patterns (`ConfirmDialog`,
+client dispatcher. Item and Admin workspace sections are literal child routes rather than one
+parameterized route with a client-side switch, so every section ships its own chunk and owns the
+queries and mutations it reads; the shared Item layout sits in a route group that keeps the PDF
+reader outside the workspace shell. Feature views live under `src/lib/features/<feature>` as typed TanStack queries,
+mutations and presentational components (`Library` and `ProjectWorkspace` are feature
+orchestrators, not root-level views); Item and Admin workspaces are composed by their route
+layouts, `ItemWorkspaceHeader`, `AdminShell` and literal section pages. Cross-feature product
+patterns (`ConfirmDialog`,
 `PromptDialog`, `StatusNotice`, `EmptyState`, `Toast`) live in `src/lib/design`. Destructive or
 text-confirmed actions use those dialog patterns; `window.confirm` and `window.prompt` are not
 used. Frontend localization is owned by Lingui. Committed gettext PO catalogs are the
 translation source of truth; a strict Svelte extractor records literal messages and marked dynamic
 labels, and Lingui generates runtime catalogs during checks and builds. Python gettext catalogs
-and template localization helpers are removed.
+and template localization helpers are removed. `src/lib/locale.ts` is the single locale inventory.
+Language is a browser display preference like theme or sidebar state: the Frontend Adapter detects
+the stored `quirebase:locale` value with Lingui's `@lingui/detect-locale` and falls back to the
+browser language, so `/session` carries no locale and the API owns no locale cookie, no locale
+request body and no `Accept-Language` negotiation. Switching the language persists the preference
+immediately and synchronizes other tabs through the `storage` event. ICU interpolation values and
+plural forms flow through `i18n._` rather than message-fragment composition.
 
 Both browsers and programmatic clients use `/api/v1`:
 
@@ -103,8 +114,12 @@ integrated with the Svelte workspace, but do not become a second general-purpose
 - A single Quirebase service and artifact still contains the complete application.
 - `/api/v1` response and authorization behavior is the shared browser, agent and script
   contract; transport-specific credential selection remains explicit.
-- CSP allows the same-origin application, `wasm-unsafe-eval` and EmbedPDF's Blob worker while
-  forbidding remote scripts and frames.
+- The application shell's CSP allows the same-origin application, `wasm-unsafe-eval` and
+  EmbedPDF's Blob worker while forbidding remote scripts and frames. `/docs`, `/redoc` and the
+  OAuth2 redirect page receive a separate documentation policy that hashes their inline
+  initialization scripts and exempts the external jsDelivr assets, FastAPI favicon and ReDoc
+  Google Fonts those generated pages load. API, OpenAPI and MCP responses receive the general
+  security headers without either policy.
 - Web is the source product. PWA, Tauri and Capacitor may package or enhance the same static
   application later without changing the FastAPI boundary.
 - Deployments must build the frontend before constructing the Python wheel or container.
@@ -118,9 +133,12 @@ integrated with the Svelte workspace, but do not become a second general-purpose
   must continue to tree-shake unused components, and frontend upgrades must check generated JS and
   CSS sizes as well as accessibility behavior. The application-shell bundle budget in
   `frontend/scripts/check-bundle-budget.ts` is raised deliberately when a maintained dependency
-  replaces hand-rolled code: once for the Toast, Popover and Tabs state machines, and once for
+  replaces hand-rolled code: once for the Toast, Popover and Tabs state machines, once for
   `openapi-fetch`, which replaced the hand-written API client plumbing while keeping the
-  `apiRequest` contract.
+  `apiRequest` contract, and once for ICU-capable localization. The same script enforces per-route
+  budgets for the Library, Import, Item and Admin graphs so section ownership changes are measured
+  rather than assumed. Temml is imported only by the lazily loaded `rich-text-math` chunk, so the
+  many routes that never render inline math do not eagerly ship it.
 - This alpha cutover is forward-only: the former Bits UI dependency and global `.button`, `.field`,
   `.panel` and related compatibility classes are removed in the same change.
 

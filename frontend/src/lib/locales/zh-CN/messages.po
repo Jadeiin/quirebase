@@ -15,6 +15,75 @@ msgstr ""
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
+msgid "{count, plural, one {# active session} other {# active sessions}}"
+msgstr "{count, plural, other {# 个活跃会话}}"
+
+#. js-lingui-explicit-id
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
+msgid "{count, plural, one {# annotation loaded} other {# annotations loaded}}"
+msgstr "{count, plural, other {# 条批注已加载}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "{count, plural, one {# diagnostic} other {# diagnostics}}"
+msgstr "{count, plural, other {# 条诊断}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+#: src/lib/features/admin/AdminProjects.svelte
+#: src/lib/features/library/Library.svelte
+#: src/lib/features/projects/Projects.svelte
+#: src/lib/features/tools/Tools.svelte
+msgid "{count, plural, one {# Item} other {# Items}}"
+msgstr "{count, plural, other {# 条文献}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminProjects.svelte
+msgid "{count, plural, one {# member} other {# members}}"
+msgstr "{count, plural, other {# 名成员}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "{count, plural, one {# record} other {# records}}"
+msgstr "{count, plural, other {# 条记录}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "{count, plural, one {# reply} other {# replies}}"
+msgstr "{count, plural, other {# 条回复}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "{count, plural, one {# result} other {# results}}"
+msgstr "{count, plural, other {# 条结果}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "{count, plural, one {# Tag} other {# Tags}}"
+msgstr "{count, plural, other {# 个标签}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "{count} selected"
+msgstr "已选择 {count} 项"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/files/ItemFilesSection.svelte
+msgid "{kind} · {size} KB"
+msgstr "{kind} · {size} KB"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "{size} MB"
+msgstr "{size} MB"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminItems.svelte
+msgid "{size} MB stored"
+msgstr "已存储 {size} MB"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
 msgid "30 days"
 msgstr "30 天"
 
@@ -63,12 +132,13 @@ msgid "Account action failed"
 msgstr "账号操作失败"
 
 #. js-lingui-explicit-id
-#: src/lib/app/AppShell.svelte
+#: src/lib/app/AppSidebar.svelte
+#: src/lib/app/navigation.ts
 msgid "Account settings"
 msgstr "账号设置"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 msgid "Action"
 msgstr "动作"
 
@@ -77,22 +147,22 @@ msgstr "动作"
 msgid "active"
 msgstr "启用"
 
+#. Project state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 msgid "Active"
 msgstr "正常"
 
 #. js-lingui-explicit-id
-#: src/lib/features/account/Account.svelte
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "active sessions"
 msgstr "个活跃会话"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminAudit.svelte
-msgid "Actor"
-msgstr "操作者"
+msgid "Actor: {actor}"
+msgstr "操作者：{actor}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
@@ -185,29 +255,36 @@ msgid "Add to Project"
 msgstr "添加到项目"
 
 #. js-lingui-explicit-id
-#: src/lib/app/AppShell.svelte
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/app/AppSidebar.svelte
+#: src/lib/app/MobileNavigation.svelte
+#: src/lib/features/admin/AdminShell.svelte
 msgid "Administration"
 msgstr "管理"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/routes/(app)/admin/items/+page.svelte
+#: src/routes/(app)/admin/settings/+page.svelte
+#: src/routes/(app)/admin/users/+page.svelte
 msgid "Administration action failed"
 msgstr "管理操作失败"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/routes/(app)/admin/audit/+page.svelte
+#: src/routes/(app)/admin/items/+page.svelte
+#: src/routes/(app)/admin/projects/+page.svelte
+#: src/routes/(app)/admin/users/+page.svelte
 msgid "Administration pages"
 msgstr "管理页面分页"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 msgid "Administration sections"
 msgstr "管理分区"
 
+#. User role.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/admin/AdminUsers.svelte
 msgid "Administrator"
 msgstr "管理员"
@@ -230,7 +307,7 @@ msgid "All revisions"
 msgstr "全部版本"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 msgid "All roles"
 msgstr "所有角色"
 
@@ -266,16 +343,10 @@ msgstr "批注可见范围"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
-#: src/lib/features/item/ItemActions.svelte
-#: src/lib/features/item/ItemWorkspace.svelte
+#: src/lib/features/item/ItemWorkspaceHeader.svelte
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Annotations"
 msgstr "批注"
-
-#. js-lingui-explicit-id
-#: src/lib/pdf/EmbeddedPdfViewer.svelte
-msgid "annotations loaded"
-msgstr "条批注"
 
 #. js-lingui-explicit-id
 #: src/lib/features/pdf-reader/PdfWorkspace.svelte
@@ -283,12 +354,17 @@ msgid "Annotations to include"
 msgstr "要包含的批注"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Annotations: {state}"
+msgstr "批注：{state}"
+
+#. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
 msgid "Another condition"
 msgstr "另一个条件"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 msgid "Any"
 msgstr "不限"
 
@@ -303,17 +379,17 @@ msgid "Any signed-in User can discover and join this Project."
 msgstr "任何已登录用户都可以发现并加入此项目。"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 msgid "Any state"
 msgstr "任意状态"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 msgid "Any status"
 msgstr "任意状态"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 msgid "Any visibility"
 msgstr "任意可见性"
 
@@ -328,7 +404,8 @@ msgid "API Tokens"
 msgstr "API 令牌"
 
 #. js-lingui-explicit-id
-#: src/lib/app/AppShell.svelte
+#: src/lib/app/AppSidebar.svelte
+#: src/lib/app/MobileNavigation.svelte
 msgid "Appearance"
 msgstr "外观"
 
@@ -338,7 +415,7 @@ msgid "Apply"
 msgstr "应用"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 msgid "Apply filters"
 msgstr "应用筛选"
 
@@ -347,12 +424,14 @@ msgstr "应用筛选"
 msgid "Archive Project"
 msgstr "归档项目"
 
+#. Project state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 msgid "Archived"
 msgstr "已归档"
 
+#. PDF shape annotation kind.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 msgid "Arrow"
@@ -363,13 +442,15 @@ msgstr "箭头"
 msgid "Associated files, annotations, and Project memberships will also be removed."
 msgstr "关联的文件、标注和项目成员关系也会一并删除。"
 
+#. File kind for a supplementary file.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 msgid "Attachment"
 msgstr "附件"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
+#: src/routes/(app)/admin/audit/+page.svelte
 msgid "Audit"
 msgstr "审计"
 
@@ -405,6 +486,11 @@ msgstr "自动更新"
 #: src/lib/features/workflows/WorkflowTray.svelte
 msgid "Background tasks"
 msgstr "后台任务"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workflows/WorkflowTray.svelte
+msgid "Background tasks ({count})"
+msgstr "后台任务（{count}）"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -488,9 +574,10 @@ msgstr "可编辑"
 msgid "Cancel"
 msgstr "取消"
 
+#. Workflow or record state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 msgid "Cancelled"
 msgstr "已取消"
 
@@ -515,7 +602,7 @@ msgid "Check records and diagnostics"
 msgstr "检查记录与诊断信息"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/routes/(app)/admin/maintenance/+page.svelte
 msgid "Check stored objects"
 msgstr "检查存储对象"
 
@@ -608,7 +695,7 @@ msgid "Citation Styles"
 msgstr "引文样式"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "Clear filters"
 msgstr "清除筛选"
@@ -645,7 +732,7 @@ msgid "Collapse navigation sidebar by default"
 msgstr "默认折叠左侧导航栏"
 
 #. js-lingui-explicit-id
-#: src/lib/app/AppShell.svelte
+#: src/lib/app/AppSidebar.svelte
 msgid "Collapse sidebar"
 msgstr "折叠侧边栏"
 
@@ -659,6 +746,7 @@ msgstr "提交"
 msgid "Commit to Library"
 msgstr "提交到文献库"
 
+#. Import Batch state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 msgid "Committed"
@@ -745,7 +833,7 @@ msgid "Create an Item manually"
 msgstr "手动创建条目"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/routes/(app)/admin/maintenance/+page.svelte
 msgid "Create backup"
 msgstr "创建备份"
 
@@ -810,20 +898,30 @@ msgid "Danger zone"
 msgstr "危险操作"
 
 #. js-lingui-explicit-id
-#: src/lib/app/AppShell.svelte
+#: src/lib/app/navigation.ts
 msgid "Dark theme"
 msgstr "深色主题"
 
 #. js-lingui-explicit-id
-#: src/lib/app/AppShell.svelte
+#: src/lib/app/navigation.ts
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Dashboard"
 msgstr "概览"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminSettings.svelte
+msgid "Data directory: {path}"
+msgstr "数据目录：{path}"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Data source"
 msgstr "数据来源"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminSettings.svelte
+msgid "Database: {url}"
+msgstr "数据库：{url}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
@@ -869,7 +967,7 @@ msgid "Delete Item permanently"
 msgstr "永久删除条目"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemWorkspace.svelte
+#: src/routes/(app)/item/[itemId]/(workspace)/files/+page.svelte
 msgid "Delete permanently"
 msgstr "永久删除"
 
@@ -894,7 +992,7 @@ msgid "Delete this Citation Style?"
 msgstr "删除此引用样式？"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemWorkspace.svelte
+#: src/routes/(app)/item/[itemId]/(workspace)/files/+page.svelte
 msgid "Delete this file permanently?"
 msgstr "永久删除此文件？"
 
@@ -908,11 +1006,6 @@ msgstr "从所有可访问条目中删除此标签？"
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Description"
 msgstr "描述"
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportBatchPreview.svelte
-msgid "diagnostics"
-msgstr "条诊断"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
@@ -930,7 +1023,7 @@ msgid "disabled"
 msgstr "停用"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 msgid "Disabled"
 msgstr "已停用"
 
@@ -945,7 +1038,7 @@ msgid "Discover"
 msgstr "发现"
 
 #. js-lingui-explicit-id
-#: src/lib/app/AppShell.svelte
+#: src/lib/app/navigation.ts
 #: src/lib/features/discovery/Discovery.svelte
 msgid "Discovery"
 msgstr "发现"
@@ -957,7 +1050,7 @@ msgstr "发现结果分页"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/discussion/ItemDiscussionSection.svelte
-#: src/lib/features/item/ItemWorkspace.svelte
+#: src/lib/features/item/ItemWorkspaceHeader.svelte
 msgid "Discussion"
 msgstr "讨论"
 
@@ -979,17 +1072,17 @@ msgid "Document download options"
 msgstr "文档下载选项"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemWorkspace.svelte
+#: src/routes/(app)/item/[itemId]/(workspace)/files/+page.svelte
 msgid "Document processing"
 msgstr "文档处理中"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemWorkspace.svelte
+#: src/routes/(app)/item/[itemId]/(workspace)/files/+page.svelte
 msgid "Document processing completed"
 msgstr "文档处理已完成"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemWorkspace.svelte
+#: src/routes/(app)/item/[itemId]/(workspace)/files/+page.svelte
 msgid "Document processing failed"
 msgstr "文档处理失败"
 
@@ -1068,8 +1161,8 @@ msgstr "下载含标注的文件"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
-msgid "Duplicate group"
-msgstr "重复条目组"
+msgid "Duplicate group {number}"
+msgstr "重复组 {number}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -1086,6 +1179,7 @@ msgstr "持久工作流"
 msgid "Edit metadata"
 msgstr "编辑元数据"
 
+#. Project member role.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -1098,6 +1192,7 @@ msgstr "编辑者"
 msgid "Editors"
 msgstr "编者"
 
+#. PDF shape annotation kind.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 msgid "Ellipse"
@@ -1124,10 +1219,11 @@ msgid "Excluded fields"
 msgstr "排除字段"
 
 #. js-lingui-explicit-id
-#: src/lib/app/AppShell.svelte
+#: src/lib/app/AppSidebar.svelte
 msgid "Expand sidebar"
 msgstr "展开侧边栏"
 
+#. API Token or invitation state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 msgid "Expired"
@@ -1155,7 +1251,7 @@ msgid "Export bibliography"
 msgstr "导出书目"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/routes/(app)/admin/settings/+page.svelte
 msgid "Export lifetime in hours"
 msgstr "导出文件保留时长（小时）"
 
@@ -1181,17 +1277,18 @@ msgstr "外部元数据"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
-msgid "External source"
-msgstr "外部来源"
+msgid "External source {number}"
+msgstr "外部来源 {number}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Extract metadata and keep the papers together in one Import Batch."
 msgstr "提取元数据，并将这些论文保存在同一个导入批次中。"
 
+#. Workflow or record state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 msgid "Failed"
 msgstr "已失败"
 
@@ -1217,7 +1314,7 @@ msgstr "文件格式"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/files/ItemFilesSection.svelte
-#: src/lib/features/item/ItemWorkspace.svelte
+#: src/lib/features/item/ItemWorkspaceHeader.svelte
 msgid "Files"
 msgstr "文件"
 
@@ -1257,6 +1354,7 @@ msgstr "格式"
 msgid "Free more horizontal space for reading and metadata work."
 msgstr "为阅读和元数据工作释放更多横向空间。"
 
+#. PDF annotation kind: a text box placed directly on the page.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 msgid "Free text"
@@ -1283,7 +1381,7 @@ msgid "Get started"
 msgstr "开始使用"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 msgid "Has PDF"
 msgstr "包含 PDF"
 
@@ -1292,6 +1390,7 @@ msgstr "包含 PDF"
 msgid "Header"
 msgstr "请求头"
 
+#. PDF annotation kind: text markup.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 msgid "Highlight"
@@ -1308,12 +1407,12 @@ msgid "Identifier, file, or PDFs"
 msgstr "标识符、文件或 PDF"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/routes/(app)/admin/settings/+page.svelte
 msgid "IEEE API key"
 msgstr "IEEE API 密钥"
 
 #. js-lingui-explicit-id
-#: src/lib/app/AppShell.svelte
+#: src/lib/app/navigation.ts
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Import"
 msgstr "导入"
@@ -1399,6 +1498,7 @@ msgstr "PDF 下载中包含附件/补充材料"
 msgid "included"
 msgstr "包含"
 
+#. PDF annotation kind: a freehand drawing.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 msgid "Ink"
@@ -1420,7 +1520,7 @@ msgid "Invalid username or password."
 msgstr "用户名或密码错误。"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/routes/(app)/admin/users/+page.svelte
 msgid "Invitation created"
 msgstr "邀请已创建"
 
@@ -1457,8 +1557,8 @@ msgid "Item actions"
 msgstr "条目操作"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
 #: src/lib/features/item/ItemActions.svelte
+#: src/routes/(app)/admin/items/+page.svelte
 msgid "Item deleted"
 msgstr "条目已删除"
 
@@ -1478,19 +1578,16 @@ msgid "Item thumbnail"
 msgstr "条目缩略图"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemWorkspace.svelte
+#: src/lib/features/item/ItemWorkspaceHeader.svelte
 msgid "Item workspace"
 msgstr "条目工作区"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
 #: src/lib/features/admin/AdminItems.svelte
 #: src/lib/features/admin/AdminOverview.svelte
-#: src/lib/features/admin/AdminProjects.svelte
-#: src/lib/features/library/Library.svelte
-#: src/lib/features/projects/Projects.svelte
+#: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
-#: src/lib/features/tools/Tools.svelte
+#: src/routes/(app)/admin/items/+page.svelte
 msgid "Items"
 msgstr "条目"
 
@@ -1563,9 +1660,9 @@ msgid "Leave Project"
 msgstr "离开项目"
 
 #. js-lingui-explicit-id
-#: src/lib/app/AppShell.svelte
+#: src/lib/app/navigation.ts
 #: src/lib/features/dashboard/Dashboard.svelte
-#: src/lib/features/item/ItemWorkspace.svelte
+#: src/lib/features/item/ItemWorkspaceHeader.svelte
 #: src/lib/features/library/Library.svelte
 msgid "Library"
 msgstr "文献库"
@@ -1591,21 +1688,26 @@ msgid "Library tools"
 msgstr "文献库工具"
 
 #. js-lingui-explicit-id
-#: src/lib/app/AppShell.svelte
+#: src/lib/app/navigation.ts
 msgid "Light theme"
 msgstr "浅色主题"
 
+#. PDF shape annotation kind.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 msgid "Line"
 msgstr "直线"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
-#: src/lib/features/item/ItemWorkspace.svelte
+#: src/lib/features/item/ItemSectionState.svelte
 #: src/lib/features/pdf-reader/PdfWorkspace.svelte
 msgid "Loading"
 msgstr "正在加载"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminSectionState.svelte
+msgid "Loading {section}…"
+msgstr "正在加载{section}…"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -1654,40 +1756,41 @@ msgid "Locale"
 msgstr "区域语言"
 
 #. js-lingui-explicit-id
-#: src/lib/features/account/Account.svelte
-msgid "Locale saved"
-msgstr "语言设置已保存"
-
-#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Look up an identifier"
 msgstr "查询标识符"
 
 #. js-lingui-explicit-id
-#: src/lib/app/AppShell.svelte
+#: src/lib/app/AppSidebar.svelte
 msgid "Main navigation"
 msgstr "主导航"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
 #: src/lib/features/admin/AdminMaintenance.svelte
+#: src/lib/features/admin/AdminShell.svelte
+#: src/routes/(app)/admin/maintenance/+page.svelte
 msgid "Maintenance"
 msgstr "维护"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/routes/(app)/admin/maintenance/+page.svelte
 msgid "Maintenance operation completed"
 msgstr "维护操作已完成"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/routes/(app)/admin/maintenance/+page.svelte
 msgid "Maintenance operation failed"
 msgstr "维护操作失败"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/routes/(app)/admin/maintenance/+page.svelte
 msgid "Maintenance operation started"
 msgstr "已开始维护操作"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/maintenance/+page.svelte
+msgid "Maintenance: {operation}"
+msgstr "维护：{operation}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -1710,26 +1813,22 @@ msgid "Match criteria"
 msgstr "匹配条件"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/routes/(app)/admin/settings/+page.svelte
 msgid "Maximum attachment size in bytes"
 msgstr "附件大小上限（字节）"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/routes/(app)/admin/settings/+page.svelte
 msgid "Maximum PDF size in bytes"
 msgstr "PDF 大小上限（字节）"
 
+#. User role.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/admin/AdminUsers.svelte
 msgid "Member"
 msgstr "成员"
-
-#. js-lingui-explicit-id
-#: src/lib/features/admin/AdminProjects.svelte
-msgid "members"
-msgstr "位成员"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -1747,13 +1846,13 @@ msgid "Messages"
 msgstr "消息"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemWorkspace.svelte
+#: src/lib/features/item/ItemWorkspaceHeader.svelte
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
 msgid "Metadata"
 msgstr "元数据"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/routes/(app)/admin/settings/+page.svelte
 msgid "Metadata contact email"
 msgstr "元数据联系邮箱"
 
@@ -1768,12 +1867,12 @@ msgid "Metadata synchronized"
 msgstr "元数据已同步"
 
 #. js-lingui-explicit-id
-#: src/lib/app/AppShell.svelte
+#: src/lib/app/MobileNavigation.svelte
 msgid "Mobile navigation"
 msgstr "移动端导航"
 
 #. js-lingui-explicit-id
-#: src/lib/app/AppShell.svelte
+#: src/lib/app/MobileNavigation.svelte
 #: src/lib/features/item/ItemActions.svelte
 msgid "More"
 msgstr "更多"
@@ -1790,12 +1889,12 @@ msgid "Name"
 msgstr "名称"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/routes/(app)/admin/settings/+page.svelte
 msgid "NASA ADS token"
 msgstr "NASA ADS 令牌"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/routes/(app)/admin/settings/+page.svelte
 msgid "NCBI API key"
 msgstr "NCBI API 密钥"
 
@@ -1812,8 +1911,8 @@ msgstr "新密码"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminUsers.svelte
-msgid "New password for"
-msgstr "为以下用户设置新密码"
+msgid "New password for {username}"
+msgstr "为 {username} 设置新密码"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
@@ -2013,15 +2112,11 @@ msgstr "未找到"
 msgid "Not generated"
 msgstr "未生成"
 
+#. PDF annotation kind: a text comment attached to a region.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 msgid "Note"
 msgstr "注释"
-
-#. js-lingui-explicit-id
-#: src/lib/features/library/LibraryResults.svelte
-msgid "of"
-msgstr "页，共"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
@@ -2074,7 +2169,7 @@ msgid "Open metadata editor"
 msgstr "打开元数据编辑器"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/routes/(app)/admin/settings/+page.svelte
 msgid "OpenAlex API key"
 msgstr "OpenAlex API 密钥"
 
@@ -2094,7 +2189,7 @@ msgid "OR"
 msgstr "或"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemWorkspace.svelte
+#: src/lib/features/item/ItemWorkspaceHeader.svelte
 msgid "Organize"
 msgstr "整理"
 
@@ -2109,11 +2204,13 @@ msgid "Output sorting"
 msgstr "输出排序"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
-#: src/lib/features/item/ItemWorkspace.svelte
+#: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/item/ItemWorkspaceHeader.svelte
+#: src/routes/(app)/admin/+page.svelte
 msgid "Overview"
 msgstr "概览"
 
+#. Project member role.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
@@ -2128,8 +2225,8 @@ msgstr "页"
 #. js-lingui-explicit-id
 #: src/lib/design/Pagination.svelte
 #: src/lib/features/library/LibraryResults.svelte
-msgid "Page"
-msgstr "第"
+msgid "Page {page} of {pageCount}"
+msgstr "第 {page} 页，共 {pageCount} 页"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemMetadataForm.svelte
@@ -2151,13 +2248,14 @@ msgstr "密码"
 msgid "Password changed"
 msgstr "密码已更改"
 
+#. File kind for a PDF revision.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 msgid "PDF"
 msgstr "PDF"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 msgid "PDF availability"
 msgstr "PDF 可用性"
 
@@ -2191,9 +2289,10 @@ msgstr "已扫描 PDF 中的 DOI"
 msgid "pending"
 msgstr "待处理"
 
+#. Workflow or record state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 msgid "Pending"
 msgstr "待处理"
 
@@ -2203,9 +2302,9 @@ msgid "Pending invitations"
 msgstr "待处理邀请"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
 #: src/lib/features/library/BulkActions.svelte
 #: src/lib/features/library/Library.svelte
+#: src/routes/(app)/admin/items/+page.svelte
 msgid "Permanently delete"
 msgstr "永久删除"
 
@@ -2215,7 +2314,7 @@ msgid "Permanently delete the selected Items?"
 msgstr "永久删除所选条目？"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/routes/(app)/admin/items/+page.svelte
 msgid "Permanently delete this Item?"
 msgstr "永久删除此条目？"
 
@@ -2309,9 +2408,10 @@ msgstr "上一页"
 msgid "Previous page"
 msgstr "上一页"
 
+#. Project visibility or annotation scope.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/projects/Projects.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Private"
@@ -2324,8 +2424,8 @@ msgstr "私人批注"
 
 #. js-lingui-explicit-id
 #: src/lib/features/pdf-reader/PdfWorkspace.svelte
-msgid "Private annotations and project"
-msgstr "私有标注及项目标注"
+msgid "Private annotations and project: {name}"
+msgstr "私人批注和项目：{name}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/pdf-reader/PdfWorkspace.svelte
@@ -2388,13 +2488,14 @@ msgid "Project settings saved"
 msgstr "项目设置已保存"
 
 #. js-lingui-explicit-id
-#: src/lib/app/AppShell.svelte
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/app/navigation.ts
 #: src/lib/features/admin/AdminProjects.svelte
+#: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/dashboard/Dashboard.svelte
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 #: src/lib/features/projects/Projects.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/admin/projects/+page.svelte
 msgid "Projects"
 msgstr "项目"
 
@@ -2405,9 +2506,10 @@ msgstr "项目"
 msgid "Provider"
 msgstr "提供方"
 
+#. Project visibility or annotation scope.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/projects/Projects.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Public"
@@ -2479,6 +2581,7 @@ msgstr "阅读 PDF"
 msgid "Reading"
 msgstr "阅读"
 
+#. Workflow or record state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 msgid "Ready"
@@ -2505,7 +2608,7 @@ msgid "Recently added"
 msgstr "最近新增"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/routes/(app)/admin/maintenance/+page.svelte
 msgid "Recommend Tags for all Items"
 msgstr "为所有条目推荐标签"
 
@@ -2519,11 +2622,7 @@ msgstr "记录"
 msgid "Record tools"
 msgstr "记录工具"
 
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportBatchPreview.svelte
-msgid "records"
-msgstr "条记录"
-
+#. PDF shape annotation kind.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 msgid "Rectangle"
@@ -2551,7 +2650,7 @@ msgid "Regenerate citation key"
 msgstr "重新生成引用键"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/routes/(app)/admin/maintenance/+page.svelte
 msgid "Reindex all Items"
 msgstr "重建所有条目索引"
 
@@ -2580,11 +2679,6 @@ msgid "Rename Tag"
 msgstr "重命名标签"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
-msgid "replies"
-msgstr "条回复"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
 msgid "Rescan PDF for DOI"
 msgstr "重新扫描 PDF 中的 DOI"
@@ -2603,11 +2697,6 @@ msgstr "恢复默认设置"
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Restore Project"
 msgstr "恢复项目"
-
-#. js-lingui-explicit-id
-#: src/lib/features/discovery/Discovery.svelte
-msgid "results"
-msgstr "条结果"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
@@ -2659,34 +2748,36 @@ msgstr "吊销会话"
 msgid "Revoke token"
 msgstr "撤销令牌"
 
+#. API Token or session state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 msgid "Revoked"
 msgstr "已撤销"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 msgid "Role"
 msgstr "角色"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminUsers.svelte
-msgid "Role for"
-msgstr "以下用户的角色"
+msgid "Role for {username}"
+msgstr "{username} 的角色"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
-msgid "Row"
-msgstr "行"
+msgid "Row {row}"
+msgstr "第 {row} 行"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "Run a check when you are ready"
 msgstr "准备好后再开始检查"
 
+#. Workflow or record state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 msgid "Running"
 msgstr "执行中"
 
@@ -2704,11 +2795,6 @@ msgstr "相同 DOI"
 #: src/lib/features/tools/Tools.svelte
 msgid "Same title"
 msgstr "相同标题"
-
-#. js-lingui-explicit-id
-#: src/lib/features/account/Account.svelte
-msgid "Save locale"
-msgstr "保存语言设置"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -2762,7 +2848,7 @@ msgid "Scanning…"
 msgstr "正在扫描…"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "Search"
 msgstr "搜索"
@@ -2833,6 +2919,11 @@ msgid "Select"
 msgstr "选择"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryResults.svelte
+msgid "Select {name}"
+msgstr "选择 {name}"
+
+#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "Select a Tag"
 msgstr "选择标签"
@@ -2848,11 +2939,6 @@ msgid "Select this page"
 msgstr "选择本页"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
-msgid "selected"
-msgstr "项已选择"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/ItemMetadataForm.svelte
 msgid "Separate Keywords with semicolons"
 msgstr "使用分号分隔关键词"
@@ -2863,7 +2949,7 @@ msgid "Session"
 msgstr "会话"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/routes/(app)/admin/settings/+page.svelte
 msgid "Session lifetime in days"
 msgstr "会话有效期（天）"
 
@@ -2883,12 +2969,13 @@ msgid "Sessions, API Tokens, locale, and password."
 msgstr "管理会话、API 令牌、语言和密码。"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
+#: src/routes/(app)/admin/settings/+page.svelte
 msgid "Settings"
 msgstr "设置"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/routes/(app)/admin/settings/+page.svelte
 msgid "Settings saved"
 msgstr "设置已保存"
 
@@ -2908,7 +2995,7 @@ msgid "Sign in to your research workspace."
 msgstr "登录您的研究工作区。"
 
 #. js-lingui-explicit-id
-#: src/lib/app/AppShell.svelte
+#: src/lib/app/AppSidebar.svelte
 #: src/lib/features/account/Account.svelte
 msgid "Sign out"
 msgstr "退出登录"
@@ -2959,16 +3046,17 @@ msgid "Starting…"
 msgstr "启动中…"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 msgid "State"
 msgstr "状态"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 msgid "Status"
 msgstr "状态"
 
+#. PDF annotation kind: text markup.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 msgid "Strikeout"
@@ -2979,9 +3067,10 @@ msgstr "删除线"
 msgid "Style name"
 msgstr "样式名称"
 
+#. Workflow or record state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 msgid "Succeeded"
 msgstr "已成功"
 
@@ -2991,13 +3080,17 @@ msgid "Suggestions derived from metadata and the latest ready PDF."
 msgstr "根据元数据和最新就绪 PDF 生成的建议。"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemActions.svelte
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Supplements"
 msgstr "补充文件"
 
 #. js-lingui-explicit-id
-#: src/lib/app/AppShell.svelte
+#: src/lib/features/item/ItemActions.svelte
+msgid "Supplements: {state}"
+msgstr "补充材料：{state}"
+
+#. js-lingui-explicit-id
+#: src/lib/app/navigation.ts
 msgid "System theme"
 msgstr "跟随系统"
 
@@ -3032,12 +3125,12 @@ msgid "Tag pages"
 msgstr "标签分页"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemWorkspace.svelte
+#: src/routes/(app)/item/[itemId]/(workspace)/organize/+page.svelte
 msgid "Tag recommendation"
 msgstr "标签推荐"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemWorkspace.svelte
+#: src/routes/(app)/item/[itemId]/(workspace)/organize/+page.svelte
 msgid "Tag recommendation failed"
 msgstr "标签推荐失败"
 
@@ -3047,7 +3140,7 @@ msgid "Tag Recommendations"
 msgstr "标签推荐"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemWorkspace.svelte
+#: src/routes/(app)/item/[itemId]/(workspace)/organize/+page.svelte
 msgid "Tag recommendations updated"
 msgstr "标签推荐已更新"
 
@@ -3058,7 +3151,6 @@ msgstr "标签已重命名"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
-#: src/lib/features/tools/Tools.svelte
 msgid "Tags"
 msgstr "标签"
 
@@ -3078,7 +3170,7 @@ msgid "Target Tag"
 msgstr "目标标签"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 msgid "Target type"
 msgstr "目标类型"
 
@@ -3123,8 +3215,8 @@ msgid "This action is not available."
 msgstr "此操作不可用。"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
 #: src/lib/features/library/Library.svelte
+#: src/routes/(app)/admin/items/+page.svelte
 msgid "This cannot be undone."
 msgstr "此操作无法撤销。"
 
@@ -3227,7 +3319,7 @@ msgid "Too many sign-in attempts. Try again later."
 msgstr "登录尝试次数过多。请稍后重试。"
 
 #. js-lingui-explicit-id
-#: src/lib/app/AppShell.svelte
+#: src/lib/app/navigation.ts
 #: src/lib/features/tools/Tools.svelte
 msgid "Tools"
 msgstr "工具"
@@ -3293,7 +3385,7 @@ msgid "Unable to join Project"
 msgstr "无法加入项目"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminSectionState.svelte
 msgid "Unable to load administration."
 msgstr "无法加载管理页面。"
 
@@ -3333,7 +3425,7 @@ msgid "Unable to open Quirebase"
 msgstr "无法打开 Quirebase"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemWorkspace.svelte
+#: src/lib/features/item/ItemSectionState.svelte
 msgid "Unable to open this Item section."
 msgstr "无法打开此条目分区。"
 
@@ -3359,7 +3451,10 @@ msgid "Unable to retry Import"
 msgstr "无法重试导入"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemWorkspace.svelte
+#: src/routes/(app)/item/[itemId]/(workspace)/discussion/+page.svelte
+#: src/routes/(app)/item/[itemId]/(workspace)/files/+page.svelte
+#: src/routes/(app)/item/[itemId]/(workspace)/metadata/+page.svelte
+#: src/routes/(app)/item/[itemId]/(workspace)/organize/+page.svelte
 msgid "Unable to save changes"
 msgstr "无法保存更改"
 
@@ -3368,6 +3463,7 @@ msgstr "无法保存更改"
 msgid "Unable to sign in"
 msgstr "无法登录"
 
+#. PDF annotation kind: text markup.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 msgid "Underline"
@@ -3376,7 +3472,7 @@ msgstr "下划线"
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminItems.svelte
 #: src/lib/features/dashboard/Dashboard.svelte
-#: src/lib/features/item/ItemWorkspace.svelte
+#: src/lib/features/item/ItemWorkspaceHeader.svelte
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Unknown authors"
 msgstr "未知作者"
@@ -3463,32 +3559,32 @@ msgid "Use the versioned JSON API and send your API Token in the Authorization h
 msgstr "使用版本化 JSON API，并在 Authorization 请求头中发送 API 令牌。"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/routes/(app)/admin/users/+page.svelte
 msgid "User created"
 msgstr "用户已创建"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/routes/(app)/admin/users/+page.svelte
 msgid "User disabled"
 msgstr "用户已停用"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/routes/(app)/admin/users/+page.svelte
 msgid "User enabled"
 msgstr "用户已启用"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/routes/(app)/admin/users/+page.svelte
 msgid "User password reset"
 msgstr "用户密码已重置"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/routes/(app)/admin/users/+page.svelte
 msgid "User role saved"
 msgstr "用户角色已保存"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/routes/(app)/admin/users/+page.svelte
 msgid "User sessions revoked"
 msgstr "用户会话已撤销"
 
@@ -3500,14 +3596,15 @@ msgid "Username"
 msgstr "用户名"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
 #: src/lib/features/admin/AdminOverview.svelte
+#: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/admin/AdminUsers.svelte
+#: src/routes/(app)/admin/users/+page.svelte
 msgid "Users"
 msgstr "用户"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 msgid "Users, storage, audit, settings, and durable operations."
 msgstr "管理用户、存储、审计、设置和持久操作。"
 
@@ -3526,6 +3623,7 @@ msgstr "查看全部"
 msgid "View Items"
 msgstr "查看条目"
 
+#. Project member role.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -3533,7 +3631,7 @@ msgid "Viewer"
 msgstr "查看者"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/projects/Projects.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Visibility"
@@ -3556,7 +3654,7 @@ msgid "Volume / Issue"
 msgstr "卷 / 期"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/features/admin/AdminShell.svelte
 msgid "Without PDF"
 msgstr "无 PDF"
 
@@ -3566,12 +3664,19 @@ msgid "Workflow"
 msgstr "工作流"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/Admin.svelte
+#: src/lib/api/workflows.ts
+#: src/lib/features/workflows/center.svelte.ts
+msgid "Workflow failed"
+msgstr "工作流失败"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+#: src/routes/(app)/admin/workflows/+page.svelte
 msgid "Workflows"
 msgstr "工作流"
 
 #. js-lingui-explicit-id
-#: src/lib/app/AppShell.svelte
+#: src/lib/app/AppSidebar.svelte
 #: src/lib/features/library/Library.svelte
 msgid "Workspace"
 msgstr "工作区"

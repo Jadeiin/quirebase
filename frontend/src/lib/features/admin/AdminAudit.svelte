@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Panel from '$lib/design/Panel.svelte';
+	import { dateTimeFormat } from '$lib/format';
 	import { t } from '$lib/i18n';
 	import type { components } from '$lib/api/schema';
 	import ItemRow from '$lib/design/ItemRow.svelte';
@@ -14,9 +15,9 @@
 			<strong>{event.action}</strong><span
 				>{event.target_type}{event.target_id ? ` · ${event.target_id}` : ''}</span
 			><span class="text-surface-600-400"
-				>{event.actor_id ? `${$t('Actor')} ${event.actor_id} · ` : ''}{new Date(
-					event.created_at
-				).toLocaleString()}</span
+				>{event.actor_id
+					? `${$t('Actor: {actor}', { actor: event.actor_id })} · `
+					: ''}{$dateTimeFormat.format(new Date(event.created_at))}</span
 			>
 			{#if event.detail}
 				<pre class="overflow-x-auto rounded bg-surface-200-800 p-2 text-xs">{typeof event.detail ===

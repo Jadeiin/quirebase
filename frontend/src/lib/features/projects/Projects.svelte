@@ -144,8 +144,10 @@
 							>{project.description}</span
 						>{/if}
 					<span class="text-sm text-surface-600-400"
-						>{$t(domainLabel(project.role))} · {project.item_count}
-						{$t('Items')} · {$t(project.visibility === 'public' ? 'Public' : 'Private')}</span
+						>{$t(domainLabel(project.role))} · {$t(
+							'{count, plural, one {# Item} other {# Items}}',
+							{ count: project.item_count }
+						)} · {$t(project.visibility === 'public' ? 'Public' : 'Private')}</span
 					>
 				</ItemRow>
 			{:else}<p class="text-surface-600-400">{$t('No Projects yet.')}</p>{/each}{/if}
@@ -162,7 +164,11 @@
 						>{project.description}</span
 					>{/if}
 				<div class="flex items-center justify-between gap-2">
-					<span class="text-sm text-surface-600-400">{project.item_count} {$t('Items')}</span>
+					<span class="text-sm text-surface-600-400"
+						>{$t('{count, plural, one {# Item} other {# Items}}', {
+							count: project.item_count
+						})}</span
+					>
 					<Button disabled={busy} onclick={() => join(project.id)}>{$t('Join')}</Button>
 				</div>
 			</ItemRow>

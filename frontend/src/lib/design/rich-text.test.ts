@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { projectRichText } from '$lib/design/rich-text';
+import { hasInlineMath, projectRichText, projectRichTextAsync } from '$lib/design/rich-text';
 
 describe('Web rich-text projection', () => {
-	it('converts every inline TeX span to allowlisted MathML inside canonical markup', () => {
-		const rendered = projectRichText(String.raw`Energy $E_{mc}\in\mathbb{R}$ and <i>$x^2$</i>`);
+	it('converts every inline TeX span to allowlisted MathML inside canonical markup', async () => {
+		const rendered = await projectRichTextAsync(
+			String.raw`Energy $E_{mc}\in\mathbb{R}$ and <i>$x^2$</i>`
+		);
 
 		expect(rendered.match(/<math/g)).toHaveLength(2);
 		expect(rendered).toContain('<i><math');
@@ -12,8 +14,8 @@ describe('Web rich-text projection', () => {
 		expect(rendered).not.toContain('$E_');
 	});
 
-	it('drops elements and attributes outside the rich-text and MathML allowlists', () => {
-		const rendered = projectRichText(
+	it('drops elements and attributes outside the rich-text and MathML allowlists', async () => {
+		const rendered = await projectRichTextAsync(
 			String.raw`<script>alert(1)</script>$\href{javascript:alert(1)}{x}$`
 		);
 
@@ -23,9 +25,9 @@ describe('Web rich-text projection', () => {
 		expect(rendered).toContain('<mi>x</mi>');
 	});
 
-	it('falls back to literal text for malformed or oversized TeX spans', () => {
-		const malformed = projectRichText(String.raw`Invalid $\frac{$ formula`);
-		const oversized = projectRichText(`$${'x'.repeat(201)}$`);
+	it('falls back to literal text for malformed or oversized TeX spans', async () => {
+		const malformed = await projectRichTextAsync(String.raw`Invalid $\frac{$ formula`);
+		const oversized = await projectRichTextAsync(`$${'x'.repeat(201)}$`);
 
 		expect(malformed).toBe(String.raw`Invalid $\frac{$ formula`);
 		expect(oversized).toBe(`$${'x'.repeat(201)}$`);
@@ -38,6 +40,14 @@ describe('Web rich-text projection', () => {
 
 		expect(rendered).toBe('Costs $5 and $10; US$5 and CA$10');
 		expect(rendered).not.toContain('<math');
+	});
+
+	it('detects inline math without treating currency as math', () => {
+		expect(hasInlineMath(String.raw`Energy $E_{mc}\in\mathbb{R}$`)).toBe(true);
+		expect(hasInlineMath(String.raw`<i>$x^2$</i>`)).toBe(true);
+		expect(hasInlineMath('Costs $5 and $10; US$5 and CA$10')).toBe(false);
+		expect(hasInlineMath('<script>$x^2$</script>')).toBe(false);
+		expect(hasInlineMath('<i>Visible</i> text')).toBe(false);
 	});
 
 	it('rebuilds canonical rich text without source attributes or unknown elements', () => {

@@ -59,14 +59,11 @@ test('account settings expose credential and session security controls', async (
 		});
 
 	await page.getByLabel('Locale').selectOption('zh-CN');
-	await page.getByRole('button', { name: 'Save locale' }).click();
 	await expect
-		.poll(() => mutations)
-		.toContainEqual({
-			method: 'PUT',
-			path: '/api/v1/account/locale',
-			body: { locale: 'zh-CN' }
-		});
+		.poll(() => page.evaluate(() => localStorage.getItem('quirebase:locale')))
+		.toBe('zh-CN');
+	await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
+	expect(mutations.some(({ path }) => path === '/api/v1/account/locale')).toBe(false);
 
 	await page.getByRole('button', { name: '撤销令牌' }).click();
 	await expect

@@ -110,7 +110,12 @@
 				onstatus($t('Loading annotations…'), false);
 				break;
 			case 'loaded':
-				onstatus(`${status.count} ${$t('annotations loaded')}`, false);
+				onstatus(
+					$t('{count, plural, one {# annotation loaded} other {# annotations loaded}}', {
+						count: status.count
+					}),
+					false
+				);
 				break;
 			case 'saving-reply':
 				onstatus($t('Saving reply…'), false);

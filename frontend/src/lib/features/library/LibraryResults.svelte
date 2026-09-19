@@ -63,7 +63,7 @@
 						type="checkbox"
 						checked={selected.has(item.id)}
 						onchange={() => onToggleItem(item.id)}
-						aria-label={`${$t('Select')} ${item.authors ?? ''}`}
+						aria-label={item.authors ? $t('Select {name}', { name: item.authors }) : $t('Select')}
 					/>
 					<a
 						class="grid min-w-0 grid-cols-1 gap-1 no-underline"
@@ -103,7 +103,10 @@
 				onclick={() => onPage(pageNumber - 1)}><Icon name="chevron-left" size={17} /></button
 			>
 			<span class="min-w-24 px-2 text-center text-xs font-medium text-surface-600-400 tabular-nums"
-				>{$t('Page')} {pageNumber} {$t('of')} {totalPages}</span
+				>{$t('Page {page} of {pageCount}', {
+					page: pageNumber,
+					pageCount: totalPages
+				})}</span
 			>
 			<button
 				type="button"

@@ -1,4 +1,5 @@
 import { apiRequest } from '$lib/api/client';
+import { translate } from '$lib/i18n';
 import type { components } from '$lib/api/schema';
 
 type WorkflowStatus = components['schemas']['WorkflowStatusView'];
@@ -59,7 +60,7 @@ export async function waitForWorkflow(
 		});
 		if (workflow.state === 'succeeded') return workflow;
 		if (workflow.state === 'failed' || workflow.state === 'cancelled') {
-			throw new Error(workflow.error || options.failureMessage || 'Workflow failed');
+			throw new Error(workflow.error || options.failureMessage || translate('Workflow failed'));
 		}
 		await delay(interval, options.signal);
 		interval = Math.min(interval * 2, 4000);

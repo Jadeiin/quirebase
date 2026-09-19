@@ -278,7 +278,7 @@
 						.map((item) => item.id)
 						.join(':'))}
 						<article class="mb-4 rounded-lg border border-surface-300-700 p-3 last:mb-0">
-							<h3>{$t('Duplicate group')} {index + 1}</h3>
+							<h3>{$t('Duplicate group {number}', { number: index + 1 })}</h3>
 							{#each group as item (item.id)}
 								<ItemRow as="a" href={resolve('/(app)/item/[itemId]', { itemId: item.id })}>
 									<strong><RichText html={item.title_html} /></strong>
@@ -299,7 +299,11 @@
 				<SectionHeader>
 					<div>
 						<h2>{$t('Manage Tags')}</h2>
-						<p class="text-surface-600-400">{filteredTags.length} {$t('Tags')}</p>
+						<p class="text-surface-600-400">
+							{$t('{count, plural, one {# Tag} other {# Tags}}', {
+								count: filteredTags.length
+							})}
+						</p>
 					</div>
 					{#snippet actions()}
 						<input
@@ -315,8 +319,9 @@
 						<div>
 							<strong>{tag.name}</strong>
 							<p class="mb-0 text-sm text-surface-600-400">
-								{tag.accessible_item_count}
-								{$t('Items')}
+								{$t('{count, plural, one {# Item} other {# Items}}', {
+									count: tag.accessible_item_count
+								})}
 							</p>
 						</div>
 						<div class="flex flex-wrap gap-2">

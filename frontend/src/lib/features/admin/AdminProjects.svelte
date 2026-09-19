@@ -14,9 +14,12 @@
 		<ItemRow>
 			<strong>{project.name}</strong><span>{project.description}</span><span
 				class="text-surface-600-400"
-				>{$t(domainLabel(project.visibility))} · {$t(domainLabel(project.state))} · {project.member_count}
-				{$t('members')} · {project.item_count}
-				{$t('Items')} · {project.creator.username}</span
+				>{$t(domainLabel(project.visibility))} · {$t(domainLabel(project.state))} ·
+				{$t('{count, plural, one {# member} other {# members}}', {
+					count: project.member_count
+				})} · {$t('{count, plural, one {# Item} other {# Items}}', {
+					count: project.item_count
+				})} · {project.creator.username}</span
 			>
 		</ItemRow>
 	{:else}

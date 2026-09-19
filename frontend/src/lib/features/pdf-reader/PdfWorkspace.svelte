@@ -125,7 +125,9 @@
 								<option value="">{$t('Private annotations only')}</option>
 								{#each viewer.data?.projects ?? [] as project (project.id)}
 									<option value={project.id}
-										>{$t('Private annotations and project')}: {project.name}</option
+										>{$t('Private annotations and project: {name}', {
+											name: project.name
+										})}</option
 									>
 								{/each}
 							</select>

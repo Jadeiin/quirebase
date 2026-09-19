@@ -22,7 +22,6 @@ from quirebase.web.api.account_schemas import (
     ApiTokenView,
     InvitationAcceptRequest,
     InvitationDetailsView,
-    LocaleRequest,
     PasswordChangeRequest,
 )
 from quirebase.web.api.auth import require_same_origin
@@ -30,7 +29,6 @@ from quirebase.web.api.common import OkView
 from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.session_schemas import LoginSessionView
 from quirebase.web.errors import ApiHTTPException
-from quirebase.web.locale import normalize_locale
 
 router = APIRouter(tags=["HTTP API"])
 
@@ -107,20 +105,6 @@ async def create_own_api_token(
 @router.delete("/account/api-tokens/{token_id}", response_model=OkView)
 async def revoke_own_api_token(token_id: str, user: ApiUser, db: Database) -> OkView:
     await revoke_api_token(db, user, token_id)
-    return OkView()
-
-
-@router.put("/account/locale", response_model=OkView)
-async def update_locale(data: LocaleRequest, user: ApiUser, response: Response) -> OkView:
-    del user
-    response.set_cookie(
-        "quirebase_locale",
-        normalize_locale(data.locale),
-        max_age=365 * 86400,
-        httponly=False,
-        secure=get_settings().secure_cookies,
-        samesite="lax",
-    )
     return OkView()
 
 

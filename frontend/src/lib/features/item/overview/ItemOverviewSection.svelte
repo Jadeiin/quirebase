@@ -41,10 +41,8 @@
 				{#if data.permissions.edit}
 					<a
 						class="text-sm font-semibold text-primary-700-300 no-underline"
-						href={resolve('/(app)/item/[itemId]/[section=itemSection]', {
-							itemId,
-							section: 'metadata'
-						})}>{$t('Edit metadata')}</a
+						href={resolve('/(app)/item/[itemId]/(workspace)/metadata', { itemId })}
+						>{$t('Edit metadata')}</a
 					>
 				{/if}
 			</header>
@@ -125,10 +123,7 @@
 								itemId,
 								revisionId: data.thumbnail.source_id
 							})
-						: resolve('/(app)/item/[itemId]/[section=itemSection]', {
-								itemId,
-								section: 'files'
-							})}
+						: resolve('/(app)/item/[itemId]/(workspace)/files', { itemId })}
 					aria-label={$t('Item thumbnail')}
 				>
 					<img
@@ -178,7 +173,7 @@
 						href={url}
 						target="_blank"
 						rel="external noreferrer"
-						><strong>{$t('External source')} {index + 1}</strong><span
+						><strong>{$t('External source {number}', { number: index + 1 })}</strong><span
 							class="truncate text-xs text-surface-600-400">{url}</span
 						></a
 					>

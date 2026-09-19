@@ -5,6 +5,7 @@ export type SvelteExtractedMessage = {
 	id: string;
 	message: string;
 	origin: [filename: string, line: number, column: number];
+	comment?: string;
 };
 
 type SvelteExtractor = {
@@ -24,6 +25,8 @@ type AstNode = {
 	loc?: { start: { line: number; column: number } };
 	callee?: { type?: string; name?: string };
 	arguments?: AstNode[];
+	key?: { type?: string; name?: string; value?: unknown };
+	properties?: AstNode[];
 	value?: unknown;
 };
 
@@ -41,16 +44,40 @@ function visit(value: unknown, callback: (node: AstNode) => void): void {
 	}
 }
 
+const MESSAGE_FUNCTIONS = new Set(['$t', 'msg', 'translate']);
+
+function objectPropertyText(object: AstNode, name: string): string | undefined {
+	for (const property of object.properties ?? []) {
+		if (property.type !== 'Property') continue;
+		const key = property.key;
+		const keyName =
+			key?.type === 'Identifier' ? key.name : key?.type === 'Literal' ? key.value : undefined;
+		if (keyName !== name) continue;
+		const value = property.value as AstNode | undefined;
+		if (value?.type === 'Literal' && typeof value.value === 'string') return value.value;
+	}
+	return undefined;
+}
+
 function literalMessage(node: AstNode, filename: string): SvelteExtractedMessage | undefined {
 	if (node.type !== 'CallExpression' || node.callee?.type !== 'Identifier') return;
-	if (node.callee.name !== '$t' && node.callee.name !== 'msg') return;
+	if (!node.callee.name || !MESSAGE_FUNCTIONS.has(node.callee.name)) return;
 
 	const argument = node.arguments?.[0];
+	let message: string | undefined;
+	let comment: string | undefined;
 	if (argument?.type === 'Literal' && typeof argument.value === 'string') {
+		message = argument.value;
+	} else if (argument?.type === 'ObjectExpression') {
+		message = objectPropertyText(argument, 'message');
+		comment = objectPropertyText(argument, 'comment');
+	}
+	if (message !== undefined) {
 		return {
-			id: argument.value,
-			message: argument.value,
-			origin: [filename, node.loc!.start.line, node.loc!.start.column]
+			id: message,
+			message,
+			origin: [filename, node.loc!.start.line, node.loc!.start.column],
+			comment
 		};
 	}
 	if (node.callee.name === 'msg') {
@@ -84,17 +111,37 @@ export const typescriptExtractor: TypeScriptExtractor = {
 			ts.ScriptKind.TS
 		);
 
+		function propertyText(object: ts.ObjectLiteralExpression, name: string): string | undefined {
+			for (const property of object.properties) {
+				if (!ts.isPropertyAssignment(property)) continue;
+				const key = property.name;
+				if (!ts.isIdentifier(key) && !ts.isStringLiteral(key)) continue;
+				if (key.text !== name) continue;
+				if (ts.isStringLiteralLike(property.initializer)) return property.initializer.text;
+			}
+			return undefined;
+		}
+
 		function visitTypeScript(node: ts.Node): void {
 			if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
 				const name = node.expression.text;
-				if (name === '$t' || name === 'msg') {
+				if (MESSAGE_FUNCTIONS.has(name)) {
 					const argument = node.arguments[0];
+					let message: string | undefined;
+					let comment: string | undefined;
 					if (argument && ts.isStringLiteralLike(argument)) {
+						message = argument.text;
+					} else if (argument && ts.isObjectLiteralExpression(argument)) {
+						message = propertyText(argument, 'message');
+						comment = propertyText(argument, 'comment');
+					}
+					if (message !== undefined) {
 						const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
 						onMessageExtracted({
-							id: argument.text,
-							message: argument.text,
-							origin: [filename, position.line + 1, position.character]
+							id: message,
+							message,
+							origin: [filename, position.line + 1, position.character],
+							comment
 						});
 					} else if (name === 'msg') {
 						const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));

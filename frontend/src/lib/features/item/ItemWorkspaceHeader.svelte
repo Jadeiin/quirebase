@@ -1,18 +1,15 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import type { components } from '$lib/api/schema';
 	import RichText from '$lib/design/RichText.svelte';
 	import ItemActions from '$lib/features/item/ItemActions.svelte';
 	import { msg, t, type MessageKey } from '$lib/i18n';
 	import type { ItemSection, ItemWorkspace } from './queries';
-	import type { ItemDetail, OrganizeView } from './types';
 
-	let { itemId, section, workspace, details, organize, user, onChanged } = $props<{
+	let { itemId, workspace, user, onChanged } = $props<{
 		itemId: string;
-		section: ItemSection;
 		workspace?: ItemWorkspace;
-		details?: ItemDetail;
-		organize?: OrganizeView;
 		user?: components['schemas']['SessionUserView'] | null;
 		onChanged: () => Promise<unknown>;
 	}>();
@@ -25,11 +22,12 @@
 		annotations: msg('Annotations'),
 		discussion: msg('Discussion')
 	};
-	const title = $derived(
-		(section === 'metadata' ? details?.title_html : undefined) ??
-			(section === 'organize' ? organize?.item.title_html : undefined) ??
-			workspace?.item.title_html
-	);
+	const sectionKeys = Object.keys(labels) as ItemSection[];
+	const section = $derived.by(() => {
+		const candidate = page.url.pathname.split('/').filter(Boolean)[2];
+		return sectionKeys.find((key) => key === candidate) ?? 'overview';
+	});
+	const title = $derived(workspace?.item.title_html);
 
 	function sectionPath(key: string) {
 		return key === 'overview' ? (`/item/${itemId}` as const) : (`/item/${itemId}/${key}` as const);

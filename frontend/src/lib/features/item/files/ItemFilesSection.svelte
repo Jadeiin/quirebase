@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { domainLabel } from '$lib/domain-labels';
+	import { kilobytes, numberFormat } from '$lib/format';
 	import Panel from '$lib/design/Panel.svelte';
 	import { t } from '$lib/i18n';
 	import type { FileRow, FilesView, ItemDetail } from '../types';
@@ -28,9 +29,10 @@
 			<ItemRow class="grid-cols-[minmax(0,1fr)_auto] items-center">
 				<div class="grid grid-cols-1 gap-1">
 					<strong>{file.original_name}</strong><span class="text-surface-600-400"
-						>{$t(domainLabel(file.kind))} · {Math.ceil(file.size / 1024)} KB{file.processing_state
-							? ` · ${$t(domainLabel(file.processing_state))}`
-							: ''}</span
+						>{$t('{kind} · {size} KB', {
+							kind: $t(domainLabel(file.kind)),
+							size: $numberFormat.format(kilobytes(file.size))
+						})}{file.processing_state ? ` · ${$t(domainLabel(file.processing_state))}` : ''}</span
 					>
 				</div>
 				<div class="flex flex-wrap gap-2">

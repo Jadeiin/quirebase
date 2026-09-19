@@ -1,8 +1,9 @@
 import { expect, test } from '@playwright/test';
 import { mockSession } from './helpers';
 
-test('session locale activates navigation without an unrelated rerender', async ({ page }) => {
-	await mockSession(page, 'member', 'zh-CN');
+test('stored locale activates navigation without an unrelated rerender', async ({ page }) => {
+	await page.addInitScript(() => localStorage.setItem('quirebase:locale', 'zh-CN'));
+	await mockSession(page);
 	await page.route('**/api/v1/dashboard', (route) =>
 		route.fulfill({
 			json: { new_items: [], recent_items: [], projects: [], session_count: 1 }

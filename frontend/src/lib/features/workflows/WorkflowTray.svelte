@@ -26,7 +26,7 @@
 			<PopoverTriggerButton
 				variant="filled"
 				class="h-12 rounded-full pr-5 pl-4 shadow-xl"
-				aria-label={`${$t('Background tasks')} (${badgeCount})`}
+				aria-label={$t('Background tasks ({count})', { count: badgeCount })}
 			>
 				<Icon name="rotate" size={20} />
 				<span class="min-w-6 text-center text-sm tabular-nums" aria-hidden="true">{badgeCount}</span

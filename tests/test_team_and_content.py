@@ -57,7 +57,7 @@ async def test_csp_allows_browser_pdf_downloads_from_external_http_sources(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
     try:
-        response = await client.get(f"/item/{item.id}/files")
+        response = await client.get(f"/item/{item.id}/files", headers={"Accept": "text/html"})
 
         assert "connect-src 'self' https: http:" in response.headers["content-security-policy"]
     finally:

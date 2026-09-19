@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Panel from '$lib/design/Panel.svelte';
 	import { domainLabel } from '$lib/domain-labels';
+	import { megabytes, numberFormat } from '$lib/format';
 	import { t, type MessageKey } from '$lib/i18n';
 	import type { components } from '$lib/api/schema';
 	import Button from '$lib/design/Button.svelte';
@@ -24,9 +25,11 @@
 <Panel class="grid grid-cols-1 gap-3">
 	<h2>{$t('Maintenance')}</h2>
 	<p>
-		{maintenance.storage.items_count} Items · {Math.ceil(
-			maintenance.storage.total_disk_bytes / 1048576
-		)} MB
+		{$t('{count, plural, one {# Item} other {# Items}}', {
+			count: maintenance.storage.items_count
+		})} · {$t('{size} MB', {
+			size: $numberFormat.format(megabytes(maintenance.storage.total_disk_bytes))
+		})}
 	</p>
 	<div class="flex flex-wrap gap-2">
 		{#each operations as [operation, label] (operation)}

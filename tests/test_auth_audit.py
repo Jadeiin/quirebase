@@ -299,11 +299,3 @@ async def test_account_settings_and_password_update(
     )
     assert event is not None
     assert event.actor_id == user.id
-
-    # Switch locale to zh_CN
-    loc_resp = await client.put(
-        "/api/v1/account/locale",
-        json={"locale": "zh_CN"},
-    )
-    assert loc_resp.status_code == 200
-    assert "quirebase_locale=zh-CN" in loc_resp.headers.get("set-cookie", "")

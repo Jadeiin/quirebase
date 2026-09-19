@@ -29,7 +29,9 @@
 			>
 		{/each}
 		<p class="text-surface-600-400">
-			Database: {settings.database_url}<br />Data directory: {settings.data_dir}
+			{$t('Database: {url}', { url: settings.database_url })}<br />{$t('Data directory: {path}', {
+				path: settings.data_dir
+			})}
 		</p>
 		<Button variant="filled" disabled={busy}>{$t('Save settings')}</Button>
 	</form>

@@ -5,18 +5,13 @@
 	import AuthPage from '$lib/design/AuthPage.svelte';
 	import Panel from '$lib/design/Panel.svelte';
 	import { invitationQuery } from '$lib/features/auth/queries';
-	import { activateLocale, t } from '$lib/i18n';
-	import { sessionQuery } from '$lib/session';
+	import { t } from '$lib/i18n';
 	import Button from '$lib/design/Button.svelte';
 	let { token } = $props<{ token: string }>();
 	let password = $state('');
 	let error = $state('');
 	let busy = $state(false);
-	const session = createQuery(() => sessionQuery());
 	const invitation = createQuery(() => invitationQuery(token));
-	$effect(() => {
-		if (session.data?.locale) activateLocale(session.data.locale);
-	});
 	async function accept() {
 		busy = true;
 		error = '';

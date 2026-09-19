@@ -285,12 +285,12 @@
 									></label
 								>{/each}
 							<p class="text-sm text-surface-600-400">
-								{$t('Annotations')}: {preferences.document.includeAnnotations
-									? $t('included')
-									: $t('excluded')}
-								· {$t('Supplements')}: {preferences.document.includeSupplements
-									? $t('included')
-									: $t('excluded')}
+								{$t('Annotations: {state}', {
+									state: preferences.document.includeAnnotations ? $t('included') : $t('excluded')
+								})}
+								· {$t('Supplements: {state}', {
+									state: preferences.document.includeSupplements ? $t('included') : $t('excluded')
+								})}
 							</p>
 							<div class="flex flex-wrap gap-2">
 								<Button

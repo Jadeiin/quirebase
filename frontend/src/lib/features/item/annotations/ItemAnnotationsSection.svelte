@@ -63,10 +63,10 @@
 				</div>
 				<span>{annotation.body ?? annotation.selected_text ?? $t('No note text')}</span><span
 					class="text-surface-600-400"
-					>{annotation.author_display_name} · {annotation.revision_name} · {(
-						annotation.replies ?? []
-					).length}
-					{$t('replies')}</span
+					>{annotation.author_display_name} · {annotation.revision_name} ·
+					{$t('{count, plural, one {# reply} other {# replies}}', {
+						count: (annotation.replies ?? []).length
+					})}</span
 				>
 			</ItemRow>
 		{:else}

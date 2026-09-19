@@ -27,4 +27,3 @@ class SessionUserView(BaseModel):
 class SessionView(BaseModel):
     authenticated: bool
     user: SessionUserView | None = None
-    locale: str

@@ -36,10 +36,6 @@ class PasswordChangeRequest(BaseModel):
     new_password: str
 
 
-class LocaleRequest(BaseModel):
-    locale: str
-
-
 class AccountSummaryView(BaseModel):
     user: SessionUserView
     sessions: list[LoginSessionView]

@@ -181,7 +181,9 @@
 	</div>
 	{#if library.data}<span
 			class="hidden rounded-full border border-surface-300-700 bg-surface-50-950 px-3 py-1.5 text-xs font-semibold text-surface-600-400 sm:inline"
-			>{library.data.total} {$t('Items')}</span
+			>{$t('{count, plural, one {# Item} other {# Items}}', {
+				count: library.data.total
+			})}</span
 		>{/if}
 </div>
 

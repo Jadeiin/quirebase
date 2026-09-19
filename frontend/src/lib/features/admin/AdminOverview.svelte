@@ -2,6 +2,7 @@
 	import ItemRow from '$lib/design/ItemRow.svelte';
 	import Panel from '$lib/design/Panel.svelte';
 	import Stat from '$lib/design/Stat.svelte';
+	import { dateTimeFormat } from '$lib/format';
 	import { t } from '$lib/i18n';
 	import type { components } from '$lib/api/schema';
 
@@ -19,7 +20,7 @@
 	{#each overview.recent_events as event (event.id)}
 		<ItemRow>
 			<strong>{event.action}</strong><span class="text-surface-600-400"
-				>{event.target_type} · {new Date(event.created_at).toLocaleString()}</span
+				>{event.target_type} · {$dateTimeFormat.format(new Date(event.created_at))}</span
 			>
 		</ItemRow>
 	{:else}

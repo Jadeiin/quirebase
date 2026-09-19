@@ -52,13 +52,31 @@ def test_sveltekit_filesystem_routes_own_application_navigation():
         "frontend/src/routes/(app)/discovery/+page.svelte": "Discovery",
         "frontend/src/routes/(app)/projects/+page.svelte": "Projects",
         "frontend/src/routes/(app)/projects/[projectId]/+page.svelte": "ProjectWorkspace",
-        "frontend/src/routes/(app)/item/[itemId]/+page.svelte": "ItemWorkspace",
-        "frontend/src/routes/(app)/item/[itemId]/[section=itemSection]/+page.svelte": "ItemWorkspace",
+        "frontend/src/routes/(app)/item/[itemId]/(workspace)/+page.svelte": "ItemOverviewSection",
+        "frontend/src/routes/(app)/item/[itemId]/(workspace)/metadata/+page.svelte": (
+            "ItemMetadataSection"
+        ),
+        "frontend/src/routes/(app)/item/[itemId]/(workspace)/files/+page.svelte": "ItemFilesSection",
+        "frontend/src/routes/(app)/item/[itemId]/(workspace)/organize/+page.svelte": (
+            "ItemOrganizeSection"
+        ),
+        "frontend/src/routes/(app)/item/[itemId]/(workspace)/annotations/+page.svelte": (
+            "ItemAnnotationsSection"
+        ),
+        "frontend/src/routes/(app)/item/[itemId]/(workspace)/discussion/+page.svelte": (
+            "ItemDiscussionSection"
+        ),
         "frontend/src/routes/(app)/item/[itemId]/pdf/[revisionId]/+page.svelte": "PdfWorkspace",
         "frontend/src/routes/(app)/tools/+page.svelte": "Tools",
         "frontend/src/routes/(app)/account/+page.svelte": "Account",
-        "frontend/src/routes/(app)/admin/+page.svelte": "Admin",
-        "frontend/src/routes/(app)/admin/[section=adminSection]/+page.svelte": "Admin",
+        "frontend/src/routes/(app)/admin/+page.svelte": "AdminOverview",
+        "frontend/src/routes/(app)/admin/users/+page.svelte": "AdminUsers",
+        "frontend/src/routes/(app)/admin/projects/+page.svelte": "AdminProjects",
+        "frontend/src/routes/(app)/admin/items/+page.svelte": "AdminItems",
+        "frontend/src/routes/(app)/admin/audit/+page.svelte": "AdminAudit",
+        "frontend/src/routes/(app)/admin/workflows/+page.svelte": "AdminWorkflows",
+        "frontend/src/routes/(app)/admin/settings/+page.svelte": "AdminSettings",
+        "frontend/src/routes/(app)/admin/maintenance/+page.svelte": "AdminMaintenance",
         "frontend/src/routes/(public)/invitation/[token]/+page.svelte": "Invitation",
     }
     for path, component in routes.items():
@@ -69,8 +87,12 @@ def test_sveltekit_filesystem_routes_own_application_navigation():
     assert not (ROOT / "frontend/src/lib/App.svelte").exists()
     assert "sessionQuery" in read("frontend/src/lib/app/AppShell.svelte")
     assert "apiRequest('GET', '/session'" in read("frontend/src/lib/session.ts")
-    assert "metadata" in read("frontend/src/params/itemSection.ts")
-    assert "maintenance" in read("frontend/src/params/adminSection.ts")
+    assert not (ROOT / "frontend/src/params/itemSection.ts").exists()
+    assert not (ROOT / "frontend/src/params/adminSection.ts").exists()
+    assert not (ROOT / "frontend/src/routes/(app)/item/[itemId]/[section=itemSection]").exists()
+    assert not (ROOT / "frontend/src/routes/(app)/admin/[section=adminSection]").exists()
+    assert not (ROOT / "frontend/src/lib/features/item/ItemWorkspace.svelte").exists()
+    assert not (ROOT / "frontend/src/lib/features/item/ItemWorkspaceContent.svelte").exists()
 
 
 def test_frontend_does_not_render_api_metadata_as_trusted_html():
@@ -92,12 +114,12 @@ def test_docker_builds_the_svelte_workspace_before_the_python_wheel():
 
 
 def test_item_workspace_uses_the_fixed_query_annotation_review_projection():
-    workspace = read("frontend/src/lib/features/item/ItemWorkspace.svelte")
+    page = read("frontend/src/routes/(app)/item/[itemId]/(workspace)/annotations/+page.svelte")
     annotations = read("frontend/src/lib/features/item/annotations/ItemAnnotationsSection.svelte")
     queries = read("frontend/src/lib/features/item/queries.ts")
     assert "itemAnnotationsReviewQuery" in annotations
     assert "'/items/{item_id}/annotations/review'" in queries
-    assert "annotationProjects" not in workspace
+    assert "annotationProjects" not in page
     assert "annotations.isError" in annotations
 
 

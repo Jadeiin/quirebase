@@ -2,16 +2,11 @@ import type { Page } from '@playwright/test';
 
 export const defaultCitationKeyFormula = 'auth.capitalize + year + shorttitle(1).capitalize';
 
-export async function mockSession(
-	page: Page,
-	role: 'member' | 'administrator' = 'member',
-	locale = 'en-US'
-) {
+export async function mockSession(page: Page, role: 'member' | 'administrator' = 'member') {
 	await page.route('**/api/v1/session', (route) =>
 		route.fulfill({
 			json: {
 				authenticated: true,
-				locale,
 				user: { id: 'user-1', username: 'reader', role }
 			}
 		})

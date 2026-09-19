@@ -102,7 +102,7 @@ async def test_authorization_header_never_falls_back_to_login_session(
 
 
 @pytest.mark.anyio
-async def test_session_bootstrap_returns_the_browser_identity_and_locale(
+async def test_session_bootstrap_returns_the_browser_identity(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
     client, _item, _revision = await authenticated_async_client(
@@ -118,7 +118,6 @@ async def test_session_bootstrap_returns_the_browser_identity_and_locale(
                 "username": "reader",
                 "role": "member",
             },
-            "locale": "zh-CN",
         }
     finally:
         await client.aclose()

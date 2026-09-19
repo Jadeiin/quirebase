@@ -9,13 +9,19 @@
 	import Panel from '$lib/design/Panel.svelte';
 	import ExportPreferences from '$lib/features/account/ExportPreferences.svelte';
 	import { accountQuery } from '$lib/features/account/queries';
-	import { activateLocale, msg, t, type MessageKey } from '$lib/i18n';
+	import { dateFormat, dateTimeFormat } from '$lib/format';
+	import { activeLocale, msg, setLocale, t, type MessageKey } from '$lib/i18n';
+	import { SUPPORTED_LOCALES, type Locale } from '$lib/locale';
 	import Button from '$lib/design/Button.svelte';
+
+	const localeLabels: Record<Locale, string> = {
+		'en-US': 'English',
+		'zh-CN': '简体中文'
+	};
 
 	let tokenName = $state('');
 	let tokenDays = $state(30);
 	let createdToken = $state('');
-	let selectedLocale = $state('en-US');
 	let externalOrigin = $state('');
 	let sidebarCollapsed = $state(false);
 	let error = $state('');
@@ -24,7 +30,6 @@
 	const account = createQuery(() => accountQuery());
 
 	onMount(() => {
-		selectedLocale = document.documentElement.lang === 'zh-CN' ? 'zh-CN' : 'en-US';
 		externalOrigin = location.origin;
 		sidebarCollapsed = localStorage.getItem('quirebase:sidebar-collapsed') === 'true';
 	});
@@ -103,24 +108,6 @@
 		);
 	}
 
-	async function saveLocale(event: SubmitEvent) {
-		event.preventDefault();
-		busy = true;
-		error = '';
-		notice = null;
-		try {
-			await apiRequest('PUT', '/account/locale', {
-				body: { locale: selectedLocale }
-			});
-			activateLocale(selectedLocale);
-			notice = msg('Locale saved');
-		} catch (reason) {
-			error = apiErrorMessage(reason, $t('Account action failed'));
-		} finally {
-			busy = false;
-		}
-	}
-
 	function revokeToken(tokenId: string) {
 		void mutate(
 			() =>
@@ -197,19 +184,17 @@
 						{$t('Choose how Quirebase looks and speaks to you.')}
 					</p>
 				</div>
-				<form class="grid grid-cols-1 gap-3" onsubmit={saveLocale}>
-					<label
-						>{$t('Language')}<select
-							class="select"
-							bind:value={selectedLocale}
-							aria-label={$t('Locale')}
-							><option value="en-US">English</option><option value="zh-CN">简体中文</option></select
-						></label
-					>
-					<div>
-						<Button disabled={busy}>{$t('Save locale')}</Button>
-					</div>
-				</form>
+				<label
+					>{$t('Language')}<select
+						class="select"
+						value={$activeLocale}
+						onchange={(event) => setLocale(event.currentTarget.value)}
+						aria-label={$t('Locale')}
+						>{#each SUPPORTED_LOCALES as locale (locale)}<option value={locale} lang={locale}
+								>{localeLabels[locale]}</option
+							>{/each}</select
+					></label
+				>
 				<label class="flex items-start gap-2 border-t border-surface-300-700 pt-4">
 					<input type="checkbox" bind:checked={sidebarCollapsed} onchange={saveSidebarPreference} />
 					<span
@@ -259,8 +244,9 @@
 					<div>
 						<h2 class="mb-1">{$t('Sessions')}</h2>
 						<p class="mb-0 text-sm text-surface-600-400">
-							{account.data.sessions.length}
-							{$t('active sessions')}
+							{$t('{count, plural, one {# active session} other {# active sessions}}', {
+								count: account.data.sessions.length
+							})}
 						</p>
 					</div>
 					<Button disabled={busy} onclick={revokeAllSessions}>{$t('Revoke all sessions')}</Button>
@@ -274,11 +260,11 @@
 								<strong>{session.current ? $t('Current session') : $t('Session')}</strong>
 								<p class="m-0 text-sm text-surface-600-400">
 									{$t('Created')}
-									{new Date(session.created_at).toLocaleString()}
+									{$dateTimeFormat.format(new Date(session.created_at))}
 								</p>
 								<p class="m-0 text-xs text-surface-600-400">
 									{$t('Expires')}
-									{new Date(session.expires_at).toLocaleString()}
+									{$dateTimeFormat.format(new Date(session.expires_at))}
 								</p>
 							</div>
 							<Button
@@ -337,7 +323,7 @@
 							<strong class="block truncate">{token.name}</strong><span
 								class="text-sm text-surface-600-400"
 								>{$t(domainLabel(token.status))} · {$t('Expires')}
-								{new Date(token.expires_at).toLocaleDateString()}</span
+								{$dateFormat.format(new Date(token.expires_at))}</span
 							>
 						</div>
 						<Button class="shrink-0" disabled={busy} onclick={() => revokeToken(token.id)}

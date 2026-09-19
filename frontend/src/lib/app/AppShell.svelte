@@ -7,7 +7,7 @@
 	import { apiErrorMessage } from '$lib/api/errors';
 	import Notice from '$lib/design/Notice.svelte';
 	import Toast from '$lib/design/Toast.svelte';
-	import { activateLocale, t } from '$lib/i18n';
+	import { t } from '$lib/i18n';
 	import Login from '$lib/features/auth/Login.svelte';
 	import { sessionQuery, setSession } from '$lib/session';
 	import { WorkflowCenter, setWorkflowCenter } from '$lib/features/workflows/center.svelte';
@@ -84,10 +84,6 @@
 			actionBusy = false;
 		}
 	}
-
-	$effect(() => {
-		if (session.data?.locale) activateLocale(session.data.locale);
-	});
 </script>
 
 {#if session.isPending}

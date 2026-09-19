@@ -67,7 +67,7 @@ test('Tag page clamps after deleting the last page of Tags', async ({ page }) =>
 	await page.getByRole('tab', { name: 'Manage Tags' }).click();
 	await expect(page.getByText('21 Tags')).toBeVisible();
 	await page.getByRole('button', { name: 'Next' }).click();
-	await expect(page.getByText('Page 2 / 2')).toBeVisible();
+	await expect(page.getByText('Page 2 of 2')).toBeVisible();
 	const tagRow = (name: string) =>
 		page.locator('strong').filter({ hasText: new RegExp(`^${name}$`) });
 	await expect(tagRow('Tag 21')).toBeVisible();
@@ -77,5 +77,5 @@ test('Tag page clamps after deleting the last page of Tags', async ({ page }) =>
 	await expect(page.getByText('20 Tags')).toBeVisible();
 	await expect(tagRow('Tag 21')).toHaveCount(0);
 	await expect(tagRow('Tag 20')).toBeVisible();
-	await expect(page.getByText('Page 2 / 2')).toHaveCount(0);
+	await expect(page.getByText('Page 2 of 2')).toHaveCount(0);
 });

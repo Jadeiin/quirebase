@@ -6,6 +6,7 @@
 	import RichText from '$lib/design/RichText.svelte';
 	import { domainLabel } from '$lib/domain-labels';
 	import { dashboardQuery } from '$lib/features/dashboard/queries';
+	import { dateFormat } from '$lib/format';
 	import { t } from '$lib/i18n';
 
 	const dashboard = createQuery(() => dashboardQuery());
@@ -105,7 +106,7 @@
 							<span
 								class="flex flex-wrap items-center justify-between gap-2 text-xs text-surface-600-400"
 								><span>{recent.item.authors || $t('Unknown authors')}</span><span
-									>{new Date(recent.last_read_at).toLocaleDateString()}</span
+									>{$dateFormat.format(new Date(recent.last_read_at))}</span
 								></span
 							>
 						</a>

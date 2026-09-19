@@ -32,9 +32,13 @@
 		<div>
 			<h2>{$t('Import preview')}</h2>
 			<p class="text-surface-600-400">
-				{batch.records.length}
-				{$t('records')} · {batch.errors.length}
-				{$t('diagnostics')} · {$t(domainLabel(batch.status))}
+				{$t('{count, plural, one {# record} other {# records}}', {
+					count: batch.records.length
+				})}
+				· {$t('{count, plural, one {# diagnostic} other {# diagnostics}}', {
+					count: batch.errors.length
+				})}
+				· {$t(domainLabel(batch.status))}
 			</p>
 		</div>
 		{#snippet actions()}
@@ -74,7 +78,7 @@
 			<strong>{String(diagnostic.message ?? diagnostic.code)}</strong>
 			{#if diagnostic.filename}<span>{String(diagnostic.filename)}</span>{/if}
 			{#if diagnostic.row || diagnostic.code}<small
-					>{diagnostic.row ? `${$t('Row')} ${String(diagnostic.row)} · ` : ''}{String(
+					>{diagnostic.row ? `${$t('Row {row}', { row: String(diagnostic.row) })} · ` : ''}{String(
 						diagnostic.code ?? ''
 					)}</small
 				>{/if}

@@ -101,6 +101,10 @@ const pdfReader = mergeGraphs(
 	dependencyGraph([pdfRouteNodes.at(-1)!], true)
 );
 
+function routeBundle(route: string): BundleSize {
+	return bundleSize(graphFiles(dependencyGraph([...runtime, ...routeNodes(route)], false)));
+}
+
 const dashboardPdfDependencies = [...dashboard].filter((key) => {
 	const entry = manifest[key];
 	return (
@@ -115,8 +119,72 @@ if (dashboardPdfDependencies.length) {
 }
 
 enforce('Application shell', bundleSize(graphFiles(dashboard)), {
-	raw: 685_000,
-	gzip: 210_000
+	raw: 500000,
+	gzip: 155000
+});
+enforce('Library route', routeBundle('/(app)/library'), {
+	raw: 530000,
+	gzip: 167000
+});
+enforce('Import route', routeBundle('/(app)/import'), {
+	raw: 520000,
+	gzip: 163000
+});
+enforce('Item overview route', routeBundle('/(app)/item/[itemId]/(workspace)'), {
+	raw: 534000,
+	gzip: 167000
+});
+enforce('Item metadata route', routeBundle('/(app)/item/[itemId]/(workspace)/metadata'), {
+	raw: 542000,
+	gzip: 170000
+});
+enforce('Item files route', routeBundle('/(app)/item/[itemId]/(workspace)/files'), {
+	raw: 539000,
+	gzip: 170000
+});
+enforce('Item organize route', routeBundle('/(app)/item/[itemId]/(workspace)/organize'), {
+	raw: 537000,
+	gzip: 168000
+});
+enforce('Item annotations route', routeBundle('/(app)/item/[itemId]/(workspace)/annotations'), {
+	raw: 530000,
+	gzip: 166000
+});
+enforce('Item discussion route', routeBundle('/(app)/item/[itemId]/(workspace)/discussion'), {
+	raw: 532000,
+	gzip: 167000
+});
+enforce('Admin overview route', routeBundle('/(app)/admin'), {
+	raw: 500000,
+	gzip: 155000
+});
+enforce('Admin users route', routeBundle('/(app)/admin/users'), {
+	raw: 510000,
+	gzip: 159000
+});
+enforce('Admin projects route', routeBundle('/(app)/admin/projects'), {
+	raw: 500000,
+	gzip: 155000
+});
+enforce('Admin items route', routeBundle('/(app)/admin/items'), {
+	raw: 522000,
+	gzip: 164000
+});
+enforce('Admin audit route', routeBundle('/(app)/admin/audit'), {
+	raw: 501000,
+	gzip: 156000
+});
+enforce('Admin workflows route', routeBundle('/(app)/admin/workflows'), {
+	raw: 498000,
+	gzip: 155000
+});
+enforce('Admin settings route', routeBundle('/(app)/admin/settings'), {
+	raw: 502000,
+	gzip: 157000
+});
+enforce('Admin maintenance route', routeBundle('/(app)/admin/maintenance'), {
+	raw: 504000,
+	gzip: 158000
 });
 enforce('PDF reader route', bundleSize(graphFiles(pdfReader)), {
 	raw: 8_000_000,

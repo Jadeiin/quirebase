@@ -155,7 +155,7 @@ export class WorkflowCenter {
 			if (status.state === 'succeeded') waiter.resolve(status);
 			else
 				waiter.reject(
-					new Error(status.error || translate(job.failureMessage) || 'Workflow failed')
+					new Error(status.error || translate(job.failureMessage) || translate('Workflow failed'))
 				);
 		}
 		if (job && status.state !== 'succeeded') {

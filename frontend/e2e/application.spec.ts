@@ -10,7 +10,6 @@ test('authenticated shell loads dashboard and navigates to Library', async ({ pa
 		return route.fulfill({
 			json: {
 				authenticated: true,
-				locale: 'en-US',
 				user: { id: 'user-1', username: 'reader', role: 'member' }
 			}
 		});
@@ -45,7 +44,6 @@ test('theme preference persists and system mode follows the browser', async ({ p
 		route.fulfill({
 			json: {
 				authenticated: true,
-				locale: 'en-US',
 				user: { id: 'user-1', username: 'reader', role: 'member' }
 			}
 		})
@@ -93,7 +91,6 @@ test('account menu keeps the active theme during client-side navigation', async 
 		route.fulfill({
 			json: {
 				authenticated: true,
-				locale: 'en-US',
 				user: { id: 'user-1', username: 'reader', role: 'member' }
 			}
 		})

@@ -30,7 +30,7 @@
 	<section
 		class="sticky top-3 z-30 mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-primary-700-300/30 bg-surface-50-950 p-3 shadow-lg"
 	>
-		<strong class="mr-2">{selectedCount} {$t('selected')}</strong>
+		<strong class="mr-2">{$t('{count} selected', { count: selectedCount })}</strong>
 		<select class="input w-auto min-w-36" bind:value={bulkAction} aria-label={$t('Bulk action')}>
 			<option value="">{$t('Choose action')}</option>
 			<option value="add_project">{$t('Add to Project')}</option>

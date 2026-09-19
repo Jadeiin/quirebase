@@ -185,7 +185,11 @@
 	<SectionHeader>
 		<div>
 			<h2>{$t('Candidate Records')}</h2>
-			{#if results}<p class="text-surface-600-400">{results.total} {$t('results')}</p>{/if}
+			{#if results}<p class="text-surface-600-400">
+					{$t('{count, plural, one {# result} other {# results}}', {
+						count: results.total
+					})}
+				</p>{/if}
 		</div>
 	</SectionHeader>
 	{#each results?.results ?? [] as candidate (`${candidate.provider}:${candidate.identifier_provider}:${candidate.identifier}`)}

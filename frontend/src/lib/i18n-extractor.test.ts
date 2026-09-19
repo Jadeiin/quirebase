@@ -21,6 +21,7 @@ describe('Svelte gettext extraction', () => {
 		const messages = extract(`
 			<script lang="ts">
 				const label = msg('Library');
+				const failure = translate('Workflow failed');
 			</script>
 			<h1>{$t('Dashboard')}</h1>
 			<a>{$t(label)}</a>
@@ -32,7 +33,20 @@ describe('Svelte gettext extraction', () => {
 				.toSorted((left, right) => left.id.localeCompare(right.id))
 		).toEqual([
 			{ id: 'Dashboard', message: 'Dashboard' },
-			{ id: 'Library', message: 'Library' }
+			{ id: 'Library', message: 'Library' },
+			{ id: 'Workflow failed', message: 'Workflow failed' }
+		]);
+	});
+
+	it('extracts translator comments from message descriptors', () => {
+		const messages = extract(`
+			<script lang="ts">
+				const label = msg({ message: 'Owner', comment: 'Project member role.' });
+			</script>
+		`);
+
+		expect(messages.map(({ id, message, comment }) => ({ id, message, comment }))).toEqual([
+			{ id: 'Owner', message: 'Owner', comment: 'Project member role.' }
 		]);
 	});
 
@@ -48,16 +62,32 @@ describe('Svelte gettext extraction', () => {
 });
 
 describe('TypeScript gettext extraction', () => {
-	it('extracts marked domain labels', () => {
+	it('extracts marked domain labels and literal translations', () => {
 		const messages: SvelteExtractedMessage[] = [];
 		typescriptExtractor.extract(
 			'domain-labels.ts',
-			`const labels = { ready: msg('Ready'), attachment: msg('Attachment') };`,
+			`const labels = { ready: msg('Ready'), attachment: msg('Attachment') };
+			const failure = translate('Workflow failed');
+			const dynamic = translate(job.failureMessage);`,
 			(message) => messages.push(message),
 			{} as never
 		);
 
-		expect(messages.map(({ id }) => id)).toEqual(['Ready', 'Attachment']);
+		expect(messages.map(({ id }) => id)).toEqual(['Ready', 'Attachment', 'Workflow failed']);
+	});
+
+	it('extracts translator comments from TypeScript message descriptors', () => {
+		const messages: SvelteExtractedMessage[] = [];
+		typescriptExtractor.extract(
+			'domain-labels.ts',
+			`const labels = { owner: msg({ message: 'Owner', comment: 'Project member role.' }) };`,
+			(message) => messages.push(message),
+			{} as never
+		);
+
+		expect(messages.map(({ id, message, comment }) => ({ id, message, comment }))).toEqual([
+			{ id: 'Owner', message: 'Owner', comment: 'Project member role.' }
+		]);
 	});
 
 	it('fails extraction when a TypeScript msg call receives a dynamic value', () => {

@@ -13,7 +13,6 @@ from quirebase.web.api.auth import require_same_origin
 from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.session_schemas import LoginRequest, SessionView
 from quirebase.web.errors import ApiHTTPException
-from quirebase.web.locale import resolve_request_locale
 
 router = APIRouter(tags=["Session"])
 
@@ -22,13 +21,11 @@ router = APIRouter(tags=["Session"])
 async def session_bootstrap(request: Request, db: Database):
     raw_session = request.cookies.get(get_settings().session_cookie, "")
     login = await get_login_session_by_token(db, raw_session)
-    locale = resolve_request_locale(request)
     if login is None:
-        return {"authenticated": False, "user": None, "locale": locale}
+        return {"authenticated": False, "user": None}
     return {
         "authenticated": True,
         "user": {"id": login.user.id, "username": login.user.username, "role": login.user.role},
-        "locale": locale,
     }
 
 
@@ -76,7 +73,6 @@ async def login_session(
     return {
         "authenticated": True,
         "user": {"id": user.id, "username": user.username, "role": user.role},
-        "locale": resolve_request_locale(request),
     }
 
 
