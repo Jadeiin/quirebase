@@ -222,22 +222,19 @@ async def test_failed_pdf_import_can_retry_with_a_new_durable_workflow(
         async_db.add(batch)
         await async_db.commit()
 
-        preview = await client.get(f"/imports/{batch.id}/preview")
-        assert f'action="/imports/{batch.id}/retry"' in preview.text
+        preview = await client.get(f"/api/v1/imports/{batch.id}")
+        assert preview.json()["status"] == "failed"
 
         retried = await client.post(
-            f"/imports/{batch.id}/retry",
-            data={"csrf_token": "test-csrf"},
-            follow_redirects=False,
+            f"/api/v1/imports/{batch.id}/retry",
+            json={},
         )
 
-        assert retried.status_code == 303
+        assert retried.status_code == 200
         await async_db.refresh(batch)
         assert batch.status == "pending"
         assert batch.workflow_id != "prepare-pdf-import:old"
-        assert retried.headers["location"] == (
-            f"/imports/{batch.id}/preview?workflow={batch.workflow_id}"
-        )
+        assert retried.json()["workflow_id"] == batch.workflow_id
         enqueue = fake_durable_operations.enqueues[-1]
         assert enqueue["workflow_id"] == batch.workflow_id
         assert enqueue["queue_name"] == "library.import"
@@ -312,19 +309,18 @@ async def test_terminal_or_missing_pdf_import_workflow_can_retry_while_batch_is_
                 raw_status=raw_status,
             )
 
-        preview = await client.get(f"/imports/{batch.id}/preview")
+        preview = await client.get(f"/api/v1/imports/{batch.id}")
         assert preview.status_code == 200
-        assert f'action="/imports/{batch.id}/retry"' in preview.text
+        assert preview.json()["status"] == "failed"
         await async_db.refresh(batch)
         assert batch.status == "failed"
 
         retried = await client.post(
-            f"/imports/{batch.id}/retry",
-            data={"csrf_token": "test-csrf"},
-            follow_redirects=False,
+            f"/api/v1/imports/{batch.id}/retry",
+            json={},
         )
 
-        assert retried.status_code == 303
+        assert retried.status_code == 200
         await async_db.refresh(batch)
         assert batch.status == "pending"
         assert batch.workflow_id != old_workflow_id
@@ -398,18 +394,14 @@ async def test_stale_preview_convergence_does_not_overwrite_concurrent_pdf_impor
             return workflow
 
         monkeypatch.setattr(fake_durable_operations, "get", interleaved_get)
-        preview_task = asyncio.create_task(client.get(f"/imports/{batch.id}/preview"))
+        preview_task = asyncio.create_task(client.get(f"/api/v1/imports/{batch.id}"))
         await preview_observed_terminal.wait()
 
-        retried = await client.post(
-            f"/imports/{batch.id}/retry",
-            data={"csrf_token": "test-csrf"},
-            follow_redirects=False,
-        )
+        retried = await client.post(f"/api/v1/imports/{batch.id}/retry", json={})
         release_preview.set()
         preview = await preview_task
 
-        assert retried.status_code == 303
+        assert retried.status_code == 200
         assert preview.status_code == 200
         await async_db.refresh(batch)
         assert batch.status == "pending"
@@ -480,22 +472,19 @@ async def test_dashboard_sidebar_limits_and_recent_reading(
             )
         await db.commit()
 
-        dashboard = await client.get("/")
+        dashboard = await client.get("/api/v1/dashboard")
         assert dashboard.status_code == 200
-        assert 'lang="zh-CN"' in dashboard.text
-        assert "主导航" in dashboard.text
-        assert "Source code" not in dashboard.text
-        assert dashboard.text.count('class="paper-row"') == 10
-        assert "Dashboard paper 11" in dashboard.text
-        assert "Dashboard paper 0" not in dashboard.text
+        assert len(dashboard.json()["new_items"]) == 10
+        titles = [row["title_html"] for row in dashboard.json()["new_items"]]
+        assert "Dashboard paper 11" in titles
+        assert "Dashboard paper 0" not in titles
 
-        opened = await client.get(f"/items/{item.id}")
+        opened = await client.get(f"/api/v1/items/{item.id}/workspace")
         assert opened.status_code == 200
         assert await db.get(ItemRead, (item.created_by, item.id)) is not None
-        refreshed = await client.get("/")
-        assert "最近阅读" in refreshed.text
-        assert item.title in refreshed.text
-        assert (await client.get("/source")).status_code == 404
+        refreshed = await client.get("/api/v1/dashboard")
+        assert refreshed.json()["recent_items"][0]["item"]["title_html"] == item.title
+        assert (await client.get("/api/v1/source")).status_code == 404
     finally:
         await client.aclose()
         get_settings.cache_clear()
@@ -519,8 +508,8 @@ async def test_item_page_validates_access_before_recording_read(
     reader_id = item.created_by
 
     try:
-        assert (await client.get("/items/missing-item")).status_code == 404
-        assert (await client.get(f"/items/{private_item_id}")).status_code == 404
+        assert (await client.get("/api/v1/items/missing-item/workspace")).status_code == 404
+        assert (await client.get(f"/api/v1/items/{private_item_id}/workspace")).status_code == 404
         assert await db.get(ItemRead, (reader_id, "missing-item")) is None
         assert await db.get(ItemRead, (reader_id, private_item_id)) is None
     finally:
@@ -567,61 +556,53 @@ async def test_library_pagination_filters_and_bulk_actions(
                 ])
         await db.commit()
 
-        first_page = await client.get("/library")
+        first_page = await client.get("/api/v1/items")
         assert first_page.status_code == 200
-        assert "第 1 页" in first_page.text
-        assert "共 2 页" in first_page.text
+        assert first_page.json()["page"] == 1
+        assert first_page.json()["total"] == 31
+        assert first_page.json()["per_page"] == 25
         assert "Library paper 29" in first_page.text
-        assert "/account/settings#export-preferences" in first_page.text
-        assert 'name="journal_mode"' in first_page.text
-        assert 'name="style" :value="style"' in first_page.text
-        assert 'name="tag_name"' in first_page.text
-        second_page = await client.get("/library?page=2")
+        second_page = await client.get("/api/v1/items?page=2")
         assert second_page.status_code == 200
         assert "Library paper 00" in second_page.text
 
-        filtered = await client.get("/library?author=Alice&year=2025&keyword=imaging")
+        filtered = await client.get("/api/v1/items?author=Alice&year=2025&keyword=imaging")
         assert filtered.status_code == 200
         assert "Library paper 00" in filtered.text
         assert "Library paper 02" not in filtered.text
-        project_filter = await client.get(f"/library?project={project.id}&tag={tag.id}")
+        project_filter = await client.get(f"/api/v1/items?project={project.id}&tag={tag.id}")
         assert "Library paper 00" in project_filter.text
         assert "Library paper 02" not in project_filter.text
 
         tagged = await client.post(
-            "/library/bulk",
-            data={
-                "csrf_token": "test-csrf",
+            "/api/v1/items/bulk",
+            json={
                 "action": "add_tag",
                 "tag_name": "Priority",
-                "item_ids": selected[0].id,
+                "item_ids": [selected[0].id],
             },
-            follow_redirects=False,
         )
-        assert tagged.status_code == 303
+        assert tagged.status_code == 200
         priority = await db.scalar(select(Tag).where(Tag.name == "Priority"))
         assert priority is not None
         assert await db.get(ItemTag, (selected[0].id, priority.id)) is not None
 
         assigned = await client.post(
-            "/library/bulk",
-            data={
-                "csrf_token": "test-csrf",
+            "/api/v1/items/bulk",
+            json={
                 "action": "add_project",
                 "project_id": second_project.id,
                 "item_ids": [selected[0].id, selected[1].id],
             },
-            follow_redirects=False,
         )
-        assert assigned.status_code == 303
+        assert assigned.status_code == 200
         assert await db.get(ProjectItem, (second_project.id, selected[0].id)) is not None
         assert await db.get(ProjectItem, (second_project.id, selected[1].id)) is not None
 
         exported = await client.post(
-            "/library/bulk",
-            data={
-                "csrf_token": "test-csrf",
-                "action": "export_endnote",
+            "/api/v1/items/bibliography",
+            json={
+                "file_format": "endnote",
                 "item_ids": [selected[0].id, selected[1].id],
             },
         )
@@ -631,32 +612,30 @@ async def test_library_pagination_filters_and_bulk_actions(
         assert "This abstract should be optional." in exported.text
 
         native_checkbox_export = await client.post(
-            "/library/bulk",
-            data={
-                "csrf_token": "test-csrf",
-                "action": "export_endnote",
-                "item_ids": selected[0].id,
-                "include_abstract": ["false", "true"],
+            "/api/v1/items/bibliography",
+            json={
+                "file_format": "endnote",
+                "item_ids": [selected[0].id],
+                "include_abstract": True,
             },
         )
         assert native_checkbox_export.status_code == 200
         assert "This abstract should be optional." in native_checkbox_export.text
 
         exported_without_abstract = await client.post(
-            "/library/bulk",
-            data={
-                "csrf_token": "test-csrf",
-                "action": "export_endnote",
-                "item_ids": selected[0].id,
-                "include_abstract": "false",
+            "/api/v1/items/bibliography",
+            json={
+                "file_format": "endnote",
+                "item_ids": [selected[0].id],
+                "include_abstract": False,
             },
         )
         assert exported_without_abstract.status_code == 200
         assert "This abstract should be optional." not in exported_without_abstract.text
 
         pdf_archive = await client.post(
-            "/library/bulk",
-            data={"csrf_token": "test-csrf", "action": "download_pdfs", "item_ids": original.id},
+            "/api/v1/items/documents/archive",
+            json={"item_ids": [original.id]},
         )
         assert pdf_archive.status_code == 200
         assert pdf_archive.headers["content-type"] == "application/zip"
@@ -669,12 +648,10 @@ async def test_library_pagination_filters_and_bulk_actions(
             ]
 
         annotated_pdf_archive = await client.post(
-            "/library/bulk",
-            data={
-                "csrf_token": "test-csrf",
-                "action": "download_pdfs",
-                "item_ids": original.id,
-                "include_annotations": "true",
+            "/api/v1/items/documents/archive",
+            json={
+                "item_ids": [original.id],
+                "include_annotations": True,
             },
         )
         assert annotated_pdf_archive.status_code == 200
@@ -684,16 +661,14 @@ async def test_library_pagination_filters_and_bulk_actions(
         )
 
         deleted = await client.post(
-            "/library/bulk",
-            data={
-                "csrf_token": "test-csrf",
+            "/api/v1/items/bulk",
+            json={
                 "action": "delete_items",
-                "item_ids": selected[1].id,
-                "confirm_delete": "delete",
+                "item_ids": [selected[1].id],
+                "confirmation": "delete",
             },
-            follow_redirects=False,
         )
-        assert deleted.status_code == 303
+        assert deleted.status_code == 200
         assert await db.get(Item, selected[1].id) is None
     finally:
         await client.aclose()
@@ -709,14 +684,6 @@ async def test_pdf_import_batch_previews_before_creating_items(
         db, async_session_factory, tmp_path, monkeypatch
     )
     try:
-        import_page = await client.get("/bibliography/import")
-        assert import_page.status_code == 200
-        assert "通过标识符导入" in import_page.text
-        assert "文献记录文件" in import_page.text
-        assert "已发表 PDF" in import_page.text
-        assert 'data-method="manual"' in import_page.text
-        assert "IEEE Xplore" in import_page.text
-
         monkeypatch.setattr(
             "quirebase.library.imports.lookup_candidate",
             AsyncMock(
@@ -728,8 +695,7 @@ async def test_pdf_import_batch_previews_before_creating_items(
             ),
         )
         preview = await client.post(
-            "/imports/pdf/published",
-            data={"csrf_token": "test-csrf"},
+            "/api/v1/imports/pdfs",
             files=[
                 (
                     "pdfs",
@@ -745,7 +711,7 @@ async def test_pdf_import_batch_previews_before_creating_items(
                 ),
             ],
         )
-        assert preview.status_code == 200
+        assert preview.status_code == 202
         assert (
             await db.scalar(
                 select(func.count()).select_from(Item).where(Item.title.like("Article %"))
@@ -756,17 +722,15 @@ async def test_pdf_import_batch_previews_before_creating_items(
         batch = await db.scalar(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
         assert batch is not None
         await finish_pdf_import_preview(db, async_session_factory, batch, monkeypatch)
-        preview = await client.get(f"/imports/{batch.id}/preview")
+        preview = await client.get(f"/api/v1/imports/{batch.id}")
         assert "first.pdf" in preview.text
         assert "second.pdf" in preview.text
-        assert f"/bibliography/import/{batch.id}" in preview.text
 
         committed = await client.post(
-            f"/bibliography/import/{batch.id}",
-            data={"csrf_token": "test-csrf"},
-            follow_redirects=False,
+            f"/api/v1/imports/{batch.id}/commit",
+            json={},
         )
-        assert committed.status_code == 303
+        assert committed.status_code == 200
         first = await db.scalar(
             select(Item).options(selectinload(Item.revisions)).where(Item.doi == "10.1000/first")
         )
@@ -803,8 +767,7 @@ async def test_pdf_import_batch_keeps_successes_and_reports_failed_files(
     )
     try:
         preview = await client.post(
-            "/imports/pdf/published",
-            data={"csrf_token": "test-csrf"},
+            "/api/v1/imports/pdfs",
             files=[
                 (
                     "pdfs",
@@ -813,23 +776,21 @@ async def test_pdf_import_batch_keeps_successes_and_reports_failed_files(
                 ("pdfs", ("missing-doi.pdf", BytesIO(pdf_bytes()), "application/pdf")),
             ],
         )
-        assert preview.status_code == 200
+        assert preview.status_code == 202
         batch = await db.scalar(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
         assert batch is not None
         await finish_pdf_import_preview(db, async_session_factory, batch, monkeypatch)
-        preview = await client.get(f"/imports/{batch.id}/preview")
+        preview = await client.get(f"/api/v1/imports/{batch.id}")
         assert "valid.pdf" in preview.text
         assert "missing-doi.pdf" in preview.text
         assert '"code": "missing_doi"' in batch.errors
-        assert f"/bibliography/import/{batch.id}" in preview.text
         assert len(set(get_settings().object_dir.rglob("*.pdf")) - objects_before) == 1
 
         committed = await client.post(
-            f"/bibliography/import/{batch.id}",
-            data={"csrf_token": "test-csrf"},
-            follow_redirects=False,
+            f"/api/v1/imports/{batch.id}/commit",
+            json={},
         )
-        assert committed.status_code == 303
+        assert committed.status_code == 200
         article = await db.scalar(
             select(Item).options(selectinload(Item.revisions)).where(Item.doi == "10.1000/valid")
         )
@@ -853,8 +814,7 @@ async def test_pdf_import_batch_rejects_an_accessible_duplicate_doi(
     objects_before = set(get_settings().object_dir.rglob("*.pdf"))
     try:
         preview = await client.post(
-            "/imports/pdf/published",
-            data={"csrf_token": "test-csrf"},
+            "/api/v1/imports/pdfs",
             files=[
                 (
                     "pdfs",
@@ -866,15 +826,14 @@ async def test_pdf_import_batch_rejects_an_accessible_duplicate_doi(
                 )
             ],
         )
-        assert preview.status_code == 200
+        assert preview.status_code == 202
         batch = await db.scalar(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
         assert batch is not None
         await finish_pdf_import_preview(db, async_session_factory, batch, monkeypatch)
-        preview = await client.get(f"/imports/{batch.id}/preview")
+        preview = await client.get(f"/api/v1/imports/{batch.id}")
         assert "duplicate.pdf" in preview.text
         assert '"code": "existing_doi"' in batch.errors
         assert batch.records == "[]"
-        assert f'action="/bibliography/import/{batch.id}?csrf_token=' not in preview.text
         assert set(get_settings().object_dir.rglob("*.pdf")) == objects_before
     finally:
         await client.aclose()
@@ -900,8 +859,7 @@ async def test_discard_pdf_import_batch_removes_staged_objects(
     )
     try:
         preview = await client.post(
-            "/imports/pdf/published",
-            data={"csrf_token": "test-csrf"},
+            "/api/v1/imports/pdfs",
             files=[
                 (
                     "pdfs",
@@ -913,19 +871,14 @@ async def test_discard_pdf_import_batch_removes_staged_objects(
                 )
             ],
         )
-        assert preview.status_code == 200
+        assert preview.status_code == 202
         batch = await db.scalar(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
         assert batch is not None
         pending_key = json.loads(batch.records)[0]["_pdf"]["object_key"]
         assert len(set(get_settings().object_dir.rglob("*.pdf")) - objects_before) == 1
 
-        discarded = await client.post(
-            f"/bibliography/import/{batch.id}/discard",
-            data={"csrf_token": "test-csrf"},
-            follow_redirects=False,
-        )
-        assert discarded.status_code == 303
-        assert discarded.headers["location"] == "/bibliography/import"
+        discarded = await client.delete(f"/api/v1/imports/{batch.id}")
+        assert discarded.status_code == 200
         assert await db.get(ImportBatch, batch.id) is None
         fake_durable_operations.workflows.pop(batch.workflow_id)
         await document_workflows.delete_unreferenced_objects_step([pending_key])
@@ -955,8 +908,7 @@ async def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(
     try:
         for filename in ("first-copy.pdf", "second-copy.pdf"):
             preview = await client.post(
-                "/imports/pdf/published",
-                data={"csrf_token": "test-csrf"},
+                "/api/v1/imports/pdfs",
                 files=[
                     (
                         "pdfs",
@@ -968,7 +920,7 @@ async def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(
                     )
                 ],
             )
-            assert preview.status_code == 200
+            assert preview.status_code == 202
 
         batches = list(
             await db.scalars(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
@@ -987,22 +939,17 @@ async def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(
         assert first_path.is_file()
         assert second_path.is_file()
 
-        discarded = await client.post(
-            f"/bibliography/import/{batches[0].id}/discard",
-            data={"csrf_token": "test-csrf"},
-            follow_redirects=False,
-        )
-        assert discarded.status_code == 303
+        discarded = await client.delete(f"/api/v1/imports/{batches[0].id}")
+        assert discarded.status_code == 200
         await document_workflows.delete_unreferenced_objects_step([first_pdf["object_key"]])
         assert not first_path.exists()
         assert second_path.is_file()
 
         committed = await client.post(
-            f"/bibliography/import/{batches[1].id}",
-            data={"csrf_token": "test-csrf"},
-            follow_redirects=False,
+            f"/api/v1/imports/{batches[1].id}/commit",
+            json={},
         )
-        assert committed.status_code == 303
+        assert committed.status_code == 200
         imported = await db.scalar(
             select(Item)
             .options(selectinload(Item.revisions))
@@ -1127,8 +1074,7 @@ async def test_commit_pdf_import_batch_rechecks_doi_after_stale_preview(
     try:
         for filename in ("first-preview.pdf", "stale-preview.pdf"):
             preview = await client.post(
-                "/imports/pdf/published",
-                data={"csrf_token": "test-csrf"},
+                "/api/v1/imports/pdfs",
                 files=[
                     (
                         "pdfs",
@@ -1140,7 +1086,7 @@ async def test_commit_pdf_import_batch_rechecks_doi_after_stale_preview(
                     )
                 ],
             )
-            assert preview.status_code == 200
+            assert preview.status_code == 202
 
         batches = list(
             await db.scalars(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
@@ -1152,16 +1098,14 @@ async def test_commit_pdf_import_batch_rechecks_doi_after_stale_preview(
             await db.scalars(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
         )
         first = await client.post(
-            f"/bibliography/import/{batches[0].id}",
-            data={"csrf_token": "test-csrf"},
-            follow_redirects=False,
+            f"/api/v1/imports/{batches[0].id}/commit",
+            json={},
         )
-        assert first.status_code == 303
+        assert first.status_code == 200
 
         stale = await client.post(
-            f"/bibliography/import/{batches[1].id}",
-            data={"csrf_token": "test-csrf"},
-            follow_redirects=False,
+            f"/api/v1/imports/{batches[1].id}/commit",
+            json={},
         )
         assert stale.status_code == 409
         assert (

@@ -6,6 +6,32 @@ on:
   schedule:
     - cron: "23 3 * * 1"
 jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          version: "0.12.14"
+          python-version: "3.12"
+      - run: bun install --frozen-lockfile
+      - run: bun run api:check
+      - run: bun run i18n:check
+      - run: git diff --exit-code -- src/lib/locales
+      - run: bun run build
+      - run: bun run bundle:check
+      - run: bun run check
+      - run: bun run lint
+      - run: bun run test
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run test:e2e
+      - run: bun run test:e2e:fullstack
   sqlite:
     strategy:
       matrix:
@@ -25,11 +51,11 @@ jobs:
         with:
           bun-version: "1.4.2"
       - run: uv sync
-      - run: bun install --frozen-lockfile
-      - run: bun run build
+      - run: bun install --cwd frontend --frozen-lockfile
+      - run: bun run --cwd frontend build
       - run: uv run prek run --all-files
       - run: uv run mypy src/quirebase
-      - run: uv run pytest -q -m "not oa"
+      - run: uv run pytest -q -m "not oa" -n 4 --dist loadscope
       - run: uv run quirebase init-db
       - run: uv run quirebase doctor
       - run: uv build --all-packages --no-sources
@@ -84,8 +110,8 @@ jobs:
         with:
           bun-version: "1.4.2"
       - run: uv sync
-      - run: bun install --frozen-lockfile
-      - run: bun run build
+      - run: bun install --cwd frontend --frozen-lockfile
+      - run: bun run --cwd frontend build
       - name: Start Garage
         run: |
           docker run --detach --name quirebase-garage \
@@ -128,8 +154,8 @@ jobs:
           path: .cache/oa-pdfs
           key: oa-pdfs-${{ hashFiles('tests/oa_corpus.json') }}
       - run: uv sync
-      - run: bun install --frozen-lockfile
+      - run: bun install --cwd frontend --frozen-lockfile
+      - run: bun run --cwd frontend build
       - run: uv run python scripts/download-oa-corpus.py
       - run: uv run pytest -q -m oa
-      - run: bun run test:oa:pdfjs
       - run: uv run python scripts/check-metadata-providers.py

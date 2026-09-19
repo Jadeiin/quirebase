@@ -22,7 +22,6 @@ async def create_login_session(
     raw = generate_token(32)
     login = LoginSession(
         token_hash=token_hash(raw),
-        csrf_token=generate_token(24),
         user_id=user.id,
         expires_at=datetime.now(UTC) + timedelta(days=session_days),
     )

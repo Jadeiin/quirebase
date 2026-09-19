@@ -1,0 +1,3703 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-09-16 16:43+0800\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: en-US\n"
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Plural-Forms: \n"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "{count, plural, one {# active session} other {# active sessions}}"
+msgstr "{count, plural, one {# active session} other {# active sessions}}"
+
+#. js-lingui-explicit-id
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
+msgid "{count, plural, one {# annotation loaded} other {# annotations loaded}}"
+msgstr "{count, plural, one {# annotation loaded} other {# annotations loaded}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "{count, plural, one {# diagnostic} other {# diagnostics}}"
+msgstr "{count, plural, one {# diagnostic} other {# diagnostics}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+#: src/lib/features/admin/AdminProjects.svelte
+#: src/lib/features/library/Library.svelte
+#: src/lib/features/projects/Projects.svelte
+#: src/lib/features/tools/Tools.svelte
+msgid "{count, plural, one {# Item} other {# Items}}"
+msgstr "{count, plural, one {# Item} other {# Items}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminProjects.svelte
+msgid "{count, plural, one {# member} other {# members}}"
+msgstr "{count, plural, one {# member} other {# members}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "{count, plural, one {# record} other {# records}}"
+msgstr "{count, plural, one {# record} other {# records}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "{count, plural, one {# reply} other {# replies}}"
+msgstr "{count, plural, one {# reply} other {# replies}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "{count, plural, one {# result} other {# results}}"
+msgstr "{count, plural, one {# result} other {# results}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "{count, plural, one {# Tag} other {# Tags}}"
+msgstr "{count, plural, one {# Tag} other {# Tags}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "{count} selected"
+msgstr "{count} selected"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/files/ItemFilesSection.svelte
+msgid "{kind} · {size} KB"
+msgstr "{kind} · {size} KB"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "{size} MB"
+msgstr "{size} MB"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminItems.svelte
+msgid "{size} MB stored"
+msgstr "{size} MB stored"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "30 days"
+msgstr "30 days"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "365 days"
+msgstr "365 days"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "7 days"
+msgstr "7 days"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "90 days"
+msgstr "90 days"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Abbreviation only"
+msgstr "Abbreviation only"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+#: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/item/metadata/ItemMetadataSection.svelte
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Abstract"
+msgstr "Abstract"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminUsers.svelte
+msgid "accepted"
+msgstr "accepted"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Account"
+msgstr "Account"
+
+#. js-lingui-explicit-id
+#: src/lib/app/AppShell.svelte
+#: src/lib/features/account/Account.svelte
+msgid "Account action failed"
+msgstr "Account action failed"
+
+#. js-lingui-explicit-id
+#: src/lib/app/AppSidebar.svelte
+#: src/lib/app/navigation.ts
+msgid "Account settings"
+msgstr "Account settings"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Action"
+msgstr "Action"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminUsers.svelte
+msgid "active"
+msgstr "active"
+
+#. Project state.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Active"
+msgstr "Active"
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "active sessions"
+msgstr "active sessions"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminAudit.svelte
+msgid "Actor: {actor}"
+msgstr "Actor: {actor}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "Add"
+msgstr "Add"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/files/ItemFilesSection.svelte
+msgid "Add a PDF from URL"
+msgstr "Add a PDF from URL"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "Add a PDF revision to begin annotating."
+msgstr "Add a PDF revision to begin annotating."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/files/ItemFilesSection.svelte
+msgid "Add attachment"
+msgstr "Add attachment"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/files/ItemFilesSection.svelte
+msgid "Add attachment from URL"
+msgstr "Add attachment from URL"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Add condition"
+msgstr "Add condition"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+msgid "Add contributor"
+msgstr "Add contributor"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Add custom Citation Style"
+msgstr "Add custom Citation Style"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+msgid "Add custom field"
+msgstr "Add custom field"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+msgid "Add identifier"
+msgstr "Add identifier"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/discussion/ItemDiscussionSection.svelte
+msgid "Add message"
+msgstr "Add message"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Add or update member"
+msgstr "Add or update member"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/files/ItemFilesSection.svelte
+msgid "Add PDF revision"
+msgstr "Add PDF revision"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "Add tag"
+msgstr "Add tag"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Add Tag"
+msgstr "Add Tag"
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "Add Tags as you read, group related Items in Projects, and review duplicates only when needed."
+msgstr "Add Tags as you read, group related Items in Projects, and review duplicates only when needed."
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Add to Library"
+msgstr "Add to Library"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Add to Project"
+msgstr "Add to Project"
+
+#. js-lingui-explicit-id
+#: src/lib/app/AppSidebar.svelte
+#: src/lib/app/MobileNavigation.svelte
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Administration"
+msgstr "Administration"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/items/+page.svelte
+#: src/routes/(app)/admin/settings/+page.svelte
+#: src/routes/(app)/admin/users/+page.svelte
+msgid "Administration action failed"
+msgstr "Administration action failed"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/audit/+page.svelte
+#: src/routes/(app)/admin/items/+page.svelte
+#: src/routes/(app)/admin/projects/+page.svelte
+#: src/routes/(app)/admin/users/+page.svelte
+msgid "Administration pages"
+msgstr "Administration pages"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Administration sections"
+msgstr "Administration sections"
+
+#. User role.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/admin/AdminUsers.svelte
+msgid "Administrator"
+msgstr "Administrator"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/item/metadata/ItemMetadataSection.svelte
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Affiliation"
+msgstr "Affiliation"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryFilters.svelte
+msgid "All Projects"
+msgstr "All Projects"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "All revisions"
+msgstr "All revisions"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+msgid "All roles"
+msgstr "All roles"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryFilters.svelte
+msgid "All Tags"
+msgstr "All Tags"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Already in Library"
+msgstr "Already in Library"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "AND"
+msgstr "AND"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "Annotation pages"
+msgstr "Annotation pages"
+
+#. js-lingui-explicit-id
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
+msgid "Annotation sync failed"
+msgstr "Annotation sync failed"
+
+#. js-lingui-explicit-id
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
+msgid "Annotation visibility"
+msgstr "Annotation visibility"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+#: src/lib/features/item/ItemWorkspaceHeader.svelte
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Annotations"
+msgstr "Annotations"
+
+#. js-lingui-explicit-id
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
+msgid "Annotations to include"
+msgstr "Annotations to include"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Annotations: {state}"
+msgstr "Annotations: {state}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Another condition"
+msgstr "Another condition"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Any"
+msgstr "Any"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Any field"
+msgstr "Any field"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Any signed-in User can discover and join this Project."
+msgstr "Any signed-in User can discover and join this Project."
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Any state"
+msgstr "Any state"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Any status"
+msgstr "Any status"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Any visibility"
+msgstr "Any visibility"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "API Token revoked"
+msgstr "API Token revoked"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "API Tokens"
+msgstr "API Tokens"
+
+#. js-lingui-explicit-id
+#: src/lib/app/AppSidebar.svelte
+#: src/lib/app/MobileNavigation.svelte
+msgid "Appearance"
+msgstr "Appearance"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Apply"
+msgstr "Apply"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Apply filters"
+msgstr "Apply filters"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Archive Project"
+msgstr "Archive Project"
+
+#. Project state.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Archived"
+msgstr "Archived"
+
+#. PDF shape annotation kind.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "Arrow"
+msgstr "Arrow"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Associated files, annotations, and Project memberships will also be removed."
+msgstr "Associated files, annotations, and Project memberships will also be removed."
+
+#. File kind for a supplementary file.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "Attachment"
+msgstr "Attachment"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+#: src/routes/(app)/admin/audit/+page.svelte
+msgid "Audit"
+msgstr "Audit"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminAudit.svelte
+msgid "Audit log"
+msgstr "Audit log"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Author"
+msgstr "Author"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/item/metadata/ItemMetadataSection.svelte
+msgid "Authors"
+msgstr "Authors"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+#: src/lib/features/item/ItemActions.svelte
+msgid "Auto detect"
+msgstr "Auto detect"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Autoupdate"
+msgstr "Autoupdate"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workflows/WorkflowTray.svelte
+msgid "Background tasks"
+msgstr "Background tasks"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workflows/WorkflowTray.svelte
+msgid "Background tasks ({count})"
+msgstr "Background tasks ({count})"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Base endpoint"
+msgstr "Base endpoint"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Bibliography downloaded"
+msgstr "Bibliography downloaded"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Bibliography file"
+msgstr "Bibliography file"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Bibliography file options"
+msgstr "Bibliography file options"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "BibTeX and BibLaTeX options"
+msgstr "BibTeX and BibLaTeX options"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+msgid "BibTeX type"
+msgstr "BibTeX type"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Boolean operator"
+msgstr "Boolean operator"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Bring records into Quirebase from an identifier, a bibliography, or published PDFs."
+msgstr "Bring records into Quirebase from an identifier, a bibliography, or published PDFs."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "Browse the complete accessible taxonomy."
+msgstr "Browse the complete accessible taxonomy."
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Build a precise query, then review candidates before Import."
+msgstr "Build a precise query, then review candidates before Import."
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Built-in CSL styles and styles installed by you."
+msgstr "Built-in CSL styles and styles installed by you."
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Bulk action"
+msgstr "Bulk action"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/Library.svelte
+msgid "Bulk action completed"
+msgstr "Bulk action completed"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/Library.svelte
+msgid "Bulk action failed"
+msgstr "Bulk action failed"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Can edit"
+msgstr "Can edit"
+
+#. js-lingui-explicit-id
+#: src/lib/design/ConfirmDialog.svelte
+#: src/lib/design/PromptDialog.svelte
+#: src/lib/features/item/ItemActions.svelte
+msgid "Cancel"
+msgstr "Cancel"
+
+#. Workflow or record state.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Cancelled"
+msgstr "Cancelled"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Candidate Records"
+msgstr "Candidate Records"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Change password"
+msgstr "Change password"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Check for duplicates"
+msgstr "Check for duplicates"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Check records and diagnostics"
+msgstr "Check records and diagnostics"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/maintenance/+page.svelte
+msgid "Check stored objects"
+msgstr "Check stored objects"
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
+msgid "Checking invitation…"
+msgstr "Checking invitation…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Choose a new name for this Tag."
+msgstr "Choose a new name for this Tag."
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Choose a source"
+msgstr "Choose a source"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Choose action"
+msgstr "Choose action"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Choose how Quirebase looks and speaks to you."
+msgstr "Choose how Quirebase looks and speaks to you."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Choose PDF revisions to package with saved download preferences."
+msgstr "Choose PDF revisions to package with saved download preferences."
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Choose PDFs more than once to add them to the same batch."
+msgstr "Choose PDFs more than once to add them to the same batch."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Citation"
+msgstr "Citation"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Citation count"
+msgstr "Citation count"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+#: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/item/metadata/ItemMetadataSection.svelte
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Citation key"
+msgstr "Citation key"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Citation Key formula"
+msgstr "Citation Key formula"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Citation Key options"
+msgstr "Citation Key options"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Citation key updated"
+msgstr "Citation key updated"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Citation Style added"
+msgstr "Citation Style added"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Citation Style catalog"
+msgstr "Citation Style catalog"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Citation Style deleted"
+msgstr "Citation Style deleted"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Citation Styles"
+msgstr "Citation Styles"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/library/LibraryFilters.svelte
+msgid "Clear filters"
+msgstr "Clear filters"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Clear selection"
+msgstr "Clear selection"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Client connection guide"
+msgstr "Client connection guide"
+
+#. js-lingui-explicit-id
+#: src/lib/design/DialogCloseButton.svelte
+#: src/lib/design/PopoverCloseButton.svelte
+msgid "Close"
+msgstr "Close"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Close editor"
+msgstr "Close editor"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Collaboration"
+msgstr "Collaboration"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Collapse navigation sidebar by default"
+msgstr "Collapse navigation sidebar by default"
+
+#. js-lingui-explicit-id
+#: src/lib/app/AppSidebar.svelte
+msgid "Collapse sidebar"
+msgstr "Collapse sidebar"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Commit"
+msgstr "Commit"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Commit to Library"
+msgstr "Commit to Library"
+
+#. Import Batch state.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "Committed"
+msgstr "Committed"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Compare likely duplicate Items before deciding what to retain."
+msgstr "Compare likely duplicate Items before deciding what to retain."
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Configure defaults used by Library and Item export actions on this browser."
+msgstr "Configure defaults used by Library and Item export actions on this browser."
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Connect an HTTP API client"
+msgstr "Connect an HTTP API client"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Connect an MCP client"
+msgstr "Connect an MCP client"
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "Continue reading"
+msgstr "Continue reading"
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "Continue reading or open a research collection."
+msgstr "Continue reading or open a research collection."
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryFilters.svelte
+msgid "Contributor"
+msgstr "Contributor"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Copied to clipboard"
+msgstr "Copied to clipboard"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminUsers.svelte
+msgid "Copy this invitation URL now"
+msgstr "Copy this invitation URL now"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Copy this token now"
+msgstr "Copy this token now"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Copy to clipboard"
+msgstr "Copy to clipboard"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+msgid "Corresponding"
+msgstr "Corresponding"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Create"
+msgstr "Create"
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
+msgid "Create a password for"
+msgstr "Create a password for"
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
+msgid "Create account"
+msgstr "Create account"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Create an Item manually"
+msgstr "Create an Item manually"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/maintenance/+page.svelte
+msgid "Create backup"
+msgstr "Create backup"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminUsers.svelte
+msgid "Create invitation"
+msgstr "Create invitation"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Create Item"
+msgstr "Create Item"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Create Project"
+msgstr "Create Project"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Create revocable credentials for API and MCP clients."
+msgstr "Create revocable credentials for API and MCP clients."
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminUsers.svelte
+msgid "Create user"
+msgstr "Create user"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Created"
+msgstr "Created"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "CSL XML"
+msgstr "CSL XML"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Current password"
+msgstr "Current password"
+
+#. js-lingui-explicit-id
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
+msgid "Current PDF"
+msgstr "Current PDF"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Current session"
+msgstr "Current session"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+msgid "Custom fields"
+msgstr "Custom fields"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Danger zone"
+msgstr "Danger zone"
+
+#. js-lingui-explicit-id
+#: src/lib/app/navigation.ts
+msgid "Dark theme"
+msgstr "Dark theme"
+
+#. js-lingui-explicit-id
+#: src/lib/app/navigation.ts
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "Dashboard"
+msgstr "Dashboard"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminSettings.svelte
+msgid "Data directory: {path}"
+msgstr "Data directory: {path}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Data source"
+msgstr "Data source"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminSettings.svelte
+msgid "Database: {url}"
+msgstr "Database: {url}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Date"
+msgstr "Date"
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "Date unknown"
+msgstr "Date unknown"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Default citation format"
+msgstr "Default citation format"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Default CSL style"
+msgstr "Default CSL style"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Defaults"
+msgstr "Defaults"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminItems.svelte
+#: src/lib/features/item/discussion/ItemDiscussionSection.svelte
+#: src/lib/features/item/files/ItemFilesSection.svelte
+#: src/lib/features/tools/Tools.svelte
+msgid "Delete"
+msgstr "Delete"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Delete Item"
+msgstr "Delete Item"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Delete Item permanently"
+msgstr "Delete Item permanently"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/item/[itemId]/(workspace)/files/+page.svelte
+msgid "Delete permanently"
+msgstr "Delete permanently"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Delete Project"
+msgstr "Delete Project"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Delete Style"
+msgstr "Delete Style"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Delete Tag"
+msgstr "Delete Tag"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Delete this Citation Style?"
+msgstr "Delete this Citation Style?"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/item/[itemId]/(workspace)/files/+page.svelte
+msgid "Delete this file permanently?"
+msgstr "Delete this file permanently?"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Delete this Tag from all accessible Items?"
+msgstr "Delete this Tag from all accessible Items?"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Description"
+msgstr "Description"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Diagnostics"
+msgstr "Diagnostics"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminUsers.svelte
+msgid "Disable user"
+msgstr "Disable user"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminUsers.svelte
+msgid "disabled"
+msgstr "disabled"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Disabled"
+msgstr "Disabled"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Discard"
+msgstr "Discard"
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "Discover"
+msgstr "Discover"
+
+#. js-lingui-explicit-id
+#: src/lib/app/navigation.ts
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Discovery"
+msgstr "Discovery"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Discovery result pages"
+msgstr "Discovery result pages"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/discussion/ItemDiscussionSection.svelte
+#: src/lib/features/item/ItemWorkspaceHeader.svelte
+msgid "Discussion"
+msgstr "Discussion"
+
+#. js-lingui-explicit-id
+#: src/lib/design/Toast.svelte
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
+#: src/lib/features/workflows/WorkflowJobRow.svelte
+msgid "Dismiss"
+msgstr "Dismiss"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Document bundle downloaded"
+msgstr "Document bundle downloaded"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Document download options"
+msgstr "Document download options"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/item/[itemId]/(workspace)/files/+page.svelte
+msgid "Document processing"
+msgstr "Document processing"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/item/[itemId]/(workspace)/files/+page.svelte
+msgid "Document processing completed"
+msgstr "Document processing completed"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/item/[itemId]/(workspace)/files/+page.svelte
+msgid "Document processing failed"
+msgstr "Document processing failed"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Documents"
+msgstr "Documents"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+msgid "DOI"
+msgstr "DOI"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "DOI policy"
+msgstr "DOI policy"
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "DOI, files, or PDFs"
+msgstr "DOI, files, or PDFs"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "DOI, PMID, or arXiv ID"
+msgstr "DOI, PMID, or arXiv ID"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/files/ItemFilesSection.svelte
+#: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
+msgid "Download"
+msgstr "Download"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/files/ItemFilesSection.svelte
+msgid "Download and add attachment"
+msgstr "Download and add attachment"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/files/ItemFilesSection.svelte
+msgid "Download and add PDF"
+msgstr "Download and add PDF"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "Download backup"
+msgstr "Download backup"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Download bundle"
+msgstr "Download bundle"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/library/BulkActions.svelte
+msgid "Download documents"
+msgstr "Download documents"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Download file"
+msgstr "Download file"
+
+#. js-lingui-explicit-id
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
+msgid "Download original"
+msgstr "Download original"
+
+#. js-lingui-explicit-id
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
+msgid "Download with annotations"
+msgstr "Download with annotations"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Duplicate group {number}"
+msgstr "Duplicate group {number}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Duplicate review"
+msgstr "Duplicate review"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminWorkflows.svelte
+msgid "Durable workflows"
+msgstr "Durable workflows"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Edit metadata"
+msgstr "Edit metadata"
+
+#. Project member role.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Editor"
+msgstr "Editor"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/item/metadata/ItemMetadataSection.svelte
+msgid "Editors"
+msgstr "Editors"
+
+#. PDF shape annotation kind.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "Ellipse"
+msgstr "Ellipse"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminUsers.svelte
+msgid "Enable user"
+msgstr "Enable user"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Encoding"
+msgstr "Encoding"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "excluded"
+msgstr "excluded"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Excluded fields"
+msgstr "Excluded fields"
+
+#. js-lingui-explicit-id
+#: src/lib/app/AppSidebar.svelte
+msgid "Expand sidebar"
+msgstr "Expand sidebar"
+
+#. API Token or invitation state.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "Expired"
+msgstr "Expired"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Expires"
+msgstr "Expires"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Expires after"
+msgstr "Expires after"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Export"
+msgstr "Export"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/library/BulkActions.svelte
+msgid "Export bibliography"
+msgstr "Export bibliography"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/settings/+page.svelte
+msgid "Export lifetime in hours"
+msgstr "Export lifetime in hours"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Export preferences"
+msgstr "Export preferences"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Export settings"
+msgstr "Export settings"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "External links"
+msgstr "External links"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "External metadata"
+msgstr "External metadata"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "External source {number}"
+msgstr "External source {number}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Extract metadata and keep the papers together in one Import Batch."
+msgstr "Extract metadata and keep the papers together in one Import Batch."
+
+#. Workflow or record state.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Failed"
+msgstr "Failed"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminOverview.svelte
+msgid "Failed workflows"
+msgstr "Failed workflows"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Fetch one record from DOI, PubMed, arXiv, and other scholarly providers."
+msgstr "Fetch one record from DOI, PubMed, arXiv, and other scholarly providers."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+msgid "Field name"
+msgstr "Field name"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "File format"
+msgstr "File format"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/files/ItemFilesSection.svelte
+#: src/lib/features/item/ItemWorkspaceHeader.svelte
+msgid "Files"
+msgstr "Files"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/tools/Tools.svelte
+msgid "Filter Tags"
+msgstr "Filter Tags"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryFilters.svelte
+msgid "Filters"
+msgstr "Filters"
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "Find saved research"
+msgstr "Find saved research"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+msgid "First name"
+msgstr "First name"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryResults.svelte
+msgid "First page"
+msgstr "First page"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Format"
+msgstr "Format"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Free more horizontal space for reading and metadata work."
+msgstr "Free more horizontal space for reading and metadata work."
+
+#. PDF annotation kind: a text box placed directly on the page.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "Free text"
+msgstr "Free text"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "From year"
+msgstr "From year"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Full title"
+msgstr "Full title"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "General citation options"
+msgstr "General citation options"
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "Get started"
+msgstr "Get started"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Has PDF"
+msgstr "Has PDF"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Header"
+msgstr "Header"
+
+#. PDF annotation kind: text markup.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "Highlight"
+msgstr "Highlight"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+msgid "Identifier"
+msgstr "Identifier"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Identifier, file, or PDFs"
+msgstr "Identifier, file, or PDFs"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/settings/+page.svelte
+msgid "IEEE API key"
+msgstr "IEEE API key"
+
+#. js-lingui-explicit-id
+#: src/lib/app/navigation.ts
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Import"
+msgstr "Import"
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "Import Items"
+msgstr "Import Items"
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "Import more"
+msgstr "Import more"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Import preview"
+msgstr "Import preview"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Import preview failed"
+msgstr "Import preview failed"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Import preview pages"
+msgstr "Import preview pages"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Import processing"
+msgstr "Import processing"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Import processing completed"
+msgstr "Import processing completed"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Import processing failed"
+msgstr "Import processing failed"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Import published PDFs"
+msgstr "Import published PDFs"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Include"
+msgstr "Include"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Include abstract"
+msgstr "Include abstract"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Include additional identifiers"
+msgstr "Include additional identifiers"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Include annotations in PDF downloads"
+msgstr "Include annotations in PDF downloads"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Include custom fields"
+msgstr "Include custom fields"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Include supplements in PDF downloads"
+msgstr "Include supplements in PDF downloads"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "included"
+msgstr "included"
+
+#. PDF annotation kind: a freehand drawing.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "Ink"
+msgstr "Ink"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Install Citation Style"
+msgstr "Install Citation Style"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Invalid Citation Key formula"
+msgstr "Invalid Citation Key formula"
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "Invalid username or password."
+msgstr "Invalid username or password."
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/users/+page.svelte
+msgid "Invitation created"
+msgstr "Invitation created"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminUsers.svelte
+msgid "Invitations"
+msgstr "Invitations"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminUsers.svelte
+msgid "Invite user"
+msgstr "Invite user"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/item/metadata/ItemMetadataSection.svelte
+msgid "Issue"
+msgstr "Issue"
+
+#. js-lingui-explicit-id
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
+msgid "Item"
+msgstr "Item"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
+msgid "Item action failed"
+msgstr "Item action failed"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Item actions"
+msgstr "Item actions"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+#: src/routes/(app)/admin/items/+page.svelte
+msgid "Item deleted"
+msgstr "Item deleted"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Item removed from Project"
+msgstr "Item removed from Project"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "Item Tags"
+msgstr "Item Tags"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Item thumbnail"
+msgstr "Item thumbnail"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemWorkspaceHeader.svelte
+msgid "Item workspace"
+msgstr "Item workspace"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminItems.svelte
+#: src/lib/features/admin/AdminOverview.svelte
+#: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/admin/items/+page.svelte
+msgid "Items"
+msgstr "Items"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Join"
+msgstr "Join"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Join open research collections from this instance."
+msgstr "Join open research collections from this instance."
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
+msgid "Join Quirebase"
+msgstr "Join Quirebase"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Journal abbreviation"
+msgstr "Journal abbreviation"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Journal title"
+msgstr "Journal title"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+msgid "JSON or text value"
+msgstr "JSON or text value"
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "Keep your Library useful"
+msgstr "Keep your Library useful"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryFilters.svelte
+msgid "Keyword"
+msgstr "Keyword"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/item/metadata/ItemMetadataSection.svelte
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Keywords"
+msgstr "Keywords"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Language"
+msgstr "Language"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+msgid "Last name or organization"
+msgstr "Last name or organization"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryResults.svelte
+msgid "Last page"
+msgstr "Last page"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Leave Project"
+msgstr "Leave Project"
+
+#. js-lingui-explicit-id
+#: src/lib/app/navigation.ts
+#: src/lib/features/dashboard/Dashboard.svelte
+#: src/lib/features/item/ItemWorkspaceHeader.svelte
+#: src/lib/features/library/Library.svelte
+msgid "Library"
+msgstr "Library"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Library maintenance"
+msgstr "Library maintenance"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Library order"
+msgstr "Library order"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryResults.svelte
+msgid "Library pages"
+msgstr "Library pages"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Library tools"
+msgstr "Library tools"
+
+#. js-lingui-explicit-id
+#: src/lib/app/navigation.ts
+msgid "Light theme"
+msgstr "Light theme"
+
+#. PDF shape annotation kind.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "Line"
+msgstr "Line"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemSectionState.svelte
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
+msgid "Loading"
+msgstr "Loading"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminSectionState.svelte
+msgid "Loading {section}…"
+msgstr "Loading {section}…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Loading account…"
+msgstr "Loading account…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
+msgid "Loading annotations…"
+msgstr "Loading annotations…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "Loading dashboard…"
+msgstr "Loading dashboard…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryResults.svelte
+msgid "Loading Library…"
+msgstr "Loading Library…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Loading Project…"
+msgstr "Loading Project…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Loading Projects…"
+msgstr "Loading Projects…"
+
+#. js-lingui-explicit-id
+#: src/lib/app/AppShell.svelte
+msgid "Loading Quirebase…"
+msgstr "Loading Quirebase…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
+msgid "Loading reader configuration…"
+msgstr "Loading reader configuration…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Locale"
+msgstr "Locale"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Look up an identifier"
+msgstr "Look up an identifier"
+
+#. js-lingui-explicit-id
+#: src/lib/app/AppSidebar.svelte
+msgid "Main navigation"
+msgstr "Main navigation"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+#: src/lib/features/admin/AdminShell.svelte
+#: src/routes/(app)/admin/maintenance/+page.svelte
+msgid "Maintenance"
+msgstr "Maintenance"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/maintenance/+page.svelte
+msgid "Maintenance operation completed"
+msgstr "Maintenance operation completed"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/maintenance/+page.svelte
+msgid "Maintenance operation failed"
+msgstr "Maintenance operation failed"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/maintenance/+page.svelte
+msgid "Maintenance operation started"
+msgstr "Maintenance operation started"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/maintenance/+page.svelte
+msgid "Maintenance: {operation}"
+msgstr "Maintenance: {operation}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Make owner"
+msgstr "Make owner"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Manage Tags"
+msgstr "Manage Tags"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Manual creation"
+msgstr "Manual creation"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Match criteria"
+msgstr "Match criteria"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/settings/+page.svelte
+msgid "Maximum attachment size in bytes"
+msgstr "Maximum attachment size in bytes"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/settings/+page.svelte
+msgid "Maximum PDF size in bytes"
+msgstr "Maximum PDF size in bytes"
+
+#. User role.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/admin/AdminUsers.svelte
+msgid "Member"
+msgstr "Member"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Members"
+msgstr "Members"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Merge Tags"
+msgstr "Merge Tags"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Messages"
+msgstr "Messages"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemWorkspaceHeader.svelte
+#: src/lib/features/item/metadata/ItemMetadataSection.svelte
+msgid "Metadata"
+msgstr "Metadata"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/settings/+page.svelte
+msgid "Metadata contact email"
+msgstr "Metadata contact email"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Metadata sources"
+msgstr "Metadata sources"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Metadata synchronized"
+msgstr "Metadata synchronized"
+
+#. js-lingui-explicit-id
+#: src/lib/app/MobileNavigation.svelte
+msgid "Mobile navigation"
+msgstr "Mobile navigation"
+
+#. js-lingui-explicit-id
+#: src/lib/app/MobileNavigation.svelte
+#: src/lib/features/item/ItemActions.svelte
+msgid "More"
+msgstr "More"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Move every assignment from the source Tag into the target Tag."
+msgstr "Move every assignment from the source Tag into the target Tag."
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Name"
+msgstr "Name"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/settings/+page.svelte
+msgid "NASA ADS token"
+msgstr "NASA ADS token"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/settings/+page.svelte
+msgid "NCBI API key"
+msgstr "NCBI API key"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "New Item metadata"
+msgstr "New Item metadata"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+#: src/lib/features/admin/AdminUsers.svelte
+msgid "New password"
+msgstr "New password"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminUsers.svelte
+msgid "New password for {username}"
+msgstr "New password for {username}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+#: src/lib/features/projects/Projects.svelte
+msgid "New Project"
+msgstr "New Project"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "New tag"
+msgstr "New tag"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "New Tag name"
+msgstr "New Tag name"
+
+#. js-lingui-explicit-id
+#: src/lib/design/Pagination.svelte
+msgid "Next"
+msgstr "Next"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryResults.svelte
+msgid "Next page"
+msgstr "Next page"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "No abstract available."
+msgstr "No abstract available."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "No annotations."
+msgstr "No annotations."
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "No API Tokens."
+msgstr "No API Tokens."
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminAudit.svelte
+#: src/lib/features/admin/AdminOverview.svelte
+msgid "No audit events."
+msgstr "No audit events."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "No available projects."
+msgstr "No available projects."
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "No Citation Styles match this search."
+msgstr "No Citation Styles match this search."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+msgid "No contributors."
+msgstr "No contributors."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+msgid "No custom fields."
+msgstr "No custom fields."
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "No description"
+msgstr "No description"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/discussion/ItemDiscussionSection.svelte
+msgid "No discussion messages."
+msgstr "No discussion messages."
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "No duplicate groups found."
+msgstr "No duplicate groups found."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "No external links."
+msgstr "No external links."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/files/ItemFilesSection.svelte
+msgid "No files."
+msgstr "No files."
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminUsers.svelte
+msgid "No invitations."
+msgstr "No invitations."
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryResults.svelte
+msgid "No Items found."
+msgstr "No Items found."
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "No Items in this Project."
+msgstr "No Items in this Project."
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminItems.svelte
+msgid "No Items."
+msgstr "No Items."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "No keywords."
+msgstr "No keywords."
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "No maintenance workflows."
+msgstr "No maintenance workflows."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "No new Tag suggestions."
+msgstr "No new Tag suggestions."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "No note text"
+msgstr "No note text"
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "No projects yet."
+msgstr "No projects yet."
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "No Projects yet."
+msgstr "No Projects yet."
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminProjects.svelte
+msgid "No projects."
+msgstr "No projects."
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "No public Projects are available to join."
+msgstr "No public Projects are available to join."
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "No sessions."
+msgstr "No sessions."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "No tags"
+msgstr "No tags"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "No Tags match this filter."
+msgstr "No Tags match this filter."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+msgid "No upstream identifiers."
+msgstr "No upstream identifiers."
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminUsers.svelte
+msgid "No users."
+msgstr "No users."
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminWorkflows.svelte
+msgid "No workflows."
+msgstr "No workflows."
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "NOT"
+msgstr "NOT"
+
+#. js-lingui-explicit-id
+#: src/routes/+error.svelte
+msgid "Not found"
+msgstr "Not found"
+
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "Not generated"
+msgstr "Not generated"
+
+#. PDF annotation kind: a text comment attached to a region.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "Note"
+msgstr "Note"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Omit"
+msgstr "Omit"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Omit when DOI exists"
+msgstr "Omit when DOI exists"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Only invited members can access this Project."
+msgstr "Only invited members can access this Project."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "Open"
+msgstr "Open"
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "Open an Item to start your reading history."
+msgstr "Open an Item to start your reading history."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "Open annotation workspace"
+msgstr "Open annotation workspace"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Open in Library"
+msgstr "Open in Library"
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "Open Library"
+msgstr "Open Library"
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "Open Library tools"
+msgstr "Open Library tools"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Open metadata editor"
+msgstr "Open metadata editor"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/settings/+page.svelte
+msgid "OpenAlex API key"
+msgstr "OpenAlex API key"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "OpenAPI"
+msgstr "OpenAPI"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "Operation"
+msgstr "Operation"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "OR"
+msgstr "OR"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemWorkspaceHeader.svelte
+msgid "Organize"
+msgstr "Organize"
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "Organize a collection"
+msgstr "Organize a collection"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Output sorting"
+msgstr "Output sorting"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/item/ItemWorkspaceHeader.svelte
+#: src/routes/(app)/admin/+page.svelte
+msgid "Overview"
+msgstr "Overview"
+
+#. Project member role.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Owner"
+msgstr "Owner"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "page"
+msgstr "page"
+
+#. js-lingui-explicit-id
+#: src/lib/design/Pagination.svelte
+#: src/lib/features/library/LibraryResults.svelte
+msgid "Page {page} of {pageCount}"
+msgstr "Page {page} of {pageCount}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/item/metadata/ItemMetadataSection.svelte
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Pages"
+msgstr "Pages"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+#: src/lib/features/admin/AdminUsers.svelte
+#: src/lib/features/auth/Invitation.svelte
+#: src/lib/features/auth/Login.svelte
+msgid "Password"
+msgstr "Password"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Password changed"
+msgstr "Password changed"
+
+#. File kind for a PDF revision.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "PDF"
+msgstr "PDF"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+msgid "PDF availability"
+msgstr "PDF availability"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "PDF files"
+msgstr "PDF files"
+
+#. js-lingui-explicit-id
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
+msgid "PDF Reader"
+msgstr "PDF Reader"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "PDF revision"
+msgstr "PDF revision"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "PDF revisions"
+msgstr "PDF revisions"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "PDF scanned for a DOI"
+msgstr "PDF scanned for a DOI"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminUsers.svelte
+msgid "pending"
+msgstr "pending"
+
+#. Workflow or record state.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Pending"
+msgstr "Pending"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminOverview.svelte
+msgid "Pending invitations"
+msgstr "Pending invitations"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/Library.svelte
+#: src/routes/(app)/admin/items/+page.svelte
+msgid "Permanently delete"
+msgstr "Permanently delete"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/Library.svelte
+msgid "Permanently delete the selected Items?"
+msgstr "Permanently delete the selected Items?"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/items/+page.svelte
+msgid "Permanently delete this Item?"
+msgstr "Permanently delete this Item?"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Permanently delete this Project?"
+msgstr "Permanently delete this Project?"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Permissions"
+msgstr "Permissions"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Personal settings"
+msgstr "Personal settings"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+msgid "Place published"
+msgstr "Place published"
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "Please check the submitted values."
+msgstr "Please check the submitted values."
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "Please sign in again."
+msgstr "Please sign in again."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/discussion/ItemDiscussionSection.svelte
+msgid "Post message"
+msgstr "Post message"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Prefer abbreviation"
+msgstr "Prefer abbreviation"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Preferences"
+msgstr "Preferences"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Preferences are automatically saved to your browser."
+msgstr "Preferences are automatically saved to your browser."
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Preparing uploaded PDFs…"
+msgstr "Preparing uploaded PDFs…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Preparing…"
+msgstr "Preparing…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Preserve bibitem case"
+msgstr "Preserve bibitem case"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Preview bibliography"
+msgstr "Preview bibliography"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Preview Citation Key"
+msgstr "Preview Citation Key"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Preview metadata"
+msgstr "Preview metadata"
+
+#. js-lingui-explicit-id
+#: src/lib/design/Pagination.svelte
+msgid "Previous"
+msgstr "Previous"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryResults.svelte
+msgid "Previous page"
+msgstr "Previous page"
+
+#. Project visibility or annotation scope.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/projects/Projects.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Private"
+msgstr "Private"
+
+#. js-lingui-explicit-id
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
+msgid "Private annotations"
+msgstr "Private annotations"
+
+#. js-lingui-explicit-id
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
+msgid "Private annotations and project: {name}"
+msgstr "Private annotations and project: {name}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
+msgid "Private annotations only"
+msgstr "Private annotations only"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryFilters.svelte
+msgid "Project"
+msgstr "Project"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Project action failed"
+msgstr "Project action failed"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Project archived"
+msgstr "Project archived"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Project lifecycle"
+msgstr "Project lifecycle"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Project member removed"
+msgstr "Project member removed"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Project member saved"
+msgstr "Project member saved"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Project name"
+msgstr "Project name"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Project ownership transferred"
+msgstr "Project ownership transferred"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Project restored"
+msgstr "Project restored"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Project settings"
+msgstr "Project settings"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Project settings saved"
+msgstr "Project settings saved"
+
+#. js-lingui-explicit-id
+#: src/lib/app/navigation.ts
+#: src/lib/features/admin/AdminProjects.svelte
+#: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/dashboard/Dashboard.svelte
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/projects/Projects.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/admin/projects/+page.svelte
+msgid "Projects"
+msgstr "Projects"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+#: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/item/ItemMetadataForm.svelte
+msgid "Provider"
+msgstr "Provider"
+
+#. Project visibility or annotation scope.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/projects/Projects.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Public"
+msgstr "Public"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Public Projects"
+msgstr "Public Projects"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+#: src/lib/features/item/metadata/ItemMetadataSection.svelte
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Publication"
+msgstr "Publication"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+#: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/item/metadata/ItemMetadataSection.svelte
+msgid "Publication date"
+msgstr "Publication date"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Publication details"
+msgstr "Publication details"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+msgid "Publication title"
+msgstr "Publication title"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/item/metadata/ItemMetadataSection.svelte
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Publisher"
+msgstr "Publisher"
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "Quick actions"
+msgstr "Quick actions"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Quirebase will not inspect your Library until you start the check."
+msgstr "Quirebase will not inspect your Library until you start the check."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/files/ItemFilesSection.svelte
+msgid "Read"
+msgstr "Read"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Read only"
+msgstr "Read only"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Read PDF"
+msgstr "Read PDF"
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "Reading"
+msgstr "Reading"
+
+#. Workflow or record state.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "Ready"
+msgstr "Ready"
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "recent additions"
+msgstr "recent additions"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminOverview.svelte
+msgid "Recent audit events"
+msgstr "Recent audit events"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "Recent operations"
+msgstr "Recent operations"
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "Recently added"
+msgstr "Recently added"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/maintenance/+page.svelte
+msgid "Recommend Tags for all Items"
+msgstr "Recommend Tags for all Items"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Record"
+msgstr "Record"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Record tools"
+msgstr "Record tools"
+
+#. PDF shape annotation kind.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "Rectangle"
+msgstr "Rectangle"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/item/metadata/ItemMetadataSection.svelte
+msgid "Reference type"
+msgstr "Reference type"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "Refresh"
+msgstr "Refresh"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Refresh this record from an upstream identifier."
+msgstr "Refresh this record from an upstream identifier."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Regenerate citation key"
+msgstr "Regenerate citation key"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/maintenance/+page.svelte
+msgid "Reindex all Items"
+msgstr "Reindex all Items"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Relevance"
+msgstr "Relevance"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+#: src/lib/features/import/ImportWorkspace.svelte
+#: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Remove"
+msgstr "Remove"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Rename"
+msgstr "Rename"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Rename Tag"
+msgstr "Rename Tag"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Rescan PDF for DOI"
+msgstr "Rescan PDF for DOI"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminUsers.svelte
+msgid "Reset password"
+msgstr "Reset password"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Reset to defaults"
+msgstr "Reset to defaults"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Restore Project"
+msgstr "Restore Project"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Retry"
+msgstr "Retry"
+
+#. js-lingui-explicit-id
+#: src/routes/+error.svelte
+msgid "Return to Quirebase"
+msgstr "Return to Quirebase"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Review and import"
+msgstr "Review and import"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Review duplicates, maintain Tags, and install Citation Styles."
+msgstr "Review duplicates, maintain Tags, and install Citation Styles."
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Review the preview"
+msgstr "Review the preview"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Revoke all sessions"
+msgstr "Revoke all sessions"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Revoke current session"
+msgstr "Revoke current session"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Revoke session"
+msgstr "Revoke session"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminUsers.svelte
+msgid "Revoke sessions"
+msgstr "Revoke sessions"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Revoke token"
+msgstr "Revoke token"
+
+#. API Token or session state.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "Revoked"
+msgstr "Revoked"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Role"
+msgstr "Role"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminUsers.svelte
+msgid "Role for {username}"
+msgstr "Role for {username}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Row {row}"
+msgstr "Row {row}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Run a check when you are ready"
+msgstr "Run a check when you are ready"
+
+#. Workflow or record state.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Running"
+msgstr "Running"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminSettings.svelte
+msgid "Runtime settings"
+msgstr "Runtime settings"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Same DOI"
+msgstr "Same DOI"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Same title"
+msgstr "Same title"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Save member"
+msgstr "Save member"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata/ItemMetadataSection.svelte
+msgid "Save metadata"
+msgstr "Save metadata"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Save only when you approve"
+msgstr "Save only when you approve"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Save Project settings"
+msgstr "Save Project settings"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminUsers.svelte
+msgid "Save role"
+msgstr "Save role"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminSettings.svelte
+msgid "Save settings"
+msgstr "Save settings"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
+msgid "Saved"
+msgstr "Saved"
+
+#. js-lingui-explicit-id
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
+msgid "Saving annotation…"
+msgstr "Saving annotation…"
+
+#. js-lingui-explicit-id
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
+msgid "Saving reply…"
+msgstr "Saving reply…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Scanning…"
+msgstr "Scanning…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/library/LibraryFilters.svelte
+msgid "Search"
+msgstr "Search"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Search Citation Styles"
+msgstr "Search Citation Styles"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Search conditions"
+msgstr "Search conditions"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Search Discovery"
+msgstr "Search Discovery"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Search failed"
+msgstr "Search failed"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Search field"
+msgstr "Search field"
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "Search Library"
+msgstr "Search Library"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Search results will appear here."
+msgstr "Search results will appear here."
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "Search scholarly sources"
+msgstr "Search scholarly sources"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Search styles"
+msgstr "Search styles"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryFilters.svelte
+msgid "Search title, author, Tag, or full text"
+msgstr "Search title, author, Tag, or full text"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/Library.svelte
+msgid "Search, select, organize, and export your scholarly Items."
+msgstr "Search, select, organize, and export your scholarly Items."
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Searching…"
+msgstr "Searching…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryResults.svelte
+msgid "Select"
+msgstr "Select"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryResults.svelte
+msgid "Select {name}"
+msgstr "Select {name}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Select a Tag"
+msgstr "Select a Tag"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Select Project"
+msgstr "Select Project"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryResults.svelte
+msgid "Select this page"
+msgstr "Select this page"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+msgid "Separate Keywords with semicolons"
+msgstr "Separate Keywords with semicolons"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Session"
+msgstr "Session"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/settings/+page.svelte
+msgid "Session lifetime in days"
+msgstr "Session lifetime in days"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Session revoked"
+msgstr "Session revoked"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Sessions"
+msgstr "Sessions"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Sessions, API Tokens, locale, and password."
+msgstr "Sessions, API Tokens, locale, and password."
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+#: src/routes/(app)/admin/settings/+page.svelte
+msgid "Settings"
+msgstr "Settings"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/settings/+page.svelte
+msgid "Settings saved"
+msgstr "Settings saved"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Shared collections with explicit membership and roles."
+msgstr "Shared collections with explicit membership and roles."
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Login.svelte
+msgid "Sign in"
+msgstr "Sign in"
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Login.svelte
+msgid "Sign in to your research workspace."
+msgstr "Sign in to your research workspace."
+
+#. js-lingui-explicit-id
+#: src/lib/app/AppSidebar.svelte
+#: src/lib/features/account/Account.svelte
+msgid "Sign out"
+msgstr "Sign out"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Signed in"
+msgstr "Signed in"
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Login.svelte
+msgid "Signing in…"
+msgstr "Signing in…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Similar title"
+msgstr "Similar title"
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "Something went wrong. Try again."
+msgstr "Something went wrong. Try again."
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Sort"
+msgstr "Sort"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Source Tag"
+msgstr "Source Tag"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Stage many records from a reference manager export."
+msgstr "Stage many records from a reference manager export."
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Stage PDFs"
+msgstr "Stage PDFs"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workflows/WorkflowJobRow.svelte
+msgid "Starting…"
+msgstr "Starting…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "State"
+msgstr "State"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Status"
+msgstr "Status"
+
+#. PDF annotation kind: text markup.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "Strikeout"
+msgstr "Strikeout"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Style name"
+msgstr "Style name"
+
+#. Workflow or record state.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Succeeded"
+msgstr "Succeeded"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "Suggestions derived from metadata and the latest ready PDF."
+msgstr "Suggestions derived from metadata and the latest ready PDF."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Supplements"
+msgstr "Supplements"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Supplements: {state}"
+msgstr "Supplements: {state}"
+
+#. js-lingui-explicit-id
+#: src/lib/app/navigation.ts
+msgid "System theme"
+msgstr "System theme"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryFilters.svelte
+msgid "Tag"
+msgstr "Tag"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Tag action failed"
+msgstr "Tag action failed"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Tag deleted"
+msgstr "Tag deleted"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "Tag matrix"
+msgstr "Tag matrix"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Tag name"
+msgstr "Tag name"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Tag pages"
+msgstr "Tag pages"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/item/[itemId]/(workspace)/organize/+page.svelte
+msgid "Tag recommendation"
+msgstr "Tag recommendation"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/item/[itemId]/(workspace)/organize/+page.svelte
+msgid "Tag recommendation failed"
+msgstr "Tag recommendation failed"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "Tag Recommendations"
+msgstr "Tag Recommendations"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/item/[itemId]/(workspace)/organize/+page.svelte
+msgid "Tag recommendations updated"
+msgstr "Tag recommendations updated"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Tag renamed"
+msgstr "Tag renamed"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Tags"
+msgstr "Tags"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "Tags currently assigned to this Item."
+msgstr "Tags currently assigned to this Item."
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Tags merged"
+msgstr "Tags merged"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Target Tag"
+msgstr "Target Tag"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Target type"
+msgstr "Target type"
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "The external service is temporarily unavailable."
+msgstr "The external service is temporarily unavailable."
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "The match criteria changed. Start a new check to refresh these results."
+msgstr "The match criteria changed. Start a new check to refresh these results."
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "The request conflicts with the current state."
+msgstr "The request conflicts with the current state."
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "The request could not be completed."
+msgstr "The request could not be completed."
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "The requested file range is not available."
+msgstr "The requested file range is not available."
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "The requested resource was not found."
+msgstr "The requested resource was not found."
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "The uploaded content is too large."
+msgstr "The uploaded content is too large."
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "This action is not available."
+msgstr "This action is not available."
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/Library.svelte
+#: src/routes/(app)/admin/items/+page.svelte
+msgid "This cannot be undone."
+msgstr "This cannot be undone."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "This cannot be undone. Delete this Item permanently?"
+msgstr "This cannot be undone. Delete this Item permanently?"
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "This Document is not ready yet."
+msgstr "This Document is not ready yet."
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "This file type is not supported."
+msgstr "This file type is not supported."
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "This Import Batch cannot be changed in its current state."
+msgstr "This Import Batch cannot be changed in its current state."
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "This Import Batch has already been committed."
+msgstr "This Import Batch has already been committed."
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "This invitation can no longer be used."
+msgstr "This invitation can no longer be used."
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
+msgid "This invitation is invalid or expired."
+msgstr "This invitation is invalid or expired."
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "This invitation is invalid or has expired."
+msgstr "This invitation is invalid or has expired."
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "This Project membership changed. Refresh and try again."
+msgstr "This Project membership changed. Refresh and try again."
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "This record changed. Refresh and try again."
+msgstr "This record changed. Refresh and try again."
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "This request came from an unexpected origin."
+msgstr "This request came from an unexpected origin."
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "This Tag conflicts with an existing Tag."
+msgstr "This Tag conflicts with an existing Tag."
+
+#. js-lingui-explicit-id
+#: src/routes/+error.svelte
+msgid "This workspace route does not exist."
+msgstr "This workspace route does not exist."
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+#: src/lib/features/discovery/Discovery.svelte
+#: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/item/metadata/ItemMetadataSection.svelte
+msgid "Title"
+msgstr "Title"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Title, author, DOI, or topic"
+msgstr "Title, author, DOI, or topic"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "To year"
+msgstr "To year"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Token name"
+msgstr "Token name"
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "Too many requests. Try again later."
+msgstr "Too many requests. Try again later."
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "Too many sign-in attempts. Try again later."
+msgstr "Too many sign-in attempts. Try again later."
+
+#. js-lingui-explicit-id
+#: src/lib/app/navigation.ts
+#: src/lib/features/tools/Tools.svelte
+msgid "Tools"
+msgstr "Tools"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryResults.svelte
+msgid "Try a different Library Search."
+msgstr "Try a different Library Search."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Type"
+msgstr "Type"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Type the Project name to confirm. This cannot be undone."
+msgstr "Type the Project name to confirm. This cannot be undone."
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
+msgid "Unable to accept invitation"
+msgstr "Unable to accept invitation"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Unable to add Citation Style"
+msgstr "Unable to add Citation Style"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Unable to commit Import"
+msgstr "Unable to commit Import"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Unable to create Item"
+msgstr "Unable to create Item"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Unable to create Project"
+msgstr "Unable to create Project"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Unable to create token"
+msgstr "Unable to create token"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Unable to delete Citation Style"
+msgstr "Unable to delete Citation Style"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Unable to discard Import"
+msgstr "Unable to discard Import"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Unable to join Project"
+msgstr "Unable to join Project"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminSectionState.svelte
+msgid "Unable to load administration."
+msgstr "Unable to load administration."
+
+#. js-lingui-explicit-id
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
+msgid "Unable to load annotations"
+msgstr "Unable to load annotations"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "Unable to load annotations."
+msgstr "Unable to load annotations."
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Unable to load Import preview"
+msgstr "Unable to load Import preview"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Unable to load Projects."
+msgstr "Unable to load Projects."
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "Unable to load the dashboard."
+msgstr "Unable to load the dashboard."
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryResults.svelte
+msgid "Unable to load the Library."
+msgstr "Unable to load the Library."
+
+#. js-lingui-explicit-id
+#: src/routes/+error.svelte
+msgid "Unable to open Quirebase"
+msgstr "Unable to open Quirebase"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemSectionState.svelte
+msgid "Unable to open this Item section."
+msgstr "Unable to open this Item section."
+
+#. js-lingui-explicit-id
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
+msgid "Unable to open this PDF."
+msgstr "Unable to open this PDF."
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Unable to open this Project."
+msgstr "Unable to open this Project."
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Unable to refresh Import preview"
+msgstr "Unable to refresh Import preview"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Unable to retry Import"
+msgstr "Unable to retry Import"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/item/[itemId]/(workspace)/discussion/+page.svelte
+#: src/routes/(app)/item/[itemId]/(workspace)/files/+page.svelte
+#: src/routes/(app)/item/[itemId]/(workspace)/metadata/+page.svelte
+#: src/routes/(app)/item/[itemId]/(workspace)/organize/+page.svelte
+msgid "Unable to save changes"
+msgstr "Unable to save changes"
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Login.svelte
+msgid "Unable to sign in"
+msgstr "Unable to sign in"
+
+#. PDF annotation kind: text markup.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "Underline"
+msgstr "Underline"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminItems.svelte
+#: src/lib/features/dashboard/Dashboard.svelte
+#: src/lib/features/item/ItemWorkspaceHeader.svelte
+#: src/lib/features/library/LibraryResults.svelte
+msgid "Unknown authors"
+msgstr "Unknown authors"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+#: src/lib/features/tools/Tools.svelte
+msgid "Unknown contributors"
+msgstr "Unknown contributors"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Unknown publication"
+msgstr "Unknown publication"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Untitled"
+msgstr "Untitled"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Upload a bibliography"
+msgstr "Upload a bibliography"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/files/ItemFilesSection.svelte
+msgid "Upload attachment"
+msgstr "Upload attachment"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Upload failed"
+msgstr "Upload failed"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/files/ItemFilesSection.svelte
+msgid "Upload PDF"
+msgstr "Upload PDF"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+msgid "Upstream identifiers"
+msgstr "Upstream identifiers"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "URL policy"
+msgstr "URL policy"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+msgid "URLs"
+msgstr "URLs"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/files/ItemFilesSection.svelte
+msgid "Use as Graphical Abstract"
+msgstr "Use as Graphical Abstract"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Use ASCII characters only"
+msgstr "Use ASCII characters only"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Use at least 12 characters for a strong password."
+msgstr "Use at least 12 characters for a strong password."
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Use Streamable HTTP. Never put an API Token in the URL."
+msgstr "Use Streamable HTTP. Never put an API Token in the URL."
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Use the metadata editor when no import source is available."
+msgstr "Use the metadata editor when no import source is available."
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Use the versioned JSON API and send your API Token in the Authorization header."
+msgstr "Use the versioned JSON API and send your API Token in the Authorization header."
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/users/+page.svelte
+msgid "User created"
+msgstr "User created"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/users/+page.svelte
+msgid "User disabled"
+msgstr "User disabled"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/users/+page.svelte
+msgid "User enabled"
+msgstr "User enabled"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/users/+page.svelte
+msgid "User password reset"
+msgstr "User password reset"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/users/+page.svelte
+msgid "User role saved"
+msgstr "User role saved"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/users/+page.svelte
+msgid "User sessions revoked"
+msgstr "User sessions revoked"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminUsers.svelte
+#: src/lib/features/auth/Login.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Username"
+msgstr "Username"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminOverview.svelte
+#: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/admin/AdminUsers.svelte
+#: src/routes/(app)/admin/users/+page.svelte
+msgid "Users"
+msgstr "Users"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Users, storage, audit, settings, and durable operations."
+msgstr "Users, storage, audit, settings, and durable operations."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Uses the defaults saved in your Account export preferences."
+msgstr "Uses the defaults saved in your Account export preferences."
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "View all"
+msgstr "View all"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "View Items"
+msgstr "View Items"
+
+#. Project member role.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Viewer"
+msgstr "Viewer"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/projects/Projects.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Visibility"
+msgstr "Visibility"
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "visible Projects"
+msgstr "visible Projects"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/item/metadata/ItemMetadataSection.svelte
+msgid "Volume"
+msgstr "Volume"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Volume / Issue"
+msgstr "Volume / Issue"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Without PDF"
+msgstr "Without PDF"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminWorkflows.svelte
+msgid "Workflow"
+msgstr "Workflow"
+
+#. js-lingui-explicit-id
+#: src/lib/api/workflows.ts
+#: src/lib/features/workflows/center.svelte.ts
+msgid "Workflow failed"
+msgstr "Workflow failed"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+#: src/routes/(app)/admin/workflows/+page.svelte
+msgid "Workflows"
+msgstr "Workflows"
+
+#. js-lingui-explicit-id
+#: src/lib/app/AppSidebar.svelte
+#: src/lib/features/library/Library.svelte
+msgid "Workspace"
+msgstr "Workspace"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+#: src/lib/features/library/LibraryFilters.svelte
+msgid "Year"
+msgstr "Year"
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "You do not have permission to perform this action."
+msgstr "You do not have permission to perform this action."
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "Your library is empty. Import a paper to begin."
+msgstr "Your library is empty. Import a paper to begin."
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Your Projects"
+msgstr "Your Projects"

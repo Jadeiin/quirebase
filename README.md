@@ -10,7 +10,7 @@ Quirebase is an AGPL-3.0-only, self-hosted collaborative research library.
 
 ## Development
 
-Requirements: Python 3.12+, `uv` 0.12.14+, and Bun 1.4+ (or Node.js 22+ with npm) for building the bundled PDF.js assets.
+Requirements: Python 3.12+, `uv` 0.12.14+, and Bun 1.4+ (or Node.js 22+ with npm) for building the Svelte application and bundled PDFium asset.
 
 For a quick local test, run:
 
@@ -18,20 +18,22 @@ For a quick local test, run:
 ./scripts/dev.sh
 ```
 
-This prepares dependencies and assets, initializes the development database, creates the
-`admin` account with password `quirebase-dev` on the first run, and starts both the web server
-and worker at <http://127.0.0.1:9060>. Override the defaults with
-`QUIREBASE_DEV_HOST`, `QUIREBASE_DEV_PORT`, `QUIREBASE_DEV_USERNAME`, and
-`QUIREBASE_DEV_PASSWORD`. Set `QUIREBASE_DEV_SKIP_SETUP=1` to skip dependency installation and
-asset rebuilding on later runs.
+This prepares dependencies, initializes the development database, creates the
+`admin` account with password `quirebase-dev` on the first run, and starts Vite with HMR at
+<http://127.0.0.1:5173>, FastAPI at <http://127.0.0.1:9060>, and the durable worker. Vite proxies
+API requests to FastAPI, and the development external origin is set to the Vite origin so
+cookie-authenticated mutations keep the production Origin policy. Override the defaults with
+`QUIREBASE_DEV_HOST`, `QUIREBASE_DEV_PORT`, `QUIREBASE_DEV_FRONTEND_PORT`,
+`QUIREBASE_DEV_USERNAME`, and `QUIREBASE_DEV_PASSWORD`. Set `QUIREBASE_DEV_SKIP_SETUP=1` to skip
+dependency installation on later runs.
 
 For manual setup:
 
 ```sh
 uv sync
 uv run prek install --hook-type pre-commit --hook-type pre-push --hook-type commit-msg
-bun install --frozen-lockfile
-bun run build
+bun install --cwd frontend --frozen-lockfile
+bun run --cwd frontend build
 uv run quirebase init-db
 uv run quirebase create-admin
 uv run quirebase serve
@@ -53,9 +55,10 @@ QUIREBASE_DATABASE_URL=postgresql://quirebase:password@localhost/quirebase uv ru
 
 Quirebase exposes authenticated library, project, document-metadata, annotation, tag, discussion,
 Discovery and citation capabilities through a versioned JSON HTTP API at `/api/v1/` and MCP
-Streamable HTTP at `/mcp/`. Both surfaces share response contracts and the same ordinary User
-authorization rules; interactive OpenAPI documentation is available at `/docs`. They include reads and
-ordinary User mutations; it deliberately excludes administrator operations, file bytes and the
+Streamable HTTP at `/mcp/`. The curated MCP tool surface is generated from the OpenAPI contract and
+executes those same API operations, so both surfaces share response contracts and ordinary User
+authorization rules; interactive OpenAPI documentation is available at `/docs`. They include reads
+and ordinary User mutations; MCP deliberately excludes administrator operations, file bytes and the
 currently unstructured PDF full text. A signed-in User can create and revoke their own time-limited
 API Tokens under **Account settings → MCP and API Tokens**; that page also shows the deployment's
 HTTP API and MCP endpoints plus an MCP client configuration example. Operators may alternatively use the CLI:
@@ -68,9 +71,12 @@ The plaintext token is shown once. It has the User's current Quirebase permissio
 tool scopes. Do not place it in a URL; send `Authorization: Bearer qb_api_...`. Inspect or revoke
 tokens with `list-api-tokens USERNAME` and `revoke-api-token USERNAME TOKEN_ID`.
 
+API errors return a stable JSON object with `code` and `message`, plus optional `fields` for request
+validation and `meta` for structured conflict details.
+
 ## PDF architecture
 
-- PDF.js is bundled locally and renders the document, text and annotation layers in the browser.
+- EmbedPDF's Svelte viewer components and bundled PDFium engine render the document, text and annotation layers in the browser.
 - PyMuPDF validates PDFs, extracts text, creates thumbnails, and writes database-backed highlights and notes into temporary export copies.
 - Original PDFs are content-addressed and never modified.
 
@@ -87,8 +93,10 @@ Quirebase is licensed under AGPL-3.0-only; see `LICENSE`. PyMuPDF is used under 
 
 ## Completed scope
 
-Quirebase includes local accounts and invitations, administrator/member and project owner/editor/viewer permissions, audited login attempts, per-session and all-session logout, durable login throttling, Item metadata/custom fields, DOI/PMID/arXiv/OpenAlex/ISBN lookup with preview, multi-source Discovery (online scholarly search), automatic DOI extraction from published PDFs, tags, dedicated project workspaces, duplicate-review and tag-management tools, discussions, PDF revisions, supplementary attachments, bulk citation/PDF export and owner-confirmed deletion, PDF.js reading with annotation detail panels, scoped annotations, PyMuPDF exports, dialect-native Library Search, staged BibTeX/RIS Import, audit events, resumable jobs, metrics, backup/restore, and integrity checks.
+Quirebase includes local accounts and invitations, administrator/member and project owner/editor/viewer permissions, audited login attempts, per-session and all-session logout, durable login throttling, Item metadata/custom fields, DOI/PMID/arXiv/OpenAlex/ISBN lookup with preview, multi-source Discovery (online scholarly search), automatic DOI extraction from published PDFs, tags, dedicated project workspaces, duplicate-review and tag-management tools, discussions, PDF revisions, supplementary attachments, bulk citation/PDF export and owner-confirmed deletion, EmbedPDF reading with annotation detail panels, scoped annotations, PyMuPDF exports, dialect-native Library Search, staged BibTeX/RIS Import, audit events, a global background-task tray for resumable jobs, metrics, backup/restore, and integrity checks.
 
 Operational instructions are in `docs/DEPLOYMENT.md`. Deferred integrations and their security gates are recorded in `docs/adr/0001-deferred-integrations.md`.
 
-The real open-access PDF validation suite uses separately downloaded, checksum-pinned PMC open-access PDFs. See `docs/TESTING.md`; run `uv run python scripts/download-oa-corpus.py`, `uv run pytest -q -m oa`, and `bun run test:oa:pdfjs`.
+The real open-access PDF validation suite uses separately downloaded, checksum-pinned PMC
+open-access PDFs. See `docs/TESTING.md`; run
+`uv run python scripts/download-oa-corpus.py` and `uv run pytest -q -m oa`.

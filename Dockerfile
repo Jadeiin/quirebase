@@ -1,12 +1,11 @@
 # syntax=docker/dockerfile:1.7
 
-# Bundled UI assets (EmbedPDF/PDFium, Alpine.js, zxcvbn) for the wheel's static directory.
+# Build the standalone Svelte application without writing into the Python source tree.
 FROM oven/bun:1.4.2 AS assets
-WORKDIR /build
-COPY package.json bun.lock ./
+WORKDIR /build/frontend
+COPY frontend/package.json frontend/bun.lock ./
 RUN bun install --frozen-lockfile
-COPY scripts/build-assets.mjs ./scripts/build-assets.mjs
-COPY src/quirebase/assets ./src/quirebase/assets
+COPY frontend ./
 RUN bun run build
 
 # The project environment lives at the same path in both stages so the copied
@@ -26,9 +25,9 @@ COPY packages/rubrica/pyproject.toml packages/rubrica/pyproject.toml
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-workspace --extra postgres --extra citation
 
-# Non-editable workspace install: the wheel bundles migrations, docs and static assets.
+# Non-editable workspace install: Hatch includes frontend/build in the application wheel.
 COPY . .
-COPY --from=assets /build/src/quirebase/static ./src/quirebase/static
+COPY --from=assets /build/frontend/build ./frontend/build
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-editable --extra postgres --extra citation
 

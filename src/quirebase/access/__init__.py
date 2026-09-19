@@ -18,6 +18,7 @@ from quirebase.access.projects import (
     require_project_member,
     visible_projects,
 )
+from quirebase.access.tags import visible_tags_query
 
 __all__ = [
     "can_delete_item",
@@ -36,4 +37,5 @@ __all__ = [
     "require_revision",
     "visible_items_query",
     "visible_projects",
+    "visible_tags_query",
 ]

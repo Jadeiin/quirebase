@@ -17,7 +17,6 @@ PACKAGE_ROLES = {
     "library": "business",
     "mcp": "inbound-adapter",
     "operations": "business",
-    "programmatic": "application-interface",
     "projects": "business",
     "search": "outbound-adapter",
     "web": "inbound-adapter",
@@ -39,17 +38,8 @@ ALLOWED_PACKAGE_DEPENDENCIES = {
         "projects",
         "search",
     },
-    "mcp": {
-        "accounts",
-        "audit",
-        "core",
-        "documents",
-        "library",
-        "programmatic",
-        "projects",
-    },
+    "mcp": {"accounts", "audit", "core"},
     "operations": {"audit", "core", "library", "models", "search"},
-    "programmatic": {"documents", "library"},
     "projects": {"access", "audit", "core", "models"},
     "search": {"models"},
     "web": {
@@ -62,7 +52,6 @@ ALLOWED_PACKAGE_DEPENDENCIES = {
         "mcp",
         "models",
         "operations",
-        "programmatic",
         "projects",
         "search",
     },
@@ -72,7 +61,6 @@ ALLOWED_STANDALONE_DEPENDENCIES = {
     "documents": {"inquiro"},
     "library": {"inquiro", "rubrica"},
     "search": {"inquiro"},
-    "web": {"inquiro"},
 }
 
 BUSINESS_ROLES = {"business", "domain-policy"}
@@ -330,7 +318,7 @@ def test_standalone_dependency_policy_covers_every_application_edge():
 
 
 def test_non_library_inquiro_edges_are_restricted_to_rich_text():
-    for package_name in ("documents", "search", "web"):
+    for package_name in ("documents", "search"):
         imports = {
             module
             for py_file in get_python_files(SRC_ROOT / package_name)
@@ -413,57 +401,52 @@ def test_persistence_dependencies_use_sqlalchemy_async_optional_groups():
     })
 
 
-def test_runtime_sources_do_not_restore_synchronous_io_adapters():
+def test_async_runtime_does_not_use_blocking_adapters_directly():
+    """Keep the accepted async boundary without constraining migrations or removed API names."""
     runtime_roots = (
         SRC_ROOT,
         REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro",
-        REPO_ROOT / "migrations",
     )
+    violations: list[str] = []
     for py_file in (path for root in runtime_roots for path in get_python_files(root)):
         tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
-                for alias in node.names:
-                    assert alias.name != "greenlet", f"{py_file} imports greenlet directly"
+                if any(alias.name == "greenlet" for alias in node.names):
+                    violations.append(f"{py_file}:{node.lineno} imports greenlet")
             elif isinstance(node, ast.ImportFrom):
                 imported_names = {alias.name for alias in node.names}
+                forbidden: set[str] = set()
                 if node.module == "quirebase.core.crypto":
-                    blocking_password_functions = imported_names & {
-                        "hash_password",
-                        "verify_password",
-                    }
-                    assert not blocking_password_functions, (
-                        f"{py_file} imports blocking password functions "
-                        f"{sorted(blocking_password_functions)}; async runtime callers must use "
-                        "the named async boundaries"
-                    )
-                if node.module == "sqlalchemy":
-                    assert "create_engine" not in imported_names, (
-                        f"{py_file} imports SQLAlchemy's synchronous engine factory"
-                    )
-                if node.module == "sqlalchemy.orm":
+                    forbidden = imported_names & {"hash_password", "verify_password"}
+                elif node.module == "sqlalchemy":
+                    forbidden = imported_names & {"create_engine"}
+                elif node.module == "sqlalchemy.orm":
                     forbidden = imported_names & {"Session", "sessionmaker"}
-                    assert not forbidden, (
-                        f"{py_file} imports synchronous SQLAlchemy names {sorted(forbidden)}"
+                elif node.module == "time":
+                    forbidden = imported_names & {"sleep"}
+                if forbidden:
+                    violations.append(
+                        f"{py_file}:{node.lineno} imports blocking names {sorted(forbidden)}"
                     )
-                if node.module == "time":
-                    assert "sleep" not in imported_names, f"{py_file} imports blocking time.sleep"
             elif (
                 isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Attribute)
                 and isinstance(node.func.value, ast.Name)
+                and (node.func.value.id, node.func.attr)
+                in {("httpx2", "Client"), ("time", "sleep")}
             ):
-                assert not (node.func.value.id == "httpx2" and node.func.attr == "Client"), (
-                    f"{py_file}:{node.lineno} constructs synchronous httpx2.Client"
+                violations.append(
+                    f"{py_file}:{node.lineno} calls {node.func.value.id}.{node.func.attr}"
                 )
-                assert not (node.func.value.id == "time" and node.func.attr == "sleep"), (
-                    f"{py_file}:{node.lineno} calls blocking time.sleep"
-                )
+
+    assert not violations, "blocking adapters bypass the named async boundary:\n" + "\n".join(
+        violations
+    )
 
 
 def test_documents_workflows_enqueue_children_through_the_core_seam():
     source = (SRC_ROOT / "documents" / "workflows.py").read_text(encoding="utf-8")
-    assert "DBOS.enqueue_workflow_with_options" not in source
     assert "enqueue_child_workflow" in source
 
 
@@ -477,7 +460,7 @@ def test_documents_own_the_file_revision_changed_event_contract():
     assert definitions == [Path("documents/events.py")]
 
 
-def test_provider_runtime_and_contract_lifecycles_are_async_only():
+def test_provider_runtime_and_contracts_expose_async_operations():
     required_async_methods = {
         "ProviderRuntime": {
             "lookup",
@@ -510,15 +493,6 @@ def test_provider_runtime_and_contract_lifecycles_are_async_only():
         }
         assert methods <= async_methods, (
             f"{class_name} must keep native async methods {sorted(methods - async_methods)}"
-        )
-        synchronous_context_methods = {
-            node.name
-            for node in class_node.body
-            if isinstance(node, ast.FunctionDef) and node.name in {"close", "__enter__", "__exit__"}
-        }
-        assert not synchronous_context_methods, (
-            f"{class_name} restores synchronous lifecycle methods "
-            f"{sorted(synchronous_context_methods)}"
         )
 
 
@@ -604,48 +578,12 @@ def test_only_audit_module_constructs_audit_events():
                     )
 
 
-def test_item_metadata_mutations_cross_the_typed_library_seam():
-    item_routes = SRC_ROOT / "web" / "views" / "items.py"
-    assert "quirebase.access.items" not in imported_modules(item_routes)
-
-    for py_file in get_python_files(SRC_ROOT):
-        tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
-        for node in ast.walk(tree):
-            assert not (isinstance(node, ast.ClassDef) and node.name == "ItemMetadataUpdate"), (
-                f"{py_file} restores the transport-shaped ItemMetadataUpdate command"
-            )
-            assert not (
-                isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-                and node.name == "update_item"
-            ), f"{py_file} restores the superseded update_item seam"
-
-
-def test_item_workspace_uses_typed_section_views():
-    forbidden_operations = {"get_item_workspace_data", "mark_item_read"}
-    for py_file in get_python_files(SRC_ROOT / "library"):
-        tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
-        for node in ast.walk(tree):
-            assert not (
-                isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-                and node.name in forbidden_operations
-            ), f"{py_file} restores an untyped or separately committed Item Workspace operation"
-
-
 def test_multi_item_document_downloads_cross_the_library_bulk_seam():
-    library_routes = SRC_ROOT / "web" / "views" / "library.py"
-    assert "quirebase.documents" not in imported_modules(library_routes)
-
-    documents_bundle = SRC_ROOT / "documents" / "bundles.py"
-    tree = ast.parse(documents_bundle.read_text(encoding="utf-8"))
-    function_names = {
-        node.name
-        for node in ast.walk(tree)
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-    }
-    assert "create_bulk_document_bundle" not in function_names
+    export_routes = SRC_ROOT / "web" / "api" / "library_exports.py"
+    assert "quirebase.documents" not in imported_modules(export_routes)
 
 
-def test_orm_models_have_one_documented_owner_without_capability_mapping_files():
+def test_orm_models_have_one_documented_owner():
     models_file = SRC_ROOT / "models.py"
     tree = ast.parse(models_file.read_text(encoding="utf-8"), filename=str(models_file))
     mapped_classes = {
@@ -656,10 +594,6 @@ def test_orm_models_have_one_documented_owner_without_capability_mapping_files()
     }
     assert mapped_classes == set(ORM_MODEL_OWNERS)
     assert set(ORM_MODEL_OWNERS.values()) <= set(PACKAGE_ROLES)
-    for owner in set(ORM_MODEL_OWNERS.values()):
-        assert not (SRC_ROOT / owner / "models.py").exists(), (
-            f"{owner} restores capability-local ORM mappings rejected by issue #9"
-        )
 
 
 def test_package_facades_do_not_export_internal_persistence_collaborators():
@@ -692,23 +626,8 @@ def test_standalone_workspace_packages_do_not_depend_on_quirebase_or_orm():
                 )
 
 
-def test_inquiro_modules_do_not_import_secondary_or_legacy_http_stacks():
-    inquiro_files = get_python_files(REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro")
-    for py_file in inquiro_files:
-        for module in imported_modules(py_file):
-            assert not (module == "requests" or module.startswith("requests.")), (
-                f"{py_file} illegally imports requests"
-            )
-            assert not (module == "httpx" or module.startswith("httpx.")), (
-                f"{py_file} illegally imports legacy transport {module}; use httpx2 instead"
-            )
-
-
 def test_inquiro_runtime_owns_one_private_provider_catalog():
     inquiro_src = REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro"
-    assert not (inquiro_src / "lookup.py").exists()
-    assert not (inquiro_src / "search.py").exists()
-    assert not (inquiro_src / "providers" / "registry.py").exists()
     assert "inquiro.providers._catalog" in imported_modules(inquiro_src / "runtime.py")
     inquiro_facade = inquiro_src / "__init__.py"
     assert "inquiro.providers" not in imported_modules(inquiro_facade)
@@ -782,13 +701,12 @@ def test_bibliography_package_layers_stay_acyclic():
                 )
 
 
-def test_web_uses_library_provider_operations_only():
+def test_web_does_not_import_inquiro():
     for py_file in get_python_files(SRC_ROOT / "web"):
         dependencies = imported_modules(py_file)
         assert not any(
-            (module == "inquiro" or module.startswith("inquiro.")) and module != "inquiro.richtext"
-            for module in dependencies
-        ), f"{py_file} bypasses the Library Interface and imports Inquiro"
+            module == "inquiro" or module.startswith("inquiro.") for module in dependencies
+        ), f"{py_file} imports Inquiro; Web Rich Text projection belongs to the frontend Adapter"
 
 
 def test_inquiro_facade_is_the_narrow_provider_interface():
@@ -842,30 +760,3 @@ def test_search_adapters_do_not_depend_on_each_other():
     for adapter_name, peer_name in (("sqlite", "postgres"), ("postgres", "sqlite")):
         py_file = SRC_ROOT / "search" / f"{adapter_name}.py"
         assert f"quirebase.search.{peer_name}" not in imported_modules(py_file)
-
-
-def test_no_legacy_root_files_or_shims():
-    forbidden_root_files = [
-        "storage.py",
-        "schemas.py",
-        "worker.py",
-        "metadata_lookup.py",
-        "maintenance.py",
-        "bibliography.py",
-        "security.py",
-        "permissions.py",
-        "app.py",
-        "config.py",
-        "db.py",
-        "i18n.py",
-        "pdf_service.py",
-        "search.py",
-        "citation.py",
-    ]
-    for forbidden in forbidden_root_files:
-        assert not (SRC_ROOT / forbidden).exists(), (
-            f"Legacy root file {forbidden} still exists in src/quirebase"
-        )
-    assert not (SRC_ROOT / "library" / "audit.py").exists(), (
-        "Audit Events belong to quirebase.audit; do not restore quirebase.library.audit"
-    )

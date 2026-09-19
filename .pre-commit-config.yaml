@@ -36,7 +36,7 @@ repos:
         pass_filenames: false
       - id: pytest-fast
         name: pytest fast suite
-        entry: uv run pytest -q -m "not oa"
+        entry: uv run pytest -q -m "not oa" -n 4 --dist loadscope
         language: system
         pass_filenames: false
         stages: [pre-push]

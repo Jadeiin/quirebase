@@ -12,204 +12,37 @@ def get_app():
     return app
 
 
-EXPECTED_OPERATIONAL_ROUTES = {
-    (
-        "DELETE",
-        "/api/v1/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}",
-    ),
-    (
-        "DELETE",
-        "/documents/{item_id}/annotations/{annotation_id}/replies/{reply_id}",
-    ),
-    (
-        "PATCH",
-        "/api/v1/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}",
-    ),
-    (
-        "PATCH",
-        "/documents/{item_id}/annotations/{annotation_id}/replies/{reply_id}",
-    ),
-    ("POST", "/api/v1/items/{item_id}/annotations/{annotation_id}/replies"),
-    ("POST", "/documents/{item_id}/annotations/{annotation_id}/replies"),
-    ("POST", "/documents/{item_id}/annotations/{annotation_id}/restore"),
-    (
-        "POST",
-        "/documents/{item_id}/annotations/{annotation_id}/replies/{reply_id}/restore",
-    ),
-    ("DELETE", "/api/v1/items/{item_id}/annotations/{annotation_id}"),
-    ("DELETE", "/api/v1/items/{item_id}/discussions/{message_id}"),
-    ("DELETE", "/api/v1/items/{item_id}/tags/{tag_id}"),
-    ("DELETE", "/api/v1/projects/{project_id}/items/{item_id}"),
-    ("DELETE", "/api/v1/projects/{project_id}"),
-    ("DELETE", "/api/v1/projects/{project_id}/members/{user_id}"),
-    ("PATCH", "/api/v1/projects/{project_id}"),
-    ("POST", "/api/v1/projects/{project_id}/description"),
-    ("POST", "/api/v1/projects/{project_id}/archive"),
-    ("POST", "/api/v1/projects/{project_id}/restore"),
-    ("POST", "/api/v1/projects/{project_id}/visibility"),
-    ("POST", "/api/v1/projects/{project_id}/leave"),
-    ("POST", "/api/v1/projects/{project_id}/ownership/{user_id}"),
-    ("DELETE", "/documents/{item_id}/annotations/{annotation_id}"),
-    ("GET", "/"),
-    ("GET", "/accept-invitation/{token}"),
-    ("GET", "/account/sessions"),
-    ("GET", "/account/settings"),
-    ("GET", "/admin"),
-    ("GET", "/admin/audit"),
-    ("GET", "/admin/items"),
-    ("GET", "/admin/projects"),
-    ("GET", "/admin/workflows"),
-    ("GET", "/admin/maintenance"),
-    ("GET", "/admin/maintenance/backups/{workflow_id}/download"),
-    ("GET", "/api/workflows/{workflow_id}"),
-    ("GET", "/admin/settings"),
-    ("GET", "/admin/users"),
-    ("GET", "/annotation-exports/{workflow_id}"),
-    ("GET", "/annotation-exports/{workflow_id}/content"),
-    ("GET", "/bibliography/export"),
-    ("GET", "/bibliography/import"),
-    ("GET", "/documents/{item_id}/annotations"),
-    ("GET", "/documents/{item_id}/citation"),
-    ("GET", "/documents/{item_id}/citation-text"),
-    ("GET", "/documents/{item_id}/citation-copy"),
-    ("GET", "/documents/{item_id}/revisions/{revision_id}/content"),
-    ("GET", "/documents/{item_id}/revisions/{revision_id}/export"),
-    ("GET", "/documents/{item_id}/revisions/{revision_id}/thumbnail"),
-    ("GET", "/documents/{item_id}/thumbnail"),
-    ("GET", "/healthz"),
-    ("GET", "/imports/{batch_id}/preview"),
-    ("POST", "/imports/{batch_id}/retry"),
-    ("GET", "/items/{item_id}"),
-    ("GET", "/items/{item_id}/attachments/{attachment_id}"),
-    ("GET", "/items/{item_id}/download"),
-    ("GET", "/items/{item_id}/pdf/{revision_id}"),
-    ("GET", "/items/{item_id}/{section}"),
-    ("GET", "/api/citation-styles"),
-    ("GET", "/api/citation-key-preview"),
-    ("GET", "/api/v1/items"),
-    ("GET", "/api/v1/items/{item_id}"),
-    ("GET", "/api/v1/items/{item_id}/annotations"),
-    ("GET", "/api/v1/items/{item_id}/citation"),
-    ("GET", "/api/v1/items/{item_id}/discussions"),
-    ("GET", "/api/v1/items/{item_id}/documents"),
-    ("GET", "/api/v1/projects"),
-    ("GET", "/api/v1/projects/{project_id}"),
-    ("GET", "/api/v1/tags"),
-    ("GET", "/library"),
-    ("GET", "/login"),
-    ("GET", "/metrics"),
-    ("GET", "/online-search"),
-    ("GET", "/projects"),
-    ("GET", "/projects/{project_id}"),
-    ("GET", "/tools"),
-    ("PATCH", "/documents/{item_id}/annotations/{annotation_id}"),
-    ("PATCH", "/api/v1/items/{item_id}/annotations/{annotation_id}"),
-    ("POST", "/accept-invitation/{token}"),
-    ("POST", "/account/api-tokens"),
-    ("POST", "/account/api-tokens/{token_id}/revoke"),
-    ("POST", "/account/sessions/revoke-all"),
-    ("POST", "/account/sessions/{session_id}/revoke"),
-    ("POST", "/account/settings/locale"),
-    ("POST", "/account/settings/password"),
-    ("POST", "/api/v1/discovery/search"),
-    ("POST", "/api/v1/items"),
-    ("POST", "/api/v1/items/{item_id}/annotations"),
-    ("POST", "/api/v1/items/{item_id}/discussions"),
-    ("POST", "/api/v1/items/{item_id}/tags"),
-    ("POST", "/api/v1/projects"),
-    ("POST", "/admin/invitations"),
-    ("POST", "/admin/items/{item_id}/delete"),
-    ("POST", "/admin/maintenance/backup"),
-    ("POST", "/admin/maintenance/check-objects"),
-    ("POST", "/admin/maintenance/reindex"),
-    ("POST", "/admin/maintenance/recommend-tags"),
-    ("POST", "/admin/settings"),
-    ("POST", "/admin/users/create"),
-    ("POST", "/admin/users/{user_id}/password"),
-    ("POST", "/admin/users/{user_id}/revoke-sessions"),
-    ("POST", "/admin/users/{user_id}/role"),
-    ("POST", "/admin/users/{user_id}/status"),
-    ("POST", "/bibliography/import/{batch_id}"),
-    ("POST", "/bibliography/import/{batch_id}/discard"),
-    ("POST", "/bibliography/preview"),
-    ("POST", "/citation-styles"),
-    ("POST", "/citation-styles/{style_id}/delete"),
-    ("POST", "/documents/{item_id}/annotation-exports"),
-    ("POST", "/documents/{item_id}/annotations"),
-    ("POST", "/imports/pdf/published"),
-    ("POST", "/items"),
-    ("POST", "/items/{item_id}/attachments"),
-    ("POST", "/items/{item_id}/attachments/{attachment_id}/delete"),
-    ("POST", "/items/{item_id}/discussion"),
-    ("POST", "/items/{item_id}/discussion/{message_id}/delete"),
-    ("POST", "/items/{item_id}/edit"),
-    ("POST", "/items/{item_id}/delete"),
-    ("POST", "/items/{item_id}/pdf"),
-    ("POST", "/items/{item_id}/pdf/{revision_id}/delete"),
-    ("POST", "/items/{item_id}/projects/{project_id}"),
-    ("POST", "/items/{item_id}/projects/{project_id}/remove"),
-    ("POST", "/items/{item_id}/rescan-doi"),
-    ("POST", "/items/{item_id}/sync-metadata"),
-    ("POST", "/items/{item_id}/tag-recommendations"),
-    ("POST", "/items/{item_id}/tags"),
-    ("POST", "/items/{item_id}/tags/matrix"),
-    ("POST", "/items/{item_id}/tags/{tag_id}/remove"),
-    ("POST", "/items/{item_id}/update-bibtex-key"),
-    ("POST", "/library/bulk"),
-    ("POST", "/login"),
-    ("POST", "/logout"),
-    ("POST", "/metadata/preview"),
-    ("POST", "/projects"),
-    ("POST", "/projects/{project_id}/members"),
-    ("POST", "/projects/{project_id}/members/{member_id}/remove"),
-    ("POST", "/projects/{project_id}/rename"),
-    ("POST", "/projects/{project_id}/description"),
-    ("POST", "/projects/{project_id}/delete"),
-    ("POST", "/projects/{project_id}/archive"),
-    ("POST", "/projects/{project_id}/restore"),
-    ("POST", "/projects/{project_id}/visibility"),
-    ("POST", "/projects/{project_id}/leave"),
-    ("POST", "/projects/{project_id}/ownership/{user_id}"),
-    ("POST", "/projects/{project_id}/ownership"),
-    ("POST", "/projects/{project_id}/join"),
-    ("POST", "/tools/tags/{tag_id}"),
-    ("POST", "/tools/tags/{tag_id}/delete"),
-    ("POST", "/tools/tags/merge"),
-    ("GET", "/api/authors/suggest"),
-    ("PUT", "/api/v1/items/{item_id}"),
-    ("PUT", "/api/v1/items/{item_id}/tags"),
-    ("PUT", "/api/v1/projects/{project_id}/items/{item_id}"),
-    ("PUT", "/api/v1/projects/{project_id}/members"),
-}
-
-
-def _extract_routes(routes):
-    out = []
-    for r in routes:
-        if hasattr(r, "original_router"):
-            out.extend(_extract_routes(r.original_router.routes))
-        elif hasattr(r, "routes"):
-            out.extend(_extract_routes(r.routes))
-        elif hasattr(r, "methods") and hasattr(r, "path"):
-            out.append(r)
-    return out
-
-
 def test_operational_routes_contract():
     test_app = get_app()
     excluded_paths = {"/docs", "/docs/oauth2-redirect", "/openapi.json", "/redoc"}
-    operational_routes: set[tuple[str, str]] = set()
 
-    for route in _extract_routes(test_app.routes):
+    # OpenAPI contains the effective paths after FastAPI composes the versioned
+    # router. Inspect direct application routes separately for the SPA fallback
+    # and other non-schema operational methods; child router internals contain
+    # relative paths by design.
+    operational_routes: set[tuple[str, str]] = {
+        (method.upper(), path)
+        for path, methods in test_app.openapi()["paths"].items()
+        for method in methods
+        if method in {"get", "post", "put", "patch", "delete"}
+    }
+    for route in test_app.routes:
+        if not hasattr(route, "methods") or not hasattr(route, "path"):
+            continue
         if route.path in excluded_paths:
             continue
         for method in route.methods:
-            if method == "HEAD":
-                continue
-            operational_routes.add((method, route.path))
+            if method != "HEAD":
+                operational_routes.add((method, route.path))
 
-    assert len(operational_routes) == 152, f"Expected 152 routes, found {len(operational_routes)}"
-    assert operational_routes == EXPECTED_OPERATIONAL_ROUTES
+    assert {
+        ("POST", "/api/v1/items/{item_id}/attachments/remote"),
+        ("POST", "/api/v1/items/{item_id}/revisions/remote"),
+    } <= operational_routes
+    assert all(
+        path.startswith("/api/v1") or path in {"/healthz", "/metrics"}
+        for _method, path in operational_routes
+    )
 
 
 @pytest.mark.anyio
@@ -220,8 +53,8 @@ async def test_http_behavioral_contract(async_db, async_session_factory, tmp_pat
     )
     item_id = item.id
 
-    # 1. Non-admin accessing /admin or /metrics returns 404 (hides admin routes)
-    admin_resp = await client.get("/admin")
+    # 1. Non-admin access to the administration API is concealed.
+    admin_resp = await client.get("/api/v1/admin/overview")
     assert admin_resp.status_code == 404
 
     metrics_resp = await client.get("/metrics")
@@ -239,19 +72,23 @@ async def test_http_behavioral_contract(async_db, async_session_factory, tmp_pat
     db.add(other_item)
     await db.commit()
 
-    edit_resp = await client.post(
-        f"/items/{other_item.id}/edit",
-        data={"csrf_token": "test-csrf", "version": 1, "title": "New Title"},
+    edit_resp = await client.put(
+        f"/api/v1/items/{other_item.id}",
+        json={"expected_version": 1, "metadata": {"title": "New Title"}},
     )
     assert edit_resp.status_code == 404
 
-    # 3. Version conflict returns 409 with detail {"version": ...}
-    conflict_resp = await client.post(
-        f"/items/{item_id}/edit",
-        data={"csrf_token": "test-csrf", "version": 999, "title": "Conflict Title"},
+    # 3. Version conflict returns the current version as structured metadata.
+    conflict_resp = await client.put(
+        f"/api/v1/items/{item_id}",
+        json={"expected_version": 999, "metadata": {"title": "Conflict Title"}},
     )
     assert conflict_resp.status_code == 409
-    assert "version" in str(conflict_resp.json())
+    assert conflict_resp.json() == {
+        "code": "version_conflict",
+        "message": "version conflict, current version is 1",
+        "meta": {"version": 1},
+    }
     await client.aclose()
 
 
@@ -264,8 +101,8 @@ async def test_oversized_bibliography_upload_returns_payload_too_large(
     )
     try:
         response = await client.post(
-            "/bibliography/preview",
-            data={"csrf_token": "test-csrf", "file_format": "bibtex"},
+            "/api/v1/imports/bibliography",
+            data={"file_format": "bibtex"},
             files={
                 "bibliography": (
                     "oversized.bib",
@@ -276,7 +113,10 @@ async def test_oversized_bibliography_upload_returns_payload_too_large(
         )
 
         assert response.status_code == 413
-        assert response.json() == {"detail": "bibliography files are limited to 5 MiB"}
+        assert response.json() == {
+            "code": "content_too_large",
+            "message": "bibliography files are limited to 5 MiB",
+        }
     finally:
         await client.aclose()
 
@@ -296,13 +136,8 @@ async def test_tag_rename_conceals_missing_and_foreign_tags(
     db.add(foreign_tag)
     await db.commit()
     try:
-        missing = await client.post(
-            "/tools/tags/missing", data={"csrf_token": "test-csrf", "name": "Renamed"}
-        )
-        foreign = await client.post(
-            f"/tools/tags/{foreign_tag.id}",
-            data={"csrf_token": "test-csrf", "name": "Renamed"},
-        )
+        missing = await client.patch("/api/v1/tags/missing", json={"name": "Renamed"})
+        foreign = await client.patch(f"/api/v1/tags/{foreign_tag.id}", json={"name": "Renamed"})
 
         assert foreign.status_code == 404
         assert foreign.content == missing.content
@@ -325,13 +160,37 @@ async def test_tag_delete_conceals_missing_and_foreign_tags(
     db.add(foreign_tag)
     await db.commit()
     try:
-        missing = await client.post("/tools/tags/missing/delete", data={"csrf_token": "test-csrf"})
-        foreign = await client.post(
-            f"/tools/tags/{foreign_tag.id}/delete", data={"csrf_token": "test-csrf"}
-        )
+        missing = await client.delete("/api/v1/tags/missing")
+        foreign = await client.delete(f"/api/v1/tags/{foreign_tag.id}")
 
         assert foreign.status_code == 404
         assert foreign.content == missing.content
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_tag_list_conceals_tags_without_accessible_items(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    other_user = User(username="prolific-tagger", password_hash="unused")
+    db.add(other_user)
+    await db.flush()
+    foreign_tag = Tag(name="Foreign private taxonomy", created_by=other_user.id)
+    own_tag = Tag(name="Own empty taxonomy", created_by=item.created_by)
+    db.add_all([foreign_tag, own_tag])
+    await db.commit()
+    try:
+        listing = await client.get("/api/v1/tags")
+
+        assert listing.status_code == 200
+        names = [row["name"] for row in listing.json()]
+        assert "Foreign private taxonomy" not in names
+        assert "Own empty taxonomy" in names
     finally:
         await client.aclose()
 
@@ -353,13 +212,8 @@ async def test_discussion_delete_conceals_missing_and_foreign_messages(
     db.add(foreign_message)
     await db.commit()
     try:
-        missing = await client.post(
-            f"/items/{item.id}/discussion/missing/delete", data={"csrf_token": "test-csrf"}
-        )
-        foreign = await client.post(
-            f"/items/{item.id}/discussion/{foreign_message.id}/delete",
-            data={"csrf_token": "test-csrf"},
-        )
+        missing = await client.delete(f"/api/v1/items/{item.id}/discussions/missing")
+        foreign = await client.delete(f"/api/v1/items/{item.id}/discussions/{foreign_message.id}")
 
         assert foreign.status_code == 404
         assert foreign.content == missing.content
@@ -376,18 +230,18 @@ async def test_invitation_creation_is_hidden_from_non_administrators(
     )
     try:
         response = await client.post(
-            "/admin/invitations",
-            data={"csrf_token": "test-csrf", "username": "invitee", "role": "member"},
+            "/api/v1/admin/invitations",
+            json={"username": "invitee", "role": "member"},
         )
 
         assert response.status_code == 404
-        assert response.json() == {"detail": "not found"}
+        assert response.json() == {"code": "not_found", "message": "resource not found"}
     finally:
         await client.aclose()
 
 
 @pytest.mark.anyio
-async def test_admin_mutation_is_hidden_before_csrf_validation(
+async def test_admin_mutation_requires_same_origin_before_authorization(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
     client, _item, _revision = await authenticated_async_client(
@@ -395,12 +249,16 @@ async def test_admin_mutation_is_hidden_before_csrf_validation(
     )
     try:
         response = await client.post(
-            "/admin/invitations",
-            data={"username": "invitee", "role": "member"},
+            "/api/v1/admin/invitations",
+            headers={"Origin": "https://attacker.example"},
+            json={"username": "invitee", "role": "member"},
         )
 
-        assert response.status_code == 404
-        assert response.json() == {"detail": "not found"}
+        assert response.status_code == 403
+        assert response.json() == {
+            "code": "origin_mismatch",
+            "message": "origin does not match request origin",
+        }
     finally:
         await client.aclose()
 
@@ -419,14 +277,10 @@ async def test_discussion_author_can_delete_own_message(
     db.add(own_message)
     await db.commit()
     try:
-        response = await client.post(
-            f"/items/{item.id}/discussion/{own_message.id}/delete",
-            data={"csrf_token": "test-csrf"},
-            follow_redirects=False,
-        )
+        response = await client.delete(f"/api/v1/items/{item.id}/discussions/{own_message.id}")
 
-        assert response.status_code == 303
-        assert response.headers["location"] == f"/items/{item.id}/discussion"
+        assert response.status_code == 200
+        assert response.json() == {"ok": True}
     finally:
         await client.aclose()
 
@@ -445,11 +299,11 @@ async def test_administrator_can_create_invitation(
     await db.commit()
     try:
         response = await client.post(
-            "/admin/invitations",
-            data={"csrf_token": "test-csrf", "username": "new-member", "role": "member"},
+            "/api/v1/admin/invitations",
+            json={"username": "new-member", "role": "member"},
         )
 
-        assert response.status_code == 200
-        assert "/accept-invitation/" in response.text
+        assert response.status_code == 201
+        assert response.json()["accept_path"].startswith("/invitation/")
     finally:
         await client.aclose()

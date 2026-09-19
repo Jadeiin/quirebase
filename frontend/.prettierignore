@@ -1,0 +1,19 @@
+# Package Managers
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+bun.lock
+bun.lockb
+
+# Generated artifacts
+.cache/
+.svelte-kit/
+build/
+openapi.json
+playwright-report/
+test-results/
+src/lib/locales/*/messages.ts
+src/lib/locales/messages.pot
+
+# Miscellaneous
+/static/

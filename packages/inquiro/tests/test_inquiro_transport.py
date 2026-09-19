@@ -4,7 +4,7 @@ import asyncio
 import socket
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from threading import Thread
+from threading import Event, Thread
 from typing import TYPE_CHECKING
 
 import pytest
@@ -20,6 +20,7 @@ pytestmark = pytest.mark.anyio
 
 class _Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
+    slow_started = Event()
 
     def log_message(self, format: str, *args: object) -> None:
         return None
@@ -41,6 +42,7 @@ class _Handler(BaseHTTPRequestHandler):
             self.wfile.flush()
             self.close_connection = True
         elif self.path.startswith("/slow"):
+            self.slow_started.set()
             time.sleep(30)
             self.send_response(200)
             self.send_header("Content-Length", "0")
@@ -75,9 +77,10 @@ def _clear_proxy_environment(monkeypatch):
 
 @pytest.fixture
 def base_url() -> Iterator[str]:
+    _Handler.slow_started.clear()
     server = _Server(("127.0.0.1", 0), _Handler)
     server.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-    thread = Thread(target=server.serve_forever, daemon=True)
+    thread = Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
     thread.start()
     try:
         yield f"http://127.0.0.1:{server.server_address[1]}"
@@ -131,7 +134,7 @@ async def test_http_exchange_cancels_a_pending_request_without_wedging_the_clien
     exchange = HttpExchange(provider_config())
     try:
         task = asyncio.create_task(exchange.send(TransportRequest(f"{base_url}/slow")))
-        await asyncio.sleep(0.25)
+        assert await asyncio.to_thread(_Handler.slow_started.wait, 1)
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task

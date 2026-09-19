@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime
 
 import pytest
@@ -7,7 +8,7 @@ from dbos import AsyncSQLAlchemyDatasource
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from quirebase.core.config import get_settings
-from quirebase.core.database import Base, make_async_engine
+from quirebase.core.database import Base, async_database_url, make_async_engine
 from quirebase.core.storage import get_object_store
 from quirebase.core.workflows import DBOSAdapter, WorkflowSummary, ads, durable_operations
 
@@ -94,6 +95,33 @@ class InMemoryDurableOperations:
         for workflow in self.workflows.values():
             counts[workflow.state] = counts.get(workflow.state, 0) + 1
         return counts
+
+
+@pytest.fixture(autouse=True)
+def serialize_shared_postgres(request):
+    if request.node.get_closest_marker("shared_postgres") is None:
+        yield
+        return
+    database_url = os.getenv("QUIREBASE_TEST_POSTGRES_URL")
+    if not database_url:
+        yield
+        return
+
+    from psycopg import connect
+    from sqlalchemy.engine import make_url
+
+    dsn = (
+        make_url(async_database_url(database_url))
+        .set(drivername="postgresql")
+        .render_as_string(hide_password=False)
+    )
+    lock_id = 0x5155495245424153  # "QUIREBAS"
+    with connect(dsn, autocommit=True) as connection:
+        connection.execute("SELECT pg_advisory_lock(%s)", (lock_id,))
+        try:
+            yield
+        finally:
+            connection.execute("SELECT pg_advisory_unlock(%s)", (lock_id,))
 
 
 @pytest.fixture(autouse=True)

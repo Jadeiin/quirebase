@@ -1,15 +1,9 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from mcp.server.auth.middleware.auth_context import AuthContextMiddleware
-from mcp.server.auth.middleware.bearer_auth import (
-    BearerAuthBackend,
-    RequireAuthMiddleware,
-)
-from mcp.server.transport_security import TransportSecuritySettings
-from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
@@ -18,7 +12,10 @@ from quirebase.mcp.server import create_mcp_server
 from quirebase.mcp.transport_security import McpOriginMiddleware, cors_origin_allowlist
 
 if TYPE_CHECKING:
-    from mcp.server import MCPServer
+    from collections.abc import AsyncIterator, Callable
+
+    from fastapi import FastAPI
+    from fastmcp import FastMCP
     from starlette.types import ASGIApp
 
     from quirebase.core.config import Settings
@@ -26,38 +23,44 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class McpHttpMount:
-    server: MCPServer
+    server: FastMCP
     app: ASGIApp
+    lifespan: Callable[[], Any]
+
+
+def _internal_api_base_url(allowed_hosts: list[str]) -> str:
+    """Choose a concrete host accepted by the outer app's TrustedHost policy."""
+    host = allowed_hosts[0]
+    if host == "*":
+        host = "fastapi"
+    elif host.startswith("*."):
+        host = f"mcp-internal{host[1:]}"
+    return f"http://{host}"
 
 
 def create_mcp_http_mount(
+    api_app: FastAPI,
     session_factory: SessionFactory,
     *,
     allowed_hosts: list[str],
     settings: Settings,
 ) -> McpHttpMount:
-    """Build a Streamable HTTP mount protected by an expiring API Token."""
+    """Generate and protect a stateless Streamable HTTP MCP projection of the API."""
     verifier = ApiTokenVerifier(session_factory)
-    server = create_mcp_server(session_factory=session_factory, settings=settings)
-    transport_security = TransportSecuritySettings(
-        # The outer middleware pair below replaces the SDK's narrower Host matcher
-        # while preserving both Host and Origin DNS-rebinding defenses. The SDK
-        # continues to validate POST media types when this flag is disabled.
-        enable_dns_rebinding_protection=False,
+    server = create_mcp_server(
+        api_app,
+        token_verifier=verifier,
+        internal_base_url=_internal_api_base_url(allowed_hosts),
     )
-    protocol_app = server.streamable_http_app(
-        streamable_http_path="/",
+    protocol_app = server.http_app(
+        path="/",
         json_response=True,
         stateless_http=True,
-        transport_security=transport_security,
-    )
-    authenticated_app: ASGIApp = AuthenticationMiddleware(
-        AuthContextMiddleware(RequireAuthMiddleware(protocol_app, required_scopes=[])),
-        backend=BearerAuthBackend(verifier),
+        host_origin_protection=False,
     )
     cors_origins, cors_origin_regex = cors_origin_allowlist(settings.mcp_allowed_origin_list)
     cors_app: ASGIApp = CORSMiddleware(
-        authenticated_app,
+        protocol_app,
         allow_origins=cors_origins,
         allow_origin_regex=cors_origin_regex,
         allow_methods=["GET", "POST", "DELETE"],
@@ -78,4 +81,10 @@ def create_mcp_http_mount(
         origin_protected_app,
         allowed_hosts=allowed_hosts,
     )
-    return McpHttpMount(server=server, app=protected_app)
+
+    @asynccontextmanager
+    async def lifespan() -> AsyncIterator[None]:
+        async with protocol_app.lifespan(protocol_app):
+            yield
+
+    return McpHttpMount(server=server, app=protected_app, lifespan=lifespan)

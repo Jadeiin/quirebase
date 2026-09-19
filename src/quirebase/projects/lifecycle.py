@@ -52,6 +52,59 @@ async def rename_project(db: AsyncSession, user: User, project_id: str, name: st
     return project
 
 
+async def update_project_settings(
+    db: AsyncSession,
+    user: User,
+    project_id: str,
+    *,
+    name: str,
+    description: str,
+    visibility: ProjectVisibility | str,
+) -> Project:
+    """Validate and commit the editable Project settings as one operation."""
+    normalized_name = name.strip()
+    if not normalized_name:
+        raise ValidationFailure("project name is required")
+    if len(normalized_name) > 240:
+        raise ValidationFailure("project name is too long")
+    normalized_description = description.replace("\r\n", "\n").replace("\r", "\n").strip()
+    if len(normalized_description) > 2000:
+        raise ValidationFailure("project description is too long")
+    try:
+        normalized_visibility = ProjectVisibility(visibility)
+    except ValueError as error:
+        raise ValidationFailure("invalid project visibility") from error
+
+    project = await lock_project_root(db, project_id)
+    if project is None or (user.id != project.owner_id and user.role != "administrator"):
+        raise ResourceUnavailable("project not found or owner role required")
+    old_values = {
+        "name": project.name,
+        "description": project.description,
+        "visibility": project.visibility.value,
+    }
+    project.name = normalized_name
+    project.description = normalized_description
+    project.visibility = normalized_visibility
+    record_event(
+        db,
+        user.id,
+        "project.settings.update",
+        "project",
+        project.id,
+        detail={
+            "old": old_values,
+            "new": {
+                "name": normalized_name,
+                "description": normalized_description,
+                "visibility": normalized_visibility.value,
+            },
+        },
+    )
+    await db.commit()
+    return project
+
+
 async def update_project_description(
     db: AsyncSession, user: User, project_id: str, description: str
 ) -> Project:

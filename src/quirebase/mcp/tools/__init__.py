@@ -1,1 +1,0 @@
-"""MCP capability registration modules."""

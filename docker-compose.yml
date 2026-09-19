@@ -5,7 +5,8 @@
 #   make docker-admin    # creates the first administrator
 #
 # Terminate TLS in a reverse proxy in front of the published port, then set
-# QUIREBASE_ALLOWED_HOSTS to the public hostname and QUIREBASE_SECURE_COOKIES=true.
+# QUIREBASE_ALLOWED_HOSTS to the public hostname, QUIREBASE_EXTERNAL_ORIGIN to the
+# public HTTPS origin, and QUIREBASE_SECURE_COOKIES=true.
 # Immutable objects stay on the shared local volume unless QUIREBASE_OBJECT_STORE=s3,
 # QUIREBASE_S3_* and AWS_* are set in .env.docker.
 
