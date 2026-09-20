@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 
 import httpx2
 import pytest
+from fastmcp import Client
 from sqlalchemy import select
 
 from quirebase.accounts import create_api_token
@@ -12,6 +13,8 @@ from quirebase.core.database import get_db
 from quirebase.mcp import TOOL_ALLOWLIST
 from quirebase.models import AuditEvent, Item, User
 from quirebase.web.app import create_app
+
+pytestmark = pytest.mark.anyio
 
 
 @asynccontextmanager
@@ -35,12 +38,35 @@ async def mcp_client(factory):
         yield client, app
 
 
+@asynccontextmanager
+async def fastmcp_client(factory):
+    app = create_app(mcp_session_factory=factory)
+
+    async def override_db():
+        session = factory()
+        try:
+            yield session
+        finally:
+            await session.close()
+
+    app.dependency_overrides[get_db] = override_db
+    async with app.router.lifespan_context(app), Client(app.state.mcp_server) as client:
+        yield client, app
+
+
 def _headers(raw_token: str) -> dict[str, str]:
     return {
         "Accept": "application/json, text/event-stream",
         "Authorization": f"Bearer {raw_token}",
         "Content-Type": "application/json",
     }
+
+
+async def test_fastmcp_client_lists_the_tool_search_surface(async_session_factory):
+    async with fastmcp_client(async_session_factory) as (client, _app):
+        tools = await client.list_tools()
+
+    assert {tool.name for tool in tools} == {"search_tools", "call_tool"}
 
 
 async def _call(client, raw_token: str, name: str, arguments: dict, request_id: int = 1):
@@ -56,27 +82,46 @@ async def _call(client, raw_token: str, name: str, arguments: dict, request_id: 
     )
 
 
-@pytest.mark.anyio
 async def test_generated_tools_match_the_fixed_allowlist_and_annotations(async_session_factory):
     async with mcp_client(async_session_factory) as (_client, app):
-        tools = await app.state.mcp_server.list_tools()
+        server = app.state.mcp_server
+        tools = await server.list_tools()
+        generated = {name: await server.get_tool(name) for name in TOOL_ALLOWLIST}
 
-    assert {tool.name for tool in tools} == TOOL_ALLOWLIST
+    assert {tool.name for tool in tools} == {"search_tools", "call_tool"}
+    assert all(tool is not None for tool in generated.values())
     assert not any(name.startswith("admin.") for name in TOOL_ALLOWLIST)
     assert not any(
         "session" in name or "content" in name or "upload" in name for name in TOOL_ALLOWLIST
     )
-    annotations = {tool.name: tool.annotations for tool in tools}
-    assert annotations["discovery.search_discovery"].openWorldHint is True
-    assert annotations["documents.list_documents"].readOnlyHint is True
-    assert annotations["annotations.delete_annotation"].destructiveHint is True
-    assert annotations["annotations.delete_reply"].destructiveHint is True
+    annotations = {name: tool.annotations for name, tool in generated.items()}
+    assert annotations["discovery.search_discovery"].open_world_hint is True
+    assert annotations["documents.list_documents"].read_only_hint is True
+    assert annotations["annotations.delete_annotation"].destructive_hint is True
+    assert annotations["annotations.delete_reply"].destructive_hint is True
 
 
-@pytest.mark.anyio
+async def test_tool_search_discovers_curated_tools(async_session_factory):
+    async with mcp_client(async_session_factory) as (_client, app):
+        result = await app.state.mcp_server.call_tool(
+            "search_tools", {"query": "update project"}, run_middleware=False
+        )
+
+    assert result.is_error is False
+    matches = json.loads(result.content[0].text)
+    matching_tool = next(tool for tool in matches if tool["name"] == "projects.update_project")
+    assert set(matching_tool["inputSchema"]["properties"]) == {
+        "project_id",
+        "name",
+        "description",
+        "visibility",
+    }
+
+
 async def test_generated_tool_schemas_come_from_the_api_contract(async_session_factory):
     async with mcp_client(async_session_factory) as (_client, app):
-        tools = {tool.name: tool for tool in await app.state.mcp_server.list_tools()}
+        server = app.state.mcp_server
+        tools = {name: await server.get_tool(name) for name in TOOL_ALLOWLIST}
 
     assert set(tools["library.search_items"].parameters["properties"]) == {
         "query",
@@ -107,7 +152,6 @@ async def test_generated_tool_schemas_come_from_the_api_contract(async_session_f
     }
 
 
-@pytest.mark.anyio
 async def test_generated_library_tool_calls_api_and_preserves_mcp_audit_provenance(
     async_db, async_session_factory
 ):
@@ -147,7 +191,45 @@ async def test_generated_library_tool_calls_api_and_preserves_mcp_audit_provenan
     }
 
 
-@pytest.mark.anyio
+async def test_tool_search_proxy_calls_the_curated_tool(async_db, async_session_factory):
+    user = User(username="tool-search-writer", password_hash="unused")
+    async_db.add(user)
+    await async_db.commit()
+    grant = await create_api_token(async_db, user, "Tool search", expires_in_days=30)
+
+    async with mcp_client(async_session_factory) as (client, _app):
+        discovered = await _call(
+            client,
+            grant.raw_token,
+            "search_tools",
+            {"query": "create bibliographic item"},
+        )
+        created = await _call(
+            client,
+            grant.raw_token,
+            "call_tool",
+            {
+                "name": "library.create_library_item",
+                "arguments": {"title": "Created through tool search"},
+            },
+        )
+
+    assert discovered.status_code == 200
+    discovered_tools = json.loads(discovered.json()["result"]["content"][0]["text"])
+    assert any(tool["name"] == "library.create_library_item" for tool in discovered_tools)
+    assert created.status_code == 200
+    created_result = created.json()["result"]
+    assert created_result["isError"] is False
+    item_id = created_result["structuredContent"]["id"]
+    event = await async_db.scalar(
+        select(AuditEvent).where(
+            AuditEvent.action == "item.create", AuditEvent.target_id == item_id
+        )
+    )
+    assert event is not None
+    assert json.loads(event.detail)["invocation"]["operation"] == "library.create_library_item"
+
+
 async def test_generated_tool_returns_api_version_conflict_as_mcp_error(
     async_db, async_session_factory
 ):
@@ -179,7 +261,6 @@ async def test_generated_tool_returns_api_version_conflict_as_mcp_error(
     assert "version" in conflict_result["content"][0]["text"].casefold()
 
 
-@pytest.mark.anyio
 async def test_generated_tool_does_not_fall_back_to_cookie_auth(async_db, async_session_factory):
     user = User(username="generated-mcp-auth", password_hash="unused")
     async_db.add(user)

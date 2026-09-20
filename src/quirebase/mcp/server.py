@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-import httpx
+import httpx2
 from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_access_token, get_http_headers
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.server.providers.openapi import MCPType
+from fastmcp.server.transforms.search import BM25SearchTransform
 from mcp.types import ToolAnnotations
 
 from quirebase.audit import programmatic_invocation
@@ -38,10 +39,10 @@ class McpInvocationMiddleware(Middleware):
             return await call_next(context)
 
 
-class ForwardVerifiedBearerAuth(httpx.Auth):
+class ForwardVerifiedBearerAuth(httpx2.Auth):
     """Forward the already-verified MCP bearer to the in-process API client."""
 
-    def auth_flow(self, request: httpx.Request):
+    def auth_flow(self, request: httpx2.Request):
         request.headers["authorization"] = get_http_headers(include={"authorization"})[
             "authorization"
         ]
@@ -56,11 +57,11 @@ def _route_type(route: HTTPRoute, _default: MCPType) -> MCPType:
 
 def _tool_annotations(effect: ToolEffect) -> ToolAnnotations:
     return ToolAnnotations(
-        readOnlyHint=effect in {ToolEffect.READ, ToolEffect.OPEN_WORLD_READ},
-        destructiveHint=effect is ToolEffect.DESTRUCTIVE,
-        idempotentHint=effect
+        read_only_hint=effect in {ToolEffect.READ, ToolEffect.OPEN_WORLD_READ},
+        destructive_hint=effect is ToolEffect.DESTRUCTIVE,
+        idempotent_hint=effect
         in {ToolEffect.READ, ToolEffect.DESTRUCTIVE, ToolEffect.OPEN_WORLD_READ},
-        openWorldHint=effect is ToolEffect.OPEN_WORLD_READ,
+        open_world_hint=effect is ToolEffect.OPEN_WORLD_READ,
     )
 
 
@@ -75,7 +76,7 @@ def create_mcp_server(
     api_app: FastAPI, *, token_verifier: TokenVerifier, internal_base_url: str
 ) -> FastMCP:
     """Generate the curated MCP surface from the canonical FastAPI OpenAPI contract."""
-    return FastMCP.from_fastapi(
+    server = FastMCP.from_fastapi(
         app=api_app,
         name="Quirebase",
         httpx_client_kwargs={
@@ -91,6 +92,8 @@ def create_mcp_server(
             "administration, and site operations are not exposed."
         ),
     )
+    server.add_transform(BM25SearchTransform(max_results=5))
+    return server
 
 
 __all__ = ["create_mcp_server"]
