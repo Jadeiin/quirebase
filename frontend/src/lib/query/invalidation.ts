@@ -9,7 +9,12 @@ async function invalidate(queryClient: QueryClient, keys: QueryKey[]) {
 }
 
 export function invalidateItem(queryClient: QueryClient, itemId: string) {
-	return invalidate(queryClient, [itemKeys.detail(itemId), itemKeys.workspace(itemId)]);
+	return invalidate(queryClient, [
+		itemKeys.detail(itemId),
+		itemKeys.workspace(itemId),
+		libraryKeys.all,
+		dashboardKeys.all
+	]);
 }
 export function invalidateItemFiles(queryClient: QueryClient, itemId: string) {
 	return invalidate(queryClient, [itemKeys.files(itemId), itemKeys.workspace(itemId)]);
