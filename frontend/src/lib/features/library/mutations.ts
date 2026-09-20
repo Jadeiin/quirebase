@@ -14,41 +14,72 @@ export type LibraryBulkInput = {
 	preferences: ExportPreferences;
 };
 
+function bibliographyFilename(format: string): string {
+	if (format === 'csl') return 'quirebase-citations.txt';
+	const extension = format === 'ris' ? 'ris' : format === 'endnote' ? 'enw' : 'bib';
+	return `quirebase-export.${extension}`;
+}
+
+function archiveFilename(includeAnnotations: boolean, includeSupplements: boolean): string {
+	const kind =
+		includeAnnotations && includeSupplements
+			? 'annotated-bundle'
+			: includeAnnotations
+				? 'annotated-pdfs'
+				: includeSupplements
+					? 'bundle'
+					: 'pdfs';
+	return `quirebase-selected-${kind}.zip`;
+}
+
 export async function runLibraryBulkDownload(input: LibraryBulkInput): Promise<void> {
 	if (input.action === 'bibliography') {
 		const citation = input.preferences.citation;
-		await apiDownload('/items/bibliography', {
-			body: {
-				item_ids: input.itemIds,
-				file_format: input.exportFormat,
-				style: citation.style,
-				include_abstract: citation.includeAbstract,
-				preserve_case: citation.preserveCase,
-				include_identifiers: citation.includeIdentifiers,
-				include_custom_fields: citation.includeCustomFields,
-				encoding: citation.encoding,
-				journal_mode: citation.journalMode,
-				doi_policy: citation.doiPolicy,
-				url_policy: citation.urlPolicy,
-				excluded_fields: citation.excludedFields
-					.split(',')
-					.map((value) => value.trim())
-					.filter(Boolean),
-				sort_by: citation.sortBy,
-				citation_key_formula: citation.citationKeyFormula,
-				citation_key_force_ascii: citation.citationKeyForceAscii
-			}
-		});
+		await apiDownload(
+			'/items/bibliography',
+			{
+				body: {
+					item_ids: input.itemIds,
+					file_format: input.exportFormat,
+					style: citation.style,
+					include_abstract: citation.includeAbstract,
+					preserve_case: citation.preserveCase,
+					include_identifiers: citation.includeIdentifiers,
+					include_custom_fields: citation.includeCustomFields,
+					encoding: citation.encoding,
+					journal_mode: citation.journalMode,
+					doi_policy: citation.doiPolicy,
+					url_policy: citation.urlPolicy,
+					excluded_fields: citation.excludedFields
+						.split(',')
+						.map((value) => value.trim())
+						.filter(Boolean),
+					sort_by: citation.sortBy,
+					citation_key_formula: citation.citationKeyFormula,
+					citation_key_force_ascii: citation.citationKeyForceAscii
+				}
+			},
+			{ suggestedName: bibliographyFilename(input.exportFormat) }
+		);
 		return;
 	}
-	await apiDownload('/items/documents/archive', {
-		body: {
-			item_ids: input.itemIds,
-			include_annotations: input.preferences.document.includeAnnotations,
-			include_supplements: input.preferences.document.includeSupplements,
-			timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+	await apiDownload(
+		'/items/documents/archive',
+		{
+			body: {
+				item_ids: input.itemIds,
+				include_annotations: input.preferences.document.includeAnnotations,
+				include_supplements: input.preferences.document.includeSupplements,
+				timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+			}
+		},
+		{
+			suggestedName: archiveFilename(
+				input.preferences.document.includeAnnotations,
+				input.preferences.document.includeSupplements
+			)
 		}
-	});
+	);
 }
 
 export async function runLibraryBulkMutation(

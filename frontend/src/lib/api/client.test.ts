@@ -3,9 +3,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+	apiDownload,
 	apiDownloadGet,
 	apiRequest,
 	apiText,
+	DownloadCancelledError,
 	downloadFilename,
 	onAuthenticationRequired
 } from './client';
@@ -110,6 +112,101 @@ describe('downloadFilename', () => {
 });
 
 describe('GET downloads', () => {
+	it('streams the default fetch response into the selected file', async () => {
+		const encoder = new TextEncoder();
+		const events: string[] = [];
+		const write = vi.fn(async (chunk: Uint8Array) => {
+			void chunk;
+		});
+		const close = vi.fn(async () => undefined);
+		const createWritable = vi.fn(async () => ({ write, close }));
+		const showSaveFilePicker = vi.fn(async () => {
+			events.push('picker');
+			return { createWritable };
+		});
+		const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+			events.push('fetch');
+			expect((input as Request).method).toBe('GET');
+			return new Response(
+				new ReadableStream({
+					start(controller) {
+						controller.enqueue(encoder.encode('first'));
+						controller.enqueue(encoder.encode('second'));
+						controller.close();
+					}
+				}),
+				{ headers: { 'Content-Disposition': 'attachment; filename="paper.pdf"' } }
+			);
+		}) as typeof fetch;
+		vi.stubGlobal('fetch', fetcher);
+		vi.stubGlobal('showSaveFilePicker', showSaveFilePicker);
+
+		await apiDownloadGet(
+			'/items/{item_id}/attachments/{attachment_id}/content',
+			{ params: { path: { item_id: 'item-1', attachment_id: 'attachment-1' } } },
+			{ suggestedName: 'paper.pdf' }
+		);
+
+		expect(showSaveFilePicker).toHaveBeenCalledWith({ suggestedName: 'paper.pdf' });
+		expect(events.slice(0, 2)).toEqual(['picker', 'fetch']);
+		expect(write).toHaveBeenNthCalledWith(1, encoder.encode('first'));
+		expect(write).toHaveBeenNthCalledWith(2, encoder.encode('second'));
+		expect(close).toHaveBeenCalledOnce();
+	});
+
+	it('falls back to a Blob download when the save picker lacks user activation', async () => {
+		const link = document.createElement('a');
+		const click = vi.spyOn(link, 'click').mockImplementation(() => undefined);
+		vi.spyOn(document, 'createElement').mockReturnValue(link);
+		vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fallback');
+		const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+		const fetcher = vi.fn(
+			async () =>
+				new Response('content', {
+					headers: { 'Content-Disposition': 'attachment; filename="paper.pdf"' }
+				})
+		) as typeof fetch;
+		const showSaveFilePicker = vi.fn(async () => {
+			throw new DOMException('blocked', 'SecurityError');
+		});
+		vi.stubGlobal('fetch', fetcher);
+		vi.stubGlobal('showSaveFilePicker', showSaveFilePicker);
+
+		await apiDownloadGet('/items/{item_id}/attachments/{attachment_id}/content', {
+			params: { path: { item_id: 'item-1', attachment_id: 'attachment-1' } }
+		});
+
+		expect(click).toHaveBeenCalledOnce();
+		expect(revokeObjectURL).toHaveBeenCalledWith('blob:fallback');
+	});
+
+	it('saves a zero-byte file when a successful response has no body', async () => {
+		const link = document.createElement('a');
+		const click = vi.spyOn(link, 'click').mockImplementation(() => undefined);
+		vi.spyOn(document, 'createElement').mockReturnValue(link);
+		const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:empty');
+		vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+		const fetcher = vi.fn(
+			async () =>
+				new Response(null, {
+					status: 200,
+					headers: {
+						'Content-Length': '0',
+						'Content-Disposition': 'attachment; filename="empty.txt"'
+					}
+				})
+		) as typeof fetch;
+		vi.stubGlobal('fetch', fetcher);
+
+		await apiDownloadGet('/items/{item_id}/attachments/{attachment_id}/content', {
+			params: { path: { item_id: 'item-1', attachment_id: 'attachment-1' } }
+		});
+
+		expect(createObjectURL).toHaveBeenCalledWith(expect.objectContaining({ size: 0 }));
+		expect(link.download).toBe('empty.txt');
+		expect(click).toHaveBeenCalledOnce();
+	});
+
 	it('waits for the GET response before saving the returned content', async () => {
 		const link = document.createElement('a');
 		const click = vi.spyOn(link, 'click').mockImplementation(() => undefined);
@@ -153,6 +250,31 @@ describe('GET downloads', () => {
 				fetcher
 			)
 		).rejects.toMatchObject({ status: 409, code: 'document_not_ready', message: 'not ready' });
+	});
+});
+
+describe('POST downloads', () => {
+	it('reports save-picker cancellation distinctly from download failures', async () => {
+		const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+			expect((input as Request).method).toBe('POST');
+			return new Response('archive');
+		}) as typeof fetch;
+		const showSaveFilePicker = vi.fn(async () => {
+			throw new DOMException('cancelled', 'AbortError');
+		});
+		vi.stubGlobal('fetch', fetcher);
+		vi.stubGlobal('showSaveFilePicker', showSaveFilePicker);
+
+		await expect(
+			apiDownload('/items/documents/archive', {
+				body: {
+					item_ids: ['item-1'],
+					include_annotations: false,
+					include_supplements: false,
+					timezone: 'UTC'
+				}
+			})
+		).rejects.toBeInstanceOf(DownloadCancelledError);
 	});
 });
 

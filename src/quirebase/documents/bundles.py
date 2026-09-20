@@ -22,7 +22,7 @@ from quirebase.access.items import require_accessible_items
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceNotFound
 from quirebase.core.storage import get_object_store
-from quirebase.core.timezones import annotation_export_timezone
+from quirebase.core.timezones import annotation_export_timezone, as_utc
 from quirebase.documents.annotations import select_visible_annotations
 from quirebase.documents.pdf import export_annotations
 from quirebase.models import Attachment, FileRevision, Item, PdfAnnotation, User
@@ -259,7 +259,7 @@ async def _item_members(
             "revision_id": revision.id,
             "original_name": revision.original_name,
             "filename": archive_filename,
-            "created_at": revision.created_at.isoformat(),
+            "created_at": as_utc(revision.created_at).isoformat(),
             "processing_state": getattr(
                 revision.processing_state, "value", revision.processing_state
             ),

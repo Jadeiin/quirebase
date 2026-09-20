@@ -146,6 +146,7 @@
 				params: { path: { project_id: projectId } },
 				body: { confirmation }
 			});
+			await invalidateProject(queryClient, projectId);
 			await goto(resolve('/projects'));
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Project action failed'));

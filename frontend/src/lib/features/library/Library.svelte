@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
+	import { isDownloadCancelled } from '$lib/api/client';
 	import { apiErrorMessage } from '$lib/api/errors';
 	import ConfirmDialog from '$lib/design/ConfirmDialog.svelte';
 	import StatusNotice from '$lib/design/StatusNotice.svelte';
@@ -164,6 +165,7 @@
 			});
 			notice = $t('Bulk action completed');
 		} catch (reason) {
+			if (isDownloadCancelled(reason)) return;
 			error = apiErrorMessage(reason, $t('Bulk action failed'));
 		}
 	}

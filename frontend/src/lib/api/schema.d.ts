@@ -3632,6 +3632,8 @@ export interface components {
 			name: string;
 			/** Accessible Item Count */
 			accessible_item_count: number;
+			/** Can Manage */
+			can_manage: boolean;
 		};
 		/** TextMarkupPayload */
 		TextMarkupPayload: {

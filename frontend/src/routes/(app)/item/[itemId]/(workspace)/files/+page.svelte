@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { apiDownloadGet } from '$lib/api/client';
+	import { apiDownloadGet, isDownloadCancelled } from '$lib/api/client';
 	import { apiErrorMessage } from '$lib/api/errors';
 	import ConfirmDialog from '$lib/design/ConfirmDialog.svelte';
 	import Notice from '$lib/design/Notice.svelte';
@@ -46,6 +46,7 @@
 	function track(promise: Promise<unknown>) {
 		mutationError = '';
 		void promise.catch((error) => {
+			if (isDownloadCancelled(error)) return;
 			mutationError = apiErrorMessage(error, $t('Unable to save changes'));
 		});
 	}
@@ -65,12 +66,20 @@
 	function downloadFile(file: FileRow) {
 		track(
 			file.kind === 'revision'
-				? apiDownloadGet('/items/{item_id}/revisions/{revision_id}/content', {
-						params: { path: { item_id: params.itemId, revision_id: file.id } }
-					})
-				: apiDownloadGet('/items/{item_id}/attachments/{attachment_id}/content', {
-						params: { path: { item_id: params.itemId, attachment_id: file.id } }
-					})
+				? apiDownloadGet(
+						'/items/{item_id}/revisions/{revision_id}/content',
+						{
+							params: { path: { item_id: params.itemId, revision_id: file.id } }
+						},
+						{ suggestedName: file.original_name }
+					)
+				: apiDownloadGet(
+						'/items/{item_id}/attachments/{attachment_id}/content',
+						{
+							params: { path: { item_id: params.itemId, attachment_id: file.id } }
+						},
+						{ suggestedName: file.original_name }
+					)
 		);
 	}
 

@@ -6,6 +6,10 @@ from quirebase.access.items import visible_items_query
 from quirebase.models import Item, ItemTag, SystemRole, Tag, User
 
 
+def can_manage_tag(user: User, tag: Tag) -> bool:
+    return tag.created_by == user.id or user.role == SystemRole.administrator.value
+
+
 def visible_tags_query(user: User) -> Select[tuple[Tag]]:
     query = select(Tag)
     if user.role == SystemRole.administrator.value:

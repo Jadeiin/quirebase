@@ -18,7 +18,12 @@
 	import ItemRow from '$lib/design/ItemRow.svelte';
 
 	type Tool = 'duplicates' | 'tags' | 'citation-styles';
-	type Tag = { id: string; name: string; accessible_item_count: number };
+	type Tag = {
+		id: string;
+		name: string;
+		accessible_item_count: number;
+		can_manage: boolean;
+	};
 	type CitationStyle = { key: string; name: string; scope: 'builtin' | 'custom' };
 
 	let activeTool = $state<Tool>('duplicates');
@@ -328,10 +333,11 @@
 							<Button as="a" href={resolve(`/library?tag=${encodeURIComponent(tag.id)}`)}
 								>{$t('View Items')}</Button
 							>
-							<Button disabled={busy} onclick={() => renameTag(tag)}>{$t('Rename')}</Button>
-							<Button variant="danger" disabled={busy} onclick={() => deleteTag(tag)}
-								>{$t('Delete')}</Button
-							>
+							{#if tag.can_manage}<Button disabled={busy} onclick={() => renameTag(tag)}
+									>{$t('Rename')}</Button
+								><Button variant="danger" disabled={busy} onclick={() => deleteTag(tag)}
+									>{$t('Delete')}</Button
+								>{/if}
 						</div>
 					</ItemRow>
 				{:else}<p class="text-surface-600-400">{$t('No Tags match this filter.')}</p>{/each}
@@ -352,7 +358,8 @@
 				<label
 					>{$t('Source Tag')}<select class="select" bind:value={sourceTag}
 						><option value="">{$t('Select a Tag')}</option
-						>{#each tags.data ?? [] as tag (tag.id)}<option value={tag.id}>{tag.name}</option
+						>{#each (tags.data ?? []).filter((tag) => tag.can_manage) as tag (tag.id)}<option
+								value={tag.id}>{tag.name}</option
 							>{/each}</select
 					></label
 				>

@@ -26,6 +26,7 @@ from quirebase.core.errors import (
     ValidationFailure,
     VersionConflict,
 )
+from quirebase.core.timezones import as_utc
 from quirebase.documents.schemas import ArrowPayload, InkPayload, LinePayload, TextMarkupPayload
 from quirebase.models import (
     AnnotationScope,
@@ -84,8 +85,8 @@ def annotation_json(
         "author_display_name": author_display_name,
         "mine": record.author_id == current_user_id,
         "editable": editable,
-        "created_at": record.created_at.isoformat(),
-        "updated_at": record.updated_at.isoformat(),
+        "created_at": as_utc(record.created_at).isoformat(),
+        "updated_at": as_utc(record.updated_at).isoformat(),
         "replies": replies or [],
     }
 
@@ -105,8 +106,8 @@ def annotation_reply_json(
         "author_display_name": author_display_name,
         "mine": record.author_id == current_user_id,
         "editable": editable,
-        "created_at": record.created_at.isoformat(),
-        "updated_at": record.updated_at.isoformat(),
+        "created_at": as_utc(record.created_at).isoformat(),
+        "updated_at": as_utc(record.updated_at).isoformat(),
     }
 
 

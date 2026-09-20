@@ -4,6 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
+from quirebase.core.timezones import as_utc
 from quirebase.documents import AnnotationKind, AnnotationPayload, AnnotationScope
 
 
@@ -62,7 +63,7 @@ def document_list_view(item_id: str, workspace: Any) -> DocumentListView:
             original_name=row.original_name,
             mime_type=row.mime_type,
             size=row.size,
-            created_at=row.created_at.isoformat(),
+            created_at=as_utc(row.created_at).isoformat(),
             page_count=row.page_count,
             processing_state=row.processing_state,
         )
@@ -75,7 +76,7 @@ def document_list_view(item_id: str, workspace: Any) -> DocumentListView:
             original_name=row.original_name,
             mime_type=row.mime_type,
             size=row.size,
-            created_at=row.created_at.isoformat(),
+            created_at=as_utc(row.created_at).isoformat(),
         )
         for row in workspace.attachments
     ]

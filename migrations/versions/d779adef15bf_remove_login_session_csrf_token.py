@@ -25,6 +25,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Downgrade schema."""
+    # Original CSRF secrets cannot be reconstructed. Invalidate existing
+    # sessions instead of assigning every session the same known token.
+    op.execute(sa.text("DELETE FROM login_sessions"))
     op.add_column(
         "login_sessions",
         sa.Column("csrf_token", sa.String(length=64), nullable=False, server_default=""),

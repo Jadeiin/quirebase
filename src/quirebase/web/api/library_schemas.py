@@ -4,6 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from quirebase.core.timezones import as_utc
 from quirebase.library import ItemMetadata
 
 
@@ -55,6 +56,7 @@ class TagView(BaseModel):
     id: str
     name: str
     accessible_item_count: int
+    can_manage: bool
 
 
 class DiscussionMessageView(BaseModel):
@@ -140,8 +142,8 @@ def discussion_message_views(workspace: Any) -> list[DiscussionMessageView]:
             author_id=row.author_id,
             author_username=row.author.username,
             body=row.body,
-            created_at=row.created_at.isoformat(),
-            updated_at=row.updated_at.isoformat(),
+            created_at=as_utc(row.created_at).isoformat(),
+            updated_at=as_utc(row.updated_at).isoformat(),
         )
         for row in workspace.messages
     ]

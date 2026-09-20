@@ -2,10 +2,16 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { Dialog, Portal } from '@skeletonlabs/skeleton-svelte';
-	import { createQuery } from '@tanstack/svelte-query';
+	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { onMount } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { apiDownloadGet, apiRequest, apiText, type WorkspaceView } from '$lib/api/client';
+	import {
+		apiDownloadGet,
+		apiRequest,
+		apiText,
+		isDownloadCancelled,
+		type WorkspaceView
+	} from '$lib/api/client';
 	import { apiErrorMessage } from '$lib/api/errors';
 	import Button from '$lib/design/Button.svelte';
 	import DialogCloseButton from '$lib/design/DialogCloseButton.svelte';
@@ -18,6 +24,7 @@
 		type ExportPreferences
 	} from '$lib/export-preferences';
 	import { itemFilesQuery } from '$lib/features/item/queries';
+	import { invalidateLibrary } from '$lib/query/invalidation';
 	import { t } from '$lib/i18n';
 
 	type ActionSection = 'documents' | 'citation' | 'sources' | 'danger';
@@ -39,6 +46,7 @@
 	let selectedRevisions = new SvelteSet<string>();
 	let revisionSelectionInitialized = false;
 	let deleteArmed = $state(false);
+	const queryClient = useQueryClient();
 	const files = createQuery(() => itemFilesQuery(itemId, open && section === 'documents'));
 	const revisions = $derived(files.data?.files.filter((file) => file.kind === 'revision') ?? []);
 
@@ -81,6 +89,26 @@
 		};
 	}
 
+	function bibliographyFilename() {
+		if (format === 'csl') return 'quirebase-citations.txt';
+		const extension = format === 'ris' ? 'ris' : format === 'endnote' ? 'enw' : 'bib';
+		return `quirebase-export.${extension}`;
+	}
+
+	function archiveFilename() {
+		const includeAnnotations = preferences.document.includeAnnotations;
+		const includeSupplements = preferences.document.includeSupplements;
+		const kind =
+			includeAnnotations && includeSupplements
+				? 'annotated-bundle'
+				: includeAnnotations
+					? 'annotated-pdfs'
+					: includeSupplements
+						? 'bundle'
+						: 'pdfs';
+		return `quirebase-${kind}.zip`;
+	}
+
 	async function action(operation: () => Promise<unknown>, success: string) {
 		busy = true;
 		error = '';
@@ -89,6 +117,7 @@
 			await operation();
 			notice = success;
 		} catch (reason) {
+			if (isDownloadCancelled(reason)) return;
 			error = apiErrorMessage(reason, $t('Item action failed'));
 		} finally {
 			busy = false;
@@ -98,9 +127,13 @@
 	function downloadBibliography() {
 		void action(
 			() =>
-				apiDownloadGet('/items/{item_id}/bibliography', {
-					params: { path: { item_id: itemId }, query: bibliographyParameters() }
-				}),
+				apiDownloadGet(
+					'/items/{item_id}/bibliography',
+					{
+						params: { path: { item_id: itemId }, query: bibliographyParameters() }
+					},
+					{ suggestedName: bibliographyFilename() }
+				),
 			$t('Bibliography downloaded')
 		);
 	}
@@ -117,17 +150,21 @@
 	function downloadDocuments() {
 		void action(
 			() =>
-				apiDownloadGet('/items/{item_id}/archive', {
-					params: {
-						path: { item_id: itemId },
-						query: {
-							revisions: [...selectedRevisions].join(','),
-							include_annotations: preferences.document.includeAnnotations,
-							include_supplements: preferences.document.includeSupplements,
-							timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+				apiDownloadGet(
+					'/items/{item_id}/archive',
+					{
+						params: {
+							path: { item_id: itemId },
+							query: {
+								revisions: [...selectedRevisions].join(','),
+								include_annotations: preferences.document.includeAnnotations,
+								include_supplements: preferences.document.includeSupplements,
+								timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+							}
 						}
-					}
-				}),
+					},
+					{ suggestedName: archiveFilename() }
+				),
 			$t('Document bundle downloaded')
 		);
 	}
@@ -171,6 +208,7 @@
 				params: { path: { item_id: itemId } },
 				body: { confirmation: 'delete' }
 			});
+			await invalidateLibrary(queryClient);
 			await goto(resolve('/library'));
 		}, $t('Item deleted'));
 	}

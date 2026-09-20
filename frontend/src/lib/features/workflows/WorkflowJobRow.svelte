@@ -23,8 +23,9 @@
 			const id = job.id;
 			queueMicrotask(() => center.resolve(id, terminal));
 		} else if (status.isError && status.error) {
-			// Retries are exhausted: fail the job so waiters settle instead of
-			// leaving the initiating mutation busy indefinitely.
+			// A failed status request is terminal for this client-side tracker
+			// after retries are exhausted, even though the server workflow may
+			// still be running. Settle waiters and stop polling deterministically.
 			const message = apiErrorMessage(status.error, job.failureMessage);
 			const id = job.id;
 			queueMicrotask(() => center.fail(id, message));

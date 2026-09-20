@@ -2,7 +2,7 @@
 	import { resolve } from '$app/paths';
 	import { Menu, Portal } from '@skeletonlabs/skeleton-svelte';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { apiDownloadGet } from '$lib/api/client';
+	import { apiDownloadGet, isDownloadCancelled } from '$lib/api/client';
 	import { apiErrorMessage } from '$lib/api/errors';
 	import Icon from '$lib/design/Icon.svelte';
 	import RichText from '$lib/design/RichText.svelte';
@@ -23,6 +23,7 @@
 		try {
 			await operation;
 		} catch (reason) {
+			if (isDownloadCancelled(reason)) return;
 			downloadError = apiErrorMessage(reason, $t('Item action failed'));
 		}
 	}
@@ -30,24 +31,36 @@
 	function downloadOriginal() {
 		if (!viewer.data) return;
 		void download(
-			apiDownloadGet('/items/{item_id}/revisions/{revision_id}/content', {
-				params: { path: { item_id: itemId, revision_id: revisionId } }
-			})
+			apiDownloadGet(
+				'/items/{item_id}/revisions/{revision_id}/content',
+				{
+					params: { path: { item_id: itemId, revision_id: revisionId } }
+				},
+				{ suggestedName: viewer.data.revision.original_name }
+			)
 		);
 	}
 
 	function downloadAnnotated() {
+		if (!viewer.data) return;
+		const originalName = viewer.data.revision.original_name;
 		void download(
-			apiDownloadGet('/items/{item_id}/revisions/{revision_id}/export', {
-				params: {
-					path: { item_id: itemId, revision_id: revisionId },
-					query: {
-						include_annotations: true,
-						timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-						project_id: exportProjectId || undefined
+			apiDownloadGet(
+				'/items/{item_id}/revisions/{revision_id}/export',
+				{
+					params: {
+						path: { item_id: itemId, revision_id: revisionId },
+						query: {
+							include_annotations: true,
+							timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+							project_id: exportProjectId || undefined
+						}
 					}
+				},
+				{
+					suggestedName: `${originalName.replace(/\.[^/.]+$/, '')}-annotated.pdf`
 				}
-			})
+			)
 		);
 	}
 </script>

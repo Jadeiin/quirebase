@@ -47,6 +47,16 @@
 	});
 
 	$effect(() => {
+		if (!ready || !styles.data) return;
+		const available = styles.data.styles;
+		if (available.some((style) => style.key === preferences.citation.style)) return;
+		// `apa` is a built-in style and the include parameter will make it
+		// available in the next catalog response even when the search filter
+		// currently excludes it.
+		preferences.citation.style = 'apa';
+	});
+
+	$effect(() => {
 		const preview = citationPreview.data;
 		if (
 			!ready ||

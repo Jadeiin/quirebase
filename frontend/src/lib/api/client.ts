@@ -35,6 +35,17 @@ export class ApiError extends Error {
 	}
 }
 
+export class DownloadCancelledError extends Error {
+	constructor() {
+		super();
+		this.name = 'DownloadCancelledError';
+	}
+}
+
+export function isDownloadCancelled(reason: unknown): reason is DownloadCancelledError {
+	return reason instanceof DownloadCancelledError;
+}
+
 type HttpMethod = 'get' | 'put' | 'post' | 'delete' | 'patch';
 type RequestMethod = Uppercase<HttpMethod>;
 type SchemaPath = Extract<keyof paths, `/api/v1${string}`>;
@@ -169,7 +180,7 @@ async function rawRequest<Path extends ApiPath, Method extends HttpMethod>(
 	method: Method,
 	options: ApiRequestOptions<Path, Method> | undefined,
 	accept: string,
-	parseAs: 'text' | 'blob',
+	parseAs: 'text' | 'blob' | 'stream',
 	fetcher: typeof fetch
 ): Promise<{ data: unknown; response: Response }> {
 	const call = (client as unknown as Record<string, ClientCall>)[method.toUpperCase()];
@@ -208,21 +219,127 @@ function saveBlob(blob: Blob, filename: string) {
 	URL.revokeObjectURL(url);
 }
 
+type DownloadPicker = {
+	createWritable(): Promise<{ write(data: Uint8Array): Promise<void>; close(): Promise<void> }>;
+};
+
+export type ApiDownloadOptions = {
+	/** Filename to show in the save picker before the response headers arrive. */
+	suggestedName?: string;
+};
+
+const defaultDownloadFilename = 'quirebase-export';
+
+function downloadConfig(fetcherOrOptions: typeof fetch | ApiDownloadOptions): {
+	fetcher: typeof fetch;
+	suggestedName: string;
+} {
+	if (typeof fetcherOrOptions === 'function') {
+		return { fetcher: fetcherOrOptions, suggestedName: defaultDownloadFilename };
+	}
+	return {
+		fetcher: fetch,
+		suggestedName: fetcherOrOptions.suggestedName ?? defaultDownloadFilename
+	};
+}
+
+async function openSaveTarget(suggestedName: string): Promise<DownloadPicker | undefined> {
+	const browser = globalThis as typeof globalThis & {
+		showSaveFilePicker?: (options?: { suggestedName?: string }) => Promise<DownloadPicker>;
+	};
+	if (!browser.showSaveFilePicker) return undefined;
+	try {
+		return await browser.showSaveFilePicker({ suggestedName });
+	} catch (error) {
+		// A caller reached the helper outside the transient activation window.
+		// Fall back to the streamed response/Blob path; explicit user
+		// cancellation still propagates to the mutation.
+		if (
+			error !== null &&
+			typeof error === 'object' &&
+			'name' in error &&
+			error.name === 'SecurityError'
+		)
+			return undefined;
+		if (
+			error !== null &&
+			typeof error === 'object' &&
+			'name' in error &&
+			error.name === 'AbortError'
+		)
+			throw new DownloadCancelledError();
+		throw error;
+	}
+}
+
+async function saveStream(
+	stream: ReadableStream<Uint8Array> | null,
+	filename: string,
+	target?: DownloadPicker
+) {
+	if (!target) {
+		// File System Access is the only browser API that can write a fetch
+		// stream directly to disk. Keep a compatibility fallback for browsers
+		// without it.
+		saveBlob(stream ? await new Response(stream).blob() : new Blob(), filename);
+		return;
+	}
+	const writable = await target.createWritable();
+	if (!stream) {
+		await writable.close();
+		return;
+	}
+	const reader = stream.getReader();
+	try {
+		while (true) {
+			const chunk = await reader.read();
+			if (chunk.done) break;
+			await writable.write(chunk.value);
+		}
+		await writable.close();
+	} catch (error) {
+		await reader.cancel();
+		throw error;
+	}
+}
+
 export async function apiDownload<Path extends PathsWithMethod<'post'>>(
 	path: Path,
 	options: ApiRequestOptions<Path, 'post'>,
-	fetcher: typeof fetch = fetch
+	fetcherOrOptions: typeof fetch | ApiDownloadOptions = fetch
 ): Promise<void> {
-	const { data, response } = await rawRequest(path, 'post', options, '*/*', 'blob', fetcher);
+	const { fetcher, suggestedName } = downloadConfig(fetcherOrOptions);
+	if (fetcher !== fetch) {
+		const { data, response } = await rawRequest(path, 'post', options, '*/*', 'blob', fetcher);
+		const filename = downloadFilename(response.headers.get('Content-Disposition') ?? '');
+		saveBlob(data as Blob, filename);
+		return;
+	}
+	// The picker must be invoked before awaiting the request. Browsers only
+	// allow showSaveFilePicker during the click's transient activation window.
+	// The response filename is not available yet, so use the caller's best
+	// filename hint while preserving the click's transient activation.
+	const target = await openSaveTarget(suggestedName);
+	const { data, response } = await rawRequest(path, 'post', options, '*/*', 'stream', fetcher);
 	const filename = downloadFilename(response.headers.get('Content-Disposition') ?? '');
-	saveBlob(data as Blob, filename);
+	await saveStream(data as ReadableStream<Uint8Array> | null, filename, target);
 }
 
 export async function apiDownloadGet<Path extends PathsWithMethod<'get'>>(
 	path: Path,
 	options: ApiRequestOptions<Path, 'get'>,
-	fetcher: typeof fetch = fetch
+	fetcherOrOptions: typeof fetch | ApiDownloadOptions = fetch
 ): Promise<void> {
+	const { fetcher, suggestedName } = downloadConfig(fetcherOrOptions);
+	if (fetcher === fetch) {
+		// See apiDownload: opening the picker before awaiting fetch preserves the
+		// transient user activation required by the File System Access API.
+		const target = await openSaveTarget(suggestedName);
+		const { data, response } = await rawRequest(path, 'get', options, '*/*', 'stream', fetcher);
+		const filename = downloadFilename(response.headers.get('Content-Disposition') ?? '');
+		await saveStream(data as ReadableStream<Uint8Array> | null, filename, target);
+		return;
+	}
 	const { data, response } = await rawRequest(path, 'get', options, '*/*', 'blob', fetcher);
 	const filename = downloadFilename(response.headers.get('Content-Disposition') ?? '');
 	saveBlob(data as Blob, filename);

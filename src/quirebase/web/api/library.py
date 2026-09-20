@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, status
 
+from quirebase.access.tags import can_manage_tag
 from quirebase.library import (
     DiscussionWorkspace,
     ItemMetadata,
@@ -136,7 +137,15 @@ async def format_item_citation(
 @router.get("/tags", response_model=list[TagView])
 async def list_tags(user: ApiUser, db: Database) -> list[TagView]:
     rows = await list_accessible_tags_with_counts(db, user)
-    return [TagView(id=tag.id, name=tag.name, accessible_item_count=count) for tag, count in rows]
+    return [
+        TagView(
+            id=tag.id,
+            name=tag.name,
+            accessible_item_count=count,
+            can_manage=can_manage_tag(user, tag),
+        )
+        for tag, count in rows
+    ]
 
 
 @router.post("/items/{item_id}/tags", response_model=WriteResult)

@@ -12,7 +12,7 @@ from quirebase.access.items import (
     require_editable_item_for_mutation,
     visible_items_query,
 )
-from quirebase.access.tags import visible_tags_query
+from quirebase.access.tags import can_manage_tag, visible_tags_query
 from quirebase.audit import record_event
 from quirebase.core.errors import (
     DomainError,
@@ -181,7 +181,7 @@ async def apply_item_tag_selection(
 
 async def rename_tag(db: AsyncSession, user: User, tag_id: str, name: str) -> Tag:
     tag = await db.scalar(select(Tag).where(Tag.id == tag_id).with_for_update(key_share=True))
-    if tag is None or (tag.created_by != user.id and user.role != "administrator"):
+    if tag is None or not can_manage_tag(user, tag):
         raise ResourceUnavailable("tag not found or cannot be managed")
     normalized = normalize_tag_name(name)
     if await db.scalar(select(Tag.id).where(Tag.name == normalized, Tag.id != tag.id)):
@@ -199,7 +199,7 @@ async def rename_tag(db: AsyncSession, user: User, tag_id: str, name: str) -> Ta
 async def delete_tag(db: AsyncSession, user: User, tag_id: str) -> None:
     # Deleting a taxonomy root must block FK association inserts until commit.
     tag = await db.scalar(select(Tag).where(Tag.id == tag_id).with_for_update())
-    if tag is None or (tag.created_by != user.id and user.role != "administrator"):
+    if tag is None or not can_manage_tag(user, tag):
         raise ResourceUnavailable("tag not found or cannot be managed")
     await db.delete(tag)
     await db.flush()
