@@ -14,6 +14,15 @@
 
 	let imageLoadFailed = $state(false);
 
+	function isSafeExternalUrl(value: string): boolean {
+		try {
+			const protocol = new URL(value).protocol;
+			return protocol === 'http:' || protocol === 'https:';
+		} catch {
+			return false;
+		}
+	}
+
 	$effect(() => {
 		if (data.thumbnail) {
 			imageLoadFailed = false;
@@ -168,15 +177,24 @@
 			<h2 class="m-0 mb-4 text-lg">{$t('External links')}</h2>
 			<div class="grid grid-cols-1 gap-2">
 				{#each details?.metadata.urls ?? [] as url, index (url)}
-					<a
-						class="grid min-w-0 grid-cols-1 gap-0.5 rounded-lg border border-surface-300-700 px-3 py-2 text-sm no-underline hover:bg-primary-50-950"
-						href={url}
-						target="_blank"
-						rel="external noreferrer"
-						><strong>{$t('External source {number}', { number: index + 1 })}</strong><span
-							class="truncate text-xs text-surface-600-400">{url}</span
-						></a
-					>
+					{#if isSafeExternalUrl(url)}
+						<a
+							class="grid min-w-0 grid-cols-1 gap-0.5 rounded-lg border border-surface-300-700 px-3 py-2 text-sm no-underline hover:bg-primary-50-950"
+							href={url}
+							target="_blank"
+							rel="external noreferrer"
+							><strong>{$t('External source {number}', { number: index + 1 })}</strong><span
+								class="truncate text-xs text-surface-600-400">{url}</span
+							></a
+						>
+					{:else}
+						<span
+							class="grid min-w-0 grid-cols-1 gap-0.5 rounded-lg border border-surface-300-700 px-3 py-2 text-sm"
+							><strong>{$t('External source {number}', { number: index + 1 })}</strong><span
+								class="truncate text-xs text-surface-600-400">{url}</span
+							></span
+						>
+					{/if}
 				{:else}
 					<span class="text-sm text-surface-600-400">{$t('No external links.')}</span>
 				{/each}

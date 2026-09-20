@@ -1,5 +1,5 @@
 import { queryOptions } from '@tanstack/svelte-query';
-import { apiRequest } from '$lib/api/client';
+import { ApiError, apiRequest } from '$lib/api/client';
 import type { components } from '$lib/api/schema';
 
 export type WorkflowStatus = components['schemas']['WorkflowStatusView'];
@@ -12,6 +12,13 @@ export const workflowKeys = {
 
 export function isTerminalWorkflowState(state: WorkflowState | undefined): boolean {
 	return state === 'succeeded' || state === 'failed' || state === 'cancelled';
+}
+
+export function isRecoverableWorkflowStatusError(error: unknown): boolean {
+	if (!(error instanceof ApiError)) return true;
+	return (
+		error.status === 408 || error.status === 425 || error.status === 429 || error.status >= 500
+	);
 }
 
 export function workflowStatusQuery(workflowId: string, shouldPoll?: () => boolean) {

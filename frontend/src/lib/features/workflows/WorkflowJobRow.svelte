@@ -3,7 +3,11 @@
 	import { apiErrorMessage } from '$lib/api/errors';
 	import Icon from '$lib/design/Icon.svelte';
 	import { getWorkflowCenter, type TrackedJob } from '$lib/features/workflows/center.svelte';
-	import { isTerminalWorkflowState, workflowStatusQuery } from '$lib/features/workflows/queries';
+	import {
+		isRecoverableWorkflowStatusError,
+		isTerminalWorkflowState,
+		workflowStatusQuery
+	} from '$lib/features/workflows/queries';
 	import { t } from '$lib/i18n';
 	import Button from '$lib/design/Button.svelte';
 
@@ -22,10 +26,10 @@
 			const terminal = current;
 			const id = job.id;
 			queueMicrotask(() => center.resolve(id, terminal));
-		} else if (status.isError && status.error) {
+		} else if (status.isError && status.error && !isRecoverableWorkflowStatusError(status.error)) {
 			// A failed status request is terminal for this client-side tracker
-			// after retries are exhausted, even though the server workflow may
-			// still be running. Settle waiters and stop polling deterministically.
+			// when the API reports a permanent error. Transport, timeout, rate
+			// limit, and server errors stay active so refetchInterval can recover.
 			const message = apiErrorMessage(status.error, job.failureMessage);
 			const id = job.id;
 			queueMicrotask(() => center.fail(id, message));
