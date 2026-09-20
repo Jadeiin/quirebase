@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import httpx2
 import pytest
+from app_helpers import create_web_test_app
 from sqlalchemy import select
 from typer.testing import CliRunner
 
@@ -49,10 +50,9 @@ async def account_client(db, session_factory, tmp_path, monkeypatch):
     raw_token = "test-session-token"
     login, _generated = await create_login_session(db, user, session_days=1)
     login.token_hash = token_hash(raw_token)
-    login.csrf_token = "test-csrf"
     await db.commit()
 
-    test_app = create_app(mcp_session_factory=session_factory)
+    test_app = create_web_test_app(mcp_session_factory=session_factory)
 
     async def override_db():
         await asyncio.sleep(0)
@@ -62,7 +62,10 @@ async def account_client(db, session_factory, tmp_path, monkeypatch):
     client = httpx2.AsyncClient(
         transport=httpx2.ASGITransport(app=test_app),
         base_url="http://testserver",
-        headers={"Accept-Language": "zh-CN,zh;q=0.9"},
+        headers={
+            "Accept-Language": "zh-CN,zh;q=0.9",
+            "Origin": "http://testserver",
+        },
     )
     client.cookies.set(get_settings().session_cookie, raw_token)
     return client, user
@@ -255,7 +258,7 @@ async def test_mcp_http_accepts_only_a_valid_bearer_api_token(async_db, async_se
                 "jsonrpc": "2.0",
                 "id": 2,
                 "method": "tools/call",
-                "params": {"name": "library.search", "arguments": {"query": ""}},
+                "params": {"name": "library.search_items", "arguments": {"query": ""}},
             },
             headers={**headers, "Authorization": f"Bearer {grant.raw_token}"},
         )
@@ -289,7 +292,7 @@ async def test_mcp_http_rejects_malformed_arguments_without_protocol_audit(
                 "jsonrpc": "2.0",
                 "id": 1,
                 "method": "tools/call",
-                "params": {"name": "library.get_item", "arguments": {}},
+                "params": {"name": "library.get_library_item", "arguments": {}},
             },
             headers=headers,
         )
@@ -322,6 +325,15 @@ async def test_mcp_http_preserves_web_allowed_host_semantics(
     monkeypatch.setenv("QUIREBASE_ALLOWED_HOSTS", allowed_hosts)
     get_settings.cache_clear()
     test_app = create_app(mcp_session_factory=async_session_factory)
+
+    async def override_db():
+        session = async_session_factory()
+        try:
+            yield session
+        finally:
+            await session.close()
+
+    test_app.dependency_overrides[get_db] = override_db
     initialize = {
         "jsonrpc": "2.0",
         "id": 1,
@@ -342,7 +354,19 @@ async def test_mcp_http_preserves_web_allowed_host_semantics(
     try:
         async with mcp_client(test_app) as client:
             response = await client.post("/mcp/", json=initialize, headers=headers)
+            called = await client.post(
+                "/mcp/",
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 2,
+                    "method": "tools/call",
+                    "params": {"name": "library.search_items", "arguments": {}},
+                },
+                headers=headers,
+            )
         assert response.status_code == 200
+        assert called.status_code == 200
+        assert called.json()["result"]["isError"] is False
     finally:
         get_settings.cache_clear()
 
@@ -503,39 +527,32 @@ async def test_member_can_create_view_and_revoke_own_api_token_from_settings(
     db = async_db
     client, user = await account_client(db, async_session_factory, tmp_path, monkeypatch)
     try:
-        page = await client.get("/account/settings")
+        page = await client.get("/api/v1/account")
         assert page.status_code == 200
-        assert "MCP 和 API Token" in page.text
-        assert "http://testserver/api/v1/" in page.text
-        assert "http://testserver/mcp/" in page.text
-        assert "Authorization: Bearer YOUR_API_TOKEN" in page.text
+        assert page.json()["user"]["username"] == "reader"
+        assert page.json()["api_tokens"] == []
 
         created = await client.post(
-            "/account/api-tokens",
-            data={"csrf_token": "test-csrf", "name": "Desktop MCP", "days": "30"},
+            "/api/v1/account/api-tokens",
+            json={"name": "Desktop MCP", "days": 30},
         )
         token = await db.scalar(
             select(ApiToken).where(ApiToken.user_id == user.id, ApiToken.name == "Desktop MCP")
         )
         assert token is not None
         assert created.status_code == 201
-        assert created.headers["cache-control"] == "no-store"
-        assert API_TOKEN_PREFIX in created.text
-        assert token.token_hash not in created.text
+        assert created.headers["cache-control"] == "private, no-store"
+        assert created.json()["token"].startswith(API_TOKEN_PREFIX)
+        assert token.token_hash not in created.json()["token"]
 
-        revisited = await client.get("/account/settings")
+        revisited = await client.get("/api/v1/account")
         assert revisited.status_code == 200
-        assert "Desktop MCP" in revisited.text
+        assert revisited.json()["api_tokens"][0]["name"] == "Desktop MCP"
         assert API_TOKEN_PREFIX not in revisited.text
 
-        revoked = await client.post(
-            f"/account/api-tokens/{token.id}/revoke",
-            data={"csrf_token": "test-csrf"},
-            follow_redirects=False,
-        )
+        revoked = await client.delete(f"/api/v1/account/api-tokens/{token.id}")
         await db.refresh(token)
-        assert revoked.status_code == 303
-        assert revoked.headers["location"] == "/account/settings#api-tokens"
+        assert revoked.status_code == 200
         assert token.revoked_at is not None
     finally:
         await client.aclose()
@@ -553,10 +570,7 @@ async def test_member_cannot_revoke_another_users_api_token(
         await db.commit()
         grant = await create_api_token(db, other, "Other token", expires_in_days=30)
 
-        response = await client.post(
-            f"/account/api-tokens/{grant.token_id}/revoke",
-            data={"csrf_token": "test-csrf"},
-        )
+        response = await client.delete(f"/api/v1/account/api-tokens/{grant.token_id}")
 
         assert response.status_code == 404
         assert await verify_api_token(db, grant.raw_token) is not None

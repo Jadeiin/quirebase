@@ -11,7 +11,7 @@ from sqlalchemy import select
 from test_http import authenticated_async_client
 
 from quirebase.core.config import get_settings
-from quirebase.models import AuditEvent
+from quirebase.models import AuditEvent, Item, ItemIdentifier
 
 
 @pytest.mark.anyio
@@ -19,7 +19,7 @@ async def test_online_search_page_keeps_search_separate_from_import(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
     db = async_db
-    client, item, _revision = await authenticated_async_client(
+    client, _item, _revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
     result = CandidateRecord(
@@ -35,93 +35,180 @@ async def test_online_search_page_keeps_search_separate_from_import(
         AsyncMock(return_value=CandidatePage("openalex", (result,), 11, 1, 10)),
     )
     try:
-        empty = await client.get("/online-search")
-        assert empty.status_code == 200
-        assert "联网检索" in empty.text
-        assert "Candidate paper" not in empty.text
-
-        searched = await client.get(
-            "/online-search",
-            params=[
-                ("provider", "openalex"),
-                ("operator", "and"),
-                ("field", "title"),
-                ("term", "quantum"),
-            ],
+        searched = await client.post(
+            "/api/v1/discovery/search",
+            json={
+                "provider": "openalex",
+                "clauses": [{"operator": "and", "field": "title", "term": "quantum"}],
+            },
         )
         assert searched.status_code == 200
-        assert "Candidate paper" in searched.text
-        assert 'action="/metadata/preview"' in searched.text
-        assert 'name="csrf_token" value="test-csrf"' in searched.text
-        assert 'name="identifier" value="W99"' in searched.text
+        assert searched.json() == {
+            "provider": "openalex",
+            "results": [
+                {
+                    "provider": "openalex",
+                    "identifier_provider": "openalex",
+                    "identifier": "W99",
+                    "title": "Candidate paper",
+                    "authors": "Researcher",
+                    "publication_title": "Journal",
+                    "publication_date": "2026",
+                    "doi": None,
+                    "abstract": None,
+                    "imported": False,
+                }
+            ],
+            "total": 11,
+            "page": 1,
+            "per_page": 10,
+        }
         event = await db.scalar(select(AuditEvent).where(AuditEvent.action == "metadata.search"))
         assert event is not None
         assert json.loads(event.detail)["fields"] == ["title"]
-        assert item.title not in searched.text
+        assert await db.scalar(select(AuditEvent).where(AuditEvent.action == "item.create")) is None
+        assert (await db.scalars(select(Item.title))).all() == ["Paper"]
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_discovery_imported_check_queries_only_returned_identifiers(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    client, item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    item.identifiers = "not valid JSON"
+    async_db.add(ItemIdentifier(item_id=item.id, provider="openalex", value="W99"))
+    await async_db.commit()
+    result = CandidateRecord(
+        provider="openalex",
+        identifier=Identifier("openalex", "w99"),
+        title="Already imported",
+        doi="10.1000/candidate",
+    )
+    monkeypatch.setattr(
+        "quirebase.library.discovery.search_candidates",
+        AsyncMock(return_value=CandidatePage("openalex", (result,), 1, 1, 10)),
+    )
+    try:
+        searched = await client.post(
+            "/api/v1/discovery/search",
+            json={
+                "provider": "openalex",
+                "clauses": [{"operator": "and", "field": "title", "term": "imported"}],
+            },
+        )
+
+        assert searched.status_code == 200
+        assert searched.json()["results"][0]["imported"] is True
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_discovery_search_uses_runtime_provider_settings(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    from quirebase.models import User
+    from quirebase.operations.settings import update_runtime_settings
+
+    admin = User(username="runtime_provider_admin", password_hash="unused", role="administrator")
+    async_db.add(admin)
+    await async_db.commit()
+    await update_runtime_settings(async_db, admin, {"nasa_ads_token": "runtime-token"})
+    client, _item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    search_candidates = AsyncMock(return_value=CandidatePage("nasa", (), 0, 1, 10))
+    monkeypatch.setattr("quirebase.library.discovery.search_candidates", search_candidates)
+    try:
+        providers = await client.get("/api/v1/discovery/providers")
+        searched = await client.post(
+            "/api/v1/discovery/search",
+            json={
+                "provider": "nasa",
+                "clauses": [{"operator": "and", "field": "any", "term": "stars"}],
+            },
+        )
+
+        assert searched.status_code == 200
+        assert {provider["id"] for provider in providers.json()} >= {"nasa", "openlibrary", "pmc"}
+        assert search_candidates.await_args.args[1].nasa_ads_token == "runtime-token"
     finally:
         await client.aclose()
         get_settings.cache_clear()
 
 
 @pytest.mark.parametrize(
-    ("year_from", "expected_message"),
-    [("not-a-year", "invalid literal"), ("999", "starting year is invalid")],
+    ("year_from", "expected_error"),
+    [
+        ("not-a-year", "int_parsing"),
+        ("999", "greater_than_equal"),
+    ],
 )
 @pytest.mark.anyio
-async def test_online_search_page_renders_invalid_year_errors(
-    async_db, async_session_factory, tmp_path, monkeypatch, year_from, expected_message
+async def test_discovery_search_rejects_invalid_years(
+    async_db, async_session_factory, tmp_path, monkeypatch, year_from, expected_error
 ):
     client, _item, _revision = await authenticated_async_client(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
     try:
-        response = await client.get(
-            "/online-search",
-            params={
+        response = await client.post(
+            "/api/v1/discovery/search",
+            json={
                 "provider": "crossref",
-                "field": "title",
-                "operator": "and",
-                "term": "quantum",
+                "clauses": [{"field": "title", "operator": "and", "term": "quantum"}],
                 "year_from": year_from,
             },
         )
 
-        assert response.status_code == 200
-        assert expected_message in response.text
+        assert response.status_code == 422
+        error = response.json()
+        assert error["code"] == "validation_failed"
+        assert error["fields"][0]["code"] == expected_error
+        assert error["fields"][0]["path"] == ["body", "year_from"]
+        assert "input" not in error["fields"][0]
     finally:
         await client.aclose()
         get_settings.cache_clear()
 
 
 @pytest.mark.anyio
-async def test_search_page_preserves_sparse_condition_rows(
+async def test_discovery_search_preserves_sparse_condition_rows(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
     client, _item, _revision = await authenticated_async_client(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
+    search_candidates = AsyncMock(return_value=CandidatePage("openalex", (), 0, 1, 10))
     monkeypatch.setattr(
         "quirebase.library.discovery.search_candidates",
-        AsyncMock(return_value=CandidatePage("openalex", (), 0, 1, 10)),
+        search_candidates,
     )
     try:
-        response = await client.get(
-            "/online-search",
-            params=[
-                ("field", "title"),
-                ("field", "author"),
-                ("field", "abstract"),
-                ("operator", "and"),
-                ("operator", "and"),
-                ("operator", "not"),
-                ("term", "quantum"),
-                ("term", ""),
-                ("term", "review"),
-            ],
+        response = await client.post(
+            "/api/v1/discovery/search",
+            json={
+                "provider": "openalex",
+                "clauses": [
+                    {"field": "title", "operator": "and", "term": "quantum"},
+                    {"field": "author", "operator": "and", "term": ""},
+                    {"field": "abstract", "operator": "not", "term": "review"},
+                ],
+            },
         )
         assert response.status_code == 200
-        assert 'data-initial-clauses="3"' in response.text
-        assert 'value="review"' in response.text
+        search = search_candidates.await_args.args[0]
+        assert [(clause.field, clause.operator, clause.term) for clause in search.clauses] == [
+            ("title", "and", "quantum"),
+            ("author", "and", ""),
+            ("abstract", "not", "review"),
+        ]
     finally:
         await client.aclose()
         get_settings.cache_clear()

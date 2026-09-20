@@ -111,6 +111,14 @@ class ItemThumbnail:
     source_id: str
 
 
+@dataclass(frozen=True)
+class ItemThumbnailSource:
+    object_key: str
+    media_type: str
+    source_kind: str
+    source_id: str
+
+
 async def _validate_staged_pdf(store: ObjectStore, object_key: str) -> None:
     """Own materialization until the validator thread has actually stopped."""
     async with store.materialize(object_key) as path:
@@ -536,6 +544,17 @@ async def get_attachment_file(
     )
 
 
+async def head_attachment_file(
+    db: AsyncSession, user: User, item_id: str, attachment_id: str
+) -> tuple[ObjectMetadata, str, str]:
+    record = await require_attachment(db, user, item_id, attachment_id)
+    return (
+        await get_object_store().head(record.object_key),
+        record.original_name,
+        record.mime_type or "application/octet-stream",
+    )
+
+
 async def get_revision_file(
     db: AsyncSession,
     user: User,
@@ -583,7 +602,22 @@ async def get_revision_thumbnail(
     return await get_object_store().get(key)
 
 
-async def get_item_thumbnail(db: AsyncSession, user: User, item_id: str) -> ItemThumbnail:
+async def head_revision_thumbnail(
+    db: AsyncSession, user: User, item_id: str, revision_id: str
+) -> ObjectMetadata:
+    revision = await require_revision(db, user, revision_id)
+    if revision.item_id != item_id:
+        raise ResourceNotFound("revision not found for item")
+    key = revision.thumbnail_object_key
+    if key is None:
+        raise ResourceNotFound("revision thumbnail not found")
+    store = get_object_store()
+    if not await store.exists(key):
+        raise ResourceNotFound("revision thumbnail not found")
+    return await store.head(key)
+
+
+async def resolve_item_thumbnail(db: AsyncSession, user: User, item_id: str) -> ItemThumbnailSource:
     await require_readable_item(db, user, item_id)
     graphical_abstract = await db.scalar(
         select(Attachment).where(
@@ -594,8 +628,8 @@ async def get_item_thumbnail(db: AsyncSession, user: User, item_id: str) -> Item
     if graphical_abstract is not None:
         store = get_object_store()
         if await store.exists(graphical_abstract.object_key):
-            return ItemThumbnail(
-                response=await store.get(graphical_abstract.object_key),
+            return ItemThumbnailSource(
+                object_key=graphical_abstract.object_key,
                 media_type=graphical_abstract.mime_type,
                 source_kind="graphical_abstract",
                 source_id=graphical_abstract.id,
@@ -616,13 +650,26 @@ async def get_item_thumbnail(db: AsyncSession, user: User, item_id: str) -> Item
             continue
         store = get_object_store()
         if await store.exists(key):
-            return ItemThumbnail(
-                response=await store.get(key),
+            return ItemThumbnailSource(
+                object_key=key,
                 media_type="image/png",
                 source_kind="pdf_thumbnail",
                 source_id=revision.id,
             )
     raise ResourceNotFound("item thumbnail not found")
+
+
+async def get_item_thumbnail(source: ItemThumbnailSource) -> ItemThumbnail:
+    return ItemThumbnail(
+        response=await get_object_store().get(source.object_key),
+        media_type=source.media_type,
+        source_kind=source.source_kind,
+        source_id=source.source_id,
+    )
+
+
+async def head_item_thumbnail(source: ItemThumbnailSource) -> ObjectMetadata:
+    return await get_object_store().head(source.object_key)
 
 
 async def delete_file_revision(

@@ -85,6 +85,7 @@ from quirebase.library.item_workspace import (
     WorkspaceView,
     open_item_workspace,
 )
+from quirebase.library.providers import acquire_remote_pdf
 from quirebase.library.tags import (
     TagConflict,
     add_existing_tag_to_item,
@@ -130,6 +131,7 @@ __all__ = [
     "UpstreamServiceError",
     "WorkspaceSection",
     "WorkspaceView",
+    "acquire_remote_pdf",
     "add_discussion_message",
     "add_existing_tag_to_item",
     "add_tag_to_item",

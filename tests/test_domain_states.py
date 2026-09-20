@@ -48,6 +48,7 @@ from quirebase.projects.lifecycle import (
     set_project_state,
     set_project_visibility,
     transfer_project_ownership,
+    update_project_settings,
 )
 from quirebase.projects.members import (
     ProjectMemberConflict,
@@ -575,6 +576,71 @@ async def test_project_rename_and_delete_do_not_change_item_search(async_db):
     await delete_project(db, owner, project.id, "RenamedProjectToken")
 
     assert await index.search(db, "RenamedProjectToken") == []
+
+
+@pytest.mark.anyio
+async def test_project_settings_validate_before_mutating_any_field(async_db):
+    owner = User(username="settings-owner", password_hash="unused")
+    async_db.add(owner)
+    await async_db.commit()
+    project = await create_project(
+        async_db,
+        owner,
+        "Original name",
+        visibility=ProjectVisibility.private,
+        description="Original description",
+    )
+
+    with pytest.raises(ValidationFailure, match="invalid project visibility"):
+        await update_project_settings(
+            async_db,
+            owner,
+            project.id,
+            name="Changed name",
+            description="Changed description",
+            visibility="invalid",
+        )
+
+    await async_db.refresh(project)
+    assert project.name == "Original name"
+    assert project.description == "Original description"
+    assert project.visibility == ProjectVisibility.private
+
+    updated = await update_project_settings(
+        async_db,
+        owner,
+        project.id,
+        name="  Changed name  ",
+        description="  Changed description  ",
+        visibility=ProjectVisibility.public,
+    )
+    assert updated.name == "Changed name"
+    assert updated.description == "Changed description"
+    assert updated.visibility == ProjectVisibility.public
+
+
+@pytest.mark.anyio
+async def test_administrator_can_update_project_settings(async_db):
+    owner = User(username="project-settings-owner", password_hash="unused")
+    administrator = User(
+        username="project-settings-admin", password_hash="unused", role="administrator"
+    )
+    async_db.add_all([owner, administrator])
+    await async_db.commit()
+    project = await create_project(async_db, owner, "Original name")
+
+    updated = await update_project_settings(
+        async_db,
+        administrator,
+        project.id,
+        name="Administrator rename",
+        description="Managed by an administrator",
+        visibility=ProjectVisibility.public,
+    )
+
+    assert updated.name == "Administrator rename"
+    assert updated.description == "Managed by an administrator"
+    assert updated.visibility == ProjectVisibility.public
 
 
 @pytest.mark.anyio

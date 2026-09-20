@@ -12,9 +12,9 @@ license = "AGPL-3.0-only"
 dependencies = [
   "alembic>=1.16,<2",
   "argon2-cffi>=25,<26",
-  "fastapi>=0.116,<1",
+  "fastapi>=0.141.1,<1",
+  "httpx2>=2.12,<3",
   "inquiro==0.1.3",
-  "jinja2>=3.1,<4",
   "pymupdf>=1.28,<1.29",
   "pydantic-settings>=2.10,<3",
   "python-multipart>=0.0.20,<1",
@@ -22,10 +22,9 @@ dependencies = [
   "sqlalchemy[asyncio,aiosqlite]>=2.0,<3",
   "typer>=0.16,<1",
   "uvicorn[standard]>=0.35,<1",
-  "babel>=2.18.0",
   "tzdata>=2025.2; sys_platform == 'win32'",
   "tzlocal>=5.3,<6",
-  "mcp>=2.1,<3",
+  "fastmcp>=4,<5",
   "obstore>=0.11.1,<0.12",
   "stream-zip>=0.0.84,<0.1",
   "dbos>=2.31.0,<3",
@@ -54,6 +53,7 @@ dev = [
   "prek>=0.3,<1",
   "pytest>=8.4,<9",
   "pytest-cov>=6.2,<7",
+  "pytest-xdist>=3.8,<4",
   "ruff>=0.16,<1",
 ]
 
@@ -80,7 +80,9 @@ prepend_sys_path = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/quirebase"]
-artifacts = ["src/quirebase/static"]
+
+[tool.hatch.build.hooks.custom]
+path = "scripts/hatch_build.py"
 
 [tool.hatch.build.targets.wheel.force-include]
 "migrations" = "quirebase/migrations"
@@ -88,11 +90,14 @@ artifacts = ["src/quirebase/static"]
 "THIRD_PARTY.md" = "quirebase/THIRD_PARTY.md"
 
 [tool.hatch.build.targets.sdist]
-artifacts = ["src/quirebase/static"]
+artifacts = ["frontend/build"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "packages/inquiro/tests", "packages/rubrica/tests"]
-markers = ["oa: tests using the separately downloaded open-access PDF corpus"]
+markers = [
+  "oa: tests using the separately downloaded open-access PDF corpus",
+  "shared_postgres: tests that mutate the configured shared PostgreSQL database",
+]
 
 [tool.ruff]
 line-length = 100

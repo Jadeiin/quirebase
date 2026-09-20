@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from quirebase.documents.annotations import (
+    AnnotationReview,
     DocumentNotReady,
     create_annotation_reply,
     create_document_annotation,
@@ -9,6 +10,7 @@ from quirebase.documents.annotations import (
     list_document_annotations,
     restore_annotation_reply,
     restore_document_annotation,
+    review_item_annotations,
     update_annotation_reply,
     update_document_annotation,
 )
@@ -23,8 +25,10 @@ from quirebase.documents.exports import (
     get_export_file,
     get_export_status,
 )
+from quirebase.documents.remote import acquire_remote_attachment
 from quirebase.documents.revisions import (
     ItemThumbnail,
+    ItemThumbnailSource,
     UnsupportedMediaType,
     create_attachment,
     delete_attachment,
@@ -36,14 +40,20 @@ from quirebase.documents.revisions import (
     get_pdf_viewer_data,
     get_revision_file,
     get_revision_thumbnail,
+    head_attachment_file,
+    head_item_thumbnail,
     head_revision_file,
+    head_revision_thumbnail,
+    resolve_item_thumbnail,
     store_pdf_revision,
 )
 from quirebase.documents.schemas import (
     AnnotationCreate,
+    AnnotationKind,
     AnnotationPayload,
     AnnotationReplyCreate,
     AnnotationReplyUpdate,
+    AnnotationScope,
     AnnotationStyle,
     AnnotationUpdate,
     Point,
@@ -52,17 +62,22 @@ from quirebase.documents.schemas import (
 
 __all__ = [
     "AnnotationCreate",
+    "AnnotationKind",
     "AnnotationPayload",
     "AnnotationReplyCreate",
     "AnnotationReplyUpdate",
+    "AnnotationReview",
+    "AnnotationScope",
     "AnnotationStyle",
     "AnnotationUpdate",
     "DocumentNotReady",
     "ItemDownloadBundle",
     "ItemThumbnail",
+    "ItemThumbnailSource",
     "Point",
     "Rect",
     "UnsupportedMediaType",
+    "acquire_remote_attachment",
     "assemble_document_bundle",
     "create_annotation_reply",
     "create_attachment",
@@ -83,10 +98,15 @@ __all__ = [
     "get_pdf_viewer_data",
     "get_revision_file",
     "get_revision_thumbnail",
+    "head_attachment_file",
+    "head_item_thumbnail",
     "head_revision_file",
+    "head_revision_thumbnail",
     "list_document_annotations",
+    "resolve_item_thumbnail",
     "restore_annotation_reply",
     "restore_document_annotation",
+    "review_item_annotations",
     "store_pdf_revision",
     "update_annotation_reply",
     "update_document_annotation",

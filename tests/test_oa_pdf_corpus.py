@@ -71,13 +71,11 @@ async def test_real_oa_pdf_web_worker_search_annotation_export(
     try:
         with source.open("rb") as stream:
             uploaded = await client.post(
-                f"/items/{item.id}/pdf",
-                data={"csrf_token": "test-csrf"},
+                f"/api/v1/items/{item.id}/revisions",
                 files={"pdf": (source.name, stream, "application/pdf")},
-                follow_redirects=False,
             )
-        assert uploaded.status_code == 303
-        workflow_id = uploaded.headers["location"].partition("workflow=")[2]
+        assert uploaded.status_code == 202
+        workflow_id = uploaded.json()["id"]
         workflow = await fake_durable_operations.get(workflow_id)
         assert workflow is not None
         assert workflow.name == "documents.upload_revision"

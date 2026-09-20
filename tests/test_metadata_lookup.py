@@ -35,10 +35,10 @@ async def test_online_preview_uses_existing_confirmed_import_flow(
     )
     try:
         preview = await client.post(
-            "/metadata/preview",
-            data={"csrf_token": "test-csrf", "identifier": "10.1/looked-up", "provider": "auto"},
+            "/api/v1/imports/identifier",
+            json={"identifier": "10.1/looked-up", "provider": "auto"},
         )
-        assert preview.status_code == 200
+        assert preview.status_code == 201
         assert "Looked-up paper" in preview.text
         assert await db.scalar(select(Item).where(Item.title == "Looked-up paper")) is None
         batch = await db.scalar(
@@ -46,11 +46,10 @@ async def test_online_preview_uses_existing_confirmed_import_flow(
         )
         assert batch is not None
         committed = await client.post(
-            f"/bibliography/import/{batch.id}",
-            follow_redirects=False,
-            data={"csrf_token": "test-csrf"},
+            f"/api/v1/imports/{batch.id}/commit",
+            json={},
         )
-        assert committed.status_code == 303
+        assert committed.status_code == 200
         imported = await db.scalar(select(Item).where(Item.title == "Looked-up paper"))
         assert imported is not None
         assert imported.doi == "10.1/looked-up"

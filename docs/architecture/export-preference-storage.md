@@ -1,5 +1,9 @@
 # Export preference storage
 
+> Historical design note. ADR 0012 replaced the Alpine/Jinja frontend described below with the
+> Svelte application. The storage boundary and privacy analysis still apply to a future Svelte
+> export-preference component; the implementation details below are not current architecture.
+
 本文研究 Quirebase 是否应在前端保存每个用户的导出偏好。结论是：现阶段适合把
 低敏感、体积很小的导出选项保存在 `localStorage`，但必须按账号隔离、校验数据并在
 存储不可用时退化为页面默认值。若产品要求跨浏览器或跨设备同步，服务端用户设置才

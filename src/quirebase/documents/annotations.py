@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access.annotations import (
@@ -15,6 +16,7 @@ from quirebase.access.annotations import (
     require_visible_annotation_for_reply_mutation,
 )
 from quirebase.access.documents import require_revision
+from quirebase.access.items import require_readable_item
 from quirebase.access.projects import project_member
 from quirebase.audit import record_event
 from quirebase.core.errors import (
@@ -24,6 +26,7 @@ from quirebase.core.errors import (
     ValidationFailure,
     VersionConflict,
 )
+from quirebase.core.timezones import as_utc
 from quirebase.documents.schemas import ArrowPayload, InkPayload, LinePayload, TextMarkupPayload
 from quirebase.models import (
     AnnotationScope,
@@ -32,6 +35,7 @@ from quirebase.models import (
     PdfAnnotation,
     PdfAnnotationReply,
     ProjectItem,
+    ProjectMember,
     SystemRole,
     User,
 )
@@ -50,6 +54,13 @@ if TYPE_CHECKING:
 
 class DocumentNotReady(DomainError):
     pass
+
+
+@dataclass(frozen=True)
+class AnnotationReview:
+    revisions: tuple[FileRevision, ...]
+    annotations: tuple[dict[str, Any], ...]
+    total: int
 
 
 def annotation_json(
@@ -74,8 +85,8 @@ def annotation_json(
         "author_display_name": author_display_name,
         "mine": record.author_id == current_user_id,
         "editable": editable,
-        "created_at": record.created_at.isoformat(),
-        "updated_at": record.updated_at.isoformat(),
+        "created_at": as_utc(record.created_at).isoformat(),
+        "updated_at": as_utc(record.updated_at).isoformat(),
         "replies": replies or [],
     }
 
@@ -95,8 +106,8 @@ def annotation_reply_json(
         "author_display_name": author_display_name,
         "mine": record.author_id == current_user_id,
         "editable": editable,
-        "created_at": record.created_at.isoformat(),
-        "updated_at": record.updated_at.isoformat(),
+        "created_at": as_utc(record.created_at).isoformat(),
+        "updated_at": as_utc(record.updated_at).isoformat(),
     }
 
 
@@ -301,6 +312,76 @@ async def list_document_annotations(
         raise ResourceNotFound("revision not found for item")
     records = await select_visible_annotations(db, user, revision_id, item_id, project_id)
     return await _annotation_views(db, user, records)
+
+
+async def review_item_annotations(
+    db: AsyncSession,
+    user: User,
+    item_id: str,
+    *,
+    page: int,
+    per_page: int,
+    revision_id: str | None = None,
+) -> AnnotationReview:
+    """Load every Annotation scope visible to the caller for one Item in fixed queries."""
+    await require_readable_item(db, user, item_id)
+    revisions = tuple(
+        (
+            await db.scalars(
+                select(FileRevision)
+                .where(FileRevision.item_id == item_id)
+                .order_by(FileRevision.created_at.desc(), FileRevision.id)
+            )
+        ).all()
+    )
+    if not revisions:
+        return AnnotationReview(revisions=(), annotations=(), total=0)
+
+    item_project_ids = select(ProjectItem.project_id).where(ProjectItem.item_id == item_id)
+    if user.role == SystemRole.administrator.value:
+        private_scope = PdfAnnotation.scope == AnnotationScope.private
+        visible_project_ids = item_project_ids
+    else:
+        private_scope = and_(
+            PdfAnnotation.scope == AnnotationScope.private,
+            PdfAnnotation.author_id == user.id,
+        )
+        visible_project_ids = select(ProjectMember.project_id).where(
+            ProjectMember.user_id == user.id,
+            ProjectMember.project_id.in_(item_project_ids),
+        )
+    filters = [
+        PdfAnnotation.file_revision_id.in_([revision.id for revision in revisions]),
+        PdfAnnotation.deleted_at.is_(None),
+        or_(
+            private_scope,
+            and_(
+                PdfAnnotation.scope == AnnotationScope.project,
+                PdfAnnotation.project_id.in_(visible_project_ids),
+            ),
+        ),
+    ]
+    if revision_id is not None:
+        filters.append(PdfAnnotation.file_revision_id == revision_id)
+    total = int(
+        await db.scalar(select(func.count()).select_from(PdfAnnotation).where(*filters)) or 0
+    )
+    records = list(
+        (
+            await db.scalars(
+                select(PdfAnnotation)
+                .where(*filters)
+                .order_by(PdfAnnotation.updated_at.desc(), PdfAnnotation.id)
+                .offset((page - 1) * per_page)
+                .limit(per_page)
+            )
+        ).all()
+    )
+    return AnnotationReview(
+        revisions=revisions,
+        annotations=tuple(await _annotation_views(db, user, records)),
+        total=total,
+    )
 
 
 async def create_document_annotation(

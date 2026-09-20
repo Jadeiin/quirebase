@@ -12,6 +12,7 @@ from quirebase.access.items import (
     require_editable_item_for_mutation,
     visible_items_query,
 )
+from quirebase.access.tags import can_manage_tag, visible_tags_query
 from quirebase.audit import record_event
 from quirebase.core.errors import (
     DomainError,
@@ -180,7 +181,7 @@ async def apply_item_tag_selection(
 
 async def rename_tag(db: AsyncSession, user: User, tag_id: str, name: str) -> Tag:
     tag = await db.scalar(select(Tag).where(Tag.id == tag_id).with_for_update(key_share=True))
-    if tag is None or (tag.created_by != user.id and user.role != "administrator"):
+    if tag is None or not can_manage_tag(user, tag):
         raise ResourceUnavailable("tag not found or cannot be managed")
     normalized = normalize_tag_name(name)
     if await db.scalar(select(Tag.id).where(Tag.name == normalized, Tag.id != tag.id)):
@@ -198,7 +199,7 @@ async def rename_tag(db: AsyncSession, user: User, tag_id: str, name: str) -> Ta
 async def delete_tag(db: AsyncSession, user: User, tag_id: str) -> None:
     # Deleting a taxonomy root must block FK association inserts until commit.
     tag = await db.scalar(select(Tag).where(Tag.id == tag_id).with_for_update())
-    if tag is None or (tag.created_by != user.id and user.role != "administrator"):
+    if tag is None or not can_manage_tag(user, tag):
         raise ResourceUnavailable("tag not found or cannot be managed")
     await db.delete(tag)
     await db.flush()
@@ -215,6 +216,7 @@ async def list_accessible_tags_with_counts(db: AsyncSession, user: User) -> list
                 ItemTag,
                 and_(ItemTag.tag_id == Tag.id, ItemTag.item_id.in_(select(accessible_ids.c.id))),
             )
+            .where(Tag.id.in_(visible_tags_query(user).with_only_columns(Tag.id)))
             .group_by(Tag.id)
             .order_by(Tag.name)
         )
@@ -225,7 +227,7 @@ async def list_accessible_tags_with_counts(db: AsyncSession, user: User) -> list
 async def get_tag_matrix_for_item(db: AsyncSession, user: User, item_id: str) -> dict[str, Any]:
     if not await can_read_item(db, user, item_id):
         raise ResourceUnavailable("item not found")
-    all_tags = list((await db.scalars(select(Tag).order_by(Tag.name))).all())
+    all_tags = list((await db.scalars(visible_tags_query(user).order_by(Tag.name))).all())
     assigned_ids = set(
         (await db.scalars(select(ItemTag.tag_id).where(ItemTag.item_id == item_id))).all()
     )

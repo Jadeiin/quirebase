@@ -4,6 +4,7 @@ import asyncio
 
 import httpx2
 import pytest
+from app_helpers import create_web_test_app
 from inquiro import CandidatePage
 from sqlalchemy import func, select
 
@@ -12,7 +13,6 @@ from quirebase.core.config import get_settings
 from quirebase.core.database import get_db
 from quirebase.library import DiscoveryClause, search_candidate_records
 from quirebase.models import AuditEvent, User
-from quirebase.web.app import create_app
 
 pytestmark = pytest.mark.anyio
 
@@ -84,7 +84,7 @@ async def test_http_api_and_database_share_the_asyncio_request_loop(async_sessio
         await db.commit()
         grant = await create_api_token(db, user, "Async HTTP", expires_in_days=30)
 
-    app = create_app(mcp_session_factory=async_session_factory)
+    app = create_web_test_app(mcp_session_factory=async_session_factory)
 
     async def override_db():
         db = async_session_factory()

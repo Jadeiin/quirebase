@@ -1,3 +1,0 @@
-{% extends "base.html" %}{% block content %}<section class="panel narrow"><h1>{{ _('Accept invitation') }}</h1>
-{% if invitation %}<p>{{ _('Create account {username}.', username=invitation.username) }}</p><form method="post"><input type="password" name="password" minlength="12" aria-label="{{ _('Password') }}" required><button>{{ _('Create account') }}</button></form>
-{% else %}<p class="error">{{ _('This invitation is invalid, expired, or already used.') }}</p>{% endif %}</section>{% endblock %}

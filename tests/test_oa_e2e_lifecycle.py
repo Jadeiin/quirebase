@@ -371,31 +371,35 @@ async def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(
         item_version = item.version
 
         # 1. Fetch workspace view
-        resp = await client.get(f"/items/{item_id}")
+        resp = await client.get(f"/api/v1/items/{item_id}")
         assert resp.status_code == 200
-        assert "Drivers and Consequences of ChatGPT Use" in resp.text
-        assert "10.3390/ejihpe13110181" in resp.text
+        assert resp.json()["title_html"] == item.title
+        assert resp.json()["doi"] == "10.3390/ejihpe13110181"
 
         # 2. Submit edit form modifying title and adding second author
-        edit_resp = await client.post(
-            f"/items/{item_id}/edit",
-            data={
-                "csrf_token": "test-csrf",
-                "version": str(item_version),
-                "title": "Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives",
-                "author_last_name[]": ["Hasanein", "Sobaih"],
-                "author_first_name[]": ["Ahmed M.", "Abu Elnasr E."],
-                "volume": "13",
-                "issue": "11",
-                "pages": "2599-2614",
-                "doi": "10.3390/ejihpe13110181",
+        edit_resp = await client.put(
+            f"/api/v1/items/{item_id}",
+            json={
+                "expected_version": item_version,
+                "metadata": {
+                    "title": "Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives",
+                    "authors": [
+                        {"last_name": "Hasanein", "first_name": "Ahmed M."},
+                        {"last_name": "Sobaih", "first_name": "Abu Elnasr E."},
+                    ],
+                    "publication_title": item.publication_title,
+                    "volume": "13",
+                    "issue": "11",
+                    "pages": "2599-2614",
+                    "doi": "10.3390/ejihpe13110181",
+                },
             },
-            follow_redirects=True,
         )
         assert edit_resp.status_code == 200
+        edited = await client.get(f"/api/v1/items/{item_id}")
         assert (
-            "Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives"
-            in edit_resp.text
+            edited.json()["title_html"]
+            == "Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives"
         )
 
         # 3. Verify structured relations in DB

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -10,6 +13,7 @@ from test_http import authenticated_async_client
 from quirebase.core.config import get_settings
 from quirebase.core.crypto import token_hash
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
+from quirebase.core.storage import ObjectSuffix, get_object_store
 from quirebase.library import (
     AnnotationsWorkspace,
     DiscussionWorkspace,
@@ -22,6 +26,7 @@ from quirebase.library import (
 )
 from quirebase.models import (
     Attachment,
+    AttachmentRole,
     AuditEvent,
     DiscussionMessage,
     Item,
@@ -36,6 +41,7 @@ from quirebase.models import (
     Tag,
     User,
 )
+from quirebase.web.api import documents as documents_api
 
 
 @pytest.mark.anyio
@@ -125,42 +131,30 @@ async def test_item_workspace_separates_page_responsibilities(
             ItemIdentifier(item_id=item.id, provider="arxiv", value="2401.00001"),
         ])
         await db.commit()
-        summary = await client.get(f"/items/{item.id}")
+        summary = await client.get(f"/api/v1/items/{item.id}/workspace")
         assert summary.status_code == 200
-        assert 'aria-current="page"><span>⌂</span>' in summary.text
-        assert "摘要与关键信息" in summary.text
-        assert 'x-data="itemDownload"' in summary.text
-        assert 'option value="bibtex"' in summary.text
-        assert 'href="/account/settings#export-preferences"' in summary.text
-        assert 'class="panel publication-snapshot"' in summary.text
-        assert 'class="panel reading-files-panel"' in summary.text
-        assert 'class="panel discovery-panel"' in summary.text
-        assert "User priority" in summary.text
-        assert 'href="https://openalex.org/W123"' in summary.text
-        assert 'href="https://arxiv.org/abs/2401.00001"' in summary.text
-        assert "Workspace activity" not in summary.text
-        assert f'action="/items/{item.id}/edit' not in summary.text
-        assert f'action="/items/{item.id}/pdf' not in summary.text
+        assert summary.json()["latest_revision"]["id"] == revision.id
+        assert summary.json()["thumbnail"] is None
+        assert summary.json()["tags"] == [{"id": tag.id, "name": "User priority"}]
+        assert {tuple(row.values()) for row in summary.json()["identifiers"]} == {
+            ("openalex", "W123"),
+            ("arxiv", "2401.00001"),
+        }
 
-        metadata = await client.get(f"/items/{item.id}/metadata")
+        metadata = await client.get(f"/api/v1/items/{item.id}")
         assert metadata.status_code == 200
-        assert "书目元数据" in metadata.text
-        assert f'action="/items/{item.id}/edit' in metadata.text
+        assert "reading-copy.PDF" in metadata.text
 
-        files = await client.get(f"/items/{item.id}/files")
+        files = await client.get(f"/api/v1/items/{item.id}/documents")
         assert files.status_code == 200
-        assert "PDF 版本与附件" in files.text
         assert revision.original_name in files.text
-        assert f'action="/items/{item.id}/pdf' in files.text
-        assert 'x-data="remotePdfUpload"' in files.text
-        assert "https://publisher.example/files/reading-copy.PDF?download=1" in files.text
 
-        organize = await client.get(f"/items/{item.id}/organize")
+        organize = await client.get("/api/v1/tags")
         assert organize.status_code == 200
-        assert "标签与项目" in organize.text
+        assert organize.json()[0]["name"] == "User priority"
 
         created = await client.post(
-            f"/documents/{item.id}/annotations",
+            f"/api/v1/items/{item.id}/annotations",
             headers={"X-CSRF-Token": "test-csrf"},
             json={
                 "id": str(uuid4()),
@@ -177,18 +171,76 @@ async def test_item_workspace_separates_page_responsibilities(
             },
         )
         assert created.status_code == 201
-        annotations = await client.get(f"/items/{item.id}/annotations")
+        annotations = await client.get(
+            f"/api/v1/items/{item.id}/annotations", params={"revision_id": revision.id}
+        )
         assert annotations.status_code == 200
-        assert "笔记与批注" in annotations.text
-        assert "A useful result" in annotations.text
-        assert "第 1 页" in annotations.text
+        assert annotations.json()[0]["selected_text"] == "A useful result"
+        assert annotations.json()[0]["page_index"] == 0
 
-        discussion = await client.get(f"/items/{item.id}/discussion")
+        discussion = await client.get(f"/api/v1/items/{item.id}/discussions")
         assert discussion.status_code == 200
-        assert "团队讨论" in discussion.text
-        assert f'action="/items/{item.id}/discussion' in discussion.text
+        assert discussion.json() == []
 
-        assert (await client.get(f"/items/{item.id}/unknown")).status_code == 404
+        assert (await client.get(f"/api/v1/items/{item.id}/unknown")).status_code == 404
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_remote_documents_are_acquired_server_side_before_upload(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    client, item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    item_id = item.id
+
+    async def content():  # ruff: ignore[unused-async] - async upload source contract
+        yield b"remote content"
+
+    @asynccontextmanager
+    async def acquire_remote_pdf(source, _settings, _max_bytes):
+        assert source == "https://publisher.example/article.pdf"
+        yield SimpleNamespace(
+            content=content(), filename="article.pdf", media_type="application/pdf"
+        )
+
+    @asynccontextmanager
+    async def acquire_remote_attachment(source, _max_bytes):
+        assert source == "https://publisher.example/supplement.zip"
+        yield SimpleNamespace(
+            content=content(), filename="supplement.zip", media_type="application/zip"
+        )
+
+    store_revision = AsyncMock(return_value=SimpleNamespace(workflow_id="revision-workflow"))
+    store_attachment = AsyncMock(return_value=SimpleNamespace(workflow_id="attachment-workflow"))
+    monkeypatch.setattr(documents_api, "acquire_remote_pdf", acquire_remote_pdf)
+    monkeypatch.setattr(documents_api, "acquire_remote_attachment", acquire_remote_attachment)
+    monkeypatch.setattr(documents_api, "store_pdf_revision", store_revision)
+    monkeypatch.setattr(documents_api, "create_attachment", store_attachment)
+
+    try:
+        revision = await client.post(
+            f"/api/v1/items/{item_id}/revisions/remote",
+            json={"source": "https://publisher.example/article.pdf"},
+        )
+        assert revision.status_code == 202
+        assert revision.json() == {"id": "revision-workflow", "version": None}
+        assert store_revision.await_args.args[4] == "article.pdf"
+
+        attachment = await client.post(
+            f"/api/v1/items/{item_id}/attachments/remote",
+            json={
+                "source": "https://publisher.example/supplement.zip",
+                "graphical_abstract": False,
+            },
+        )
+        assert attachment.status_code == 202
+        assert attachment.json() == {"id": "attachment-workflow", "version": None}
+        assert store_attachment.await_args.args[4] == "supplement.zip"
+        assert store_attachment.await_args.args[5] == "application/zip"
     finally:
         await client.aclose()
         get_settings.cache_clear()
@@ -211,7 +263,6 @@ async def test_project_editor_can_edit_item_without_seeing_permanent_delete(
         ProjectMember(project_id=project.id, user_id=editor.id, role="editor"),
         LoginSession(
             token_hash=token_hash("editor-session"),
-            csrf_token="editor-csrf",
             user_id=editor.id,
             expires_at=datetime.now(UTC) + timedelta(hours=1),
         ),
@@ -219,15 +270,14 @@ async def test_project_editor_can_edit_item_without_seeing_permanent_delete(
     await db.commit()
 
     try:
-        owner_page = await owner_client.get(f"/items/{item.id}")
-        assert "删除条目" in owner_page.text
+        owner_page = await owner_client.get(f"/api/v1/items/{item.id}/workspace")
+        assert owner_page.json()["permissions"] == {"edit": True, "delete": True}
 
         editor_client = owner_client
         editor_client.cookies.set(get_settings().session_cookie, "editor-session")
-        editor_page = await editor_client.get(f"/items/{item.id}")
+        editor_page = await editor_client.get(f"/api/v1/items/{item.id}/workspace")
         assert editor_page.status_code == 200
-        assert "编辑元数据" in editor_page.text
-        assert "删除条目" not in editor_page.text
+        assert editor_page.json()["permissions"] == {"edit": True, "delete": False}
 
         view = await open_item_workspace(db, editor, item.id, WorkspaceSection.summary)
         assert view.can_edit is True
@@ -255,35 +305,32 @@ async def test_item_citation_export_and_project_removal(
         ])
         await db.commit()
 
-        exported = await client.get(f"/documents/{item.id}/citation?file_format=bibtex")
+        exported = await client.get(f"/api/v1/items/{item.id}/bibliography?file_format=bibtex")
         assert exported.status_code == 200
         assert item.title in exported.text
         assert "quirebase-export.bib" in exported.headers["content-disposition"]
 
-        cited = await client.get(f"/documents/{item.id}/citation?file_format=csl&style=apa")
+        cited = await client.get(f"/api/v1/items/{item.id}/bibliography?file_format=csl&style=apa")
         assert cited.status_code == 200
         assert item.title in cited.text
         assert "quirebase-citations.txt" in cited.headers["content-disposition"]
 
-        plain_download = await client.get(f"/items/{item.id}/download")
+        plain_download = await client.get(f"/api/v1/items/{item.id}/archive")
         assert "Paper-pdfs.zip" in plain_download.headers["content-disposition"]
-        annotated_download = await client.get(f"/items/{item.id}/download?include_annotations=true")
+        annotated_download = await client.get(
+            f"/api/v1/items/{item.id}/archive?include_annotations=true"
+        )
         assert "Paper-annotated-pdfs.zip" in annotated_download.headers["content-disposition"]
 
         item.title = "中文论文"
         item.bibtex_id = None
         await db.commit()
-        unicode_download = await client.get(f"/items/{item.id}/download")
+        unicode_download = await client.get(f"/api/v1/items/{item.id}/archive")
         assert unicode_download.status_code == 200
         assert "filename*=utf-8''" in unicode_download.headers["content-disposition"]
 
-        removed = await client.post(
-            f"/items/{item.id}/projects/{project.id}/remove",
-            data={"csrf_token": "test-csrf"},
-            follow_redirects=False,
-        )
-        assert removed.status_code == 303
-        assert removed.headers["location"] == f"/items/{item.id}/organize"
+        removed = await client.delete(f"/api/v1/projects/{project.id}/items/{item.id}")
+        assert removed.status_code == 200
         assert await db.get(ProjectItem, (project.id, item.id)) is None
         assert await db.scalar(
             select(AuditEvent).where(
@@ -364,10 +411,62 @@ async def test_item_header_keeps_pdf_link_on_lightweight_sections(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
     try:
-        for section in ("organize", "discussion"):
-            response = await client.get(f"/items/{item.id}/{section}")
-            assert response.status_code == 200
-            assert f"/items/{item.id}/pdf/{revision.id}" in response.text
+        response = await client.get(f"/api/v1/items/{item.id}/revisions/{revision.id}/viewer")
+        assert response.status_code == 200
+        assert response.json()["revision"]["content_url"].endswith(f"/{revision.id}/content")
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_item_workspace_projection_includes_thumbnail_metadata(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    try:
+        response = await client.get(f"/api/v1/items/{item.id}/workspace")
+        assert response.status_code == 200
+        assert response.json()["thumbnail"] is None
+
+        store = get_object_store()
+        thumb = await store.put_object(
+            uuid4(), ObjectSuffix.PNG, b"\x89PNG\r\n\x1a\nthumb", max_bytes=100
+        )
+        revision.thumbnail_object_key = thumb.key
+        await db.commit()
+
+        response = await client.get(f"/api/v1/items/{item.id}/workspace")
+        assert response.status_code == 200
+        assert response.json()["thumbnail"] == {
+            "source_kind": "pdf_thumbnail",
+            "source_id": revision.id,
+        }
+
+        ga_obj = await store.put_object(
+            uuid4(), ObjectSuffix.PNG, b"\x89PNG\r\n\x1a\ngraphical", max_bytes=100
+        )
+        graphical_abstract = Attachment(
+            item_id=item.id,
+            object_key=ga_obj.key,
+            mime_type="image/png",
+            role=AttachmentRole.graphical_abstract,
+            size=ga_obj.size,
+            original_name="graphical_abstract.png",
+            created_by=revision.created_by,
+        )
+        db.add(graphical_abstract)
+        await db.commit()
+
+        response = await client.get(f"/api/v1/items/{item.id}/workspace")
+        assert response.status_code == 200
+        assert response.json()["thumbnail"] == {
+            "source_kind": "graphical_abstract",
+            "source_id": graphical_abstract.id,
+        }
     finally:
         await client.aclose()
         get_settings.cache_clear()

@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     session_cookie: str = "quirebase_session"
     session_days: int = 30
     secure_cookies: bool = False
+    external_origin: str | None = None
     max_pdf_bytes: int = 250 * 1024 * 1024
     max_attachment_bytes: int = 250 * 1024 * 1024
     export_ttl_hours: int = 24

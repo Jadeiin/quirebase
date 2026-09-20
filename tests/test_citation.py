@@ -158,7 +158,6 @@ def test_builtin_style_selection_reuses_one_catalog_snapshot(monkeypatch):
         catalog_calls += 1
         return catalog
 
-    styles.builtin_style_catalog.cache_clear()
     monkeypatch.setattr(styles, "builtin_style_catalog", load_catalog)
 
     selection = citations.select_builtin_citation_styles("matching", limit=1, include="saved")
@@ -181,7 +180,7 @@ async def test_citation_copy_endpoint_accepts_export_options(
     )
     try:
         response = await client.get(
-            f"/documents/{item.id}/citation-copy",
+            f"/api/v1/items/{item.id}/bibliography/content",
             params={
                 "file_format": "bibtex",
                 "include_abstract": "false",
@@ -190,6 +189,7 @@ async def test_citation_copy_endpoint_accepts_export_options(
             },
         )
         assert response.status_code == 200
+        assert response.headers["content-type"] == "text/plain; charset=utf-8"
         assert "abstract" not in response.text
         assert "title = {{P}aper}" in response.text
     finally:
@@ -214,7 +214,7 @@ async def test_citation_style_search_includes_owned_custom_styles(
         xml = builtin_style_xml("apa")
         assert user is not None and xml is not None
         await create_custom_citation_style(db, user, "My Searchable Style", xml)
-        response = await client.get("/api/citation-styles?query=searchable")
+        response = await client.get("/api/v1/citation-styles?query=searchable")
         assert response.status_code == 200
         assert response.json()["styles"][0]["name"] == "My Searchable Style"
     finally:
@@ -234,7 +234,9 @@ async def test_citation_style_search_includes_requested_saved_style(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
     try:
-        response = await client.get("/api/citation-styles", params={"limit": 1, "include": "apa"})
+        response = await client.get(
+            "/api/v1/citation-styles", params={"limit": 1, "include": "apa"}
+        )
         assert response.status_code == 200
         styles = response.json()["styles"]
         assert len(styles) == 2
@@ -393,16 +395,18 @@ async def test_citation_routes_enforce_custom_style_ownership(
         style_b = await create_custom_citation_style(db, user_b, "User B Style", csl_xml)
 
         # User A requesting User A's style succeeds
-        res = await client.get(f"/documents/{item.id}/citation-text?style={style_a.id}")
+        res = await client.get(f"/api/v1/items/{item.id}/citation/content?style={style_a.id}")
         assert res.status_code == 200
         assert item.title in res.text
 
         # User A requesting User B's style is forbidden / invalid
-        res_forbidden = await client.get(f"/documents/{item.id}/citation-text?style={style_b.id}")
+        res_forbidden = await client.get(
+            f"/api/v1/items/{item.id}/citation/content?style={style_b.id}"
+        )
         assert res_forbidden.status_code == 422
 
         res_csl_forbidden = await client.get(
-            f"/documents/{item.id}/citation?file_format=csl&style={style_b.id}"
+            f"/api/v1/items/{item.id}/bibliography?file_format=csl&style={style_b.id}"
         )
         assert res_csl_forbidden.status_code == 422
     finally:
@@ -437,12 +441,16 @@ async def test_custom_styles_accessible_in_item_workspace(
             db, user, "My Isolated Custom Style", csl_xml
         )
 
-        response = await client.get(f"/items/{item.id}")
+        response = await client.get("/api/v1/citation-styles", params={"include": custom_style.id})
         assert response.status_code == 200
-        assert 'x-data="formattedCitation"' not in response.text
-        assert 'x-data="itemExport"' in response.text
+        assert any(
+            style["key"] == custom_style.id and style["scope"] == "custom"
+            for style in response.json()["styles"]
+        )
 
-        text_res = await client.get(f"/documents/{item.id}/citation-text?style={custom_style.id}")
+        text_res = await client.get(
+            f"/api/v1/items/{item.id}/citation/content?style={custom_style.id}"
+        )
         assert text_res.status_code == 200
         assert item.title in text_res.text
     finally:

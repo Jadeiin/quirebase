@@ -7,9 +7,7 @@ from dataclasses import dataclass, field
 from html import escape
 from html.parser import HTMLParser
 from typing import Literal
-from xml.etree import ElementTree
 
-from latex2mathml.converter import convert as _latex_math_to_mathml
 from pylatexenc.latex2text import LatexNodes2Text  # type: ignore[import-untyped]
 from pylatexenc.latexencode import (  # type: ignore[import-untyped]
     RULE_DICT,
@@ -18,7 +16,7 @@ from pylatexenc.latexencode import (  # type: ignore[import-untyped]
 )
 
 type RichTextSource = Literal["html", "latex", "text"]
-type RichTextTarget = Literal["html", "latex", "text", "web"]
+type RichTextTarget = Literal["html", "latex", "text"]
 type LatexEncoding = Literal["unicode", "latex"]
 
 _HTML_TAGS = {
@@ -61,64 +59,6 @@ _SINGLE_PROTECTED_CHARACTER = re.compile(r"\{([^{}])\}")
 _CURRENCY_AMOUNT_START = re.compile(r"\d+(?:[.,]\d+)?")
 _EXPLICIT_MATH_SYNTAX = re.compile(r"[\\_^{}=+*/<>]")
 _MAX_INLINE_MATH_SPAN = 200
-_MATHML_NAMESPACE = "http://www.w3.org/1998/Math/MathML"
-_MATHML_TAGS = {
-    "math",
-    "menclose",
-    "mfrac",
-    "mi",
-    "mn",
-    "mo",
-    "mover",
-    "mpadded",
-    "mphantom",
-    "mroot",
-    "mrow",
-    "mspace",
-    "msqrt",
-    "mstyle",
-    "msub",
-    "msubsup",
-    "msup",
-    "mtable",
-    "mtd",
-    "mtext",
-    "mtr",
-    "munder",
-    "munderover",
-}
-_MATHML_ATTRIBUTES = {
-    "accent",
-    "accentunder",
-    "columnalign",
-    "columnlines",
-    "columnspacing",
-    "depth",
-    "display",
-    "displaystyle",
-    "fence",
-    "form",
-    "height",
-    "linebreak",
-    "linethickness",
-    "lspace",
-    "mathsize",
-    "mathvariant",
-    "maxsize",
-    "minsize",
-    "movablelimits",
-    "notation",
-    "rowalign",
-    "rowlines",
-    "rowspacing",
-    "rspace",
-    "scriptlevel",
-    "separator",
-    "stretchy",
-    "symmetric",
-    "voffset",
-    "width",
-}
 _LATEX_DECODER = LatexNodes2Text()
 _LATEX_ENCODER = UnicodeToLatexEncoder(
     conversion_rules=[
@@ -157,7 +97,6 @@ _UNICODE_LATEX_ENCODER = UnicodeToLatexEncoder(
     unknown_char_policy="keep",
     unknown_char_warning=False,
 )
-ElementTree.register_namespace("", _MATHML_NAMESPACE)
 
 
 def _compact(value: str) -> str:
@@ -244,35 +183,6 @@ def _render_html(node: _Node) -> str:
         else:
             chunks.append(f"<{child.kind}>{_render_html(child.child)}</{child.kind}>")
     return "".join(chunks)
-
-
-def _render_web(node: _Node) -> str:
-    chunks: list[str] = []
-    for child in _iter_nodes(node):
-        if isinstance(child, str):
-            chunks.extend(
-                _render_mathml(segment) if is_math else escape(segment, quote=False)
-                for segment, is_math in _math_segments(child)
-            )
-        else:
-            chunks.append(f"<{child.kind}>{_render_web(child.child)}</{child.kind}>")
-    return "".join(chunks)
-
-
-def _render_mathml(span: str) -> str:
-    """Render one ``$...$`` span through a strict, inert MathML projection."""
-    try:
-        root = ElementTree.fromstring(_latex_math_to_mathml(span[1:-1]))
-    except Exception:
-        return escape(span, quote=False)
-    for element in root.iter():
-        namespace, separator, local_name = element.tag.removeprefix("{").partition("}")
-        if separator != "}" or namespace != _MATHML_NAMESPACE or local_name not in _MATHML_TAGS:
-            return escape(span, quote=False)
-        element.attrib = {
-            name: value for name, value in element.attrib.items() if name in _MATHML_ATTRIBUTES
-        }
-    return ElementTree.tostring(root, encoding="unicode", short_empty_elements=True)
 
 
 def _render_text(node: _Node) -> str:
@@ -626,13 +536,11 @@ def convert_rich_text(
 
     if target == "html":
         return _render_html(rich_text).strip()
-    if target == "web":
-        return _render_web(rich_text).strip()
     if target == "text":
         return _render_text(rich_text).strip()
     if target == "latex":
         return _render_latex(rich_text, latex_encoding).strip()
-    raise ValueError("rich-text target must be html, latex, text or web")
+    raise ValueError("rich-text target must be html, latex or text")
 
 
 __all__ = ["convert_rich_text"]
