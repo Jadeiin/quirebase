@@ -3,6 +3,12 @@ import type { Page } from '@playwright/test';
 export const defaultCitationKeyFormula = 'auth.capitalize + year + shorttitle(1).capitalize';
 
 export async function mockSession(page: Page, role: 'member' | 'administrator' = 'member') {
+	// Download E2E tests assert the request payload. Disable the native picker,
+	// which is unavailable in headless CI and would otherwise block the fetch
+	// while waiting for a user to choose a path.
+	await page.addInitScript(() => {
+		Object.defineProperty(window, 'showSaveFilePicker', { value: undefined });
+	});
 	await page.route('**/api/v1/session', (route) =>
 		route.fulfill({
 			json: {
