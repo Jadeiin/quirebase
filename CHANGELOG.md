@@ -1,3 +1,28 @@
+## 0.1.4 (2026-09-21)
+
+### Feat
+
+- **frontend**: replace web UI with Svelte application (#14)
+- **projects**: add lifecycle and discovery controls
+- **logging**: unify runtime log output
+- **pdf**: improve annotation sync and canonical exports
+
+### Fix
+
+- **pdf**: strip NUL bytes from extracted PDF text
+- harden validation and workflow projections
+- **projects**: serialize project mutations
+- **workflows**: harden durable queues and recovery
+- update CI workflow with bun setup and MinIO configuration
+- update MinIO client configuration for improved storage setup
+
+### Refactor
+
+- **concurrency**: narrow business concurrency boundaries
+- **workflows**: harden durable import state
+- **workflows**: make imports and maintenance durable
+- **workflows**: adopt AsyncSQLAlchemyDatasource for durable DB steps
+
 ## 0.1.3 (2026-09-02)
 
 ### Feat
