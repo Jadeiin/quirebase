@@ -11,11 +11,26 @@ A bibliographic record representing a paper, book, preprint, manuscript or
 other research output.
 _Avoid_: Paper, Work, Document when referring to the stored bibliographic record
 
+**Personal Library**:
+The private content scope belonging to one User. It contains that User's Items, Personal Tags and
+Private Annotations.
+_Avoid_: Workspace, Personal Project
+
 **Item Owner**:
-The User with inherent authority to edit and permanently delete an Item, independently of
-Project membership. Ownership is assigned when the Item is created and is not currently
-transferable.
-_Avoid_: Creator when discussing authorization
+The User whose Personal Library is linked to a Live Copy. Independent Copies have no Item Owner,
+and ownership may be taken, relinquished or ended without deleting Project content.
+_Avoid_: Creator, Project Owner
+
+**Live Copy**:
+A Project's linked use of an Item from one Item Owner's Personal Library. Bibliographic metadata
+and Documents are shared across every linked Personal Library and Project location.
+_Avoid_: Duplicate, Independent Copy
+
+**Independent Copy**:
+An Item maintained separately in one Personal Library or Project. It has no synchronization or
+ownership relationship with an Item in another content scope, even when both represent the same
+research output.
+_Avoid_: Live Copy, Duplicate when independence matters
 
 **Contributor**:
 A person or organization credited in an Item's bibliographic metadata, with a role such
@@ -25,8 +40,14 @@ organization.
 _Avoid_: Creator, User
 
 **Project**:
-A collaborative collection that grants members access to assigned Items.
-_Avoid_: Folder, Group
+A shared library and Quirebase's sole shared membership and collaboration scope. Its Items, Tags,
+Annotations and Discussion Messages inherit the Project's access rules.
+_Avoid_: Workspace, Folder, Group
+
+**Project Item**:
+An Item's presence and collaboration context within one Project. Its Project Tags, Project
+Annotations and Project Discussion Messages are permanently deleted when it is removed.
+_Avoid_: Folder entry, bare association
 
 **Document**:
 Stored file content associated with an Item, represented by a File Revision or
@@ -34,12 +55,14 @@ Attachment.
 _Avoid_: Item
 
 **File Revision**:
-An immutable primary PDF version associated with an Item. It is pending while awaiting
-inspection and ready after its text and page geometry have been successfully extracted.
+An immutable primary PDF version associated with one or more Items derived from the same source.
+It is pending while awaiting inspection and ready after its text and page geometry have been
+successfully extracted.
 _Avoid_: Attachment, Item version
 
 **Attachment**:
-A supplementary file associated with an Item that is not its primary PDF.
+A supplementary file associated with one or more Items derived from the same source that is not a
+primary PDF.
 An Attachment may carry a distinguished role such as Graphical Abstract.
 _Avoid_: File Revision
 
@@ -57,7 +80,7 @@ otherwise the newest ready File Revision with an available PDF Thumbnail is used
 
 **Annotation**:
 A user-authored text mark, note, free text, ink stroke or geometric shape anchored to one page of
-a File Revision and scoped either privately or to a Project.
+a File Revision and scoped either privately or to a Project Item.
 _Avoid_: Comment
 
 **Annotation Reply**:
@@ -70,11 +93,12 @@ A temporary PDF derived from a File Revision and its visible Annotations for dow
 available until its recorded expiration time and is then eligible for physical cleanup.
 
 **Discussion Message**:
-A conversational message attached to an Item and visible through Item access.
+A conversational message attached to a Project Item and visible through that Project.
 _Avoid_: Annotation, Comment
 
 **Tag**:
-A user-defined taxonomy label attached to Items for cross-cutting categorization.
+A user-defined taxonomy label scoped to either one Personal Library or one Project and attached to
+Items within that same content scope.
 Item Keywords may be presented as suggested Tag names, but become Tags only after explicit User
 selection.
 _Avoid_: Category, Keyword, Folder
@@ -141,8 +165,14 @@ A global authorization tier (`administrator` or `member`) governing instance-wid
 _Avoid_: Global Role, User Role
 
 **Project Role**:
-A collection-scoped authorization tier (`owner`, `editor`, or `viewer`) governing member access and editing rights within a Project.
+A Project-scoped authorization tier (`admin`, `editor`, or `viewer`). Admins govern membership and
+settings, Editors manage content, and Viewers have read-only Project access.
 _Avoid_: Group Role, Project Permission
+
+**Archived Project**:
+A Project that permits no Project operations. Its Live Copies may still reflect changes made from
+their source Personal Libraries.
+_Avoid_: Deleted Project
 
 **Invitation**:
 A single-use, time-limited token granting registration for a new User with a designated System Role.
@@ -165,11 +195,10 @@ The HTTP API and its generated operation IDs use these verbs deliberately:
 
 - **Delete** removes a first-class resource from its owning lifecycle. Use delete for an
   Item, Project, Annotation, File Revision, Attachment, Discussion Message or other resource
-  whose identity is being destroyed (including a soft-deleted resource whose normal projection
-  no longer exposes it).
+  whose identity is being destroyed.
 - **Remove** detaches an association while preserving both resources. Use remove for an
-  Item–Tag, Project–Item or Project–member relationship; neither the Item, Tag, Project nor User
-  is deleted.
+  Item–Tag, Project–Item or Project–member relationship; the relationship-owned context is deleted,
+  but the Item, Tag, Project and User identities are preserved.
 
 An HTTP DELETE method can therefore generate either a delete_* or remove_* operation ID:
 the method describes the transport, while the verb describes the domain effect. discard is
@@ -178,21 +207,25 @@ for invalidating a Login Session or API Token without deleting its audit/persist
 
 ## Relationships
 
-- A User is the Item Owner of zero or more Items, owns zero or more Login Sessions and API Tokens,
-  and has one System Role.
+- A User is the Item Owner of zero or more Live Copies, has one Personal Library, owns zero or more
+  Login Sessions and API Tokens, and has one System Role.
 - An Item has zero or more Contributors in an ordered bibliographic role. A Contributor may have a split first/last name or a single-field literal name.
 - An Invitation provisions one new User with an assigned System Role.
-- An Item has zero or more File Revisions, Attachments, Tags, and Discussion Messages, and at most
+- An Item has zero or more File Revisions and Attachments, and at most
   one Attachment designated as its current Graphical Abstract.
-- Deleting a File Revision deletes its PDF Thumbnail. Item Thumbnail resolution then falls back to
-  the next eligible File Revision unless a Graphical Abstract is designated.
+- A File Revision and its PDF Thumbnail become eligible for physical cleanup only after no Item
+  references them. Item Thumbnail resolution then falls back to the next eligible File Revision
+  unless a Graphical Abstract is designated.
 - An Item has at most one current Item Tag Recommendation generation.
-- An Item may belong to multiple Projects.
-- A Project has members with an assigned Project Role (owner, editor, or viewer).
+- A Live Copy may appear in an Item Owner's Personal Library and multiple Projects; an Independent
+  Copy belongs to one content scope.
+- A Project has members with an assigned Project Role (admin, editor, or viewer) and at least one
+  active Admin.
+- A Project Item has zero or more Project Tags, Project Annotations and Project Discussion Messages.
 - An Annotation belongs to exactly one File Revision.
 - An Annotation has zero or more Annotation Replies.
 - An Annotation Export Artifact is derived from one File Revision and expires independently of it.
-- A Project-scoped Annotation references exactly one Project containing the Item.
+- A Project Annotation references exactly one Project Item.
 - Discovery produces Candidate Records; selecting one refetches metadata into Import.
 - An Import Batch holds parsed Candidate Records until confirmed into Items; a committed batch retains
   the confirmation result but is no longer an active staging reservation.

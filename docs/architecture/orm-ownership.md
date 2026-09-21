@@ -25,9 +25,9 @@ The architecture suite keeps this list complete when mappings are added or remov
 | Owner | ORM classes |
 | --- | --- |
 | Accounts | `User`, `LoginSession`, `LoginThrottle`, `Invitation` |
-| Library | `Item`, `Author`, `ItemAuthor`, `ItemIdentifier`, `ItemRead`, `Tag`, `ItemTag`, `DiscussionMessage` |
+| Library | `Item`, `Author`, `ItemAuthor`, `ItemIdentifier`, `ItemRead`, `Tag`, `PersonalItemTag`, `ProjectItemTag`, `DiscussionMessage` |
 | Projects | `Project`, `ProjectMember`, `ProjectItem` |
-| Documents | `FileRevision`, `Attachment`, `PdfAnnotationObject`, `PdfAnnotation`, `PdfAnnotationReply`, `ExportArtifact` |
+| Documents | `FileRevision`, `ItemFileRevision`, `Attachment`, `ItemAttachment`, `PdfAnnotationObject`, `PdfAnnotation`, `PdfAnnotationReply`, `ExportArtifact` |
 | Discovery | `ImportBatch`, `CitationStyle` |
 | Audit | `AuditEvent` |
 | Operations | `SystemSetting` |

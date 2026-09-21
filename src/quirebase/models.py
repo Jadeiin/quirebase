@@ -11,6 +11,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Integer,
     String,
     Text,
@@ -58,7 +59,7 @@ class SystemRole(StrEnum):
 
 
 class ProjectRole(StrEnum):
-    owner = "owner"
+    admin = "admin"
     editor = "editor"
     viewer = "viewer"
 
@@ -71,6 +72,11 @@ class ProjectState(StrEnum):
 class ProjectVisibility(StrEnum):
     private = "private"
     public = "public"
+
+
+class ProjectSharingMode(StrEnum):
+    live = "live"
+    independent = "independent"
 
 
 class AnnotationKind(StrEnum):
@@ -169,6 +175,7 @@ class Invitation(Base):
 
 class Item(Base):
     __tablename__ = "items"
+    __table_args__ = (UniqueConstraint("id", "owner_id", name="uq_items_id_owner"),)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     title: Mapped[str] = mapped_column(Text, index=True)
     abstract: Mapped[str | None] = mapped_column(Text)
@@ -191,6 +198,9 @@ class Item(Base):
     urls: Mapped[str | None] = mapped_column(Text)
     keywords: Mapped[str | None] = mapped_column(Text)
     custom_fields: Mapped[str | None] = mapped_column(Text)
+    owner_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     updated_by: Mapped[str | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -198,7 +208,10 @@ class Item(Base):
     version: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
-    revisions: Mapped[list[FileRevision]] = relationship(
+    file_revision_links: Mapped[list[ItemFileRevision]] = relationship(
+        back_populates="item", cascade="all, delete-orphan", passive_deletes=True
+    )
+    attachment_links: Mapped[list[ItemAttachment]] = relationship(
         back_populates="item", cascade="all, delete-orphan", passive_deletes=True
     )
     author_links: Mapped[list[ItemAuthor]] = relationship(
@@ -210,6 +223,7 @@ class Item(Base):
     identifier_links: Mapped[list[ItemIdentifier]] = relationship(
         back_populates="item", cascade="all, delete-orphan", passive_deletes=True
     )
+    owner: Mapped[User | None] = relationship(foreign_keys=[owner_id])
     creator: Mapped[User] = relationship(foreign_keys=[created_by])
     updater: Mapped[User | None] = relationship(foreign_keys=[updated_by])
 
@@ -270,19 +284,15 @@ class Project(Base):
     __table_args__ = (
         CheckConstraint("state IN ('active', 'archived')", name="ck_projects_state"),
         CheckConstraint("visibility IN ('private', 'public')", name="ck_projects_visibility"),
+        CheckConstraint(
+            "sharing_mode IN ('live', 'independent')",
+            name="ck_projects_sharing_mode",
+        ),
     )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     name: Mapped[str] = mapped_column(String(240))
     description: Mapped[str] = mapped_column(Text, default="")
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
-    owner_id: Mapped[str] = mapped_column(
-        ForeignKey("users.id"),
-        index=True,
-        # A newly-created Project is always owned by its creator.  Deriving
-        # the value at INSERT keeps the invariant local to the model while
-        # allowing callers to override it only for an explicit transfer.
-        default=lambda context: context.get_current_parameters()["created_by"],
-    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
     state: Mapped[ProjectState] = mapped_column(
@@ -291,13 +301,16 @@ class Project(Base):
     visibility: Mapped[ProjectVisibility] = mapped_column(
         enum_type(ProjectVisibility, "project_visibility"), default=ProjectVisibility.private
     )
-    owner: Mapped[User] = relationship(foreign_keys=[owner_id])
+    sharing_mode: Mapped[ProjectSharingMode] = mapped_column(
+        enum_type(ProjectSharingMode, "project_sharing_mode"),
+        default=ProjectSharingMode.live,
+    )
 
 
 class ProjectMember(Base):
     __tablename__ = "project_members"
     __table_args__ = (
-        CheckConstraint("role IN ('owner', 'editor', 'viewer')", name="ck_project_members_role"),
+        CheckConstraint("role IN ('admin', 'editor', 'viewer')", name="ck_project_members_role"),
     )
     project_id: Mapped[str] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True
@@ -310,28 +323,88 @@ class ProjectMember(Base):
 
 class ProjectItem(Base):
     __tablename__ = "project_items"
+    __table_args__ = (
+        UniqueConstraint("project_id", "item_id", name="uq_project_items_project_item"),
+        UniqueConstraint("id", "project_id", name="uq_project_items_id_project"),
+        UniqueConstraint("id", "item_id", name="uq_project_items_id_item"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     project_id: Mapped[str] = mapped_column(
-        ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
     )
-    item_id: Mapped[str] = mapped_column(
-        ForeignKey("items.id", ondelete="CASCADE"), primary_key=True
+    item_id: Mapped[str] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), index=True)
+    added_by: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
 class Tag(Base):
     __tablename__ = "tags"
+    __table_args__ = (
+        CheckConstraint(
+            "(user_id IS NOT NULL AND project_id IS NULL) OR "
+            "(user_id IS NULL AND project_id IS NOT NULL)",
+            name="ck_tags_exactly_one_scope",
+        ),
+        UniqueConstraint("user_id", "normalized_name", name="uq_tags_user_name"),
+        UniqueConstraint("project_id", "normalized_name", name="uq_tags_project_name"),
+        UniqueConstraint("id", "user_id", name="uq_tags_id_user"),
+        UniqueConstraint("id", "project_id", name="uq_tags_id_project"),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    name: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    project_id: Mapped[str | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    name: Mapped[str] = mapped_column(String(120))
+    normalized_name: Mapped[str] = mapped_column(String(120))
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
-class ItemTag(Base):
-    __tablename__ = "item_tags"
-    item_id: Mapped[str] = mapped_column(
-        ForeignKey("items.id", ondelete="CASCADE"), primary_key=True
+class PersonalItemTag(Base):
+    __tablename__ = "personal_item_tags"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["item_id", "owner_id"],
+            ["items.id", "items.owner_id"],
+            ondelete="CASCADE",
+            name="fk_personal_item_tags_item_owner",
+        ),
+        ForeignKeyConstraint(
+            ["tag_id", "owner_id"],
+            ["tags.id", "tags.user_id"],
+            ondelete="CASCADE",
+            name="fk_personal_item_tags_tag_owner",
+        ),
     )
-    tag_id: Mapped[str] = mapped_column(ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True)
+    item_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    tag_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+
+
+class ProjectItemTag(Base):
+    __tablename__ = "project_item_tags"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["project_item_id", "project_id"],
+            ["project_items.id", "project_items.project_id"],
+            ondelete="CASCADE",
+            name="fk_project_item_tags_project_item",
+        ),
+        ForeignKeyConstraint(
+            ["tag_id", "project_id"],
+            ["tags.id", "tags.project_id"],
+            ondelete="CASCADE",
+            name="fk_project_item_tags_tag_project",
+        ),
+    )
+    project_item_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    tag_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
 
 
 class ItemTagRecommendation(Base):
@@ -355,7 +428,9 @@ class ItemTagRecommendation(Base):
 class DiscussionMessage(Base):
     __tablename__ = "discussion_messages"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    item_id: Mapped[str] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
+    project_item_id: Mapped[str] = mapped_column(
+        ForeignKey("project_items.id", ondelete="CASCADE"), index=True
+    )
     author_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     body: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
@@ -372,9 +447,10 @@ class FileRevision(Base):
         ),
     )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    item_id: Mapped[str] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
-    object_key: Mapped[str] = mapped_column(String(200), index=True)
-    thumbnail_object_key: Mapped[str | None] = mapped_column(String(200), nullable=True, index=True)
+    object_key: Mapped[str] = mapped_column(String(200), unique=True, index=True)
+    thumbnail_object_key: Mapped[str | None] = mapped_column(
+        String(200), nullable=True, unique=True, index=True
+    )
     thumbnail_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     size: Mapped[int] = mapped_column(Integer)
     mime_type: Mapped[str] = mapped_column(String(100), default="application/pdf")
@@ -388,29 +464,58 @@ class FileRevision(Base):
     )
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
-    item: Mapped[Item] = relationship(back_populates="revisions")
+    item_links: Mapped[list[ItemFileRevision]] = relationship(back_populates="file_revision")
+
+
+class ItemFileRevision(Base):
+    __tablename__ = "item_file_revisions"
+    __table_args__ = (
+        UniqueConstraint("item_id", "file_revision_id", name="uq_item_file_revision"),
+        UniqueConstraint("id", "item_id", name="uq_item_file_revisions_id_item"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    item_id: Mapped[str] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
+    file_revision_id: Mapped[str] = mapped_column(
+        ForeignKey("file_revisions.id", ondelete="RESTRICT"), index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    item: Mapped[Item] = relationship(back_populates="file_revision_links")
+    file_revision: Mapped[FileRevision] = relationship(back_populates="item_links")
 
 
 class Attachment(Base):
     __tablename__ = "attachments"
-    __table_args__ = (
-        CheckConstraint(
-            "role IS NULL OR role = 'graphical_abstract'",
-            name="ck_attachments_role",
-        ),
-        UniqueConstraint("item_id", "role", name="uq_attachments_item_role"),
-    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    item_id: Mapped[str] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
-    object_key: Mapped[str] = mapped_column(String(200), index=True)
+    object_key: Mapped[str] = mapped_column(String(200), unique=True, index=True)
     size: Mapped[int] = mapped_column(Integer)
     mime_type: Mapped[str] = mapped_column(String(100), default="application/octet-stream")
     original_name: Mapped[str] = mapped_column(String(255))
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    item_links: Mapped[list[ItemAttachment]] = relationship(back_populates="attachment")
+
+
+class ItemAttachment(Base):
+    __tablename__ = "item_attachments"
+    __table_args__ = (
+        CheckConstraint(
+            "role IS NULL OR role = 'graphical_abstract'",
+            name="ck_item_attachments_role",
+        ),
+        UniqueConstraint("item_id", "attachment_id", name="uq_item_attachment"),
+        UniqueConstraint("item_id", "role", name="uq_item_attachments_item_role"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    item_id: Mapped[str] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
+    attachment_id: Mapped[str] = mapped_column(
+        ForeignKey("attachments.id", ondelete="RESTRICT"), index=True
+    )
     role: Mapped[AttachmentRole | None] = mapped_column(
         enum_type(AttachmentRole, "attachment_role"), nullable=True
     )
-    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    item: Mapped[Item] = relationship(back_populates="attachment_links")
+    attachment: Mapped[Attachment] = relationship(back_populates="item_links")
 
 
 class PdfAnnotationObject(Base):
@@ -437,9 +542,21 @@ class PdfAnnotation(Base):
         ),
         CheckConstraint("scope IN ('private', 'project')", name="ck_pdf_annotations_scope"),
         CheckConstraint(
-            "(scope = 'private' AND project_id IS NULL) OR "
-            "(scope = 'project' AND project_id IS NOT NULL)",
-            name="ck_pdf_annotations_project_scope",
+            "(scope = 'private' AND project_item_id IS NULL) OR "
+            "(scope = 'project' AND project_item_id IS NOT NULL)",
+            name="ck_pdf_annotations_project_item_scope",
+        ),
+        ForeignKeyConstraint(
+            ["item_file_revision_id", "item_id"],
+            ["item_file_revisions.id", "item_file_revisions.item_id"],
+            ondelete="CASCADE",
+            name="fk_pdf_annotations_item_file_revision",
+        ),
+        ForeignKeyConstraint(
+            ["project_item_id", "item_id"],
+            ["project_items.id", "project_items.item_id"],
+            ondelete="CASCADE",
+            name="fk_pdf_annotations_project_item",
         ),
     )
     id: Mapped[str] = mapped_column(
@@ -451,25 +568,21 @@ class PdfAnnotation(Base):
         default=uid,
     )
     object_identity: Mapped[PdfAnnotationObject] = relationship()
-    file_revision_id: Mapped[str] = mapped_column(
-        ForeignKey("file_revisions.id", ondelete="CASCADE"), index=True
-    )
+    item_file_revision_id: Mapped[str] = mapped_column(String(36), index=True)
+    item_id: Mapped[str] = mapped_column(String(36), index=True)
     page_index: Mapped[int] = mapped_column(Integer)
     author_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     kind: Mapped[AnnotationKind] = mapped_column(enum_type(AnnotationKind, "annotation_kind"))
     scope: Mapped[AnnotationScope] = mapped_column(
         enum_type(AnnotationScope, "annotation_scope"), default=AnnotationScope.private
     )
-    project_id: Mapped[str | None] = mapped_column(
-        ForeignKey("projects.id", ondelete="CASCADE"), index=True
-    )
+    project_item_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     body: Mapped[str | None] = mapped_column(Text)
     selected_text: Mapped[str | None] = mapped_column(Text)
     payload: Mapped[dict] = mapped_column(JSON)
     version: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     def __init__(self, **kwargs):
         object_id = kwargs.setdefault("id", uid())
@@ -502,7 +615,6 @@ class PdfAnnotationReply(Base):
     version: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     def __init__(self, **kwargs):
         object_id = kwargs.setdefault("id", uid())
