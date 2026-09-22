@@ -11,11 +11,33 @@ A bibliographic record representing a paper, book, preprint, manuscript or
 other research output.
 _Avoid_: Paper, Work, Document when referring to the stored bibliographic record
 
-**Item Owner**:
-The User with inherent authority to edit and permanently delete an Item, independently of
-Project membership. Ownership is assigned when the Item is created and is not currently
-transferable.
-_Avoid_: Creator when discussing authorization
+**Workspace**:
+A shared knowledge space and the data-governance and authorization boundary for its Items,
+Documents, Tags, Discussions and Projects. Every Workspace-owned resource has one Workspace
+lineage. A User receives an initial Workspace when provisioning succeeds; that initial Workspace
+is a product-level Personal Library label, not a separate authorization kind.
+_Avoid_: Tenant when discussing research data
+
+**Workspace Member**:
+A User with an active or suspended membership in a Workspace. An active membership is required
+for Workspace data access; suspension and termination remove effective access without changing
+the provenance of Workspace-owned resources.
+
+**Workspace Role**:
+The only persistent resource role axis in Quirebase: `owner`, `admin`, `editor`, `reviewer` or
+`viewer`. Workspace capabilities, evaluated through the Access Module, govern Workspace data and
+governance operations. A role is never inferred from `created_by`.
+
+**Workspace Capability**:
+An Access Module decision granting or denying one operation for a User within a Workspace, such
+as reading Items, editing metadata, managing files, governing Tags or managing members. A
+capability is evaluated only after Workspace lineage and active membership are established.
+
+**Item Stewardship**:
+The Workspace-governed authority to maintain or permanently delete a canonical Item. It is
+derived from Workspace capability, not from the User who created the Item. `created_by` remains
+provenance only.
+_Avoid_: Item Owner when discussing authorization
 
 **Contributor**:
 A person or organization credited in an Item's bibliographic metadata, with a role such
@@ -25,8 +47,26 @@ organization.
 _Avoid_: Creator, User
 
 **Project**:
-A collaborative collection that grants members access to assigned Items.
+A collaboration context inside one Workspace that organizes a working set of Items and contains
+Project-scoped annotations, discussions and notes. A Project does not grant access to an Item or
+raise a User's Workspace capability.
 _Avoid_: Folder, Group
+
+**Project Member**:
+An explicit User–Project participation and visibility-scope association without a Project role.
+For a Project with `visibility=members`, an active Project Member is required to read or mutate
+the Project context; for `visibility=workspace`, membership is optional and does not add
+authority.
+
+**Project Visibility**:
+The Project-context visibility setting `workspace` or `members`. `workspace` exposes the
+Project context to active Workspace members for reading, while writes still require the relevant
+Workspace capability; `members` limits context visibility to active Project Members. Visibility
+never changes the underlying Workspace Item ACL.
+
+**ProjectItem**:
+An association placing an Item from the same Workspace in a Project working set. ProjectItem
+does not grant Item access or any Workspace capability.
 
 **Document**:
 Stored file content associated with an Item, represented by a File Revision or
@@ -70,7 +110,9 @@ A temporary PDF derived from a File Revision and its visible Annotations for dow
 available until its recorded expiration time and is then eligible for physical cleanup.
 
 **Discussion Message**:
-A conversational message attached to an Item and visible through Item access.
+A conversational message attached to an Item and visible through Workspace Item access. A
+Project Discussion/Note is a separate Project-scoped collaboration resource governed by Project
+visibility and Workspace capabilities.
 _Avoid_: Annotation, Comment
 
 **Tag**:
@@ -137,16 +179,20 @@ An authenticated human account with an assigned System Role.
 _Avoid_: Account, Profile
 
 **System Role**:
-A global authorization tier (`administrator` or `member`) governing instance-wide administration and Item deletion.
+A global authorization tier (`administrator` or `member`) governing instance-wide administration,
+tenancy/lifecycle governance and account operations. It does not grant implicit access to
+Workspace-owned research data.
 _Avoid_: Global Role, User Role
 
-**Project Role**:
-A collection-scoped authorization tier (`owner`, `editor`, or `viewer`) governing member access and editing rights within a Project.
-_Avoid_: Group Role, Project Permission
-
 **Invitation**:
-A single-use, time-limited token granting registration for a new User with a designated System Role.
+A single-use, time-limited instance-level mechanism for provisioning or registering a User. A
+Workspace admission uses a separate WorkspaceInvitation and does not follow from instance
+registration alone.
 _Avoid_: Invite Code, Signup Token
+
+**Workspace Invitation**:
+A single-use, time-limited admission mechanism for adding an existing User to a Workspace.
+Accepting it creates or activates a Workspace Member; it does not provision instance identity.
 
 **Login Session**:
 A revocable authenticated device session belonging to one User.
@@ -178,17 +224,23 @@ for invalidating a Login Session or API Token without deleting its audit/persist
 
 ## Relationships
 
-- A User is the Item Owner of zero or more Items, owns zero or more Login Sessions and API Tokens,
-  and has one System Role.
+- A User owns zero or more Login Sessions and API Tokens, has one System Role, and may belong to
+  zero or more Workspaces through Workspace Members.
 - An Item has zero or more Contributors in an ordered bibliographic role. A Contributor may have a split first/last name or a single-field literal name.
-- An Invitation provisions one new User with an assigned System Role.
+- An Invitation provisions or registers one new User with an assigned System Role; successful
+  provisioning also creates that User's initial Workspace and owner membership.
+- A Workspace has Workspace Members, a canonical Item Library, shared Tags, Item Discussions and
+  Projects. Workspace ownership and access are evaluated through Workspace capabilities.
 - An Item has zero or more File Revisions, Attachments, Tags, and Discussion Messages, and at most
   one Attachment designated as its current Graphical Abstract.
 - Deleting a File Revision deletes its PDF Thumbnail. Item Thumbnail resolution then falls back to
   the next eligible File Revision unless a Graphical Abstract is designated.
 - An Item has at most one current Item Tag Recommendation generation.
-- An Item may belong to multiple Projects.
-- A Project has members with an assigned Project Role (owner, editor, or viewer).
+- An Item may belong to multiple Projects in the same Workspace; ProjectItem is an organizational
+  association and never grants Item access.
+- A Project has zero or more Project Members without roles and one Project Visibility setting. A
+  Project has no owner authority; Project lifecycle and membership operations use Workspace
+  capabilities.
 - An Annotation belongs to exactly one File Revision.
 - An Annotation has zero or more Annotation Replies.
 - An Annotation Export Artifact is derived from one File Revision and expires independently of it.
