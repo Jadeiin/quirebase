@@ -2,18 +2,22 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 
+from quirebase.access import Capability, require_project_context, require_workspace_capability
 from quirebase.audit import record_event
-from quirebase.core.errors import (
-    DomainError,
-    ResourceNotFound,
-    ResourceUnavailable,
-    ValidationFailure,
+from quirebase.core.errors import DomainError, ResourceNotFound, ValidationFailure
+from quirebase.models import (
+    ProjectMember,
+    ProjectState,
+    ProjectVisibility,
+    User,
+    WorkspaceMember,
+    WorkspaceMemberState,
 )
-from quirebase.models import Project, ProjectMember, ProjectRole, User
 
-from ._locking import lock_project_root
+from ._locking import lock_project_membership_workspace, lock_project_root
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,41 +30,65 @@ class ProjectMemberConflict(DomainError):
 async def add_project_member(
     db: AsyncSession,
     user: User,
+    workspace_id: str,
     project_id: str,
     username: str,
-    role: ProjectRole | str = ProjectRole.viewer,
 ) -> ProjectMember:
-    await lock_project_root(db, project_id)
-    project = await db.get(Project, project_id, populate_existing=True)
-    if project is None or user.id != project.owner_id:
-        raise ResourceUnavailable("project not found or owner role required")
-    try:
-        requested_role = ProjectRole(role)
-    except ValueError as error:
-        raise ValidationFailure("invalid project role") from error
-    if requested_role is ProjectRole.owner:
-        raise ValidationFailure("use ownership transfer to assign the owner role")
+    await lock_project_membership_workspace(db, workspace_id)
+    workspace = await require_workspace_capability(
+        db, user, workspace_id, Capability.projects_members_manage
+    )
+    await lock_project_root(db, project_id, workspace_id, state=ProjectState.active)
     target = await db.scalar(
-        select(User).where(User.username == username.strip(), User.active.is_(True))
+        select(User)
+        .join(WorkspaceMember, WorkspaceMember.user_id == User.id)
+        .where(
+            User.username == username.strip(),
+            User.active.is_(True),
+            WorkspaceMember.workspace_id == workspace_id,
+            WorkspaceMember.state == WorkspaceMemberState.active,
+            WorkspaceMember.terminated_at.is_(None),
+        )
     )
     if target is None:
-        raise ResourceNotFound("user not found")
-    if target.id == project.owner_id:
-        raise ProjectMemberConflict("the owner role can only change through ownership transfer")
-    existing = await db.get(ProjectMember, (project_id, target.id), populate_existing=True)
-    if existing:
-        existing.role = requested_role
-        member = existing
-    else:
-        member = ProjectMember(project_id=project_id, user_id=target.id, role=requested_role)
-        db.add(member)
+        raise ResourceNotFound("active Workspace member not found")
+    # An owner/admin outside a members-visible Project can explicitly join it
+    # before exercising Project-scoped governance. Adding someone else still
+    # requires the ordinary Project visibility gate.
+    if target.id != user.id:
+        await require_project_context(
+            db, user, workspace_id, project_id, Capability.projects_members_manage
+        )
+    existing = await db.scalar(
+        select(ProjectMember).where(
+            ProjectMember.workspace_id == workspace_id,
+            ProjectMember.project_id == project_id,
+            ProjectMember.user_id == target.id,
+        )
+    )
+    if existing is not None:
+        return existing
+    member = ProjectMember(
+        workspace_id=workspace_id,
+        project_id=project_id,
+        user_id=target.id,
+    )
+    db.add(member)
+    try:
+        await db.flush()
+    except IntegrityError as error:
+        raise ProjectMemberConflict("Project member already exists") from error
     record_event(
         db,
         user.id,
-        "project.member.set",
-        "project",
-        project_id,
-        detail={"user_id": target.id, "role": requested_role},
+        "project.member.add",
+        "project_member",
+        member.id,
+        detail={"user_id": target.id},
+        workspace_id=workspace_id,
+        project_id=project_id,
+        authorization_role=workspace.role.value,
+        authorization_capability=Capability.projects_members_manage.value,
     )
     await db.commit()
     return member
@@ -69,23 +97,55 @@ async def add_project_member(
 async def remove_project_member(
     db: AsyncSession,
     user: User,
+    workspace_id: str,
     project_id: str,
-    member_id: str,
+    member_user_id: str,
 ) -> None:
-    await lock_project_root(db, project_id)
-    project = await db.get(Project, project_id, populate_existing=True)
-    target = await db.get(ProjectMember, (project_id, member_id), populate_existing=True)
-    if project is None or user.id != project.owner_id or target is None:
-        raise ResourceUnavailable("project or member not found")
-    if target.user_id == project.owner_id:
-        raise ProjectMemberConflict("a project must retain an owner")
+    await lock_project_membership_workspace(db, workspace_id)
+    project = await lock_project_root(db, project_id, workspace_id)
+    context = await require_project_context(
+        db, user, workspace_id, project_id, Capability.projects_members_manage
+    )
+    target = await db.scalar(
+        select(ProjectMember).where(
+            ProjectMember.workspace_id == workspace_id,
+            ProjectMember.project_id == project_id,
+            ProjectMember.user_id == member_user_id,
+        )
+    )
+    if target is None:
+        raise ResourceNotFound("Project member not found")
+    if project.visibility is ProjectVisibility.members:
+        remaining_active = await db.scalar(
+            select(func.count(ProjectMember.id))
+            .join(User, User.id == ProjectMember.user_id)
+            .join(
+                WorkspaceMember,
+                (WorkspaceMember.workspace_id == ProjectMember.workspace_id)
+                & (WorkspaceMember.user_id == ProjectMember.user_id),
+            )
+            .where(
+                ProjectMember.workspace_id == workspace_id,
+                ProjectMember.project_id == project_id,
+                ProjectMember.user_id != member_user_id,
+                User.active.is_(True),
+                WorkspaceMember.state == WorkspaceMemberState.active,
+                WorkspaceMember.terminated_at.is_(None),
+            )
+        )
+        if not remaining_active:
+            raise ValidationFailure("members-visible Project must retain a Project member")
     await db.delete(target)
     record_event(
         db,
         user.id,
         "project.member.remove",
-        "project",
-        project_id,
-        detail={"user_id": member_id},
+        "project_member",
+        target.id,
+        detail={"user_id": member_user_id},
+        workspace_id=workspace_id,
+        project_id=project_id,
+        authorization_role=context.workspace.role.value,
+        authorization_capability=Capability.projects_members_manage.value,
     )
     await db.commit()

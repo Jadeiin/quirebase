@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
+from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.models import Author, Item, ItemAuthor, ItemIdentifier, User
 
@@ -14,9 +15,12 @@ async def test_item_rich_metadata_fields(async_db):
     user2 = User(username="user2", password_hash="hash")
     db.add_all([user1, user2])
     await db.flush()
+    await provision_initial_workspace(db, user1)
+    await provision_initial_workspace(db, user2)
 
     item = Item(
         title="Deep Learning for Science",
+        workspace_id=fixture_workspace_id(user1),
         created_by=user1.id,
         updated_by=user2.id,
         volume="12",
@@ -59,8 +63,13 @@ async def test_author_and_item_author_relations(async_db):
     user = User(username="author_user", password_hash="hash")
     db.add(user)
     await db.flush()
+    await provision_initial_workspace(db, user)
 
-    item = Item(title="Graph Neural Networks", created_by=user.id)
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        title="Graph Neural Networks",
+        created_by=user.id,
+    )
     author1 = Author(first_name="Alice", last_name="Smith")
     author2 = Author(first_name="Bob", last_name="Jones")
     db.add_all([item, author1, author2])
@@ -96,8 +105,13 @@ async def test_item_identifier_relations(async_db):
     user = User(username="ident_user", password_hash="hash")
     db.add(user)
     await db.flush()
+    await provision_initial_workspace(db, user)
 
-    item = Item(title="Quantum Computation", created_by=user.id)
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        title="Quantum Computation",
+        created_by=user.id,
+    )
     db.add(item)
     await db.flush()
 

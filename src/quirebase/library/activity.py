@@ -25,6 +25,7 @@ class SearchClauseView(Protocol):
 async def record_discovery_search_audit(
     db: AsyncSession,
     user: User,
+    workspace_id: str,
     provider: str,
     clauses: Sequence[SearchClauseView],
     result_count: int,
@@ -35,6 +36,7 @@ async def record_discovery_search_audit(
         "metadata.search",
         "provider",
         provider,
+        workspace_id=workspace_id,
         detail={
             "fields": [clause.field for clause in clauses],
             "result_count": result_count,
@@ -43,9 +45,11 @@ async def record_discovery_search_audit(
     await db.commit()
 
 
-async def get_accessible_item_identifiers(db: AsyncSession, user: User) -> set[tuple[str, str]]:
+async def get_accessible_item_identifiers(
+    db: AsyncSession, user: User, workspace_id: str
+) -> set[tuple[str, str]]:
     identifiers_by_provider: set[tuple[str, str]] = set()
-    for item in (await db.scalars(visible_items_query(user))).all():
+    for item in (await db.scalars(visible_items_query(workspace_id))).all():
         if item.doi:
             identifiers_by_provider.add(("doi", item.doi.casefold()))
         try:
@@ -61,6 +65,7 @@ async def get_accessible_item_identifiers(db: AsyncSession, user: User) -> set[t
 async def get_matching_accessible_item_identifiers(
     db: AsyncSession,
     user: User,
+    workspace_id: str,
     candidates: set[tuple[str, str]],
 ) -> set[tuple[str, str]]:
     """Return accessible identifiers that occur in one Provider result page."""
@@ -72,7 +77,7 @@ async def get_matching_accessible_item_identifiers(
     if not normalized:
         return set()
 
-    visible_ids = visible_items_query(user).with_only_columns(Item.id).subquery()
+    visible_ids = visible_items_query(workspace_id).with_only_columns(Item.id).subquery()
     matched: set[tuple[str, str]] = set()
 
     doi_values = {value for provider, value in normalized if provider == "doi"}

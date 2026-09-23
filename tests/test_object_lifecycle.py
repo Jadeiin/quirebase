@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4, uuid5
 
 import pytest
+from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.config import get_settings
 from quirebase.core.storage import ObjectSuffix, get_object_store
@@ -13,20 +14,28 @@ from quirebase.operations.maintenance import cleanup_exports, reconcile_objects
 from quirebase.operations.object_migration import migrate_legacy_objects
 
 
+async def _user(db, username: str) -> User:
+    user = User(username=username, password_hash="unused")
+    db.add(user)
+    await db.flush()
+    await provision_initial_workspace(db, user)
+    await db.commit()
+    return user
+
+
 @pytest.mark.anyio
 async def test_shared_legacy_cas_migrates_to_independent_uuid_objects(async_db):
     content = b"%PDF-shared-legacy"
     old_key = "aa/bb/" + "0" * 64 + ".pdf"
     store = get_object_store()
     await store.put(old_key, content)
-    user = User(username="migration-owner", password_hash="unused")
-    async_db.add(user)
-    await async_db.flush()
-    first_item = Item(title="First", created_by=user.id)
-    second_item = Item(title="Second", created_by=user.id)
+    user = await _user(async_db, "migration-owner")
+    first_item = Item(workspace_id=fixture_workspace_id(user), title="First", created_by=user.id)
+    second_item = Item(workspace_id=fixture_workspace_id(user), title="Second", created_by=user.id)
     async_db.add_all([first_item, second_item])
     await async_db.flush()
     first = FileRevision(
+        workspace_id=fixture_workspace_id(user),
         item_id=first_item.id,
         object_key=old_key,
         size=len(content),
@@ -34,6 +43,7 @@ async def test_shared_legacy_cas_migrates_to_independent_uuid_objects(async_db):
         created_by=user.id,
     )
     second = FileRevision(
+        workspace_id=fixture_workspace_id(user),
         item_id=second_item.id,
         object_key=old_key,
         size=len(content),
@@ -90,14 +100,13 @@ async def test_reconciliation_deletes_only_old_unreferenced_managed_objects(
     os.utime(object_root / active_pdf.key, (cutoff, cutoff))
     os.utime(object_root / active_thumbnail.key, (cutoff, cutoff))
 
-    user = User(username="reconcile-owner", password_hash="unused")
-    async_db.add(user)
-    await async_db.flush()
-    item = Item(title="Referenced", created_by=user.id)
+    user = await _user(async_db, "reconcile-owner")
+    item = Item(workspace_id=fixture_workspace_id(user), title="Referenced", created_by=user.id)
     async_db.add(item)
     await async_db.flush()
     async_db.add(
         FileRevision(
+            workspace_id=fixture_workspace_id(user),
             item_id=item.id,
             object_key=referenced.key,
             size=referenced.size,
@@ -139,9 +148,11 @@ async def test_cleanup_exports_applies_runtime_ttl_to_annotation_objects(
     expired = await store.put_object(uuid4(), ObjectSuffix.PDF, b"expired export", max_bytes=100)
     recent = await store.put_object(uuid4(), ObjectSuffix.PDF, b"recent export", max_bytes=100)
     now = datetime.now(UTC)
+    user = await _user(async_db, "cleanup-owner")
     async_db.add_all([
         ExportArtifact(
             workflow_id="expired-export",
+            workspace_id=fixture_workspace_id(user),
             object_key=expired.key,
             filename="expired.pdf",
             size=expired.size,
@@ -149,6 +160,7 @@ async def test_cleanup_exports_applies_runtime_ttl_to_annotation_objects(
         ),
         ExportArtifact(
             workflow_id="recent-export",
+            workspace_id=fixture_workspace_id(user),
             object_key=recent.key,
             filename="recent.pdf",
             size=recent.size,
@@ -171,13 +183,16 @@ async def test_cleanup_exports_applies_runtime_ttl_to_annotation_objects(
 @pytest.mark.anyio
 async def test_migration_repeat_cleans_legacy_thumbnail_when_target_is_recorded(async_db):
     store = get_object_store()
-    user = User(username="thumbnail-migration-owner", password_hash="unused")
-    async_db.add(user)
-    await async_db.flush()
-    item = Item(title="Thumbnail migration", created_by=user.id)
+    user = await _user(async_db, "thumbnail-migration-owner")
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        title="Thumbnail migration",
+        created_by=user.id,
+    )
     async_db.add(item)
     await async_db.flush()
     revision = FileRevision(
+        workspace_id=fixture_workspace_id(user),
         item_id=item.id,
         object_key="aa/bb/" + "1" * 64 + ".pdf",
         size=8,

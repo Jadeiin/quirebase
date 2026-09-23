@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 from test_http import authenticated_async_client
+from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.crypto import hash_password
 from quirebase.models import DiscussionMessage, Item, Tag, User
@@ -36,8 +37,8 @@ def test_operational_routes_contract():
                 operational_routes.add((method, route.path))
 
     assert {
-        ("POST", "/api/v1/items/{item_id}/attachments/remote"),
-        ("POST", "/api/v1/items/{item_id}/revisions/remote"),
+        ("POST", "/api/v1/workspaces/{workspace_id}/items/{item_id}/attachments/remote"),
+        ("POST", "/api/v1/workspaces/{workspace_id}/items/{item_id}/revisions/remote"),
     } <= operational_routes
     assert all(
         path.startswith("/api/v1") or path in {"/healthz", "/metrics"}
@@ -52,6 +53,7 @@ async def test_http_behavioral_contract(async_db, async_session_factory, tmp_pat
         db, async_session_factory, tmp_path, monkeypatch
     )
     item_id = item.id
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
 
     # 1. Non-admin access to the administration API is concealed.
     admin_resp = await client.get("/api/v1/admin/overview")
@@ -68,19 +70,24 @@ async def test_http_behavioral_contract(async_db, async_session_factory, tmp_pat
     )
     db.add(other_user)
     await db.flush()
-    other_item = Item(title="Private item", created_by=other_user.id)
+    await provision_initial_workspace(db, other_user)
+    other_item = Item(
+        workspace_id=fixture_workspace_id(other_user),
+        title="Private item",
+        created_by=other_user.id,
+    )
     db.add(other_item)
     await db.commit()
 
     edit_resp = await client.put(
-        f"/api/v1/items/{other_item.id}",
+        f"{workspace_base}/items/{other_item.id}",
         json={"expected_version": 1, "metadata": {"title": "New Title"}},
     )
     assert edit_resp.status_code == 404
 
     # 3. Version conflict returns the current version as structured metadata.
     conflict_resp = await client.put(
-        f"/api/v1/items/{item_id}",
+        f"{workspace_base}/items/{item_id}",
         json={"expected_version": 999, "metadata": {"title": "Conflict Title"}},
     )
     assert conflict_resp.status_code == 409
@@ -96,12 +103,13 @@ async def test_http_behavioral_contract(async_db, async_session_factory, tmp_pat
 async def test_oversized_bibliography_upload_returns_payload_too_large(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
-    client, _item, _revision = await authenticated_async_client(
+    client, item, _revision = await authenticated_async_client(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     try:
         response = await client.post(
-            "/api/v1/imports/bibliography",
+            f"{workspace_base}/imports/bibliography",
             data={"file_format": "bibtex"},
             files={
                 "bibliography": (
@@ -126,18 +134,26 @@ async def test_tag_rename_conceals_missing_and_foreign_tags(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
     db = async_db
-    client, _item, _revision = await authenticated_async_client(
+    client, item, _revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     other_user = User(username="tag-owner", password_hash="unused")
     db.add(other_user)
     await db.flush()
-    foreign_tag = Tag(name="Foreign tag", created_by=other_user.id)
+    await provision_initial_workspace(db, other_user)
+    foreign_tag = Tag(
+        workspace_id=fixture_workspace_id(other_user),
+        name="Foreign tag",
+        created_by=other_user.id,
+    )
     db.add(foreign_tag)
     await db.commit()
     try:
-        missing = await client.patch("/api/v1/tags/missing", json={"name": "Renamed"})
-        foreign = await client.patch(f"/api/v1/tags/{foreign_tag.id}", json={"name": "Renamed"})
+        missing = await client.patch(f"{workspace_base}/tags/missing", json={"name": "Renamed"})
+        foreign = await client.patch(
+            f"{workspace_base}/tags/{foreign_tag.id}", json={"name": "Renamed"}
+        )
 
         assert foreign.status_code == 404
         assert foreign.content == missing.content
@@ -150,18 +166,24 @@ async def test_tag_delete_conceals_missing_and_foreign_tags(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
     db = async_db
-    client, _item, _revision = await authenticated_async_client(
+    client, item, _revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     other_user = User(username="foreign-tag-owner", password_hash="unused")
     db.add(other_user)
     await db.flush()
-    foreign_tag = Tag(name="Protected tag", created_by=other_user.id)
+    await provision_initial_workspace(db, other_user)
+    foreign_tag = Tag(
+        workspace_id=fixture_workspace_id(other_user),
+        name="Protected tag",
+        created_by=other_user.id,
+    )
     db.add(foreign_tag)
     await db.commit()
     try:
-        missing = await client.delete("/api/v1/tags/missing")
-        foreign = await client.delete(f"/api/v1/tags/{foreign_tag.id}")
+        missing = await client.delete(f"{workspace_base}/tags/missing")
+        foreign = await client.delete(f"{workspace_base}/tags/{foreign_tag.id}")
 
         assert foreign.status_code == 404
         assert foreign.content == missing.content
@@ -177,15 +199,25 @@ async def test_tag_list_conceals_tags_without_accessible_items(
     client, item, _revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     other_user = User(username="prolific-tagger", password_hash="unused")
     db.add(other_user)
     await db.flush()
-    foreign_tag = Tag(name="Foreign private taxonomy", created_by=other_user.id)
-    own_tag = Tag(name="Own empty taxonomy", created_by=item.created_by)
+    await provision_initial_workspace(db, other_user)
+    foreign_tag = Tag(
+        workspace_id=fixture_workspace_id(other_user),
+        name="Foreign private taxonomy",
+        created_by=other_user.id,
+    )
+    own_tag = Tag(
+        workspace_id=item.workspace_id,
+        name="Own empty taxonomy",
+        created_by=item.created_by,
+    )
     db.add_all([foreign_tag, own_tag])
     await db.commit()
     try:
-        listing = await client.get("/api/v1/tags")
+        listing = await client.get(f"{workspace_base}/tags")
 
         assert listing.status_code == 200
         names = [row["name"] for row in listing.json()]
@@ -203,17 +235,23 @@ async def test_discussion_delete_conceals_missing_and_foreign_messages(
     client, item, _revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     other_user = User(username="message-author", password_hash="unused")
     db.add(other_user)
     await db.flush()
     foreign_message = DiscussionMessage(
-        item_id=item.id, author_id=other_user.id, body="Private authorship"
+        workspace_id=item.workspace_id,
+        item_id=item.id,
+        author_id=other_user.id,
+        body="Private authorship",
     )
     db.add(foreign_message)
     await db.commit()
     try:
-        missing = await client.delete(f"/api/v1/items/{item.id}/discussions/missing")
-        foreign = await client.delete(f"/api/v1/items/{item.id}/discussions/{foreign_message.id}")
+        missing = await client.delete(f"{workspace_base}/items/{item.id}/discussions/missing")
+        foreign = await client.delete(
+            f"{workspace_base}/items/{item.id}/discussions/{foreign_message.id}"
+        )
 
         assert foreign.status_code == 404
         assert foreign.content == missing.content
@@ -271,13 +309,19 @@ async def test_discussion_author_can_delete_own_message(
     client, item, _revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     own_message = DiscussionMessage(
-        item_id=item.id, author_id=item.created_by, body="Finished reviewing"
+        workspace_id=item.workspace_id,
+        item_id=item.id,
+        author_id=item.created_by,
+        body="Finished reviewing",
     )
     db.add(own_message)
     await db.commit()
     try:
-        response = await client.delete(f"/api/v1/items/{item.id}/discussions/{own_message.id}")
+        response = await client.delete(
+            f"{workspace_base}/items/{item.id}/discussions/{own_message.id}"
+        )
 
         assert response.status_code == 200
         assert response.json() == {"ok": True}

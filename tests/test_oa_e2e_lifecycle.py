@@ -16,6 +16,7 @@ from provider_helpers import provider_runtime
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from test_http import authenticated_async_client
+from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.config import get_settings
 from quirebase.library import (
@@ -140,6 +141,8 @@ async def test_seam2_oa_corpus_batch_import_and_relational_mapping(async_db, mon
     db = async_db
     user = User(username="oa_corpus_tester", password_hash="secret")
     db.add(user)
+    await db.flush()
+    await provision_initial_workspace(db, user)
     await db.commit()
     user_id = user.id
 
@@ -157,13 +160,14 @@ async def test_seam2_oa_corpus_batch_import_and_relational_mapping(async_db, mon
     batch, records, errors = await stage_identifier_import_batch(
         db,
         user,
+        fixture_workspace_id(user),
         identifier="10.3390/ejihpe13110181",
         provider="openalex",
     )
     assert not errors
     assert len(records) == 1
 
-    await commit_import_batch(db, user, batch.id)
+    await commit_import_batch(db, user, fixture_workspace_id(user), batch.id)
 
     # Verify persisted Item
     item = await db.scalar(
@@ -216,6 +220,7 @@ async def test_seam3_oa_corpus_upstream_sync_and_reconciliation(async_db):
     user = User(username="sync_corpus_tester", password_hash="secret")
     db.add(user)
     await db.flush()
+    await provision_initial_workspace(db, user)
 
     # Initial minimal item
     item = await create_item(
@@ -257,6 +262,7 @@ async def test_seam3_oa_corpus_upstream_sync_and_reconciliation(async_db):
         updated = await sync_metadata_from_upstream(
             db,
             user,
+            fixture_workspace_id(user),
             item.id,
             item.version,
             provider="doi",
@@ -294,8 +300,10 @@ async def test_seam4_oa_corpus_citation_generation_and_csl_export(async_db):
     user = User(username="cite_corpus_tester", password_hash="secret")
     db.add(user)
     await db.flush()
+    await provision_initial_workspace(db, user)
 
     item = Item(
+        workspace_id=fixture_workspace_id(user),
         title="Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives",
         authors="Hasanein, Ahmed M.; Sobaih, Abu Elnasr E.",
         publication_title="European Journal of Investigation in Health, Psychology and Education",
@@ -355,6 +363,7 @@ async def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(
         assert user is not None
 
         item = Item(
+            workspace_id=seed_item.workspace_id,
             title="Drivers and Consequences of ChatGPT Use in Higher Education",
             authors="Hasanein, Ahmed M.",
             publication_title="European Journal of Investigation in Health, Psychology and Education",
@@ -371,14 +380,14 @@ async def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(
         item_version = item.version
 
         # 1. Fetch workspace view
-        resp = await client.get(f"/api/v1/items/{item_id}")
+        resp = await client.get(f"/api/v1/workspaces/{seed_item.workspace_id}/items/{item_id}")
         assert resp.status_code == 200
         assert resp.json()["title_html"] == item.title
         assert resp.json()["doi"] == "10.3390/ejihpe13110181"
 
         # 2. Submit edit form modifying title and adding second author
         edit_resp = await client.put(
-            f"/api/v1/items/{item_id}",
+            f"/api/v1/workspaces/{seed_item.workspace_id}/items/{item_id}",
             json={
                 "expected_version": item_version,
                 "metadata": {
@@ -396,23 +405,28 @@ async def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(
             },
         )
         assert edit_resp.status_code == 200
-        edited = await client.get(f"/api/v1/items/{item_id}")
+        edited = await client.get(f"/api/v1/workspaces/{seed_item.workspace_id}/items/{item_id}")
         assert (
             edited.json()["title_html"]
             == "Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives"
         )
 
         # 3. Verify structured relations in DB
+        workspace_id = seed_item.workspace_id
         db.expire_all()
         user = await db.get(User, user_id)
         assert user is not None
-        workspace_data = await open_item_workspace(db, user, item_id, WorkspaceSection.summary)
+        workspace_data = await open_item_workspace(
+            db, user, workspace_id, item_id, WorkspaceSection.summary
+        )
         assert isinstance(workspace_data, SummaryWorkspace)
         assert (
             workspace_data.item.title
             == "Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives"
         )
-        metadata = await open_item_workspace(db, user, item_id, WorkspaceSection.metadata)
+        metadata = await open_item_workspace(
+            db, user, workspace_id, item_id, WorkspaceSection.metadata
+        )
         assert isinstance(metadata, MetadataWorkspace)
         author_links = metadata.authors
         assert len(author_links) == 2

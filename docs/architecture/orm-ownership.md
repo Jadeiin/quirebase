@@ -24,7 +24,8 @@ The architecture suite keeps this list complete when mappings are added or remov
 
 | Owner | ORM classes |
 | --- | --- |
-| Accounts | `User`, `LoginSession`, `LoginThrottle`, `Invitation` |
+| Accounts | `User`, `LoginSession`, `LoginThrottle`, `Invitation`, `ApiToken` |
+| Workspaces | `Workspace`, `WorkspaceMember`, `WorkspaceInvitation` |
 | Library | `Item`, `Author`, `ItemAuthor`, `ItemIdentifier`, `ItemRead`, `Tag`, `ItemTag`, `DiscussionMessage` |
 | Projects | `Project`, `ProjectMember`, `ProjectItem` |
 | Documents | `FileRevision`, `Attachment`, `PdfAnnotationObject`, `PdfAnnotation`, `PdfAnnotationReply`, `ExportArtifact` |

@@ -61,7 +61,8 @@ class TagView(BaseModel):
 
 class DiscussionMessageView(BaseModel):
     id: str
-    item_id: str
+    item_id: str | None = None
+    project_id: str | None = None
     author_id: str
     author_username: str
     body: str
@@ -134,24 +135,30 @@ def item_detail_view(workspace: Any) -> ItemDetailView:
     )
 
 
+def discussion_message_view(row: Any) -> DiscussionMessageView:
+    return DiscussionMessageView(
+        id=row.id,
+        item_id=row.item_id,
+        project_id=row.project_id,
+        author_id=row.author_id,
+        author_username=row.author.username,
+        body=row.body,
+        created_at=as_utc(row.created_at).isoformat(),
+        updated_at=as_utc(row.updated_at).isoformat(),
+    )
+
+
 def discussion_message_views(workspace: Any) -> list[DiscussionMessageView]:
-    return [
-        DiscussionMessageView(
-            id=row.id,
-            item_id=row.item_id,
-            author_id=row.author_id,
-            author_username=row.author.username,
-            body=row.body,
-            created_at=as_utc(row.created_at).isoformat(),
-            updated_at=as_utc(row.updated_at).isoformat(),
-        )
-        for row in workspace.messages
-    ]
+    return [discussion_message_view(row) for row in workspace.messages]
 
 
 class ItemUpdateRequest(BaseModel):
     expected_version: int = Field(ge=1)
     metadata: ItemMetadata
+
+
+class CrossWorkspaceCopyRequest(BaseModel):
+    target_workspace_id: str = Field(min_length=1, max_length=36)
 
 
 class NameRequest(BaseModel):

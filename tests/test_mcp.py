@@ -7,6 +7,7 @@ import httpx2
 import pytest
 from fastmcp import Client
 from sqlalchemy import select
+from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.accounts import create_api_token
 from quirebase.core.database import get_db
@@ -111,6 +112,7 @@ async def test_tool_search_discovers_curated_tools(async_session_factory):
     matches = json.loads(result.content[0].text)
     matching_tool = next(tool for tool in matches if tool["name"] == "projects.update_project")
     assert set(matching_tool["inputSchema"]["properties"]) == {
+        "workspace_id",
         "project_id",
         "name",
         "description",
@@ -124,6 +126,7 @@ async def test_generated_tool_schemas_come_from_the_api_contract(async_session_f
         tools = {name: await server.get_tool(name) for name in TOOL_ALLOWLIST}
 
     assert set(tools["library.search_items"].parameters["properties"]) == {
+        "workspace_id",
         "query",
         "tag",
         "project",
@@ -133,12 +136,14 @@ async def test_generated_tool_schemas_come_from_the_api_contract(async_session_f
         "page",
     }
     assert set(tools["projects.update_project"].parameters["properties"]) == {
+        "workspace_id",
         "project_id",
         "name",
         "description",
         "visibility",
     }
     assert set(tools["annotations.update_annotation"].parameters["properties"]) == {
+        "workspace_id",
         "item_id",
         "annotation_id",
         "version",
@@ -157,6 +162,8 @@ async def test_generated_library_tool_calls_api_and_preserves_mcp_audit_provenan
 ):
     user = User(username="generated-mcp-writer", password_hash="unused")
     async_db.add(user)
+    await async_db.flush()
+    await provision_initial_workspace(async_db, user)
     await async_db.commit()
     grant = await create_api_token(async_db, user, "Generated MCP", expires_in_days=30)
 
@@ -165,7 +172,11 @@ async def test_generated_library_tool_calls_api_and_preserves_mcp_audit_provenan
             client,
             grant.raw_token,
             "library.create_library_item",
-            {"title": "Created through generated MCP", "doi": "10.1/generated"},
+            {
+                "workspace_id": fixture_workspace_id(user),
+                "title": "Created through generated MCP",
+                "doi": "10.1/generated",
+            },
         )
 
     assert response.status_code == 200
@@ -194,6 +205,8 @@ async def test_generated_library_tool_calls_api_and_preserves_mcp_audit_provenan
 async def test_tool_search_proxy_calls_the_curated_tool(async_db, async_session_factory):
     user = User(username="tool-search-writer", password_hash="unused")
     async_db.add(user)
+    await async_db.flush()
+    await provision_initial_workspace(async_db, user)
     await async_db.commit()
     grant = await create_api_token(async_db, user, "Tool search", expires_in_days=30)
 
@@ -210,7 +223,10 @@ async def test_tool_search_proxy_calls_the_curated_tool(async_db, async_session_
             "call_tool",
             {
                 "name": "library.create_library_item",
-                "arguments": {"title": "Created through tool search"},
+                "arguments": {
+                    "workspace_id": fixture_workspace_id(user),
+                    "title": "Created through tool search",
+                },
             },
         )
 
@@ -235,6 +251,8 @@ async def test_generated_tool_returns_api_version_conflict_as_mcp_error(
 ):
     user = User(username="generated-mcp-conflict", password_hash="unused")
     async_db.add(user)
+    await async_db.flush()
+    await provision_initial_workspace(async_db, user)
     await async_db.commit()
     grant = await create_api_token(async_db, user, "Generated MCP conflict", expires_in_days=30)
 
@@ -243,10 +261,11 @@ async def test_generated_tool_returns_api_version_conflict_as_mcp_error(
             client,
             grant.raw_token,
             "library.create_library_item",
-            {"title": "Versioned Item"},
+            {"workspace_id": fixture_workspace_id(user), "title": "Versioned Item"},
         )
         item_id = created.json()["result"]["structuredContent"]["id"]
         arguments = {
+            "workspace_id": fixture_workspace_id(user),
             "item_id": item_id,
             "expected_version": 1,
             "metadata": {"title": "First update"},

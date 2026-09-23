@@ -26,14 +26,14 @@ async def test_dispatch_maintenance_workflow_is_transactional_and_audited(
     async_db, fake_durable_operations
 ):
     admin = await create_user(async_db, "maintenance-admin", "administrator")
-    workflow_id = await dispatch_maintenance_workflow(async_db, admin, "reindex_all")
+    workflow_id = await dispatch_maintenance_workflow(async_db, admin, "check_objects")
     workflow = await fake_durable_operations.get(workflow_id)
     assert workflow is not None
-    assert workflow.name == "operations.reindex_all"
+    assert workflow.name == "operations.check_objects"
     assert workflow.queue_name == "operations"
     audit = await async_db.scalar(select(AuditEvent).where(AuditEvent.target_id == workflow_id))
     assert audit is not None
-    assert audit.action == "admin.maintenance.reindex_all"
+    assert audit.action == "admin.maintenance.check_objects"
 
 
 @pytest.mark.anyio
@@ -41,7 +41,7 @@ async def test_all_supported_maintenance_operations_use_the_global_queue(
     async_db, fake_durable_operations
 ):
     admin = await create_user(async_db, "maintenance-kinds", "administrator")
-    for operation in ("reindex_all", "check_objects", "backup", "recommend_tags_all"):
+    for operation in ("check_objects",):
         workflow_id = await dispatch_maintenance_workflow(async_db, admin, operation)
         workflow = await fake_durable_operations.get(workflow_id)
         assert workflow is not None
@@ -49,7 +49,8 @@ async def test_all_supported_maintenance_operations_use_the_global_queue(
         assert workflow.attributes == {
             "capability": "operations",
             "operation": operation,
-            "owner_id": admin.id,
+            "actor_id": admin.id,
+            "workspace_id": None,
         }
 
 

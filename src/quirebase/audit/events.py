@@ -22,6 +22,14 @@ def record_event(
     target_type: str,
     target_id: str | None = None,
     detail: dict[str, Any] | str | None = None,
+    *,
+    workspace_id: str | None = None,
+    project_id: str | None = None,
+    target_ids: list[str] | tuple[str, ...] | None = None,
+    authorization_role: str | None = None,
+    authorization_capability: str | None = None,
+    result: str = "succeeded",
+    source: str | None = None,
 ) -> AuditEvent:
     invocation = current_programmatic_invocation()
     if invocation is not None:
@@ -38,10 +46,17 @@ def record_event(
         detail_text = detail
     event = AuditEvent(
         actor_id=actor_id,
+        workspace_id=workspace_id,
+        project_id=project_id,
         action=action,
         target_type=target_type,
         target_id=target_id,
         detail=detail_text,
+        target_ids=json.dumps(list(target_ids)) if target_ids is not None else None,
+        authorization_role=authorization_role,
+        authorization_capability=authorization_capability,
+        result=result,
+        source=source or (invocation.protocol if invocation is not None else "internal"),
     )
     db.add(event)
     return event

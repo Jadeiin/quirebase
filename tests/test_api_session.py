@@ -16,11 +16,11 @@ from quirebase.models import LoginSession, User
 async def test_login_session_can_use_safe_api_routes(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
-    client, _item, _revision = await authenticated_async_client(
+    client, item, _revision = await authenticated_async_client(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
     try:
-        response = await client.get("/api/v1/items")
+        response = await client.get(f"/api/v1/workspaces/{item.workspace_id}/items")
         assert response.status_code == 200
         assert response.json()["total"] == 1
     finally:
@@ -36,17 +36,17 @@ async def test_session_api_mutations_require_an_exact_origin(
     )
     try:
         missing = await client.post(
-            f"/api/v1/items/{item.id}/tags",
+            f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/tags",
             headers={"Origin": ""},
             json={"name": "Missing origin"},
         )
         cross_origin = await client.post(
-            f"/api/v1/items/{item.id}/tags",
+            f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/tags",
             headers={"Origin": "https://attacker.example"},
             json={"name": "Cross origin"},
         )
         same_origin = await client.post(
-            f"/api/v1/items/{item.id}/tags",
+            f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/tags",
             headers={"Origin": "http://testserver"},
             json={"name": "Same origin"},
         )
@@ -68,12 +68,12 @@ async def test_session_api_uses_configured_external_origin_behind_tls_proxy(
     )
     try:
         accepted = await client.post(
-            f"/api/v1/items/{item.id}/tags",
+            f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/tags",
             headers={"Origin": "https://library.example"},
             json={"name": "Proxied request"},
         )
         internal_origin = await client.post(
-            f"/api/v1/items/{item.id}/tags",
+            f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/tags",
             headers={"Origin": "http://testserver"},
             json={"name": "Internal origin"},
         )
@@ -88,12 +88,12 @@ async def test_session_api_uses_configured_external_origin_behind_tls_proxy(
 async def test_authorization_header_never_falls_back_to_login_session(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
-    client, _item, _revision = await authenticated_async_client(
+    client, item, _revision = await authenticated_async_client(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
     try:
         response = await client.get(
-            "/api/v1/items",
+            f"/api/v1/workspaces/{item.workspace_id}/items",
             headers={"Authorization": "Bearer invalid"},
         )
         assert response.status_code == 401

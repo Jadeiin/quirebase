@@ -7,6 +7,7 @@ import pytest
 from app_helpers import create_web_test_app
 from inquiro import CandidatePage
 from sqlalchemy import func, select
+from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.accounts import create_api_token
 from quirebase.core.config import get_settings
@@ -24,6 +25,8 @@ async def test_provider_wait_releases_the_read_transaction_and_other_request_pro
     async with async_session_factory() as seed_db:
         user = User(username="async-provider-user", password_hash="unused")
         seed_db.add(user)
+        await seed_db.flush()
+        await provision_initial_workspace(seed_db, user)
         await seed_db.commit()
         user_id = user.id
 
@@ -49,6 +52,7 @@ async def test_provider_wait_releases_the_read_transaction_and_other_request_pro
             search_candidate_records(
                 slow_db,
                 slow_user,
+                fixture_workspace_id(slow_user),
                 "crossref",
                 (DiscoveryClause("any", "and", "slow"),),
                 settings=settings,
@@ -59,6 +63,7 @@ async def test_provider_wait_releases_the_read_transaction_and_other_request_pro
             fast = await search_candidate_records(
                 fast_db,
                 fast_user,
+                fixture_workspace_id(fast_user),
                 "crossref",
                 (DiscoveryClause("any", "and", "fast"),),
                 settings=settings,
@@ -81,6 +86,8 @@ async def test_http_api_and_database_share_the_asyncio_request_loop(async_sessio
     async with async_session_factory() as db:
         user = User(username="async-http-user", password_hash="unused")
         db.add(user)
+        await db.flush()
+        await provision_initial_workspace(db, user)
         await db.commit()
         grant = await create_api_token(db, user, "Async HTTP", expires_in_days=30)
 
@@ -97,8 +104,13 @@ async def test_http_api_and_database_share_the_asyncio_request_loop(async_sessio
     transport = httpx2.ASGITransport(app=app)
     headers = {"Authorization": f"Bearer {grant.raw_token}"}
     async with httpx2.AsyncClient(transport=transport, base_url="http://testserver") as client:
-        created = await client.post("/api/v1/items", headers=headers, json={"title": "Async Item"})
-        listed = await client.get("/api/v1/items", headers=headers)
+        workspace_id = fixture_workspace_id(user)
+        created = await client.post(
+            f"/api/v1/workspaces/{workspace_id}/items",
+            headers=headers,
+            json={"title": "Async Item"},
+        )
+        listed = await client.get(f"/api/v1/workspaces/{workspace_id}/items", headers=headers)
 
     assert created.status_code == 201
     assert listed.status_code == 200

@@ -19,6 +19,7 @@ from quirebase.core.crypto import hash_password_async, token_hash, verify_passwo
 from quirebase.core.errors import DomainError, ResourceNotFound, ValidationFailure
 from quirebase.core.timezones import as_utc
 from quirebase.models import Invitation, LoginSession, User
+from quirebase.workspaces import provision_initial_workspace
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -101,6 +102,9 @@ async def logout(db: AsyncSession, user: User, login_session: LoginSession) -> N
 
 
 async def accept_invitation(db: AsyncSession, token: str, password: str) -> User:
+    from quirebase.accounts.registration import ensure_registration_allowed
+
+    await ensure_registration_allowed(db, via_invitation=True)
     invitation = await db.scalar(
         select(Invitation).where(Invitation.token_hash == token_hash(token)).with_for_update()
     )
@@ -122,6 +126,7 @@ async def accept_invitation(db: AsyncSession, token: str, password: str) -> User
     invitation.accepted_at = datetime.now(UTC)
     try:
         await db.flush()
+        await provision_initial_workspace(db, user)
         record_event(db, user.id, "invitation.accept", "user", user.id)
         await db.commit()
     except IntegrityError as error:

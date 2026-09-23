@@ -9,18 +9,27 @@ from inquiro.bibliography import (
     record_to_csl_json,
     render_citation,
 )
+from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
-from quirebase.core.errors import ValidationFailure
+from quirebase.core.errors import (
+    PermissionDenied,
+    ValidationFailure,
+    WorkspaceLifecycleError,
+    WorkspaceMembershipRequired,
+)
 from quirebase.library.citations import (
     create_custom_citation_style,
+    delete_custom_citation_style,
     format_csl_export,
     format_standard_export,
     get_item_citation_text_response,
+    list_custom_citation_styles,
     preview_citation_key,
     resolve_style_xml,
     select_builtin_citation_styles,
 )
-from quirebase.models import CitationStyle, Item, User
+from quirebase.models import CitationStyle, Item, User, WorkspaceMember, WorkspaceRole
+from quirebase.workspaces import archive_workspace
 
 _counter = 0
 
@@ -31,6 +40,8 @@ async def _async_item(db, **overrides) -> Item:
     user = User(username=f"citation-async-{_counter}", password_hash="unused")
     db.add(user)
     await db.flush()
+    await provision_initial_workspace(db, user)
+    await db.commit()
     fields = {
         "title": "An Example Paper",
         "authors": "Doe, Jane; Smith, Alex",
@@ -43,11 +54,88 @@ async def _async_item(db, **overrides) -> Item:
         "reference_type": "journal-article",
     }
     fields.update(overrides)
-    item = Item(created_by=user.id, **fields)
+    item = Item(workspace_id=fixture_workspace_id(user), created_by=user.id, **fields)
     db.add(item)
     await db.flush()
     await db.refresh(item, ["author_links"])
     return item
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("role", [WorkspaceRole.viewer, WorkspaceRole.reviewer])
+async def test_shared_citation_style_writes_require_capability(async_db, role):
+    item = await _async_item(async_db)
+    owner = await async_db.get(User, item.created_by)
+    assert owner is not None
+    contributor = User(username=f"style-{role.value}-writer", password_hash="unused")
+    async_db.add(contributor)
+    await async_db.flush()
+    await provision_initial_workspace(async_db, contributor)
+    async_db.add(WorkspaceMember(workspace_id=item.workspace_id, user_id=contributor.id, role=role))
+    await async_db.commit()
+    xml = builtin_style_xml("apa")
+    assert xml is not None
+    style = await create_custom_citation_style(async_db, owner, item.workspace_id, "Shared", xml)
+
+    with pytest.raises(PermissionDenied):
+        await create_custom_citation_style(async_db, contributor, item.workspace_id, "Other", xml)
+    with pytest.raises(PermissionDenied):
+        await delete_custom_citation_style(async_db, contributor, item.workspace_id, style.id)
+    assert await async_db.get(CitationStyle, style.id) is not None
+
+
+@pytest.mark.anyio
+async def test_shared_citation_style_duplicate_and_archived_workspace(async_db):
+    item = await _async_item(async_db)
+    owner = await async_db.get(User, item.created_by)
+    assert owner is not None
+    xml = builtin_style_xml("apa")
+    assert xml is not None
+    style = await create_custom_citation_style(async_db, owner, item.workspace_id, "Shared", xml)
+    with pytest.raises(ValidationFailure, match="already exists"):
+        await create_custom_citation_style(async_db, owner, item.workspace_id, " Shared ", xml)
+    await archive_workspace(async_db, owner, item.workspace_id)
+    with pytest.raises(WorkspaceLifecycleError):
+        await create_custom_citation_style(async_db, owner, item.workspace_id, "Other", xml)
+    with pytest.raises(WorkspaceLifecycleError):
+        await delete_custom_citation_style(async_db, owner, item.workspace_id, style.id)
+
+
+@pytest.mark.anyio
+async def test_shared_citation_styles_require_workspace_membership_to_list(async_db):
+    item = await _async_item(async_db)
+    outsider = User(username="style-outsider", password_hash="unused")
+    async_db.add(outsider)
+    await async_db.flush()
+    await provision_initial_workspace(async_db, outsider)
+    await async_db.commit()
+    with pytest.raises(WorkspaceMembershipRequired):
+        await list_custom_citation_styles(async_db, outsider, item.workspace_id)
+
+
+@pytest.mark.anyio
+async def test_duplicate_shared_citation_style_returns_validation_response(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    from test_http import authenticated_async_client
+
+    from quirebase.core.config import get_settings
+
+    client, item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    try:
+        xml = builtin_style_xml("apa")
+        assert xml is not None
+        url = f"/api/v1/workspaces/{item.workspace_id}/citation-styles"
+        payload = {"name": "Shared", "csl": xml}
+        assert (await client.post(url, json=payload)).status_code == 201
+        duplicate = await client.post(url, json=payload)
+        assert duplicate.status_code == 422
+        assert duplicate.json()["code"] == "validation_failed"
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
 
 
 @pytest.mark.anyio
@@ -180,7 +268,7 @@ async def test_citation_copy_endpoint_accepts_export_options(
     )
     try:
         response = await client.get(
-            f"/api/v1/items/{item.id}/bibliography/content",
+            f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/bibliography/content",
             params={
                 "file_format": "bibtex",
                 "include_abstract": "false",
@@ -213,8 +301,12 @@ async def test_citation_style_search_includes_owned_custom_styles(
         user = await db.get(User, item.created_by)
         xml = builtin_style_xml("apa")
         assert user is not None and xml is not None
-        await create_custom_citation_style(db, user, "My Searchable Style", xml)
-        response = await client.get("/api/v1/citation-styles?query=searchable")
+        await create_custom_citation_style(
+            db, user, fixture_workspace_id(user), "My Searchable Style", xml
+        )
+        response = await client.get(
+            f"/api/v1/workspaces/{item.workspace_id}/citation-styles?query=searchable"
+        )
         assert response.status_code == 200
         assert response.json()["styles"][0]["name"] == "My Searchable Style"
     finally:
@@ -230,12 +322,13 @@ async def test_citation_style_search_includes_requested_saved_style(
 
     from quirebase.core.config import get_settings
 
-    client, _item, _revision = await authenticated_async_client(
+    client, item, _revision = await authenticated_async_client(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
     try:
         response = await client.get(
-            "/api/v1/citation-styles", params={"limit": 1, "include": "apa"}
+            f"/api/v1/workspaces/{item.workspace_id}/citation-styles",
+            params={"limit": 1, "include": "apa"},
         )
         assert response.status_code == 200
         styles = response.json()["styles"]
@@ -311,19 +404,24 @@ async def test_resolve_style_xml_scoped_to_owner(async_db):
     user_b = User(username="owner-b", password_hash="unused")
     db.add_all([user_a, user_b])
     await db.flush()
+    await provision_initial_workspace(db, user_a)
+    await provision_initial_workspace(db, user_b)
+    await db.commit()
 
-    style_a = await create_custom_citation_style(db, user_a, "Custom A", csl_xml)
+    style_a = await create_custom_citation_style(
+        db, user_a, fixture_workspace_id(user_a), "Custom A", csl_xml
+    )
 
     # Owner can resolve
-    assert await resolve_style_xml(db, user_a, style_a.id) == csl_xml
+    assert await resolve_style_xml(db, user_a, fixture_workspace_id(user_a), style_a.id) == csl_xml
     # Non-owner cannot resolve
-    assert await resolve_style_xml(db, user_b, style_a.id) is None
+    assert await resolve_style_xml(db, user_b, fixture_workspace_id(user_b), style_a.id) is None
     # Unauthenticated cannot resolve
-    assert await resolve_style_xml(db, None, style_a.id) is None
+    assert await resolve_style_xml(db, None, fixture_workspace_id(user_a), style_a.id) is None
     # Built-in styles remain resolvable by anyone
-    assert await resolve_style_xml(db, user_a, "apa") == csl_xml
-    assert await resolve_style_xml(db, user_b, "apa") == csl_xml
-    assert await resolve_style_xml(db, None, "apa") == csl_xml
+    assert await resolve_style_xml(db, user_a, fixture_workspace_id(user_a), "apa") == csl_xml
+    assert await resolve_style_xml(db, user_b, fixture_workspace_id(user_b), "apa") == csl_xml
+    assert await resolve_style_xml(db, None, fixture_workspace_id(user_a), "apa") == csl_xml
 
 
 @pytest.mark.anyio
@@ -334,7 +432,12 @@ async def test_csl_export_translates_unavailable_engine_at_library_interface(asy
     item = await _async_item(db)
     user = await db.get(User, item.created_by)
     assert user is not None
-    style = CitationStyle(name="Persisted Style", csl_xml="<style/>", created_by=user.id)
+    style = CitationStyle(
+        workspace_id=item.workspace_id,
+        name="Persisted Style",
+        csl_xml="<style/>",
+        created_by=user.id,
+    )
     db.add(style)
     await db.flush()
 
@@ -344,7 +447,7 @@ async def test_csl_export_translates_unavailable_engine_at_library_interface(asy
     monkeypatch.setattr(citations, "render_bibliography", unavailable)
 
     with pytest.raises(ValidationFailure, match="requires the 'citation' extra"):
-        await format_csl_export(db, user, [item], style_key=style.id)
+        await format_csl_export(db, user, item.workspace_id, [item], style_key=style.id)
 
 
 @pytest.mark.anyio
@@ -357,7 +460,12 @@ async def test_citation_text_translates_unavailable_engine_at_library_interface(
     item = await _async_item(db)
     user = await db.get(User, item.created_by)
     assert user is not None
-    style = CitationStyle(name="Persisted Style", csl_xml="<style/>", created_by=user.id)
+    style = CitationStyle(
+        workspace_id=item.workspace_id,
+        name="Persisted Style",
+        csl_xml="<style/>",
+        created_by=user.id,
+    )
     db.add(style)
     await db.flush()
 
@@ -367,7 +475,9 @@ async def test_citation_text_translates_unavailable_engine_at_library_interface(
     monkeypatch.setattr(citations, "render_citation", unavailable)
 
     with pytest.raises(ValidationFailure, match="requires the 'citation' extra"):
-        await get_item_citation_text_response(db, user, item.id, style_key=style.id)
+        await get_item_citation_text_response(
+            db, user, item.workspace_id, item.id, style_key=style.id
+        )
 
 
 @pytest.mark.anyio
@@ -388,25 +498,33 @@ async def test_citation_routes_enforce_custom_style_ownership(
         user_b = User(username="other-user", password_hash="unused")
         db.add(user_b)
         await db.flush()
+        await provision_initial_workspace(db, user_b)
+        await db.commit()
 
         csl_xml = builtin_style_xml("apa")
         assert csl_xml is not None
-        style_a = await create_custom_citation_style(db, user_a, "User A Style", csl_xml)
-        style_b = await create_custom_citation_style(db, user_b, "User B Style", csl_xml)
+        style_a = await create_custom_citation_style(
+            db, user_a, item.workspace_id, "User A Style", csl_xml
+        )
+        style_b = await create_custom_citation_style(
+            db, user_b, fixture_workspace_id(user_b), "User B Style", csl_xml
+        )
 
         # User A requesting User A's style succeeds
-        res = await client.get(f"/api/v1/items/{item.id}/citation/content?style={style_a.id}")
+        res = await client.get(
+            f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/citation/content?style={style_a.id}"
+        )
         assert res.status_code == 200
         assert item.title in res.text
 
         # User A requesting User B's style is forbidden / invalid
         res_forbidden = await client.get(
-            f"/api/v1/items/{item.id}/citation/content?style={style_b.id}"
+            f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/citation/content?style={style_b.id}"
         )
         assert res_forbidden.status_code == 422
 
         res_csl_forbidden = await client.get(
-            f"/api/v1/items/{item.id}/bibliography?file_format=csl&style={style_b.id}"
+            f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/bibliography?file_format=csl&style={style_b.id}"
         )
         assert res_csl_forbidden.status_code == 422
     finally:
@@ -438,10 +556,13 @@ async def test_custom_styles_accessible_in_item_workspace(
             "</style>"
         )
         custom_style = await create_custom_citation_style(
-            db, user, "My Isolated Custom Style", csl_xml
+            db, user, item.workspace_id, "My Isolated Custom Style", csl_xml
         )
 
-        response = await client.get("/api/v1/citation-styles", params={"include": custom_style.id})
+        response = await client.get(
+            f"/api/v1/workspaces/{item.workspace_id}/citation-styles",
+            params={"include": custom_style.id},
+        )
         assert response.status_code == 200
         assert any(
             style["key"] == custom_style.id and style["scope"] == "custom"
@@ -449,7 +570,7 @@ async def test_custom_styles_accessible_in_item_workspace(
         )
 
         text_res = await client.get(
-            f"/api/v1/items/{item.id}/citation/content?style={custom_style.id}"
+            f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/citation/content?style={custom_style.id}"
         )
         assert text_res.status_code == 200
         assert item.title in text_res.text

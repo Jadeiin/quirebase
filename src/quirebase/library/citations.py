@@ -32,8 +32,10 @@ from inquiro.bibliography import (
     preview_citation_key as preview_formula,
 )
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from quirebase.access.items import require_readable_item
+from quirebase.access.workspaces import Capability, require_workspace_capability
 from quirebase.core.errors import ResourceNotFound, ValidationFailure
 from quirebase.models import CitationStyle
 
@@ -52,24 +54,30 @@ def preview_citation_key(formula: str, *, force_ascii: bool = False) -> str:
         raise ValidationFailure(str(error)) from error
 
 
-async def resolve_style_xml(db: AsyncSession, user: User | None, style_key: str) -> str | None:
+async def resolve_style_xml(
+    db: AsyncSession, user: User | None, workspace_id: str, style_key: str
+) -> str | None:
     builtin = await asyncio.to_thread(builtin_style_xml, style_key)
     if builtin:
         return builtin
     if user is None:
         return None
+    await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
     style = await db.get(CitationStyle, style_key)
-    if style is None or style.created_by != user.id:
+    if style is None or style.workspace_id != workspace_id:
         return None
     return style.csl_xml
 
 
-async def list_custom_citation_styles(db: AsyncSession, user: User) -> list[CitationStyle]:
+async def list_custom_citation_styles(
+    db: AsyncSession, user: User, workspace_id: str
+) -> list[CitationStyle]:
+    await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
     return list(
         (
             await db.scalars(
                 select(CitationStyle)
-                .where(CitationStyle.created_by == user.id)
+                .where(CitationStyle.workspace_id == workspace_id)
                 .order_by(CitationStyle.name)
             )
         ).all()
@@ -77,8 +85,9 @@ async def list_custom_citation_styles(db: AsyncSession, user: User) -> list[Cita
 
 
 async def create_custom_citation_style(
-    db: AsyncSession, user: User, name: str, csl: str
+    db: AsyncSession, user: User, workspace_id: str, name: str, csl: str
 ) -> CitationStyle:
+    await require_workspace_capability(db, user, workspace_id, Capability.citation_styles_manage)
     name = name.strip()
     if not name:
         raise ValidationFailure("style name is required")
@@ -86,15 +95,37 @@ async def create_custom_citation_style(
         name = name[:120]
     if not is_valid_csl(csl):
         raise ValidationFailure("the CSL text is not a valid citation style")
-    style = CitationStyle(name=name, csl_xml=csl, created_by=user.id)
-    db.add(style)
+    existing = await db.scalar(
+        select(CitationStyle.id).where(
+            CitationStyle.workspace_id == workspace_id, CitationStyle.name == name
+        )
+    )
+    if existing is not None:
+        raise ValidationFailure("citation style name already exists in Workspace")
+    style = CitationStyle(workspace_id=workspace_id, name=name, csl_xml=csl, created_by=user.id)
+    try:
+        async with db.begin_nested():
+            db.add(style)
+            await db.flush()
+    except IntegrityError:
+        existing = await db.scalar(
+            select(CitationStyle.id).where(
+                CitationStyle.workspace_id == workspace_id, CitationStyle.name == name
+            )
+        )
+        if existing is None:
+            raise
+        raise ValidationFailure("citation style name already exists in Workspace") from None
     await db.commit()
     return style
 
 
-async def delete_custom_citation_style(db: AsyncSession, user: User, style_id: str) -> None:
+async def delete_custom_citation_style(
+    db: AsyncSession, user: User, workspace_id: str, style_id: str
+) -> None:
+    await require_workspace_capability(db, user, workspace_id, Capability.citation_styles_manage)
     style = await db.get(CitationStyle, style_id)
-    if style is None or style.created_by != user.id:
+    if style is None or style.workspace_id != workspace_id:
         raise ResourceNotFound("citation style not found")
     await db.delete(style)
     await db.commit()
@@ -103,11 +134,12 @@ async def delete_custom_citation_style(db: AsyncSession, user: User, style_id: s
 async def format_csl_export(
     db: AsyncSession,
     user: User,
+    workspace_id: str,
     items: list[Item],
     style_key: str = "apa",
     options: BibliographyExportOptions | None = None,
 ) -> tuple[str, str, str]:
-    style_xml = await resolve_style_xml(db, user, style_key)
+    style_xml = await resolve_style_xml(db, user, workspace_id, style_key)
     if style_xml is None:
         raise ValidationFailure("unknown citation style")
     try:
@@ -214,22 +246,30 @@ def _item_to_bibliography_record(item: Item) -> BibliographyRecord:
 async def get_item_citation_response(
     db: AsyncSession,
     user: User,
+    workspace_id: str,
     item_id: str,
     file_format: str,
     style_key: str = "apa",
     options: BibliographyExportOptions | None = None,
 ) -> tuple[str, str, str]:
-    item = await require_readable_item(db, user, item_id)
+    item = await require_readable_item(db, user, workspace_id, item_id)
     if file_format == "csl":
-        return await format_csl_export(db, user, [item], style_key=style_key, options=options)
+        return await format_csl_export(
+            db, user, workspace_id, [item], style_key=style_key, options=options
+        )
     return format_standard_export([item], file_format, options=options)
 
 
 async def get_item_citation_text_response(
-    db: AsyncSession, user: User, item_id: str, style_key: str = "apa", output: str = "text"
+    db: AsyncSession,
+    user: User,
+    workspace_id: str,
+    item_id: str,
+    style_key: str = "apa",
+    output: str = "text",
 ) -> tuple[str, str]:
-    item = await require_readable_item(db, user, item_id)
-    style_xml = await resolve_style_xml(db, user, style_key)
+    item = await require_readable_item(db, user, workspace_id, item_id)
+    style_xml = await resolve_style_xml(db, user, workspace_id, style_key)
     if style_xml is None:
         raise ValidationFailure("unknown citation style")
     try:

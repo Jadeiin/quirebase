@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, select
 
+from quirebase.access.items import require_editable_item
+from quirebase.access.workspaces import Capability, require_workspace_capability
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
 from quirebase.documents import enqueue_object_cleanup
@@ -12,53 +14,6 @@ from quirebase.search import search_index
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
-
-
-async def list_global_items(
-    db: AsyncSession,
-    admin: User,
-    search: str = "",
-    owner_id: str | None = None,
-    has_pdf: bool | None = None,
-    page: int = 1,
-    page_size: int = 20,
-) -> tuple[list[Item], int]:
-    if admin.role != "administrator":
-        raise ResourceUnavailable("administrator required")
-    query = select(Item)
-    count_query = select(func.count(Item.id))
-    filters = []
-    if search.strip():
-        search_value = search.strip()
-        term = f"%{search_value}%"
-        matching_ids = await search_index(db).matching_item_ids(db, search_value)
-        filters.append(
-            or_(
-                Item.id.in_(matching_ids),
-                Item.title.ilike(term),
-                Item.authors.ilike(term),
-                Item.doi.ilike(term),
-                Item.id == search_value,
-            )
-        )
-    if owner_id:
-        filters.append(Item.created_by == owner_id)
-    if has_pdf is True:
-        filters.append(Item.id.in_(select(FileRevision.item_id)))
-    elif has_pdf is False:
-        filters.append(Item.id.not_in(select(FileRevision.item_id)))
-    if filters:
-        query = query.where(*filters)
-        count_query = count_query.where(*filters)
-
-    total = await db.scalar(count_query) or 0
-    offset = max(0, (page - 1) * page_size)
-    items = list(
-        (
-            await db.scalars(query.order_by(Item.created_at.desc()).offset(offset).limit(page_size))
-        ).all()
-    )
-    return items, total
 
 
 async def get_storage_metrics(db: AsyncSession, admin: User) -> dict[str, Any]:
@@ -104,41 +59,64 @@ async def get_storage_metrics(db: AsyncSession, admin: User) -> dict[str, Any]:
     }
 
 
-async def _delete_item(
-    db: AsyncSession, actor: User, item_id: str, *, require_admin: bool = False
-) -> None:
-    if require_admin and actor.role != "administrator":
-        raise ResourceUnavailable("administrator required")
-    item = await db.scalar(select(Item).where(Item.id == item_id).with_for_update())
+async def _delete_item(db: AsyncSession, actor: User, workspace_id: str, item_id: str) -> None:
+    await require_workspace_capability(db, actor, workspace_id, Capability.items_delete)
+    await require_editable_item(db, actor, workspace_id, item_id)
+    item = await db.scalar(
+        select(Item).where(Item.id == item_id, Item.workspace_id == workspace_id).with_for_update()
+    )
     if item is None:
         raise ResourceNotFound("item not found")
-    if not require_admin and item.created_by != actor.id and actor.role != "administrator":
-        raise ResourceUnavailable("item owner required")
 
     title = item.title
     # Collect keys to clean up from storage
     cleanup_keys = list(
         (
-            await db.scalars(select(FileRevision.object_key).where(FileRevision.item_id == item.id))
+            await db.scalars(
+                select(FileRevision.object_key).where(
+                    FileRevision.workspace_id == workspace_id,
+                    FileRevision.item_id == item.id,
+                )
+            )
         ).all()
     )
     cleanup_keys.extend(
-        (await db.scalars(select(Attachment.object_key).where(Attachment.item_id == item.id))).all()
+        (
+            await db.scalars(
+                select(Attachment.object_key).where(
+                    Attachment.workspace_id == workspace_id,
+                    Attachment.item_id == item.id,
+                )
+            )
+        ).all()
     )
 
     thumbnail_keys = tuple(
         key
         for key in (
             await db.scalars(
-                select(FileRevision.thumbnail_object_key).where(FileRevision.item_id == item.id)
+                select(FileRevision.thumbnail_object_key).where(
+                    FileRevision.workspace_id == workspace_id,
+                    FileRevision.item_id == item.id,
+                )
             )
         ).all()
         if key
     )
 
     # Explicitly delete child relations for cross-dialect foreign key safety
-    await db.execute(delete(FileRevision).where(FileRevision.item_id == item.id))
-    await db.execute(delete(Attachment).where(Attachment.item_id == item.id))
+    await db.execute(
+        delete(FileRevision).where(
+            FileRevision.workspace_id == workspace_id,
+            FileRevision.item_id == item.id,
+        )
+    )
+    await db.execute(
+        delete(Attachment).where(
+            Attachment.workspace_id == workspace_id,
+            Attachment.item_id == item.id,
+        )
+    )
 
     # Revision projections are owned by FileRevision and cascade on PostgreSQL;
     # the SQLite adapter clears them explicitly.
@@ -151,25 +129,24 @@ async def _delete_item(
     record_event(
         db,
         actor.id,
-        "admin.item.delete" if require_admin else "item.delete",
+        "item.delete",
         "item",
         item.id,
         detail={"title": title},
+        workspace_id=workspace_id,
+        authorization_capability=Capability.items_delete.value,
     )
     await enqueue_object_cleanup(
         db,
         [*cleanup_keys, *thumbnail_keys],
-        owner_id=actor.id,
+        actor_id=actor.id,
+        workspace_id=workspace_id,
         operation="item_delete",
         target_id=item.id,
     )
     await db.commit()
 
 
-async def delete_item(db: AsyncSession, actor: User, item_id: str) -> None:
-    """Permanently delete one Item owned by the actor or an administrator."""
-    await _delete_item(db, actor, item_id)
-
-
-async def admin_delete_item(db: AsyncSession, admin: User, item_id: str) -> None:
-    await _delete_item(db, admin, item_id, require_admin=True)
+async def delete_item(db: AsyncSession, actor: User, workspace_id: str, item_id: str) -> None:
+    """Permanently delete one Workspace Item with the destructive capability."""
+    await _delete_item(db, actor, workspace_id, item_id)

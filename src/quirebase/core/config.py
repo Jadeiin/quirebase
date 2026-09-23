@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     max_attachment_bytes: int = 250 * 1024 * 1024
     export_ttl_hours: int = 24
     object_orphan_retention_hours: int = Field(default=24, ge=1, le=8760)
+    workspace_delete_retention_days: int = Field(default=30, ge=1, le=3650)
     workflow_upload_timeout_seconds: int = Field(default=600, ge=1, le=3600)
     workflow_executor_id: str = "quirebase-worker"
     log_level: str = "INFO"
@@ -64,6 +65,8 @@ class Settings(BaseSettings):
     recommendation_engine: str = "yake"
     recommendation_max_chars: int = Field(default=200_000, ge=1_000, le=2_000_000)
     keybert_model_path: Path | None = None
+    registration_policy: Literal["open", "closed", "invitation_only"] = "invitation_only"
+    workspace_creation_policy: Literal["admins_only", "members_allowed"] = "admins_only"
 
     @property
     def allowed_host_list(self) -> list[str]:

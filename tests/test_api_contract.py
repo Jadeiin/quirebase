@@ -12,8 +12,15 @@ OPENAPI = create_web_test_app().openapi()
 def test_api_version_prefix_is_owned_by_composition_root() -> None:
     """Capability routers stay relative; only the composition root owns /api/v1."""
     assert api_router.prefix == "/api/v1"
-    assert {router.prefix for router in CAPABILITY_ROUTERS} <= {"", "/admin"}
-    admin_router_prefixes = [router.prefix for router in CAPABILITY_ROUTERS if router.prefix]
+    assert {router.prefix for router in CAPABILITY_ROUTERS} <= {
+        "",
+        "/admin",
+        "/workspaces/{workspace_id}",
+        "/workspaces/{workspace_id}/projects",
+    }
+    admin_router_prefixes = [
+        router.prefix for router in CAPABILITY_ROUTERS if router.prefix == "/admin"
+    ]
     assert admin_router_prefixes == ["/admin"]
 
 
@@ -103,26 +110,26 @@ def test_openapi_media_type_contracts() -> None:
         "application/x-endnote-refer",
     }
     for bib_path, method in [
-        ("/api/v1/items/{item_id}/bibliography", "get"),
-        ("/api/v1/items/bibliography", "post"),
-        ("/api/v1/bibliography", "get"),
+        ("/api/v1/workspaces/{workspace_id}/items/{item_id}/bibliography", "get"),
+        ("/api/v1/workspaces/{workspace_id}/items/bibliography", "post"),
+        ("/api/v1/workspaces/{workspace_id}/bibliography", "get"),
     ]:
         content = paths[bib_path][method]["responses"]["200"]["content"]
         assert set(content.keys()) == bib_expected, f"Mismatched media types in {bib_path}"
 
-    bib_copy_content = paths["/api/v1/items/{item_id}/bibliography/content"]["get"]["responses"][
-        "200"
-    ]["content"]
+    bib_copy_content = paths[
+        "/api/v1/workspaces/{workspace_id}/items/{item_id}/bibliography/content"
+    ]["get"]["responses"]["200"]["content"]
     assert set(bib_copy_content.keys()) == {"text/plain"}
 
-    citation_content = paths["/api/v1/items/{item_id}/citation/content"]["get"]["responses"]["200"][
-        "content"
-    ]
+    citation_content = paths["/api/v1/workspaces/{workspace_id}/items/{item_id}/citation/content"][
+        "get"
+    ]["responses"]["200"]["content"]
     assert set(citation_content.keys()) == {"text/plain", "text/html"}
 
-    thumbnail_content = paths["/api/v1/items/{item_id}/thumbnail"]["get"]["responses"]["200"][
-        "content"
-    ]
+    thumbnail_content = paths["/api/v1/workspaces/{workspace_id}/items/{item_id}/thumbnail"]["get"][
+        "responses"
+    ]["200"]["content"]
     assert set(thumbnail_content.keys()) == {
         "image/png",
         "image/jpeg",
@@ -130,9 +137,9 @@ def test_openapi_media_type_contracts() -> None:
         "image/gif",
     }
 
-    attachment_content = paths["/api/v1/items/{item_id}/attachments/{attachment_id}/content"][
-        "get"
-    ]["responses"]["200"]["content"]
+    attachment_content = paths[
+        "/api/v1/workspaces/{workspace_id}/items/{item_id}/attachments/{attachment_id}/content"
+    ]["get"]["responses"]["200"]["content"]
     assert set(attachment_content.keys()) == {"application/octet-stream"}
 
 

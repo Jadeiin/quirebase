@@ -40,11 +40,6 @@ class ItemTagView(BaseModel):
     name: str
 
 
-class ItemOwnerView(BaseModel):
-    id: str
-    username: str
-
-
 class ItemIdentifierView(BaseModel):
     provider: str
     value: str
@@ -68,7 +63,6 @@ class ItemWorkspaceView(BaseModel):
     permissions: ItemWorkspacePermissionsView
     counts: ItemWorkspaceCountsView
     tags: list[ItemTagView]
-    owner: ItemOwnerView
     identifiers: list[ItemIdentifierView]
     latest_revision: ItemLatestRevisionView | None = None
     thumbnail: ItemThumbnailView | None = None
@@ -77,7 +71,6 @@ class ItemWorkspaceView(BaseModel):
 class ItemOrganizeProjectView(BaseModel):
     id: str
     name: str
-    role: str
     assigned: bool
 
 

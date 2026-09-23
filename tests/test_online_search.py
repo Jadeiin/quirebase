@@ -9,6 +9,7 @@ from inquiro import CandidatePage, CandidateRecord, Identifier
 from provider_helpers import provider_runtime
 from sqlalchemy import select
 from test_http import authenticated_async_client
+from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.config import get_settings
 from quirebase.models import AuditEvent, Item, ItemIdentifier
@@ -19,7 +20,7 @@ async def test_online_search_page_keeps_search_separate_from_import(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
     db = async_db
-    client, _item, _revision = await authenticated_async_client(
+    client, item, _revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
     result = CandidateRecord(
@@ -36,7 +37,7 @@ async def test_online_search_page_keeps_search_separate_from_import(
     )
     try:
         searched = await client.post(
-            "/api/v1/discovery/search",
+            f"/api/v1/workspaces/{item.workspace_id}/discovery/search",
             json={
                 "provider": "openalex",
                 "clauses": [{"operator": "and", "field": "title", "term": "quantum"}],
@@ -95,7 +96,7 @@ async def test_discovery_imported_check_queries_only_returned_identifiers(
     )
     try:
         searched = await client.post(
-            "/api/v1/discovery/search",
+            f"/api/v1/workspaces/{item.workspace_id}/discovery/search",
             json={
                 "provider": "openalex",
                 "clauses": [{"operator": "and", "field": "title", "term": "imported"}],
@@ -120,15 +121,15 @@ async def test_discovery_search_uses_runtime_provider_settings(
     async_db.add(admin)
     await async_db.commit()
     await update_runtime_settings(async_db, admin, {"nasa_ads_token": "runtime-token"})
-    client, _item, _revision = await authenticated_async_client(
+    client, item, _revision = await authenticated_async_client(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
     search_candidates = AsyncMock(return_value=CandidatePage("nasa", (), 0, 1, 10))
     monkeypatch.setattr("quirebase.library.discovery.search_candidates", search_candidates)
     try:
-        providers = await client.get("/api/v1/discovery/providers")
+        providers = await client.get(f"/api/v1/workspaces/{item.workspace_id}/discovery/providers")
         searched = await client.post(
-            "/api/v1/discovery/search",
+            f"/api/v1/workspaces/{item.workspace_id}/discovery/search",
             json={
                 "provider": "nasa",
                 "clauses": [{"operator": "and", "field": "any", "term": "stars"}],
@@ -154,12 +155,12 @@ async def test_discovery_search_uses_runtime_provider_settings(
 async def test_discovery_search_rejects_invalid_years(
     async_db, async_session_factory, tmp_path, monkeypatch, year_from, expected_error
 ):
-    client, _item, _revision = await authenticated_async_client(
+    client, item, _revision = await authenticated_async_client(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
     try:
         response = await client.post(
-            "/api/v1/discovery/search",
+            f"/api/v1/workspaces/{item.workspace_id}/discovery/search",
             json={
                 "provider": "crossref",
                 "clauses": [{"field": "title", "operator": "and", "term": "quantum"}],
@@ -182,7 +183,7 @@ async def test_discovery_search_rejects_invalid_years(
 async def test_discovery_search_preserves_sparse_condition_rows(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
-    client, _item, _revision = await authenticated_async_client(
+    client, item, _revision = await authenticated_async_client(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
     search_candidates = AsyncMock(return_value=CandidatePage("openalex", (), 0, 1, 10))
@@ -192,7 +193,7 @@ async def test_discovery_search_preserves_sparse_condition_rows(
     )
     try:
         response = await client.post(
-            "/api/v1/discovery/search",
+            f"/api/v1/workspaces/{item.workspace_id}/discovery/search",
             json={
                 "provider": "openalex",
                 "clauses": [
@@ -269,11 +270,15 @@ async def test_fallback_identifiers_can_be_staged_for_import(async_db, monkeypat
     db = async_db
     user = User(username="search_user", password_hash="unused")
     db.add(user)
+    await db.flush()
+
+    await provision_initial_workspace(db, user)
     await db.commit()
 
     batch_nasa, records_nasa, errors_nasa = await stage_identifier_import_batch(
         db,
         user,
+        fixture_workspace_id(user),
         "2025ApJ...123..456A",
         "bibcode",
     )
@@ -284,6 +289,7 @@ async def test_fallback_identifiers_can_be_staged_for_import(async_db, monkeypat
     batch_ieee, records_ieee, errors_ieee = await stage_identifier_import_batch(
         db,
         user,
+        fixture_workspace_id(user),
         "9876543",
         "article_number",
     )

@@ -15,8 +15,9 @@ from typing import TYPE_CHECKING, Any
 
 import stream_zip
 from inquiro.richtext import convert_rich_text
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 
+from quirebase.access import Capability
 from quirebase.access.documents import require_revision
 from quirebase.access.items import require_accessible_items
 from quirebase.audit import record_event
@@ -25,7 +26,19 @@ from quirebase.core.storage import get_object_store
 from quirebase.core.timezones import annotation_export_timezone, as_utc
 from quirebase.documents.annotations import select_visible_annotations
 from quirebase.documents.pdf import export_annotations
-from quirebase.models import Attachment, FileRevision, Item, PdfAnnotation, User
+from quirebase.models import (
+    AnnotationScope,
+    Attachment,
+    FileRevision,
+    Item,
+    PdfAnnotation,
+    Project,
+    ProjectItem,
+    ProjectMember,
+    ProjectState,
+    ProjectVisibility,
+    User,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterable, AsyncIterator
@@ -157,15 +170,45 @@ async def _bytes_body(value: bytes) -> AsyncIterator[bytes]:
     yield value
 
 
-async def _own_annotations(db: AsyncSession, user: User, revision_id: str) -> list[PdfAnnotation]:
+async def _own_annotations(
+    db: AsyncSession, user: User, revision: FileRevision
+) -> list[PdfAnnotation]:
+    workspace_id = revision.workspace_id
+    participating_projects = select(ProjectMember.project_id).where(
+        ProjectMember.workspace_id == workspace_id,
+        ProjectMember.user_id == user.id,
+    )
+    visible_projects = select(Project.id).where(
+        Project.workspace_id == workspace_id,
+        Project.state != ProjectState.deleted,
+        or_(
+            Project.visibility == ProjectVisibility.workspace,
+            Project.id.in_(participating_projects),
+        ),
+    )
+    visible_project_items = select(ProjectItem.id).where(
+        ProjectItem.workspace_id == workspace_id,
+        ProjectItem.item_id == revision.item_id,
+        ProjectItem.project_id.in_(visible_projects),
+    )
     return list(
         (
             await db.scalars(
                 select(PdfAnnotation)
                 .where(
-                    PdfAnnotation.file_revision_id == revision_id,
+                    PdfAnnotation.workspace_id == workspace_id,
+                    PdfAnnotation.file_revision_id == revision.id,
                     PdfAnnotation.author_id == user.id,
                     PdfAnnotation.deleted_at.is_(None),
+                    PdfAnnotation.hidden_at.is_(None),
+                    PdfAnnotation.archived_at.is_(None),
+                    or_(
+                        PdfAnnotation.scope == AnnotationScope.private,
+                        and_(
+                            PdfAnnotation.scope == AnnotationScope.project,
+                            PdfAnnotation.project_item_id.in_(visible_project_items),
+                        ),
+                    ),
                 )
                 .order_by(PdfAnnotation.created_at)
             )
@@ -185,7 +228,7 @@ async def _revision_member(
 ) -> AsyncMemberFile:
     store = get_object_store()
     if include_annotations:
-        annotations = await _own_annotations(db, user, revision.id)
+        annotations = await _own_annotations(db, user, revision)
     else:
         annotations = []
     if annotations:
@@ -232,7 +275,10 @@ async def _item_members(
 ) -> AsyncIterator[AsyncMemberFile]:
     query = (
         select(FileRevision)
-        .where(FileRevision.item_id == item.id)
+        .where(
+            FileRevision.workspace_id == item.workspace_id,
+            FileRevision.item_id == item.id,
+        )
         .order_by(FileRevision.created_at.desc())
     )
     if revision_ids:
@@ -277,7 +323,10 @@ async def _item_members(
         attachments = (
             await db.scalars(
                 select(Attachment)
-                .where(Attachment.item_id == item.id)
+                .where(
+                    Attachment.workspace_id == item.workspace_id,
+                    Attachment.item_id == item.id,
+                )
                 .order_by(Attachment.created_at)
             )
         ).all()
@@ -312,6 +361,7 @@ async def _zip_body(
 async def create_item_document_bundle(
     db: AsyncSession,
     user: User,
+    workspace_id: str,
     item_id: str,
     *,
     revision_ids: list[str] | None = None,
@@ -319,7 +369,7 @@ async def create_item_document_bundle(
     include_supplements: bool = False,
     timezone: str | None = None,
 ) -> ItemDownloadBundle:
-    item = (await require_accessible_items(db, user, [item_id]))[0]
+    item = (await require_accessible_items(db, user, workspace_id, [item_id]))[0]
     prefix = _item_archive_prefix(item)
     record_event(
         db,
@@ -332,6 +382,8 @@ async def create_item_document_bundle(
             "include_supplements": include_supplements,
             "revision_ids": revision_ids or [],
         },
+        workspace_id=workspace_id,
+        authorization_capability=Capability.workspace_export.value,
     )
     await db.commit()
     active_reads = _ActiveReads()
@@ -408,6 +460,7 @@ async def assemble_document_bundle(
 async def _record_revision_pdf_export(
     db: AsyncSession,
     user: User,
+    workspace_id: str,
     item_id: str,
     revision_id: str,
     *,
@@ -425,6 +478,8 @@ async def _record_revision_pdf_export(
             "include_annotations": include_annotations,
             "project_id": project_id,
         },
+        workspace_id=workspace_id,
+        authorization_capability=Capability.workspace_export.value,
     )
     await db.commit()
 
@@ -432,6 +487,7 @@ async def _record_revision_pdf_export(
 async def export_revision_pdf(
     db: AsyncSession,
     user: User,
+    workspace_id: str,
     item_id: str,
     revision_id: str,
     *,
@@ -439,11 +495,11 @@ async def export_revision_pdf(
     project_id: str | None = None,
     timezone: str | None = None,
 ) -> ExportedRevision:
-    revision = await require_revision(db, user, revision_id)
+    revision = await require_revision(db, user, workspace_id, revision_id)
     if revision.item_id != item_id:
         raise ResourceNotFound("revision not found for item")
     annotations = (
-        await select_visible_annotations(db, user, revision.id, item_id, project_id)
+        await select_visible_annotations(db, user, workspace_id, revision.id, item_id, project_id)
         if include_annotations
         else []
     )
@@ -484,6 +540,7 @@ async def export_revision_pdf(
         await _record_revision_pdf_export(
             db,
             user,
+            revision.workspace_id,
             item_id,
             revision_id,
             include_annotations=include_annotations,

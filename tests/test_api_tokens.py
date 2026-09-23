@@ -9,6 +9,7 @@ import pytest
 from app_helpers import create_web_test_app
 from sqlalchemy import select
 from typer.testing import CliRunner
+from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase import cli
 from quirebase.accounts import (
@@ -320,6 +321,8 @@ async def test_mcp_http_preserves_web_allowed_host_semantics(
     db = async_db
     user = User(username=f"host-{host}", password_hash="unused")
     db.add(user)
+    await db.flush()
+    await provision_initial_workspace(db, user)
     await db.commit()
     grant = await create_api_token(db, user, "HTTP host", expires_in_days=30)
     monkeypatch.setenv("QUIREBASE_ALLOWED_HOSTS", allowed_hosts)
@@ -360,7 +363,10 @@ async def test_mcp_http_preserves_web_allowed_host_semantics(
                     "jsonrpc": "2.0",
                     "id": 2,
                     "method": "tools/call",
-                    "params": {"name": "library.search_items", "arguments": {}},
+                    "params": {
+                        "name": "library.search_items",
+                        "arguments": {"workspace_id": fixture_workspace_id(user)},
+                    },
                 },
                 headers=headers,
             )

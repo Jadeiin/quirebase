@@ -14,6 +14,8 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 ALLOWED_RUNTIME_KEYS: set[str] = {
+    "registration_policy",
+    "workspace_creation_policy",
     "metadata_contact_email",
     "ncbi_api_key",
     "openalex_api_key",
@@ -36,6 +38,8 @@ INTEGER_KEYS: set[str] = {
 async def get_runtime_settings(db: AsyncSession) -> dict[str, Any]:
     base = get_settings()
     current: dict[str, Any] = {
+        "registration_policy": base.registration_policy,
+        "workspace_creation_policy": base.workspace_creation_policy,
         "metadata_contact_email": base.metadata_contact_email or "",
         "ncbi_api_key": base.ncbi_api_key or "",
         "openalex_api_key": base.openalex_api_key or "",
@@ -88,6 +92,10 @@ async def update_runtime_settings(db: AsyncSession, admin: User, updates: dict[s
         if key not in ALLOWED_RUNTIME_KEYS:
             raise ValidationFailure(f"setting '{key}' cannot be modified at runtime")
         str_val = str(value).strip() if value is not None else ""
+        if key == "registration_policy" and str_val not in {"open", "closed", "invitation_only"}:
+            raise ValidationFailure("invalid registration policy")
+        if key == "workspace_creation_policy" and str_val not in {"admins_only", "members_allowed"}:
+            raise ValidationFailure("invalid Workspace creation policy")
         if key in INTEGER_KEYS and str_val:
             try:
                 int_val = int(str_val)

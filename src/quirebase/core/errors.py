@@ -21,6 +21,18 @@ class PermissionDenied(DomainError):
     pass
 
 
+class WorkspaceContextRequired(DomainError):
+    pass
+
+
+class WorkspaceMembershipRequired(DomainError):
+    pass
+
+
+class WorkspaceLifecycleError(DomainError):
+    pass
+
+
 class ValidationFailure(DomainError):
     pass
 

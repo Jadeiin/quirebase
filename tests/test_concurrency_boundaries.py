@@ -1,77 +1,78 @@
 from __future__ import annotations
 
-import json
-from uuid import uuid4
-
 import pytest
+from sqlalchemy import select
+from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
-from quirebase.core.errors import PermissionDenied
-from quirebase.documents import workflows as document_workflows
-from quirebase.library.imports import commit_import_batch
-from quirebase.models import ImportBatch, Item, Project, ProjectMember, ProjectRole, User
-from quirebase.projects.lifecycle import leave_project
+from quirebase.documents.workflows import _lock_upload_authority
+from quirebase.models import Item, User, WorkspaceMember, WorkspaceRole
+from quirebase.workspaces import terminate_workspace_member
+
+
+async def _user(db, username: str) -> User:
+    user = User(username=username, password_hash="unused")
+    db.add(user)
+    await db.flush()
+    await provision_initial_workspace(db, user)
+    await db.commit()
+    return user
 
 
 @pytest.mark.anyio
-async def test_import_confirmation_replays_the_committed_item_ids(async_db):
-    user = User(username="batch-owner", password_hash="hash")
-    async_db.add(user)
-    await async_db.flush()
-    batch = ImportBatch(
-        owner_id=user.id,
-        file_format="bibtex",
-        records=json.dumps([{"title": "Replayable import", "authors": None}]),
-        errors="[]",
+async def test_upload_finalizer_rechecks_revoked_membership(async_db):
+    owner = await _user(async_db, "upload-owner")
+    actor = await _user(async_db, "upload-actor")
+    membership = WorkspaceMember(
+        workspace_id=fixture_workspace_id(owner),
+        user_id=actor.id,
+        role=WorkspaceRole.editor,
+        invited_by=owner.id,
     )
-    async_db.add(batch)
+    item = Item(
+        workspace_id=fixture_workspace_id(owner),
+        title="Finalizer target",
+        created_by=owner.id,
+    )
+    async_db.add_all([membership, item])
     await async_db.commit()
 
-    first = await commit_import_batch(async_db, user, batch.id)
-    second = await commit_import_batch(async_db, user, batch.id)
-
-    assert first == second
-    assert len(first) == 1
-    stored = await async_db.get(ImportBatch, batch.id)
-    assert stored is not None and stored.status == "committed"
-    assert await async_db.get(Item, first[0]) is not None
-
-
-@pytest.mark.anyio
-async def test_project_owner_cannot_leave_without_transfer(async_db):
-    owner = User(username="project-owner", password_hash="hash")
-    async_db.add(owner)
-    await async_db.flush()
-    project = Project(name="Owned", created_by=owner.id)
-    async_db.add(project)
-    await async_db.flush()
-    async_db.add(ProjectMember(project_id=project.id, user_id=owner.id, role=ProjectRole.owner))
-    await async_db.commit()
-
-    with pytest.raises(PermissionDenied, match="transfer ownership"):
-        await leave_project(async_db, owner, project.id)
-
-
-@pytest.mark.anyio
-async def test_upload_finalizer_rechecks_item_authority(async_db):
-    owner = User(username="upload-owner", password_hash="hash")
-    stranger = User(username="upload-stranger", password_hash="hash")
-    async_db.add_all([owner, stranger])
-    await async_db.flush()
-    item = Item(title="Upload gate", created_by=owner.id)
-    async_db.add(item)
-    await async_db.commit()
-    inspected = {
-        "revision_id": str(uuid4()),
-        "object_key": "gate/revision.pdf",
-        "thumbnail_object_key": "gate/thumb.png",
-        "thumbnail_size": 1,
-        "size": 2,
-        "page_count": 1,
-        "full_text": "text",
-        "page_geometry": "[]",
-    }
+    await terminate_workspace_member(async_db, owner, fixture_workspace_id(owner), membership.id)
 
     with pytest.raises(ValueError, match="no longer writable"):
-        await document_workflows.commit_uploaded_revision(
-            item.id, stranger.id, "sample.pdf", inspected
-        )
+        await _lock_upload_authority(async_db, actor.id, fixture_workspace_id(owner), item.id)
+
+
+@pytest.mark.anyio
+async def test_membership_history_allows_rejoin_after_termination(async_db):
+    owner = await _user(async_db, "history-owner")
+    actor = await _user(async_db, "history-actor")
+    first = WorkspaceMember(
+        workspace_id=fixture_workspace_id(owner),
+        user_id=actor.id,
+        role=WorkspaceRole.viewer,
+        invited_by=owner.id,
+    )
+    async_db.add(first)
+    await async_db.commit()
+    await terminate_workspace_member(async_db, owner, fixture_workspace_id(owner), first.id)
+    second = WorkspaceMember(
+        workspace_id=fixture_workspace_id(owner),
+        user_id=actor.id,
+        role=WorkspaceRole.reviewer,
+        invited_by=owner.id,
+    )
+    async_db.add(second)
+    await async_db.commit()
+
+    rows = list(
+        (
+            await async_db.scalars(
+                select(WorkspaceMember).where(
+                    WorkspaceMember.workspace_id == fixture_workspace_id(owner),
+                    WorkspaceMember.user_id == actor.id,
+                )
+            )
+        ).all()
+    )
+    assert len(rows) == 2
+    assert sum(row.terminated_at is None for row in rows) == 1

@@ -11,6 +11,11 @@ from uuid import UUID
 from dbos import DBOS
 from sqlalchemy import and_, or_, select
 
+from quirebase.access import (
+    Capability,
+    require_project_context,
+    require_workspace_capability,
+)
 from quirebase.audit import record_event
 from quirebase.core.config import get_settings
 from quirebase.core.database import AsyncSessionLocal
@@ -27,11 +32,9 @@ from quirebase.models import (
     FileRevisionProcessingState,
     Item,
     PdfAnnotation,
-    Project,
     ProjectItem,
-    ProjectMember,
-    ProjectRole,
     User,
+    Workspace,
 )
 from quirebase.search import search_index
 
@@ -46,68 +49,38 @@ _MAX_THUMBNAIL_BYTES = 32 * 1024 * 1024
 
 
 async def _lock_upload_authority(
-    db, item_id: str, owner_id: str, *, role: AttachmentRole | None = None
+    db,
+    actor_id: str,
+    workspace_id: str,
+    item_id: str,
+    *,
+    role: AttachmentRole | None = None,
 ) -> tuple[User, Item]:
-    owner = await db.scalar(
-        select(User).where(User.id == owner_id, User.active.is_(True)).with_for_update(read=True)
+    workspace = await db.scalar(
+        select(Workspace).where(Workspace.id == workspace_id).with_for_update()
     )
-    lock = select(Item).where(Item.id == item_id).execution_options(populate_existing=True)
+    if workspace is None:
+        raise ValueError("Workspace is no longer writable")
+    actor = await db.scalar(
+        select(User).where(User.id == actor_id, User.active.is_(True)).with_for_update(read=True)
+    )
+    lock = (
+        select(Item)
+        .where(Item.id == item_id, Item.workspace_id == workspace_id)
+        .execution_options(populate_existing=True)
+    )
     if role is AttachmentRole.graphical_abstract:
         lock = lock.with_for_update(key_share=True)
     else:
         lock = lock.with_for_update(read=True, key_share=True)
     item = await db.scalar(lock)
-    if owner is None or item is None:
+    if actor is None or item is None:
         raise ValueError("Item is no longer writable")
-    if owner.role != "administrator" and item.created_by != owner.id:
-        project_id = await db.scalar(
-            select(Project.id)
-            .join(ProjectItem, ProjectItem.project_id == Project.id)
-            .outerjoin(
-                ProjectMember,
-                (ProjectMember.project_id == Project.id) & (ProjectMember.user_id == owner.id),
-            )
-            .where(
-                ProjectItem.item_id == item_id,
-                Project.state == "active",
-                (Project.owner_id == owner.id)
-                | (
-                    (ProjectMember.user_id == owner.id) & (ProjectMember.role == ProjectRole.editor)
-                ),
-            )
-            .order_by(Project.id)
-            .limit(1)
-        )
-        if project_id is None:
-            raise ValueError("Item is no longer writable")
-        project = await db.scalar(
-            select(Project)
-            .where(Project.id == project_id, Project.state == "active")
-            .execution_options(populate_existing=True)
-            .with_for_update(read=True)
-        )
-        project_item = await db.scalar(
-            select(ProjectItem)
-            .where(ProjectItem.project_id == project_id, ProjectItem.item_id == item_id)
-            .execution_options(populate_existing=True)
-            .with_for_update(read=True)
-        )
-        member = await db.scalar(
-            select(ProjectMember)
-            .where(ProjectMember.project_id == project_id, ProjectMember.user_id == owner.id)
-            .execution_options(populate_existing=True)
-            .with_for_update(read=True)
-        )
-        if (
-            project is None
-            or project_item is None
-            or (
-                project.owner_id != owner.id
-                and (member is None or member.role != ProjectRole.editor)
-            )
-        ):
-            raise ValueError("Item is no longer writable")
-    return owner, item
+    try:
+        await require_workspace_capability(db, actor, workspace_id, Capability.files_manage)
+    except Exception as error:
+        raise ValueError("Item is no longer writable") from error
+    return actor, item
 
 
 class UploadReceipt(TypedDict):
@@ -140,7 +113,8 @@ class RevisionWorkflowResult(TypedDict):
 
 class ImportedRevisionWorkflowResult(TypedDict):
     revision_id: str
-    owner_id: str
+    actor_id: str
+    workspace_id: str
 
 
 class ValidatedAttachment(TypedDict):
@@ -178,11 +152,17 @@ async def remove_owned_object(key: str) -> None:
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
 async def delete_unreferenced_objects_step(
-    object_keys: list[str], ignore_workflow_id: str | None = None
+    actor_id: str,
+    workspace_id: str,
+    object_keys: list[str],
+    ignore_workflow_id: str | None = None,
 ) -> list[str]:
     from quirebase.documents.revisions import delete_unreferenced_objects
 
     async with AsyncSessionLocal() as db:
+        # The resource deletion was authorized in the enqueue transaction. Cleanup
+        # must survive later membership and Workspace lifecycle changes; the
+        # reference check below remains the authority for deleting each key.
         return list(
             await delete_unreferenced_objects(
                 db, object_keys, ignore_workflow_id=ignore_workflow_id
@@ -192,9 +172,14 @@ async def delete_unreferenced_objects_step(
 
 @DBOS.workflow(name=OBJECT_CLEANUP_WORKFLOW)
 async def cleanup_objects_workflow(
-    object_keys: list[str], ignore_workflow_id: str | None = None
+    actor_id: str,
+    workspace_id: str,
+    object_keys: list[str],
+    ignore_workflow_id: str | None = None,
 ) -> list[str]:
-    return await delete_unreferenced_objects_step(object_keys, ignore_workflow_id)
+    return await delete_unreferenced_objects_step(
+        actor_id, workspace_id, object_keys, ignore_workflow_id
+    )
 
 
 async def _inspect_pdf_object(
@@ -256,15 +241,18 @@ async def inspect_uploaded_pdf(
 
 @ads.transaction()
 async def commit_uploaded_revision(
+    actor_id: str,
+    workspace_id: str,
     item_id: str,
-    owner_id: str,
     filename: str,
     inspected: UploadedPdfInspection,
 ) -> RevisionWorkflowResult:
     db = ads.sql_session()
-    _owner, _item = await _lock_upload_authority(db, item_id, owner_id)
+    _actor, _item = await _lock_upload_authority(db, actor_id, workspace_id, item_id)
     existing = await db.get(FileRevision, inspected["revision_id"])
     if existing is not None:
+        if existing.workspace_id != workspace_id or existing.item_id != item_id:
+            raise ValueError("uploaded revision does not belong to the requested item")
         if existing.processing_state == FileRevisionProcessingState.pending:
             existing.object_key = inspected["object_key"]
             existing.thumbnail_object_key = inspected["thumbnail_object_key"]
@@ -278,6 +266,7 @@ async def commit_uploaded_revision(
         return {"revision_id": existing.id, "item_id": existing.item_id}
     revision = FileRevision(
         id=inspected["revision_id"],
+        workspace_id=workspace_id,
         item_id=item_id,
         object_key=inspected["object_key"],
         thumbnail_object_key=inspected["thumbnail_object_key"],
@@ -288,23 +277,32 @@ async def commit_uploaded_revision(
         page_geometry=inspected["page_geometry"],
         full_text=inspected["full_text"],
         processing_state=FileRevisionProcessingState.ready,
-        created_by=owner_id,
+        created_by=actor_id,
     )
     db.add(revision)
     await db.flush()
     await search_index(db).index_revision(db, revision.id)
-    record_event(db, owner_id, "pdf.upload", "file_revision", revision.id)
+    record_event(
+        db,
+        actor_id,
+        "pdf.upload",
+        "file_revision",
+        revision.id,
+        workspace_id=workspace_id,
+        authorization_capability=Capability.files_manage.value,
+    )
     return {"revision_id": revision.id, "item_id": item_id}
 
 
 async def _enqueue_file_revision_changed(
-    revision_id: str, item_id: str, owner_id: str | None
+    revision_id: str, actor_id: str, workspace_id: str, item_id: str
 ) -> str:
     return await enqueue_child_workflow(
         FILE_REVISION_CHANGED_WORKFLOW,
+        actor_id,
+        workspace_id,
         revision_id,
         item_id,
-        owner_id,
         queue_name=LIBRARY_QUEUE,
         workflow_id=f"file-revision-changed:{revision_id}",
     )
@@ -312,8 +310,9 @@ async def _enqueue_file_revision_changed(
 
 @DBOS.workflow(name=REVISION_UPLOAD_WORKFLOW)
 async def upload_revision_workflow(
+    actor_id: str,
+    workspace_id: str,
     item_id: str,
-    owner_id: str,
     revision_id: str,
     object_id: str,
     thumbnail_object_id: str,
@@ -330,9 +329,11 @@ async def upload_revision_workflow(
         inspected = await inspect_uploaded_pdf(
             revision_id, object_id, thumbnail_object_id, completed_receipt
         )
-        result = await commit_uploaded_revision(item_id, owner_id, filename, inspected)
+        result = await commit_uploaded_revision(
+            actor_id, workspace_id, item_id, filename, inspected
+        )
         committed = True
-        await _enqueue_file_revision_changed(revision_id, item_id, owner_id)
+        await _enqueue_file_revision_changed(revision_id, actor_id, workspace_id, item_id)
         return result
     except BaseException:
         if not committed:
@@ -343,16 +344,24 @@ async def upload_revision_workflow(
 
 @DBOS.workflow(name=IMPORTED_REVISION_INSPECTION_WORKFLOW)
 async def inspect_imported_revision_workflow(
-    revision_id: str, owner_id: str, object_key_value: str, thumbnail_object_id: str
+    actor_id: str,
+    workspace_id: str,
+    revision_id: str,
+    object_key_value: str,
+    thumbnail_object_id: str,
 ) -> ImportedRevisionWorkflowResult:
     thumbnail_key = object_key(UUID(thumbnail_object_id), ObjectSuffix.PNG)
     committed = False
     try:
         inspected = await inspect_imported_pdf(revision_id, object_key_value, thumbnail_object_id)
-        result = await commit_imported_revision(inspected)
+        result = await commit_imported_revision(actor_id, workspace_id, inspected)
         committed = True
-        await _enqueue_file_revision_changed(revision_id, result["item_id"], owner_id)
-        return {"revision_id": revision_id, "owner_id": owner_id}
+        await _enqueue_file_revision_changed(revision_id, actor_id, workspace_id, result["item_id"])
+        return {
+            "revision_id": revision_id,
+            "actor_id": actor_id,
+            "workspace_id": workspace_id,
+        }
     except BaseException:
         if not committed:
             await remove_owned_object(thumbnail_key)
@@ -371,20 +380,16 @@ async def inspect_imported_pdf(
 
 
 @ads.transaction()
-async def commit_imported_revision(inspected: PdfInspection) -> RevisionWorkflowResult:
+async def commit_imported_revision(
+    actor_id: str, workspace_id: str, inspected: PdfInspection
+) -> RevisionWorkflowResult:
     db = ads.sql_session()
     revision = await db.get(FileRevision, inspected["revision_id"])
-    if revision is None:
+    if revision is None or revision.workspace_id != workspace_id:
         raise ValueError("imported revision no longer exists")
-    item_exists = await db.scalar(
-        select(Item.id)
-        .where(Item.id == revision.item_id)
-        .with_for_update(read=True, key_share=True)
-    )
-    if item_exists is None:
-        raise ValueError("Item no longer exists")
+    await _lock_upload_authority(db, actor_id, workspace_id, revision.item_id)
     revision = await db.get(FileRevision, inspected["revision_id"], populate_existing=True)
-    if revision is None:
+    if revision is None or revision.workspace_id != workspace_id:
         raise ValueError("imported revision no longer exists")
     if revision.processing_state == FileRevisionProcessingState.pending:
         revision.thumbnail_object_key = inspected["thumbnail_object_key"]
@@ -432,8 +437,9 @@ async def validate_attachment_upload(
 
 @ads.transaction()
 async def commit_uploaded_attachment(
+    actor_id: str,
+    workspace_id: str,
     item_id: str,
-    owner_id: str,
     attachment_id: str,
     filename: str,
     content_type: str,
@@ -442,36 +448,52 @@ async def commit_uploaded_attachment(
 ) -> AttachmentWorkflowResult:
     db = ads.sql_session()
     role = AttachmentRole(role_value) if role_value else None
-    _owner, _item = await _lock_upload_authority(db, item_id, owner_id, role=role)
+    _actor, _item = await _lock_upload_authority(db, actor_id, workspace_id, item_id, role=role)
     existing = await db.get(Attachment, attachment_id)
     if existing is not None:
+        if existing.workspace_id != workspace_id or existing.item_id != item_id:
+            raise ValueError("uploaded attachment does not belong to the requested item")
         return {"attachment_id": existing.id, "item_id": existing.item_id}
     if role is not None:
         current = await db.scalar(
-            select(Attachment).where(Attachment.item_id == item_id, Attachment.role == role)
+            select(Attachment).where(
+                Attachment.workspace_id == workspace_id,
+                Attachment.item_id == item_id,
+                Attachment.role == role,
+            )
         )
         if current is not None:
             current.role = None
             await db.flush()
     attachment = Attachment(
         id=attachment_id,
+        workspace_id=workspace_id,
         item_id=item_id,
         object_key=receipt["object_key"],
         size=receipt["size"],
         mime_type=content_type[:100],
         original_name=Path(filename).name[:255],
         role=role,
-        created_by=owner_id,
+        created_by=actor_id,
     )
     db.add(attachment)
-    record_event(db, owner_id, "attachment.upload", "attachment", attachment.id)
+    record_event(
+        db,
+        actor_id,
+        "attachment.upload",
+        "attachment",
+        attachment.id,
+        workspace_id=workspace_id,
+        authorization_capability=Capability.files_manage.value,
+    )
     return {"attachment_id": attachment.id, "item_id": item_id}
 
 
 @DBOS.workflow(name=ATTACHMENT_UPLOAD_WORKFLOW)
 async def upload_attachment_workflow(
+    actor_id: str,
+    workspace_id: str,
     item_id: str,
-    owner_id: str,
     attachment_id: str,
     object_id: str,
     filename: str,
@@ -491,8 +513,9 @@ async def upload_attachment_workflow(
             completed_receipt,
         )
         return await commit_uploaded_attachment(
+            actor_id,
+            workspace_id,
             item_id,
-            owner_id,
             attachment_id,
             filename,
             content_type,
@@ -506,7 +529,8 @@ async def upload_attachment_workflow(
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
 async def build_annotation_export(
-    owner_id: str,
+    actor_id: str,
+    workspace_id: str,
     revision_id: str,
     object_id: str,
     project_id: str | None,
@@ -514,7 +538,16 @@ async def build_annotation_export(
     timezone: str | None,
 ) -> AnnotationExportResult:
     async with AsyncSessionLocal() as db:
-        revision = await db.get(FileRevision, revision_id)
+        actor = await db.get(User, actor_id)
+        if actor is None:
+            raise PermissionError("actor no longer exists")
+        await require_workspace_capability(db, actor, workspace_id, Capability.workspace_export)
+        revision = await db.scalar(
+            select(FileRevision).where(
+                FileRevision.id == revision_id,
+                FileRevision.workspace_id == workspace_id,
+            )
+        )
         if revision is None:
             raise ValueError("revision no longer exists")
         scopes = []
@@ -522,18 +555,26 @@ async def build_annotation_export(
             scopes.append(
                 and_(
                     PdfAnnotation.scope == AnnotationScope.private,
-                    PdfAnnotation.author_id == owner_id,
+                    PdfAnnotation.author_id == actor_id,
                 )
             )
         if project_id:
-            membership = await db.get(ProjectMember, (project_id, owner_id))
-            assignment = await db.get(ProjectItem, (project_id, revision.item_id))
-            if membership is None or assignment is None:
-                raise PermissionError("project membership no longer exists")
+            await require_project_context(
+                db, actor, workspace_id, project_id, Capability.workspace_export
+            )
+            assignment = await db.scalar(
+                select(ProjectItem).where(
+                    ProjectItem.workspace_id == workspace_id,
+                    ProjectItem.project_id == project_id,
+                    ProjectItem.item_id == revision.item_id,
+                )
+            )
+            if assignment is None:
+                raise PermissionError("project assignment no longer exists")
             scopes.append(
                 and_(
                     PdfAnnotation.scope == AnnotationScope.project,
-                    PdfAnnotation.project_id == project_id,
+                    PdfAnnotation.project_item_id == assignment.id,
                 )
             )
         records = (
@@ -544,7 +585,10 @@ async def build_annotation_export(
                     await db.scalars(
                         select(PdfAnnotation).where(
                             PdfAnnotation.file_revision_id == revision.id,
+                            PdfAnnotation.workspace_id == workspace_id,
                             PdfAnnotation.deleted_at.is_(None),
+                            PdfAnnotation.hidden_at.is_(None),
+                            PdfAnnotation.archived_at.is_(None),
                             or_(*scopes),
                         )
                     )
@@ -591,36 +635,79 @@ async def build_annotation_export(
 
 @DBOS.workflow(name=ANNOTATION_EXPORT_WORKFLOW)
 async def annotation_export_workflow(
-    owner_id: str,
+    actor_id: str,
+    workspace_id: str,
     revision_id: str,
     object_id: str,
     project_id: str | None,
     include_private: bool,
     timezone: str | None,
 ) -> AnnotationExportResult:
-    result = await build_annotation_export(
-        owner_id, revision_id, object_id, project_id, include_private, timezone
-    )
-    workflow_id = DBOS.workflow_id
-    if workflow_id is None:
-        raise RuntimeError("annotation export must run within a DBOS workflow")
-    await record_annotation_export_artifact(workflow_id, result)
-    return result
+    result: AnnotationExportResult | None = None
+    try:
+        result = await build_annotation_export(
+            actor_id,
+            workspace_id,
+            revision_id,
+            object_id,
+            project_id,
+            include_private,
+            timezone,
+        )
+        workflow_id = DBOS.workflow_id
+        if workflow_id is None:
+            raise RuntimeError("annotation export must run within a DBOS workflow")
+        await record_annotation_export_artifact(
+            workflow_id, actor_id, workspace_id, project_id, result
+        )
+        return result
+    except BaseException:
+        if result is not None:
+            await remove_owned_object(result["object_key"])
+        raise
 
 
 @ads.transaction(isolation_level="READ COMMITTED")
 async def record_annotation_export_artifact(
-    workflow_id: str, result: AnnotationExportResult
+    workflow_id: str,
+    actor_id: str,
+    workspace_id: str,
+    project_id: str | None,
+    result: AnnotationExportResult,
 ) -> None:
     from quirebase.operations.settings import get_effective_setting
 
     db = ads.sql_session()
     if await db.get(ExportArtifact, workflow_id) is not None:
         return
+    workspace = await db.scalar(
+        select(Workspace).where(Workspace.id == workspace_id).with_for_update()
+    )
+    if workspace is None:
+        raise PermissionError("Workspace no longer exists")
+    actor = await db.get(User, actor_id)
+    if actor is None:
+        raise PermissionError("actor no longer exists")
+    await require_workspace_capability(db, actor, workspace_id, Capability.workspace_export)
+    revision = await db.scalar(
+        select(FileRevision)
+        .where(
+            FileRevision.id == result["revision_id"],
+            FileRevision.workspace_id == workspace_id,
+        )
+        .with_for_update(read=True, key_share=True)
+    )
+    if revision is None:
+        raise ValueError("revision no longer exists")
+    if project_id:
+        await require_project_context(
+            db, actor, workspace_id, project_id, Capability.workspace_export
+        )
     ttl_hours = await get_effective_setting(db, "export_ttl_hours", get_settings().export_ttl_hours)
     db.add(
         ExportArtifact(
             workflow_id=workflow_id,
+            workspace_id=workspace_id,
             object_key=result["object_key"],
             filename=result["filename"],
             size=result["size_bytes"],

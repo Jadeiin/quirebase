@@ -7,6 +7,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from test_domain_states import assert_closed_state_constraints
+from workspace_helpers import provision_initial_workspace
 
 from quirebase.core.database import Base, make_async_engine
 from quirebase.models import Item, User
@@ -54,8 +55,12 @@ async def test_postgresql_search_contract():
             user = User(username=username, password_hash="unused")
             db.add(user)
             await db.flush()
+            workspace = await provision_initial_workspace(db, user)
             item = Item(
-                title="Spectral graph methods", abstract="Topological signal", created_by=user.id
+                workspace_id=workspace.id,
+                title="Spectral graph methods",
+                abstract="Topological signal",
+                created_by=user.id,
             )
             db.add(item)
             await db.flush()

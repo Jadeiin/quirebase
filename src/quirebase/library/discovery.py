@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from inquiro import SearchClause, SearchQuery
 
+from quirebase.access.workspaces import require_workspace_membership
 from quirebase.core.errors import ResourceUnavailable
 from quirebase.library.activity import (
     get_matching_accessible_item_identifiers,
@@ -52,6 +53,7 @@ class CandidatePageView:
 async def search_candidate_records(
     db: AsyncSession,
     user: User,
+    workspace_id: str,
     provider: str,
     clauses: tuple[DiscoveryClause, ...],
     *,
@@ -83,6 +85,7 @@ async def search_candidate_records(
     reloaded_user = await db.get(User, user_id)
     if reloaded_user is None or not reloaded_user.active:
         raise ResourceUnavailable("user not available")
+    reloaded_user = (await require_workspace_membership(db, reloaded_user, workspace_id)).actor
     candidate_identifiers = {
         (candidate.identifier.provider, candidate.identifier.value) for candidate in result.results
     }
@@ -90,7 +93,7 @@ async def search_candidate_records(
         ("doi", candidate.doi) for candidate in result.results if candidate.doi
     )
     accessible_identifiers = await get_matching_accessible_item_identifiers(
-        db, reloaded_user, candidate_identifiers
+        db, reloaded_user, workspace_id, candidate_identifiers
     )
     page_view = CandidatePageView(
         provider=result.provider,
@@ -124,6 +127,6 @@ async def search_candidate_records(
         per_page=result.per_page,
     )
     await record_discovery_search_audit(
-        db, reloaded_user, provider, clauses, len(page_view.results)
+        db, reloaded_user, workspace_id, provider, clauses, len(page_view.results)
     )
     return page_view

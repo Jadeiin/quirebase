@@ -39,6 +39,9 @@ EXPECTED_TABLES = {
     "system_settings",
     "tags",
     "users",
+    "workspaces",
+    "workspace_members",
+    "workspace_invitations",
 }
 
 

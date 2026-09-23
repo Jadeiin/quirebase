@@ -1,16 +1,20 @@
 from __future__ import annotations
 
-from quirebase.projects.administration import ProjectAdminSummary, list_projects_for_admin
 from quirebase.projects.lifecycle import (
     delete_project,
-    leave_project,
     rename_project,
     set_project_state,
     set_project_visibility,
-    transfer_project_ownership,
     update_project_description,
     update_project_settings,
     validate_project_state,
+)
+from quirebase.projects.loaders import (
+    get_project,
+    get_project_for_update,
+    get_project_item,
+    require_project,
+    require_project_item,
 )
 from quirebase.projects.members import (
     ProjectMemberConflict,
@@ -23,15 +27,12 @@ from quirebase.projects.workspaces import (
     add_item_to_project,
     add_items_to_project,
     create_project,
-    join_project,
-    list_joinable_projects,
     list_user_projects,
     open_project_workspace,
     remove_item_from_project,
 )
 
 __all__ = [
-    "ProjectAdminSummary",
     "ProjectMemberConflict",
     "ProjectWorkspace",
     "ProjectWorkspaceMember",
@@ -40,18 +41,18 @@ __all__ = [
     "add_project_member",
     "create_project",
     "delete_project",
-    "join_project",
-    "leave_project",
-    "list_joinable_projects",
-    "list_projects_for_admin",
+    "get_project",
+    "get_project_for_update",
+    "get_project_item",
     "list_user_projects",
     "open_project_workspace",
     "remove_item_from_project",
     "remove_project_member",
     "rename_project",
+    "require_project",
+    "require_project_item",
     "set_project_state",
     "set_project_visibility",
-    "transfer_project_ownership",
     "update_project_description",
     "update_project_settings",
     "validate_project_state",

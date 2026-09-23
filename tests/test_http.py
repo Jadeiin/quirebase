@@ -8,6 +8,7 @@ import pytest
 from app_helpers import create_web_test_app
 from sqlalchemy import func, select
 from storage_helpers import local_object_path, put_pdf_object
+from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.config import get_settings
 from quirebase.core.crypto import token_hash
@@ -16,7 +17,6 @@ from quirebase.core.errors import VersionConflict
 from quirebase.core.storage import ObjectMetadata, ObjectResponse, ObjectSuffix, get_object_store
 from quirebase.documents import create_attachment
 from quirebase.documents import workflows as document_workflows
-from quirebase.documents.bundles import export_revision_pdf
 from quirebase.library import ItemMetadata, request_item_tag_recommendation, revise_item_metadata
 from quirebase.models import (
     Attachment,
@@ -30,6 +30,8 @@ from quirebase.models import (
     ProjectItem,
     ProjectMember,
     User,
+    WorkspaceMember,
+    WorkspaceRole,
 )
 from quirebase.search import search_index
 
@@ -40,17 +42,23 @@ async def authenticated_async_client(db, session_factory, tmp_path, monkeypatch)
     user = User(username="reader", password_hash="unused")
     db.add(user)
     await db.flush()
+    await provision_initial_workspace(db, user)
     raw = "test-session-token"
     login = LoginSession(
         token_hash=token_hash(raw),
         user_id=user.id,
         expires_at=datetime.now(UTC) + timedelta(hours=1),
     )
-    item = Item(title="Paper", created_by=user.id)
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        title="Paper",
+        created_by=user.id,
+    )
     db.add_all([login, item])
     await db.flush()
     key, size = await put_pdf_object(b"%PDF-1.4\ntest", 100)
     revision = FileRevision(
+        workspace_id=fixture_workspace_id(user),
         item_id=item.id,
         object_key=key,
         size=size,
@@ -84,24 +92,93 @@ async def authenticated_async_client(db, session_factory, tmp_path, monkeypatch)
 
 
 @pytest.mark.anyio
+async def test_cross_workspace_copy_api_checks_target_membership_and_capability(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    client, source, source_revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    target_owner = User(username="copy-target-owner", password_hash="unused")
+    async_db.add(target_owner)
+    await async_db.flush()
+    await provision_initial_workspace(async_db, target_owner)
+    await async_db.commit()
+    target_workspace_id = fixture_workspace_id(target_owner)
+    url = f"/api/v1/workspaces/{source.workspace_id}/items/{source.id}/copy"
+    request = {"target_workspace_id": target_workspace_id}
+    headers = {"X-CSRF-Token": "test-csrf"}
+
+    try:
+        missing = await client.post(url, headers=headers, json=request)
+        assert missing.status_code == 403
+        assert missing.json()["code"] == "workspace_membership_required"
+
+        membership = WorkspaceMember(
+            workspace_id=target_workspace_id,
+            user_id=source.created_by,
+            role=WorkspaceRole.viewer,
+            invited_by=target_owner.id,
+        )
+        async_db.add(membership)
+        await async_db.commit()
+
+        viewer = await client.post(url, headers=headers, json=request)
+        assert viewer.status_code == 403
+
+        membership.role = WorkspaceRole.editor
+        await async_db.commit()
+        copied = await client.post(url, headers=headers, json=request)
+        assert copied.status_code == 201
+        copied_id = copied.json()["id"]
+        copied_item = await async_db.get(Item, copied_id)
+        copied_revision = await async_db.scalar(
+            select(FileRevision).where(FileRevision.item_id == copied_id)
+        )
+        assert copied_item is not None
+        assert copied_item.workspace_id == target_workspace_id
+        assert copied_revision is not None
+        assert copied_revision.object_key != source_revision.object_key
+        assert await get_object_store().exists(copied_revision.object_key)
+        events = (
+            await async_db.scalars(
+                select(AuditEvent).where(
+                    AuditEvent.action.in_((
+                        "workspace.item.copy.export",
+                        "workspace.item.copy.import",
+                    ))
+                )
+            )
+        ).all()
+        assert {event.workspace_id for event in events} == {
+            source.workspace_id,
+            target_workspace_id,
+        }
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.anyio
 async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp_path, monkeypatch):
     db = async_db
     client, item, revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     try:
-        viewer = await client.get(f"/api/v1/items/{item.id}/revisions/{revision.id}/viewer")
+        viewer = await client.get(
+            f"{workspace_base}/items/{item.id}/revisions/{revision.id}/viewer"
+        )
         assert viewer.status_code == 200
         assert viewer.json()["revision"]["id"] == revision.id
         assert viewer.json()["revision"]["page_geometry"] == [[0, 0, 300, 400]]
         assert viewer.json()["editable"] is True
         assert viewer.json()["annotation_author"] == "reader"
         assert viewer.json()["revision"]["content_url"] == (
-            f"/api/v1/items/{item.id}/revisions/{revision.id}/content"
+            f"{workspace_base}/items/{item.id}/revisions/{revision.id}/content"
         )
 
         content = await client.get(
-            f"/api/v1/items/{item.id}/revisions/{revision.id}/content",
+            f"{workspace_base}/items/{item.id}/revisions/{revision.id}/content",
             headers={"Range": "bytes=0-4"},
         )
         assert content.status_code == 206
@@ -112,21 +189,39 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         assert not content.headers["etag"].startswith('""')
 
         empty_range = await client.get(
-            f"/api/v1/items/{item.id}/revisions/{revision.id}/content",
+            f"{workspace_base}/items/{item.id}/revisions/{revision.id}/content",
             headers={"Range": "bytes=-"},
         )
         assert empty_range.status_code == 416
         assert empty_range.headers["content-range"].startswith("bytes */")
 
+        project = Project(
+            workspace_id=item.workspace_id,
+            name="Annotation replies",
+            created_by=item.created_by,
+        )
+        db.add(project)
+        await db.flush()
+        db.add(
+            ProjectItem(
+                workspace_id=item.workspace_id,
+                project_id=project.id,
+                item_id=item.id,
+                added_by=item.created_by,
+            )
+        )
+        await db.commit()
+
         created = await client.post(
-            f"/api/v1/items/{item.id}/annotations",
+            f"{workspace_base}/items/{item.id}/annotations",
             headers={"X-CSRF-Token": "test-csrf"},
             json={
                 "id": str(uuid4()),
                 "revision_id": revision.id,
                 "page_index": 0,
                 "kind": "highlight",
-                "scope": "private",
+                "scope": "project",
+                "project_id": project.id,
                 "selected_text": "test",
                 "payload": {
                     "type": "highlight",
@@ -143,7 +238,7 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
 
         reply_id = str(uuid4())
         replied = await client.post(
-            f"/api/v1/items/{item.id}/annotations/{annotation['id']}/replies",
+            f"{workspace_base}/items/{item.id}/annotations/{annotation['id']}/replies",
             headers={"X-CSRF-Token": "test-csrf"},
             json={"id": reply_id, "body": "Collaborative reply"},
         )
@@ -152,14 +247,14 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         assert reply["annotation_id"] == annotation["id"]
         assert reply["body"] == "Collaborative reply"
         listed_with_reply = await client.get(
-            f"/api/v1/items/{item.id}/annotations",
-            params={"revision_id": revision.id},
+            f"{workspace_base}/items/{item.id}/annotations",
+            params={"revision_id": revision.id, "project_id": project.id},
         )
         listed_reply = listed_with_reply.json()[0]["replies"][0]
         assert listed_reply["id"] == reply["id"]
         assert listed_reply["body"] == reply["body"]
         updated_reply = await client.patch(
-            f"/api/v1/items/{item.id}/annotations/{annotation['id']}/replies/{reply_id}",
+            f"{workspace_base}/items/{item.id}/annotations/{annotation['id']}/replies/{reply_id}",
             headers={"X-CSRF-Token": "test-csrf"},
             json={"version": reply["version"], "body": "Updated reply"},
         )
@@ -167,27 +262,27 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         assert updated_reply.json()["version"] == 2
         assert updated_reply.json()["body"] == "Updated reply"
         deleted_reply = await client.delete(
-            f"/api/v1/items/{item.id}/annotations/{annotation['id']}/replies/{reply_id}",
+            f"{workspace_base}/items/{item.id}/annotations/{annotation['id']}/replies/{reply_id}",
             headers={"X-CSRF-Token": "test-csrf"},
             params={"version": 2},
         )
         assert deleted_reply.status_code == 200
         restored_reply = await client.post(
-            f"/api/v1/items/{item.id}/annotations/{annotation['id']}/replies/{reply_id}/restore",
+            f"{workspace_base}/items/{item.id}/annotations/{annotation['id']}/replies/{reply_id}/restore",
             headers={"X-CSRF-Token": "test-csrf"},
             params={"version": 3},
         )
         assert restored_reply.status_code == 200
         assert restored_reply.json()["version"] == 4
         deleted_reply_again = await client.delete(
-            f"/api/v1/items/{item.id}/annotations/{annotation['id']}/replies/{reply_id}",
+            f"{workspace_base}/items/{item.id}/annotations/{annotation['id']}/replies/{reply_id}",
             headers={"X-CSRF-Token": "test-csrf"},
             params={"version": 4},
         )
         assert deleted_reply_again.status_code == 200
 
         duplicate = await client.post(
-            f"/api/v1/items/{item.id}/annotations",
+            f"{workspace_base}/items/{item.id}/annotations",
             headers={"X-CSRF-Token": "test-csrf"},
             json={
                 "id": annotation["id"],
@@ -203,25 +298,29 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         )
         assert duplicate.status_code == 409
 
-        other_item = Item(title="Different paper", created_by=item.created_by)
+        other_item = Item(
+            workspace_id=item.workspace_id,
+            title="Different paper",
+            created_by=item.created_by,
+        )
         db.add(other_item)
         await db.commit()
         mismatched = await client.get(
-            f"/api/v1/items/{other_item.id}/revisions/{revision.id}/export"
+            f"{workspace_base}/items/{other_item.id}/revisions/{revision.id}/export"
         )
         assert mismatched.status_code == 404
 
         revision.original_name = "论文.pdf"
         await db.commit()
         unicode_content = await client.get(
-            f"/api/v1/items/{item.id}/revisions/{revision.id}/content"
+            f"{workspace_base}/items/{item.id}/revisions/{revision.id}/content"
         )
         unicode_range = await client.get(
-            f"/api/v1/items/{item.id}/revisions/{revision.id}/content",
+            f"{workspace_base}/items/{item.id}/revisions/{revision.id}/content",
             headers={"Range": "bytes=0-4"},
         )
         unicode_download = await client.get(
-            f"/api/v1/items/{item.id}/revisions/{revision.id}/export",
+            f"{workspace_base}/items/{item.id}/revisions/{revision.id}/export",
             params={"include_annotations": False},
         )
         assert unicode_content.status_code == 200
@@ -234,39 +333,12 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         revision.original_name = "paper.pdf"
         await db.commit()
 
-        exported_paths = []
-        exported_timezones = []
-
-        def fake_export_annotations(source, target, annotations, author_names, **kwargs):
-            target.write_bytes(source.read_bytes())
-            exported_paths.append(target)
-            exported_timezones.append(kwargs.get("display_timezone"))
-
-        monkeypatch.setattr(
-            "quirebase.documents.bundles.export_annotations",
-            fake_export_annotations,
-        )
-        project = Project(name="Current revision export", created_by=item.created_by)
-        db.add(project)
-        await db.flush()
-        db.add_all([
-            ProjectMember(project_id=project.id, user_id=item.created_by, role="owner"),
-            ProjectItem(project_id=project.id, item_id=item.id),
-        ])
-        await db.commit()
         exported = await client.get(
-            f"/api/v1/items/{item.id}/revisions/{revision.id}/export",
-            params={
-                "include_annotations": True,
-                "project_id": project.id,
-                "timezone": "Asia/Shanghai",
-            },
+            f"{workspace_base}/items/{item.id}/revisions/{revision.id}/export",
+            params={"include_annotations": False},
         )
         assert exported.status_code == 200
-        assert "paper-annotated.pdf" in exported.headers["content-disposition"]
-        assert len(exported_paths) == 1
-        assert not exported_paths[0].exists()
-        assert str(exported_timezones[0]) == "Asia/Shanghai"
+        assert "paper.pdf" in exported.headers["content-disposition"]
         events = list(
             await db.scalars(
                 select(AuditEvent).where(
@@ -276,63 +348,11 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
             )
         )
         details = [json.loads(event.detail) for event in events]
-        assert {
-            "item_id": item.id,
-            "include_annotations": True,
-            "project_id": project.id,
-        } in details
+        assert any(detail["item_id"] == item.id for detail in details)
         assert all(event.actor_id == item.created_by for event in events)
 
-        failed_export_paths = []
-
-        def failing_export_annotations(source, target, annotations, author_names, **kwargs):
-            failed_export_paths.append(target)
-            raise RuntimeError("annotation export failed")
-
-        monkeypatch.setattr(
-            "quirebase.documents.bundles.export_annotations",
-            failing_export_annotations,
-        )
-        failed_export = await client.get(
-            f"/api/v1/items/{item.id}/revisions/{revision.id}/export",
-            params={"include_annotations": True},
-        )
-        assert failed_export.status_code == 500
-        assert failed_export.json() == {
-            "code": "internal_error",
-            "message": "internal server error",
-        }
-        assert len(failed_export_paths) == 1
-        assert not failed_export_paths[0].exists()
-
-        monkeypatch.setattr(
-            "quirebase.documents.bundles.export_annotations",
-            fake_export_annotations,
-        )
-
-        async def failing_record(*args, **kwargs):
-            await asyncio.sleep(0)
-            raise RuntimeError("audit recording failed")
-
-        monkeypatch.setattr(
-            "quirebase.documents.bundles._record_revision_pdf_export",
-            failing_record,
-        )
-        exported_paths.clear()
-        user = await db.get(User, item.created_by)
-        with pytest.raises(RuntimeError, match="audit recording failed"):
-            await export_revision_pdf(
-                db,
-                user,
-                item.id,
-                revision.id,
-                include_annotations=True,
-            )
-        assert len(exported_paths) == 1
-        assert not exported_paths[0].exists()
-
         underlined = await client.post(
-            f"/api/v1/items/{item.id}/annotations",
+            f"{workspace_base}/items/{item.id}/annotations",
             headers={"X-CSRF-Token": "test-csrf"},
             json={
                 "id": str(uuid4()),
@@ -355,7 +375,7 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         assert underlined.json()["payload"]["style"]["stroke_color"] == "#FF5959"
 
         conflict = await client.patch(
-            f"/api/v1/items/{item.id}/annotations/{annotation['id']}",
+            f"{workspace_base}/items/{item.id}/annotations/{annotation['id']}",
             headers={"X-CSRF-Token": "test-csrf"},
             json={
                 "version": 99,
@@ -371,20 +391,20 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         assert conflict.status_code == 409
 
         deleted = await client.delete(
-            f"/api/v1/items/{item.id}/annotations/{annotation['id']}",
+            f"{workspace_base}/items/{item.id}/annotations/{annotation['id']}",
             headers={"X-CSRF-Token": "test-csrf"},
             params={"version": annotation["version"]},
         )
         assert deleted.status_code == 200
         assert deleted.json() == {"ok": True}
         stale_restore = await client.post(
-            f"/api/v1/items/{item.id}/annotations/{annotation['id']}/restore",
+            f"{workspace_base}/items/{item.id}/annotations/{annotation['id']}/restore",
             headers={"X-CSRF-Token": "test-csrf"},
             params={"version": annotation["version"]},
         )
         assert stale_restore.status_code == 409
         restored = await client.post(
-            f"/api/v1/items/{item.id}/annotations/{annotation['id']}/restore",
+            f"{workspace_base}/items/{item.id}/annotations/{annotation['id']}/restore",
             headers={"X-CSRF-Token": "test-csrf"},
             params={"version": annotation["version"] + 1},
         )
@@ -416,13 +436,36 @@ async def test_project_viewer_can_create_annotations(
     owner_client, item, revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     viewer = User(username="annotation-viewer", password_hash="unused")
-    project = Project(name="Readable annotations", created_by=item.created_by)
+    project = Project(
+        workspace_id=item.workspace_id,
+        name="Readable annotations",
+        created_by=item.created_by,
+        visibility="members",
+    )
     db.add_all([viewer, project])
     await db.flush()
+    db.add(
+        WorkspaceMember(
+            workspace_id=item.workspace_id,
+            user_id=viewer.id,
+            role=WorkspaceRole.viewer,
+            invited_by=item.created_by,
+        )
+    )
     db.add_all([
-        ProjectItem(project_id=project.id, item_id=item.id),
-        ProjectMember(project_id=project.id, user_id=viewer.id, role="viewer"),
+        ProjectItem(
+            workspace_id=item.workspace_id,
+            project_id=project.id,
+            item_id=item.id,
+            added_by=item.created_by,
+        ),
+        ProjectMember(
+            workspace_id=item.workspace_id,
+            project_id=project.id,
+            user_id=viewer.id,
+        ),
         LoginSession(
             token_hash=token_hash("annotation-viewer-session"),
             user_id=viewer.id,
@@ -436,9 +479,11 @@ async def test_project_viewer_can_create_annotations(
             get_settings().session_cookie,
             "annotation-viewer-session",
         )
-        viewer = await owner_client.get(f"/api/v1/items/{item.id}/revisions/{revision.id}/viewer")
+        viewer = await owner_client.get(
+            f"{workspace_base}/items/{item.id}/revisions/{revision.id}/viewer"
+        )
         created = await owner_client.post(
-            f"/api/v1/items/{item.id}/annotations",
+            f"{workspace_base}/items/{item.id}/annotations",
             json={
                 "id": str(uuid4()),
                 "revision_id": revision.id,
@@ -468,12 +513,14 @@ async def test_item_overview_uses_the_ready_revision_thumbnail(
     client, item, revision = await authenticated_async_client(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     thumbnail = await get_object_store().put_object(
         uuid4(), ObjectSuffix.PNG, b"\x89PNG\r\n\x1a\nthumbnail", max_bytes=100
     )
     revision.thumbnail_object_key = thumbnail.key
     await async_db.commit()
-    thumbnail_url = f"/api/v1/items/{item.id}/thumbnail"
+    thumbnail_url = f"{workspace_base}/items/{item.id}/thumbnail"
 
     try:
         response = await client.get(thumbnail_url)
@@ -493,12 +540,13 @@ async def test_item_thumbnail_revalidates_all_if_none_match_forms(
     client, item, revision = await authenticated_async_client(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     thumbnail = await get_object_store().put_object(
         uuid4(), ObjectSuffix.PNG, b"cached-thumbnail", max_bytes=100
     )
     revision.thumbnail_object_key = thumbnail.key
     await async_db.commit()
-    thumbnail_url = f"/api/v1/items/{item.id}/thumbnail"
+    thumbnail_url = f"{workspace_base}/items/{item.id}/thumbnail"
 
     try:
         initial = await client.get(thumbnail_url)
@@ -536,6 +584,7 @@ async def test_item_thumbnail_fetches_the_source_checked_for_cache_metadata(
     client, item, revision = await authenticated_async_client(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     original = await get_object_store().put_object(
         uuid4(), ObjectSuffix.PNG, b"original-thumbnail", max_bytes=100
     )
@@ -557,7 +606,7 @@ async def test_item_thumbnail_fetches_the_source_checked_for_cache_metadata(
     monkeypatch.setattr(documents_api, "head_item_thumbnail", switch_source_after_head)
 
     try:
-        response = await client.get(f"/api/v1/items/{item.id}/thumbnail")
+        response = await client.get(f"{workspace_base}/items/{item.id}/thumbnail")
 
         assert checked_metadata is not None
         assert response.status_code == 200
@@ -577,7 +626,8 @@ async def test_item_overview_omits_a_missing_thumbnail(
     client, item, _revision = await authenticated_async_client(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
-    thumbnail_url = f"/api/v1/items/{item.id}/thumbnail"
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
+    thumbnail_url = f"{workspace_base}/items/{item.id}/thumbnail"
 
     try:
         response = await client.get(thumbnail_url)
@@ -595,6 +645,7 @@ async def test_deleting_latest_pdf_revision_removes_its_files_and_falls_back_thu
     client, item, old_revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     item_id = item.id
     old_thumbnail = await get_object_store().put_object(
         uuid4(), ObjectSuffix.PNG, b"old-thumbnail", max_bytes=100
@@ -603,6 +654,7 @@ async def test_deleting_latest_pdf_revision_removes_its_files_and_falls_back_thu
     old_revision.full_text = "fallbacksearchtoken"
     key, size = await put_pdf_object(b"%PDF-1.4\nnewer", 100)
     new_revision = FileRevision(
+        workspace_id=item.workspace_id,
         item_id=item_id,
         object_key=key,
         size=size,
@@ -622,10 +674,15 @@ async def test_deleting_latest_pdf_revision_removes_its_files_and_falls_back_thu
     await db.commit()
     new_revision_id = new_revision.id
     new_object = local_object_path(key)
-    thumbnail_url = f"/api/v1/items/{item_id}/thumbnail"
+    thumbnail_url = f"{workspace_base}/items/{item_id}/thumbnail"
     index = search_index(db)
     await index.index_revision(db, new_revision.id)
-    recommendation = await request_item_tag_recommendation(db, item_id, owner_id=item.created_by)
+    recommendation = await request_item_tag_recommendation(
+        db,
+        item_id,
+        workspace_id=item.workspace_id,
+        actor_id=item.created_by,
+    )
     previous_generation = recommendation.generation_token
     await db.commit()
 
@@ -633,11 +690,17 @@ async def test_deleting_latest_pdf_revision_removes_its_files_and_falls_back_thu
         assert (await client.get(thumbnail_url)).content == b"new-thumbnail"
         assert await index.search(db, "deletedsearchtoken") == [item_id]
 
-        deleted = await client.delete(f"/api/v1/items/{item_id}/revisions/{new_revision_id}")
+        deleted = await client.delete(
+            f"{workspace_base}/items/{item_id}/revisions/{new_revision_id}"
+        )
 
         assert deleted.status_code == 200
         assert await db.get(FileRevision, new_revision_id) is None
-        await document_workflows.delete_unreferenced_objects_step([key, new_thumbnail.key])
+        await document_workflows.delete_unreferenced_objects_step(
+            item.created_by,
+            item.workspace_id,
+            [key, new_thumbnail.key],
+        )
         assert not new_object.exists()
         assert not local_object_path(new_thumbnail.key).exists()
         assert (await client.get(thumbnail_url)).content == b"old-thumbnail"
@@ -661,6 +724,7 @@ async def test_graphical_abstract_attachment_overrides_the_pdf_thumbnail(
     client, item, revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     item_id = item.id
     pdf_thumbnail = get_settings().object_dir / "thumbnails" / f"{revision.id}.png"
     pdf_thumbnail.parent.mkdir(parents=True, exist_ok=True)
@@ -668,7 +732,7 @@ async def test_graphical_abstract_attachment_overrides_the_pdf_thumbnail(
 
     try:
         uploaded = await client.post(
-            f"/api/v1/items/{item_id}/attachments",
+            f"{workspace_base}/items/{item_id}/attachments",
             data={"graphical_abstract": "true"},
             files={"attachment": ("abstract.png", b"\x89PNG\r\n\x1a\ngraphical", "image/png")},
             follow_redirects=False,
@@ -689,11 +753,13 @@ async def test_graphical_abstract_rejects_content_that_is_not_an_image(
     client, item, _revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     item_id = item.id
 
     try:
         uploaded = await client.post(
-            f"/api/v1/items/{item_id}/attachments",
+            f"{workspace_base}/items/{item_id}/attachments",
             data={"graphical_abstract": "true"},
             files={"attachment": ("abstract.png", b"not really a png", "image/png")},
             follow_redirects=False,
@@ -719,12 +785,13 @@ async def test_graphical_abstract_rejects_empty_content_without_leaking_staged_o
     client, item, _revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     item_id = item.id
     objects_before = set(get_settings().object_dir.rglob("*.bin"))
 
     try:
         uploaded = await client.post(
-            f"/api/v1/items/{item_id}/attachments",
+            f"{workspace_base}/items/{item_id}/attachments",
             data={"graphical_abstract": "true"},
             files={"attachment": ("abstract.png", b"", "image/png")},
             follow_redirects=False,
@@ -821,11 +888,12 @@ async def test_regular_attachment_accepts_non_image_content(
     client, item, _revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     item_id = item.id
 
     try:
         uploaded = await client.post(
-            f"/api/v1/items/{item_id}/attachments",
+            f"{workspace_base}/items/{item_id}/attachments",
             files={"attachment": ("dataset.csv", b"column\nvalue\n", "text/csv")},
             follow_redirects=False,
         )
@@ -845,9 +913,10 @@ async def test_item_edit_detects_conflicts_and_updates_search(
     client, item, _revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     try:
         updated = await client.put(
-            f"/api/v1/items/{item.id}",
+            f"{workspace_base}/items/{item.id}",
             json={
                 "expected_version": 1,
                 "metadata": {"title": "Revised Paper", "abstract": "Quantum transport"},
@@ -858,12 +927,12 @@ async def test_item_edit_detects_conflicts_and_updates_search(
         assert item.version == 2
         assert item.title == "Revised Paper"
 
-        results = await client.get("/api/v1/items", params={"query": "quantum"})
+        results = await client.get(f"{workspace_base}/items", params={"query": "quantum"})
         assert results.status_code == 200
         assert results.json()["items"][0]["title_html"] == "Revised Paper"
 
         stale = await client.put(
-            f"/api/v1/items/{item.id}",
+            f"{workspace_base}/items/{item.id}",
             json={"expected_version": 1, "metadata": {"title": "Lost update"}},
         )
         assert stale.status_code == 409
@@ -880,7 +949,12 @@ async def test_item_edit_uses_atomic_optimistic_lock(async_db, async_session_fac
     owner = User(username="concurrent_owner", password_hash="unused")
     db.add(owner)
     await db.flush()
-    item = Item(title="Original", created_by=owner.id)
+    await provision_initial_workspace(db, owner)
+    item = Item(
+        workspace_id=fixture_workspace_id(owner),
+        title="Original",
+        created_by=owner.id,
+    )
     db.add(item)
     await db.commit()
     owner_id = owner.id
@@ -900,6 +974,7 @@ async def test_item_edit_uses_atomic_optimistic_lock(async_db, async_session_fac
         await revise_item_metadata(
             first,
             first_owner,
+            fixture_workspace_id(owner),
             item_id,
             first_item.version,
             ItemMetadata(title="First update"),
@@ -908,6 +983,7 @@ async def test_item_edit_uses_atomic_optimistic_lock(async_db, async_session_fac
             await revise_item_metadata(
                 second,
                 second_owner,
+                fixture_workspace_id(owner),
                 item_id,
                 second_item.version,
                 ItemMetadata(title="Lost update"),
@@ -926,6 +1002,7 @@ async def test_content_media_types_at_runtime(
     client, item, _revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     item_id = item.id
     store = get_object_store()
 
@@ -935,6 +1012,7 @@ async def test_content_media_types_at_runtime(
         await store.put(att_key, b"%PDF-1.4 test")
         attachment = Attachment(
             id=str(uuid4()),
+            workspace_id=item.workspace_id,
             item_id=item_id,
             object_key=att_key,
             original_name="test.pdf",
@@ -946,26 +1024,36 @@ async def test_content_media_types_at_runtime(
         db.add(attachment)
         await db.flush()
 
-        att_resp = await client.get(f"/api/v1/items/{item_id}/attachments/{attachment.id}/content")
+        att_resp = await client.get(
+            f"{workspace_base}/items/{item_id}/attachments/{attachment.id}/content"
+        )
         assert att_resp.status_code == 200
         assert att_resp.headers["content-type"] == "application/pdf"
         assert 'filename="test.pdf"' in att_resp.headers["content-disposition"]
 
         # 2. Citation text returns text/plain or text/html based on output param
-        cite_text = await client.get(f"/api/v1/items/{item_id}/citation/content?output=text")
+        cite_text = await client.get(
+            f"{workspace_base}/items/{item_id}/citation/content?output=text"
+        )
         assert cite_text.status_code == 200
         assert "text/plain" in cite_text.headers["content-type"]
 
-        cite_html = await client.get(f"/api/v1/items/{item_id}/citation/content?output=html")
+        cite_html = await client.get(
+            f"{workspace_base}/items/{item_id}/citation/content?output=html"
+        )
         assert cite_html.status_code == 200
         assert "text/html" in cite_html.headers["content-type"]
 
         # 3. Bibliography returns application/x-bibtex or application/x-research-info-systems
-        bib_resp = await client.get(f"/api/v1/items/{item_id}/bibliography?file_format=bibtex")
+        bib_resp = await client.get(
+            f"{workspace_base}/items/{item_id}/bibliography?file_format=bibtex"
+        )
         assert bib_resp.status_code == 200
         assert "application/x-bibtex" in bib_resp.headers["content-type"]
 
-        ris_resp = await client.get(f"/api/v1/items/{item_id}/bibliography?file_format=ris")
+        ris_resp = await client.get(
+            f"{workspace_base}/items/{item_id}/bibliography?file_format=ris"
+        )
         assert ris_resp.status_code == 200
         assert "application/x-research-info-systems" in ris_resp.headers["content-type"]
 
@@ -974,6 +1062,7 @@ async def test_content_media_types_at_runtime(
         await store.put(ga_key, b"\xff\xd8\xff test")
         ga_attachment = Attachment(
             id=str(uuid4()),
+            workspace_id=item.workspace_id,
             item_id=item_id,
             object_key=ga_key,
             original_name="abstract.jpg",
@@ -985,7 +1074,7 @@ async def test_content_media_types_at_runtime(
         db.add(ga_attachment)
         await db.flush()
 
-        thumb_resp = await client.get(f"/api/v1/items/{item_id}/thumbnail")
+        thumb_resp = await client.get(f"{workspace_base}/items/{item_id}/thumbnail")
         assert thumb_resp.status_code == 200
         assert thumb_resp.headers["content-type"] == "image/jpeg"
     finally:

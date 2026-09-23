@@ -1,6 +1,6 @@
 # Workspaces as data-governance and ACL boundaries
 
-Status: proposed.
+Status: accepted.
 
 Quirebase introduces `Workspace` as the first-class data-governance, ACL, shared-library and
 team-governance boundary between the Instance and Project layers. Workspace membership and
@@ -76,6 +76,7 @@ The initial role presets are:
 | Upload/manage File Revisions and Attachments | yes | yes | yes | no | no |
 | Create/attach/detach Tags | yes | yes | yes | no | no |
 | Rename/merge/delete shared Tags | yes | yes | no | no | no |
+| Manage shared Citation Styles | yes | yes | yes | no | no |
 | Create/update/archive Projects | yes | yes | yes | no | no |
 | Manage Project membership | yes | yes | no | no | no |
 | Write Item or Project Discussion/Notes | yes | yes | yes | yes | no |
@@ -100,8 +101,9 @@ Instance registration and Workspace admission are separate operations:
 
 - The existing instance-level `Invitation` is responsible for provisioning/registering a User,
   subject to instance open/closed registration and administrator-controlled manual creation.
-- Successful User provisioning transactionally and idempotently creates the User's initial
-  Workspace and owner membership.
+- Each successful User creation transaction also creates one ordinary Workspace and its owner
+  membership. Registration retries cannot create a second User because the registration identity
+  is unique; existing Users are never provisioned implicitly.
 - Admission to another Workspace uses a separate `WorkspaceInvitation` or an owner/admin
   membership mutation for an existing User.
 - A valid membership has state `active` or `suspended`. Removal terminates the membership and is
@@ -122,7 +124,7 @@ Quota and rate limits are intentionally separate concerns.
 A User with no active Workspace membership may still log in and use account-level operations, but
 all Library, Project, Tag and Document operations fail with a typed membership-required error.
 The system does not silently create another Personal Library; an explicit repair or create action
-is required.
+is required. User records do not store an initial Workspace pointer or provisioning state.
 
 ### Project is a collaboration context, not an ACL root
 
@@ -171,7 +173,10 @@ Workspace and Project have `active`, `archived` and internal `deleted` lifecycle
 An archived Workspace remains readable and exportable, including existing file downloads, but
 rejects Item, file, Tag, Project, membership and shared Discussion mutations. Owner/admin may
 restore it. Permanent Workspace deletion is owner-only and requires archive plus a retention
-period; `deleted` is an internal cleanup state and is not exposed as an ordinary business state.
+period (30 days by default). The deletion transaction removes the Workspace root and cascades
+its owned rows; a durable, reference-aware cleanup removes its stored objects. Audit Events keep
+the deleted Workspace ID as historical metadata. `deleted` is an internal cleanup state and is
+not exposed as an ordinary business state.
 
 An archived Project is readable but rejects ProjectItem, Annotation, Discussion, Notes and
 membership mutations. Project archive/restore is controlled by the Workspace `projects.manage`

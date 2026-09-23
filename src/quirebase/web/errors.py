@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from quirebase.accounts.invitations import InvitationConflict
+from quirebase.accounts.registration import RegistrationClosed, RegistrationInvitationRequired
 from quirebase.accounts.throttling import LoginThrottled
 from quirebase.core.errors import (
     DomainError,
@@ -19,6 +20,9 @@ from quirebase.core.errors import (
     SizeLimitExceeded,
     ValidationFailure,
     VersionConflict,
+    WorkspaceContextRequired,
+    WorkspaceLifecycleError,
+    WorkspaceMembershipRequired,
 )
 from quirebase.documents.annotations import DocumentNotReady
 from quirebase.documents.revisions import UnsupportedMediaType
@@ -65,6 +69,15 @@ def _error_response(
 def _domain_error(exc: DomainError) -> tuple[int, str, str, dict[str, Any] | None]:
     if isinstance(exc, LoginThrottled):
         return 429, "login_throttled", str(exc) or "too many login attempts; try again later", None
+    if isinstance(exc, RegistrationClosed):
+        return 403, "registration_closed", str(exc) or "registration is closed", None
+    if isinstance(exc, RegistrationInvitationRequired):
+        return (
+            403,
+            "registration_invitation_required",
+            str(exc) or "registration requires an invitation",
+            None,
+        )
     if isinstance(exc, InvitationConflict):
         return 409, "invitation_conflict", str(exc) or "invitation conflict", None
     if isinstance(exc, TagConflict):
@@ -81,6 +94,12 @@ def _domain_error(exc: DomainError) -> tuple[int, str, str, dict[str, Any] | Non
         return 502, "upstream_service_error", str(exc) or "upstream service error", None
     if isinstance(exc, ResourceUnavailable):
         return 404, "not_found", "not found", None
+    if isinstance(exc, WorkspaceContextRequired):
+        return 400, "workspace_context_required", str(exc) or "Workspace context required", None
+    if isinstance(exc, WorkspaceMembershipRequired):
+        return 403, "workspace_membership_required", str(exc), None
+    if isinstance(exc, WorkspaceLifecycleError):
+        return 409, "workspace_lifecycle_error", str(exc), None
     if isinstance(exc, ResourceNotFound):
         return 404, "not_found", str(exc) or "not found", None
     if isinstance(exc, PermissionDenied):

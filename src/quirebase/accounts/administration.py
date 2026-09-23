@@ -13,7 +13,20 @@ from quirebase.core.errors import (
     ResourceUnavailable,
     ValidationFailure,
 )
-from quirebase.models import Invitation, LoginSession, Project, SystemRole, User
+from quirebase.models import (
+    Invitation,
+    LoginSession,
+    Project,
+    ProjectMember,
+    ProjectState,
+    ProjectVisibility,
+    SystemRole,
+    User,
+    Workspace,
+    WorkspaceMember,
+    WorkspaceMemberState,
+)
+from quirebase.workspaces import provision_initial_workspace
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -81,6 +94,7 @@ async def create_user_admin(
     db.add(user)
     try:
         await db.flush()
+        await provision_initial_workspace(db, user)
         record_event(
             db,
             admin.id,
@@ -99,13 +113,69 @@ async def create_user_admin(
 async def update_user_status(db: AsyncSession, admin: User, user_id: str, active: bool) -> User:
     if admin.role != "administrator":
         raise ResourceUnavailable("administrator required")
-    user = await db.scalar(select(User).where(User.id == user_id).with_for_update(key_share=True))
+    user = await db.scalar(select(User).where(User.id == user_id).with_for_update())
     if user is None:
         raise ResourceNotFound("user not found")
     if user.id == admin.id and not active:
         raise PermissionDenied("administrators cannot deactivate their own account")
-    if not active and await db.scalar(select(Project.id).where(Project.owner_id == user.id)):
-        raise PermissionDenied("transfer project ownership before deactivating this account")
+    if not active and await db.scalar(
+        select(Workspace.id).where(Workspace.owner_id == user.id, Workspace.state != "deleted")
+    ):
+        raise PermissionDenied("transfer Workspace ownership before deactivating this account")
+    if not active:
+        # A User can participate in several Workspaces. Lock their roots in a
+        # stable order before checking whether deactivation would orphan a
+        # members-visible Project. Project participation commands take the
+        # same root before changing their membership rows.
+        (
+            await db.scalars(
+                select(Workspace.id)
+                .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
+                .where(
+                    WorkspaceMember.user_id == user.id,
+                    WorkspaceMember.terminated_at.is_(None),
+                )
+                .order_by(Workspace.id)
+                .with_for_update(of=Workspace)
+            )
+        ).all()
+        if await db.scalar(
+            select(Workspace.id).where(Workspace.owner_id == user.id, Workspace.state != "deleted")
+        ):
+            raise PermissionDenied("transfer Workspace ownership before deactivating this account")
+        scoped_project_ids = (
+            await db.scalars(
+                select(ProjectMember.project_id)
+                .join(Project, Project.id == ProjectMember.project_id)
+                .where(
+                    ProjectMember.user_id == user.id,
+                    Project.visibility == ProjectVisibility.members,
+                    Project.state != ProjectState.deleted,
+                )
+                .order_by(ProjectMember.project_id)
+            )
+        ).all()
+        for project_id in scoped_project_ids:
+            active_others = await db.scalar(
+                select(func.count(ProjectMember.id))
+                .join(User, User.id == ProjectMember.user_id)
+                .join(
+                    WorkspaceMember,
+                    (WorkspaceMember.workspace_id == ProjectMember.workspace_id)
+                    & (WorkspaceMember.user_id == ProjectMember.user_id),
+                )
+                .where(
+                    ProjectMember.project_id == project_id,
+                    ProjectMember.user_id != user.id,
+                    User.active.is_(True),
+                    WorkspaceMember.state == WorkspaceMemberState.active,
+                    WorkspaceMember.terminated_at.is_(None),
+                )
+            )
+            if not active_others:
+                raise PermissionDenied(
+                    "members-visible Project must retain an active Project member"
+                )
     user.active = active
     if not active:
         # Revoke all active sessions upon deactivation
@@ -127,7 +197,7 @@ async def change_user_role(db: AsyncSession, admin: User, user_id: str, new_role
         raise ResourceUnavailable("administrator required")
     if new_role not in (SystemRole.administrator.value, SystemRole.member.value):
         raise ValidationFailure("invalid user role")
-    user = await db.scalar(select(User).where(User.id == user_id).with_for_update(key_share=True))
+    user = await db.scalar(select(User).where(User.id == user_id).with_for_update())
     if user is None:
         raise ResourceNotFound("user not found")
     if user.id == admin.id and new_role != SystemRole.administrator.value:
@@ -153,7 +223,7 @@ async def reset_user_password(
     if len(new_password) < 12:
         raise ValidationFailure("password must contain at least 12 characters")
     password_hash = await hash_password_async(new_password)
-    user = await db.scalar(select(User).where(User.id == user_id).with_for_update(key_share=True))
+    user = await db.scalar(select(User).where(User.id == user_id).with_for_update())
     if user is None:
         raise ResourceNotFound("user not found")
     user.password_hash = password_hash

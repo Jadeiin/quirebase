@@ -10,6 +10,7 @@ from quirebase.accounts import (
     get_valid_invitation,
     list_api_tokens,
     list_user_sessions,
+    register_user,
     revoke_all_sessions,
     revoke_api_token,
     revoke_session,
@@ -23,6 +24,7 @@ from quirebase.web.api.account_schemas import (
     InvitationAcceptRequest,
     InvitationDetailsView,
     PasswordChangeRequest,
+    RegisterRequest,
 )
 from quirebase.web.api.auth import require_same_origin
 from quirebase.web.api.common import OkView
@@ -55,6 +57,13 @@ async def accept_user_invitation(
 ) -> OkView:
     require_same_origin(request)
     await accept_invitation(db, token, data.password)
+    return OkView()
+
+
+@router.post("/register", response_model=OkView, status_code=status.HTTP_201_CREATED)
+async def register_account(data: RegisterRequest, request: Request, db: Database) -> OkView:
+    require_same_origin(request)
+    await register_user(db, data.username, data.password)
     return OkView()
 
 

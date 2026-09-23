@@ -7,8 +7,14 @@ from typing import TYPE_CHECKING, Any
 from inquiro.richtext import convert_rich_text
 from sqlalchemy import func, or_, select
 
-from quirebase.access.items import visible_items_query
-from quirebase.access.projects import visible_projects
+from quirebase.access import (
+    Capability,
+    require_project_context,
+    require_workspace_capability,
+    visible_projects_for_context,
+    workspace_items_query,
+)
+from quirebase.access.scope import workspace_select
 from quirebase.core.errors import ValidationFailure
 from quirebase.models import (
     Item,
@@ -28,6 +34,7 @@ if TYPE_CHECKING:
 async def search_library(
     db: AsyncSession,
     user: User,
+    workspace_id: str,
     q: str = "",
     tag: str = "",
     project: str = "",
@@ -38,21 +45,30 @@ async def search_library(
     per_page: int = 25,
 ) -> tuple[list[Item], int, list[Tag], list[str]]:
     page = max(page, 1)
-    item_query = visible_items_query(user)
+    context = await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    item_query = workspace_items_query(context)
     matching_ids = await search_index(db).matching_item_ids(db, q) if q.strip() else None
     if matching_ids is not None:
         item_query = item_query.where(Item.id.in_(matching_ids))
     if tag:
         item_query = item_query.where(
             Item.id.in_(
-                select(ItemTag.item_id)
+                workspace_select(ItemTag, context)
+                .with_only_columns(ItemTag.item_id)
                 .join(Tag, Tag.id == ItemTag.tag_id)
-                .where(or_(Tag.id == tag, Tag.name == tag))
+                .where(
+                    or_(Tag.id == tag, Tag.name == tag),
+                )
             )
         )
     if project:
+        await require_project_context(db, user, workspace_id, project, Capability.workspace_read)
         item_query = item_query.where(
-            Item.id.in_(select(ProjectItem.item_id).where(ProjectItem.project_id == project))
+            Item.id.in_(
+                workspace_select(ProjectItem, context)
+                .with_only_columns(ProjectItem.item_id)
+                .where(ProjectItem.project_id == project)
+            )
         )
     if year:
         item_query = item_query.where(Item.publication_date.startswith(year))
@@ -71,13 +87,15 @@ async def search_library(
             )
         ).all()
     )
-    accessible_ids = visible_items_query(user).with_only_columns(Item.id).subquery()
+    accessible_ids = workspace_items_query(context).with_only_columns(Item.id).subquery()
     tags = list(
         (
             await db.scalars(
-                select(Tag)
+                workspace_select(Tag, context)
                 .join(ItemTag, ItemTag.tag_id == Tag.id)
-                .where(ItemTag.item_id.in_(select(accessible_ids.c.id)))
+                .where(
+                    ItemTag.item_id.in_(select(accessible_ids.c.id)),
+                )
                 .distinct()
                 .order_by(Tag.name)
             )
@@ -85,7 +103,7 @@ async def search_library(
     )
     dates = (
         await db.scalars(
-            visible_items_query(user)
+            workspace_items_query(context)
             .with_only_columns(Item.publication_date)
             .where(Item.publication_date.is_not(None))
             .distinct()
@@ -95,25 +113,30 @@ async def search_library(
     return items, total, tags, years
 
 
-async def get_dashboard_data(db: AsyncSession, user: User) -> dict[str, Any]:
+async def get_dashboard_data(db: AsyncSession, user: User, workspace_id: str) -> dict[str, Any]:
+    context = await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
     new_items = list(
         (
-            await db.scalars(visible_items_query(user).order_by(Item.created_at.desc()).limit(10))
+            await db.scalars(
+                workspace_items_query(context).order_by(Item.created_at.desc()).limit(10)
+            )
         ).all()
     )
     recent_items = list(
         (
             await db.execute(
-                visible_items_query(user)
+                workspace_items_query(context)
                 .join(ItemRead, ItemRead.item_id == Item.id)
-                .where(ItemRead.user_id == user.id)
+                .where(
+                    ItemRead.user_id == user.id,
+                )
                 .with_only_columns(Item, ItemRead.last_read_at)
                 .order_by(ItemRead.last_read_at.desc())
                 .limit(10)
             )
         ).all()
     )
-    projects = await visible_projects(db, user)
+    projects = await visible_projects_for_context(db, context)
     sessions = list(
         (
             await db.scalars(
@@ -132,14 +155,17 @@ async def get_dashboard_data(db: AsyncSession, user: User) -> dict[str, Any]:
     }
 
 
-async def find_duplicates(db: AsyncSession, user: User, mode: str) -> list[list[Item]]:
+async def find_duplicates(
+    db: AsyncSession, user: User, workspace_id: str, mode: str
+) -> list[list[Item]]:
     if mode not in ("", "doi", "title", "similar"):
         raise ValidationFailure(f"unknown duplicate mode: {mode}")
     if not mode:
         return []
+    context = await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
     limit = 500 if mode == "similar" else 2000
     items = list(
-        (await db.scalars(visible_items_query(user).order_by(Item.title).limit(limit))).all()
+        (await db.scalars(workspace_items_query(context).order_by(Item.title).limit(limit))).all()
     )
     groups: list[list[Item]] = []
     buckets: dict[str, list[Item]] = {}

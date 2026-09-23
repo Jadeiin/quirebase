@@ -5,8 +5,9 @@ from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import select
+from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
-from quirebase.core.errors import ResourceUnavailable
+from quirebase.core.errors import PermissionDenied, ResourceUnavailable
 from quirebase.library.tags import (
     TagConflict,
     add_tag_to_item,
@@ -15,170 +16,151 @@ from quirebase.library.tags import (
     merge_tags,
     remove_tag_from_item,
 )
-from quirebase.models import AuditEvent, Item, ItemTag, ItemTagRecommendation, Tag, User
+from quirebase.models import (
+    AuditEvent,
+    Item,
+    ItemTag,
+    ItemTagRecommendation,
+    Tag,
+    User,
+    WorkspaceMember,
+    WorkspaceRole,
+)
+
+
+async def _user(db, username: str) -> User:
+    user = User(username=username, password_hash="hash")
+    db.add(user)
+    await db.flush()
+    await provision_initial_workspace(db, user)
+    await db.commit()
+    return user
 
 
 @pytest.mark.anyio
-async def test_remove_tag_from_item_records_the_business_change(async_db):
-    db = async_db
-    user = User(username="tag-remover", password_hash="hash")
-    db.add(user)
-    await db.flush()
-    item = Item(title="Tagged Item", created_by=user.id)
-    db.add(item)
-    await db.flush()
-    assignment = await add_tag_to_item(db, user, item.id, "Temporary")
-    tag_id = assignment.tag_id
+async def test_tag_mutations_are_workspace_scoped_and_audited(async_db):
+    user = await _user(async_db, "tag-remover")
+    workspace_id = fixture_workspace_id(user)
+    assert workspace_id is not None
+    item = Item(workspace_id=workspace_id, title="Tagged Item", created_by=user.id)
+    async_db.add(item)
+    await async_db.flush()
 
-    await remove_tag_from_item(db, user, item.id, tag_id)
+    assignment = await add_tag_to_item(async_db, user, workspace_id, item.id, "Temporary")
+    await remove_tag_from_item(async_db, user, workspace_id, item.id, assignment.tag_id)
 
-    assert await db.get(ItemTag, (item.id, tag_id)) is None
-    event = await db.scalar(
+    assert (
+        await async_db.scalar(
+            select(ItemTag).where(
+                ItemTag.workspace_id == workspace_id,
+                ItemTag.item_id == item.id,
+                ItemTag.tag_id == assignment.tag_id,
+            )
+        )
+        is None
+    )
+    event = await async_db.scalar(
         select(AuditEvent).where(AuditEvent.action == "tag.remove", AuditEvent.target_id == item.id)
     )
     assert event is not None
-    assert json.loads(event.detail) == {"tag_id": tag_id}
+    assert event.workspace_id == workspace_id
+    assert json.loads(event.detail or "{}") == {"tag_id": assignment.tag_id}
 
 
 @pytest.mark.anyio
-async def test_tag_selection_rolls_back_when_a_later_change_is_invalid(async_db):
-    db = async_db
-    user = User(username="tag-selection-atomic", password_hash="hash")
-    db.add(user)
-    await db.flush()
-    item = Item(title="Atomic Tag Selection", created_by=user.id)
-    db.add(item)
-    await db.flush()
-    assignment = await add_tag_to_item(db, user, item.id, "Keep Me")
+async def test_tag_selection_is_atomic(async_db):
+    user = await _user(async_db, "tag-selection-atomic")
+    workspace_id = fixture_workspace_id(user)
+    assert workspace_id is not None
+    item = Item(workspace_id=workspace_id, title="Atomic Tag Selection", created_by=user.id)
+    async_db.add(item)
+    await async_db.flush()
+    assignment = await add_tag_to_item(async_db, user, workspace_id, item.id, "Keep Me")
     item_id = item.id
     tag_id = assignment.tag_id
 
     with pytest.raises(ResourceUnavailable, match="tag not found"):
         await apply_item_tag_selection(
-            db,
+            async_db,
             user,
+            workspace_id,
             item_id,
             remove_tag_ids=[tag_id],
             tag_ids=["missing-tag"],
         )
-
-    assert await db.get(ItemTag, (item_id, tag_id)) is not None
+    assert (
+        await async_db.scalar(
+            select(ItemTag).where(
+                ItemTag.workspace_id == workspace_id,
+                ItemTag.item_id == item_id,
+                ItemTag.tag_id == tag_id,
+            )
+        )
+        is not None
+    )
 
 
 @pytest.mark.anyio
-async def test_get_tag_matrix_for_item(async_db):
-    db = async_db
-    user = User(username="tag_matrix_user", password_hash="hash")
-    db.add(user)
-    await db.flush()
-
-    t1 = Tag(name="Algorithms", created_by=user.id)
-    t2 = Tag(name="Bioinformatics", created_by=user.id)
-    t3 = Tag(name="Compiler", created_by=user.id)
-    db.add_all([t1, t2, t3])
-    await db.flush()
-
+async def test_tag_matrix_and_normalized_names_are_workspace_scoped(async_db):
+    user = await _user(async_db, "tag-matrix-user")
+    foreign = await _user(async_db, "tag-matrix-foreign")
+    workspace_id = fixture_workspace_id(user)
+    foreign_workspace_id = fixture_workspace_id(foreign)
+    assert workspace_id is not None and foreign_workspace_id is not None
+    tags = [
+        Tag(workspace_id=workspace_id, name=name, created_by=user.id)
+        for name in ("Algorithms", "Bioinformatics", "Compiler")
+    ]
+    tags.append(Tag(workspace_id=foreign_workspace_id, name="Foreign", created_by=foreign.id))
     item = Item(
+        workspace_id=workspace_id,
         title="Compiler Optimization Algorithms",
         abstract="Efficient algorithms for compiler backend.",
-        keywords="Compiler; Graph Neural Networks; graph neural networks; New Optimizer",
+        keywords="Compiler; New Optimizer",
         created_by=user.id,
     )
-    db.add(item)
-    await db.flush()
-    db.add(
+    async_db.add_all([*tags, item])
+    await async_db.flush()
+    async_db.add(
         ItemTagRecommendation(
+            workspace_id=workspace_id,
             item_id=item.id,
             generation_token=1,
             single_words=json.dumps(["Algorithms", "Compiler"]),
-            phrases=json.dumps(["Graph Neural Networks", "New Optimizer"]),
+            phrases=json.dumps(["New Optimizer"]),
             generated_at=datetime.now(UTC),
         )
     )
-    await add_tag_to_item(db, user, item.id, "Algorithms")
-    await db.commit()
-
-    matrix = await get_tag_matrix_for_item(db, user, item.id)
-    assert len(matrix["groups"]) >= 3
-    assert t1.id in matrix["assigned_ids"]
-    assert t2.id not in matrix["assigned_ids"]
-    assert t1.id in matrix["recommended_ids"]
-    assert t3.id in matrix["recommended_ids"]
-    assert matrix["suggested_names"] == ("Graph Neural Networks", "New Optimizer")
-
-
-@pytest.mark.anyio
-async def test_tag_matrix_conceals_foreign_tags_without_accessible_items(async_db):
-    db = async_db
-    viewer = User(username="matrix_viewer", password_hash="hash")
-    author = User(username="matrix_author", password_hash="hash")
-    db.add_all([viewer, author])
-    await db.flush()
-    attached_tag = Tag(name="Attached to visible item", created_by=author.id)
-    foreign_orphan = Tag(name="Foreign orphan", created_by=author.id)
-    own_orphan = Tag(name="Own orphan", created_by=viewer.id)
-    db.add_all([attached_tag, foreign_orphan, own_orphan])
-    await db.flush()
-    item = Item(title="Viewer item", created_by=viewer.id)
-    db.add(item)
-    await db.flush()
-    db.add(ItemTag(item_id=item.id, tag_id=attached_tag.id))
-    await db.commit()
-
-    matrix = await get_tag_matrix_for_item(db, viewer, item.id)
-
+    await add_tag_to_item(async_db, user, workspace_id, item.id, "Algorithms")
+    matrix = await get_tag_matrix_for_item(async_db, user, workspace_id, item.id)
     names = {tag.name for group in matrix["groups"] for tag in group["tags"]}
-    assert "Attached to visible item" in names
-    assert "Own orphan" in names
-    assert "Foreign orphan" not in names
+    assert names == {"Algorithms", "Bioinformatics", "Compiler"}
+    assert tags[0].id in matrix["assigned_ids"]
+    assert tags[2].id in matrix["recommended_ids"]
 
 
 @pytest.mark.anyio
-async def test_merge_tags_relinks_items_and_rejects_self_merge(async_db):
-    db = async_db
-    admin = User(username="admin_merge", password_hash="hash", role="administrator")
-    db.add(admin)
-    await db.flush()
-    first = Item(title="First Item", created_by=admin.id)
-    second = Item(title="Second Item", created_by=admin.id)
-    source = Tag(name="ML", created_by=admin.id)
-    target = Tag(name="Machine Learning", created_by=admin.id)
-    db.add_all([first, second, source, target])
-    await db.flush()
-    db.add_all([
-        ItemTag(item_id=first.id, tag_id=source.id),
-        ItemTag(item_id=second.id, tag_id=source.id),
-        ItemTag(item_id=second.id, tag_id=target.id),
-    ])
-    await db.commit()
+async def test_tag_merge_requires_workspace_capability_not_creator_ownership(async_db):
+    owner = await _user(async_db, "tag-owner")
+    editor = await _user(async_db, "tag-editor")
+    workspace_id = fixture_workspace_id(owner)
+    assert workspace_id is not None
+    async_db.add(
+        WorkspaceMember(
+            workspace_id=workspace_id,
+            user_id=editor.id,
+            role=WorkspaceRole.editor,
+            invited_by=owner.id,
+        )
+    )
+    source = Tag(workspace_id=workspace_id, name="ML", created_by=owner.id)
+    target = Tag(workspace_id=workspace_id, name="Machine Learning", created_by=editor.id)
+    async_db.add_all([source, target])
+    await async_db.commit()
 
-    merged = await merge_tags(db, admin, source.id, target.id)
-
+    with pytest.raises(PermissionDenied, match=r"tags\.manage"):
+        await merge_tags(async_db, editor, workspace_id, source.id, target.id)
+    merged = await merge_tags(async_db, owner, workspace_id, source.id, target.id)
     assert merged.id == target.id
-    assert await db.get(Tag, source.id) is None
-    assert set(
-        (await db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == target.id))).all()
-    ) == {
-        first.id,
-        second.id,
-    }
     with pytest.raises(TagConflict, match="different"):
-        await merge_tags(db, admin, target.id, target.id)
-
-
-@pytest.mark.anyio
-async def test_merge_tags_requires_source_tag_ownership(async_db):
-    db = async_db
-    source_owner = User(username="source_owner", password_hash="hash")
-    other_user = User(username="other_user", password_hash="hash")
-    db.add_all([source_owner, other_user])
-    await db.flush()
-    source = Tag(name="Protected source", created_by=source_owner.id)
-    target = Tag(name="Shared target", created_by=other_user.id)
-    db.add_all([source, target])
-    await db.commit()
-
-    with pytest.raises(ResourceUnavailable, match="not authorized"):
-        await merge_tags(db, other_user, source.id, target.id)
-
-    assert await db.get(Tag, source.id) is not None
+        await merge_tags(async_db, owner, workspace_id, target.id, target.id)

@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, status
 
-from quirebase.access.tags import can_manage_tag
+from quirebase.access import Capability, resolve_workspace_context, role_has_capability
 from quirebase.library import (
     DiscussionWorkspace,
     ItemMetadata,
@@ -14,6 +14,7 @@ from quirebase.library import (
     add_tag_to_item,
     apply_bulk_item_action,
     apply_item_tag_selection,
+    copy_item_to_workspace,
     create_item,
     delete_discussion_message,
     get_item_citation_text_response,
@@ -28,6 +29,7 @@ from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.library_schemas import (
     BulkActionRequest,
     CitationView,
+    CrossWorkspaceCopyRequest,
     DiscussionMessageView,
     DiscussionRequest,
     ItemDetailView,
@@ -41,14 +43,17 @@ from quirebase.web.api.library_schemas import (
     item_search_view,
 )
 
-router = APIRouter(tags=["Library"])
+router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["Library"])
 
 
 @router.post("/items/bulk", response_model=OkView)
-async def apply_item_bulk_action(data: BulkActionRequest, user: ApiUser, db: Database) -> OkView:
+async def apply_item_bulk_action(
+    workspace_id: str, data: BulkActionRequest, user: ApiUser, db: Database
+) -> OkView:
     await apply_bulk_item_action(
         db,
         user,
+        workspace_id=workspace_id,
         item_ids=data.item_ids,
         action=data.action,
         project_id=data.project_id,
@@ -60,6 +65,7 @@ async def apply_item_bulk_action(data: BulkActionRequest, user: ApiUser, db: Dat
 
 @router.get("/items", response_model=LibrarySearchView)
 async def search_items(
+    workspace_id: str,
     user: ApiUser,
     db: Database,
     query: str = "",
@@ -74,6 +80,7 @@ async def search_items(
     items, total, _tags, _years = await search_library(
         db,
         user,
+        workspace_id,
         q=query,
         tag=tag,
         project=project,
@@ -96,14 +103,20 @@ async def search_items(
     response_model=WriteResult,
     status_code=status.HTTP_201_CREATED,
 )
-async def create_library_item(metadata: ItemMetadata, user: ApiUser, db: Database) -> WriteResult:
-    result = await create_item(db, user, metadata)
+async def create_library_item(
+    workspace_id: str, metadata: ItemMetadata, user: ApiUser, db: Database
+) -> WriteResult:
+    result = await create_item(db, user, workspace_id, metadata)
     return WriteResult(id=result.item_id, version=result.version)
 
 
 @router.get("/items/{item_id}", response_model=ItemDetailView)
-async def get_library_item(item_id: str, user: ApiUser, db: Database) -> ItemDetailView:
-    workspace = await open_item_workspace(db, user, item_id, WorkspaceSection.metadata)
+async def get_library_item(
+    workspace_id: str, item_id: str, user: ApiUser, db: Database
+) -> ItemDetailView:
+    workspace = await open_item_workspace(
+        db, user, workspace_id, item_id, WorkspaceSection.metadata
+    )
     if not isinstance(workspace, MetadataWorkspace):  # pragma: no cover
         raise TypeError("item metadata workspace mismatch")
     return item_detail_view(workspace)
@@ -111,10 +124,28 @@ async def get_library_item(item_id: str, user: ApiUser, db: Database) -> ItemDet
 
 @router.put("/items/{item_id}", response_model=WriteResult)
 async def update_library_item(
-    item_id: str, data: ItemUpdateRequest, user: ApiUser, db: Database
+    workspace_id: str, item_id: str, data: ItemUpdateRequest, user: ApiUser, db: Database
 ) -> WriteResult:
-    result = await revise_item_metadata(db, user, item_id, data.expected_version, data.metadata)
+    result = await revise_item_metadata(
+        db, user, workspace_id, item_id, data.expected_version, data.metadata
+    )
     return WriteResult(id=result.item_id, version=result.version)
+
+
+@router.post(
+    "/items/{item_id}/copy",
+    response_model=WriteResult,
+    status_code=status.HTTP_201_CREATED,
+)
+async def copy_library_item(
+    workspace_id: str,
+    item_id: str,
+    data: CrossWorkspaceCopyRequest,
+    user: ApiUser,
+    db: Database,
+) -> WriteResult:
+    copied = await copy_item_to_workspace(db, user, workspace_id, data.target_workspace_id, item_id)
+    return WriteResult(id=copied.id, version=copied.version)
 
 
 @router.get(
@@ -122,6 +153,7 @@ async def update_library_item(
     response_model=CitationView,
 )
 async def format_item_citation(
+    workspace_id: str,
     item_id: str,
     user: ApiUser,
     db: Database,
@@ -129,28 +161,32 @@ async def format_item_citation(
     output: Annotated[str, Query(pattern="^(text|html)$")] = "text",
 ) -> CitationView:
     content, media_type = await get_item_citation_text_response(
-        db, user, item_id, style_key=style, output=output
+        db, user, workspace_id, item_id, style_key=style, output=output
     )
     return CitationView(content=content, media_type=media_type)
 
 
 @router.get("/tags", response_model=list[TagView])
-async def list_tags(user: ApiUser, db: Database) -> list[TagView]:
-    rows = await list_accessible_tags_with_counts(db, user)
+async def list_tags(workspace_id: str, user: ApiUser, db: Database) -> list[TagView]:
+    rows = await list_accessible_tags_with_counts(db, user, workspace_id)
+    context = await resolve_workspace_context(db, user, workspace_id)
+    can_manage = role_has_capability(context.role, Capability.tags_manage)
     return [
         TagView(
             id=tag.id,
             name=tag.name,
             accessible_item_count=count,
-            can_manage=can_manage_tag(user, tag),
+            can_manage=can_manage,
         )
         for tag, count in rows
     ]
 
 
 @router.post("/items/{item_id}/tags", response_model=WriteResult)
-async def add_item_tag(item_id: str, data: NameRequest, user: ApiUser, db: Database) -> WriteResult:
-    assignment = await add_tag_to_item(db, user, item_id, data.name)
+async def add_item_tag(
+    workspace_id: str, item_id: str, data: NameRequest, user: ApiUser, db: Database
+) -> WriteResult:
+    assignment = await add_tag_to_item(db, user, workspace_id, item_id, data.name)
     return WriteResult(id=assignment.tag_id)
 
 
@@ -158,18 +194,21 @@ async def add_item_tag(item_id: str, data: NameRequest, user: ApiUser, db: Datab
     "/items/{item_id}/tags/{tag_id}",
     response_model=OkView,
 )
-async def remove_item_tag(item_id: str, tag_id: str, user: ApiUser, db: Database) -> OkView:
-    await remove_tag_from_item(db, user, item_id, tag_id)
+async def remove_item_tag(
+    workspace_id: str, item_id: str, tag_id: str, user: ApiUser, db: Database
+) -> OkView:
+    await remove_tag_from_item(db, user, workspace_id, item_id, tag_id)
     return OkView()
 
 
 @router.put("/items/{item_id}/tags", response_model=OkView)
 async def set_item_tag_selection(
-    item_id: str, data: TagSetRequest, user: ApiUser, db: Database
+    workspace_id: str, item_id: str, data: TagSetRequest, user: ApiUser, db: Database
 ) -> OkView:
     await apply_item_tag_selection(
         db,
         user,
+        workspace_id,
         item_id,
         remove_tag_ids=data.remove_tag_ids,
         tag_ids=data.add_tag_ids,
@@ -183,9 +222,11 @@ async def set_item_tag_selection(
     response_model=list[DiscussionMessageView],
 )
 async def list_discussions(
-    item_id: str, user: ApiUser, db: Database
+    workspace_id: str, item_id: str, user: ApiUser, db: Database
 ) -> list[DiscussionMessageView]:
-    workspace = await open_item_workspace(db, user, item_id, WorkspaceSection.discussion)
+    workspace = await open_item_workspace(
+        db, user, workspace_id, item_id, WorkspaceSection.discussion
+    )
     if not isinstance(workspace, DiscussionWorkspace):  # pragma: no cover
         raise TypeError("item discussion workspace mismatch")
     return discussion_message_views(workspace)
@@ -197,9 +238,9 @@ async def list_discussions(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_discussion(
-    item_id: str, data: DiscussionRequest, user: ApiUser, db: Database
+    workspace_id: str, item_id: str, data: DiscussionRequest, user: ApiUser, db: Database
 ) -> WriteResult:
-    message = await add_discussion_message(db, user, item_id, data.body)
+    message = await add_discussion_message(db, user, workspace_id, item_id, data.body)
     return WriteResult(id=message.id)
 
 
@@ -207,6 +248,8 @@ async def create_discussion(
     "/items/{item_id}/discussions/{message_id}",
     response_model=OkView,
 )
-async def delete_discussion(item_id: str, message_id: str, user: ApiUser, db: Database) -> OkView:
-    await delete_discussion_message(db, user, item_id, message_id)
+async def delete_discussion(
+    workspace_id: str, item_id: str, message_id: str, user: ApiUser, db: Database
+) -> OkView:
+    await delete_discussion_message(db, user, workspace_id, item_id, message_id)
     return OkView()

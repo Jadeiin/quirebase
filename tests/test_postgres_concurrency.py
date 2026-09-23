@@ -1,47 +1,50 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
-from typing import TYPE_CHECKING
 from uuid import uuid4
 
 import pytest
-from dbos import AsyncSQLAlchemyDatasource
-from sqlalchemy import select, text
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
-from quirebase.accounts.throttling import record_login_failure
-from quirebase.core.database import Base, async_database_url, make_async_engine
-from quirebase.core.errors import VersionConflict
-from quirebase.core.workflows import ads
-from quirebase.documents.workflows import commit_uploaded_attachment, commit_uploaded_revision
-from quirebase.library.bulk_items import apply_bulk_item_action
-from quirebase.library.identifiers import rescan_pdf_doi
-from quirebase.library.imports import commit_import_batch
-from quirebase.library.item_metadata import ItemMetadata, revise_item_metadata
-from quirebase.library.tags import add_tag_to_item, rename_tag
+from quirebase.access import Capability, require_workspace_capability
+from quirebase.core.database import Base, make_async_engine
+from quirebase.core.errors import PermissionDenied, ValidationFailure, WorkspaceLifecycleError
+from quirebase.library import (
+    add_discussion_message,
+    add_existing_tag_to_item,
+    add_project_discussion_message,
+)
 from quirebase.models import (
-    Attachment,
-    AttachmentRole,
-    FileRevision,
-    FileRevisionProcessingState,
-    ImportBatch,
     Item,
     ItemTag,
-    LoginThrottle,
     Project,
     ProjectItem,
     ProjectMember,
-    ProjectRole,
+    ProjectState,
+    ProjectVisibility,
     Tag,
     User,
+    Workspace,
+    WorkspaceMember,
+    WorkspaceRole,
+    WorkspaceState,
 )
-from quirebase.projects import remove_item_from_project, remove_project_member
-from quirebase.search import search_index
-
-if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Awaitable, Callable
+from quirebase.projects import (
+    add_item_to_project,
+    create_project,
+    remove_project_member,
+    rename_project,
+)
+from quirebase.workspaces import (
+    archive_workspace,
+    repair_initial_workspace,
+    suspend_workspace_member,
+    transfer_workspace_ownership,
+)
 
 pytestmark = [
     pytest.mark.anyio,
@@ -53,460 +56,479 @@ pytestmark = [
 
 
 @pytest.fixture
-async def postgres_sessions(monkeypatch) -> AsyncIterator[async_sessionmaker[AsyncSession]]:
-    database_url = os.environ["QUIREBASE_TEST_POSTGRES_URL"]
-    engine = make_async_engine(database_url)
+async def postgres_sessions():
+    engine = make_async_engine(os.environ["QUIREBASE_TEST_POSTGRES_URL"])
     async with engine.begin() as connection:
-        await connection.execute(text("DROP TABLE IF EXISTS revision_search"))
-        await connection.execute(text("DROP TABLE IF EXISTS item_search"))
-        await connection.run_sync(Base.metadata.drop_all)
         await connection.run_sync(Base.metadata.create_all)
-        await connection.execute(
-            text(
-                "CREATE TABLE item_search ("
-                "item_id varchar(36) PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,"
-                "document tsvector NOT NULL)"
-            )
-        )
-        await connection.execute(
-            text("CREATE INDEX ix_item_search_document ON item_search USING gin(document)")
-        )
-        await connection.execute(
-            text(
-                "CREATE TABLE revision_search ("
-                "revision_id varchar(36) PRIMARY KEY REFERENCES file_revisions(id) ON DELETE CASCADE,"
-                "item_id varchar(36) NOT NULL, document tsvector NOT NULL)"
-            )
-        )
-        await connection.execute(
-            text("CREATE INDEX ix_revision_search_document ON revision_search USING gin(document)")
-        )
-        await connection.execute(
-            text("CREATE INDEX ix_revision_search_item_id ON revision_search(item_id)")
-        )
-
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
-    datasource = await AsyncSQLAlchemyDatasource.create(
-        async_database_url(database_url), engine=engine
-    )
-    ads.set_instance(datasource)
-    monkeypatch.setattr("quirebase.documents.workflows.AsyncSessionLocal", factory)
     try:
         yield factory
     finally:
-        ads.set_instance(None)
         async with engine.begin() as connection:
-            await connection.execute(text("DROP TABLE IF EXISTS revision_search"))
-            await connection.execute(text("DROP TABLE IF EXISTS item_search"))
             await connection.run_sync(Base.metadata.drop_all)
         await engine.dispose()
 
 
-async def _start_together(
-    *operations: Callable[[], Awaitable[object]],
-) -> list[object]:
-    ready = [asyncio.Event() for _ in operations]
-    start = asyncio.Event()
-
-    async def run(index: int, operation: Callable[[], Awaitable[object]]) -> object:
-        ready[index].set()
-        await start.wait()
-        return await operation()
-
-    tasks = [
-        asyncio.create_task(run(index, operation)) for index, operation in enumerate(operations)
-    ]
-    await asyncio.gather(*(event.wait() for event in ready))
-    start.set()
-    return list(await asyncio.gather(*tasks, return_exceptions=True))
+async def _user(db: AsyncSession, prefix: str) -> User:
+    user = User(username=f"{prefix}-{uuid4()}", password_hash="unused")
+    db.add(user)
+    await db.flush()
+    await provision_initial_workspace(db, user)
+    await db.commit()
+    return user
 
 
-async def _create_user_and_item(
-    factory: async_sessionmaker[AsyncSession], *, title: str
-) -> tuple[str, str]:
-    async with factory() as db:
-        user = User(username=f"race-{uuid4()}", password_hash="hash")
-        db.add(user)
-        await db.flush()
-        item = Item(title=title, created_by=user.id)
+async def test_write_authorization_serializes_with_workspace_archive(postgres_sessions):
+    async with postgres_sessions() as db:
+        owner = await _user(db, "write-race-owner")
+        writer = await _user(db, "write-race-writer")
+        workspace_id, owner_id, writer_id = fixture_workspace_id(owner), owner.id, writer.id
+        item = Item(workspace_id=workspace_id, title="Write race", created_by=owner_id)
+        db.add_all([
+            item,
+            WorkspaceMember(
+                workspace_id=workspace_id,
+                user_id=writer_id,
+                role=WorkspaceRole.reviewer,
+                invited_by=owner_id,
+            ),
+        ])
+        await db.commit()
+        item_id = item.id
+
+    authorized = asyncio.Event()
+    release_write = asyncio.Event()
+    archive_started = asyncio.Event()
+
+    async def write_message():
+        async with postgres_sessions() as db:
+            actor = await db.get(User, writer_id)
+            assert actor is not None
+            await require_workspace_capability(db, actor, workspace_id, Capability.discussion_write)
+            authorized.set()
+            await release_write.wait()
+            return await add_discussion_message(db, actor, workspace_id, item_id, "Before archive")
+
+    async def archive():
+        async with postgres_sessions() as db:
+            actor = await db.get(User, owner_id)
+            assert actor is not None
+            archive_started.set()
+            await archive_workspace(db, actor, workspace_id)
+
+    writer_task = asyncio.create_task(write_message())
+    await authorized.wait()
+    archive_task = asyncio.create_task(archive())
+    try:
+        await archive_started.wait()
+        await asyncio.sleep(0.05)
+        assert not archive_task.done()
+    finally:
+        release_write.set()
+        await asyncio.gather(writer_task, archive_task)
+
+    async with postgres_sessions() as db:
+        actor = await db.get(User, writer_id)
+        assert actor is not None
+        with pytest.raises(WorkspaceLifecycleError):
+            await add_discussion_message(db, actor, workspace_id, item_id, "After archive")
+
+
+async def test_project_discussion_waits_for_archive_and_rechecks_state(postgres_sessions):
+    async with postgres_sessions() as db:
+        owner = await _user(db, "project-archive-race")
+        workspace_id, owner_id = fixture_workspace_id(owner), owner.id
+        project = Project(workspace_id=workspace_id, name="Archiving")
+        db.add(project)
+        await db.commit()
+        project_id = project.id
+
+    async with postgres_sessions() as archive_db:
+        project = await archive_db.scalar(
+            select(Project).where(Project.id == project_id).with_for_update()
+        )
+        assert project is not None
+        project.state = ProjectState.archived
+
+        started = asyncio.Event()
+
+        async def write_message():
+            async with postgres_sessions() as db:
+                actor = await db.get(User, owner_id)
+                assert actor is not None
+                started.set()
+                with pytest.raises(WorkspaceLifecycleError):
+                    await add_project_discussion_message(
+                        db, actor, workspace_id, project_id, "After archive"
+                    )
+
+        writer_task = asyncio.create_task(write_message())
+        try:
+            await started.wait()
+            await asyncio.sleep(0.05)
+            assert not writer_task.done()
+        finally:
+            await archive_db.commit()
+            await writer_task
+
+
+async def test_waiting_writer_reloads_workspace_after_archive_commits(postgres_sessions):
+    async with postgres_sessions() as db:
+        owner = await _user(db, "waiting-write-owner")
+        workspace_id, owner_id = fixture_workspace_id(owner), owner.id
+
+    async with postgres_sessions() as governance_db:
+        workspace = await governance_db.scalar(
+            select(Workspace).where(Workspace.id == workspace_id).with_for_update()
+        )
+        assert workspace is not None
+        workspace.state = WorkspaceState.archived
+
+        started = asyncio.Event()
+
+        async def authorize_write():
+            async with postgres_sessions() as db:
+                actor = await db.get(User, owner_id)
+                assert actor is not None
+                started.set()
+                with pytest.raises(WorkspaceLifecycleError):
+                    await require_workspace_capability(
+                        db, actor, workspace_id, Capability.discussion_write
+                    )
+
+        writer_task = asyncio.create_task(authorize_write())
+        try:
+            await started.wait()
+            await asyncio.sleep(0.05)
+            assert not writer_task.done()
+        finally:
+            await governance_db.commit()
+            await writer_task
+
+
+async def test_current_membership_partial_unique_serializes_rejoin(postgres_sessions):
+    async with postgres_sessions() as db:
+        owner = await _user(db, "membership-owner")
+        target = await _user(db, "membership-target")
+        workspace_id = fixture_workspace_id(owner)
+        owner_id = owner.id
+        target_id = target.id
+
+    async def add_current_member():
+        async with postgres_sessions() as db:
+            db.add(
+                WorkspaceMember(
+                    workspace_id=workspace_id,
+                    user_id=target_id,
+                    role=WorkspaceRole.viewer,
+                    invited_by=owner_id,
+                )
+            )
+            try:
+                await db.commit()
+                return "committed"
+            except IntegrityError:
+                await db.rollback()
+                return "conflict"
+
+    outcomes = await asyncio.gather(add_current_member(), add_current_member())
+    assert sorted(outcomes) == ["committed", "conflict"]
+
+
+async def test_concurrent_ownership_transfer_reauthorizes_after_root_lock(postgres_sessions):
+    async with postgres_sessions() as db:
+        owner = await _user(db, "transfer-owner")
+        first = await _user(db, "transfer-first")
+        second = await _user(db, "transfer-second")
+        workspace_id = fixture_workspace_id(owner)
+        owner_id = owner.id
+        first_member = WorkspaceMember(
+            workspace_id=workspace_id,
+            user_id=first.id,
+            role=WorkspaceRole.editor,
+            invited_by=owner.id,
+        )
+        second_member = WorkspaceMember(
+            workspace_id=workspace_id,
+            user_id=second.id,
+            role=WorkspaceRole.editor,
+            invited_by=owner.id,
+        )
+        db.add_all([first_member, second_member])
+        await db.commit()
+        target_ids = (first_member.id, second_member.id)
+
+    gate = asyncio.Event()
+    ready = 0
+    ready_lock = asyncio.Lock()
+
+    async def transfer(target_id: str):
+        nonlocal ready
+        async with postgres_sessions() as db:
+            actor = await db.get(User, owner_id)
+            assert actor is not None
+            async with ready_lock:
+                ready += 1
+                if ready == 2:
+                    gate.set()
+            await gate.wait()
+            try:
+                await transfer_workspace_ownership(db, actor, workspace_id, target_id)
+                return "committed"
+            except PermissionDenied:
+                await db.rollback()
+                return "denied"
+
+    outcomes = await asyncio.gather(*(transfer(target_id) for target_id in target_ids))
+    assert sorted(outcomes) == ["committed", "denied"]
+
+    async with postgres_sessions() as db:
+        workspace = await db.get(Workspace, workspace_id)
+        assert workspace is not None
+        owner_count = await db.scalar(
+            select(func.count(WorkspaceMember.id)).where(
+                WorkspaceMember.workspace_id == workspace_id,
+                WorkspaceMember.role == WorkspaceRole.owner,
+                WorkspaceMember.terminated_at.is_(None),
+            )
+        )
+        assert owner_count == 1
+        assert workspace.owner_id in {first.id, second.id}
+
+
+async def test_repair_initial_workspace_serializes_with_ownership_transfer(postgres_sessions):
+    async with postgres_sessions() as db:
+        initial_owner = await _user(db, "repair-transfer-owner")
+        successor = await _user(db, "repair-transfer-successor")
+        workspace_id = fixture_workspace_id(initial_owner)
+        initial_owner_id = initial_owner.id
+        successor_id = successor.id
+        successor_membership = WorkspaceMember(
+            workspace_id=workspace_id,
+            user_id=successor_id,
+            role=WorkspaceRole.editor,
+            invited_by=initial_owner_id,
+        )
+        db.add(successor_membership)
+        await db.commit()
+        successor_membership_id = successor_membership.id
+
+    transfer_has_root_lock = asyncio.Event()
+    allow_transfer_to_finish = asyncio.Event()
+
+    async def transfer():
+        async with postgres_sessions() as db:
+            actor = await db.get(User, initial_owner_id)
+            assert actor is not None
+            await db.scalar(select(Workspace).where(Workspace.id == workspace_id).with_for_update())
+            transfer_has_root_lock.set()
+            await allow_transfer_to_finish.wait()
+            await transfer_workspace_ownership(db, actor, workspace_id, successor_membership_id)
+
+    async def repair():
+        async with postgres_sessions() as db:
+            actor = await db.get(User, initial_owner_id)
+            assert actor is not None
+            return await repair_initial_workspace(db, actor)
+
+    transfer_task = asyncio.create_task(transfer())
+    await transfer_has_root_lock.wait()
+    repair_task = asyncio.create_task(repair())
+    try:
+        await asyncio.sleep(0.05)
+        assert not repair_task.done()
+    finally:
+        allow_transfer_to_finish.set()
+        await asyncio.gather(transfer_task, repair_task)
+
+    async with postgres_sessions() as db:
+        workspace = await db.get(Workspace, workspace_id)
+        assert workspace is not None
+        assert workspace.owner_id == successor_id
+        owner_count = await db.scalar(
+            select(func.count(WorkspaceMember.id)).where(
+                WorkspaceMember.workspace_id == workspace_id,
+                WorkspaceMember.role == WorkspaceRole.owner,
+                WorkspaceMember.terminated_at.is_(None),
+            )
+        )
+        assert owner_count == 1
+
+
+async def test_concurrent_project_renames_do_not_upgrade_shared_workspace_locks(
+    postgres_sessions,
+):
+    async with postgres_sessions() as db:
+        owner = await _user(db, "rename-lock-owner")
+        workspace_id = fixture_workspace_id(owner)
+        project = await create_project(db, owner, workspace_id, "Initial name")
+        project_id = project.id
+        owner_id = owner.id
+
+    gate = asyncio.Event()
+    ready = 0
+    ready_lock = asyncio.Lock()
+
+    async def rename(name: str):
+        nonlocal ready
+        async with postgres_sessions() as db:
+            actor = await db.get(User, owner_id)
+            assert actor is not None
+            async with ready_lock:
+                ready += 1
+                if ready == 2:
+                    gate.set()
+            await gate.wait()
+            await rename_project(db, actor, workspace_id, project_id, name)
+
+    await asyncio.wait_for(asyncio.gather(rename("First name"), rename("Second name")), timeout=5)
+
+    async with postgres_sessions() as db:
+        project = await db.get(Project, project_id)
+        assert project is not None
+        assert project.name in {"First name", "Second name"}
+
+
+async def test_project_member_removal_races_workspace_member_suspension(postgres_sessions):
+    async with postgres_sessions() as db:
+        owner = await _user(db, "scope-owner")
+        target = await _user(db, "scope-target")
+        workspace_id = fixture_workspace_id(owner)
+        owner_id = owner.id
+        target_id = target.id
+        membership = WorkspaceMember(
+            workspace_id=workspace_id,
+            user_id=target_id,
+            role=WorkspaceRole.editor,
+            invited_by=owner_id,
+        )
+        db.add(membership)
+        await db.commit()
+        membership_id = membership.id
+        project = await create_project(
+            db, owner, workspace_id, "Concurrent scope", ProjectVisibility.members
+        )
+        db.add_all([
+            ProjectMember(
+                workspace_id=workspace_id,
+                project_id=project.id,
+                user_id=target_id,
+            ),
+            ProjectMember(
+                workspace_id=workspace_id,
+                project_id=project.id,
+                user_id=owner_id,
+            ),
+        ])
+        await db.commit()
+        project_id = project.id
+
+    gate = asyncio.Event()
+    ready = 0
+    ready_lock = asyncio.Lock()
+
+    async def change_scope(remove_project_membership: bool):
+        nonlocal ready
+        async with postgres_sessions() as db:
+            actor = await db.get(User, owner_id)
+            assert actor is not None
+            async with ready_lock:
+                ready += 1
+                if ready == 2:
+                    gate.set()
+            await gate.wait()
+            try:
+                if remove_project_membership:
+                    await remove_project_member(db, actor, workspace_id, project_id, owner_id)
+                else:
+                    await suspend_workspace_member(db, actor, workspace_id, membership_id)
+                return "committed"
+            except ValidationFailure:
+                await db.rollback()
+                return "rejected"
+
+    outcomes = await asyncio.gather(change_scope(True), change_scope(False))
+    assert sorted(outcomes) == ["committed", "rejected"]
+
+
+async def test_concurrent_project_item_add_is_idempotent(postgres_sessions):
+    async with postgres_sessions() as db:
+        owner = await _user(db, "assignment-owner")
+        workspace_id = fixture_workspace_id(owner)
+        owner_id = owner.id
+        project = await create_project(db, owner, workspace_id, "Working set")
+        item = Item(workspace_id=workspace_id, title="Shared assignment", created_by=owner_id)
         db.add(item)
         await db.commit()
-        return user.id, item.id
+        project_id, item_id = project.id, item.id
 
+    gate = asyncio.Event()
+    ready = 0
+    ready_lock = asyncio.Lock()
 
-@pytest.mark.anyio
-async def test_concurrent_import_confirmation_has_one_identity(postgres_sessions):
-    async with postgres_sessions() as db:
-        user = User(username=f"pg-import-race-{uuid4()}", password_hash="unused")
-        db.add(user)
-        await db.flush()
-        batch = ImportBatch(
-            owner_id=user.id,
-            file_format="bibtex",
-            records=json.dumps([{"title": "one identity"}]),
-            errors="[]",
-        )
-        db.add(batch)
-        await db.commit()
-        user_id, batch_id = user.id, batch.id
-
-    async def confirm() -> list[str]:
+    async def add():
+        nonlocal ready
         async with postgres_sessions() as db:
-            owner = await db.get(User, user_id)
-            assert owner is not None
-            return await commit_import_batch(db, owner, batch_id)
+            actor = await db.get(User, owner_id)
+            assert actor is not None
+            async with ready_lock:
+                ready += 1
+                if ready == 2:
+                    gate.set()
+            await gate.wait()
+            await add_item_to_project(db, actor, workspace_id, project_id, item_id)
 
-    first, second = await _start_together(confirm, confirm)
-    assert first == second
-
+    await asyncio.gather(add(), add())
     async with postgres_sessions() as db:
-        assert await db.scalar(text("SELECT count(*) FROM items WHERE title = 'one identity'")) == 1
-        stored = await db.get(ImportBatch, batch_id)
-        assert stored is not None and stored.status == "committed"
-        assert await db.get(Item, first[0]) is not None
-
-
-@pytest.mark.parametrize("finalizer", ["revision", "attachment"])
-async def test_item_delete_wins_against_upload_finalizer(postgres_sessions, finalizer):
-    user_id, item_id = await _create_user_and_item(postgres_sessions, title="Delete race")
-    deletion_db = postgres_sessions()
-    item = await deletion_db.scalar(select(Item).where(Item.id == item_id).with_for_update())
-    assert item is not None
-
-    async def finish_upload() -> object:
-        if finalizer == "revision":
-            return await commit_uploaded_revision(
-                item_id,
-                user_id,
-                "race.pdf",
-                {
-                    "revision_id": str(uuid4()),
-                    "object_key": "race/revision.pdf",
-                    "thumbnail_object_key": "race/revision.png",
-                    "thumbnail_size": 10,
-                    "size": 20,
-                    "page_count": 1,
-                    "full_text": "race",
-                    "page_geometry": "[]",
-                },
-            )
-        return await commit_uploaded_attachment(
-            item_id,
-            user_id,
-            str(uuid4()),
-            "race.bin",
-            "application/octet-stream",
-            None,
-            {"object_key": "race/attachment.bin", "size": 20},
-        )
-
-    try:
-        task = asyncio.create_task(finish_upload())
-        await asyncio.sleep(0.05)
-        assert not task.done()
-        await deletion_db.delete(item)
-        await deletion_db.commit()
-        result = await task
-    except BaseException as error:
-        result = error
-    finally:
-        await deletion_db.close()
-    assert isinstance(result, ValueError)
-    assert "no longer writable" in str(result)
-
-
-async def test_item_delete_wins_against_project_editor_upload_finalizer(postgres_sessions):
-    async with postgres_sessions() as db:
-        owner = User(username=f"owner-{uuid4()}", password_hash="hash")
-        editor = User(username=f"editor-{uuid4()}", password_hash="hash")
-        db.add_all([owner, editor])
-        await db.flush()
-        item = Item(title="Project delete race", created_by=owner.id)
-        project = Project(name="Project delete gate", created_by=owner.id)
-        db.add_all([item, project])
-        await db.flush()
-        db.add_all([
-            ProjectMember(project_id=project.id, user_id=owner.id, role=ProjectRole.owner),
-            ProjectMember(project_id=project.id, user_id=editor.id, role=ProjectRole.editor),
-            ProjectItem(project_id=project.id, item_id=item.id),
-        ])
-        await db.commit()
-        editor_id, item_id = editor.id, item.id
-
-    deletion_db = postgres_sessions()
-    locked_item = await deletion_db.scalar(select(Item).where(Item.id == item_id).with_for_update())
-    assert locked_item is not None
-
-    async def finish_upload() -> object:
-        return await commit_uploaded_attachment(
-            item_id,
-            editor_id,
-            str(uuid4()),
-            "project-delete-race.bin",
-            "application/octet-stream",
-            None,
-            {"object_key": "race/project-delete.bin", "size": 20},
-        )
-
-    try:
-        task = asyncio.create_task(finish_upload())
-        await asyncio.sleep(0.05)
-        assert not task.done()
-        await deletion_db.delete(locked_item)
-        await deletion_db.commit()
-        result = await task
-    except BaseException as error:
-        result = error
-    finally:
-        await deletion_db.close()
-    assert isinstance(result, ValueError)
-    assert "no longer writable" in str(result)
-
-
-async def test_bulk_item_delete_serializes_with_upload_finalizer(postgres_sessions):
-    user_id, item_id = await _create_user_and_item(postgres_sessions, title="Bulk delete race")
-
-    async def bulk_delete() -> object:
-        async with postgres_sessions() as db:
-            user = await db.get(User, user_id)
-            assert user is not None
-            return await apply_bulk_item_action(
-                db,
-                user,
-                [item_id],
-                "delete_items",
-                confirm_delete="delete",
-            )
-
-    async def upload() -> object:
-        return await commit_uploaded_attachment(
-            item_id,
-            user_id,
-            str(uuid4()),
-            "race.bin",
-            "application/octet-stream",
-            None,
-            {"object_key": "race/bulk.bin", "size": 20},
-        )
-
-    results = await _start_together(bulk_delete, upload)
-    assert isinstance(results[0], list), results
-    assert (
-        results[1] is None
-        or (isinstance(results[1], ValueError) and "no longer writable" in str(results[1]))
-        or (isinstance(results[1], dict) and results[1].get("item_id") == item_id)
-    ), results
-    if results[1] is None or isinstance(results[1], dict):
-        assert "race/bulk.bin" in results[0]
-    async with postgres_sessions() as db:
-        assert await db.get(Item, item_id) is None
-
-
-async def test_project_item_removal_serializes_with_upload_finalizer(postgres_sessions):
-    async with postgres_sessions() as db:
-        owner = User(username=f"owner-{uuid4()}", password_hash="hash")
-        editor = User(username=f"editor-{uuid4()}", password_hash="hash")
-        db.add_all([owner, editor])
-        await db.flush()
-        item = Item(title="Project item race", created_by=owner.id)
-        project = Project(name="Project item gate", created_by=owner.id)
-        db.add_all([item, project])
-        await db.flush()
-        db.add_all([
-            ProjectMember(project_id=project.id, user_id=owner.id, role=ProjectRole.owner),
-            ProjectMember(project_id=project.id, user_id=editor.id, role=ProjectRole.editor),
-            ProjectItem(project_id=project.id, item_id=item.id),
-        ])
-        await db.commit()
-        owner_id, editor_id, item_id, project_id = owner.id, editor.id, item.id, project.id
-
-    async def remove_assignment() -> object:
-        async with postgres_sessions() as db:
-            owner = await db.get(User, owner_id)
-            assert owner is not None
-            return await remove_item_from_project(db, owner, project_id, item_id)
-
-    async def upload() -> object:
-        return await commit_uploaded_attachment(
-            item_id,
-            editor_id,
-            str(uuid4()),
-            "project-race.bin",
-            "application/octet-stream",
-            None,
-            {"object_key": "race/project-item.bin", "size": 20},
-        )
-
-    results = await _start_together(remove_assignment, upload)
-    assert results[0] is None
-    assert results[1] is None or (
-        isinstance(results[1], ValueError) and "no longer writable" in str(results[1])
-    ), results
-
-
-async def test_graphical_abstract_replacements_serialize_on_item(postgres_sessions):
-    user_id, item_id = await _create_user_and_item(
-        postgres_sessions, title="Graphical abstract race"
-    )
-
-    async def upload(suffix: str) -> object:
-        return await commit_uploaded_attachment(
-            item_id,
-            user_id,
-            str(uuid4()),
-            f"{suffix}.png",
-            "image/png",
-            AttachmentRole.graphical_abstract.value,
-            {"object_key": f"race/{suffix}.png", "size": 20},
-        )
-
-    results = await _start_together(lambda: upload("first"), lambda: upload("second"))
-    assert not any(isinstance(result, BaseException) for result in results), results
-    async with postgres_sessions() as db:
-        graphical = list(
-            (
-                await db.scalars(
-                    select(Attachment).where(
-                        Attachment.item_id == item_id,
-                        Attachment.role == AttachmentRole.graphical_abstract,
-                    )
-                )
-            ).all()
-        )
-        assert len(graphical) == 1
-
-
-async def test_project_member_revoke_wins_against_upload_finalizer(postgres_sessions):
-    async with postgres_sessions() as db:
-        owner = User(username=f"owner-{uuid4()}", password_hash="hash")
-        editor = User(username=f"editor-{uuid4()}", password_hash="hash")
-        db.add_all([owner, editor])
-        await db.flush()
-        item = Item(title="Permission race", created_by=owner.id)
-        project = Project(name="Permission gate", created_by=owner.id)
-        db.add_all([item, project])
-        await db.flush()
-        db.add_all([
-            ProjectMember(project_id=project.id, user_id=owner.id, role=ProjectRole.owner),
-            ProjectMember(project_id=project.id, user_id=editor.id, role=ProjectRole.editor),
-            ProjectItem(project_id=project.id, item_id=item.id),
-        ])
-        await db.commit()
-        owner_id, editor_id, item_id, project_id = owner.id, editor.id, item.id, project.id
-
-    async def revoke() -> object:
-        async with postgres_sessions() as db:
-            owner = await db.get(User, owner_id)
-            assert owner is not None
-            return await remove_project_member(db, owner, project_id, editor_id)
-
-    async def upload() -> object:
-        return await commit_uploaded_attachment(
-            item_id,
-            editor_id,
-            str(uuid4()),
-            "revoked.bin",
-            "application/octet-stream",
-            None,
-            {"object_key": "race/revoked.bin", "size": 20},
-        )
-
-    results = await _start_together(revoke, upload)
-    assert results[0] is None
-    assert results[1] is None or (
-        isinstance(results[1], ValueError) and "no longer writable" in str(results[1])
-    )
-
-
-async def test_metadata_cas_races_pdf_doi_rescan(postgres_sessions):
-    user_id, item_id = await _create_user_and_item(postgres_sessions, title="Original")
-    async with postgres_sessions() as db:
-        db.add(
-            FileRevision(
-                item_id=item_id,
-                object_key="race/doi.pdf",
-                size=10,
-                original_name="doi.pdf",
-                processing_state=FileRevisionProcessingState.ready,
-                full_text="doi: 10.1038/s41586-020-2649-2",
-                created_by=user_id,
+        count = await db.scalar(
+            select(func.count(ProjectItem.id)).where(
+                ProjectItem.workspace_id == workspace_id,
+                ProjectItem.project_id == project_id,
+                ProjectItem.item_id == item_id,
             )
         )
-        await search_index(db).index_item(db, item_id)
+        assert count == 1
+
+
+async def test_concurrent_item_tag_add_is_idempotent(postgres_sessions):
+    async with postgres_sessions() as db:
+        owner = await _user(db, "tag-owner")
+        workspace_id = fixture_workspace_id(owner)
+        owner_id = owner.id
+        item = Item(workspace_id=workspace_id, title="Tagged once", created_by=owner_id)
+        tag = Tag(
+            workspace_id=workspace_id,
+            name="Evidence",
+            normalized_name="evidence",
+            created_by=owner_id,
+        )
+        db.add_all([item, tag])
         await db.commit()
+        item_id, tag_id = item.id, tag.id
 
-    async def revise() -> object:
+    gate = asyncio.Event()
+    ready = 0
+    ready_lock = asyncio.Lock()
+
+    async def add():
+        nonlocal ready
         async with postgres_sessions() as db:
-            user = await db.get(User, user_id)
-            assert user is not None
-            return await revise_item_metadata(
-                db, user, item_id, 1, ItemMetadata(title="Concurrent metadata")
+            actor = await db.get(User, owner_id)
+            assert actor is not None
+            async with ready_lock:
+                ready += 1
+                if ready == 2:
+                    gate.set()
+            await gate.wait()
+            await add_existing_tag_to_item(db, actor, workspace_id, item_id, tag_id)
+
+    await asyncio.gather(add(), add())
+    async with postgres_sessions() as db:
+        count = await db.scalar(
+            select(func.count(ItemTag.item_id)).where(
+                ItemTag.workspace_id == workspace_id,
+                ItemTag.item_id == item_id,
+                ItemTag.tag_id == tag_id,
             )
-
-    async def rescan() -> object:
-        async with postgres_sessions() as db:
-            user = await db.get(User, user_id)
-            assert user is not None
-            return await rescan_pdf_doi(db, user, item_id)
-
-    results = await _start_together(revise, rescan)
-    conflicts = [result for result in results if isinstance(result, VersionConflict)]
-    assert not any(
-        isinstance(result, BaseException) and not isinstance(result, VersionConflict)
-        for result in results
-    ), results
-    assert len(conflicts) <= 1, results
-    async with postgres_sessions() as db:
-        item = await db.get(Item, item_id)
-        assert item is not None and item.version in {2, 3}
-        assert (item.title, item.doi) in {
-            ("Concurrent metadata", None),
-            ("Original", "10.1038/s41586-020-2649-2"),
-            ("Concurrent metadata", "10.1038/s41586-020-2649-2"),
-        }
-
-
-async def test_tag_rename_does_not_wait_on_item_gate(postgres_sessions):
-    user_id, item_id = await _create_user_and_item(postgres_sessions, title="Tag rename race")
-    async with postgres_sessions() as db:
-        user = await db.get(User, user_id)
-        assert user is not None
-        tag = Tag(name="Before rename", created_by=user_id)
-        db.add(tag)
-        await db.flush()
-        await add_tag_to_item(db, user, item_id, tag.name)
-        tag_id = tag.id
-
-    async with postgres_sessions() as blocker:
-        await blocker.execute(select(Item).where(Item.id == item_id).with_for_update())
-
-        async def rename() -> object:
-            async with postgres_sessions() as db:
-                user = await db.get(User, user_id)
-                assert user is not None
-                return await rename_tag(db, user, tag_id, "After rename")
-
-        result = await asyncio.wait_for(rename(), timeout=1)
-        assert not isinstance(result, BaseException)
-        await blocker.commit()
-
-    async with postgres_sessions() as db:
-        renamed = await db.get(Tag, tag_id)
-        assert renamed is not None and renamed.name == "After rename"
-        assignment = await db.get(ItemTag, (item_id, tag_id))
-        assert assignment is not None
-
-
-async def test_login_throttle_concurrent_increment_is_atomic(postgres_sessions):
-    identity = f"identity-{uuid4()}"
-
-    async def increment() -> object:
-        async with postgres_sessions() as db:
-            await record_login_failure(db, identity)
-        return None
-
-    results = await _start_together(*(increment for _ in range(8)))
-    assert not any(isinstance(result, BaseException) for result in results), results
-    async with postgres_sessions() as db:
-        throttle = await db.get(LoginThrottle, identity)
-        assert throttle is not None and throttle.failures == 8
+        )
+        assert count == 1

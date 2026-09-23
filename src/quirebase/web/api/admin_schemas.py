@@ -5,8 +5,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from quirebase.web.api.library_schemas import ItemSearchView
-
 
 class AdminUserCreateRequest(BaseModel):
     username: str = Field(min_length=1, max_length=120)
@@ -16,6 +14,19 @@ class AdminUserCreateRequest(BaseModel):
 
 class UserStatusRequest(BaseModel):
     active: bool
+
+
+class BreakGlassReadRequest(BaseModel):
+    reason: str = Field(min_length=10, max_length=1000)
+
+
+class AdminWorkspaceView(BaseModel):
+    id: str
+    name: str
+    owner_id: str
+    state: str
+    governance_suspended_at: datetime | None = None
+    governance_suspended_by: str | None = None
 
 
 class UserRoleRequest(BaseModel):
@@ -32,6 +43,8 @@ class InvitationCreateRequest(BaseModel):
 
 
 class RuntimeSettingsRequest(BaseModel):
+    registration_policy: Literal["open", "closed", "invitation_only"] = "invitation_only"
+    workspace_creation_policy: Literal["admins_only", "members_allowed"] = "admins_only"
     metadata_contact_email: str = ""
     ncbi_api_key: str = ""
     openalex_api_key: str = ""
@@ -76,29 +89,6 @@ class AdminInvitationCreatedView(BaseModel):
     accept_path: str
 
 
-class AdminProjectUserView(BaseModel):
-    id: str
-    username: str
-
-
-class AdminProjectItemView(BaseModel):
-    id: str
-    name: str
-    description: str
-    state: str
-    visibility: str
-    creator: AdminProjectUserView
-    member_count: int
-    item_count: int
-
-
-class AdminProjectsView(BaseModel):
-    projects: list[AdminProjectItemView]
-    total: int
-    page: int
-    per_page: int
-
-
 class StorageMetricsView(BaseModel):
     items_count: int
     revisions_count: int
@@ -116,9 +106,16 @@ class StorageMetricsView(BaseModel):
 class AdminAuditEventView(BaseModel):
     id: str
     actor_id: str | None = None
+    workspace_id: str | None = None
+    project_id: str | None = None
     action: str
     target_type: str
     target_id: str | None = None
+    target_ids: list[str] | None = None
+    authorization_role: str | None = None
+    authorization_capability: str | None = None
+    result: str | None = None
+    source: str | None = None
     detail: Any | None = None
     created_at: datetime
 
@@ -146,14 +143,6 @@ class AdminOverviewView(BaseModel):
     recent_events: list[AdminAuditEventView]
 
 
-class AdminItemsView(BaseModel):
-    items: list[ItemSearchView]
-    total: int
-    page: int
-    per_page: int
-    storage: StorageMetricsView
-
-
 class AdminAuditView(BaseModel):
     events: list[AdminAuditEventView]
     total: int
@@ -166,6 +155,8 @@ class AdminWorkflowsView(BaseModel):
 
 
 class AdminSettingsView(BaseModel):
+    registration_policy: Literal["open", "closed", "invitation_only"]
+    workspace_creation_policy: Literal["admins_only", "members_allowed"]
     metadata_contact_email: str
     ncbi_api_key: str
     openalex_api_key: str

@@ -35,6 +35,12 @@ from quirebase.accounts.invitations import (
     create_invitation,
     get_valid_invitation,
 )
+from quirebase.accounts.registration import (
+    RegistrationClosed,
+    RegistrationInvitationRequired,
+    ensure_registration_allowed,
+    register_user,
+)
 from quirebase.accounts.sessions import (
     create_login_session,
     get_login_session_by_token,
@@ -58,6 +64,8 @@ __all__ = [
     "InvalidCredentials",
     "InvitationConflict",
     "LoginThrottled",
+    "RegistrationClosed",
+    "RegistrationInvitationRequired",
     "VerifiedApiToken",
     "accept_invitation",
     "authenticate_user",
@@ -69,6 +77,7 @@ __all__ = [
     "create_invitation",
     "create_login_session",
     "create_user_admin",
+    "ensure_registration_allowed",
     "get_login_session_by_token",
     "get_valid_invitation",
     "list_api_tokens",
@@ -78,6 +87,7 @@ __all__ = [
     "list_users_paginated",
     "logout",
     "record_login_failure",
+    "register_user",
     "reset_user_password",
     "resolve_api_token_user",
     "revoke_all_sessions",

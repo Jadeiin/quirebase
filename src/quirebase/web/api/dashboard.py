@@ -6,12 +6,12 @@ from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.library_schemas import item_search_view
 from quirebase.web.api.serialization import enum_value
 
-router = APIRouter(tags=["Dashboard"])
+router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["Dashboard"])
 
 
 @router.get("/dashboard", response_model=DashboardView)
-async def dashboard(user: ApiUser, db: Database):
-    data = await get_dashboard_data(db, user)
+async def dashboard(workspace_id: str, user: ApiUser, db: Database):
+    data = await get_dashboard_data(db, user, workspace_id)
     return {
         "new_items": [item_search_view(item) for item in data["new_items"]],
         "recent_items": [

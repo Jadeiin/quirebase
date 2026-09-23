@@ -25,17 +25,17 @@ class McpToolDefinition:
 _DEFINITIONS = (
     McpToolDefinition(
         "library.search_items",
-        "Search bibliographic Items visible to the authenticated User.",
+        "Search bibliographic Items in the explicitly specified Workspace.",
         ToolEffect.READ,
     ),
     McpToolDefinition(
         "library.get_library_item",
-        "Get bibliographic metadata for one visible Item; never returns file content.",
+        "Get bibliographic metadata for one Item in the explicitly specified Workspace; never returns file content.",
         ToolEffect.READ,
     ),
     McpToolDefinition(
         "library.create_library_item",
-        "Create a bibliographic Item owned by the authenticated User.",
+        "Create a bibliographic Item in the explicitly specified Workspace.",
         ToolEffect.WRITE,
     ),
     McpToolDefinition(
@@ -48,15 +48,19 @@ _DEFINITIONS = (
         "Render a visible Item as a plain-text or HTML citation.",
         ToolEffect.READ,
     ),
-    McpToolDefinition("projects.list_projects", "List joined Projects.", ToolEffect.READ),
+    McpToolDefinition(
+        "projects.list_projects",
+        "List Projects in the explicitly specified Workspace.",
+        ToolEffect.READ,
+    ),
     McpToolDefinition(
         "projects.get_project",
-        "Get one joined Project, its members, and bibliographic Items.",
+        "Get one Project in the explicitly specified Workspace, its members, and bibliographic Items.",
         ToolEffect.READ,
     ),
     McpToolDefinition(
         "projects.create_user_project",
-        "Create a Project owned by the authenticated User.",
+        "Create a Project in the explicitly specified Workspace.",
         ToolEffect.WRITE,
     ),
     McpToolDefinition(
@@ -69,25 +73,30 @@ _DEFINITIONS = (
     ),
     McpToolDefinition("projects.archive_project", "Archive a Project.", ToolEffect.WRITE),
     McpToolDefinition("projects.restore_project", "Restore an archived Project.", ToolEffect.WRITE),
-    McpToolDefinition("projects.leave_user_project", "Leave a Project.", ToolEffect.WRITE),
-    McpToolDefinition(
-        "projects.transfer_user_project",
-        "Transfer Project ownership to an existing member.",
-        ToolEffect.WRITE,
-    ),
     McpToolDefinition(
         "projects.add_project_item", "Add a visible Item to a Project.", ToolEffect.WRITE
     ),
     McpToolDefinition(
         "projects.remove_project_item", "Remove an Item from a Project.", ToolEffect.DESTRUCTIVE
     ),
+    McpToolDefinition("projects.set_project_member", "Add a Project member.", ToolEffect.WRITE),
     McpToolDefinition(
-        "projects.set_project_member",
-        "Add or change a Project editor or viewer.",
+        "projects.remove_project_member", "Remove a Project member.", ToolEffect.DESTRUCTIVE
+    ),
+    McpToolDefinition(
+        "projects.list_project_discussions",
+        "List Discussion Messages in a visible Project in the explicitly specified Workspace.",
+        ToolEffect.READ,
+    ),
+    McpToolDefinition(
+        "projects.create_project_discussion",
+        "Add a Discussion Message to a visible Project.",
         ToolEffect.WRITE,
     ),
     McpToolDefinition(
-        "projects.remove_project_member", "Remove a Project member.", ToolEffect.DESTRUCTIVE
+        "projects.delete_project_discussion",
+        "Delete the User's own Project Discussion Message.",
+        ToolEffect.DESTRUCTIVE,
     ),
     McpToolDefinition(
         "documents.list_documents",
@@ -101,7 +110,7 @@ _DEFINITIONS = (
     ),
     McpToolDefinition(
         "annotations.create_annotation",
-        "Create a private or Project-visible Annotation.",
+        "Create a private or Project-scoped Annotation in the explicitly specified Workspace.",
         ToolEffect.WRITE,
     ),
     McpToolDefinition(

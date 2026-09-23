@@ -34,6 +34,7 @@ from .operations import check_objects, create_backup, restore_backup, verify_bac
 from .operations.object_migration import migrate_legacy_objects
 from .operations.workflows import maintenance_schedules
 from .search import reindex_all
+from .workspaces import provision_initial_workspace
 
 app = typer.Typer(help="Quirebase administration")
 
@@ -42,6 +43,7 @@ def _register_workflows() -> None:
     import quirebase.documents.workflows  # ruff: ignore[unused-import]
     import quirebase.library.workflows  # ruff: ignore[unused-import]
     import quirebase.operations.workflows  # ruff: ignore[unused-import]
+    import quirebase.workspaces.workflows  # ruff: ignore[unused-import]
 
 
 @app.command("serve")
@@ -89,13 +91,14 @@ def create_admin(
         async with AsyncSessionLocal() as db:
             if await db.scalar(select(User).where(User.username == username)):
                 raise typer.BadParameter("username already exists")
-            db.add(
-                User(
-                    username=username,
-                    password_hash=await hash_password_async(password),
-                    role="administrator",
-                )
+            user = User(
+                username=username,
+                password_hash=await hash_password_async(password),
+                role="administrator",
             )
+            db.add(user)
+            await db.flush()
+            await provision_initial_workspace(db, user)
             await db.commit()
 
     asyncio.run(create())

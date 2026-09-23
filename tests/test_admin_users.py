@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 from sqlalchemy import select
+from workspace_helpers import accessible_workspace_id
 
 from quirebase.accounts import (
     authenticate_user,
@@ -19,7 +20,8 @@ from quirebase.core.errors import (
     ResourceUnavailable,
     ValidationFailure,
 )
-from quirebase.models import AuditEvent, LoginSession, User
+from quirebase.models import AuditEvent, LoginSession, User, WorkspaceMember, WorkspaceRole
+from quirebase.workspaces import transfer_workspace_ownership
 
 
 async def create_test_admin(db, username="admin_tester"):
@@ -92,6 +94,20 @@ async def test_admin_toggle_user_status_and_session_revocation(async_db):
     db = async_db
     admin = await create_test_admin(db, "admin3")
     user = await create_user_admin(db, admin, "target_user", "password123456")
+
+    # A Workspace owner must transfer ownership before the instance account can
+    # be deactivated.  Make the administrator an active member of the target
+    # user's initial Workspace, then perform that explicit governance action.
+    workspace_id = await accessible_workspace_id(db, user)
+    membership = WorkspaceMember(
+        workspace_id=workspace_id,
+        user_id=admin.id,
+        role=WorkspaceRole.admin,
+        invited_by=admin.id,
+    )
+    db.add(membership)
+    await db.flush()
+    await transfer_workspace_ownership(db, user, workspace_id, membership.id)
 
     # Create active sessions
     _session1, _ = await create_login_session(db, user)
@@ -196,6 +212,16 @@ async def test_list_users_paginated_and_filtered(async_db):
     await create_user_admin(db, admin, "alpha_member", "pass123456789", role="member")
     await create_user_admin(db, admin, "beta_admin", "pass123456789", role="administrator")
     u3 = await create_user_admin(db, admin, "gamma_disabled", "pass123456789", role="member")
+    workspace_id = await accessible_workspace_id(db, u3)
+    membership = WorkspaceMember(
+        workspace_id=workspace_id,
+        user_id=admin.id,
+        role=WorkspaceRole.admin,
+        invited_by=admin.id,
+    )
+    db.add(membership)
+    await db.flush()
+    await transfer_workspace_ownership(db, u3, workspace_id, membership.id)
     await update_user_status(db, admin, u3.id, active=False)
 
     users, total = await list_users_paginated(db, admin, search="alpha")

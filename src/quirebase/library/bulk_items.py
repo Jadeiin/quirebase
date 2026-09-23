@@ -11,8 +11,9 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from quirebase.access.items import (
     can_edit_item,
     require_accessible_items,
-    require_editable_item_for_mutation,
+    require_editable_item,
 )
+from quirebase.access.workspaces import Capability, require_workspace_capability
 from quirebase.audit import record_event
 from quirebase.core.errors import (
     PermissionDenied,
@@ -42,23 +43,26 @@ if TYPE_CHECKING:
 async def apply_bulk_item_action(
     db: AsyncSession,
     user: User,
+    workspace_id: str,
     item_ids: list[str],
     action: str,
     project_id: str = "",
     tag_name: str = "",
     confirm_delete: str = "",
 ) -> list[str]:
-    items = await require_accessible_items(db, user, item_ids)
+    items = await require_accessible_items(db, user, workspace_id, item_ids)
 
     # Fail-closed: All selected items must be editable for mutating bulk actions
     for item in items:
-        if not await can_edit_item(db, user, item.id):
+        if not await can_edit_item(db, user, workspace_id, item.id):
             raise PermissionDenied("all selected items must be editable")
 
     cleanup_keys: list[str] = []
     if action in ("add_project", "project_add"):
         try:
-            await add_items_to_project(db, user, project_id, [item.id for item in items])
+            await add_items_to_project(
+                db, user, workspace_id, project_id, [item.id for item in items]
+            )
         except ResourceUnavailable as error:
             raise ValidationFailure("choose an editable project") from error
         audit_action = "library.bulk.add_project"
@@ -67,17 +71,23 @@ async def apply_bulk_item_action(
         # archive cannot race the authorization check.  Stable Item ordering
         # keeps concurrent bulk requests from acquiring grant locks differently.
         for item in sorted(items, key=lambda candidate: candidate.id):
-            await require_editable_item_for_mutation(db, user, item.id)
-        tag_record = await get_or_create_tag(db, user, tag_name)
+            await require_editable_item(db, user, workspace_id, item.id)
+        tag_record = await get_or_create_tag(db, user, workspace_id, tag_name)
         dialect = db.get_bind().dialect.name
         insert = pg_insert(ItemTag) if dialect == "postgresql" else sqlite_insert(ItemTag)
         await db.execute(
             insert.values([
-                {"item_id": item.id, "tag_id": tag_record.id} for item in items
+                {
+                    "workspace_id": workspace_id,
+                    "item_id": item.id,
+                    "tag_id": tag_record.id,
+                }
+                for item in items
             ]).on_conflict_do_nothing(index_elements=["item_id", "tag_id"])
         )
         audit_action = "library.bulk.add_tag"
     elif action in ("delete_items", "delete"):
+        await require_workspace_capability(db, user, workspace_id, Capability.items_delete)
         if confirm_delete != "delete":
             raise ValidationFailure("confirm deletion of the selected items")
         # Lock every Item root in stable order before collecting child object keys.  Upload and
@@ -88,7 +98,7 @@ async def apply_bulk_item_action(
             (
                 await db.scalars(
                     select(Item)
-                    .where(Item.id.in_(requested_ids))
+                    .where(Item.workspace_id == workspace_id, Item.id.in_(requested_ids))
                     .order_by(Item.id)
                     .execution_options(populate_existing=True)
                     .with_for_update()
@@ -98,13 +108,12 @@ async def apply_bulk_item_action(
         if len(locked_items) != len(requested_ids):
             raise ResourceUnavailable("one or more selected items no longer exist")
         items = locked_items
-        if user.role != "administrator" and any(item.created_by != user.id for item in items):
-            raise PermissionDenied("only item owners can permanently delete items")
         cleanup_keys = list(
             (
                 await db.scalars(
                     select(FileRevision.object_key).where(
-                        FileRevision.item_id.in_([item.id for item in items])
+                        FileRevision.workspace_id == workspace_id,
+                        FileRevision.item_id.in_([item.id for item in items]),
                     )
                 )
             ).all()
@@ -113,7 +122,8 @@ async def apply_bulk_item_action(
             (
                 await db.scalars(
                     select(Attachment.object_key).where(
-                        Attachment.item_id.in_([item.id for item in items])
+                        Attachment.workspace_id == workspace_id,
+                        Attachment.item_id.in_([item.id for item in items]),
                     )
                 )
             ).all()
@@ -123,15 +133,26 @@ async def apply_bulk_item_action(
             for key in (
                 await db.scalars(
                     select(FileRevision.thumbnail_object_key).where(
-                        FileRevision.item_id.in_([item.id for item in items])
+                        FileRevision.workspace_id == workspace_id,
+                        FileRevision.item_id.in_([item.id for item in items]),
                     )
                 )
             ).all()
             if key
         )
         for item in items:
-            await db.execute(delete(FileRevision).where(FileRevision.item_id == item.id))
-            await db.execute(delete(Attachment).where(Attachment.item_id == item.id))
+            await db.execute(
+                delete(FileRevision).where(
+                    FileRevision.workspace_id == workspace_id,
+                    FileRevision.item_id == item.id,
+                )
+            )
+            await db.execute(
+                delete(Attachment).where(
+                    Attachment.workspace_id == workspace_id,
+                    Attachment.item_id == item.id,
+                )
+            )
             await search_index(db).remove_item(db, item.id)
             await db.delete(item)
         audit_action = "library.bulk.delete_items"
@@ -145,12 +166,21 @@ async def apply_bulk_item_action(
         "item",
         None,
         detail={"item_ids": [item.id for item in items]},
+        workspace_id=workspace_id,
+        authorization_capability=(
+            Capability.projects_manage.value
+            if action in ("add_project", "project_add")
+            else Capability.tags_use.value
+            if action in ("add_tag", "tag")
+            else Capability.items_delete.value
+        ),
     )
     if cleanup_keys:
         await enqueue_object_cleanup(
             db,
             cleanup_keys,
-            owner_id=user.id,
+            actor_id=user.id,
+            workspace_id=workspace_id,
             operation="bulk_item_delete",
         )
     await db.commit()
@@ -161,13 +191,14 @@ async def apply_bulk_item_action(
 async def download_selected_item_documents(
     db: AsyncSession,
     user: User,
+    workspace_id: str,
     item_ids: list[str],
     *,
     include_annotations: bool = False,
     include_supplements: bool = False,
     timezone: str | None = None,
 ) -> ItemDownloadBundle:
-    items = await require_accessible_items(db, user, item_ids)
+    items = await require_accessible_items(db, user, workspace_id, item_ids)
     bundle = await assemble_document_bundle(
         db,
         user,
@@ -187,6 +218,7 @@ async def download_selected_item_documents(
             "include_annotations": include_annotations,
             "include_supplements": include_supplements,
         },
+        workspace_id=workspace_id,
     )
     await db.commit()
     return bundle

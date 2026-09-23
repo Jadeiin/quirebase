@@ -5,7 +5,9 @@ from inquiro.bibliography import Contributor as BibliographyContributor
 from inquiro.bibliography import parse_bibliography_records
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
+from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
+from quirebase.core.errors import WorkspaceMembershipRequired
 from quirebase.library.authors import (
     find_or_create_author,
     get_item_authors,
@@ -18,6 +20,15 @@ from quirebase.library.citations import format_standard_export
 from quirebase.models import Author, Item, ItemAuthor, User
 
 
+async def _user(db, username: str) -> User:
+    user = User(username=username, password_hash="hash")
+    db.add(user)
+    await db.flush()
+    await provision_initial_workspace(db, user)
+    await db.flush()
+    return user
+
+
 def test_parse_author_name():
     assert parse_author_name("Smith, Alice") == ("Smith", "Alice")
     assert parse_author_name("Alice Smith") == ("Smith", "Alice")
@@ -28,11 +39,11 @@ def test_parse_author_name():
 @pytest.mark.anyio
 async def test_set_and_get_item_authors(async_db):
     db = async_db
-    user = User(username="author_test_user", password_hash="hash")
-    db.add(user)
-    await db.flush()
+    user = await _user(db, "author_test_user")
 
-    item = Item(title="Information Theory", created_by=user.id)
+    item = Item(
+        workspace_id=fixture_workspace_id(user), title="Information Theory", created_by=user.id
+    )
     db.add(item)
     await db.flush()
 
@@ -40,7 +51,9 @@ async def test_set_and_get_item_authors(async_db):
         {"last_name": "Shannon", "first_name": "Claude", "is_corresponding": True},
         {"last_name": "Weaver", "first_name": "Warren", "is_corresponding": False},
     ]
-    await set_item_authors(db, user, item.id, authors_data, role="author")
+    await set_item_authors(
+        db, user, fixture_workspace_id(user), item.id, authors_data, role="author"
+    )
     await db.commit()
 
     links = await get_item_authors(db, item.id, role="author")
@@ -61,10 +74,13 @@ async def test_set_and_get_item_authors(async_db):
 @pytest.mark.anyio
 async def test_set_item_authors_from_string(async_db):
     db = async_db
-    user = User(username="string_author_user", password_hash="hash")
-    db.add(user)
-    await db.flush()
-    item = Item(title="Computing Machinery", authors="Turing, Alan", created_by=user.id)
+    user = await _user(db, "string_author_user")
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        title="Computing Machinery",
+        authors="Turing, Alan",
+        created_by=user.id,
+    )
     db.add(item)
     await db.flush()
 
@@ -77,11 +93,10 @@ async def test_set_item_authors_from_string(async_db):
 @pytest.mark.anyio
 async def test_set_item_authors_from_string_preserves_parser_compatible_names(async_db):
     db = async_db
-    user = User(username="structured-author-user", password_hash="hash")
-    db.add(user)
-    await db.flush()
+    user = await _user(db, "structured-author-user")
     item = Item(
         title="Structured contributors",
+        workspace_id=fixture_workspace_id(user),
         authors="{World Health Organization}; de la Cruz, Jr., Juan",
         created_by=user.id,
     )
@@ -101,16 +116,19 @@ async def test_set_item_authors_from_string_preserves_parser_compatible_names(as
 @pytest.mark.anyio
 async def test_set_item_authors_projects_suffix_names_into_first_last_identity(async_db):
     db = async_db
-    user = User(username="structured-identity-user", password_hash="hash")
-    db.add(user)
-    await db.flush()
-    item = Item(title="Simplified contributor identities", created_by=user.id)
+    user = await _user(db, "structured-identity-user")
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        title="Simplified contributor identities",
+        created_by=user.id,
+    )
     db.add(item)
     await db.flush()
 
     await set_item_authors(
         db,
         user,
+        fixture_workspace_id(user),
         item.id,
         [
             {"last_name": "Smith", "first_name": "John"},
@@ -145,15 +163,33 @@ async def test_set_item_authors_projects_suffix_names_into_first_last_identity(a
 @pytest.mark.anyio
 async def test_search_authors_typeahead(async_db):
     db = async_db
-    await find_or_create_author(db, last_name="Shannon", first_name="Claude")
-    await find_or_create_author(db, last_name="Shaw", first_name="George")
-    await find_or_create_author(db, last_name="Turing", first_name="Alan")
+    reader = await _user(db, "typeahead-reader")
+    other = await _user(db, "typeahead-other")
+    reader_item = Item(
+        workspace_id=fixture_workspace_id(reader), title="Reader", created_by=reader.id
+    )
+    other_item = Item(workspace_id=fixture_workspace_id(other), title="Other", created_by=other.id)
+    db.add_all([reader_item, other_item])
+    await db.flush()
+    local = await find_or_create_author(db, last_name="Shannon", first_name="Claude")
+    remote = await find_or_create_author(db, last_name="Shaw", first_name="George")
+    shared = await find_or_create_author(db, last_name="Shapiro", first_name="Alex")
+    await find_or_create_author(db, last_name="Shaver", first_name="Unlinked")
+    db.add_all([
+        ItemAuthor(item_id=reader_item.id, author_id=local.id),
+        ItemAuthor(item_id=other_item.id, author_id=remote.id),
+        ItemAuthor(item_id=reader_item.id, author_id=shared.id),
+        ItemAuthor(item_id=other_item.id, author_id=shared.id),
+    ])
     await db.commit()
 
-    results = await search_authors_typeahead(db, "Sha")
-    assert len(results) == 2
-    assert any(r["last_name"] == "Shannon" for r in results)
-    assert any(r["last_name"] == "Shaw" for r in results)
+    results = await search_authors_typeahead(db, reader, fixture_workspace_id(reader), "Sha")
+    assert [row["id"] for row in results] == [local.id, shared.id]
+    assert await search_authors_typeahead(db, reader, fixture_workspace_id(reader), "Sha", 1) == [
+        results[0]
+    ]
+    with pytest.raises(WorkspaceMembershipRequired):
+        await search_authors_typeahead(db, reader, fixture_workspace_id(other), "Sha")
 
 
 @pytest.mark.anyio

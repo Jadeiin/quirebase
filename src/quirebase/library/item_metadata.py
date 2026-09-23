@@ -11,7 +11,8 @@ from typing import TYPE_CHECKING
 from inquiro.canonical import normalize_reference_type
 from sqlalchemy import select, update
 
-from quirebase.access.items import require_editable_item_for_mutation
+from quirebase.access.items import require_editable_item
+from quirebase.access.workspaces import Capability, require_workspace_capability
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceUnavailable, ValidationFailure, VersionConflict
 from quirebase.library.authors import set_item_authors
@@ -243,20 +244,24 @@ def _serialize_custom_fields(fields: tuple[CustomField, ...]) -> str | None:
 async def _create_item(
     db: AsyncSession,
     actor: User,
+    workspace_id: str,
     metadata: ItemMetadata,
 ) -> ItemWriteResult:
+    context = await require_workspace_capability(db, actor, workspace_id, Capability.items_create)
     values = _bibliographic_values(metadata)
     values.update(
         custom_fields=_serialize_custom_fields(metadata.custom_fields),
         created_by=actor.id,
+        workspace_id=workspace_id,
     )
     item = Item(**values)
     db.add(item)
     await db.flush()
-    await set_item_identifiers(db, actor, item.id, _identifier_pairs(metadata))
+    await set_item_identifiers(db, actor, workspace_id, item.id, _identifier_pairs(metadata))
     await set_item_authors(
         db,
         actor,
+        workspace_id,
         item.id,
         _contributor_payload(metadata.authors, editor=False),
         role="author",
@@ -264,13 +269,23 @@ async def _create_item(
     await set_item_authors(
         db,
         actor,
+        workspace_id,
         item.id,
         _contributor_payload(metadata.editors, editor=True),
         role="editor",
     )
     await search_index(db).index_item(db, item.id)
-    await request_item_tag_recommendation(db, item.id, owner_id=actor.id)
-    record_event(db, actor.id, "item.create", "item", item.id)
+    await request_item_tag_recommendation(db, item.id, workspace_id=workspace_id, actor_id=actor.id)
+    record_event(
+        db,
+        actor.id,
+        "item.create",
+        "item",
+        item.id,
+        workspace_id=workspace_id,
+        authorization_role=context.role.value,
+        authorization_capability=Capability.items_create.value,
+    )
     await db.commit()
     return ItemWriteResult(item_id=item.id, version=item.version)
 
@@ -278,10 +293,11 @@ async def _create_item(
 async def create_item(
     db: AsyncSession,
     actor: User,
+    workspace_id: str,
     metadata: ItemMetadata,
 ) -> ItemWriteResult:
     try:
-        return await _create_item(db, actor, metadata)
+        return await _create_item(db, actor, workspace_id, metadata)
     except Exception:
         await db.rollback()
         raise
@@ -290,12 +306,13 @@ async def create_item(
 async def _revise_item_metadata(
     db: AsyncSession,
     actor: User,
+    workspace_id: str,
     item_id: str,
     expected_version: int,
     metadata: ItemMetadata,
 ) -> ItemWriteResult:
     actor_id = actor.id
-    item = await require_editable_item_for_mutation(db, actor, item_id)
+    item = await require_editable_item(db, actor, workspace_id, item_id)
     values = _bibliographic_values(metadata)
     values.update(
         custom_fields=_serialize_custom_fields(metadata.custom_fields),
@@ -305,7 +322,11 @@ async def _revise_item_metadata(
     )
     version = await db.scalar(
         update(Item)
-        .where(Item.id == item_id, Item.version == expected_version)
+        .where(
+            Item.id == item_id,
+            Item.workspace_id == workspace_id,
+            Item.version == expected_version,
+        )
         .values(**values)
         .returning(Item.version)
     )
@@ -314,10 +335,11 @@ async def _revise_item_metadata(
         current = await db.get(Item, item_id)
         raise VersionConflict(current.version if current else None)
 
-    await set_item_identifiers(db, actor, item_id, _identifier_pairs(metadata))
+    await set_item_identifiers(db, actor, workspace_id, item_id, _identifier_pairs(metadata))
     await set_item_authors(
         db,
         actor,
+        workspace_id,
         item_id,
         _contributor_payload(metadata.authors, editor=False),
         role="author",
@@ -325,6 +347,7 @@ async def _revise_item_metadata(
     await set_item_authors(
         db,
         actor,
+        workspace_id,
         item_id,
         _contributor_payload(metadata.editors, editor=True),
         role="editor",
@@ -334,7 +357,13 @@ async def _revise_item_metadata(
     # also expires the caller's User and invites implicit async ORM I/O later.
     await db.refresh(item)
     await search_index(db).index_item(db, item_id)
-    await request_item_tag_recommendation(db, item_id, owner_id=actor_id, force=True)
+    await request_item_tag_recommendation(
+        db,
+        item_id,
+        workspace_id=workspace_id,
+        actor_id=actor_id,
+        force=True,
+    )
     record_event(
         db,
         actor_id,
@@ -342,6 +371,8 @@ async def _revise_item_metadata(
         "item",
         item_id,
         detail={"version": version},
+        workspace_id=workspace_id,
+        authorization_capability=Capability.items_edit.value,
     )
     await db.commit()
     return ItemWriteResult(item_id=item_id, version=version)
@@ -350,12 +381,15 @@ async def _revise_item_metadata(
 async def revise_item_metadata(
     db: AsyncSession,
     actor: User,
+    workspace_id: str,
     item_id: str,
     expected_version: int,
     metadata: ItemMetadata,
 ) -> ItemWriteResult:
     try:
-        return await _revise_item_metadata(db, actor, item_id, expected_version, metadata)
+        return await _revise_item_metadata(
+            db, actor, workspace_id, item_id, expected_version, metadata
+        )
     except Exception:
         await db.rollback()
         raise
@@ -364,13 +398,14 @@ async def revise_item_metadata(
 async def _regenerate_bibtex_key(
     db: AsyncSession,
     actor: User,
+    workspace_id: str,
     item_id: str,
 ) -> ItemWriteResult:
     actor_id = actor.id
-    await require_editable_item_for_mutation(db, actor, item_id)
+    await require_editable_item(db, actor, workspace_id, item_id)
     item = await db.scalar(
         select(Item)
-        .where(Item.id == item_id)
+        .where(Item.id == item_id, Item.workspace_id == workspace_id)
         .execution_options(populate_existing=True)
         .with_for_update(key_share=True)
     )
@@ -391,6 +426,8 @@ async def _regenerate_bibtex_key(
         "item",
         item_id,
         detail={"version": version},
+        workspace_id=workspace_id,
+        authorization_capability=Capability.items_edit.value,
     )
     await db.commit()
     return ItemWriteResult(item_id=item_id, version=version)
@@ -399,10 +436,11 @@ async def _regenerate_bibtex_key(
 async def regenerate_bibtex_key(
     db: AsyncSession,
     actor: User,
+    workspace_id: str,
     item_id: str,
 ) -> ItemWriteResult:
     try:
-        return await _regenerate_bibtex_key(db, actor, item_id)
+        return await _regenerate_bibtex_key(db, actor, workspace_id, item_id)
     except Exception:
         await db.rollback()
         raise

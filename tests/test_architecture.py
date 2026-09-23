@@ -20,11 +20,12 @@ PACKAGE_ROLES = {
     "projects": "business",
     "search": "outbound-adapter",
     "web": "inbound-adapter",
+    "workspaces": "business",
 }
 
 ALLOWED_PACKAGE_DEPENDENCIES = {
     "access": {"core", "models"},
-    "accounts": {"audit", "core", "models"},
+    "accounts": {"audit", "core", "models", "operations", "workspaces"},
     "audit": {"core", "models"},
     "core": set(),
     "documents": {"access", "audit", "core", "models", "operations", "search"},
@@ -38,9 +39,10 @@ ALLOWED_PACKAGE_DEPENDENCIES = {
         "projects",
         "search",
     },
+    "workspaces": {"access", "audit", "core", "documents", "models", "operations"},
     "mcp": {"accounts", "audit", "core"},
-    "operations": {"audit", "core", "library", "models", "search"},
-    "projects": {"access", "audit", "core", "models"},
+    "operations": {"access", "audit", "core", "library", "models", "search"},
+    "projects": {"access", "audit", "core", "documents", "models"},
     "search": {"models"},
     "web": {
         "access",
@@ -54,6 +56,7 @@ ALLOWED_PACKAGE_DEPENDENCIES = {
         "operations",
         "projects",
         "search",
+        "workspaces",
     },
 }
 
@@ -107,6 +110,9 @@ ORM_MODEL_OWNERS = {
     "SystemSetting": "operations",
     "Tag": "library",
     "User": "accounts",
+    "Workspace": "workspaces",
+    "WorkspaceInvitation": "workspaces",
+    "WorkspaceMember": "workspaces",
 }
 
 FORBIDDEN_FACADE_EXPORTS = {

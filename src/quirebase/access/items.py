@@ -2,179 +2,131 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Select, exists, or_, select
+from sqlalchemy import Select, select
 from sqlalchemy.orm import selectinload
 
-from quirebase.core.errors import ResourceNotFound, ResourceUnavailable, ValidationFailure
-from quirebase.models import (
-    Item,
-    ItemAuthor,
-    Project,
-    ProjectItem,
-    ProjectMember,
-    ProjectRole,
-    SystemRole,
-    User,
+from quirebase.access.scope import workspace_select
+from quirebase.access.workspaces import (
+    Capability,
+    WorkspaceContext,
+    require_workspace_capability,
 )
+from quirebase.core.errors import ResourceUnavailable, ValidationFailure
+from quirebase.models import Item, ItemAuthor, User
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
-def visible_items_query(user: User) -> Select[tuple[Item]]:
-    query = select(Item)
-    if user.role == SystemRole.administrator.value:
-        return query
-    project_ids = (
-        select(ProjectItem.project_id)
-        .join(Project, Project.id == ProjectItem.project_id)
-        .outerjoin(
-            ProjectMember,
-            (ProjectMember.project_id == Project.id) & (ProjectMember.user_id == user.id),
+def visible_items_query(workspace_id: str) -> Select[tuple[Item]]:
+    return select(Item).where(Item.workspace_id == workspace_id)
+
+
+def workspace_items_query(ctx: WorkspaceContext) -> Select[tuple[Item]]:
+    """Return the Item lineage query for a resolved context."""
+
+    return workspace_select(Item, ctx)
+
+
+async def get_item(db: AsyncSession, ctx: WorkspaceContext, item_id: str) -> Item | None:
+    """Load an Item by id inside an already-resolved Workspace context."""
+
+    return await db.scalar(
+        workspace_select(Item, ctx)
+        .options(
+            selectinload(Item.author_links).selectinload(ItemAuthor.author),
+            selectinload(Item.identifier_links),
         )
-        .where((Project.owner_id == user.id) | (ProjectMember.user_id == user.id))
+        .where(Item.id == item_id)
     )
-    shared_ids = select(ProjectItem.item_id).where(ProjectItem.project_id.in_(project_ids))
-    return query.where(or_(Item.created_by == user.id, Item.id.in_(shared_ids)))
 
 
-async def can_read_item(db: AsyncSession, user: User, item_id: str) -> bool:
-    if user.role == SystemRole.administrator.value:
-        return await db.get(Item, item_id) is not None
-    own = exists().where(Item.id == item_id, Item.created_by == user.id)
-    shared = exists(
-        select(ProjectItem.project_id)
-        .join(Project, Project.id == ProjectItem.project_id)
-        .outerjoin(
-            ProjectMember,
-            (ProjectMember.project_id == Project.id) & (ProjectMember.user_id == user.id),
+async def get_item_for_update(db: AsyncSession, ctx: WorkspaceContext, item_id: str) -> Item | None:
+    """Load an Item root with a row lock for a mutation boundary."""
+
+    return await db.scalar(
+        workspace_select(Item, ctx)
+        .options(
+            selectinload(Item.author_links).selectinload(ItemAuthor.author),
+            selectinload(Item.identifier_links),
         )
-        .where(
-            ProjectItem.item_id == item_id,
-            (Project.owner_id == user.id) | (ProjectMember.user_id == user.id),
-        )
+        .where(Item.id == item_id)
+        .with_for_update()
     )
-    return bool(await db.scalar(select(or_(own, shared))))
 
 
-async def can_edit_item(db: AsyncSession, user: User, item_id: str) -> bool:
-    item = await db.get(Item, item_id)
-    if item is None:
+async def can_read_item(db: AsyncSession, user: User, workspace_id: str, item_id: str) -> bool:
+    try:
+        await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    except Exception:  # the boolean policy helper deliberately conceals the failure category
         return False
-    if user.role == SystemRole.administrator.value or item.created_by == user.id:
-        return True
-    editable = exists(
-        select(ProjectItem.project_id)
-        .join(Project, Project.id == ProjectItem.project_id)
-        .outerjoin(
-            ProjectMember,
-            (ProjectMember.project_id == Project.id) & (ProjectMember.user_id == user.id),
-        )
-        .where(
-            ProjectItem.item_id == item_id,
-            Project.state == "active",
-            (Project.owner_id == user.id)
-            | ((ProjectMember.user_id == user.id) & (ProjectMember.role == ProjectRole.editor)),
+    return bool(
+        await db.scalar(
+            select(Item.id).where(Item.id == item_id, Item.workspace_id == workspace_id)
         )
     )
-    return bool(await db.scalar(select(editable)))
 
 
-def can_delete_item(db: AsyncSession, user: User, item: Item) -> bool:
-    if user.role == SystemRole.administrator.value:
-        return True
-    return item.created_by == user.id
+async def can_edit_item(db: AsyncSession, user: User, workspace_id: str, item_id: str) -> bool:
+    try:
+        await require_workspace_capability(db, user, workspace_id, Capability.items_edit)
+    except Exception:
+        return False
+    return bool(
+        await db.scalar(
+            select(Item.id).where(Item.id == item_id, Item.workspace_id == workspace_id)
+        )
+    )
 
 
-async def require_readable_item(db: AsyncSession, user: User, item_id: str) -> Item:
-    if not await can_read_item(db, user, item_id):
-        raise ResourceUnavailable("item not found")
-    item = await db.scalar(
+async def can_delete_item(db: AsyncSession, user: User, workspace_id: str, item_id: str) -> bool:
+    try:
+        await require_workspace_capability(db, user, workspace_id, Capability.items_delete)
+    except Exception:
+        return False
+    return bool(
+        await db.scalar(
+            select(Item.id).where(Item.id == item_id, Item.workspace_id == workspace_id)
+        )
+    )
+
+
+def _item_query(workspace_id: str, item_id: str):
+    return (
         select(Item)
         .options(
             selectinload(Item.author_links).selectinload(ItemAuthor.author),
             selectinload(Item.identifier_links),
         )
-        .where(Item.id == item_id)
+        .where(Item.id == item_id, Item.workspace_id == workspace_id)
     )
+
+
+async def require_readable_item(
+    db: AsyncSession, user: User, workspace_id: str, item_id: str
+) -> Item:
+    await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    item = await db.scalar(_item_query(workspace_id, item_id))
     if item is None:
-        raise ResourceUnavailable("item not found")
+        raise ResourceUnavailable("Item not found")
     return item
 
 
-async def require_editable_item(db: AsyncSession, user: User, item_id: str) -> Item:
-    item = await db.scalar(
-        select(Item)
-        .options(
-            selectinload(Item.author_links).selectinload(ItemAuthor.author),
-            selectinload(Item.identifier_links),
-        )
-        .where(Item.id == item_id)
-    )
+async def require_editable_item(
+    db: AsyncSession, user: User, workspace_id: str, item_id: str
+) -> Item:
+    await require_workspace_capability(db, user, workspace_id, Capability.items_edit)
+    item = await db.scalar(_item_query(workspace_id, item_id))
     if item is None:
-        raise ResourceUnavailable("item not found")
-    if user.role == SystemRole.administrator.value or item.created_by == user.id:
-        return item
-    editable = exists(
-        select(ProjectItem.project_id)
-        .join(Project, Project.id == ProjectItem.project_id)
-        .outerjoin(
-            ProjectMember,
-            (ProjectMember.project_id == Project.id) & (ProjectMember.user_id == user.id),
-        )
-        .where(
-            ProjectItem.item_id == item_id,
-            Project.state == "active",
-            (Project.owner_id == user.id)
-            | ((ProjectMember.user_id == user.id) & (ProjectMember.role == ProjectRole.editor)),
-        )
-    )
-    if not await db.scalar(select(editable)):
-        raise ResourceUnavailable("item not found")
+        raise ResourceUnavailable("Item not found")
     return item
 
 
-async def require_editable_item_for_mutation(db: AsyncSession, user: User, item_id: str) -> Item:
-    """Authorize a short Item command at command entry.
-
-    Project membership and active state are intentionally a point-in-time
-    authorization check for short synchronous commands. Durable finalizers
-    must use their own final revalidation primitive immediately before commit.
-    """
-    item = await db.scalar(
-        select(Item)
-        .options(
-            selectinload(Item.author_links).selectinload(ItemAuthor.author),
-            selectinload(Item.identifier_links),
-        )
-        .where(Item.id == item_id)
-    )
-    if item is None:
-        raise ResourceNotFound("item not found")
-    if user.role == SystemRole.administrator.value or item.created_by == user.id:
-        return item
-    project = await db.scalar(
-        select(Project)
-        .join(ProjectItem, ProjectItem.project_id == Project.id)
-        .outerjoin(
-            ProjectMember,
-            (ProjectMember.project_id == Project.id) & (ProjectMember.user_id == user.id),
-        )
-        .where(
-            ProjectItem.item_id == item_id,
-            Project.state == "active",
-            (Project.owner_id == user.id)
-            | ((ProjectMember.user_id == user.id) & (ProjectMember.role == ProjectRole.editor)),
-        )
-        .order_by(Project.id)
-    )
-    if project is None:
-        raise ResourceUnavailable("item not found")
-    return item
-
-
-async def require_accessible_items(db: AsyncSession, user: User, item_ids: list[str]) -> list[Item]:
-    requested_ids = tuple(dict.fromkeys(item_ids))
+async def require_accessible_items(
+    db: AsyncSession, user: User, workspace_id: str, item_ids: list[str]
+) -> list[Item]:
+    await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    requested = tuple(dict.fromkeys(item_ids))
     rows = list(
         (
             await db.scalars(
@@ -183,15 +135,11 @@ async def require_accessible_items(db: AsyncSession, user: User, item_ids: list[
                     selectinload(Item.author_links).selectinload(ItemAuthor.author),
                     selectinload(Item.identifier_links),
                 )
-                .where(Item.id.in_(requested_ids))
+                .where(Item.workspace_id == workspace_id, Item.id.in_(requested))
             )
         ).all()
     )
     by_id = {item.id: item for item in rows}
-    selected = [by_id.get(item_id) for item_id in requested_ids]
-    items = [
-        item for item in selected if item is not None and await can_read_item(db, user, item.id)
-    ]
-    if not items or len(items) != len(selected):
-        raise ValidationFailure("select one or more accessible items")
-    return items
+    if not requested or any(item_id not in by_id for item_id in requested):
+        raise ValidationFailure("select one or more accessible Items")
+    return [by_id[item_id] for item_id in requested]

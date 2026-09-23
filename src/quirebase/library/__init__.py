@@ -6,10 +6,8 @@ from quirebase.library.activity import (
     record_discovery_search_audit,
 )
 from quirebase.library.administration import (
-    admin_delete_item,
     delete_item,
     get_storage_metrics,
-    list_global_items,
 )
 from quirebase.library.authors import (
     parse_author_list_string,
@@ -34,13 +32,20 @@ from quirebase.library.citations import (
     resolve_style_xml,
     select_builtin_citation_styles,
 )
+from quirebase.library.cross_workspace import copy_item_to_workspace
 from quirebase.library.discovery import (
     CandidatePageView,
     CandidateView,
     DiscoveryClause,
     search_candidate_records,
 )
-from quirebase.library.discussions import add_discussion_message, delete_discussion_message
+from quirebase.library.discussions import (
+    add_discussion_message,
+    add_project_discussion_message,
+    delete_discussion_message,
+    delete_project_discussion_message,
+    list_project_discussion_messages,
+)
 from quirebase.library.identifiers import (
     create_item_from_metadata_record,
     rescan_pdf_doi,
@@ -134,17 +139,19 @@ __all__ = [
     "acquire_remote_pdf",
     "add_discussion_message",
     "add_existing_tag_to_item",
+    "add_project_discussion_message",
     "add_tag_to_item",
-    "admin_delete_item",
     "apply_bulk_item_action",
     "apply_item_tag_selection",
     "commit_import_batch",
+    "copy_item_to_workspace",
     "create_custom_citation_style",
     "create_item",
     "create_item_from_metadata_record",
     "delete_custom_citation_style",
     "delete_discussion_message",
     "delete_item",
+    "delete_project_discussion_message",
     "delete_tag",
     "discard_import_batch",
     "download_selected_item_documents",
@@ -162,7 +169,7 @@ __all__ = [
     "item_ids_for_tag_recommendation",
     "list_accessible_tags_with_counts",
     "list_custom_citation_styles",
-    "list_global_items",
+    "list_project_discussion_messages",
     "merge_tags",
     "open_item_workspace",
     "parse_author_list_string",

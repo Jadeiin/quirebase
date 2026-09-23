@@ -13,6 +13,7 @@ from inquiro import (
     ProviderUnavailable,
 )
 from sqlalchemy import select
+from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.errors import ResourceNotFound, ValidationFailure, VersionConflict
 from quirebase.library import UpstreamServiceError
@@ -25,6 +26,15 @@ from quirebase.library.identifiers import (
     sync_metadata_from_upstream,
 )
 from quirebase.models import AuditEvent, FileRevision, Item, User
+
+
+async def _user(db, username: str) -> User:
+    user = User(username=username, password_hash="hash")
+    db.add(user)
+    await db.flush()
+    await provision_initial_workspace(db, user)
+    await db.commit()
+    return user
 
 
 async def _return_async(value):
@@ -78,10 +88,12 @@ def candidate(identifier: Identifier, values: dict) -> CandidateRecord:
 
 @pytest.mark.anyio
 async def test_apply_metadata_record_rejects_overlong_reference_type(async_db):
-    user = User(username="reference-type-owner", password_hash="hash")
-    async_db.add(user)
-    await async_db.flush()
-    item = Item(title="Reference type", created_by=user.id)
+    user = await _user(async_db, "reference-type-owner")
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        title="Reference type",
+        created_by=user.id,
+    )
     async_db.add(item)
     await async_db.flush()
 
@@ -97,11 +109,11 @@ async def test_apply_metadata_record_rejects_overlong_reference_type(async_db):
 @pytest.mark.anyio
 async def test_set_and_get_item_identifiers(async_db):
     db = async_db
-    user = User(username="ident_test_user", password_hash="hash")
-    db.add(user)
-    await db.flush()
+    user = await _user(db, "ident_test_user")
 
-    item = Item(title="Information Theory", created_by=user.id)
+    item = Item(
+        workspace_id=fixture_workspace_id(user), title="Information Theory", created_by=user.id
+    )
     db.add(item)
     await db.flush()
 
@@ -110,7 +122,7 @@ async def test_set_and_get_item_identifiers(async_db):
         ("arxiv", "2401.00001"),
         ("pmid", "12345678"),
     ]
-    await set_item_identifiers(db, user, item.id, id_pairs)
+    await set_item_identifiers(db, user, fixture_workspace_id(user), item.id, id_pairs)
     await db.commit()
 
     loaded_ids = await get_item_identifiers(db, item.id)
@@ -130,11 +142,10 @@ async def test_set_and_get_item_identifiers(async_db):
 @pytest.mark.anyio
 async def test_generate_bibtex_key(async_db):
     db = async_db
-    user = User(username="key_user", password_hash="hash")
-    db.add(user)
-    await db.flush()
+    user = await _user(db, "key_user")
 
     item = Item(
+        workspace_id=fixture_workspace_id(user),
         title="A Mathematical Theory of Communication",
         authors="Shannon, Claude; Weaver, Warren",
         publication_date="1948-07-01",
@@ -150,10 +161,9 @@ async def test_generate_bibtex_key(async_db):
 @pytest.mark.anyio
 async def test_generate_bibtex_key_parses_first_last_author_name(async_db):
     db = async_db
-    user = User(username="first_last_key_user", password_hash="hash")
-    db.add(user)
-    await db.flush()
+    user = await _user(db, "first_last_key_user")
     item = Item(
+        workspace_id=fixture_workspace_id(user),
         title="Computing Machinery and Intelligence",
         authors="Alan Turing",
         publication_date="1950",
@@ -166,15 +176,14 @@ async def test_generate_bibtex_key_parses_first_last_author_name(async_db):
 @pytest.mark.anyio
 async def test_rescan_pdf_doi(async_db):
     db = async_db
-    user = User(username="pdf_doi_user", password_hash="hash")
-    db.add(user)
-    await db.flush()
+    user = await _user(db, "pdf_doi_user")
 
-    item = Item(title="Scanned Paper", created_by=user.id)
+    item = Item(workspace_id=fixture_workspace_id(user), title="Scanned Paper", created_by=user.id)
     db.add(item)
     await db.flush()
 
     revision = FileRevision(
+        workspace_id=fixture_workspace_id(user),
         item_id=item.id,
         object_key="rev-1",
         size=1024,
@@ -188,7 +197,7 @@ async def test_rescan_pdf_doi(async_db):
     initial_version = item.version
     with patch("quirebase.library.identifiers.search_index") as search_index_factory:
         search_index_factory.return_value.index_item = AsyncMock()
-        found_doi = await rescan_pdf_doi(db, user, item.id)
+        found_doi = await rescan_pdf_doi(db, user, fixture_workspace_id(user), item.id)
     assert found_doi == "10.1038/s41586-020-2649-2"
 
     loaded_item = await db.get(Item, item.id)
@@ -202,14 +211,18 @@ async def test_rescan_pdf_doi(async_db):
 @pytest.mark.anyio
 async def test_rescan_pdf_doi_does_not_replace_manual_doi(async_db):
     db = async_db
-    user = User(username="pdf_doi_manual", password_hash="hash")
-    db.add(user)
-    await db.flush()
-    item = Item(title="Manual DOI", doi="10.1000/manual", created_by=user.id)
+    user = await _user(db, "pdf_doi_manual")
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        title="Manual DOI",
+        doi="10.1000/manual",
+        created_by=user.id,
+    )
     db.add(item)
     await db.flush()
     db.add(
         FileRevision(
+            workspace_id=fixture_workspace_id(user),
             item_id=item.id,
             object_key="manual-rev",
             size=1,
@@ -221,7 +234,7 @@ async def test_rescan_pdf_doi_does_not_replace_manual_doi(async_db):
     await db.commit()
     initial_version = item.version
 
-    found_doi = await rescan_pdf_doi(db, user, item.id)
+    found_doi = await rescan_pdf_doi(db, user, fixture_workspace_id(user), item.id)
 
     assert found_doi == "10.1000/manual"
     await db.refresh(item)
@@ -232,11 +245,9 @@ async def test_rescan_pdf_doi_does_not_replace_manual_doi(async_db):
 @pytest.mark.anyio
 async def test_sync_metadata_from_upstream(async_db):
     db = async_db
-    user = User(username="sync_user", password_hash="hash")
-    db.add(user)
-    await db.flush()
+    user = await _user(db, "sync_user")
 
-    item = Item(title="Initial Title", created_by=user.id)
+    item = Item(workspace_id=fixture_workspace_id(user), title="Initial Title", created_by=user.id)
     db.add(item)
     await db.commit()
 
@@ -266,6 +277,7 @@ async def test_sync_metadata_from_upstream(async_db):
         updated_item = await sync_metadata_from_upstream(
             db,
             user,
+            fixture_workspace_id(user),
             item.id,
             item.version,
             provider="doi",
@@ -299,10 +311,12 @@ async def test_sync_metadata_translates_inquiro_errors_at_library_interface(
     async_db, package_error, domain_error
 ):
     db = async_db
-    user = User(username=f"sync-error-{domain_error.__name__}", password_hash="hash")
-    db.add(user)
-    await db.flush()
-    item = Item(title="Original title", created_by=user.id)
+    user = await _user(db, f"sync-error-{domain_error.__name__}")
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        title="Original title",
+        created_by=user.id,
+    )
     db.add(item)
     await db.commit()
     item_id = item.id
@@ -324,6 +338,7 @@ async def test_sync_metadata_translates_inquiro_errors_at_library_interface(
         await sync_metadata_from_upstream(
             db,
             user,
+            fixture_workspace_id(user),
             item_id,
             item_version,
             provider="doi",
@@ -339,10 +354,8 @@ async def test_sync_metadata_translates_inquiro_errors_at_library_interface(
 @pytest.mark.anyio
 async def test_sync_by_doi_does_not_store_doi_as_provider_identifier(async_db):
     db = async_db
-    user = User(username="canonical_doi_sync", password_hash="hash")
-    db.add(user)
-    await db.flush()
-    item = Item(title="Initial", created_by=user.id)
+    user = await _user(db, "canonical_doi_sync")
+    item = Item(workspace_id=fixture_workspace_id(user), title="Initial", created_by=user.id)
     db.add(item)
     await db.commit()
 
@@ -354,6 +367,7 @@ async def test_sync_by_doi_does_not_store_doi_as_provider_identifier(async_db):
         await sync_metadata_from_upstream(
             db,
             user,
+            fixture_workspace_id(user),
             item.id,
             item.version,
             provider="openalex",
@@ -367,10 +381,13 @@ async def test_sync_by_doi_does_not_store_doi_as_provider_identifier(async_db):
 @pytest.mark.anyio
 async def test_non_doi_sync_preserves_existing_canonical_doi_when_upstream_omits_it(async_db):
     db = async_db
-    user = User(username="preserve_canonical_doi", password_hash="hash")
-    db.add(user)
-    await db.flush()
-    item = Item(title="Initial", doi="10.1000/existing", created_by=user.id)
+    user = await _user(db, "preserve_canonical_doi")
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        title="Initial",
+        doi="10.1000/existing",
+        created_by=user.id,
+    )
     db.add(item)
     await db.commit()
 
@@ -382,6 +399,7 @@ async def test_non_doi_sync_preserves_existing_canonical_doi_when_upstream_omits
         await sync_metadata_from_upstream(
             db,
             user,
+            fixture_workspace_id(user),
             item.id,
             item.version,
             provider="openalex",
@@ -400,11 +418,9 @@ async def test_non_doi_sync_preserves_existing_canonical_doi_when_upstream_omits
 @pytest.mark.anyio
 async def test_sync_metadata_cleans_html_and_syncs_bibtex_type(async_db):
     db = async_db
-    user = User(username="clean_html_user", password_hash="hash")
-    db.add(user)
-    await db.flush()
+    user = await _user(db, "clean_html_user")
 
-    item = Item(title="Draft Title", created_by=user.id)
+    item = Item(workspace_id=fixture_workspace_id(user), title="Draft Title", created_by=user.id)
     db.add(item)
     await db.commit()
 
@@ -432,6 +448,7 @@ async def test_sync_metadata_cleans_html_and_syncs_bibtex_type(async_db):
         updated = await sync_metadata_from_upstream(
             db,
             user,
+            fixture_workspace_id(user),
             item.id,
             item.version,
             provider="doi",
@@ -469,10 +486,12 @@ async def test_sync_metadata_cleans_html_and_syncs_bibtex_type(async_db):
 @pytest.mark.anyio
 async def test_sync_metadata_from_upstream_rejects_a_stale_version(async_db, async_session_factory):
     db = async_db
-    owner = User(username="concurrent_sync_owner", password_hash="hash")
-    db.add(owner)
-    await db.flush()
-    item = Item(title="Original title", created_by=owner.id)
+    owner = await _user(db, "concurrent_sync_owner")
+    item = Item(
+        workspace_id=fixture_workspace_id(owner),
+        title="Original title",
+        created_by=owner.id,
+    )
     db.add(item)
     await db.commit()
     owner_id = owner.id
@@ -496,6 +515,7 @@ async def test_sync_metadata_from_upstream_rejects_a_stale_version(async_db, asy
             await sync_metadata_from_upstream(
                 first,
                 first_owner,
+                fixture_workspace_id(owner),
                 item_id,
                 first_item.version,
                 provider="doi",
@@ -505,6 +525,7 @@ async def test_sync_metadata_from_upstream_rejects_a_stale_version(async_db, asy
                 await sync_metadata_from_upstream(
                     second,
                     second_owner,
+                    fixture_workspace_id(owner),
                     item_id,
                     second_item.version,
                     provider="doi",
@@ -520,10 +541,13 @@ async def test_sync_metadata_from_upstream_rejects_a_stale_version(async_db, asy
 @pytest.mark.anyio
 async def test_sync_metadata_uses_normalized_upstream_identifier(async_db):
     db = async_db
-    user = User(username="normalized_upstream_sync", password_hash="hash")
-    db.add(user)
-    await db.flush()
-    item = Item(title="Initial", doi="10.1000/canonical", created_by=user.id)
+    user = await _user(db, "normalized_upstream_sync")
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        title="Initial",
+        doi="10.1000/canonical",
+        created_by=user.id,
+    )
     db.add(item)
     await db.commit()
 
@@ -535,6 +559,7 @@ async def test_sync_metadata_uses_normalized_upstream_identifier(async_db):
         await sync_metadata_from_upstream(
             db,
             user,
+            fixture_workspace_id(user),
             item.id,
             item.version,
             provider="openalex",

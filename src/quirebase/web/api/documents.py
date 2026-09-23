@@ -50,7 +50,7 @@ from quirebase.web.errors import ApiHTTPException
 from quirebase.web.responses import content_disposition
 from quirebase.web.uploads import upload_chunks
 
-router = APIRouter(tags=["Documents"])
+router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["Documents"])
 
 RANGE_PATTERN = re.compile(r"bytes=(\d*)-(\d*)$")
 THUMBNAIL_CONTENT_TYPES = {
@@ -181,8 +181,10 @@ async def ranged_object(request: Request, metadata, filename: str, object_get):
 
 
 @router.get("/items/{item_id}/documents", response_model=DocumentListView)
-async def list_documents(item_id: str, user: ApiUser, db: Database) -> DocumentListView:
-    workspace = await open_item_workspace(db, user, item_id, WorkspaceSection.files)
+async def list_documents(
+    workspace_id: str, item_id: str, user: ApiUser, db: Database
+) -> DocumentListView:
+    workspace = await open_item_workspace(db, user, workspace_id, item_id, WorkspaceSection.files)
     if not isinstance(workspace, FilesWorkspace):  # pragma: no cover
         raise TypeError("item files workspace mismatch")
     return document_list_view(item_id, workspace)
@@ -200,6 +202,7 @@ async def list_documents(item_id: str, user: ApiUser, db: Database) -> DocumentL
     },
 )
 async def download_item_archive(
+    workspace_id: str,
     item_id: str,
     user: ApiUser,
     db: Database,
@@ -214,6 +217,7 @@ async def download_item_archive(
     bundle = await create_item_document_bundle(
         db,
         user,
+        workspace_id,
         item_id,
         revision_ids=revision_ids,
         include_annotations=include_annotations,
@@ -234,6 +238,7 @@ async def download_item_archive(
     "/items/{item_id}/attachments", response_model=WriteResult, status_code=status.HTTP_202_ACCEPTED
 )
 async def upload_item_attachment(
+    workspace_id: str,
     item_id: str,
     user: ApiUser,
     db: Database,
@@ -243,6 +248,7 @@ async def upload_item_attachment(
     workflow = await create_attachment(
         db,
         user,
+        workspace_id,
         item_id,
         upload_chunks(attachment),
         attachment.filename or "",
@@ -261,17 +267,22 @@ async def upload_item_attachment(
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def upload_remote_item_attachment(
-    item_id: str, data: RemoteAttachmentRequest, user: ApiUser, db: Database
+    workspace_id: str,
+    item_id: str,
+    data: RemoteAttachmentRequest,
+    user: ApiUser,
+    db: Database,
 ) -> WriteResult:
     max_bytes = await get_effective_setting(
         db, "max_attachment_bytes", get_settings().max_attachment_bytes
     )
-    await require_editable_item(db, user, item_id)
+    await require_editable_item(db, user, workspace_id, item_id)
     await db.rollback()
     async with acquire_remote_attachment(data.source, max_bytes) as attachment:
         workflow = await create_attachment(
             db,
             user,
+            workspace_id,
             item_id,
             attachment.content,
             attachment.filename,
@@ -294,15 +305,20 @@ async def upload_remote_item_attachment(
     },
 )
 async def download_item_attachment(
-    request: Request, item_id: str, attachment_id: str, user: ApiUser, db: Database
+    request: Request,
+    workspace_id: str,
+    item_id: str,
+    attachment_id: str,
+    user: ApiUser,
+    db: Database,
 ) -> Response:
     metadata, original_name, media_type = await head_attachment_file(
-        db, user, item_id, attachment_id
+        db, user, workspace_id, item_id, attachment_id
     )
     if (not_modified := _not_modified(request, metadata)) is not None:
         return not_modified
     response, _original_name, _media_type = await get_attachment_file(
-        db, user, item_id, attachment_id
+        db, user, workspace_id, item_id, attachment_id
     )
     return StreamingResponse(
         response.body,
@@ -318,9 +334,9 @@ async def download_item_attachment(
 
 @router.delete("/items/{item_id}/attachments/{attachment_id}", response_model=OkView)
 async def delete_item_attachment(
-    item_id: str, attachment_id: str, user: ApiUser, db: Database
+    workspace_id: str, item_id: str, attachment_id: str, user: ApiUser, db: Database
 ) -> OkView:
-    await delete_attachment(db, user, item_id, attachment_id)
+    await delete_attachment(db, user, workspace_id, item_id, attachment_id)
     return OkView()
 
 
@@ -328,11 +344,16 @@ async def delete_item_attachment(
     "/items/{item_id}/revisions", response_model=WriteResult, status_code=status.HTTP_202_ACCEPTED
 )
 async def upload_item_pdf(
-    item_id: str, user: ApiUser, db: Database, pdf: Annotated[UploadFile, File()]
+    workspace_id: str,
+    item_id: str,
+    user: ApiUser,
+    db: Database,
+    pdf: Annotated[UploadFile, File()],
 ) -> WriteResult:
     workflow = await store_pdf_revision(
         db,
         user,
+        workspace_id,
         item_id,
         upload_chunks(pdf),
         pdf.filename or "",
@@ -347,28 +368,36 @@ async def upload_item_pdf(
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def upload_remote_item_pdf(
-    item_id: str, data: RemoteRevisionRequest, user: ApiUser, db: Database
+    workspace_id: str,
+    item_id: str,
+    data: RemoteRevisionRequest,
+    user: ApiUser,
+    db: Database,
 ) -> WriteResult:
     settings = await get_effective_settings_model(db)
     max_bytes = await get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes)
-    await require_editable_item(db, user, item_id)
+    await require_editable_item(db, user, workspace_id, item_id)
     await db.rollback()
     async with acquire_remote_pdf(data.source, settings, max_bytes) as document:
         workflow = await store_pdf_revision(
-            db, user, item_id, document.content, document.filename, max_bytes
+            db, user, workspace_id, item_id, document.content, document.filename, max_bytes
         )
     return WriteResult(id=workflow.workflow_id)
 
 
 @router.delete("/items/{item_id}/revisions/{revision_id}", response_model=OkView)
-async def delete_item_pdf(item_id: str, revision_id: str, user: ApiUser, db: Database) -> OkView:
-    await delete_file_revision(db, user, item_id, revision_id)
+async def delete_item_pdf(
+    workspace_id: str, item_id: str, revision_id: str, user: ApiUser, db: Database
+) -> OkView:
+    await delete_file_revision(db, user, workspace_id, item_id, revision_id)
     return OkView()
 
 
 @router.get("/items/{item_id}/revisions/{revision_id}/viewer", response_model=PdfViewerView)
-async def pdf_viewer_configuration(item_id: str, revision_id: str, user: ApiUser, db: Database):
-    data = await get_pdf_viewer_data(db, user, item_id, revision_id)
+async def pdf_viewer_configuration(
+    workspace_id: str, item_id: str, revision_id: str, user: ApiUser, db: Database
+):
+    data = await get_pdf_viewer_data(db, user, workspace_id, item_id, revision_id)
     revision = data["revision"]
     return {
         "item": item_search_view(data["item"]),
@@ -382,7 +411,9 @@ async def pdf_viewer_configuration(item_id: str, revision_id: str, user: ApiUser
             "page_count": revision.page_count,
             "processing_state": enum_value(revision.processing_state),
             "page_geometry": json.loads(revision.page_geometry or "[]"),
-            "content_url": f"/api/v1/items/{item_id}/revisions/{revision_id}/content",
+            "content_url": (
+                f"/api/v1/workspaces/{workspace_id}/items/{item_id}/revisions/{revision_id}/content"
+            ),
         },
         "projects": [{"id": project.id, "name": project.name} for project in data["projects"]],
     }
@@ -406,16 +437,19 @@ async def pdf_viewer_configuration(item_id: str, revision_id: str, user: ApiUser
 )
 async def pdf_content(
     request: Request,
+    workspace_id: str,
     item_id: str,
     revision_id: str,
     user: ApiUser,
     db: Database,
 ):
-    metadata, original_name, _media_type = await head_revision_file(db, user, item_id, revision_id)
+    metadata, original_name, _media_type = await head_revision_file(
+        db, user, workspace_id, item_id, revision_id
+    )
 
     async def object_get(byte_range: tuple[int, int] | None):
         response, _name, _sha = await get_revision_file(
-            db, user, item_id, revision_id, byte_range=byte_range
+            db, user, workspace_id, item_id, revision_id, byte_range=byte_range
         )
         return response
 
@@ -435,15 +469,16 @@ async def pdf_content(
 )
 async def pdf_thumbnail(
     request: Request,
+    workspace_id: str,
     item_id: str,
     revision_id: str,
     user: ApiUser,
     db: Database,
 ):
-    metadata = await head_revision_thumbnail(db, user, item_id, revision_id)
+    metadata = await head_revision_thumbnail(db, user, workspace_id, item_id, revision_id)
     if (not_modified := _not_modified(request, metadata)) is not None:
         return not_modified
-    response = await get_revision_thumbnail(db, user, item_id, revision_id)
+    response = await get_revision_thumbnail(db, user, workspace_id, item_id, revision_id)
     return StreamingResponse(
         response.body,
         media_type="image/png",
@@ -462,11 +497,12 @@ async def pdf_thumbnail(
 )
 async def item_thumbnail(
     request: Request,
+    workspace_id: str,
     item_id: str,
     user: ApiUser,
     db: Database,
 ):
-    source = await resolve_item_thumbnail(db, user, item_id)
+    source = await resolve_item_thumbnail(db, user, workspace_id, item_id)
     metadata = await head_item_thumbnail(source)
     if (not_modified := _not_modified(request, metadata)) is not None:
         return not_modified
@@ -495,6 +531,7 @@ async def item_thumbnail(
     },
 )
 async def export_revision_pdf_route(
+    workspace_id: str,
     item_id: str,
     revision_id: str,
     user: ApiUser,
@@ -506,6 +543,7 @@ async def export_revision_pdf_route(
     exported = await export_revision_pdf(
         db,
         user,
+        workspace_id,
         item_id,
         revision_id,
         include_annotations=include_annotations,

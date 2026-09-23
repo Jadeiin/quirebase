@@ -12,6 +12,11 @@ class InvitationAcceptRequest(BaseModel):
     password: str = Field(min_length=1)
 
 
+class RegisterRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=1)
+
+
 class ApiTokenCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     days: int = Field(default=30, ge=1, le=365)

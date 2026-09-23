@@ -1,26 +1,9 @@
 from __future__ import annotations
 
-from sqlalchemy import Select, exists, or_, select
+from sqlalchemy import Select, select
 
-from quirebase.access.items import visible_items_query
-from quirebase.models import Item, ItemTag, SystemRole, Tag, User
-
-
-def can_manage_tag(user: User, tag: Tag) -> bool:
-    return tag.created_by == user.id or user.role == SystemRole.administrator.value
+from quirebase.models import Tag
 
 
-def visible_tags_query(user: User) -> Select[tuple[Tag]]:
-    query = select(Tag)
-    if user.role == SystemRole.administrator.value:
-        return query
-    accessible_ids = visible_items_query(user).with_only_columns(Item.id).subquery()
-    return query.where(
-        or_(
-            Tag.created_by == user.id,
-            exists().where(
-                ItemTag.tag_id == Tag.id,
-                ItemTag.item_id.in_(select(accessible_ids.c.id)),
-            ),
-        )
-    )
+def visible_tags_query(workspace_id: str) -> Select[tuple[Tag]]:
+    return select(Tag).where(Tag.workspace_id == workspace_id)

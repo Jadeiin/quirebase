@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import json
+from contextlib import suppress
 from dataclasses import asdict
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, status
-from fastapi.responses import FileResponse
 
 from quirebase.accounts import (
     change_user_role,
@@ -20,28 +21,25 @@ from quirebase.accounts import (
 from quirebase.audit import query_events
 from quirebase.core.errors import ResourceNotFound, ValidationFailure
 from quirebase.core.workflows import durable_operations
-from quirebase.library import admin_delete_item as delete_item_as_admin
-from quirebase.library import get_storage_metrics, list_global_items
+from quirebase.library import get_storage_metrics
 from quirebase.models import User
 from quirebase.operations import (
     dispatch_maintenance_workflow,
-    get_backup_artifact,
     get_runtime_settings,
     update_runtime_settings,
 )
-from quirebase.projects import list_projects_for_admin
 from quirebase.web.api.admin_schemas import (
     AdminAuditView,
     AdminInvitationCreatedView,
-    AdminItemsView,
     AdminMaintenanceView,
     AdminOverviewView,
-    AdminProjectsView,
     AdminSettingsView,
     AdminUserCreateRequest,
     AdminUsersView,
     AdminUserView,
     AdminWorkflowsView,
+    AdminWorkspaceView,
+    BreakGlassReadRequest,
     InvitationCreateRequest,
     PasswordResetRequest,
     RuntimeSettingsRequest,
@@ -51,9 +49,14 @@ from quirebase.web.api.admin_schemas import (
 )
 from quirebase.web.api.common import OkView, WriteResult
 from quirebase.web.api.dependencies import ApiUser, Database
-from quirebase.web.api.library_schemas import item_search_view
-from quirebase.web.api.serialization import enum_value
+from quirebase.web.api.library_schemas import ItemSearchView, item_search_view
 from quirebase.web.errors import ApiHTTPException
+from quirebase.workspaces import (
+    list_workspaces_for_governance,
+    read_workspace_items_break_glass,
+    recover_workspace_governance,
+    suspend_workspace_governance,
+)
 
 
 def require_api_admin(user: ApiUser) -> User:
@@ -87,6 +90,39 @@ def _workflow_view(workflow) -> dict:
     return asdict(workflow)
 
 
+def _audit_view(event) -> dict:
+    target_ids = None
+    if event.target_ids:
+        try:
+            parsed = json.loads(event.target_ids)
+            if isinstance(parsed, list) and all(isinstance(value, str) for value in parsed):
+                target_ids = parsed
+        except (TypeError, ValueError):
+            # Audit metadata is intentionally best-effort JSON.  Preserve the
+            # event itself even if an old/internal writer stored malformed text.
+            target_ids = None
+    detail = event.detail
+    if detail:
+        with suppress(TypeError, ValueError):
+            detail = json.loads(detail)
+    return {
+        "id": event.id,
+        "actor_id": event.actor_id,
+        "workspace_id": event.workspace_id,
+        "project_id": event.project_id,
+        "action": event.action,
+        "target_type": event.target_type,
+        "target_id": event.target_id,
+        "target_ids": target_ids,
+        "authorization_role": event.authorization_role,
+        "authorization_capability": event.authorization_capability,
+        "result": event.result,
+        "source": event.source,
+        "detail": detail,
+        "created_at": event.created_at,
+    }
+
+
 @router.get("/overview", response_model=AdminOverviewView)
 async def admin_overview(user: AdminUser, db: Database):
     users = await list_users(db, user)
@@ -100,18 +136,7 @@ async def admin_overview(user: AdminUser, db: Database):
         ),
         "failed_workflows": [_workflow_view(workflow) for workflow in failed],
         "storage": await get_storage_metrics(db, user),
-        "recent_events": [
-            {
-                "id": event.id,
-                "actor_id": event.actor_id,
-                "action": event.action,
-                "target_type": event.target_type,
-                "target_id": event.target_id,
-                "detail": event.detail,
-                "created_at": event.created_at,
-            }
-            for event in events
-        ],
+        "recent_events": [_audit_view(event) for event in events],
     }
 
 
@@ -195,70 +220,6 @@ async def admin_create_invitation(data: InvitationCreateRequest, user: AdminUser
     }
 
 
-@router.get("/projects", response_model=AdminProjectsView)
-async def admin_projects(
-    user: AdminUser,
-    db: Database,
-    search: str = "",
-    state: str = "",
-    visibility: str = "",
-    page: Annotated[int, Query(ge=1)] = 1,
-):
-    projects, total = await list_projects_for_admin(
-        db,
-        user,
-        search=search,
-        state=state,
-        visibility=visibility,
-        page=page,
-        page_size=20,
-    )
-    return {
-        "projects": [
-            {
-                "id": row.project.id,
-                "name": row.project.name,
-                "description": row.project.description,
-                "state": enum_value(row.project.state),
-                "visibility": enum_value(row.project.visibility),
-                "creator": {"id": row.creator.id, "username": row.creator.username},
-                "member_count": row.member_count,
-                "item_count": row.item_count,
-            }
-            for row in projects
-        ],
-        "total": total,
-        "page": page,
-        "per_page": 20,
-    }
-
-
-@router.get("/items", response_model=AdminItemsView)
-async def admin_items(
-    user: AdminUser,
-    db: Database,
-    search: str = "",
-    has_pdf: bool | None = None,
-    page: Annotated[int, Query(ge=1)] = 1,
-):
-    items, total = await list_global_items(
-        db, user, search=search, has_pdf=has_pdf, page=page, page_size=20
-    )
-    return {
-        "items": [item_search_view(item) for item in items],
-        "total": total,
-        "page": page,
-        "per_page": 20,
-        "storage": await get_storage_metrics(db, user),
-    }
-
-
-@router.delete("/items/{item_id}", response_model=OkView)
-async def admin_delete_item(item_id: str, user: AdminUser, db: Database) -> OkView:
-    await delete_item_as_admin(db, user, item_id)
-    return OkView()
-
-
 @router.get("/audit", response_model=AdminAuditView)
 async def admin_audit(
     user: AdminUser,
@@ -280,18 +241,7 @@ async def admin_audit(
         page_size=50,
     )
     return {
-        "events": [
-            {
-                "id": event.id,
-                "actor_id": event.actor_id,
-                "action": event.action,
-                "target_type": event.target_type,
-                "target_id": event.target_id,
-                "detail": event.detail,
-                "created_at": event.created_at,
-            }
-            for event in events
-        ],
+        "events": [_audit_view(event) for event in events],
         "total": total,
         "page": page,
         "per_page": 50,
@@ -339,30 +289,56 @@ async def admin_maintenance(user: AdminUser, db: Database):
     }
 
 
+@router.get("/workspaces", response_model=list[AdminWorkspaceView])
+async def admin_workspaces(user: AdminUser, db: Database) -> list[AdminWorkspaceView]:
+    return [
+        AdminWorkspaceView(
+            id=workspace.id,
+            name=workspace.name,
+            owner_id=workspace.owner_id,
+            state=workspace.state.value,
+            governance_suspended_at=workspace.governance_suspended_at,
+            governance_suspended_by=workspace.governance_suspended_by,
+        )
+        for workspace in await list_workspaces_for_governance(db, user)
+    ]
+
+
+@router.post("/workspaces/{workspace_id}/suspend", response_model=OkView)
+async def admin_suspend_workspace(workspace_id: str, user: AdminUser, db: Database) -> OkView:
+    await suspend_workspace_governance(db, user, workspace_id)
+    return OkView()
+
+
+@router.post("/workspaces/{workspace_id}/recover", response_model=OkView)
+async def admin_recover_workspace(workspace_id: str, user: AdminUser, db: Database) -> OkView:
+    await recover_workspace_governance(db, user, workspace_id)
+    return OkView()
+
+
+@router.post(
+    "/workspaces/{workspace_id}/break-glass/items",
+    response_model=list[ItemSearchView],
+)
+async def admin_break_glass_items(
+    workspace_id: str,
+    data: BreakGlassReadRequest,
+    user: AdminUser,
+    db: Database,
+) -> list[ItemSearchView]:
+    return [
+        item_search_view(item)
+        for item in await read_workspace_items_break_glass(db, user, workspace_id, data.reason)
+    ]
+
+
 @router.post("/maintenance/{operation}", response_model=WriteResult)
 async def run_maintenance(
-    operation: Literal["reindex_all", "check_objects", "backup", "recommend_tags_all"],
+    operation: Literal["check_objects"],
     user: AdminUser,
     db: Database,
 ) -> WriteResult:
     return WriteResult(id=await dispatch_maintenance_workflow(db, user, operation))
-
-
-@router.get(
-    "/maintenance/backups/{workflow_id}/content",
-    response_class=FileResponse,
-    responses={
-        200: {"content": {"application/zip": {"schema": {"type": "string", "format": "binary"}}}}
-    },
-)
-async def download_backup(workflow_id: str, user: AdminUser, db: Database) -> FileResponse:
-    path, filename = await get_backup_artifact(db, user, workflow_id)
-    return FileResponse(
-        str(path),
-        media_type="application/zip",
-        filename=filename,
-        headers={"Cache-Control": "private, no-store"},
-    )
 
 
 @router.get("/workflows/{workflow_id}", response_model=WorkflowSummaryView)

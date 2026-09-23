@@ -14,9 +14,10 @@ async def test_online_preview_uses_existing_confirmed_import_flow(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
     db = async_db
-    client, _item, _revision = await authenticated_async_client(
+    client, item, _revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_id = item.workspace_id
     record = CandidateRecord(
         provider="crossref",
         identifier=Identifier("doi", "10.1/looked-up"),
@@ -35,7 +36,7 @@ async def test_online_preview_uses_existing_confirmed_import_flow(
     )
     try:
         preview = await client.post(
-            "/api/v1/imports/identifier",
+            f"/api/v1/workspaces/{workspace_id}/imports/identifier",
             json={"identifier": "10.1/looked-up", "provider": "auto"},
         )
         assert preview.status_code == 201
@@ -45,8 +46,9 @@ async def test_online_preview_uses_existing_confirmed_import_flow(
             select(ImportBatch).where(ImportBatch.file_format == "metadata:doi")
         )
         assert batch is not None
+        batch_id = batch.id
         committed = await client.post(
-            f"/api/v1/imports/{batch.id}/commit",
+            f"/api/v1/workspaces/{workspace_id}/imports/{batch_id}/commit",
             json={},
         )
         assert committed.status_code == 200

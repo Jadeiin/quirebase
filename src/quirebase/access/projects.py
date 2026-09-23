@@ -4,37 +4,39 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 
-from quirebase.core.errors import PermissionDenied, ResourceUnavailable
-from quirebase.models import Project, ProjectMember, ProjectRole, ProjectState, SystemRole, User
+from quirebase.access.scope import workspace_select
+from quirebase.access.workspaces import (
+    Capability,
+    WorkspaceContext,
+    require_project_context,
+    require_workspace_capability,
+)
+from quirebase.models import Project, ProjectMember, ProjectState, User
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
-async def visible_projects(db: AsyncSession, user: User) -> list[Project]:
-    query = select(Project).where(Project.state == ProjectState.active).order_by(Project.name)
-    if user.role != SystemRole.administrator.value:
-        member_project_ids = select(ProjectMember.project_id).where(
-            ProjectMember.user_id == user.id
-        )
-        query = query.where((Project.owner_id == user.id) | Project.id.in_(member_project_ids))
-    return list((await db.scalars(query)).all())
+async def visible_projects(db: AsyncSession, user: User, workspace_id: str) -> list[Project]:
+    context = await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    return await visible_projects_for_context(db, context)
 
 
-async def editable_projects(db: AsyncSession, user: User) -> list[Project]:
+async def visible_projects_for_context(db: AsyncSession, ctx: WorkspaceContext) -> list[Project]:
+    """List visible Projects without re-resolving Workspace membership."""
+
+    member_ids = (
+        workspace_select(ProjectMember, ctx)
+        .where(ProjectMember.user_id == ctx.actor.id)
+        .with_only_columns(ProjectMember.project_id)
+    )
     return list(
         (
             await db.scalars(
-                select(Project)
+                workspace_select(Project, ctx)
                 .where(
-                    Project.state == ProjectState.active,
-                    (Project.owner_id == user.id)
-                    | Project.id.in_(
-                        select(ProjectMember.project_id).where(
-                            ProjectMember.user_id == user.id,
-                            ProjectMember.role == ProjectRole.editor,
-                        )
-                    ),
+                    Project.state != ProjectState.deleted,
+                    (Project.visibility == "workspace") | Project.id.in_(member_ids),
                 )
                 .order_by(Project.name)
             )
@@ -42,27 +44,34 @@ async def editable_projects(db: AsyncSession, user: User) -> list[Project]:
     )
 
 
+async def editable_projects(db: AsyncSession, user: User, workspace_id: str) -> list[Project]:
+    await require_workspace_capability(db, user, workspace_id, Capability.projects_manage)
+    visible = await visible_projects(db, user, workspace_id)
+    return [project for project in visible if project.state is ProjectState.active]
+
+
 async def project_member(
-    db: AsyncSession, user: User, project_id: str | None
+    db: AsyncSession, user: User, workspace_id: str, project_id: str | None
 ) -> ProjectMember | None:
     if project_id is None:
         return None
-    return await db.get(ProjectMember, (project_id, user.id))
+    return await db.scalar(
+        select(ProjectMember).where(
+            ProjectMember.workspace_id == workspace_id,
+            ProjectMember.project_id == project_id,
+            ProjectMember.user_id == user.id,
+        )
+    )
 
 
 async def require_project_member(
-    db: AsyncSession, user: User, project_id: str, allowed_roles: set[str] | None = None
+    db: AsyncSession, user: User, workspace_id: str, project_id: str
 ) -> ProjectMember:
-    member = await project_member(db, user, project_id)
-    if member is None:
-        if user.role == SystemRole.administrator.value:
-            project = await db.get(Project, project_id)
-            if project is None:
-                raise ResourceUnavailable("project not found")
-            return ProjectMember(
-                project_id=project_id, user_id=user.id, role=SystemRole.administrator.value
-            )
-        raise ResourceUnavailable("project not found or membership required")
-    if allowed_roles and member.role not in allowed_roles:
-        raise PermissionDenied("insufficient project role permissions")
-    return member
+    context = await require_project_context(
+        db, user, workspace_id, project_id, Capability.workspace_read
+    )
+    if context.membership is None:
+        from quirebase.core.errors import ResourceUnavailable
+
+        raise ResourceUnavailable("Project membership required")
+    return context.membership

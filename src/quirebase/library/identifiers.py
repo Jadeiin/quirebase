@@ -12,7 +12,8 @@ from inquiro.identifiers import DOI_PATTERN, normalize_doi
 from inquiro.models import CandidateRecord
 from sqlalchemy import delete, select, update
 
-from quirebase.access.items import require_editable_item, require_editable_item_for_mutation
+from quirebase.access import Capability
+from quirebase.access.items import require_editable_item
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceUnavailable, ValidationFailure, VersionConflict
 from quirebase.documents.pdf import first_doi_from_text
@@ -70,10 +71,11 @@ def clean_identifier_value(provider: str, value: str) -> str:
 async def set_item_identifiers(
     db: AsyncSession,
     user: User,
+    workspace_id: str,
     item_id: str,
     id_pairs: list[tuple[str, str]],
 ) -> list[ItemIdentifier]:
-    item = await require_editable_item_for_mutation(db, user, item_id)
+    item = await require_editable_item(db, user, workspace_id, item_id)
     return await _set_item_identifiers_for_item(db, user, item, id_pairs)
 
 
@@ -149,15 +151,20 @@ def generate_bibtex_key(item: Item) -> str:
     return f"{author_part}{year_part}{title_part}"
 
 
-async def rescan_pdf_doi(db: AsyncSession, user: User, item_id: str) -> str | None:
+async def rescan_pdf_doi(
+    db: AsyncSession, user: User, workspace_id: str, item_id: str
+) -> str | None:
     # Scan the immutable extracted text without holding an Item lock. Re-authorize and lock the
     # canonical Item only after a DOI candidate is found, immediately before mutating identifiers.
-    await require_editable_item(db, user, item_id)
+    await require_editable_item(db, user, workspace_id, item_id)
     revisions = list(
         (
             await db.scalars(
                 select(FileRevision)
-                .where(FileRevision.item_id == item_id)
+                .where(
+                    FileRevision.workspace_id == workspace_id,
+                    FileRevision.item_id == item_id,
+                )
                 .order_by(FileRevision.created_at.desc())
             )
         ).all()
@@ -166,10 +173,10 @@ async def rescan_pdf_doi(db: AsyncSession, user: User, item_id: str) -> str | No
         if rev.full_text:
             found_doi = first_doi_from_text(rev.full_text)
             if found_doi:
-                await require_editable_item_for_mutation(db, user, item_id)
+                await require_editable_item(db, user, workspace_id, item_id)
                 item = await db.scalar(
                     select(Item)
-                    .where(Item.id == item_id)
+                    .where(Item.id == item_id, Item.workspace_id == workspace_id)
                     .execution_options(populate_existing=True)
                     .with_for_update(key_share=True)
                 )
@@ -190,7 +197,15 @@ async def rescan_pdf_doi(db: AsyncSession, user: User, item_id: str) -> str | No
                 item.version += 1
                 await db.flush()
                 await search_index(db).index_item(db, item_id)
-                record_event(db, user.id, "item.rescan_doi", "item", item_id)
+                record_event(
+                    db,
+                    user.id,
+                    "item.rescan_doi",
+                    "item",
+                    item_id,
+                    workspace_id=item.workspace_id,
+                    authorization_capability=Capability.items_edit.value,
+                )
                 await db.commit()
                 return found_doi
     return None
@@ -307,7 +322,7 @@ async def apply_metadata_record(
         if cleaned_value:
             identifiers[provider] = cleaned_value
     if identifiers:
-        await set_item_identifiers(db, user, item.id, list(identifiers.items()))
+        await set_item_identifiers(db, user, item.workspace_id, item.id, list(identifiers.items()))
 
     return item
 
@@ -315,20 +330,22 @@ async def apply_metadata_record(
 async def create_item_from_metadata_record(
     db: AsyncSession,
     user: User,
+    workspace_id: str,
     record: CandidateRecord | dict,
 ) -> Item:
     """Create an imported Item and enqueue its initial Tag recommendation."""
-    item = Item(title="Untitled", created_by=user.id)
+    item = Item(title="Untitled", workspace_id=workspace_id, created_by=user.id)
     db.add(item)
     await db.flush()
     await apply_metadata_record(db, user, item, record)
-    await request_item_tag_recommendation(db, item.id, owner_id=user.id)
+    await request_item_tag_recommendation(db, item.id, workspace_id=workspace_id, actor_id=user.id)
     return item
 
 
 async def _sync_metadata_from_upstream(
     db: AsyncSession,
     user: User,
+    workspace_id: str,
     item_id: str,
     expected_version: int,
     provider: str,
@@ -336,7 +353,7 @@ async def _sync_metadata_from_upstream(
     settings: Settings | None = None,
 ) -> Item:
     user_id = user.id
-    item = await require_editable_item(db, user, item_id)
+    item = await require_editable_item(db, user, workspace_id, item_id)
     previous_generated_key = generate_bibtex_key(item)
     previous_key = item.bibtex_id
 
@@ -352,10 +369,14 @@ async def _sync_metadata_from_upstream(
     if reloaded_user is None or not reloaded_user.active:
         raise ResourceUnavailable("user not available")
     user = reloaded_user
-    item = await require_editable_item_for_mutation(db, user, item_id)
+    item = await require_editable_item(db, user, workspace_id, item_id)
     version = await db.scalar(
         update(Item)
-        .where(Item.id == item_id, Item.version == expected_version)
+        .where(
+            Item.id == item_id,
+            Item.workspace_id == workspace_id,
+            Item.version == expected_version,
+        )
         .values(
             updated_by=user.id,
             updated_at=datetime.now(UTC),
@@ -403,7 +424,13 @@ async def _sync_metadata_from_upstream(
     await db.flush()
 
     await search_index(db).index_item(db, item_id)
-    await request_item_tag_recommendation(db, item_id, owner_id=user.id, force=True)
+    await request_item_tag_recommendation(
+        db,
+        item_id,
+        workspace_id=item.workspace_id,
+        actor_id=user.id,
+        force=True,
+    )
     record_event(
         db,
         user.id,
@@ -419,6 +446,8 @@ async def _sync_metadata_from_upstream(
                 and (not previous_key or previous_key == previous_generated_key)
             ),
         },
+        workspace_id=item.workspace_id,
+        authorization_capability=Capability.items_edit.value,
     )
     await db.commit()
     return item
@@ -427,6 +456,7 @@ async def _sync_metadata_from_upstream(
 async def sync_metadata_from_upstream(
     db: AsyncSession,
     user: User,
+    workspace_id: str,
     item_id: str,
     expected_version: int,
     provider: str,
@@ -437,6 +467,7 @@ async def sync_metadata_from_upstream(
         return await _sync_metadata_from_upstream(
             db,
             user,
+            workspace_id,
             item_id,
             expected_version,
             provider,

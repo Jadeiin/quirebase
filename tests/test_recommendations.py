@@ -5,6 +5,7 @@ import json
 
 import pytest
 from sqlalchemy import select
+from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.config import Settings
 from quirebase.library.item_metadata import ItemMetadata, create_item
@@ -16,24 +17,36 @@ from quirebase.library.workflows import (
 from quirebase.models import Item, ItemTagRecommendation, User
 
 
+async def _user(db, username: str) -> User:
+    user = User(username=username, password_hash="hash")
+    db.add(user)
+    await db.flush()
+    await provision_initial_workspace(db, user)
+    await db.commit()
+    return user
+
+
 @pytest.mark.anyio
 async def test_request_is_idempotent_until_explicitly_superseded(async_db, fake_durable_operations):
     db = async_db
-    user = User(username="recommend-owner", password_hash="hash")
-    db.add(user)
-    await db.flush()
+    user = await _user(db, "recommend-owner")
     item = Item(
         title="Graph representation learning for molecules",
+        workspace_id=fixture_workspace_id(user),
         abstract="A robust neural method for molecular prediction.",
         keywords="provider supplied keyword",
         created_by=user.id,
     )
     db.add(item)
     await db.flush()
-    first = await request_item_tag_recommendation(db, item.id, owner_id=user.id)
+    first = await request_item_tag_recommendation(
+        db, item.id, workspace_id=fixture_workspace_id(user), actor_id=user.id
+    )
     first_workflow_id = first.workflow_id
     item.keywords = "entirely different upstream keywords"
-    second = await request_item_tag_recommendation(db, item.id, owner_id=user.id)
+    second = await request_item_tag_recommendation(
+        db, item.id, workspace_id=fixture_workspace_id(user), actor_id=user.id
+    )
 
     assert second.id == first.id
     assert second.generation_token == 1
@@ -44,15 +57,14 @@ async def test_request_is_idempotent_until_explicitly_superseded(async_db, fake_
 @pytest.mark.anyio
 async def test_item_creation_enqueues_and_worker_persists_yake_results(async_db, monkeypatch):
     db = async_db
-    user = User(username="automatic-owner", password_hash="hash")
-    db.add(user)
-    await db.commit()
+    user = await _user(db, "automatic-owner")
     settings = Settings(_env_file=None, recommendation_engine="yake")
     monkeypatch.setattr("quirebase.library.tag_recommendations.get_settings", lambda: settings)
 
     item_result = await create_item(
         db,
         user,
+        fixture_workspace_id(user),
         ItemMetadata(
             title="Graph neural networks for molecular property prediction",
             abstract=(
@@ -68,6 +80,8 @@ async def test_item_creation_enqueues_and_worker_persists_yake_results(async_db,
     assert record.workflow_id is not None
     candidates = await recommend_item_tags(db, item_result.item_id, settings=settings)
     await commit_item_tag_recommendation_step(
+        user.id,
+        fixture_workspace_id(user),
         item_result.item_id,
         record.generation_token,
         record.workflow_id,
@@ -83,20 +97,33 @@ async def test_item_creation_enqueues_and_worker_persists_yake_results(async_db,
 @pytest.mark.anyio
 async def test_stale_job_cannot_overwrite_new_generation(async_db):
     db = async_db
-    user = User(username="stale-owner", password_hash="hash")
-    db.add(user)
-    await db.flush()
-    item = Item(title="Stable title", abstract="Enough English content", created_by=user.id)
+    user = await _user(db, "stale-owner")
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        title="Stable title",
+        abstract="Enough English content",
+        created_by=user.id,
+    )
     db.add(item)
     await db.flush()
     settings = Settings(_env_file=None, recommendation_engine="yake")
-    first = await request_item_tag_recommendation(db, item.id, owner_id=user.id)
+    first = await request_item_tag_recommendation(
+        db, item.id, workspace_id=fixture_workspace_id(user), actor_id=user.id
+    )
     assert first.workflow_id is not None
-    await request_item_tag_recommendation(db, item.id, owner_id=user.id, force=True)
+    await request_item_tag_recommendation(
+        db,
+        item.id,
+        workspace_id=fixture_workspace_id(user),
+        actor_id=user.id,
+        force=True,
+    )
     await db.commit()
 
     candidates = await recommend_item_tags(db, item.id, settings=settings)
     result = await commit_item_tag_recommendation_step(
+        user.id,
+        fixture_workspace_id(user),
         item.id,
         1,
         first.workflow_id,
@@ -117,13 +144,17 @@ async def test_concurrent_force_requests_receive_distinct_generation_tokens(
     async_db, async_session_factory
 ):
     db = async_db
-    user = User(username="concurrent-recommend-owner", password_hash="hash")
-    db.add(user)
-    await db.flush()
-    item = Item(title="Concurrent recommendation requests", created_by=user.id)
+    user = await _user(db, "concurrent-recommend-owner")
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        title="Concurrent recommendation requests",
+        created_by=user.id,
+    )
     db.add(item)
     await db.flush()
-    await request_item_tag_recommendation(db, item.id, owner_id=user.id)
+    await request_item_tag_recommendation(
+        db, item.id, workspace_id=fixture_workspace_id(user), actor_id=user.id
+    )
     await db.commit()
     user_id, item_id = user.id, item.id
     original_updated_at = item.updated_at
@@ -134,7 +165,11 @@ async def test_concurrent_force_requests_receive_distinct_generation_tokens(
         async with async_session_factory() as worker_db:
             await start.wait()
             record = await request_item_tag_recommendation(
-                worker_db, item_id, owner_id=user_id, force=True
+                worker_db,
+                item_id,
+                workspace_id=fixture_workspace_id(user),
+                actor_id=user_id,
+                force=True,
             )
             await worker_db.commit()
             assert record.workflow_id is not None
@@ -156,10 +191,12 @@ async def test_concurrent_force_requests_receive_distinct_generation_tokens(
 @pytest.mark.anyio
 async def test_missing_keybert_configuration_fails_explicitly(async_db):
     db = async_db
-    user = User(username="keybert-owner", password_hash="hash")
-    db.add(user)
-    await db.flush()
-    item = Item(title="Local semantic extraction", created_by=user.id)
+    user = await _user(db, "keybert-owner")
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        title="Local semantic extraction",
+        created_by=user.id,
+    )
     db.add(item)
     await db.flush()
     settings = Settings(
@@ -167,7 +204,9 @@ async def test_missing_keybert_configuration_fails_explicitly(async_db):
         recommendation_engine="keybert",
         keybert_model_path=None,
     )
-    record = await request_item_tag_recommendation(db, item.id, owner_id=user.id)
+    record = await request_item_tag_recommendation(
+        db, item.id, workspace_id=fixture_workspace_id(user), actor_id=user.id
+    )
     assert record.workflow_id is not None
 
     with pytest.raises(RuntimeError, match="KEYBERT_MODEL_PATH"):
@@ -181,14 +220,17 @@ async def test_generation_result_does_not_include_source_text(async_db, monkeypa
     from quirebase.models import FileRevision, FileRevisionProcessingState
 
     db = async_db
-    user = User(username="compact-generation-owner", password_hash="hash")
-    db.add(user)
-    await db.flush()
-    item = Item(title="Compact checkpoint", created_by=user.id)
+    user = await _user(db, "compact-generation-owner")
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        title="Compact checkpoint",
+        created_by=user.id,
+    )
     db.add(item)
     await db.flush()
     db.add(
         FileRevision(
+            workspace_id=fixture_workspace_id(user),
             item_id=item.id,
             object_key="aa/bb/full-text.pdf",
             size=1,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from quirebase.core.timezones import as_utc
 from quirebase.documents import AnnotationKind, AnnotationPayload, AnnotationScope
@@ -50,9 +50,18 @@ class AnnotationView(BaseModel):
     author_display_name: str
     mine: bool
     editable: bool
+    hidden_at: str | None = None
+    archived_at: str | None = None
+    locked_at: str | None = None
+    moderated_by: str | None = None
     created_at: str
     updated_at: str
     replies: list[AnnotationReplyView]
+
+
+class AnnotationModerationRequest(BaseModel):
+    action: Literal["hide", "archive", "restore", "lock", "unlock"]
+    version: int = Field(ge=1)
 
 
 def document_list_view(item_id: str, workspace: Any) -> DocumentListView:

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import pytest
+from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.audit import query_events
-from quirebase.core.errors import ResourceUnavailable, ValidationFailure
+from quirebase.core.errors import PermissionDenied, ValidationFailure
 from quirebase.library import (
     Contributor,
     ExternalIdentifier,
@@ -17,21 +18,33 @@ from quirebase.library import (
     revise_item_metadata,
     search_library,
 )
-from quirebase.models import Author, Item, ItemAuthor, ItemIdentifier, User
+from quirebase.models import (
+    Author,
+    Item,
+    ItemAuthor,
+    ItemIdentifier,
+    User,
+    WorkspaceMember,
+    WorkspaceRole,
+)
+
+
+async def _user(db, username: str, *, role: str = "member") -> User:
+    user = User(username=username, password_hash="unused", role=role)
+    db.add(user)
+    await db.flush()
+    await provision_initial_workspace(db, user)
+    await db.commit()
+    return user
 
 
 @pytest.mark.anyio
 async def test_regenerate_bibtex_key_is_a_narrow_atomic_item_mutation(async_db):
     db = async_db
-    owner = User(
-        username="item-mutation-owner",
-        password_hash="unused",
-        role="administrator",
-    )
-    db.add(owner)
-    await db.flush()
+    owner = await _user(db, "item-mutation-owner", role="administrator")
     item = Item(
         title="Computing Machinery and Intelligence",
+        workspace_id=fixture_workspace_id(owner),
         abstract="Can machines think?",
         authors="Turing, Alan",
         publication_date="1950",
@@ -43,9 +56,11 @@ async def test_regenerate_bibtex_key_is_a_narrow_atomic_item_mutation(async_db):
     owner_id = owner.id
     item_id = item.id
 
-    result = await regenerate_bibtex_key(db, owner, item_id)
+    result = await regenerate_bibtex_key(db, owner, fixture_workspace_id(owner), item_id)
 
-    workspace = await open_item_workspace(db, owner, item_id, WorkspaceSection.metadata)
+    workspace = await open_item_workspace(
+        db, owner, fixture_workspace_id(owner), item_id, WorkspaceSection.metadata
+    )
     assert isinstance(workspace, MetadataWorkspace)
     updated = workspace.item
     events, total = await query_events(db, owner, action="item.bibtex_key.regenerate")
@@ -62,38 +77,38 @@ async def test_regenerate_bibtex_key_is_a_narrow_atomic_item_mutation(async_db):
 @pytest.mark.anyio
 async def test_item_metadata_rejects_values_longer_than_bounded_columns(async_db):
     db = async_db
-    owner = User(username="bounded-item-owner", password_hash="unused")
-    db.add(owner)
-    await db.commit()
+    owner = await _user(db, "bounded-item-owner")
+    workspace_id = fixture_workspace_id(owner)
 
     with pytest.raises(ValidationFailure, match="publication date is too long"):
         await create_item(
             db,
             owner,
+            workspace_id,
             ItemMetadata(title="Bounded", publication_date="x" * 33),
         )
-    await db.refresh(owner)
 
     with pytest.raises(ValidationFailure, match="reference type is too long"):
         await create_item(
             db,
             owner,
+            workspace_id,
             ItemMetadata(title="Bounded", reference_type="x" * 41),
         )
-    await db.refresh(owner)
 
     with pytest.raises(ValidationFailure, match="contributor name is too long"):
         await create_item(
             db,
             owner,
+            workspace_id,
             ItemMetadata(title="Bounded", authors=(Contributor("x" * 121),)),
         )
-    await db.refresh(owner)
 
     with pytest.raises(ValidationFailure, match="identifier value is too long"):
         await create_item(
             db,
             owner,
+            workspace_id,
             ItemMetadata(
                 title="Bounded",
                 identifiers=(ExternalIdentifier("pmid", "x" * 501),),
@@ -104,11 +119,10 @@ async def test_item_metadata_rejects_values_longer_than_bounded_columns(async_db
 @pytest.mark.anyio
 async def test_revise_item_metadata_makes_the_dedicated_doi_authoritative(async_db):
     db = async_db
-    owner = User(username="identifier-owner", password_hash="unused")
-    db.add(owner)
-    await db.flush()
+    owner = await _user(db, "identifier-owner")
     item = Item(
         title="Identifier precedence",
+        workspace_id=fixture_workspace_id(owner),
         doi="10.1000/old",
         identifiers='{"doi": "10.1000/old", "pmid": "old-pmid"}',
         created_by=owner.id,
@@ -124,6 +138,7 @@ async def test_revise_item_metadata_makes_the_dedicated_doi_authoritative(async_
     result = await revise_item_metadata(
         db,
         owner,
+        fixture_workspace_id(owner),
         item_id,
         item_version,
         ItemMetadata(
@@ -136,7 +151,9 @@ async def test_revise_item_metadata_makes_the_dedicated_doi_authoritative(async_
         ),
     )
 
-    workspace = await open_item_workspace(db, owner, item_id, WorkspaceSection.summary)
+    workspace = await open_item_workspace(
+        db, owner, fixture_workspace_id(owner), item_id, WorkspaceSection.summary
+    )
     assert isinstance(workspace, SummaryWorkspace)
     updated = workspace.item
     identifiers = {link.provider: link.value for link in workspace.identifiers}
@@ -148,11 +165,16 @@ async def test_revise_item_metadata_makes_the_dedicated_doi_authoritative(async_
 @pytest.mark.anyio
 async def test_revise_item_metadata_replaces_contributors_in_order(async_db):
     db = async_db
-    owner = User(username="contributor-owner", password_hash="unused")
+    owner = await _user(db, "contributor-owner")
     old_author = Author(last_name="Old", first_name="Author")
-    db.add_all([owner, old_author])
+    db.add(old_author)
     await db.flush()
-    item = Item(title="Contributor replacement", authors="Old, Author", created_by=owner.id)
+    item = Item(
+        workspace_id=fixture_workspace_id(owner),
+        title="Contributor replacement",
+        authors="Old, Author",
+        created_by=owner.id,
+    )
     db.add(item)
     await db.flush()
     db.add(ItemAuthor(item_id=item.id, author_id=old_author.id, position=1, role="author"))
@@ -164,6 +186,7 @@ async def test_revise_item_metadata_replaces_contributors_in_order(async_db):
     await revise_item_metadata(
         db,
         owner,
+        fixture_workspace_id(owner),
         item_id,
         item_version,
         ItemMetadata(
@@ -176,7 +199,9 @@ async def test_revise_item_metadata_replaces_contributors_in_order(async_db):
         ),
     )
 
-    workspace = await open_item_workspace(db, owner, item_id, WorkspaceSection.metadata)
+    workspace = await open_item_workspace(
+        db, owner, fixture_workspace_id(owner), item_id, WorkspaceSection.metadata
+    )
     assert isinstance(workspace, MetadataWorkspace)
     assert workspace.item.authors == "Shannon, Claude; Weaver, Warren"
     assert workspace.item.editors is None
@@ -186,17 +211,21 @@ async def test_revise_item_metadata_replaces_contributors_in_order(async_db):
     ]
     assert [link.position for link in workspace.authors] == [1, 2]
     assert workspace.authors[0].is_corresponding
-    matches, total, _, _ = await search_library(db, owner, q="Contributor replacement")
+    matches, total, _, _ = await search_library(
+        db, owner, fixture_workspace_id(owner), q="Contributor replacement"
+    )
     assert total == 1
     assert matches[0].id == item_id
 
 
 @pytest.mark.anyio
 async def test_revise_item_metadata_rejects_canonically_duplicate_contributors(async_db):
-    owner = User(username="canonical-contributor-owner", password_hash="unused")
-    async_db.add(owner)
-    await async_db.flush()
-    item = Item(title="Canonical contributor identity", created_by=owner.id)
+    owner = await _user(async_db, "canonical-contributor-owner")
+    item = Item(
+        workspace_id=fixture_workspace_id(owner),
+        title="Canonical contributor identity",
+        created_by=owner.id,
+    )
     async_db.add(item)
     await async_db.commit()
 
@@ -204,6 +233,7 @@ async def test_revise_item_metadata_rejects_canonically_duplicate_contributors(a
         await revise_item_metadata(
             async_db,
             owner,
+            fixture_workspace_id(owner),
             item.id,
             item.version,
             ItemMetadata(
@@ -216,13 +246,12 @@ async def test_revise_item_metadata_rejects_canonically_duplicate_contributors(a
 @pytest.mark.anyio
 async def test_create_item_accepts_typed_metadata_and_returns_a_mutation_result(async_db):
     db = async_db
-    owner = User(username="create-item-owner", password_hash="unused")
-    db.add(owner)
-    await db.commit()
+    owner = await _user(db, "create-item-owner")
 
     result = await create_item(
         db,
         owner,
+        fixture_workspace_id(owner),
         ItemMetadata(
             title="A Mathematical Theory of Communication",
             abstract="The fundamental problem of communication.",
@@ -233,7 +262,9 @@ async def test_create_item_accepts_typed_metadata_and_returns_a_mutation_result(
         ),
     )
 
-    workspace = await open_item_workspace(db, owner, result.item_id, WorkspaceSection.summary)
+    workspace = await open_item_workspace(
+        db, owner, fixture_workspace_id(owner), result.item_id, WorkspaceSection.summary
+    )
     assert isinstance(workspace, SummaryWorkspace)
     created = workspace.item
     assert result.version == 1
@@ -247,10 +278,12 @@ async def test_create_item_accepts_typed_metadata_and_returns_a_mutation_result(
 @pytest.mark.anyio
 async def test_revise_item_metadata_rolls_back_every_change_when_a_group_is_invalid(async_db):
     db = async_db
-    owner = User(username="atomic-item-owner", password_hash="unused")
-    db.add(owner)
-    await db.flush()
-    item = Item(title="Original title", created_by=owner.id)
+    owner = await _user(db, "atomic-item-owner")
+    item = Item(
+        workspace_id=fixture_workspace_id(owner),
+        title="Original title",
+        created_by=owner.id,
+    )
     db.add(item)
     await db.commit()
     item_id = item.id
@@ -260,6 +293,7 @@ async def test_revise_item_metadata_rolls_back_every_change_when_a_group_is_inva
         await revise_item_metadata(
             db,
             owner,
+            fixture_workspace_id(owner),
             item_id,
             item_version,
             ItemMetadata(
@@ -280,20 +314,32 @@ async def test_revise_item_metadata_rolls_back_every_change_when_a_group_is_inva
 @pytest.mark.anyio
 async def test_revise_item_metadata_enforces_item_owner_permissions(async_db):
     db = async_db
-    owner = User(username="permission-owner", password_hash="unused")
-    outsider = User(username="permission-outsider", password_hash="unused")
-    db.add_all([owner, outsider])
+    owner = await _user(db, "permission-owner")
+    outsider = await _user(db, "permission-outsider")
+    db.add(
+        WorkspaceMember(
+            workspace_id=fixture_workspace_id(owner),
+            user_id=outsider.id,
+            role=WorkspaceRole.viewer,
+            invited_by=owner.id,
+        )
+    )
     await db.flush()
-    item = Item(title="Private metadata", created_by=owner.id)
+    item = Item(
+        workspace_id=fixture_workspace_id(owner),
+        title="Private metadata",
+        created_by=owner.id,
+    )
     db.add(item)
     await db.commit()
     item_id = item.id
     item_version = item.version
 
-    with pytest.raises(ResourceUnavailable, match="item not found"):
+    with pytest.raises(PermissionDenied, match=r"items\.edit"):
         await revise_item_metadata(
             db,
             outsider,
+            fixture_workspace_id(owner),
             item_id,
             item_version,
             ItemMetadata(title="Unauthorized update"),

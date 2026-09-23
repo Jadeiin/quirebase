@@ -7,7 +7,8 @@ from sqlalchemy import delete, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
-from quirebase.access.items import require_editable_item_for_mutation
+from quirebase.access.items import require_editable_item
+from quirebase.access.workspaces import Capability, require_workspace_capability
 from quirebase.core.errors import ValidationFailure
 from quirebase.models import Author, Item, ItemAuthor, User, normalize_author_identity
 
@@ -77,6 +78,7 @@ async def find_or_create_author(
 async def set_item_authors(
     db: AsyncSession,
     user: User,
+    workspace_id: str,
     item_id: str,
     authors_data: list[dict],
     role: str = "author",
@@ -95,7 +97,7 @@ async def set_item_authors(
             raise ValidationFailure("contributors must be unique within a role")
         identities.add(identity)
 
-    item = await require_editable_item_for_mutation(db, user, item_id)
+    item = await require_editable_item(db, user, workspace_id, item_id)
 
     await db.execute(
         delete(ItemAuthor).where(ItemAuthor.item_id == item_id, ItemAuthor.role == role)
@@ -150,7 +152,7 @@ async def set_item_authors_from_string(
     parsed_authors = parse_author_list_string(raw)
     if not parsed_authors:
         return []
-    return await set_item_authors(db, user, item.id, parsed_authors, role=role)
+    return await set_item_authors(db, user, item.workspace_id, item.id, parsed_authors, role=role)
 
 
 async def get_item_authors(
@@ -168,18 +170,28 @@ async def get_item_authors(
     )
 
 
-async def search_authors_typeahead(db: AsyncSession, query: str, limit: int = 10) -> list[dict]:
+async def search_authors_typeahead(
+    db: AsyncSession, user: User, workspace_id: str, query: str, limit: int = 10
+) -> list[dict]:
+    await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
     term = query.strip()
     if not term:
         return []
     pattern = f"{term}%"
+    linked_item = (
+        select(ItemAuthor.id)
+        .join(Item, Item.id == ItemAuthor.item_id)
+        .where(ItemAuthor.author_id == Author.id, Item.workspace_id == workspace_id)
+        .exists()
+    )
     stmt = (
         select(Author)
         .where(
+            linked_item,
             or_(
                 Author.last_name.ilike(pattern),
                 Author.first_name.ilike(pattern),
-            )
+            ),
         )
         .order_by(Author.last_name, Author.first_name)
         .limit(limit)

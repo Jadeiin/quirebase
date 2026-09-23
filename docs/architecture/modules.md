@@ -11,6 +11,7 @@ Planned deepening work is ordered in `docs/architecture/deep-module-roadmap.md`.
 | Package | Role | Owns |
 | --- | --- | --- |
 | `accounts` | Business Module | User authentication, Invitations, Login Sessions, API Tokens and login throttling |
+| `workspaces` | Business Module | Workspace provisioning, membership, invitations, ownership and lifecycle governance |
 | `access` | Domain-policy Module | Authorization decisions over Items, Tags, Projects, Documents and Annotations |
 | `audit` | Business Module | Audit Event construction, programmatic invocation provenance, detail serialization and administrative queries |
 | `library` | Business Module | Items, Authors, Identifiers, Tags, Item Tag Recommendations, Discussion Messages, Import Batches and Citation Styles |
@@ -97,6 +98,14 @@ callers select the configured implementation through `search_index`. DBOS regist
 low-level document staging, ORM synchronization helpers and operational file utilities likewise
 stay in their owning implementation modules rather than package facades.
 
+Workspace authorization is resolved once at an inbound request or workflow boundary into an
+`access.WorkspaceContext`. Business operations may use the thin `access.workspace_select()`
+lineage primitive and Module-owned aggregate loaders (`get_item`, `get_project`,
+`get_project_item`, and document loaders). The primitive only adds the Workspace lineage
+predicate; capability checks and Project visibility remain explicit Access gates, while mutation
+statements retain their Workspace and CAS predicates at the linearization point. No generic
+Repository or implicit ORM tenant filter is part of this seam.
+
 Citation Style lookup and access control cross the Library Interface. Library delegates CSL
 formatting to `inquiro`, but translates its declared engine-unavailable error into a typed domain
 error at that seam. Callers therefore do not need to know whether citation formatting is backed by
@@ -161,8 +170,9 @@ translated only inside the Web asset and never enter Documents persistence or AP
 Tag selection is presented by the Item Workspace and committed through additive/remove commands
 (`add_tag_to_item` and `remove_tag_from_item`). Existing Tags may be matched case-insensitively
 against an Item Tag Recommendation, while candidates absent from the taxonomy are returned as
-suggested names. Tag reads expose only Tags the User authored or that label an accessible Item, so
-foreign Tags without accessible Items stay concealed; administrators see the full taxonomy.
+suggested names. Tag reads expose the selected Workspace's taxonomy to its active members.
+The creator of a Tag has no separate visibility or management authority; Workspace capabilities
+govern taxonomy edits.
 Taxonomy maintenance crosses the Library interface through rename, delete and
 `merge_tags`; these operations mutate only Tag and association rows and never invalidate Search.
 
@@ -177,26 +187,26 @@ identifier. Library metadata writes enqueue generation transactionally through C
 Adapter, and the Library-owned workflow invokes the Library operation.
 
 Opening a Project crosses the Projects interface through `open_project_workspace`, which returns
-a typed read model containing the Project, the caller's membership, members and assigned Items.
-Membership authorization and the related queries remain coordinated behind that operation; only
-the Web adapter maps the typed view to an API projection.
+a typed read model containing the Project, optional caller participation, members and assigned
+Items. Workspace membership/capability and Project visibility authorization remain coordinated
+behind that operation; only the Web adapter maps the typed view to an API projection.
 
 The Project settings form crosses the Projects interface through `update_project_settings`.
 Name, description and visibility are validated before mutation and committed with their Audit
 Event in one transaction; the Web adapter sends the form as one request and does not coordinate
 partial Project updates.
 
-Project-scoped mutations lock the Project root only when changing Project state or membership;
-ownership is represented by `Project.owner_id` and transfer updates the owner and membership rows
-atomically. Item assignments use the Project root plus FK/primary-key idempotency and do not
-participate in a global lock graph. Library bulk assignment crosses this Projects interface while
-retaining ownership of the surrounding bulk-operation transaction and Audit Event.
+Project-scoped mutations lock the Project root only when changing Project state, visibility or
+membership. Project authority comes exclusively from Workspace capabilities; ProjectMember has no
+role and is only a visibility/participation scope gate. Item assignments use the Project root plus
+FK/unique-key idempotency and do not participate in a global lock graph. Library bulk assignment
+crosses this Projects interface while retaining ownership of the surrounding bulk-operation
+transaction and Audit Event.
 
-Administrator Project management crosses the Projects interface through
-`list_projects_for_admin`, which returns a paginated directory with creator and membership/item
-counts. Administrator lifecycle mutations reuse the Projects operations so state changes,
-visibility changes, renames and their Audit Events remain subject to one business seam; the Web
-administration adapter owns filtering controls and UI projection.
+Instance administrators do not receive an implicit Projects interface. They may inspect Workspace
+tenancy metadata and suspend or recover governance, but Project content remains behind Workspace
+membership. Exceptional content reads use the reason-required, read-only break-glass operation and
+do not change ordinary endpoint authorization.
 
 `inquiro` presents one asynchronous `ProviderRuntime` as its reusable Provider Interface. Callers
 use `async with` and await its operations; `lookup` and `search` return immutable Candidate Record values, while
@@ -286,13 +296,14 @@ directions are:
 | Source | May depend on | Ownership reason |
 | --- | --- | --- |
 | `access` | `core`, `models` | Evaluate policies using persisted identities and domain errors |
-| `accounts` | `audit`, `core`, `models` | Authentication persistence and Audit Event recording |
+| `accounts` | `audit`, `core`, `models`, `operations`, `workspaces` | Authentication persistence, Audit Event recording, runtime registration policy and initial Workspace provisioning |
 | `audit` | `core`, `models` | Authorization errors and Audit Event persistence |
 | `library` | `access`, `audit`, `core`, `documents`, `models`, `operations`, `projects`, `search` | Authorization, persistence and auditing; selected-Item document assembly; Project-gated bulk assignment; runtime Provider/import settings; Library-owned workflows and search-index synchronization |
-| `projects` | `access`, `audit`, `core`, `models` | Authorization, Project persistence and audit recording |
+| `projects` | `access`, `audit`, `core`, `documents`, `models` | Authorization, Project persistence and audit recording; Documents-owned Annotation cleanup when detaching a ProjectItem |
 | `documents` | `access`, `audit`, `core`, `models`, `operations`, `search` | Authorization, owned-object persistence, auditing, runtime settings, Documents workflows and revision-owned Search projection |
-| `operations` | `audit`, `core`, `library`, `models`, `search` | Infrastructure access, operational persistence, maintenance workflows, global rebuild coordination and audit recording |
+| `operations` | `access`, `audit`, `core`, `library`, `models`, `search` | Infrastructure access, operational persistence, Workspace-authorized maintenance workflows, global integrity coordination and audit recording |
 | `search` | `models` | Build and query the derived search representation |
+| `workspaces` | `access`, `audit`, `core`, `documents`, `models`, `operations` | Workspace authorization, membership/invitation persistence, audit recording, runtime Workspace creation policy and reference-safe physical cleanup after deletion |
 | `web` | Business Modules, `access`, `accounts`, `audit`, `core`, `documents`, `library`, `mcp`, `models`, `operations`, `projects`, `search` | Invoke use cases, own capability-local HTTP DTOs and projections, expose `/api/v1` through explicit Bearer or Login Session authentication, enforce cookie-request Origins, format responses, serve the static application and compose the MCP HTTP mount |
 | `mcp` | `accounts`, `audit`, `core` | Verify API Tokens at the MCP transport, select a fixed OpenAPI operation allowlist, bind trusted MCP provenance and invoke the same `/api/v1` handlers through an in-process ASGI client |
 | `core` | Nothing above infrastructure | Infrastructure must not know business concepts |

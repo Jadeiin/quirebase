@@ -23,7 +23,7 @@ from quirebase.web.api.import_schemas import (
 )
 from quirebase.web.uploads import upload_chunks
 
-router = APIRouter(tags=["Imports"])
+router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["Imports"])
 
 
 def _import_batch_view(batch, records: list[dict], errors: list[dict]) -> dict:
@@ -44,13 +44,14 @@ def _import_batch_view(batch, records: list[dict], errors: list[dict]) -> dict:
     status_code=status.HTTP_201_CREATED,
 )
 async def stage_bibliography_import(
+    workspace_id: str,
     user: ApiUser,
     db: Database,
     bibliography: Annotated[UploadFile, File()],
     file_format: Annotated[str, Form()],
 ):
     raw = await bibliography.read(5 * 1024 * 1024 + 1)
-    return _import_batch_view(*(await stage_import_batch(db, user, raw, file_format)))
+    return _import_batch_view(*(await stage_import_batch(db, user, workspace_id, raw, file_format)))
 
 
 @router.post(
@@ -58,10 +59,13 @@ async def stage_bibliography_import(
     response_model=ImportBatchView,
     status_code=status.HTTP_201_CREATED,
 )
-async def stage_identifier_import(data: IdentifierImportRequest, user: ApiUser, db: Database):
+async def stage_identifier_import(
+    workspace_id: str, data: IdentifierImportRequest, user: ApiUser, db: Database
+):
     result = await stage_identifier_import_batch(
         db,
         user,
+        workspace_id,
         data.identifier,
         data.provider,
         settings=await get_effective_settings_model(db),
@@ -74,10 +78,16 @@ async def stage_identifier_import(data: IdentifierImportRequest, user: ApiUser, 
     response_model=ImportBatchView,
     status_code=status.HTTP_202_ACCEPTED,
 )
-async def stage_pdf_import(user: ApiUser, db: Database, pdfs: Annotated[list[UploadFile], File()]):
+async def stage_pdf_import(
+    workspace_id: str,
+    user: ApiUser,
+    db: Database,
+    pdfs: Annotated[list[UploadFile], File()],
+):
     result = await stage_pdf_import_batch(
         db,
         user,
+        workspace_id,
         [(upload_chunks(pdf), pdf.filename or "") for pdf in pdfs],
         settings=await get_effective_settings_model(db),
     )
@@ -85,23 +95,27 @@ async def stage_pdf_import(user: ApiUser, db: Database, pdfs: Annotated[list[Upl
 
 
 @router.get("/imports/{batch_id}", response_model=ImportBatchView)
-async def import_batch(batch_id: str, user: ApiUser, db: Database):
-    return _import_batch_view(*(await get_import_batch_preview(db, user, batch_id)))
+async def import_batch(workspace_id: str, batch_id: str, user: ApiUser, db: Database):
+    return _import_batch_view(*(await get_import_batch_preview(db, user, workspace_id, batch_id)))
 
 
 @router.post("/imports/{batch_id}/retry", response_model=ImportBatchRetryView)
-async def retry_import_batch(batch_id: str, user: ApiUser, db: Database):
-    batch = await retry_pdf_import_batch(db, user, batch_id)
+async def retry_import_batch(workspace_id: str, batch_id: str, user: ApiUser, db: Database):
+    batch = await retry_pdf_import_batch(db, user, workspace_id, batch_id)
     return {"id": batch.id, "status": batch.status, "workflow_id": batch.workflow_id}
 
 
 @router.post("/imports/{batch_id}/commit", response_model=OkView)
-async def commit_staged_import(batch_id: str, user: ApiUser, db: Database) -> OkView:
-    await commit_import_batch(db, user, batch_id)
+async def commit_staged_import(
+    workspace_id: str, batch_id: str, user: ApiUser, db: Database
+) -> OkView:
+    await commit_import_batch(db, user, workspace_id, batch_id)
     return OkView()
 
 
 @router.delete("/imports/{batch_id}", response_model=OkView)
-async def discard_staged_import(batch_id: str, user: ApiUser, db: Database) -> OkView:
-    await discard_import_batch(db, user, batch_id)
+async def discard_staged_import(
+    workspace_id: str, batch_id: str, user: ApiUser, db: Database
+) -> OkView:
+    await discard_import_batch(db, user, workspace_id, batch_id)
     return OkView()

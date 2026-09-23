@@ -1,8 +1,8 @@
-"""initial schema
+"""initial workspace schema
 
-Revision ID: a2254a6c211f
+Revision ID: 5c1d5e851c78
 Revises:
-Create Date: 2026-09-15 16:23:36.694528
+Create Date: 2026-09-22 16:45:35.507543
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'a2254a6c211f'
+revision: str = '5c1d5e851c78'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -31,16 +31,6 @@ def upgrade() -> None:
     sa.UniqueConstraint('identity_key', name='uq_authors_identity')
     )
     op.create_index(op.f('ix_authors_last_name'), 'authors', ['last_name'], unique=False)
-    op.create_table('export_artifacts',
-    sa.Column('workflow_id', sa.String(length=255), nullable=False),
-    sa.Column('object_key', sa.String(length=500), nullable=False),
-    sa.Column('filename', sa.String(length=255), nullable=False),
-    sa.Column('size', sa.Integer(), nullable=False),
-    sa.Column('expires_at', sa.DateTime(timezone=True), nullable=False),
-    sa.PrimaryKeyConstraint('workflow_id'),
-    sa.UniqueConstraint('object_key')
-    )
-    op.create_index(op.f('ix_export_artifacts_expires_at'), 'export_artifacts', ['expires_at'], unique=False)
     op.create_table('login_throttles',
     sa.Column('identity_hash', sa.String(length=64), nullable=False),
     sa.Column('failures', sa.Integer(), nullable=False),
@@ -73,6 +63,25 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_users_username'), 'users', ['username'], unique=True)
+    op.create_table('workspaces',
+    sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('name', sa.String(length=240), nullable=False),
+    sa.Column('created_by', sa.String(length=36), nullable=False),
+    sa.Column('owner_id', sa.String(length=36), nullable=False),
+    sa.Column('state', sa.Enum('active', 'archived', 'deleted', name='workspace_state', native_enum=False), nullable=False),
+    sa.Column('governance_suspended_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('governance_suspended_by', sa.String(length=36), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('archived_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
+    sa.CheckConstraint("state IN ('active', 'archived', 'deleted')", name='ck_workspaces_state'),
+    sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['governance_suspended_by'], ['users.id'], ondelete='SET NULL'),
+    sa.ForeignKeyConstraint(['owner_id'], ['users.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_workspaces_owner_id'), 'workspaces', ['owner_id'], unique=False)
     op.create_table('api_tokens',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('name', sa.String(length=120), nullable=False),
@@ -87,31 +96,37 @@ def upgrade() -> None:
     op.create_index(op.f('ix_api_tokens_expires_at'), 'api_tokens', ['expires_at'], unique=False)
     op.create_index(op.f('ix_api_tokens_token_hash'), 'api_tokens', ['token_hash'], unique=True)
     op.create_index(op.f('ix_api_tokens_user_id'), 'api_tokens', ['user_id'], unique=False)
-    op.create_table('audit_events',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('actor_id', sa.String(length=36), nullable=True),
-    sa.Column('action', sa.String(length=120), nullable=False),
-    sa.Column('target_type', sa.String(length=80), nullable=False),
-    sa.Column('target_id', sa.String(length=36), nullable=True),
-    sa.Column('detail', sa.Text(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
-    sa.ForeignKeyConstraint(['actor_id'], ['users.id'], ondelete='SET NULL'),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_audit_events_action'), 'audit_events', ['action'], unique=False)
     op.create_table('citation_styles',
     sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('workspace_id', sa.String(length=36), nullable=False),
     sa.Column('name', sa.String(length=120), nullable=False),
     sa.Column('csl_xml', sa.Text(), nullable=False),
     sa.Column('created_by', sa.String(length=36), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.ForeignKeyConstraint(['created_by'], ['users.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id')
+    sa.ForeignKeyConstraint(['workspace_id'], ['workspaces.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('workspace_id', 'name', name='uq_citation_styles_workspace_name')
     )
     op.create_index(op.f('ix_citation_styles_created_by'), 'citation_styles', ['created_by'], unique=False)
+    op.create_index(op.f('ix_citation_styles_workspace_id'), 'citation_styles', ['workspace_id'], unique=False)
+    op.create_table('export_artifacts',
+    sa.Column('workflow_id', sa.String(length=255), nullable=False),
+    sa.Column('workspace_id', sa.String(length=36), nullable=False),
+    sa.Column('object_key', sa.String(length=500), nullable=False),
+    sa.Column('filename', sa.String(length=255), nullable=False),
+    sa.Column('size', sa.Integer(), nullable=False),
+    sa.Column('expires_at', sa.DateTime(timezone=True), nullable=False),
+    sa.ForeignKeyConstraint(['workspace_id'], ['workspaces.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('workflow_id'),
+    sa.UniqueConstraint('object_key')
+    )
+    op.create_index(op.f('ix_export_artifacts_expires_at'), 'export_artifacts', ['expires_at'], unique=False)
+    op.create_index(op.f('ix_export_artifacts_workspace_id'), 'export_artifacts', ['workspace_id'], unique=False)
     op.create_table('import_batches',
     sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('owner_id', sa.String(length=36), nullable=False),
+    sa.Column('workspace_id', sa.String(length=36), nullable=False),
+    sa.Column('actor_id', sa.String(length=36), nullable=False),
     sa.Column('file_format', sa.String(length=16), nullable=False),
     sa.Column('records', sa.Text(), nullable=False),
     sa.Column('errors', sa.Text(), nullable=False),
@@ -120,12 +135,14 @@ def upgrade() -> None:
     sa.Column('committed_item_ids', sa.Text(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.CheckConstraint("status IN ('pending', 'ready', 'failed', 'committed')", name='ck_import_batches_status'),
-    sa.ForeignKeyConstraint(['owner_id'], ['users.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['actor_id'], ['users.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['workspace_id'], ['workspaces.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_index(op.f('ix_import_batches_actor_id'), 'import_batches', ['actor_id'], unique=False)
     op.create_index(op.f('ix_import_batches_created_at'), 'import_batches', ['created_at'], unique=False)
-    op.create_index(op.f('ix_import_batches_owner_id'), 'import_batches', ['owner_id'], unique=False)
     op.create_index(op.f('ix_import_batches_workflow_id'), 'import_batches', ['workflow_id'], unique=False)
+    op.create_index(op.f('ix_import_batches_workspace_id'), 'import_batches', ['workspace_id'], unique=False)
     op.create_table('invitations',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('token_hash', sa.String(length=64), nullable=False),
@@ -143,6 +160,7 @@ def upgrade() -> None:
     op.create_index(op.f('ix_invitations_token_hash'), 'invitations', ['token_hash'], unique=True)
     op.create_table('items',
     sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('workspace_id', sa.String(length=36), nullable=False),
     sa.Column('title', sa.Text(), nullable=False),
     sa.Column('abstract', sa.Text(), nullable=True),
     sa.Column('publication_date', sa.String(length=32), nullable=True),
@@ -171,15 +189,17 @@ def upgrade() -> None:
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
     sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
     sa.ForeignKeyConstraint(['updated_by'], ['users.id'], ondelete='SET NULL'),
-    sa.PrimaryKeyConstraint('id')
+    sa.ForeignKeyConstraint(['workspace_id'], ['workspaces.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('workspace_id', 'id', name='uq_items_workspace_id')
     )
     op.create_index(op.f('ix_items_bibtex_id'), 'items', ['bibtex_id'], unique=False)
     op.create_index(op.f('ix_items_doi'), 'items', ['doi'], unique=False)
     op.create_index(op.f('ix_items_title'), 'items', ['title'], unique=False)
+    op.create_index(op.f('ix_items_workspace_id'), 'items', ['workspace_id'], unique=False)
     op.create_table('login_sessions',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('token_hash', sa.String(length=64), nullable=False),
-    sa.Column('csrf_token', sa.String(length=64), nullable=False),
     sa.Column('user_id', sa.String(length=36), nullable=False),
     sa.Column('expires_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
@@ -190,21 +210,22 @@ def upgrade() -> None:
     op.create_index(op.f('ix_login_sessions_token_hash'), 'login_sessions', ['token_hash'], unique=True)
     op.create_table('projects',
     sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('workspace_id', sa.String(length=36), nullable=False),
     sa.Column('name', sa.String(length=240), nullable=False),
     sa.Column('description', sa.Text(), nullable=False),
     sa.Column('created_by', sa.String(length=36), nullable=False),
-    sa.Column('owner_id', sa.String(length=36), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
-    sa.Column('state', sa.Enum('active', 'archived', name='project_state', native_enum=False), nullable=False),
-    sa.Column('visibility', sa.Enum('private', 'public', name='project_visibility', native_enum=False), nullable=False),
-    sa.CheckConstraint("state IN ('active', 'archived')", name='ck_projects_state'),
-    sa.CheckConstraint("visibility IN ('private', 'public')", name='ck_projects_visibility'),
+    sa.Column('state', sa.Enum('active', 'archived', 'deleted', name='project_state', native_enum=False), nullable=False),
+    sa.Column('visibility', sa.Enum('workspace', 'members', name='project_visibility', native_enum=False), nullable=False),
+    sa.CheckConstraint("state IN ('active', 'archived', 'deleted')", name='ck_projects_state'),
+    sa.CheckConstraint("visibility IN ('workspace', 'members')", name='ck_projects_visibility'),
     sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
-    sa.ForeignKeyConstraint(['owner_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('id')
+    sa.ForeignKeyConstraint(['workspace_id'], ['workspaces.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('workspace_id', 'id', name='uq_projects_workspace_id')
     )
-    op.create_index(op.f('ix_projects_owner_id'), 'projects', ['owner_id'], unique=False)
+    op.create_index(op.f('ix_projects_workspace_id'), 'projects', ['workspace_id'], unique=False)
     op.create_table('system_settings',
     sa.Column('key', sa.String(length=64), nullable=False),
     sa.Column('value', sa.Text(), nullable=False),
@@ -215,15 +236,65 @@ def upgrade() -> None:
     )
     op.create_table('tags',
     sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('workspace_id', sa.String(length=36), nullable=False),
     sa.Column('name', sa.String(length=120), nullable=False),
+    sa.Column('normalized_name', sa.String(length=120), nullable=False),
     sa.Column('created_by', sa.String(length=36), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['workspace_id'], ['workspaces.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('workspace_id', 'id', name='uq_tags_workspace_id'),
+    sa.UniqueConstraint('workspace_id', 'normalized_name', name='uq_tags_workspace_normalized')
+    )
+    op.create_index(op.f('ix_tags_name'), 'tags', ['name'], unique=False)
+    op.create_index(op.f('ix_tags_normalized_name'), 'tags', ['normalized_name'], unique=False)
+    op.create_index(op.f('ix_tags_workspace_id'), 'tags', ['workspace_id'], unique=False)
+    op.create_table('workspace_invitations',
+    sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('workspace_id', sa.String(length=36), nullable=False),
+    sa.Column('user_id', sa.String(length=36), nullable=False),
+    sa.Column('role', sa.Enum('owner', 'admin', 'editor', 'reviewer', 'viewer', name='workspace_invitation_role', native_enum=False), nullable=False),
+    sa.Column('token_hash', sa.String(length=64), nullable=False),
+    sa.Column('invited_by', sa.String(length=36), nullable=False),
+    sa.Column('expires_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('accepted_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('revoked_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.CheckConstraint("role IN ('admin', 'editor', 'reviewer', 'viewer')", name='ck_workspace_invitations_role'),
+    sa.ForeignKeyConstraint(['invited_by'], ['users.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['workspace_id'], ['workspaces.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_index(op.f('ix_tags_name'), 'tags', ['name'], unique=True)
+    op.create_index(op.f('ix_workspace_invitations_expires_at'), 'workspace_invitations', ['expires_at'], unique=False)
+    op.create_index(op.f('ix_workspace_invitations_token_hash'), 'workspace_invitations', ['token_hash'], unique=True)
+    op.create_index(op.f('ix_workspace_invitations_user_id'), 'workspace_invitations', ['user_id'], unique=False)
+    op.create_index(op.f('ix_workspace_invitations_workspace_id'), 'workspace_invitations', ['workspace_id'], unique=False)
+    op.create_table('workspace_members',
+    sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('workspace_id', sa.String(length=36), nullable=False),
+    sa.Column('user_id', sa.String(length=36), nullable=False),
+    sa.Column('role', sa.Enum('owner', 'admin', 'editor', 'reviewer', 'viewer', name='workspace_role', native_enum=False), nullable=False),
+    sa.Column('state', sa.Enum('active', 'suspended', name='workspace_member_state', native_enum=False), nullable=False),
+    sa.Column('invited_by', sa.String(length=36), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('suspended_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('terminated_at', sa.DateTime(timezone=True), nullable=True),
+    sa.CheckConstraint("role IN ('owner', 'admin', 'editor', 'reviewer', 'viewer')", name='ck_workspace_members_role'),
+    sa.CheckConstraint("state IN ('active', 'suspended')", name='ck_workspace_members_state'),
+    sa.ForeignKeyConstraint(['invited_by'], ['users.id'], ondelete='SET NULL'),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['workspace_id'], ['workspaces.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_workspace_members_user_id'), 'workspace_members', ['user_id'], unique=False)
+    op.create_index(op.f('ix_workspace_members_workspace_id'), 'workspace_members', ['workspace_id'], unique=False)
+    op.create_index('uq_workspace_members_current', 'workspace_members', ['workspace_id', 'user_id'], unique=True, sqlite_where=sa.text('terminated_at IS NULL'), postgresql_where=sa.text('terminated_at IS NULL'))
+    op.create_index('uq_workspace_members_current_owner', 'workspace_members', ['workspace_id'], unique=True, sqlite_where=sa.text("terminated_at IS NULL AND role = 'owner'"), postgresql_where=sa.text("terminated_at IS NULL AND role = 'owner'"))
     op.create_table('attachments',
     sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('workspace_id', sa.String(length=36), nullable=False),
     sa.Column('item_id', sa.String(length=36), nullable=False),
     sa.Column('object_key', sa.String(length=200), nullable=False),
     sa.Column('size', sa.Integer(), nullable=False),
@@ -234,27 +305,57 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.CheckConstraint("role IS NULL OR role = 'graphical_abstract'", name='ck_attachments_role'),
     sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
-    sa.ForeignKeyConstraint(['item_id'], ['items.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['workspace_id', 'item_id'], ['items.workspace_id', 'items.id'], name='fk_attachments_item_workspace', ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('item_id', 'role', name='uq_attachments_item_role')
     )
     op.create_index(op.f('ix_attachments_item_id'), 'attachments', ['item_id'], unique=False)
     op.create_index(op.f('ix_attachments_object_key'), 'attachments', ['object_key'], unique=False)
+    op.create_index(op.f('ix_attachments_workspace_id'), 'attachments', ['workspace_id'], unique=False)
+    op.create_table('audit_events',
+    sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('actor_id', sa.String(length=36), nullable=True),
+    sa.Column('workspace_id', sa.String(length=36), nullable=True),
+    sa.Column('project_id', sa.String(length=36), nullable=True),
+    sa.Column('action', sa.String(length=120), nullable=False),
+    sa.Column('target_type', sa.String(length=80), nullable=False),
+    sa.Column('target_id', sa.String(length=36), nullable=True),
+    sa.Column('detail', sa.Text(), nullable=True),
+    sa.Column('target_ids', sa.Text(), nullable=True),
+    sa.Column('authorization_role', sa.String(length=32), nullable=True),
+    sa.Column('authorization_capability', sa.String(length=80), nullable=True),
+    sa.Column('result', sa.String(length=32), nullable=True),
+    sa.Column('source', sa.String(length=32), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.ForeignKeyConstraint(['actor_id'], ['users.id'], ondelete='SET NULL'),
+    sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='SET NULL'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_audit_events_action'), 'audit_events', ['action'], unique=False)
+    op.create_index(op.f('ix_audit_events_project_id'), 'audit_events', ['project_id'], unique=False)
+    op.create_index(op.f('ix_audit_events_workspace_id'), 'audit_events', ['workspace_id'], unique=False)
     op.create_table('discussion_messages',
     sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('item_id', sa.String(length=36), nullable=False),
+    sa.Column('workspace_id', sa.String(length=36), nullable=False),
+    sa.Column('item_id', sa.String(length=36), nullable=True),
+    sa.Column('project_id', sa.String(length=36), nullable=True),
     sa.Column('author_id', sa.String(length=36), nullable=False),
     sa.Column('body', sa.Text(), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
+    sa.CheckConstraint("(item_id IS NOT NULL AND project_id IS NULL) OR (item_id IS NULL AND project_id IS NOT NULL)", name='ck_discussion_messages_context'),
     sa.ForeignKeyConstraint(['author_id'], ['users.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['item_id'], ['items.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['workspace_id', 'item_id'], ['items.workspace_id', 'items.id'], name='fk_discussion_messages_item_workspace', ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['workspace_id', 'project_id'], ['projects.workspace_id', 'projects.id'], name='fk_discussion_messages_project_workspace', ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_discussion_messages_author_id'), 'discussion_messages', ['author_id'], unique=False)
     op.create_index(op.f('ix_discussion_messages_item_id'), 'discussion_messages', ['item_id'], unique=False)
+    op.create_index(op.f('ix_discussion_messages_project_id'), 'discussion_messages', ['project_id'], unique=False)
+    op.create_index(op.f('ix_discussion_messages_workspace_id'), 'discussion_messages', ['workspace_id'], unique=False)
     op.create_table('file_revisions',
     sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('workspace_id', sa.String(length=36), nullable=False),
     sa.Column('item_id', sa.String(length=36), nullable=False),
     sa.Column('object_key', sa.String(length=200), nullable=False),
     sa.Column('thumbnail_object_key', sa.String(length=200), nullable=True),
@@ -270,12 +371,15 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.CheckConstraint("processing_state IN ('pending', 'ready')", name='ck_file_revisions_processing_state'),
     sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
-    sa.ForeignKeyConstraint(['item_id'], ['items.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id')
+    sa.ForeignKeyConstraint(['workspace_id', 'item_id'], ['items.workspace_id', 'items.id'], name='fk_file_revisions_item_workspace', ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('workspace_id', 'id', name='uq_file_revisions_workspace_id'),
+    sa.UniqueConstraint('workspace_id', 'id', 'item_id', name='uq_file_revisions_workspace_id_item')
     )
     op.create_index(op.f('ix_file_revisions_item_id'), 'file_revisions', ['item_id'], unique=False)
     op.create_index(op.f('ix_file_revisions_object_key'), 'file_revisions', ['object_key'], unique=False)
     op.create_index(op.f('ix_file_revisions_thumbnail_object_key'), 'file_revisions', ['thumbnail_object_key'], unique=False)
+    op.create_index(op.f('ix_file_revisions_workspace_id'), 'file_revisions', ['workspace_id'], unique=False)
     op.create_table('item_authors',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('item_id', sa.String(length=36), nullable=False),
@@ -306,14 +410,17 @@ def upgrade() -> None:
     op.create_table('item_reads',
     sa.Column('user_id', sa.String(length=36), nullable=False),
     sa.Column('item_id', sa.String(length=36), nullable=False),
+    sa.Column('workspace_id', sa.String(length=36), nullable=False),
     sa.Column('last_read_at', sa.DateTime(timezone=True), nullable=False),
-    sa.ForeignKeyConstraint(['item_id'], ['items.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['workspace_id', 'item_id'], ['items.workspace_id', 'items.id'], name='fk_item_reads_item_workspace', ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('user_id', 'item_id')
     )
     op.create_index(op.f('ix_item_reads_last_read_at'), 'item_reads', ['last_read_at'], unique=False)
+    op.create_index(op.f('ix_item_reads_workspace_id'), 'item_reads', ['workspace_id'], unique=False)
     op.create_table('item_tag_recommendations',
     sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('workspace_id', sa.String(length=36), nullable=False),
     sa.Column('item_id', sa.String(length=36), nullable=False),
     sa.Column('generation_token', sa.Integer(), nullable=False),
     sa.Column('workflow_id', sa.String(length=255), nullable=True),
@@ -323,42 +430,63 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
     sa.CheckConstraint('generation_token >= 1', name='ck_item_tag_recommendations_token'),
-    sa.ForeignKeyConstraint(['item_id'], ['items.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['workspace_id', 'item_id'], ['items.workspace_id', 'items.id'], name='fk_item_tag_recommendations_item_workspace', ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_item_tag_recommendations_item_id'), 'item_tag_recommendations', ['item_id'], unique=True)
     op.create_index(op.f('ix_item_tag_recommendations_workflow_id'), 'item_tag_recommendations', ['workflow_id'], unique=False)
+    op.create_index(op.f('ix_item_tag_recommendations_workspace_id'), 'item_tag_recommendations', ['workspace_id'], unique=False)
     op.create_table('item_tags',
+    sa.Column('workspace_id', sa.String(length=36), nullable=False),
     sa.Column('item_id', sa.String(length=36), nullable=False),
     sa.Column('tag_id', sa.String(length=36), nullable=False),
-    sa.ForeignKeyConstraint(['item_id'], ['items.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['tag_id'], ['tags.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['workspace_id', 'item_id'], ['items.workspace_id', 'items.id'], name='fk_item_tags_item_workspace', ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['workspace_id', 'tag_id'], ['tags.workspace_id', 'tags.id'], name='fk_item_tags_tag_workspace', ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('item_id', 'tag_id')
     )
+    op.create_index(op.f('ix_item_tags_workspace_id'), 'item_tags', ['workspace_id'], unique=False)
     op.create_table('project_items',
+    sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('workspace_id', sa.String(length=36), nullable=False),
     sa.Column('project_id', sa.String(length=36), nullable=False),
     sa.Column('item_id', sa.String(length=36), nullable=False),
-    sa.ForeignKeyConstraint(['item_id'], ['items.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('project_id', 'item_id')
+    sa.Column('added_by', sa.String(length=36), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.ForeignKeyConstraint(['added_by'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['workspace_id', 'item_id'], ['items.workspace_id', 'items.id'], name='fk_project_items_item_workspace', ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['workspace_id', 'project_id'], ['projects.workspace_id', 'projects.id'], name='fk_project_items_project_workspace', ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('workspace_id', 'id', name='uq_project_items_workspace_id'),
+    sa.UniqueConstraint('workspace_id', 'id', 'item_id', name='uq_project_items_workspace_id_item'),
+    sa.UniqueConstraint('workspace_id', 'project_id', 'item_id', name='uq_project_items_workspace')
     )
+    op.create_index(op.f('ix_project_items_item_id'), 'project_items', ['item_id'], unique=False)
+    op.create_index(op.f('ix_project_items_project_id'), 'project_items', ['project_id'], unique=False)
+    op.create_index(op.f('ix_project_items_workspace_id'), 'project_items', ['workspace_id'], unique=False)
     op.create_table('project_members',
+    sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('workspace_id', sa.String(length=36), nullable=False),
     sa.Column('project_id', sa.String(length=36), nullable=False),
     sa.Column('user_id', sa.String(length=36), nullable=False),
-    sa.Column('role', sa.Enum('owner', 'editor', 'viewer', name='project_role', native_enum=False), nullable=False),
-    sa.CheckConstraint("role IN ('owner', 'editor', 'viewer')", name='ck_project_members_role'),
-    sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='CASCADE'),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('project_id', 'user_id')
+    sa.ForeignKeyConstraint(['workspace_id', 'project_id'], ['projects.workspace_id', 'projects.id'], name='fk_project_members_project_workspace', ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('workspace_id', 'project_id', 'user_id', name='uq_project_member_workspace')
     )
+    op.create_index(op.f('ix_project_members_project_id'), 'project_members', ['project_id'], unique=False)
+    op.create_index(op.f('ix_project_members_user_id'), 'project_members', ['user_id'], unique=False)
+    op.create_index(op.f('ix_project_members_workspace_id'), 'project_members', ['workspace_id'], unique=False)
     op.create_table('pdf_annotations',
     sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('workspace_id', sa.String(length=36), nullable=False),
     sa.Column('file_revision_id', sa.String(length=36), nullable=False),
+    sa.Column('item_id', sa.String(length=36), nullable=False),
     sa.Column('page_index', sa.Integer(), nullable=False),
     sa.Column('author_id', sa.String(length=36), nullable=False),
     sa.Column('kind', sa.Enum('highlight', 'underline', 'strikeout', 'note', 'free_text', 'ink', 'rectangle', 'ellipse', 'line', 'arrow', name='annotation_kind', native_enum=False), nullable=False),
     sa.Column('scope', sa.Enum('private', 'project', name='annotation_scope', native_enum=False), nullable=False),
-    sa.Column('project_id', sa.String(length=36), nullable=True),
+    sa.Column('project_item_id', sa.String(length=36), nullable=True),
     sa.Column('body', sa.Text(), nullable=True),
     sa.Column('selected_text', sa.Text(), nullable=True),
     sa.Column('payload', sa.JSON(), nullable=False),
@@ -366,20 +494,29 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
-    sa.CheckConstraint("(scope = 'private' AND project_id IS NULL) OR (scope = 'project' AND project_id IS NOT NULL)", name='ck_pdf_annotations_project_scope'),
+    sa.Column('hidden_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('archived_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('locked_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('moderated_by', sa.String(length=36), nullable=True),
+    sa.CheckConstraint("(scope = 'private' AND project_item_id IS NULL) OR (scope = 'project' AND project_item_id IS NOT NULL)", name='ck_pdf_annotations_project_scope'),
     sa.CheckConstraint("kind IN ('highlight', 'underline', 'strikeout', 'note', 'free_text', 'ink', 'rectangle', 'ellipse', 'line', 'arrow')", name='ck_pdf_annotations_kind'),
     sa.CheckConstraint("scope IN ('private', 'project')", name='ck_pdf_annotations_scope'),
     sa.ForeignKeyConstraint(['author_id'], ['users.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['file_revision_id'], ['file_revisions.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['id'], ['pdf_annotation_objects.id'], name='fk_pdf_annotations_object_id'),
-    sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id')
+    sa.ForeignKeyConstraint(['moderated_by'], ['users.id'], ondelete='SET NULL'),
+    sa.ForeignKeyConstraint(['workspace_id', 'file_revision_id', 'item_id'], ['file_revisions.workspace_id', 'file_revisions.id', 'file_revisions.item_id'], name='fk_pdf_annotations_revision_item_workspace', ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['workspace_id', 'project_item_id', 'item_id'], ['project_items.workspace_id', 'project_items.id', 'project_items.item_id'], name='fk_pdf_annotations_project_item_revision_item', ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('workspace_id', 'id', name='uq_pdf_annotations_workspace_id')
     )
     op.create_index(op.f('ix_pdf_annotations_author_id'), 'pdf_annotations', ['author_id'], unique=False)
     op.create_index(op.f('ix_pdf_annotations_file_revision_id'), 'pdf_annotations', ['file_revision_id'], unique=False)
-    op.create_index(op.f('ix_pdf_annotations_project_id'), 'pdf_annotations', ['project_id'], unique=False)
+    op.create_index(op.f('ix_pdf_annotations_item_id'), 'pdf_annotations', ['item_id'], unique=False)
+    op.create_index(op.f('ix_pdf_annotations_project_item_id'), 'pdf_annotations', ['project_item_id'], unique=False)
+    op.create_index(op.f('ix_pdf_annotations_workspace_id'), 'pdf_annotations', ['workspace_id'], unique=False)
     op.create_table('pdf_annotation_replies',
     sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('workspace_id', sa.String(length=36), nullable=False),
     sa.Column('annotation_id', sa.String(length=36), nullable=False),
     sa.Column('author_id', sa.String(length=36), nullable=False),
     sa.Column('body', sa.Text(), nullable=False),
@@ -387,16 +524,15 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
-    sa.ForeignKeyConstraint(['annotation_id'], ['pdf_annotations.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['author_id'], ['users.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['id'], ['pdf_annotation_objects.id'], name='fk_pdf_annotation_replies_object_id'),
+    sa.ForeignKeyConstraint(['workspace_id', 'annotation_id'], ['pdf_annotations.workspace_id', 'pdf_annotations.id'], name='fk_pdf_annotation_replies_annotation_workspace', ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_pdf_annotation_replies_annotation_id'), 'pdf_annotation_replies', ['annotation_id'], unique=False)
     op.create_index(op.f('ix_pdf_annotation_replies_author_id'), 'pdf_annotation_replies', ['author_id'], unique=False)
+    op.create_index(op.f('ix_pdf_annotation_replies_workspace_id'), 'pdf_annotation_replies', ['workspace_id'], unique=False)
     # ### end Alembic commands ###
-
-    # The full-text search projections are dialect-specific and invisible to autogenerate.
     if op.get_bind().dialect.name == "postgresql":
         op.execute(
             """
@@ -444,22 +580,34 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Downgrade schema."""
-    # ### commands auto generated by Alembic - please adjust! ###
     op.execute("DROP TABLE IF EXISTS revision_search")
     op.execute("DROP TABLE IF EXISTS item_search")
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_index(op.f('ix_pdf_annotation_replies_workspace_id'), table_name='pdf_annotation_replies')
     op.drop_index(op.f('ix_pdf_annotation_replies_author_id'), table_name='pdf_annotation_replies')
     op.drop_index(op.f('ix_pdf_annotation_replies_annotation_id'), table_name='pdf_annotation_replies')
     op.drop_table('pdf_annotation_replies')
-    op.drop_index(op.f('ix_pdf_annotations_project_id'), table_name='pdf_annotations')
+    op.drop_index(op.f('ix_pdf_annotations_workspace_id'), table_name='pdf_annotations')
+    op.drop_index(op.f('ix_pdf_annotations_project_item_id'), table_name='pdf_annotations')
+    op.drop_index(op.f('ix_pdf_annotations_item_id'), table_name='pdf_annotations')
     op.drop_index(op.f('ix_pdf_annotations_file_revision_id'), table_name='pdf_annotations')
     op.drop_index(op.f('ix_pdf_annotations_author_id'), table_name='pdf_annotations')
     op.drop_table('pdf_annotations')
+    op.drop_index(op.f('ix_project_members_workspace_id'), table_name='project_members')
+    op.drop_index(op.f('ix_project_members_user_id'), table_name='project_members')
+    op.drop_index(op.f('ix_project_members_project_id'), table_name='project_members')
     op.drop_table('project_members')
+    op.drop_index(op.f('ix_project_items_workspace_id'), table_name='project_items')
+    op.drop_index(op.f('ix_project_items_project_id'), table_name='project_items')
+    op.drop_index(op.f('ix_project_items_item_id'), table_name='project_items')
     op.drop_table('project_items')
+    op.drop_index(op.f('ix_item_tags_workspace_id'), table_name='item_tags')
     op.drop_table('item_tags')
+    op.drop_index(op.f('ix_item_tag_recommendations_workspace_id'), table_name='item_tag_recommendations')
     op.drop_index(op.f('ix_item_tag_recommendations_workflow_id'), table_name='item_tag_recommendations')
     op.drop_index(op.f('ix_item_tag_recommendations_item_id'), table_name='item_tag_recommendations')
     op.drop_table('item_tag_recommendations')
+    op.drop_index(op.f('ix_item_reads_workspace_id'), table_name='item_reads')
     op.drop_index(op.f('ix_item_reads_last_read_at'), table_name='item_reads')
     op.drop_table('item_reads')
     op.drop_index(op.f('ix_item_identifiers_value'), table_name='item_identifiers')
@@ -469,24 +617,45 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_item_authors_item_id'), table_name='item_authors')
     op.drop_index(op.f('ix_item_authors_author_id'), table_name='item_authors')
     op.drop_table('item_authors')
+    op.drop_index(op.f('ix_file_revisions_workspace_id'), table_name='file_revisions')
     op.drop_index(op.f('ix_file_revisions_thumbnail_object_key'), table_name='file_revisions')
     op.drop_index(op.f('ix_file_revisions_object_key'), table_name='file_revisions')
     op.drop_index(op.f('ix_file_revisions_item_id'), table_name='file_revisions')
     op.drop_table('file_revisions')
+    op.drop_index(op.f('ix_discussion_messages_workspace_id'), table_name='discussion_messages')
+    op.drop_index(op.f('ix_discussion_messages_project_id'), table_name='discussion_messages')
     op.drop_index(op.f('ix_discussion_messages_item_id'), table_name='discussion_messages')
     op.drop_index(op.f('ix_discussion_messages_author_id'), table_name='discussion_messages')
     op.drop_table('discussion_messages')
+    op.drop_index(op.f('ix_audit_events_workspace_id'), table_name='audit_events')
+    op.drop_index(op.f('ix_audit_events_project_id'), table_name='audit_events')
+    op.drop_index(op.f('ix_audit_events_action'), table_name='audit_events')
+    op.drop_table('audit_events')
+    op.drop_index(op.f('ix_attachments_workspace_id'), table_name='attachments')
     op.drop_index(op.f('ix_attachments_object_key'), table_name='attachments')
     op.drop_index(op.f('ix_attachments_item_id'), table_name='attachments')
     op.drop_table('attachments')
+    op.drop_index('uq_workspace_members_current_owner', table_name='workspace_members', sqlite_where=sa.text("terminated_at IS NULL AND role = 'owner'"), postgresql_where=sa.text("terminated_at IS NULL AND role = 'owner'"))
+    op.drop_index('uq_workspace_members_current', table_name='workspace_members', sqlite_where=sa.text('terminated_at IS NULL'), postgresql_where=sa.text('terminated_at IS NULL'))
+    op.drop_index(op.f('ix_workspace_members_workspace_id'), table_name='workspace_members')
+    op.drop_index(op.f('ix_workspace_members_user_id'), table_name='workspace_members')
+    op.drop_table('workspace_members')
+    op.drop_index(op.f('ix_workspace_invitations_workspace_id'), table_name='workspace_invitations')
+    op.drop_index(op.f('ix_workspace_invitations_user_id'), table_name='workspace_invitations')
+    op.drop_index(op.f('ix_workspace_invitations_token_hash'), table_name='workspace_invitations')
+    op.drop_index(op.f('ix_workspace_invitations_expires_at'), table_name='workspace_invitations')
+    op.drop_table('workspace_invitations')
+    op.drop_index(op.f('ix_tags_workspace_id'), table_name='tags')
+    op.drop_index(op.f('ix_tags_normalized_name'), table_name='tags')
     op.drop_index(op.f('ix_tags_name'), table_name='tags')
     op.drop_table('tags')
     op.drop_table('system_settings')
-    op.drop_index(op.f('ix_projects_owner_id'), table_name='projects')
+    op.drop_index(op.f('ix_projects_workspace_id'), table_name='projects')
     op.drop_table('projects')
     op.drop_index(op.f('ix_login_sessions_token_hash'), table_name='login_sessions')
     op.drop_index(op.f('ix_login_sessions_expires_at'), table_name='login_sessions')
     op.drop_table('login_sessions')
+    op.drop_index(op.f('ix_items_workspace_id'), table_name='items')
     op.drop_index(op.f('ix_items_title'), table_name='items')
     op.drop_index(op.f('ix_items_doi'), table_name='items')
     op.drop_index(op.f('ix_items_bibtex_id'), table_name='items')
@@ -494,26 +663,29 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_invitations_token_hash'), table_name='invitations')
     op.drop_index(op.f('ix_invitations_expires_at'), table_name='invitations')
     op.drop_table('invitations')
+    op.drop_index(op.f('ix_import_batches_workspace_id'), table_name='import_batches')
     op.drop_index(op.f('ix_import_batches_workflow_id'), table_name='import_batches')
-    op.drop_index(op.f('ix_import_batches_owner_id'), table_name='import_batches')
     op.drop_index(op.f('ix_import_batches_created_at'), table_name='import_batches')
+    op.drop_index(op.f('ix_import_batches_actor_id'), table_name='import_batches')
     op.drop_table('import_batches')
+    op.drop_index(op.f('ix_export_artifacts_workspace_id'), table_name='export_artifacts')
+    op.drop_index(op.f('ix_export_artifacts_expires_at'), table_name='export_artifacts')
+    op.drop_table('export_artifacts')
+    op.drop_index(op.f('ix_citation_styles_workspace_id'), table_name='citation_styles')
     op.drop_index(op.f('ix_citation_styles_created_by'), table_name='citation_styles')
     op.drop_table('citation_styles')
-    op.drop_index(op.f('ix_audit_events_action'), table_name='audit_events')
-    op.drop_table('audit_events')
     op.drop_index(op.f('ix_api_tokens_user_id'), table_name='api_tokens')
     op.drop_index(op.f('ix_api_tokens_token_hash'), table_name='api_tokens')
     op.drop_index(op.f('ix_api_tokens_expires_at'), table_name='api_tokens')
     op.drop_table('api_tokens')
+    op.drop_index(op.f('ix_workspaces_owner_id'), table_name='workspaces')
+    op.drop_table('workspaces')
     op.drop_index(op.f('ix_users_username'), table_name='users')
     op.drop_table('users')
     op.drop_table('pdf_annotation_objects')
     op.drop_index(op.f('ix_object_integrity_scans_checked_at'), table_name='object_integrity_scans')
     op.drop_table('object_integrity_scans')
     op.drop_table('login_throttles')
-    op.drop_index(op.f('ix_export_artifacts_expires_at'), table_name='export_artifacts')
-    op.drop_table('export_artifacts')
     op.drop_index(op.f('ix_authors_last_name'), table_name='authors')
     op.drop_table('authors')
     # ### end Alembic commands ###

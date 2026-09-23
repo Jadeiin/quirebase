@@ -10,11 +10,11 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import select
 
+from quirebase.access import Capability
 from quirebase.access.documents import require_attachment, require_revision
 from quirebase.access.items import (
     can_edit_item,
     require_editable_item,
-    require_editable_item_for_mutation,
     require_readable_item,
 )
 from quirebase.audit import record_event
@@ -61,6 +61,8 @@ from quirebase.models import (
     Project,
     ProjectItem,
     ProjectMember,
+    ProjectState,
+    ProjectVisibility,
     User,
 )
 from quirebase.search import search_index
@@ -209,6 +211,7 @@ async def attach_staged_pdf(
 ) -> FileRevision:
     key, size, original_name = staged
     revision = FileRevision(
+        workspace_id=item.workspace_id,
         item_id=item.id,
         object_key=key,
         size=size,
@@ -222,8 +225,9 @@ async def attach_staged_pdf(
     await durable_operations().enqueue_in_transaction(
         db,
         IMPORTED_REVISION_INSPECTION_WORKFLOW,
-        revision.id,
         user.id,
+        item.workspace_id,
+        revision.id,
         key,
         str(thumbnail_object_id),
         queue_name=DOCUMENTS_QUEUE,
@@ -232,14 +236,23 @@ async def attach_staged_pdf(
         attributes={
             "capability": "documents",
             "operation": "inspect_imported_revision",
-            "owner_id": user.id,
+            "actor_id": user.id,
+            "workspace_id": item.workspace_id,
             "item_id": item.id,
             "revision_id": revision.id,
             "object_key": key,
             "object_keys": [key, thumbnail_key],
         },
     )
-    record_event(db, user.id, "pdf.upload", "file_revision", revision.id)
+    record_event(
+        db,
+        user.id,
+        "pdf.upload",
+        "file_revision",
+        revision.id,
+        workspace_id=item.workspace_id,
+        authorization_capability=Capability.files_manage.value,
+    )
     return revision
 
 
@@ -349,7 +362,8 @@ async def enqueue_object_cleanup(
     db: AsyncSession,
     object_keys: Iterable[str],
     *,
-    owner_id: str | None,
+    actor_id: str,
+    workspace_id: str,
     operation: str,
     target_id: str | None = None,
 ) -> str | None:
@@ -361,13 +375,16 @@ async def enqueue_object_cleanup(
     await durable_operations().enqueue_in_transaction(
         db,
         OBJECT_CLEANUP_WORKFLOW,
+        actor_id,
+        workspace_id,
         keys,
         queue_name=DOCUMENT_CLEANUP_QUEUE,
         workflow_id=workflow_id,
         attributes={
             "capability": "documents",
             "operation": operation,
-            "owner_id": owner_id,
+            "actor_id": actor_id,
+            "workspace_id": workspace_id,
             "target_id": target_id,
             "object_keys": keys,
         },
@@ -382,6 +399,7 @@ async def discard_staged_object(db: AsyncSession, object_key: str) -> None:
 async def store_pdf_revision(
     db: AsyncSession,
     user: User,
+    workspace_id: str,
     item_id: str,
     source: ObjectSource,
     filename: str,
@@ -390,7 +408,7 @@ async def store_pdf_revision(
     from quirebase.operations.settings import get_effective_setting
 
     user_id = user.id
-    await require_editable_item(db, user, item_id)
+    await require_editable_item(db, user, workspace_id, item_id)
     if not filename or not filename.lower().endswith(".pdf"):
         raise UnsupportedMediaType("a PDF file is required")
     if max_bytes is None:
@@ -406,8 +424,9 @@ async def store_pdf_revision(
     workflow_id = f"upload-revision:{revision_id}"
     await durable_operations().enqueue(
         REVISION_UPLOAD_WORKFLOW,
-        item_id,
         user_id,
+        workspace_id,
+        item_id,
         str(revision_id),
         str(revision_id),
         str(thumbnail_object_id),
@@ -417,7 +436,8 @@ async def store_pdf_revision(
         attributes={
             "capability": "documents",
             "operation": "upload_revision",
-            "owner_id": user_id,
+            "actor_id": user_id,
+            "workspace_id": workspace_id,
             "item_id": item_id,
             "revision_id": str(revision_id),
             "object_key": revision_key,
@@ -458,6 +478,7 @@ async def store_pdf_revision(
 async def create_attachment(
     db: AsyncSession,
     user: User,
+    workspace_id: str,
     item_id: str,
     source: ObjectSource,
     filename: str,
@@ -468,7 +489,7 @@ async def create_attachment(
     from quirebase.operations.settings import get_effective_setting
 
     user_id = user.id
-    if not await can_edit_item(db, user, item_id) or not filename:
+    if not await can_edit_item(db, user, workspace_id, item_id) or not filename:
         raise ResourceUnavailable("item not accessible or filename missing")
     if max_bytes is None:
         max_bytes = await get_effective_setting(
@@ -487,8 +508,9 @@ async def create_attachment(
     workflow_id = f"upload-attachment:{attachment_id}"
     await durable_operations().enqueue(
         ATTACHMENT_UPLOAD_WORKFLOW,
-        item_id,
         user_id,
+        workspace_id,
+        item_id,
         str(attachment_id),
         str(attachment_id),
         Path(filename).name,
@@ -499,7 +521,8 @@ async def create_attachment(
         attributes={
             "capability": "documents",
             "operation": "upload_attachment",
-            "owner_id": user_id,
+            "actor_id": user_id,
+            "workspace_id": workspace_id,
             "item_id": item_id,
             "attachment_id": str(attachment_id),
             "object_key": attachment_key,
@@ -534,9 +557,9 @@ async def create_attachment(
 
 
 async def get_attachment_file(
-    db: AsyncSession, user: User, item_id: str, attachment_id: str
+    db: AsyncSession, user: User, workspace_id: str, item_id: str, attachment_id: str
 ) -> tuple[ObjectResponse, str, str]:
-    record = await require_attachment(db, user, item_id, attachment_id)
+    record = await require_attachment(db, user, workspace_id, item_id, attachment_id)
     return (
         await get_object_store().get(record.object_key),
         record.original_name,
@@ -545,9 +568,9 @@ async def get_attachment_file(
 
 
 async def head_attachment_file(
-    db: AsyncSession, user: User, item_id: str, attachment_id: str
+    db: AsyncSession, user: User, workspace_id: str, item_id: str, attachment_id: str
 ) -> tuple[ObjectMetadata, str, str]:
-    record = await require_attachment(db, user, item_id, attachment_id)
+    record = await require_attachment(db, user, workspace_id, item_id, attachment_id)
     return (
         await get_object_store().head(record.object_key),
         record.original_name,
@@ -558,12 +581,13 @@ async def head_attachment_file(
 async def get_revision_file(
     db: AsyncSession,
     user: User,
+    workspace_id: str,
     item_id: str,
     revision_id: str,
     *,
     byte_range: tuple[int, int] | None = None,
 ) -> tuple[ObjectResponse, str, str]:
-    revision = await require_revision(db, user, revision_id)
+    revision = await require_revision(db, user, workspace_id, revision_id)
     if revision.item_id != item_id:
         raise ResourceNotFound("revision not found for item")
     store = get_object_store()
@@ -576,9 +600,9 @@ async def get_revision_file(
 
 
 async def head_revision_file(
-    db: AsyncSession, user: User, item_id: str, revision_id: str
+    db: AsyncSession, user: User, workspace_id: str, item_id: str, revision_id: str
 ) -> tuple[ObjectMetadata, str, str]:
-    revision = await require_revision(db, user, revision_id)
+    revision = await require_revision(db, user, workspace_id, revision_id)
     if revision.item_id != item_id:
         raise ResourceNotFound("revision not found for item")
     return (
@@ -589,9 +613,9 @@ async def head_revision_file(
 
 
 async def get_revision_thumbnail(
-    db: AsyncSession, user: User, item_id: str, revision_id: str
+    db: AsyncSession, user: User, workspace_id: str, item_id: str, revision_id: str
 ) -> ObjectResponse:
-    revision = await require_revision(db, user, revision_id)
+    revision = await require_revision(db, user, workspace_id, revision_id)
     if revision.item_id != item_id:
         raise ResourceNotFound("revision not found for item")
     key = revision.thumbnail_object_key
@@ -603,9 +627,9 @@ async def get_revision_thumbnail(
 
 
 async def head_revision_thumbnail(
-    db: AsyncSession, user: User, item_id: str, revision_id: str
+    db: AsyncSession, user: User, workspace_id: str, item_id: str, revision_id: str
 ) -> ObjectMetadata:
-    revision = await require_revision(db, user, revision_id)
+    revision = await require_revision(db, user, workspace_id, revision_id)
     if revision.item_id != item_id:
         raise ResourceNotFound("revision not found for item")
     key = revision.thumbnail_object_key
@@ -617,11 +641,14 @@ async def head_revision_thumbnail(
     return await store.head(key)
 
 
-async def resolve_item_thumbnail(db: AsyncSession, user: User, item_id: str) -> ItemThumbnailSource:
-    await require_readable_item(db, user, item_id)
+async def resolve_item_thumbnail(
+    db: AsyncSession, user: User, workspace_id: str, item_id: str
+) -> ItemThumbnailSource:
+    await require_readable_item(db, user, workspace_id, item_id)
     graphical_abstract = await db.scalar(
         select(Attachment).where(
             Attachment.item_id == item_id,
+            Attachment.workspace_id == workspace_id,
             Attachment.role == AttachmentRole.graphical_abstract,
         )
     )
@@ -639,6 +666,7 @@ async def resolve_item_thumbnail(db: AsyncSession, user: User, item_id: str) -> 
             select(FileRevision)
             .where(
                 FileRevision.item_id == item_id,
+                FileRevision.workspace_id == workspace_id,
                 FileRevision.processing_state == "ready",
             )
             .order_by(FileRevision.created_at.desc())
@@ -673,18 +701,22 @@ async def head_item_thumbnail(source: ItemThumbnailSource) -> ObjectMetadata:
 
 
 async def delete_file_revision(
-    db: AsyncSession, user: User, item_id: str, revision_id: str
+    db: AsyncSession, user: User, workspace_id: str, item_id: str, revision_id: str
 ) -> None:
-    await require_editable_item_for_mutation(db, user, item_id)
+    await require_editable_item(db, user, workspace_id, item_id)
     if (
         await db.scalar(
-            select(Item.id).where(Item.id == item_id).with_for_update(read=True, key_share=True)
+            select(Item.id)
+            .where(Item.id == item_id, Item.workspace_id == workspace_id)
+            .with_for_update(read=True, key_share=True)
         )
         is None
     ):
         raise ResourceNotFound("item not found")
     revision = await db.scalar(
-        select(FileRevision).where(FileRevision.id == revision_id).with_for_update()
+        select(FileRevision)
+        .where(FileRevision.id == revision_id, FileRevision.workspace_id == workspace_id)
+        .with_for_update()
     )
     if revision is None or revision.item_id != item_id:
         raise ResourceNotFound("file revision not found")
@@ -697,62 +729,109 @@ async def delete_file_revision(
     await durable_operations().enqueue_in_transaction(
         db,
         FILE_REVISION_CHANGED_WORKFLOW,
+        user.id,
+        workspace_id,
         revision_id,
         item_id,
-        user.id,
         queue_name=LIBRARY_QUEUE,
         workflow_id=event_workflow_id,
-        attributes={"capability": "library", "item_id": item_id},
+        attributes={
+            "capability": "library",
+            "actor_id": user.id,
+            "workspace_id": workspace_id,
+            "item_id": item_id,
+        },
     )
     await enqueue_object_cleanup(
         db,
         tuple(key for key in (object_key, thumbnail_key) if key),
-        owner_id=user.id,
+        actor_id=user.id,
+        workspace_id=workspace_id,
         operation="file_revision_delete",
         target_id=revision.id,
     )
-    record_event(db, user.id, "pdf.delete", "file_revision", revision.id)
+    record_event(
+        db,
+        user.id,
+        "pdf.delete",
+        "file_revision",
+        revision.id,
+        workspace_id=workspace_id,
+        authorization_capability=Capability.files_manage.value,
+    )
     await db.commit()
 
 
-async def delete_attachment(db: AsyncSession, user: User, item_id: str, attachment_id: str) -> None:
-    await require_editable_item_for_mutation(db, user, item_id)
+async def delete_attachment(
+    db: AsyncSession,
+    user: User,
+    workspace_id: str,
+    item_id: str,
+    attachment_id: str,
+) -> None:
+    await require_editable_item(db, user, workspace_id, item_id)
     if (
         await db.scalar(
-            select(Item.id).where(Item.id == item_id).with_for_update(read=True, key_share=True)
+            select(Item.id)
+            .where(Item.id == item_id, Item.workspace_id == workspace_id)
+            .with_for_update(read=True, key_share=True)
         )
         is None
     ):
         raise ResourceNotFound("item not found")
     attachment = await db.get(Attachment, attachment_id)
-    if attachment is None or attachment.item_id != item_id:
+    if (
+        attachment is None
+        or attachment.workspace_id != workspace_id
+        or attachment.item_id != item_id
+    ):
         raise ResourceNotFound("attachment not found")
     object_key = attachment.object_key
     await db.delete(attachment)
     await enqueue_object_cleanup(
         db,
         (object_key,),
-        owner_id=user.id,
+        actor_id=user.id,
+        workspace_id=workspace_id,
         operation="attachment_delete",
         target_id=attachment.id,
     )
-    record_event(db, user.id, "attachment.delete", "attachment", attachment.id)
+    record_event(
+        db,
+        user.id,
+        "attachment.delete",
+        "attachment",
+        attachment.id,
+        workspace_id=workspace_id,
+        authorization_capability=Capability.files_manage.value,
+    )
     await db.commit()
 
 
 async def get_pdf_viewer_data(
-    db: AsyncSession, user: User, item_id: str, revision_id: str
+    db: AsyncSession, user: User, workspace_id: str, item_id: str, revision_id: str
 ) -> dict[str, Any]:
-    revision = await require_revision(db, user, revision_id)
+    revision = await require_revision(db, user, workspace_id, revision_id)
     if revision.item_id != item_id:
         raise ResourceNotFound("revision not found for item")
     projects = list(
         (
             await db.scalars(
                 select(Project)
-                .join(ProjectMember, ProjectMember.project_id == Project.id)
                 .join(ProjectItem, ProjectItem.project_id == Project.id)
-                .where(ProjectMember.user_id == user.id, ProjectItem.item_id == item_id)
+                .where(
+                    Project.workspace_id == workspace_id,
+                    Project.state != ProjectState.deleted,
+                    (Project.visibility == ProjectVisibility.workspace)
+                    | Project.id.in_(
+                        select(ProjectMember.project_id).where(
+                            ProjectMember.workspace_id == workspace_id,
+                            ProjectMember.user_id == user.id,
+                        )
+                    ),
+                    ProjectItem.workspace_id == workspace_id,
+                    ProjectItem.item_id == item_id,
+                )
                 .order_by(Project.name)
             )
         ).all()
