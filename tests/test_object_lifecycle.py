@@ -8,56 +8,9 @@ import pytest
 
 from quirebase.core.config import get_settings
 from quirebase.core.storage import ObjectSuffix, get_object_store
-from quirebase.models import FileRevision, Item, User
+from quirebase.models import FileRevision, Item, ItemFileRevision, User
 from quirebase.operations.maintenance import cleanup_exports, reconcile_objects
 from quirebase.operations.object_migration import migrate_legacy_objects
-
-
-@pytest.mark.anyio
-async def test_shared_legacy_cas_migrates_to_independent_uuid_objects(async_db):
-    content = b"%PDF-shared-legacy"
-    old_key = "aa/bb/" + "0" * 64 + ".pdf"
-    store = get_object_store()
-    await store.put(old_key, content)
-    user = User(username="migration-owner", password_hash="unused")
-    async_db.add(user)
-    await async_db.flush()
-    first_item = Item(title="First", created_by=user.id)
-    second_item = Item(title="Second", created_by=user.id)
-    async_db.add_all([first_item, second_item])
-    await async_db.flush()
-    first = FileRevision(
-        item_id=first_item.id,
-        object_key=old_key,
-        size=len(content),
-        original_name="first.pdf",
-        created_by=user.id,
-    )
-    second = FileRevision(
-        item_id=second_item.id,
-        object_key=old_key,
-        size=len(content),
-        original_name="second.pdf",
-        created_by=user.id,
-    )
-    async_db.add_all([first, second])
-    await async_db.commit()
-
-    dry_run = await migrate_legacy_objects(async_db)
-    assert dry_run.planned == 2
-    assert first.object_key == old_key
-
-    report = await migrate_legacy_objects(async_db, apply=True)
-    await async_db.refresh(first)
-    await async_db.refresh(second)
-    assert report.references_updated == 2
-    assert first.object_key != second.object_key
-    assert await store.exists(first.object_key)
-    assert await store.exists(second.object_key)
-    assert not await store.exists(old_key)
-
-    repeated = await migrate_legacy_objects(async_db, apply=True)
-    assert repeated.planned == 0
 
 
 @pytest.mark.anyio
@@ -93,18 +46,18 @@ async def test_reconciliation_deletes_only_old_unreferenced_managed_objects(
     user = User(username="reconcile-owner", password_hash="unused")
     async_db.add(user)
     await async_db.flush()
-    item = Item(title="Referenced", created_by=user.id)
+    item = Item(title="Referenced", owner_id=user.id, created_by=user.id)
     async_db.add(item)
     await async_db.flush()
-    async_db.add(
-        FileRevision(
-            item_id=item.id,
-            object_key=referenced.key,
-            size=referenced.size,
-            original_name="referenced.pdf",
-            created_by=user.id,
-        )
+    revision = FileRevision(
+        object_key=referenced.key,
+        size=referenced.size,
+        original_name="referenced.pdf",
+        created_by=user.id,
     )
+    async_db.add(revision)
+    await async_db.flush()
+    async_db.add(ItemFileRevision(item_id=item.id, file_revision_id=revision.id))
     await async_db.commit()
 
     await fake_durable_operations.enqueue(
@@ -174,11 +127,10 @@ async def test_migration_repeat_cleans_legacy_thumbnail_when_target_is_recorded(
     user = User(username="thumbnail-migration-owner", password_hash="unused")
     async_db.add(user)
     await async_db.flush()
-    item = Item(title="Thumbnail migration", created_by=user.id)
+    item = Item(title="Thumbnail migration", owner_id=user.id, created_by=user.id)
     async_db.add(item)
     await async_db.flush()
     revision = FileRevision(
-        item_id=item.id,
         object_key="aa/bb/" + "1" * 64 + ".pdf",
         size=8,
         original_name="paper.pdf",
@@ -186,6 +138,7 @@ async def test_migration_repeat_cleans_legacy_thumbnail_when_target_is_recorded(
     )
     async_db.add(revision)
     await async_db.flush()
+    async_db.add(ItemFileRevision(item_id=item.id, file_revision_id=revision.id))
     thumbnail_id = uuid5(UUID("9a8c5b31-a356-5c30-884d-45c17722d8b8"), f"thumbnail:{revision.id}")
     revision.thumbnail_object_key = (
         f"{thumbnail_id.hex[:2]}/{thumbnail_id.hex[2:4]}/{thumbnail_id.hex}.png"

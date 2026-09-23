@@ -12,7 +12,7 @@ async def test_item_access_is_owner_or_project_membership(async_db):
     outsider = User(username="outsider", password_hash="x")
     db.add_all([owner, member, outsider])
     await db.flush()
-    item = Item(title="Paper", created_by=owner.id)
+    item = Item(title="Paper", owner_id=owner.id, created_by=owner.id)
     project = Project(name="Lab", created_by=owner.id)
     db.add_all([item, project])
     await db.flush()

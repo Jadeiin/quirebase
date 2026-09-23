@@ -32,7 +32,7 @@ async def test_set_and_get_item_authors(async_db):
     db.add(user)
     await db.flush()
 
-    item = Item(title="Information Theory", created_by=user.id)
+    item = Item(title="Information Theory", owner_id=user.id, created_by=user.id)
     db.add(item)
     await db.flush()
 
@@ -64,7 +64,9 @@ async def test_set_item_authors_from_string(async_db):
     user = User(username="string_author_user", password_hash="hash")
     db.add(user)
     await db.flush()
-    item = Item(title="Computing Machinery", authors="Turing, Alan", created_by=user.id)
+    item = Item(
+        title="Computing Machinery", authors="Turing, Alan", owner_id=user.id, created_by=user.id
+    )
     db.add(item)
     await db.flush()
 
@@ -83,6 +85,7 @@ async def test_set_item_authors_from_string_preserves_parser_compatible_names(as
     item = Item(
         title="Structured contributors",
         authors="{World Health Organization}; de la Cruz, Jr., Juan",
+        owner_id=user.id,
         created_by=user.id,
     )
     db.add(item)
@@ -104,7 +107,7 @@ async def test_set_item_authors_projects_suffix_names_into_first_last_identity(a
     user = User(username="structured-identity-user", password_hash="hash")
     db.add(user)
     await db.flush()
-    item = Item(title="Simplified contributor identities", created_by=user.id)
+    item = Item(title="Simplified contributor identities", owner_id=user.id, created_by=user.id)
     db.add(item)
     await db.flush()
 

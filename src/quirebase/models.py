@@ -211,8 +211,14 @@ class Item(Base):
     file_revision_links: Mapped[list[ItemFileRevision]] = relationship(
         back_populates="item", cascade="all, delete-orphan", passive_deletes=True
     )
+    file_revisions: Mapped[list[FileRevision]] = relationship(
+        secondary="item_file_revisions", viewonly=True, order_by="FileRevision.created_at.desc()"
+    )
     attachment_links: Mapped[list[ItemAttachment]] = relationship(
         back_populates="item", cascade="all, delete-orphan", passive_deletes=True
+    )
+    attachments: Mapped[list[Attachment]] = relationship(
+        secondary="item_attachments", viewonly=True, order_by="Attachment.created_at"
     )
     author_links: Mapped[list[ItemAuthor]] = relationship(
         back_populates="item",
@@ -465,6 +471,7 @@ class FileRevision(Base):
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     item_links: Mapped[list[ItemFileRevision]] = relationship(back_populates="file_revision")
+    items: Mapped[list[Item]] = relationship(secondary="item_file_revisions", viewonly=True)
 
 
 class ItemFileRevision(Base):
@@ -493,6 +500,7 @@ class Attachment(Base):
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     item_links: Mapped[list[ItemAttachment]] = relationship(back_populates="attachment")
+    items: Mapped[list[Item]] = relationship(secondary="item_attachments", viewonly=True)
 
 
 class ItemAttachment(Base):

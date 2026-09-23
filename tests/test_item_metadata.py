@@ -36,6 +36,7 @@ async def test_regenerate_bibtex_key_is_a_narrow_atomic_item_mutation(async_db):
         authors="Turing, Alan",
         publication_date="1950",
         doi="10.1093/mind/lix.236.433",
+        owner_id=owner.id,
         created_by=owner.id,
     )
     db.add(item)
@@ -111,6 +112,7 @@ async def test_revise_item_metadata_makes_the_dedicated_doi_authoritative(async_
         title="Identifier precedence",
         doi="10.1000/old",
         identifiers='{"doi": "10.1000/old", "pmid": "old-pmid"}',
+        owner_id=owner.id,
         created_by=owner.id,
     )
     db.add(item)
@@ -152,7 +154,12 @@ async def test_revise_item_metadata_replaces_contributors_in_order(async_db):
     old_author = Author(last_name="Old", first_name="Author")
     db.add_all([owner, old_author])
     await db.flush()
-    item = Item(title="Contributor replacement", authors="Old, Author", created_by=owner.id)
+    item = Item(
+        title="Contributor replacement",
+        authors="Old, Author",
+        owner_id=owner.id,
+        created_by=owner.id,
+    )
     db.add(item)
     await db.flush()
     db.add(ItemAuthor(item_id=item.id, author_id=old_author.id, position=1, role="author"))
@@ -196,7 +203,7 @@ async def test_revise_item_metadata_rejects_canonically_duplicate_contributors(a
     owner = User(username="canonical-contributor-owner", password_hash="unused")
     async_db.add(owner)
     await async_db.flush()
-    item = Item(title="Canonical contributor identity", created_by=owner.id)
+    item = Item(title="Canonical contributor identity", owner_id=owner.id, created_by=owner.id)
     async_db.add(item)
     await async_db.commit()
 
@@ -250,7 +257,7 @@ async def test_revise_item_metadata_rolls_back_every_change_when_a_group_is_inva
     owner = User(username="atomic-item-owner", password_hash="unused")
     db.add(owner)
     await db.flush()
-    item = Item(title="Original title", created_by=owner.id)
+    item = Item(title="Original title", owner_id=owner.id, created_by=owner.id)
     db.add(item)
     await db.commit()
     item_id = item.id
@@ -284,7 +291,7 @@ async def test_revise_item_metadata_enforces_item_owner_permissions(async_db):
     outsider = User(username="permission-outsider", password_hash="unused")
     db.add_all([owner, outsider])
     await db.flush()
-    item = Item(title="Private metadata", created_by=owner.id)
+    item = Item(title="Private metadata", owner_id=owner.id, created_by=owner.id)
     db.add(item)
     await db.commit()
     item_id = item.id

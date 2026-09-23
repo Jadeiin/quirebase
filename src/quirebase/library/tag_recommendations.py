@@ -25,6 +25,7 @@ from quirebase.models import (
     FileRevision,
     FileRevisionProcessingState,
     Item,
+    ItemFileRevision,
     ItemTagRecommendation,
 )
 
@@ -106,8 +107,9 @@ def validate_engine_configuration(settings: Settings) -> EngineDescriptor:
 async def _item_text(db: AsyncSession, item: Item, settings: Settings) -> str:
     full_text = await db.scalar(
         select(FileRevision.full_text)
+        .join(ItemFileRevision, ItemFileRevision.file_revision_id == FileRevision.id)
         .where(
-            FileRevision.item_id == item.id,
+            ItemFileRevision.item_id == item.id,
             FileRevision.processing_state == FileRevisionProcessingState.ready,
         )
         .order_by(FileRevision.created_at.desc())

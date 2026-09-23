@@ -3,12 +3,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
+from sqlalchemy import select
+
 from quirebase.access.documents import require_revision
 from quirebase.access.projects import project_member
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
 from quirebase.core.storage import ObjectResponse, ObjectSuffix, get_object_store, object_key
 from quirebase.core.workflows import DOCUMENTS_QUEUE, durable_operations
-from quirebase.models import ProjectItem, User
+from quirebase.models import ItemFileRevision, ProjectItem, User
 
 from .workflows import ANNOTATION_EXPORT_WORKFLOW
 
@@ -19,12 +21,25 @@ if TYPE_CHECKING:
 
 
 async def create_export_job(db: AsyncSession, user: User, item_id: str, data: ExportCreate) -> str:
-    revision = await require_revision(db, user, data.revision_id)
-    if revision.item_id != item_id:
+    await require_revision(db, user, data.revision_id)
+    if (
+        await db.scalar(
+            select(ItemFileRevision.id).where(
+                ItemFileRevision.file_revision_id == data.revision_id,
+                ItemFileRevision.item_id == item_id,
+            )
+        )
+        is None
+    ):
         raise ResourceNotFound("revision not found for item")
     if data.project_id and (
         await project_member(db, user, data.project_id) is None
-        or await db.get(ProjectItem, (data.project_id, item_id)) is None
+        or await db.scalar(
+            select(ProjectItem.id).where(
+                ProjectItem.project_id == data.project_id, ProjectItem.item_id == item_id
+            )
+        )
+        is None
     ):
         raise ResourceUnavailable("project membership or project item not found")
     object_id = uuid4()
@@ -33,6 +48,7 @@ async def create_export_job(db: AsyncSession, user: User, item_id: str, data: Ex
     await durable_operations().enqueue(
         ANNOTATION_EXPORT_WORKFLOW,
         user.id,
+        item_id,
         data.revision_id,
         str(object_id),
         data.project_id,
@@ -80,7 +96,15 @@ async def get_export_file(db: AsyncSession, user: User, workflow_id: str) -> Obj
     project_id = workflow.output.get("project_id")
     if project_id and (
         await project_member(db, user, project_id) is None
-        or await db.get(ProjectItem, (project_id, revision.item_id)) is None
+        or await db.scalar(
+            select(ProjectItem.id)
+            .join(ItemFileRevision, ItemFileRevision.item_id == ProjectItem.item_id)
+            .where(
+                ProjectItem.project_id == project_id,
+                ItemFileRevision.file_revision_id == revision.id,
+            )
+        )
+        is None
     ):
         raise ResourceUnavailable("project membership or project item not found")
     key = workflow.output.get("object_key")

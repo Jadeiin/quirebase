@@ -5,17 +5,17 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 
 from quirebase.access.items import can_read_item
-from quirebase.access.projects import project_member
 from quirebase.core.errors import ResourceUnavailable
 from quirebase.models import (
     AnnotationScope,
     FileRevision,
     Item,
+    ItemFileRevision,
     PdfAnnotation,
     PdfAnnotationReply,
-    Project,
     ProjectItem,
     ProjectMember,
+    ProjectRole,
     SystemRole,
     User,
 )
@@ -24,87 +24,38 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
-async def can_edit_annotation(db: AsyncSession, user: User, annotation: PdfAnnotation) -> bool:
-    return annotation.id in await editable_annotation_ids(db, user, [annotation])
+def can_edit_annotation(user: User, annotation: PdfAnnotation) -> bool:
+    return annotation.author_id == user.id
 
 
-async def editable_annotation_ids(
-    db: AsyncSession, user: User, annotations: list[PdfAnnotation]
-) -> set[str]:
-    """Resolve editable Annotations with at most one Project membership query."""
-    if user.role == SystemRole.administrator.value:
-        return {annotation.id for annotation in annotations}
+def editable_annotation_ids(user: User, annotations: list[PdfAnnotation]) -> set[str]:
+    """Only the author may rewrite authored Annotation state."""
+    return {annotation.id for annotation in annotations if annotation.author_id == user.id}
 
-    editable = {annotation.id for annotation in annotations if annotation.author_id == user.id}
-    project_ids = {
-        annotation.project_id
-        for annotation in annotations
-        if annotation.id not in editable
-        and annotation.scope is AnnotationScope.project
-        and annotation.project_id
-    }
-    if not project_ids:
-        return editable
-    owned_project_ids = set(
-        (
-            await db.scalars(
-                select(ProjectMember.project_id)
-                .join(Project, Project.id == ProjectMember.project_id)
-                .where(
-                    Project.owner_id == user.id,
-                    ProjectMember.project_id.in_(project_ids),
-                )
+
+def editable_annotation_reply_ids(user: User, replies: list[PdfAnnotationReply]) -> set[str]:
+    """Only the author may rewrite authored Reply state."""
+    return {reply.id for reply in replies if reply.author_id == user.id}
+
+
+async def can_delete_annotation(db: AsyncSession, user: User, annotation: PdfAnnotation) -> bool:
+    if user.role == SystemRole.administrator.value or annotation.author_id == user.id:
+        return True
+    if annotation.scope is not AnnotationScope.project or annotation.project_item_id is None:
+        return False
+    return (
+        await db.scalar(
+            select(ProjectMember.project_id)
+            .join(ProjectItem, ProjectItem.project_id == ProjectMember.project_id)
+            .where(
+                ProjectItem.id == annotation.project_item_id,
+                ProjectMember.user_id == user.id,
+                ProjectMember.role == ProjectRole.admin,
             )
-        ).all()
+            .limit(1)
+        )
+        is not None
     )
-    editable.update(
-        annotation.id
-        for annotation in annotations
-        if annotation.scope is AnnotationScope.project
-        and annotation.project_id in owned_project_ids
-    )
-    return editable
-
-
-async def editable_annotation_reply_ids(
-    db: AsyncSession,
-    user: User,
-    replies: list[PdfAnnotationReply],
-    annotations: dict[str, PdfAnnotation],
-) -> set[str]:
-    """Resolve editable Annotation Replies with at most one Project membership query."""
-    if user.role == SystemRole.administrator.value:
-        return {reply.id for reply in replies}
-    editable = {reply.id for reply in replies if reply.author_id == user.id}
-    project_ids = {
-        annotation.project_id
-        for reply in replies
-        if reply.id not in editable
-        and (annotation := annotations.get(reply.annotation_id)) is not None
-        and annotation.scope is AnnotationScope.project
-        and annotation.project_id
-    }
-    if not project_ids:
-        return editable
-    owned_project_ids = set(
-        (
-            await db.scalars(
-                select(ProjectMember.project_id)
-                .join(Project, Project.id == ProjectMember.project_id)
-                .where(
-                    Project.owner_id == user.id,
-                    ProjectMember.project_id.in_(project_ids),
-                )
-            )
-        ).all()
-    )
-    editable.update(
-        reply.id
-        for reply in replies
-        if (annotation := annotations.get(reply.annotation_id)) is not None
-        and annotation.project_id in owned_project_ids
-    )
-    return editable
 
 
 async def require_visible_annotation(
@@ -128,12 +79,25 @@ async def _lock_reply_mutation_context(
     record = await db.scalar(
         select(PdfAnnotation).where(PdfAnnotation.id == annotation_id).with_for_update(read=True)
     )
-    revision = await db.get(FileRevision, record.file_revision_id) if record else None
+    revision = (
+        await db.scalar(
+            select(FileRevision)
+            .join(ItemFileRevision, ItemFileRevision.file_revision_id == FileRevision.id)
+            .where(ItemFileRevision.id == record.item_file_revision_id)
+        )
+        if record
+        else None
+    )
     if (
         record is None
-        or record.deleted_at is not None
         or revision is None
-        or revision.item_id != item_id
+        or await db.scalar(
+            select(ItemFileRevision.id).where(
+                ItemFileRevision.id == record.item_file_revision_id,
+                ItemFileRevision.item_id == item_id,
+            )
+        )
+        is None
     ):
         raise ResourceUnavailable("annotation not found or cannot be viewed")
     return locked_user, item, record
@@ -151,7 +115,7 @@ async def require_visible_annotation_for_reply_mutation(
     administrator = locked_user.role == SystemRole.administrator.value
     if record.scope is AnnotationScope.private:
         visible_scope = administrator or record.author_id == locked_user.id
-        if visible_scope and not administrator and item.created_by != locked_user.id:
+        if visible_scope and not administrator and item.owner_id != locked_user.id:
             access_grant = await db.scalar(
                 select(ProjectMember)
                 .join(
@@ -167,13 +131,10 @@ async def require_visible_annotation_for_reply_mutation(
                 .with_for_update(read=True)
             )
             visible_scope = access_grant is not None
-    elif record.project_id:
+    elif record.project_item_id:
         project_item = await db.scalar(
             select(ProjectItem)
-            .where(
-                ProjectItem.project_id == record.project_id,
-                ProjectItem.item_id == item_id,
-            )
+            .where(ProjectItem.id == record.project_item_id, ProjectItem.item_id == item_id)
             .with_for_update(read=True)
         )
         if administrator:
@@ -181,8 +142,9 @@ async def require_visible_annotation_for_reply_mutation(
         else:
             membership = await db.scalar(
                 select(ProjectMember)
+                .join(ProjectItem, ProjectItem.project_id == ProjectMember.project_id)
                 .where(
-                    ProjectMember.project_id == record.project_id,
+                    ProjectItem.id == record.project_item_id,
                     ProjectMember.user_id == locked_user.id,
                 )
                 .with_for_update(read=True)
@@ -202,23 +164,42 @@ async def _require_visible_annotation(
     deleted: bool,
 ) -> PdfAnnotation:
     record = await db.scalar(select(PdfAnnotation).where(PdfAnnotation.id == annotation_id))
-    revision = await db.get(FileRevision, record.file_revision_id) if record else None
+    revision = (
+        await db.scalar(
+            select(FileRevision)
+            .join(ItemFileRevision, ItemFileRevision.file_revision_id == FileRevision.id)
+            .where(ItemFileRevision.id == record.item_file_revision_id)
+        )
+        if record
+        else None
+    )
     administrator = user.role == SystemRole.administrator.value
     visible_scope = False
     if record is not None:
         if record.scope is AnnotationScope.private:
             visible_scope = administrator or record.author_id == user.id
-        elif record.project_id:
-            visible_scope = await db.get(
-                ProjectItem, (record.project_id, item_id)
-            ) is not None and (
-                administrator or await project_member(db, user, record.project_id) is not None
+        elif record.project_item_id:
+            visible_scope = await db.get(ProjectItem, record.project_item_id) is not None and (
+                administrator
+                or await db.scalar(
+                    select(ProjectMember.project_id)
+                    .join(ProjectItem, ProjectItem.project_id == ProjectMember.project_id)
+                    .where(
+                        ProjectItem.id == record.project_item_id, ProjectMember.user_id == user.id
+                    )
+                )
+                is not None
             )
     if (
         record is None
-        or (record.deleted_at is not None) != deleted
         or revision is None
-        or revision.item_id != item_id
+        or await db.scalar(
+            select(ItemFileRevision.id).where(
+                ItemFileRevision.id == record.item_file_revision_id,
+                ItemFileRevision.item_id == item_id,
+            )
+        )
+        is None
         or not visible_scope
         or not await can_read_item(db, user, item_id)
     ):
@@ -230,15 +211,15 @@ async def require_editable_annotation(
     db: AsyncSession, user: User, item_id: str, annotation_id: str
 ) -> PdfAnnotation:
     record = await require_visible_annotation(db, user, item_id, annotation_id)
-    if not await can_edit_annotation(db, user, record):
+    if not can_edit_annotation(user, record):
         raise ResourceUnavailable("annotation not found or cannot be edited")
     return record
 
 
-async def require_restorable_annotation(
+async def require_deletable_annotation(
     db: AsyncSession, user: User, item_id: str, annotation_id: str
 ) -> PdfAnnotation:
-    record = await _require_visible_annotation(db, user, item_id, annotation_id, deleted=True)
-    if not await can_edit_annotation(db, user, record):
-        raise ResourceUnavailable("annotation not found or cannot be restored")
+    record = await require_visible_annotation(db, user, item_id, annotation_id)
+    if not await can_delete_annotation(db, user, record):
+        raise ResourceUnavailable("annotation not found or cannot be deleted")
     return record

@@ -11,6 +11,7 @@ from quirebase.library import (
     MetadataWorkspace,
     WorkspaceSection,
     add_discussion_message,
+    add_project_tag_to_item,
     add_tag_to_item,
     apply_bulk_item_action,
     apply_item_tag_selection,
@@ -18,7 +19,10 @@ from quirebase.library import (
     delete_discussion_message,
     get_item_citation_text_response,
     list_accessible_tags_with_counts,
+    list_project_tags_with_counts,
     open_item_workspace,
+    project_item_for_user,
+    remove_project_tag_from_item,
     remove_tag_from_item,
     revise_item_metadata,
     search_library,
@@ -178,35 +182,71 @@ async def set_item_tag_selection(
     return OkView()
 
 
+@router.get("/projects/{project_id}/tags", response_model=list[TagView])
+async def list_project_tags(project_id: str, user: ApiUser, db: Database) -> list[TagView]:
+    rows = await list_project_tags_with_counts(db, user, project_id)
+    return [
+        TagView(
+            id=tag.id,
+            name=tag.name,
+            accessible_item_count=count,
+            can_manage=can_manage_tag(user, tag),
+        )
+        for tag, count in rows
+    ]
+
+
+@router.post("/projects/{project_id}/items/{item_id}/tags", response_model=WriteResult)
+async def add_project_item_tag(
+    project_id: str, item_id: str, data: NameRequest, user: ApiUser, db: Database
+) -> WriteResult:
+    assignment = await add_project_tag_to_item(db, user, project_id, item_id, data.name)
+    return WriteResult(id=assignment.tag_id)
+
+
+@router.delete("/projects/{project_id}/items/{item_id}/tags/{tag_id}", response_model=OkView)
+async def remove_project_item_tag(
+    project_id: str, item_id: str, tag_id: str, user: ApiUser, db: Database
+) -> OkView:
+    await remove_project_tag_from_item(db, user, project_id, item_id, tag_id)
+    return OkView()
+
+
 @router.get(
-    "/items/{item_id}/discussions",
+    "/projects/{project_id}/items/{item_id}/discussions",
     response_model=list[DiscussionMessageView],
 )
 async def list_discussions(
-    item_id: str, user: ApiUser, db: Database
+    item_id: str, project_id: str, user: ApiUser, db: Database
 ) -> list[DiscussionMessageView]:
-    workspace = await open_item_workspace(db, user, item_id, WorkspaceSection.discussion)
+    workspace = await open_item_workspace(
+        db, user, item_id, WorkspaceSection.discussion, project_id
+    )
     if not isinstance(workspace, DiscussionWorkspace):  # pragma: no cover
         raise TypeError("item discussion workspace mismatch")
     return discussion_message_views(workspace)
 
 
 @router.post(
-    "/items/{item_id}/discussions",
+    "/projects/{project_id}/items/{item_id}/discussions",
     response_model=WriteResult,
     status_code=status.HTTP_201_CREATED,
 )
 async def create_discussion(
-    item_id: str, data: DiscussionRequest, user: ApiUser, db: Database
+    item_id: str, project_id: str, data: DiscussionRequest, user: ApiUser, db: Database
 ) -> WriteResult:
-    message = await add_discussion_message(db, user, item_id, data.body)
+    project_item = await project_item_for_user(db, user, item_id, project_id)
+    message = await add_discussion_message(db, user, project_item.id, data.body)
     return WriteResult(id=message.id)
 
 
 @router.delete(
-    "/items/{item_id}/discussions/{message_id}",
+    "/projects/{project_id}/items/{item_id}/discussions/{message_id}",
     response_model=OkView,
 )
-async def delete_discussion(item_id: str, message_id: str, user: ApiUser, db: Database) -> OkView:
-    await delete_discussion_message(db, user, item_id, message_id)
+async def delete_discussion(
+    item_id: str, project_id: str, message_id: str, user: ApiUser, db: Database
+) -> OkView:
+    project_item = await project_item_for_user(db, user, item_id, project_id)
+    await delete_discussion_message(db, user, project_item.id, message_id)
     return OkView()

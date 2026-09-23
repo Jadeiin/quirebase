@@ -18,6 +18,7 @@ from quirebase.models import (
     FileRevision,
     ImportBatch,
     Item,
+    ItemFileRevision,
     ObjectIntegrityScan,
     User,
 )
@@ -341,20 +342,21 @@ async def test_imported_revision_inspection_enqueues_derived_state_sync(
     user = User(username="import-workflow-owner", password_hash="unused")
     async_db.add(user)
     await async_db.flush()
-    item = Item(title="Imported PDF", created_by=user.id)
+    item = Item(title="Imported PDF", owner_id=user.id, created_by=user.id)
     async_db.add(item)
     await async_db.flush()
     stored = await get_object_store().put_object(
         uuid4(), ObjectSuffix.PDF, b"%PDF-imported", max_bytes=100
     )
     revision = FileRevision(
-        item_id=item.id,
         object_key=stored.key,
         size=stored.size,
         original_name="imported.pdf",
         created_by=user.id,
     )
     async_db.add(revision)
+    await async_db.flush()
+    async_db.add(ItemFileRevision(item_id=item.id, file_revision_id=revision.id))
     await async_db.commit()
 
     enqueued = []
@@ -522,6 +524,7 @@ async def test_annotation_export_workflow_records_expiring_artifact(monkeypatch)
 
     output = await workflow_body(
         "owner-id",
+        "item-id",
         "revision-id",
         "00000000-0000-0000-0000-000000000001",
         None,
@@ -567,7 +570,7 @@ async def test_integrity_scan_applies_database_backfills_in_datasource_transacti
     user = User(username="integrity-owner", password_hash="unused")
     async_db.add(user)
     await async_db.flush()
-    item = Item(title="Integrity transaction", created_by=user.id)
+    item = Item(title="Integrity transaction", owner_id=user.id, created_by=user.id)
     async_db.add(item)
     await async_db.flush()
     pdf = await get_object_store().put_object(
@@ -577,7 +580,6 @@ async def test_integrity_scan_applies_database_backfills_in_datasource_transacti
         uuid4(), ObjectSuffix.PNG, b"thumbnail", max_bytes=100
     )
     revision = FileRevision(
-        item_id=item.id,
         object_key=pdf.key,
         size=pdf.size,
         thumbnail_object_key=thumbnail.key,
@@ -586,6 +588,8 @@ async def test_integrity_scan_applies_database_backfills_in_datasource_transacti
         created_by=user.id,
     )
     async_db.add(revision)
+    await async_db.flush()
+    async_db.add(ItemFileRevision(item_id=item.id, file_revision_id=revision.id))
     await async_db.commit()
     monkeypatch.setattr(operation_workflows, "AsyncSessionLocal", async_session_factory)
 
@@ -686,7 +690,7 @@ async def test_commit_uploaded_revision_uses_datasource_transaction(async_db):
     user = User(username="upload-tx-user", password_hash="unused")
     async_db.add(user)
     await async_db.flush()
-    item = Item(title="TX Item", created_by=user.id)
+    item = Item(title="TX Item", owner_id=user.id, created_by=user.id)
     async_db.add(item)
     await async_db.commit()
 
@@ -720,7 +724,7 @@ async def test_commit_uploaded_attachment_uses_datasource_transaction(async_db):
     user = User(username="att-tx-user", password_hash="unused")
     async_db.add(user)
     await async_db.flush()
-    item = Item(title="Attachment Item", created_by=user.id)
+    item = Item(title="Attachment Item", owner_id=user.id, created_by=user.id)
     async_db.add(item)
     await async_db.commit()
 
@@ -742,7 +746,7 @@ async def test_operations_and_library_transaction_steps(async_db):
     user = User(username="op-tx-user", password_hash="unused")
     async_db.add(user)
     await async_db.flush()
-    item = Item(title="Reindex Item", created_by=user.id)
+    item = Item(title="Reindex Item", owner_id=user.id, created_by=user.id)
     async_db.add(item)
     await async_db.commit()
 

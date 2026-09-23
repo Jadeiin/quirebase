@@ -15,6 +15,7 @@ class ProjectSummaryView(BaseModel):
     state: str
     visibility: str
     description: str = ""
+    sharing_mode: str = "live"
 
 
 class ProjectMemberView(BaseModel):
@@ -35,6 +36,7 @@ class JoinableProjectView(BaseModel):
     state: str
     visibility: str
     description: str = ""
+    sharing_mode: str = "live"
 
 
 def project_detail_view(workspace: Any) -> ProjectDetailView:
@@ -46,6 +48,7 @@ def project_detail_view(workspace: Any) -> ProjectDetailView:
         state=workspace.project.state.value,
         visibility=workspace.project.visibility.value,
         description=workspace.project.description,
+        sharing_mode=workspace.project.sharing_mode.value,
         members=[
             ProjectMemberView(
                 user_id=member.user.id,
@@ -62,16 +65,22 @@ class ProjectCreateRequest(BaseModel):
     name: str = Field(max_length=240)
     visibility: Literal["private", "public"] = "private"
     description: str = Field(default="", max_length=2000)
+    sharing_mode: Literal["live", "independent"] = "live"
 
 
 class ProjectSettingsRequest(BaseModel):
     name: str = Field(max_length=240)
     visibility: Literal["private", "public"]
     description: str = Field(max_length=2000)
+    sharing_mode: Literal["live", "independent"]
 
 
 class ProjectVisibilityRequest(BaseModel):
     visibility: Literal["private", "public"]
+
+
+class ProjectSharingModeRequest(BaseModel):
+    sharing_mode: Literal["live", "independent"]
 
 
 class ProjectDescriptionRequest(BaseModel):
@@ -84,4 +93,4 @@ class ProjectDeleteRequest(BaseModel):
 
 class ProjectMemberRequest(BaseModel):
     username: str
-    role: Literal["editor", "viewer"] = "viewer"
+    role: Literal["admin", "editor", "viewer"] = "viewer"

@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from quirebase.projects.administration import ProjectAdminSummary, list_projects_for_admin
 from quirebase.projects.lifecycle import (
+    change_project_sharing_mode,
     delete_project,
     leave_project,
     rename_project,
     set_project_state,
     set_project_visibility,
-    transfer_project_ownership,
     update_project_description,
     update_project_settings,
     validate_project_state,
@@ -38,6 +38,7 @@ __all__ = [
     "add_item_to_project",
     "add_items_to_project",
     "add_project_member",
+    "change_project_sharing_mode",
     "create_project",
     "delete_project",
     "join_project",
@@ -51,7 +52,6 @@ __all__ = [
     "rename_project",
     "set_project_state",
     "set_project_visibility",
-    "transfer_project_ownership",
     "update_project_description",
     "update_project_settings",
     "validate_project_state",

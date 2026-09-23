@@ -26,6 +26,8 @@ from quirebase.models import (
     FileRevision,
     FileRevisionProcessingState,
     Item,
+    ItemAttachment,
+    ItemFileRevision,
     PdfAnnotation,
     Project,
     ProjectItem,
@@ -59,7 +61,7 @@ async def _lock_upload_authority(
     item = await db.scalar(lock)
     if owner is None or item is None:
         raise ValueError("Item is no longer writable")
-    if owner.role != "administrator" and item.created_by != owner.id:
+    if owner.role != "administrator" and item.owner_id != owner.id:
         project_id = await db.scalar(
             select(Project.id)
             .join(ProjectItem, ProjectItem.project_id == Project.id)
@@ -70,10 +72,8 @@ async def _lock_upload_authority(
             .where(
                 ProjectItem.item_id == item_id,
                 Project.state == "active",
-                (Project.owner_id == owner.id)
-                | (
-                    (ProjectMember.user_id == owner.id) & (ProjectMember.role == ProjectRole.editor)
-                ),
+                ProjectMember.user_id == owner.id,
+                ProjectMember.role.in_((ProjectRole.admin, ProjectRole.editor)),
             )
             .order_by(Project.id)
             .limit(1)
@@ -101,10 +101,7 @@ async def _lock_upload_authority(
         if (
             project is None
             or project_item is None
-            or (
-                project.owner_id != owner.id
-                and (member is None or member.role != ProjectRole.editor)
-            )
+            or (member is None or member.role not in (ProjectRole.admin, ProjectRole.editor))
         ):
             raise ValueError("Item is no longer writable")
     return owner, item
@@ -265,6 +262,16 @@ async def commit_uploaded_revision(
     _owner, _item = await _lock_upload_authority(db, item_id, owner_id)
     existing = await db.get(FileRevision, inspected["revision_id"])
     if existing is not None:
+        if (
+            await db.scalar(
+                select(ItemFileRevision.id).where(
+                    ItemFileRevision.item_id == item_id,
+                    ItemFileRevision.file_revision_id == existing.id,
+                )
+            )
+            is None
+        ):
+            db.add(ItemFileRevision(item_id=item_id, file_revision_id=existing.id))
         if existing.processing_state == FileRevisionProcessingState.pending:
             existing.object_key = inspected["object_key"]
             existing.thumbnail_object_key = inspected["thumbnail_object_key"]
@@ -275,10 +282,9 @@ async def commit_uploaded_revision(
             existing.full_text = inspected["full_text"]
             existing.processing_state = FileRevisionProcessingState.ready
             await search_index(db).index_revision(db, existing.id)
-        return {"revision_id": existing.id, "item_id": existing.item_id}
+        return {"revision_id": existing.id, "item_id": item_id}
     revision = FileRevision(
         id=inspected["revision_id"],
-        item_id=item_id,
         object_key=inspected["object_key"],
         thumbnail_object_key=inspected["thumbnail_object_key"],
         thumbnail_size=inspected["thumbnail_size"],
@@ -292,6 +298,7 @@ async def commit_uploaded_revision(
     )
     db.add(revision)
     await db.flush()
+    db.add(ItemFileRevision(item_id=item_id, file_revision_id=revision.id))
     await search_index(db).index_revision(db, revision.id)
     record_event(db, owner_id, "pdf.upload", "file_revision", revision.id)
     return {"revision_id": revision.id, "item_id": item_id}
@@ -378,7 +385,8 @@ async def commit_imported_revision(inspected: PdfInspection) -> RevisionWorkflow
         raise ValueError("imported revision no longer exists")
     item_exists = await db.scalar(
         select(Item.id)
-        .where(Item.id == revision.item_id)
+        .join(ItemFileRevision, ItemFileRevision.item_id == Item.id)
+        .where(ItemFileRevision.file_revision_id == revision.id)
         .with_for_update(read=True, key_share=True)
     )
     if item_exists is None:
@@ -395,7 +403,12 @@ async def commit_imported_revision(inspected: PdfInspection) -> RevisionWorkflow
         revision.page_geometry = inspected["page_geometry"]
         revision.processing_state = FileRevisionProcessingState.ready
         await search_index(db).index_revision(db, revision.id)
-    return {"revision_id": revision.id, "item_id": revision.item_id}
+    item_id = await db.scalar(
+        select(ItemFileRevision.item_id).where(ItemFileRevision.file_revision_id == revision.id)
+    )
+    if item_id is None:
+        raise ValueError("revision is not linked to an Item")
+    return {"revision_id": revision.id, "item_id": item_id}
 
 
 def _is_image_header(header: bytes, content_type: str) -> bool:
@@ -445,25 +458,36 @@ async def commit_uploaded_attachment(
     _owner, _item = await _lock_upload_authority(db, item_id, owner_id, role=role)
     existing = await db.get(Attachment, attachment_id)
     if existing is not None:
-        return {"attachment_id": existing.id, "item_id": existing.item_id}
+        linked_item_id = await db.scalar(
+            select(ItemAttachment.item_id).where(ItemAttachment.attachment_id == existing.id)
+        )
+        return {"attachment_id": existing.id, "item_id": linked_item_id or ""}
     if role is not None:
         current = await db.scalar(
-            select(Attachment).where(Attachment.item_id == item_id, Attachment.role == role)
+            select(Attachment)
+            .join(ItemAttachment, ItemAttachment.attachment_id == Attachment.id)
+            .where(ItemAttachment.item_id == item_id, ItemAttachment.role == role)
         )
         if current is not None:
-            current.role = None
+            link = await db.scalar(
+                select(ItemAttachment).where(
+                    ItemAttachment.item_id == item_id, ItemAttachment.attachment_id == current.id
+                )
+            )
+            if link is not None:
+                link.role = None
             await db.flush()
     attachment = Attachment(
         id=attachment_id,
-        item_id=item_id,
         object_key=receipt["object_key"],
         size=receipt["size"],
         mime_type=content_type[:100],
         original_name=Path(filename).name[:255],
-        role=role,
         created_by=owner_id,
     )
     db.add(attachment)
+    await db.flush()
+    db.add(ItemAttachment(item_id=item_id, attachment_id=attachment.id, role=role))
     record_event(db, owner_id, "attachment.upload", "attachment", attachment.id)
     return {"attachment_id": attachment.id, "item_id": item_id}
 
@@ -507,6 +531,7 @@ async def upload_attachment_workflow(
 @DBOS.step(retries_allowed=True, max_attempts=3)
 async def build_annotation_export(
     owner_id: str,
+    item_id: str,
     revision_id: str,
     object_id: str,
     project_id: str | None,
@@ -527,13 +552,22 @@ async def build_annotation_export(
             )
         if project_id:
             membership = await db.get(ProjectMember, (project_id, owner_id))
-            assignment = await db.get(ProjectItem, (project_id, revision.item_id))
+            assignment = await db.scalar(
+                select(ProjectItem)
+                .join(ItemFileRevision, ItemFileRevision.item_id == ProjectItem.item_id)
+                .where(
+                    ProjectItem.project_id == project_id,
+                    ProjectItem.item_id == item_id,
+                    ItemFileRevision.file_revision_id == revision.id,
+                    ItemFileRevision.item_id == item_id,
+                )
+            )
             if membership is None or assignment is None:
                 raise PermissionError("project membership no longer exists")
             scopes.append(
                 and_(
                     PdfAnnotation.scope == AnnotationScope.project,
-                    PdfAnnotation.project_id == project_id,
+                    PdfAnnotation.project_item_id == assignment.id,
                 )
             )
         records = (
@@ -543,8 +577,12 @@ async def build_annotation_export(
                 (
                     await db.scalars(
                         select(PdfAnnotation).where(
-                            PdfAnnotation.file_revision_id == revision.id,
-                            PdfAnnotation.deleted_at.is_(None),
+                            PdfAnnotation.item_file_revision_id.in_(
+                                select(ItemFileRevision.id).where(
+                                    ItemFileRevision.file_revision_id == revision.id,
+                                    ItemFileRevision.item_id == item_id,
+                                )
+                            ),
                             or_(*scopes),
                         )
                     )
@@ -592,6 +630,7 @@ async def build_annotation_export(
 @DBOS.workflow(name=ANNOTATION_EXPORT_WORKFLOW)
 async def annotation_export_workflow(
     owner_id: str,
+    item_id: str,
     revision_id: str,
     object_id: str,
     project_id: str | None,
@@ -599,7 +638,7 @@ async def annotation_export_workflow(
     timezone: str | None,
 ) -> AnnotationExportResult:
     result = await build_annotation_export(
-        owner_id, revision_id, object_id, project_id, include_private, timezone
+        owner_id, item_id, revision_id, object_id, project_id, include_private, timezone
     )
     workflow_id = DBOS.workflow_id
     if workflow_id is None:

@@ -32,16 +32,17 @@ def visible_items_query(user: User) -> Select[tuple[Item]]:
             ProjectMember,
             (ProjectMember.project_id == Project.id) & (ProjectMember.user_id == user.id),
         )
-        .where((Project.owner_id == user.id) | (ProjectMember.user_id == user.id))
+        .where(ProjectMember.user_id == user.id)
+        .where(Project.state == "active")
     )
     shared_ids = select(ProjectItem.item_id).where(ProjectItem.project_id.in_(project_ids))
-    return query.where(or_(Item.created_by == user.id, Item.id.in_(shared_ids)))
+    return query.where(or_(Item.owner_id == user.id, Item.id.in_(shared_ids)))
 
 
 async def can_read_item(db: AsyncSession, user: User, item_id: str) -> bool:
     if user.role == SystemRole.administrator.value:
         return await db.get(Item, item_id) is not None
-    own = exists().where(Item.id == item_id, Item.created_by == user.id)
+    own = exists().where(Item.id == item_id, Item.owner_id == user.id)
     shared = exists(
         select(ProjectItem.project_id)
         .join(Project, Project.id == ProjectItem.project_id)
@@ -51,7 +52,8 @@ async def can_read_item(db: AsyncSession, user: User, item_id: str) -> bool:
         )
         .where(
             ProjectItem.item_id == item_id,
-            (Project.owner_id == user.id) | (ProjectMember.user_id == user.id),
+            ProjectMember.user_id == user.id,
+            Project.state == "active",
         )
     )
     return bool(await db.scalar(select(or_(own, shared))))
@@ -61,7 +63,7 @@ async def can_edit_item(db: AsyncSession, user: User, item_id: str) -> bool:
     item = await db.get(Item, item_id)
     if item is None:
         return False
-    if user.role == SystemRole.administrator.value or item.created_by == user.id:
+    if user.role == SystemRole.administrator.value or item.owner_id == user.id:
         return True
     editable = exists(
         select(ProjectItem.project_id)
@@ -73,8 +75,8 @@ async def can_edit_item(db: AsyncSession, user: User, item_id: str) -> bool:
         .where(
             ProjectItem.item_id == item_id,
             Project.state == "active",
-            (Project.owner_id == user.id)
-            | ((ProjectMember.user_id == user.id) & (ProjectMember.role == ProjectRole.editor)),
+            (ProjectMember.user_id == user.id)
+            & (ProjectMember.role.in_((ProjectRole.admin, ProjectRole.editor))),
         )
     )
     return bool(await db.scalar(select(editable)))
@@ -83,7 +85,7 @@ async def can_edit_item(db: AsyncSession, user: User, item_id: str) -> bool:
 def can_delete_item(db: AsyncSession, user: User, item: Item) -> bool:
     if user.role == SystemRole.administrator.value:
         return True
-    return item.created_by == user.id
+    return item.owner_id == user.id
 
 
 async def require_readable_item(db: AsyncSession, user: User, item_id: str) -> Item:
@@ -113,7 +115,7 @@ async def require_editable_item(db: AsyncSession, user: User, item_id: str) -> I
     )
     if item is None:
         raise ResourceUnavailable("item not found")
-    if user.role == SystemRole.administrator.value or item.created_by == user.id:
+    if user.role == SystemRole.administrator.value or item.owner_id == user.id:
         return item
     editable = exists(
         select(ProjectItem.project_id)
@@ -125,8 +127,8 @@ async def require_editable_item(db: AsyncSession, user: User, item_id: str) -> I
         .where(
             ProjectItem.item_id == item_id,
             Project.state == "active",
-            (Project.owner_id == user.id)
-            | ((ProjectMember.user_id == user.id) & (ProjectMember.role == ProjectRole.editor)),
+            (ProjectMember.user_id == user.id)
+            & (ProjectMember.role.in_((ProjectRole.admin, ProjectRole.editor))),
         )
     )
     if not await db.scalar(select(editable)):
@@ -151,7 +153,7 @@ async def require_editable_item_for_mutation(db: AsyncSession, user: User, item_
     )
     if item is None:
         raise ResourceNotFound("item not found")
-    if user.role == SystemRole.administrator.value or item.created_by == user.id:
+    if user.role == SystemRole.administrator.value or item.owner_id == user.id:
         return item
     project = await db.scalar(
         select(Project)
@@ -163,8 +165,8 @@ async def require_editable_item_for_mutation(db: AsyncSession, user: User, item_
         .where(
             ProjectItem.item_id == item_id,
             Project.state == "active",
-            (Project.owner_id == user.id)
-            | ((ProjectMember.user_id == user.id) & (ProjectMember.role == ProjectRole.editor)),
+            (ProjectMember.user_id == user.id)
+            & (ProjectMember.role.in_((ProjectRole.admin, ProjectRole.editor))),
         )
         .order_by(Project.id)
     )

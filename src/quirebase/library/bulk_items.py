@@ -29,7 +29,9 @@ from quirebase.models import (
     Attachment,
     FileRevision,
     Item,
-    ItemTag,
+    ItemAttachment,
+    ItemFileRevision,
+    PersonalItemTag,
     User,
 )
 from quirebase.projects import add_items_to_project
@@ -70,10 +72,14 @@ async def apply_bulk_item_action(
             await require_editable_item_for_mutation(db, user, item.id)
         tag_record = await get_or_create_tag(db, user, tag_name)
         dialect = db.get_bind().dialect.name
-        insert = pg_insert(ItemTag) if dialect == "postgresql" else sqlite_insert(ItemTag)
+        insert = (
+            pg_insert(PersonalItemTag)
+            if dialect == "postgresql"
+            else sqlite_insert(PersonalItemTag)
+        )
         await db.execute(
             insert.values([
-                {"item_id": item.id, "tag_id": tag_record.id} for item in items
+                {"item_id": item.id, "tag_id": tag_record.id, "owner_id": user.id} for item in items
             ]).on_conflict_do_nothing(index_elements=["item_id", "tag_id"])
         )
         audit_action = "library.bulk.add_tag"
@@ -98,23 +104,23 @@ async def apply_bulk_item_action(
         if len(locked_items) != len(requested_ids):
             raise ResourceUnavailable("one or more selected items no longer exist")
         items = locked_items
-        if user.role != "administrator" and any(item.created_by != user.id for item in items):
+        if user.role != "administrator" and any(item.owner_id != user.id for item in items):
             raise PermissionDenied("only item owners can permanently delete items")
         cleanup_keys = list(
             (
                 await db.scalars(
-                    select(FileRevision.object_key).where(
-                        FileRevision.item_id.in_([item.id for item in items])
-                    )
+                    select(FileRevision.object_key)
+                    .where(ItemFileRevision.item_id.in_([item.id for item in items]))
+                    .join(ItemFileRevision, ItemFileRevision.file_revision_id == FileRevision.id)
                 )
             ).all()
         )
         cleanup_keys.extend(
             (
                 await db.scalars(
-                    select(Attachment.object_key).where(
-                        Attachment.item_id.in_([item.id for item in items])
-                    )
+                    select(Attachment.object_key)
+                    .where(ItemAttachment.item_id.in_([item.id for item in items]))
+                    .join(ItemAttachment, ItemAttachment.attachment_id == Attachment.id)
                 )
             ).all()
         )
@@ -122,16 +128,16 @@ async def apply_bulk_item_action(
             key
             for key in (
                 await db.scalars(
-                    select(FileRevision.thumbnail_object_key).where(
-                        FileRevision.item_id.in_([item.id for item in items])
-                    )
+                    select(FileRevision.thumbnail_object_key)
+                    .where(ItemFileRevision.item_id.in_([item.id for item in items]))
+                    .join(ItemFileRevision, ItemFileRevision.file_revision_id == FileRevision.id)
                 )
             ).all()
             if key
         )
         for item in items:
-            await db.execute(delete(FileRevision).where(FileRevision.item_id == item.id))
-            await db.execute(delete(Attachment).where(Attachment.item_id == item.id))
+            await db.execute(delete(ItemFileRevision).where(ItemFileRevision.item_id == item.id))
+            await db.execute(delete(ItemAttachment).where(ItemAttachment.item_id == item.id))
             await search_index(db).remove_item(db, item.id)
             await db.delete(item)
         audit_action = "library.bulk.delete_items"

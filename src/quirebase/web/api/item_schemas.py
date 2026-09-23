@@ -68,7 +68,7 @@ class ItemWorkspaceView(BaseModel):
     permissions: ItemWorkspacePermissionsView
     counts: ItemWorkspaceCountsView
     tags: list[ItemTagView]
-    owner: ItemOwnerView
+    owner: ItemOwnerView | None
     identifiers: list[ItemIdentifierView]
     latest_revision: ItemLatestRevisionView | None = None
     thumbnail: ItemThumbnailView | None = None

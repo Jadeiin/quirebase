@@ -26,6 +26,7 @@ async def test_request_is_idempotent_until_explicitly_superseded(async_db, fake_
         title="Graph representation learning for molecules",
         abstract="A robust neural method for molecular prediction.",
         keywords="provider supplied keyword",
+        owner_id=user.id,
         created_by=user.id,
     )
     db.add(item)
@@ -86,7 +87,12 @@ async def test_stale_job_cannot_overwrite_new_generation(async_db):
     user = User(username="stale-owner", password_hash="hash")
     db.add(user)
     await db.flush()
-    item = Item(title="Stable title", abstract="Enough English content", created_by=user.id)
+    item = Item(
+        title="Stable title",
+        abstract="Enough English content",
+        owner_id=user.id,
+        created_by=user.id,
+    )
     db.add(item)
     await db.flush()
     settings = Settings(_env_file=None, recommendation_engine="yake")
@@ -120,7 +126,7 @@ async def test_concurrent_force_requests_receive_distinct_generation_tokens(
     user = User(username="concurrent-recommend-owner", password_hash="hash")
     db.add(user)
     await db.flush()
-    item = Item(title="Concurrent recommendation requests", created_by=user.id)
+    item = Item(title="Concurrent recommendation requests", owner_id=user.id, created_by=user.id)
     db.add(item)
     await db.flush()
     await request_item_tag_recommendation(db, item.id, owner_id=user.id)
@@ -159,7 +165,7 @@ async def test_missing_keybert_configuration_fails_explicitly(async_db):
     user = User(username="keybert-owner", password_hash="hash")
     db.add(user)
     await db.flush()
-    item = Item(title="Local semantic extraction", created_by=user.id)
+    item = Item(title="Local semantic extraction", owner_id=user.id, created_by=user.id)
     db.add(item)
     await db.flush()
     settings = Settings(
@@ -178,26 +184,26 @@ async def test_missing_keybert_configuration_fails_explicitly(async_db):
 async def test_generation_result_does_not_include_source_text(async_db, monkeypatch):
     from types import SimpleNamespace
 
-    from quirebase.models import FileRevision, FileRevisionProcessingState
+    from quirebase.models import FileRevision, FileRevisionProcessingState, ItemFileRevision
 
     db = async_db
     user = User(username="compact-generation-owner", password_hash="hash")
     db.add(user)
     await db.flush()
-    item = Item(title="Compact checkpoint", created_by=user.id)
+    item = Item(title="Compact checkpoint", owner_id=user.id, created_by=user.id)
     db.add(item)
     await db.flush()
-    db.add(
-        FileRevision(
-            item_id=item.id,
-            object_key="aa/bb/full-text.pdf",
-            size=1,
-            original_name="full-text.pdf",
-            full_text="checkpoint sentinel " * 20_000,
-            processing_state=FileRevisionProcessingState.ready,
-            created_by=user.id,
-        )
+    revision = FileRevision(
+        object_key="aa/bb/full-text.pdf",
+        size=1,
+        original_name="full-text.pdf",
+        full_text="checkpoint sentinel " * 20_000,
+        processing_state=FileRevisionProcessingState.ready,
+        created_by=user.id,
     )
+    db.add(revision)
+    await db.flush()
+    db.add(ItemFileRevision(item_id=item.id, file_revision_id=revision.id))
     settings = Settings(
         _env_file=None,
         recommendation_engine="yake",

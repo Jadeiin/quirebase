@@ -13,7 +13,8 @@ from quirebase.core.errors import (
     ResourceUnavailable,
     ValidationFailure,
 )
-from quirebase.models import Invitation, LoginSession, Project, SystemRole, User
+from quirebase.models import Invitation, LoginSession, ProjectMember, ProjectRole, SystemRole, User
+from quirebase.projects.sharing import fork_owned_project_items
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -104,8 +105,33 @@ async def update_user_status(db: AsyncSession, admin: User, user_id: str, active
         raise ResourceNotFound("user not found")
     if user.id == admin.id and not active:
         raise PermissionDenied("administrators cannot deactivate their own account")
-    if not active and await db.scalar(select(Project.id).where(Project.owner_id == user.id)):
-        raise PermissionDenied("transfer project ownership before deactivating this account")
+    if not active:
+        memberships = list(
+            (
+                await db.scalars(
+                    select(ProjectMember).where(
+                        ProjectMember.user_id == user.id,
+                        ProjectMember.role.in_((ProjectRole.admin, ProjectRole.editor)),
+                    )
+                )
+            ).all()
+        )
+        for membership in memberships:
+            if membership.role is ProjectRole.admin:
+                replacement = await db.scalar(
+                    select(ProjectMember.user_id)
+                    .join(User, User.id == ProjectMember.user_id)
+                    .where(
+                        ProjectMember.project_id == membership.project_id,
+                        ProjectMember.role == ProjectRole.admin,
+                        ProjectMember.user_id != user.id,
+                        User.active.is_(True),
+                    )
+                    .limit(1)
+                )
+                if replacement is None:
+                    raise PermissionDenied("a project must retain an active admin")
+            await fork_owned_project_items(db, membership.project_id, user.id, admin)
     user.active = active
     if not active:
         # Revoke all active sessions upon deactivation

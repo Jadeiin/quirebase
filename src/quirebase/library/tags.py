@@ -12,6 +12,7 @@ from quirebase.access.items import (
     require_editable_item_for_mutation,
     visible_items_query,
 )
+from quirebase.access.projects import require_project_member
 from quirebase.access.tags import can_manage_tag, visible_tags_query
 from quirebase.audit import record_event
 from quirebase.core.errors import (
@@ -24,7 +25,17 @@ from quirebase.library.workflows import (
     item_tag_recommendation_status,
     request_item_tag_recommendation,
 )
-from quirebase.models import Item, ItemTag, ItemTagRecommendation, Tag, User
+from quirebase.models import (
+    Item,
+    ItemTagRecommendation,
+    PersonalItemTag,
+    Project,
+    ProjectItem,
+    ProjectItemTag,
+    ProjectRole,
+    Tag,
+    User,
+)
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -52,21 +63,29 @@ def normalize_tag_name(name: str) -> str:
 
 async def get_or_create_tag(db: AsyncSession, user: User, name: str) -> Tag:
     normalized = normalize_tag_name(name)
-    tag = await db.scalar(select(Tag).where(Tag.name == normalized))
+    folded = normalized.casefold()
+    tag = await db.scalar(select(Tag).where(Tag.user_id == user.id, Tag.normalized_name == folded))
     if tag is None:
         try:
             async with db.begin_nested():
-                tag = Tag(name=normalized, created_by=user.id)
+                tag = Tag(
+                    user_id=user.id,
+                    name=normalized,
+                    normalized_name=folded,
+                    created_by=user.id,
+                )
                 db.add(tag)
                 await db.flush()
         except IntegrityError:
-            tag = await db.scalar(select(Tag).where(Tag.name == normalized))
+            tag = await db.scalar(
+                select(Tag).where(Tag.user_id == user.id, Tag.normalized_name == folded)
+            )
             if tag is None:  # pragma: no cover - constraint unrelated to Tag identity
                 raise
     return tag
 
 
-async def add_tag_to_item(db: AsyncSession, user: User, item_id: str, name: str) -> ItemTag:
+async def add_tag_to_item(db: AsyncSession, user: User, item_id: str, name: str) -> PersonalItemTag:
     await require_editable_item_for_mutation(db, user, item_id)
     tag = await get_or_create_tag(db, user, name)
     return await _add_tag_id_to_item(db, user, item_id, tag.id)
@@ -79,18 +98,18 @@ async def _add_tag_id_to_item(
     tag_id: str,
     *,
     commit: bool = True,
-) -> ItemTag:
-    assignment = await db.get(ItemTag, (item_id, tag_id))
+) -> PersonalItemTag:
+    assignment = await db.get(PersonalItemTag, (item_id, tag_id))
     created = False
     if assignment is None:
         try:
             async with db.begin_nested():
-                assignment = ItemTag(item_id=item_id, tag_id=tag_id)
+                assignment = PersonalItemTag(item_id=item_id, tag_id=tag_id, owner_id=user.id)
                 db.add(assignment)
                 await db.flush()
                 created = True
         except IntegrityError:
-            assignment = await db.get(ItemTag, (item_id, tag_id), populate_existing=True)
+            assignment = await db.get(PersonalItemTag, (item_id, tag_id), populate_existing=True)
             if assignment is None:  # pragma: no cover - constraint unrelated to association PK
                 raise
     if created:
@@ -102,7 +121,7 @@ async def _add_tag_id_to_item(
 
 async def add_existing_tag_to_item(
     db: AsyncSession, user: User, item_id: str, tag_id: str
-) -> ItemTag:
+) -> PersonalItemTag:
     await require_editable_item_for_mutation(db, user, item_id)
     if await db.get(Tag, tag_id) is None:
         raise ResourceUnavailable("tag not found")
@@ -121,7 +140,9 @@ async def _remove_tag_from_item(
     db: AsyncSession, user: User, item_id: str, tag_id: str, *, commit: bool = True
 ) -> None:
     result = await db.execute(
-        delete(ItemTag).where(ItemTag.item_id == item_id, ItemTag.tag_id == tag_id)
+        delete(PersonalItemTag).where(
+            PersonalItemTag.item_id == item_id, PersonalItemTag.tag_id == tag_id
+        )
     )
     if getattr(result, "rowcount", 0):
         record_event(
@@ -181,12 +202,17 @@ async def apply_item_tag_selection(
 
 async def rename_tag(db: AsyncSession, user: User, tag_id: str, name: str) -> Tag:
     tag = await db.scalar(select(Tag).where(Tag.id == tag_id).with_for_update(key_share=True))
-    if tag is None or not can_manage_tag(user, tag):
+    if tag is None:
+        raise ResourceUnavailable("tag not found or cannot be managed")
+    if tag.project_id is not None:
+        await require_project_member(db, user, tag.project_id, {ProjectRole.admin})
+    elif not can_manage_tag(user, tag):
         raise ResourceUnavailable("tag not found or cannot be managed")
     normalized = normalize_tag_name(name)
     if await db.scalar(select(Tag.id).where(Tag.name == normalized, Tag.id != tag.id)):
         raise TagConflict("tag name already exists")
     tag.name = normalized
+    tag.normalized_name = normalized.casefold()
     record_event(db, user.id, "tag.rename", "tag", tag.id)
     try:
         await db.commit()
@@ -199,7 +225,11 @@ async def rename_tag(db: AsyncSession, user: User, tag_id: str, name: str) -> Ta
 async def delete_tag(db: AsyncSession, user: User, tag_id: str) -> None:
     # Deleting a taxonomy root must block FK association inserts until commit.
     tag = await db.scalar(select(Tag).where(Tag.id == tag_id).with_for_update())
-    if tag is None or not can_manage_tag(user, tag):
+    if tag is None:
+        raise ResourceUnavailable("tag not found or cannot be managed")
+    if tag.project_id is not None:
+        await require_project_member(db, user, tag.project_id, {ProjectRole.admin})
+    elif not can_manage_tag(user, tag):
         raise ResourceUnavailable("tag not found or cannot be managed")
     await db.delete(tag)
     await db.flush()
@@ -211,10 +241,13 @@ async def list_accessible_tags_with_counts(db: AsyncSession, user: User) -> list
     accessible_ids = visible_items_query(user).with_only_columns(Item.id).subquery()
     rows = (
         await db.execute(
-            select(Tag, func.count(ItemTag.item_id))
+            select(Tag, func.count(PersonalItemTag.item_id))
             .outerjoin(
-                ItemTag,
-                and_(ItemTag.tag_id == Tag.id, ItemTag.item_id.in_(select(accessible_ids.c.id))),
+                PersonalItemTag,
+                and_(
+                    PersonalItemTag.tag_id == Tag.id,
+                    PersonalItemTag.item_id.in_(select(accessible_ids.c.id)),
+                ),
             )
             .where(Tag.id.in_(visible_tags_query(user).with_only_columns(Tag.id)))
             .group_by(Tag.id)
@@ -229,7 +262,13 @@ async def get_tag_matrix_for_item(db: AsyncSession, user: User, item_id: str) ->
         raise ResourceUnavailable("item not found")
     all_tags = list((await db.scalars(visible_tags_query(user).order_by(Tag.name))).all())
     assigned_ids = set(
-        (await db.scalars(select(ItemTag.tag_id).where(ItemTag.item_id == item_id))).all()
+        (
+            await db.scalars(
+                select(PersonalItemTag.tag_id).where(
+                    PersonalItemTag.item_id == item_id, PersonalItemTag.owner_id == user.id
+                )
+            )
+        ).all()
     )
     recommendation = await db.scalar(
         select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == item_id)
@@ -290,18 +329,50 @@ async def merge_tags(db: AsyncSession, user: User, source_tag_id: str, target_ta
     target_tag = locked_tags[target_tag_id]
     if source_tag is None or target_tag is None:
         raise ResourceUnavailable("tags not found")
+    if (source_tag.project_id, source_tag.user_id) != (target_tag.project_id, target_tag.user_id):
+        raise ResourceUnavailable("tags belong to different scopes")
+    if source_tag.project_id is not None:
+        await require_project_member(db, user, source_tag.project_id, {ProjectRole.admin})
+        dialect = db.get_bind().dialect.name
+        insert = (
+            pg_insert(ProjectItemTag) if dialect == "postgresql" else sqlite_insert(ProjectItemTag)
+        )
+        await db.execute(
+            insert.from_select(
+                ["project_item_id", "tag_id", "project_id"],
+                select(
+                    ProjectItemTag.project_item_id,
+                    literal(target_tag.id),
+                    ProjectItemTag.project_id,
+                ).where(ProjectItemTag.tag_id == source_tag.id),
+            ).on_conflict_do_nothing(index_elements=["project_item_id", "tag_id"])
+        )
+        await db.execute(delete(ProjectItemTag).where(ProjectItemTag.tag_id == source_tag.id))
+        await db.delete(source_tag)
+        await db.flush()
+        record_event(
+            db, user.id, "tag.merge", "tag", target_tag.id, detail={"merged_from": source_tag.name}
+        )
+        await db.commit()
+        return target_tag
     if user.role != "administrator" and source_tag.created_by != user.id:
         raise ResourceUnavailable("not authorized to merge these tags")
 
     dialect = db.get_bind().dialect.name
-    insert = pg_insert(ItemTag) if dialect == "postgresql" else sqlite_insert(ItemTag)
+    insert = (
+        pg_insert(PersonalItemTag) if dialect == "postgresql" else sqlite_insert(PersonalItemTag)
+    )
     await db.execute(
         insert.from_select(
-            ["item_id", "tag_id"],
-            select(ItemTag.item_id, literal(target_tag.id)).where(ItemTag.tag_id == source_tag.id),
+            ["item_id", "tag_id", "owner_id"],
+            select(
+                PersonalItemTag.item_id,
+                literal(target_tag.id),
+                PersonalItemTag.owner_id,
+            ).where(PersonalItemTag.tag_id == source_tag.id),
         ).on_conflict_do_nothing(index_elements=["item_id", "tag_id"])
     )
-    await db.execute(delete(ItemTag).where(ItemTag.tag_id == source_tag.id))
+    await db.execute(delete(PersonalItemTag).where(PersonalItemTag.tag_id == source_tag.id))
     await db.delete(source_tag)
     await db.flush()
 
@@ -315,3 +386,143 @@ async def merge_tags(db: AsyncSession, user: User, source_tag_id: str, target_ta
     )
     await db.commit()
     return target_tag
+
+
+async def _editable_project_item(
+    db: AsyncSession, user: User, project_id: str, item_id: str
+) -> ProjectItem:
+    await require_project_member(db, user, project_id, {ProjectRole.admin, ProjectRole.editor})
+    return await _project_item_for_member(db, user, project_id, item_id)
+
+
+async def _project_item_for_member(
+    db: AsyncSession, user: User, project_id: str, item_id: str
+) -> ProjectItem:
+    await require_project_member(db, user, project_id)
+    row = await db.scalar(
+        select(ProjectItem)
+        .join(Project, Project.id == ProjectItem.project_id)
+        .where(
+            ProjectItem.project_id == project_id,
+            ProjectItem.item_id == item_id,
+            Project.state == "active",
+        )
+    )
+    if row is None:
+        raise ResourceUnavailable("project item not found")
+    return row
+
+
+async def get_or_create_project_tag(
+    db: AsyncSession, user: User, project_id: str, name: str
+) -> Tag:
+    await require_project_member(db, user, project_id, {ProjectRole.admin, ProjectRole.editor})
+    normalized = normalize_tag_name(name)
+    folded = normalized.casefold()
+    tag = await db.scalar(
+        select(Tag).where(Tag.project_id == project_id, Tag.normalized_name == folded)
+    )
+    if tag is None:
+        try:
+            async with db.begin_nested():
+                tag = Tag(
+                    project_id=project_id,
+                    name=normalized,
+                    normalized_name=folded,
+                    created_by=user.id,
+                )
+                db.add(tag)
+                await db.flush()
+        except IntegrityError:
+            tag = await db.scalar(
+                select(Tag).where(Tag.project_id == project_id, Tag.normalized_name == folded)
+            )
+            if tag is None:
+                raise
+    return tag
+
+
+async def add_project_tag_to_item(
+    db: AsyncSession, user: User, project_id: str, item_id: str, name: str
+) -> ProjectItemTag:
+    project_item = await _editable_project_item(db, user, project_id, item_id)
+    tag = await get_or_create_project_tag(db, user, project_id, name)
+    assignment = await db.get(ProjectItemTag, (project_item.id, tag.id))
+    if assignment is None:
+        assignment = ProjectItemTag(
+            project_item_id=project_item.id, tag_id=tag.id, project_id=project_id
+        )
+        db.add(assignment)
+        await db.flush()
+        record_event(db, user.id, "project_tag.add", "project_item", project_item.id)
+    await db.commit()
+    return assignment
+
+
+async def remove_project_tag_from_item(
+    db: AsyncSession, user: User, project_id: str, item_id: str, tag_id: str
+) -> None:
+    project_item = await _editable_project_item(db, user, project_id, item_id)
+    result = await db.execute(
+        delete(ProjectItemTag).where(
+            ProjectItemTag.project_item_id == project_item.id,
+            ProjectItemTag.project_id == project_id,
+            ProjectItemTag.tag_id == tag_id,
+        )
+    )
+    if getattr(result, "rowcount", 0):
+        record_event(db, user.id, "project_tag.remove", "project_item", project_item.id)
+    await db.commit()
+
+
+async def list_project_tags_with_counts(
+    db: AsyncSession, user: User, project_id: str
+) -> list[tuple[Tag, int]]:
+    await require_project_member(db, user, project_id)
+    rows = (
+        await db.execute(
+            select(Tag, func.count(ProjectItemTag.project_item_id))
+            .outerjoin(ProjectItemTag, ProjectItemTag.tag_id == Tag.id)
+            .where(Tag.project_id == project_id)
+            .group_by(Tag.id)
+            .order_by(Tag.name)
+        )
+    ).all()
+    return [(row[0], row[1]) for row in rows]
+
+
+async def get_project_tag_matrix_for_item(
+    db: AsyncSession, user: User, project_id: str, item_id: str
+) -> dict[str, Any]:
+    project_item = await _project_item_for_member(db, user, project_id, item_id)
+    tags = list(
+        (await db.scalars(select(Tag).where(Tag.project_id == project_id).order_by(Tag.name))).all()
+    )
+    assigned_ids = set(
+        (
+            await db.scalars(
+                select(ProjectItemTag.tag_id).where(
+                    ProjectItemTag.project_item_id == project_item.id
+                )
+            )
+        ).all()
+    )
+    groups: dict[str, list[Tag]] = {}
+    for tag in tags:
+        letter = tag.name[0].upper() if tag.name else "#"
+        if not ("A" <= letter <= "Z"):
+            letter = "#"
+        groups.setdefault(letter, []).append(tag)
+    return {
+        "groups": [
+            {"letter": letter, "tags": values, "names": [tag.name for tag in values]}
+            for letter, values in sorted(groups.items(), key=lambda row: (row[0] == "#", row[0]))
+        ],
+        "assigned_ids": assigned_ids,
+        "recommended_ids": set(),
+        "suggested_names": (),
+        "suggested_single_words": (),
+        "suggested_phrases": (),
+        "recommendation_state": "not_available",
+        "recommendation_error": None,
+    }

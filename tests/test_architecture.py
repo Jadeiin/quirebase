@@ -24,7 +24,7 @@ PACKAGE_ROLES = {
 
 ALLOWED_PACKAGE_DEPENDENCIES = {
     "access": {"core", "models"},
-    "accounts": {"audit", "core", "models"},
+    "accounts": {"audit", "core", "models", "projects"},
     "audit": {"core", "models"},
     "core": set(),
     "documents": {"access", "audit", "core", "models", "operations", "search"},

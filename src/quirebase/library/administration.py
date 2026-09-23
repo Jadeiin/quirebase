@@ -2,12 +2,20 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, exists, func, or_, select
 
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
 from quirebase.documents import enqueue_object_cleanup
-from quirebase.models import Attachment, FileRevision, Item, ObjectIntegrityScan, User
+from quirebase.models import (
+    Attachment,
+    FileRevision,
+    Item,
+    ItemAttachment,
+    ItemFileRevision,
+    ObjectIntegrityScan,
+    User,
+)
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
@@ -42,11 +50,11 @@ async def list_global_items(
             )
         )
     if owner_id:
-        filters.append(Item.created_by == owner_id)
+        filters.append(Item.owner_id == owner_id)
     if has_pdf is True:
-        filters.append(Item.id.in_(select(FileRevision.item_id)))
+        filters.append(Item.id.in_(select(ItemFileRevision.item_id)))
     elif has_pdf is False:
-        filters.append(Item.id.not_in(select(FileRevision.item_id)))
+        filters.append(Item.id.not_in(select(ItemFileRevision.item_id)))
     if filters:
         query = query.where(*filters)
         count_query = count_query.where(*filters)
@@ -112,33 +120,75 @@ async def _delete_item(
     item = await db.scalar(select(Item).where(Item.id == item_id).with_for_update())
     if item is None:
         raise ResourceNotFound("item not found")
-    if not require_admin and item.created_by != actor.id and actor.role != "administrator":
+    if not require_admin and item.owner_id != actor.id and actor.role != "administrator":
         raise ResourceUnavailable("item owner required")
 
     title = item.title
     # Collect keys to clean up from storage
+    revision_ids = list(
+        (
+            await db.scalars(
+                select(ItemFileRevision.file_revision_id).where(ItemFileRevision.item_id == item.id)
+            )
+        ).all()
+    )
+    attachment_ids = list(
+        (
+            await db.scalars(
+                select(ItemAttachment.attachment_id).where(ItemAttachment.item_id == item.id)
+            )
+        ).all()
+    )
     cleanup_keys = list(
         (
-            await db.scalars(select(FileRevision.object_key).where(FileRevision.item_id == item.id))
+            await db.scalars(
+                select(FileRevision.object_key)
+                .join(ItemFileRevision, ItemFileRevision.file_revision_id == FileRevision.id)
+                .where(ItemFileRevision.item_id == item.id)
+            )
         ).all()
     )
     cleanup_keys.extend(
-        (await db.scalars(select(Attachment.object_key).where(Attachment.item_id == item.id))).all()
+        (
+            await db.scalars(
+                select(Attachment.object_key)
+                .join(ItemAttachment, ItemAttachment.attachment_id == Attachment.id)
+                .where(ItemAttachment.item_id == item.id)
+            )
+        ).all()
     )
 
     thumbnail_keys = tuple(
         key
         for key in (
             await db.scalars(
-                select(FileRevision.thumbnail_object_key).where(FileRevision.item_id == item.id)
+                select(FileRevision.thumbnail_object_key)
+                .join(ItemFileRevision, ItemFileRevision.file_revision_id == FileRevision.id)
+                .where(ItemFileRevision.item_id == item.id)
             )
         ).all()
         if key
     )
 
     # Explicitly delete child relations for cross-dialect foreign key safety
-    await db.execute(delete(FileRevision).where(FileRevision.item_id == item.id))
-    await db.execute(delete(Attachment).where(Attachment.item_id == item.id))
+    await db.execute(delete(ItemFileRevision).where(ItemFileRevision.item_id == item.id))
+    await db.execute(delete(ItemAttachment).where(ItemAttachment.item_id == item.id))
+    # Link rows own the association; a FileRevision/Attachment root is retained
+    # only while another Item still references it.
+    if revision_ids:
+        await db.execute(
+            delete(FileRevision).where(
+                FileRevision.id.in_(revision_ids),
+                ~exists().where(ItemFileRevision.file_revision_id == FileRevision.id),
+            )
+        )
+    if attachment_ids:
+        await db.execute(
+            delete(Attachment).where(
+                Attachment.id.in_(attachment_ids),
+                ~exists().where(ItemAttachment.attachment_id == Attachment.id),
+            )
+        )
 
     # Revision projections are owned by FileRevision and cascade on PostgreSQL;
     # the SQLite adapter clears them explicitly.

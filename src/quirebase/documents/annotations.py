@@ -11,8 +11,8 @@ from sqlalchemy.exc import IntegrityError
 from quirebase.access.annotations import (
     editable_annotation_ids,
     editable_annotation_reply_ids,
+    require_deletable_annotation,
     require_editable_annotation,
-    require_restorable_annotation,
     require_visible_annotation_for_reply_mutation,
 )
 from quirebase.access.documents import require_revision
@@ -32,10 +32,12 @@ from quirebase.models import (
     AnnotationScope,
     FileRevision,
     FileRevisionProcessingState,
+    ItemFileRevision,
     PdfAnnotation,
     PdfAnnotationReply,
     ProjectItem,
     ProjectMember,
+    ProjectRole,
     SystemRole,
     User,
 )
@@ -67,17 +69,19 @@ def annotation_json(
     record: PdfAnnotation,
     current_user_id: str,
     *,
+    revision_id: str,
+    project_id: str | None,
     author_display_name: str,
     editable: bool,
     replies: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     return {
         "id": record.id,
-        "revision_id": record.file_revision_id,
+        "revision_id": revision_id,
         "page_index": record.page_index,
         "kind": record.kind,
         "scope": record.scope,
-        "project_id": record.project_id,
+        "project_id": project_id,
         "body": record.body,
         "selected_text": record.selected_text,
         "payload": record.payload,
@@ -197,13 +201,22 @@ async def select_visible_annotations(
     if project_id:
         if (
             await project_member(db, user, project_id) is None
-            or await db.get(ProjectItem, (project_id, item_id)) is None
+            or await db.scalar(
+                select(ProjectItem.id).where(
+                    ProjectItem.project_id == project_id, ProjectItem.item_id == item_id
+                )
+            )
+            is None
         ):
             raise ResourceUnavailable("project membership or project item not found")
         scopes.append(
             and_(
                 PdfAnnotation.scope == AnnotationScope.project,
-                PdfAnnotation.project_id == project_id,
+                PdfAnnotation.project_item_id.in_(
+                    select(ProjectItem.id).where(
+                        ProjectItem.project_id == project_id, ProjectItem.item_id == item_id
+                    )
+                ),
             )
         )
     return list(
@@ -211,8 +224,12 @@ async def select_visible_annotations(
             await db.scalars(
                 select(PdfAnnotation)
                 .where(
-                    PdfAnnotation.file_revision_id == revision_id,
-                    PdfAnnotation.deleted_at.is_(None),
+                    PdfAnnotation.item_file_revision_id.in_(
+                        select(ItemFileRevision.id).where(
+                            ItemFileRevision.file_revision_id == revision_id,
+                            ItemFileRevision.item_id == item_id,
+                        )
+                    ),
                     or_(*scopes),
                 )
                 .order_by(PdfAnnotation.created_at, PdfAnnotation.id)
@@ -227,13 +244,35 @@ async def _annotation_views(
     if not records:
         return []
     annotation_ids = {record.id for record in records}
+    revision_rows = (
+        await db.execute(
+            select(ItemFileRevision.id, ItemFileRevision.file_revision_id).where(
+                ItemFileRevision.id.in_({record.item_file_revision_id for record in records})
+            )
+        )
+    ).all()
+    revision_ids = {row[0]: row[1] for row in revision_rows}
+    project_item_ids = {
+        record.project_item_id for record in records if record.project_item_id is not None
+    }
+    project_rows = (
+        (
+            await db.execute(
+                select(ProjectItem.id, ProjectItem.project_id).where(
+                    ProjectItem.id.in_(project_item_ids)
+                )
+            )
+        ).all()
+        if project_item_ids
+        else []
+    )
+    project_ids = {row[0]: row[1] for row in project_rows}
     replies = list(
         (
             await db.scalars(
                 select(PdfAnnotationReply)
                 .where(
                     PdfAnnotationReply.annotation_id.in_(annotation_ids),
-                    PdfAnnotationReply.deleted_at.is_(None),
                 )
                 .order_by(PdfAnnotationReply.created_at, PdfAnnotationReply.id)
             )
@@ -244,9 +283,8 @@ async def _annotation_views(
         await db.execute(select(User.id, User.username).where(User.id.in_(author_ids)))
     ).all()
     authors: dict[str, str] = {row[0]: row[1] for row in author_rows}
-    editable_ids = await editable_annotation_ids(db, user, records)
-    records_by_id = {record.id: record for record in records}
-    editable_reply_ids = await editable_annotation_reply_ids(db, user, replies, records_by_id)
+    editable_ids = editable_annotation_ids(user, records)
+    editable_reply_ids = editable_annotation_reply_ids(user, replies)
     replies_by_annotation: dict[str, list[dict[str, Any]]] = {
         annotation_id: [] for annotation_id in annotation_ids
     }
@@ -263,6 +301,8 @@ async def _annotation_views(
         annotation_json(
             record,
             user.id,
+            revision_id=revision_ids[record.item_file_revision_id],
+            project_id=project_ids.get(record.project_item_id),
             author_display_name=authors.get(record.author_id, ""),
             editable=record.id in editable_ids,
             replies=replies_by_annotation[record.id],
@@ -286,17 +326,56 @@ async def _editable_reply(
         .where(
             PdfAnnotationReply.id == reply_id,
             PdfAnnotationReply.annotation_id == annotation_id,
-            PdfAnnotationReply.deleted_at.is_(None),
         )
         .with_for_update()
     )
     if reply is None:
         raise ResourceUnavailable("annotation reply not found or cannot be edited")
-    editable_ids = await editable_annotation_reply_ids(
-        db, locked_user, [reply], {annotation.id: annotation}
-    )
+    editable_ids = editable_annotation_reply_ids(locked_user, [reply])
     if reply.id not in editable_ids:
         raise ResourceUnavailable("annotation reply not found or cannot be edited")
+    return annotation, reply
+
+
+async def _deletable_reply(
+    db: AsyncSession,
+    user: User,
+    item_id: str,
+    annotation_id: str,
+    reply_id: str,
+) -> tuple[PdfAnnotation, PdfAnnotationReply]:
+    locked_user, annotation = await require_visible_annotation_for_reply_mutation(
+        db, user, item_id, annotation_id
+    )
+    reply = await db.scalar(
+        select(PdfAnnotationReply)
+        .where(
+            PdfAnnotationReply.id == reply_id,
+            PdfAnnotationReply.annotation_id == annotation_id,
+        )
+        .with_for_update()
+    )
+    if reply is None:
+        raise ResourceUnavailable("annotation reply not found or cannot be deleted")
+    allowed = (
+        reply.author_id == locked_user.id or locked_user.role == SystemRole.administrator.value
+    )
+    if not allowed and annotation.project_item_id is not None:
+        allowed = (
+            await db.scalar(
+                select(ProjectMember.project_id)
+                .join(ProjectItem, ProjectItem.project_id == ProjectMember.project_id)
+                .where(
+                    ProjectItem.id == annotation.project_item_id,
+                    ProjectMember.user_id == locked_user.id,
+                    ProjectMember.role == ProjectRole.admin,
+                )
+                .limit(1)
+            )
+            is not None
+        )
+    if not allowed:
+        raise ResourceUnavailable("annotation reply not found or cannot be deleted")
     return annotation, reply
 
 
@@ -307,8 +386,16 @@ async def list_document_annotations(
     revision_id: str,
     project_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    revision = await require_revision(db, user, revision_id)
-    if revision.item_id != item_id:
+    await require_revision(db, user, revision_id)
+    if (
+        await db.scalar(
+            select(ItemFileRevision.id).where(
+                ItemFileRevision.file_revision_id == revision_id,
+                ItemFileRevision.item_id == item_id,
+            )
+        )
+        is None
+    ):
         raise ResourceNotFound("revision not found for item")
     records = await select_visible_annotations(db, user, revision_id, item_id, project_id)
     return await _annotation_views(db, user, records)
@@ -329,7 +416,8 @@ async def review_item_annotations(
         (
             await db.scalars(
                 select(FileRevision)
-                .where(FileRevision.item_id == item_id)
+                .join(ItemFileRevision, ItemFileRevision.file_revision_id == FileRevision.id)
+                .where(ItemFileRevision.item_id == item_id)
                 .order_by(FileRevision.created_at.desc(), FileRevision.id)
             )
         ).all()
@@ -351,18 +439,35 @@ async def review_item_annotations(
             ProjectMember.project_id.in_(item_project_ids),
         )
     filters = [
-        PdfAnnotation.file_revision_id.in_([revision.id for revision in revisions]),
-        PdfAnnotation.deleted_at.is_(None),
+        PdfAnnotation.item_file_revision_id.in_(
+            list(
+                await db.scalars(
+                    select(ItemFileRevision.id).where(ItemFileRevision.item_id == item_id)
+                )
+            )
+        ),
         or_(
             private_scope,
             and_(
                 PdfAnnotation.scope == AnnotationScope.project,
-                PdfAnnotation.project_id.in_(visible_project_ids),
+                PdfAnnotation.project_item_id.in_(
+                    select(ProjectItem.id).where(
+                        ProjectItem.project_id.in_(visible_project_ids),
+                        ProjectItem.item_id == item_id,
+                    )
+                ),
             ),
         ),
     ]
     if revision_id is not None:
-        filters.append(PdfAnnotation.file_revision_id == revision_id)
+        filters.append(
+            PdfAnnotation.item_file_revision_id.in_(
+                select(ItemFileRevision.id).where(
+                    ItemFileRevision.file_revision_id == revision_id,
+                    ItemFileRevision.item_id == item_id,
+                )
+            )
+        )
     total = int(
         await db.scalar(select(func.count()).select_from(PdfAnnotation).where(*filters)) or 0
     )
@@ -391,23 +496,52 @@ async def create_document_annotation(
     data: AnnotationCreate,
 ) -> dict[str, Any]:
     revision = await require_revision(db, user, data.revision_id)
-    if revision.item_id != item_id:
+    if (
+        await db.scalar(
+            select(ItemFileRevision.id).where(
+                ItemFileRevision.file_revision_id == data.revision_id,
+                ItemFileRevision.item_id == item_id,
+            )
+        )
+        is None
+    ):
         raise ResourceNotFound("revision not found for item")
     if data.scope is AnnotationScope.project and (
         await project_member(db, user, data.project_id) is None
-        or await db.get(ProjectItem, (data.project_id, item_id)) is None
+        or await db.scalar(
+            select(ProjectItem.id).where(
+                ProjectItem.project_id == data.project_id, ProjectItem.item_id == item_id
+            )
+        )
+        is None
     ):
         raise ResourceUnavailable("project membership or project item not found")
     validate_payload(data.page_index, data.payload, revision)
     object_id = str(data.id)
     record = PdfAnnotation(
         id=object_id,
-        file_revision_id=data.revision_id,
+        item_file_revision_id=(
+            await db.scalar(
+                select(ItemFileRevision.id).where(
+                    ItemFileRevision.file_revision_id == data.revision_id,
+                    ItemFileRevision.item_id == item_id,
+                )
+            )
+        ),
+        item_id=item_id,
         page_index=data.page_index,
         author_id=user.id,
         kind=data.kind,
         scope=data.scope,
-        project_id=data.project_id,
+        project_item_id=(
+            await db.scalar(
+                select(ProjectItem.id).where(
+                    ProjectItem.project_id == data.project_id, ProjectItem.item_id == item_id
+                )
+            )
+        )
+        if data.project_id
+        else None,
         body=data.body,
         selected_text=data.selected_text,
         payload=data.payload.model_dump(mode="json"),
@@ -423,6 +557,8 @@ async def create_document_annotation(
     return annotation_json(
         record,
         user.id,
+        revision_id=data.revision_id,
+        project_id=data.project_id,
         author_display_name=user.username,
         editable=True,
     )
@@ -436,11 +572,34 @@ async def update_document_annotation(
     data: AnnotationUpdate,
 ) -> dict[str, Any]:
     record = await require_editable_annotation(db, user, item_id, annotation_id)
-    revision = await db.get(FileRevision, record.file_revision_id)
+    revision = await db.get(
+        FileRevision,
+        (
+            await db.scalar(
+                select(ItemFileRevision.file_revision_id).where(
+                    ItemFileRevision.id == record.item_file_revision_id
+                )
+            )
+        ),
+    )
     if revision is None:
         raise ResourceNotFound("revision not found")
+    current_project_id = (
+        await db.scalar(
+            select(ProjectItem.project_id).where(ProjectItem.id == record.project_item_id)
+        )
+        if record.project_item_id is not None
+        else None
+    )
+    if current_project_id != data.project_id:
+        raise ValidationFailure("annotation project scope cannot change")
     if data.scope is AnnotationScope.project and (
-        await db.get(ProjectItem, (data.project_id, item_id)) is None
+        await db.scalar(
+            select(ProjectItem.id).where(
+                ProjectItem.project_id == data.project_id, ProjectItem.item_id == item_id
+            )
+        )
+        is None
         or (
             user.role != SystemRole.administrator.value
             and await project_member(db, user, data.project_id) is None
@@ -453,13 +612,20 @@ async def update_document_annotation(
         .where(
             PdfAnnotation.id == annotation_id,
             PdfAnnotation.version == data.version,
-            PdfAnnotation.deleted_at.is_(None),
         )
         .values(
             page_index=data.page_index,
             kind=data.kind,
             scope=data.scope,
-            project_id=data.project_id,
+            project_item_id=(
+                await db.scalar(
+                    select(ProjectItem.id).where(
+                        ProjectItem.project_id == data.project_id, ProjectItem.item_id == item_id
+                    )
+                )
+            )
+            if data.project_id
+            else None,
             body=data.body,
             selected_text=data.selected_text,
             payload=data.payload.model_dump(mode="json"),
@@ -486,63 +652,12 @@ async def delete_document_annotation(
     annotation_id: str,
     version: int,
 ) -> None:
-    record = await require_editable_annotation(db, user, item_id, annotation_id)
-    deleted_at = datetime.now(UTC)
-    new_version = await db.scalar(
-        update(PdfAnnotation)
-        .where(
-            PdfAnnotation.id == annotation_id,
-            PdfAnnotation.version == version,
-            PdfAnnotation.deleted_at.is_(None),
-        )
-        .values(
-            deleted_at=deleted_at,
-            updated_at=deleted_at,
-            version=PdfAnnotation.version + 1,
-        )
-        .returning(PdfAnnotation.version)
-    )
-    if new_version is None:
-        current_version = await db.scalar(
-            select(PdfAnnotation.version).where(PdfAnnotation.id == annotation_id)
-        )
-        raise VersionConflict(current_version)
+    record = await require_deletable_annotation(db, user, item_id, annotation_id)
+    if record.version != version:
+        raise VersionConflict(record.version)
+    await db.delete(record)
     record_event(db, user.id, "annotation.delete", "pdf_annotation", record.id)
     await db.commit()
-
-
-async def restore_document_annotation(
-    db: AsyncSession,
-    user: User,
-    item_id: str,
-    annotation_id: str,
-    version: int,
-) -> dict[str, Any]:
-    record = await require_restorable_annotation(db, user, item_id, annotation_id)
-    restored_at = datetime.now(UTC)
-    new_version = await db.scalar(
-        update(PdfAnnotation)
-        .where(
-            PdfAnnotation.id == annotation_id,
-            PdfAnnotation.version == version,
-            PdfAnnotation.deleted_at.is_not(None),
-        )
-        .values(
-            deleted_at=None,
-            updated_at=restored_at,
-            version=PdfAnnotation.version + 1,
-        )
-        .returning(PdfAnnotation.version)
-    )
-    if new_version is None:
-        current_version = await db.scalar(
-            select(PdfAnnotation.version).where(PdfAnnotation.id == annotation_id)
-        )
-        raise VersionConflict(current_version)
-    await db.refresh(record)
-    record_event(db, user.id, "annotation.restore", "pdf_annotation", record.id)
-    await db.commit()
-    return (await _annotation_views(db, user, [record]))[0]
 
 
 async def create_annotation_reply(
@@ -592,7 +707,6 @@ async def update_annotation_reply(
         .where(
             PdfAnnotationReply.id == reply_id,
             PdfAnnotationReply.version == data.version,
-            PdfAnnotationReply.deleted_at.is_(None),
         )
         .values(
             body=data.body,
@@ -626,85 +740,9 @@ async def delete_annotation_reply(
     reply_id: str,
     version: int,
 ) -> None:
-    _annotation, reply = await _editable_reply(db, user, item_id, annotation_id, reply_id)
-    deleted_at = datetime.now(UTC)
-    new_version = await db.scalar(
-        update(PdfAnnotationReply)
-        .where(
-            PdfAnnotationReply.id == reply_id,
-            PdfAnnotationReply.version == version,
-            PdfAnnotationReply.deleted_at.is_(None),
-        )
-        .values(
-            deleted_at=deleted_at,
-            updated_at=deleted_at,
-            version=PdfAnnotationReply.version + 1,
-        )
-        .returning(PdfAnnotationReply.version)
-    )
-    if new_version is None:
-        current_version = await db.scalar(
-            select(PdfAnnotationReply.version).where(PdfAnnotationReply.id == reply_id)
-        )
-        raise VersionConflict(current_version)
+    _annotation, reply = await _deletable_reply(db, user, item_id, annotation_id, reply_id)
+    if reply.version != version:
+        raise VersionConflict(reply.version)
+    await db.delete(reply)
     record_event(db, user.id, "annotation_reply.delete", "pdf_annotation_reply", reply.id)
     await db.commit()
-
-
-async def restore_annotation_reply(
-    db: AsyncSession,
-    user: User,
-    item_id: str,
-    annotation_id: str,
-    reply_id: str,
-    version: int,
-) -> dict[str, Any]:
-    locked_user, annotation = await require_visible_annotation_for_reply_mutation(
-        db, user, item_id, annotation_id
-    )
-    reply = await db.scalar(
-        select(PdfAnnotationReply)
-        .where(
-            PdfAnnotationReply.id == reply_id,
-            PdfAnnotationReply.annotation_id == annotation_id,
-            PdfAnnotationReply.deleted_at.is_not(None),
-        )
-        .with_for_update()
-    )
-    if reply is None:
-        raise ResourceUnavailable("annotation reply not found or cannot be restored")
-    editable_ids = await editable_annotation_reply_ids(
-        db, locked_user, [reply], {annotation.id: annotation}
-    )
-    if reply.id not in editable_ids:
-        raise ResourceUnavailable("annotation reply not found or cannot be restored")
-    restored_at = datetime.now(UTC)
-    new_version = await db.scalar(
-        update(PdfAnnotationReply)
-        .where(
-            PdfAnnotationReply.id == reply_id,
-            PdfAnnotationReply.version == version,
-            PdfAnnotationReply.deleted_at.is_not(None),
-        )
-        .values(
-            deleted_at=None,
-            updated_at=restored_at,
-            version=PdfAnnotationReply.version + 1,
-        )
-        .returning(PdfAnnotationReply.version)
-    )
-    if new_version is None:
-        current_version = await db.scalar(
-            select(PdfAnnotationReply.version).where(PdfAnnotationReply.id == reply_id)
-        )
-        raise VersionConflict(current_version)
-    await db.refresh(reply)
-    record_event(db, user.id, "annotation_reply.restore", "pdf_annotation_reply", reply.id)
-    await db.commit()
-    author_name = await db.scalar(select(User.username).where(User.id == reply.author_id)) or ""
-    return annotation_reply_json(
-        reply,
-        user.id,
-        author_display_name=author_name,
-        editable=True,
-    )

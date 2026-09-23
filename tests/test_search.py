@@ -1,27 +1,26 @@
 import pytest
 from sqlalchemy import select
 
-from quirebase.models import FileRevision, Item, User
+from quirebase.models import FileRevision, Item, ItemFileRevision, User
 from quirebase.search import reindex_all, search_index
 
 
 async def add_item(db, user, *, title, abstract=None, full_text=None):
-    item = Item(title=title, abstract=abstract, created_by=user.id)
+    item = Item(title=title, abstract=abstract, owner_id=user.id, created_by=user.id)
     db.add(item)
     await db.flush()
     if full_text:
-        db.add(
-            FileRevision(
-                item_id=item.id,
-                object_key=f"objects/{item.id}",
-                size=1,
-                original_name="paper.pdf",
-                full_text=full_text,
-                processing_state="ready",
-                created_by=user.id,
-            )
+        revision = FileRevision(
+            object_key=f"objects/{item.id}",
+            size=1,
+            original_name="paper.pdf",
+            full_text=full_text,
+            processing_state="ready",
+            created_by=user.id,
         )
+        db.add(revision)
         await db.flush()
+        db.add(ItemFileRevision(item_id=item.id, file_revision_id=revision.id))
     return item
 
 
@@ -68,7 +67,11 @@ async def test_metadata_reindex_preserves_revision_projection(async_db):
         async_db, user, title="Original title", full_text="Distinctive PDF phrase"
     )
     index = search_index(async_db)
-    revision = await async_db.scalar(select(FileRevision).where(FileRevision.item_id == item.id))
+    revision = await async_db.scalar(
+        select(FileRevision)
+        .join(ItemFileRevision, ItemFileRevision.file_revision_id == FileRevision.id)
+        .where(ItemFileRevision.item_id == item.id)
+    )
     await index.index_revision(async_db, revision.id)
     item.title = "Updated title"
     await index.index_item(async_db, item.id)

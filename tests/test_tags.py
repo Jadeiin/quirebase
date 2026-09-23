@@ -15,7 +15,14 @@ from quirebase.library.tags import (
     merge_tags,
     remove_tag_from_item,
 )
-from quirebase.models import AuditEvent, Item, ItemTag, ItemTagRecommendation, Tag, User
+from quirebase.models import (
+    AuditEvent,
+    Item,
+    ItemTagRecommendation,
+    PersonalItemTag,
+    Tag,
+    User,
+)
 
 
 @pytest.mark.anyio
@@ -24,7 +31,7 @@ async def test_remove_tag_from_item_records_the_business_change(async_db):
     user = User(username="tag-remover", password_hash="hash")
     db.add(user)
     await db.flush()
-    item = Item(title="Tagged Item", created_by=user.id)
+    item = Item(title="Tagged Item", owner_id=user.id, created_by=user.id)
     db.add(item)
     await db.flush()
     assignment = await add_tag_to_item(db, user, item.id, "Temporary")
@@ -32,7 +39,7 @@ async def test_remove_tag_from_item_records_the_business_change(async_db):
 
     await remove_tag_from_item(db, user, item.id, tag_id)
 
-    assert await db.get(ItemTag, (item.id, tag_id)) is None
+    assert await db.get(PersonalItemTag, (item.id, tag_id)) is None
     event = await db.scalar(
         select(AuditEvent).where(AuditEvent.action == "tag.remove", AuditEvent.target_id == item.id)
     )
@@ -46,7 +53,7 @@ async def test_tag_selection_rolls_back_when_a_later_change_is_invalid(async_db)
     user = User(username="tag-selection-atomic", password_hash="hash")
     db.add(user)
     await db.flush()
-    item = Item(title="Atomic Tag Selection", created_by=user.id)
+    item = Item(title="Atomic Tag Selection", owner_id=user.id, created_by=user.id)
     db.add(item)
     await db.flush()
     assignment = await add_tag_to_item(db, user, item.id, "Keep Me")
@@ -62,7 +69,7 @@ async def test_tag_selection_rolls_back_when_a_later_change_is_invalid(async_db)
             tag_ids=["missing-tag"],
         )
 
-    assert await db.get(ItemTag, (item_id, tag_id)) is not None
+    assert await db.get(PersonalItemTag, (item_id, tag_id)) is not None
 
 
 @pytest.mark.anyio
@@ -72,9 +79,11 @@ async def test_get_tag_matrix_for_item(async_db):
     db.add(user)
     await db.flush()
 
-    t1 = Tag(name="Algorithms", created_by=user.id)
-    t2 = Tag(name="Bioinformatics", created_by=user.id)
-    t3 = Tag(name="Compiler", created_by=user.id)
+    t1 = Tag(user_id=user.id, name="Algorithms", normalized_name="algorithms", created_by=user.id)
+    t2 = Tag(
+        user_id=user.id, name="Bioinformatics", normalized_name="bioinformatics", created_by=user.id
+    )
+    t3 = Tag(user_id=user.id, name="Compiler", normalized_name="compiler", created_by=user.id)
     db.add_all([t1, t2, t3])
     await db.flush()
 
@@ -82,6 +91,7 @@ async def test_get_tag_matrix_for_item(async_db):
         title="Compiler Optimization Algorithms",
         abstract="Efficient algorithms for compiler backend.",
         keywords="Compiler; Graph Neural Networks; graph neural networks; New Optimizer",
+        owner_id=user.id,
         created_by=user.id,
     )
     db.add(item)
@@ -114,21 +124,32 @@ async def test_tag_matrix_conceals_foreign_tags_without_accessible_items(async_d
     author = User(username="matrix_author", password_hash="hash")
     db.add_all([viewer, author])
     await db.flush()
-    attached_tag = Tag(name="Attached to visible item", created_by=author.id)
-    foreign_orphan = Tag(name="Foreign orphan", created_by=author.id)
-    own_orphan = Tag(name="Own orphan", created_by=viewer.id)
+    attached_tag = Tag(
+        user_id=author.id,
+        name="Attached to visible item",
+        normalized_name="attached to visible item",
+        created_by=author.id,
+    )
+    foreign_orphan = Tag(
+        user_id=author.id,
+        name="Foreign orphan",
+        normalized_name="foreign orphan",
+        created_by=author.id,
+    )
+    own_orphan = Tag(
+        user_id=viewer.id, name="Own orphan", normalized_name="own orphan", created_by=viewer.id
+    )
     db.add_all([attached_tag, foreign_orphan, own_orphan])
     await db.flush()
-    item = Item(title="Viewer item", created_by=viewer.id)
+    item = Item(title="Viewer item", owner_id=viewer.id, created_by=viewer.id)
     db.add(item)
     await db.flush()
-    db.add(ItemTag(item_id=item.id, tag_id=attached_tag.id))
     await db.commit()
 
     matrix = await get_tag_matrix_for_item(db, viewer, item.id)
 
     names = {tag.name for group in matrix["groups"] for tag in group["tags"]}
-    assert "Attached to visible item" in names
+    assert "Attached to visible item" not in names
     assert "Own orphan" in names
     assert "Foreign orphan" not in names
 
@@ -139,16 +160,21 @@ async def test_merge_tags_relinks_items_and_rejects_self_merge(async_db):
     admin = User(username="admin_merge", password_hash="hash", role="administrator")
     db.add(admin)
     await db.flush()
-    first = Item(title="First Item", created_by=admin.id)
-    second = Item(title="Second Item", created_by=admin.id)
-    source = Tag(name="ML", created_by=admin.id)
-    target = Tag(name="Machine Learning", created_by=admin.id)
+    first = Item(title="First Item", owner_id=admin.id, created_by=admin.id)
+    second = Item(title="Second Item", owner_id=admin.id, created_by=admin.id)
+    source = Tag(user_id=admin.id, name="ML", normalized_name="ml", created_by=admin.id)
+    target = Tag(
+        user_id=admin.id,
+        name="Machine Learning",
+        normalized_name="machine learning",
+        created_by=admin.id,
+    )
     db.add_all([first, second, source, target])
     await db.flush()
     db.add_all([
-        ItemTag(item_id=first.id, tag_id=source.id),
-        ItemTag(item_id=second.id, tag_id=source.id),
-        ItemTag(item_id=second.id, tag_id=target.id),
+        PersonalItemTag(item_id=first.id, tag_id=source.id, owner_id=admin.id),
+        PersonalItemTag(item_id=second.id, tag_id=source.id, owner_id=admin.id),
+        PersonalItemTag(item_id=second.id, tag_id=target.id, owner_id=admin.id),
     ])
     await db.commit()
 
@@ -157,7 +183,11 @@ async def test_merge_tags_relinks_items_and_rejects_self_merge(async_db):
     assert merged.id == target.id
     assert await db.get(Tag, source.id) is None
     assert set(
-        (await db.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == target.id))).all()
+        (
+            await db.scalars(
+                select(PersonalItemTag.item_id).where(PersonalItemTag.tag_id == target.id)
+            )
+        ).all()
     ) == {
         first.id,
         second.id,
@@ -173,8 +203,18 @@ async def test_merge_tags_requires_source_tag_ownership(async_db):
     other_user = User(username="other_user", password_hash="hash")
     db.add_all([source_owner, other_user])
     await db.flush()
-    source = Tag(name="Protected source", created_by=source_owner.id)
-    target = Tag(name="Shared target", created_by=other_user.id)
+    source = Tag(
+        user_id=source_owner.id,
+        name="Protected source",
+        normalized_name="protected source",
+        created_by=source_owner.id,
+    )
+    target = Tag(
+        user_id=source_owner.id,
+        name="Shared target",
+        normalized_name="shared target",
+        created_by=source_owner.id,
+    )
     db.add_all([source, target])
     await db.commit()
 

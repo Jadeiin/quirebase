@@ -1,8 +1,8 @@
 """initial schema
 
-Revision ID: a2254a6c211f
+Revision ID: 7e5d37dc472f
 Revises:
-Create Date: 2026-09-15 16:23:36.694528
+Create Date: 2026-09-22 00:20:58.561514
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'a2254a6c211f'
+revision: str = '7e5d37dc472f'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -87,6 +87,18 @@ def upgrade() -> None:
     op.create_index(op.f('ix_api_tokens_expires_at'), 'api_tokens', ['expires_at'], unique=False)
     op.create_index(op.f('ix_api_tokens_token_hash'), 'api_tokens', ['token_hash'], unique=True)
     op.create_index(op.f('ix_api_tokens_user_id'), 'api_tokens', ['user_id'], unique=False)
+    op.create_table('attachments',
+    sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('object_key', sa.String(length=200), nullable=False),
+    sa.Column('size', sa.Integer(), nullable=False),
+    sa.Column('mime_type', sa.String(length=100), nullable=False),
+    sa.Column('original_name', sa.String(length=255), nullable=False),
+    sa.Column('created_by', sa.String(length=36), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_attachments_object_key'), 'attachments', ['object_key'], unique=True)
     op.create_table('audit_events',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('actor_id', sa.String(length=36), nullable=True),
@@ -109,6 +121,26 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_citation_styles_created_by'), 'citation_styles', ['created_by'], unique=False)
+    op.create_table('file_revisions',
+    sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('object_key', sa.String(length=200), nullable=False),
+    sa.Column('thumbnail_object_key', sa.String(length=200), nullable=True),
+    sa.Column('thumbnail_size', sa.Integer(), nullable=True),
+    sa.Column('size', sa.Integer(), nullable=False),
+    sa.Column('mime_type', sa.String(length=100), nullable=False),
+    sa.Column('original_name', sa.String(length=255), nullable=False),
+    sa.Column('page_count', sa.Integer(), nullable=True),
+    sa.Column('page_geometry', sa.Text(), nullable=True),
+    sa.Column('full_text', sa.Text(), nullable=True),
+    sa.Column('processing_state', sa.Enum('pending', 'ready', name='file_revision_processing_state', native_enum=False), nullable=False),
+    sa.Column('created_by', sa.String(length=36), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.CheckConstraint("processing_state IN ('pending', 'ready')", name='ck_file_revisions_processing_state'),
+    sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_file_revisions_object_key'), 'file_revisions', ['object_key'], unique=True)
+    op.create_index(op.f('ix_file_revisions_thumbnail_object_key'), 'file_revisions', ['thumbnail_object_key'], unique=True)
     op.create_table('import_batches',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('owner_id', sa.String(length=36), nullable=False),
@@ -164,22 +196,25 @@ def upgrade() -> None:
     sa.Column('urls', sa.Text(), nullable=True),
     sa.Column('keywords', sa.Text(), nullable=True),
     sa.Column('custom_fields', sa.Text(), nullable=True),
+    sa.Column('owner_id', sa.String(length=36), nullable=True),
     sa.Column('created_by', sa.String(length=36), nullable=False),
     sa.Column('updated_by', sa.String(length=36), nullable=True),
     sa.Column('version', sa.Integer(), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
     sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['owner_id'], ['users.id'], ondelete='RESTRICT'),
     sa.ForeignKeyConstraint(['updated_by'], ['users.id'], ondelete='SET NULL'),
-    sa.PrimaryKeyConstraint('id')
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('id', 'owner_id', name='uq_items_id_owner')
     )
     op.create_index(op.f('ix_items_bibtex_id'), 'items', ['bibtex_id'], unique=False)
     op.create_index(op.f('ix_items_doi'), 'items', ['doi'], unique=False)
+    op.create_index(op.f('ix_items_owner_id'), 'items', ['owner_id'], unique=False)
     op.create_index(op.f('ix_items_title'), 'items', ['title'], unique=False)
     op.create_table('login_sessions',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('token_hash', sa.String(length=64), nullable=False),
-    sa.Column('csrf_token', sa.String(length=64), nullable=False),
     sa.Column('user_id', sa.String(length=36), nullable=False),
     sa.Column('expires_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
@@ -193,18 +228,17 @@ def upgrade() -> None:
     sa.Column('name', sa.String(length=240), nullable=False),
     sa.Column('description', sa.Text(), nullable=False),
     sa.Column('created_by', sa.String(length=36), nullable=False),
-    sa.Column('owner_id', sa.String(length=36), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('state', sa.Enum('active', 'archived', name='project_state', native_enum=False), nullable=False),
     sa.Column('visibility', sa.Enum('private', 'public', name='project_visibility', native_enum=False), nullable=False),
+    sa.Column('sharing_mode', sa.Enum('live', 'independent', name='project_sharing_mode', native_enum=False), nullable=False),
+    sa.CheckConstraint("sharing_mode IN ('live', 'independent')", name='ck_projects_sharing_mode'),
     sa.CheckConstraint("state IN ('active', 'archived')", name='ck_projects_state'),
     sa.CheckConstraint("visibility IN ('private', 'public')", name='ck_projects_visibility'),
     sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
-    sa.ForeignKeyConstraint(['owner_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_index(op.f('ix_projects_owner_id'), 'projects', ['owner_id'], unique=False)
     op.create_table('system_settings',
     sa.Column('key', sa.String(length=64), nullable=False),
     sa.Column('value', sa.Text(), nullable=False),
@@ -213,69 +247,21 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['updated_by'], ['users.id'], ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('key')
     )
-    op.create_table('tags',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('name', sa.String(length=120), nullable=False),
-    sa.Column('created_by', sa.String(length=36), nullable=False),
-    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
-    sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_tags_name'), 'tags', ['name'], unique=True)
-    op.create_table('attachments',
+    op.create_table('item_attachments',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('item_id', sa.String(length=36), nullable=False),
-    sa.Column('object_key', sa.String(length=200), nullable=False),
-    sa.Column('size', sa.Integer(), nullable=False),
-    sa.Column('mime_type', sa.String(length=100), nullable=False),
-    sa.Column('original_name', sa.String(length=255), nullable=False),
+    sa.Column('attachment_id', sa.String(length=36), nullable=False),
     sa.Column('role', sa.Enum('graphical_abstract', name='attachment_role', native_enum=False), nullable=True),
-    sa.Column('created_by', sa.String(length=36), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
-    sa.CheckConstraint("role IS NULL OR role = 'graphical_abstract'", name='ck_attachments_role'),
-    sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
+    sa.CheckConstraint("role IS NULL OR role = 'graphical_abstract'", name='ck_item_attachments_role'),
+    sa.ForeignKeyConstraint(['attachment_id'], ['attachments.id'], ondelete='RESTRICT'),
     sa.ForeignKeyConstraint(['item_id'], ['items.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('item_id', 'role', name='uq_attachments_item_role')
+    sa.UniqueConstraint('item_id', 'attachment_id', name='uq_item_attachment'),
+    sa.UniqueConstraint('item_id', 'role', name='uq_item_attachments_item_role')
     )
-    op.create_index(op.f('ix_attachments_item_id'), 'attachments', ['item_id'], unique=False)
-    op.create_index(op.f('ix_attachments_object_key'), 'attachments', ['object_key'], unique=False)
-    op.create_table('discussion_messages',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('item_id', sa.String(length=36), nullable=False),
-    sa.Column('author_id', sa.String(length=36), nullable=False),
-    sa.Column('body', sa.Text(), nullable=False),
-    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
-    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
-    sa.ForeignKeyConstraint(['author_id'], ['users.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['item_id'], ['items.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_discussion_messages_author_id'), 'discussion_messages', ['author_id'], unique=False)
-    op.create_index(op.f('ix_discussion_messages_item_id'), 'discussion_messages', ['item_id'], unique=False)
-    op.create_table('file_revisions',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('item_id', sa.String(length=36), nullable=False),
-    sa.Column('object_key', sa.String(length=200), nullable=False),
-    sa.Column('thumbnail_object_key', sa.String(length=200), nullable=True),
-    sa.Column('thumbnail_size', sa.Integer(), nullable=True),
-    sa.Column('size', sa.Integer(), nullable=False),
-    sa.Column('mime_type', sa.String(length=100), nullable=False),
-    sa.Column('original_name', sa.String(length=255), nullable=False),
-    sa.Column('page_count', sa.Integer(), nullable=True),
-    sa.Column('page_geometry', sa.Text(), nullable=True),
-    sa.Column('full_text', sa.Text(), nullable=True),
-    sa.Column('processing_state', sa.Enum('pending', 'ready', name='file_revision_processing_state', native_enum=False), nullable=False),
-    sa.Column('created_by', sa.String(length=36), nullable=False),
-    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
-    sa.CheckConstraint("processing_state IN ('pending', 'ready')", name='ck_file_revisions_processing_state'),
-    sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
-    sa.ForeignKeyConstraint(['item_id'], ['items.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_file_revisions_item_id'), 'file_revisions', ['item_id'], unique=False)
-    op.create_index(op.f('ix_file_revisions_object_key'), 'file_revisions', ['object_key'], unique=False)
-    op.create_index(op.f('ix_file_revisions_thumbnail_object_key'), 'file_revisions', ['thumbnail_object_key'], unique=False)
+    op.create_index(op.f('ix_item_attachments_attachment_id'), 'item_attachments', ['attachment_id'], unique=False)
+    op.create_index(op.f('ix_item_attachments_item_id'), 'item_attachments', ['item_id'], unique=False)
     op.create_table('item_authors',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('item_id', sa.String(length=36), nullable=False),
@@ -290,6 +276,19 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_item_authors_author_id'), 'item_authors', ['author_id'], unique=False)
     op.create_index(op.f('ix_item_authors_item_id'), 'item_authors', ['item_id'], unique=False)
+    op.create_table('item_file_revisions',
+    sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('item_id', sa.String(length=36), nullable=False),
+    sa.Column('file_revision_id', sa.String(length=36), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.ForeignKeyConstraint(['file_revision_id'], ['file_revisions.id'], ondelete='RESTRICT'),
+    sa.ForeignKeyConstraint(['item_id'], ['items.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('id', 'item_id', name='uq_item_file_revisions_id_item'),
+    sa.UniqueConstraint('item_id', 'file_revision_id', name='uq_item_file_revision')
+    )
+    op.create_index(op.f('ix_item_file_revisions_file_revision_id'), 'item_file_revisions', ['file_revision_id'], unique=False)
+    op.create_index(op.f('ix_item_file_revisions_item_id'), 'item_file_revisions', ['item_id'], unique=False)
     op.create_table('item_identifiers',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('item_id', sa.String(length=36), nullable=False),
@@ -328,56 +327,111 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_item_tag_recommendations_item_id'), 'item_tag_recommendations', ['item_id'], unique=True)
     op.create_index(op.f('ix_item_tag_recommendations_workflow_id'), 'item_tag_recommendations', ['workflow_id'], unique=False)
-    op.create_table('item_tags',
-    sa.Column('item_id', sa.String(length=36), nullable=False),
-    sa.Column('tag_id', sa.String(length=36), nullable=False),
-    sa.ForeignKeyConstraint(['item_id'], ['items.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['tag_id'], ['tags.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('item_id', 'tag_id')
-    )
     op.create_table('project_items',
+    sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('project_id', sa.String(length=36), nullable=False),
     sa.Column('item_id', sa.String(length=36), nullable=False),
-    sa.ForeignKeyConstraint(['item_id'], ['items.id'], ondelete='CASCADE'),
+    sa.Column('added_by', sa.String(length=36), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.ForeignKeyConstraint(['added_by'], ['users.id'], ondelete='SET NULL'),
+    sa.ForeignKeyConstraint(['item_id'], ['items.id'], ondelete='RESTRICT'),
     sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('project_id', 'item_id')
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('id', 'item_id', name='uq_project_items_id_item'),
+    sa.UniqueConstraint('id', 'project_id', name='uq_project_items_id_project'),
+    sa.UniqueConstraint('project_id', 'item_id', name='uq_project_items_project_item')
     )
+    op.create_index(op.f('ix_project_items_added_by'), 'project_items', ['added_by'], unique=False)
+    op.create_index(op.f('ix_project_items_item_id'), 'project_items', ['item_id'], unique=False)
+    op.create_index(op.f('ix_project_items_project_id'), 'project_items', ['project_id'], unique=False)
     op.create_table('project_members',
     sa.Column('project_id', sa.String(length=36), nullable=False),
     sa.Column('user_id', sa.String(length=36), nullable=False),
-    sa.Column('role', sa.Enum('owner', 'editor', 'viewer', name='project_role', native_enum=False), nullable=False),
-    sa.CheckConstraint("role IN ('owner', 'editor', 'viewer')", name='ck_project_members_role'),
+    sa.Column('role', sa.Enum('admin', 'editor', 'viewer', name='project_role', native_enum=False), nullable=False),
+    sa.CheckConstraint("role IN ('admin', 'editor', 'viewer')", name='ck_project_members_role'),
     sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('project_id', 'user_id')
     )
+    op.create_table('tags',
+    sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('user_id', sa.String(length=36), nullable=True),
+    sa.Column('project_id', sa.String(length=36), nullable=True),
+    sa.Column('name', sa.String(length=120), nullable=False),
+    sa.Column('normalized_name', sa.String(length=120), nullable=False),
+    sa.Column('created_by', sa.String(length=36), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.CheckConstraint('(user_id IS NOT NULL AND project_id IS NULL) OR (user_id IS NULL AND project_id IS NOT NULL)', name='ck_tags_exactly_one_scope'),
+    sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('id', 'project_id', name='uq_tags_id_project'),
+    sa.UniqueConstraint('id', 'user_id', name='uq_tags_id_user'),
+    sa.UniqueConstraint('project_id', 'normalized_name', name='uq_tags_project_name'),
+    sa.UniqueConstraint('user_id', 'normalized_name', name='uq_tags_user_name')
+    )
+    op.create_index(op.f('ix_tags_project_id'), 'tags', ['project_id'], unique=False)
+    op.create_index(op.f('ix_tags_user_id'), 'tags', ['user_id'], unique=False)
+    op.create_table('discussion_messages',
+    sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('project_item_id', sa.String(length=36), nullable=False),
+    sa.Column('author_id', sa.String(length=36), nullable=False),
+    sa.Column('body', sa.Text(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
+    sa.ForeignKeyConstraint(['author_id'], ['users.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['project_item_id'], ['project_items.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_discussion_messages_author_id'), 'discussion_messages', ['author_id'], unique=False)
+    op.create_index(op.f('ix_discussion_messages_project_item_id'), 'discussion_messages', ['project_item_id'], unique=False)
     op.create_table('pdf_annotations',
     sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('file_revision_id', sa.String(length=36), nullable=False),
+    sa.Column('item_file_revision_id', sa.String(length=36), nullable=False),
+    sa.Column('item_id', sa.String(length=36), nullable=False),
     sa.Column('page_index', sa.Integer(), nullable=False),
     sa.Column('author_id', sa.String(length=36), nullable=False),
     sa.Column('kind', sa.Enum('highlight', 'underline', 'strikeout', 'note', 'free_text', 'ink', 'rectangle', 'ellipse', 'line', 'arrow', name='annotation_kind', native_enum=False), nullable=False),
     sa.Column('scope', sa.Enum('private', 'project', name='annotation_scope', native_enum=False), nullable=False),
-    sa.Column('project_id', sa.String(length=36), nullable=True),
+    sa.Column('project_item_id', sa.String(length=36), nullable=True),
     sa.Column('body', sa.Text(), nullable=True),
     sa.Column('selected_text', sa.Text(), nullable=True),
     sa.Column('payload', sa.JSON(), nullable=False),
     sa.Column('version', sa.Integer(), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
-    sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
-    sa.CheckConstraint("(scope = 'private' AND project_id IS NULL) OR (scope = 'project' AND project_id IS NOT NULL)", name='ck_pdf_annotations_project_scope'),
+    sa.CheckConstraint("(scope = 'private' AND project_item_id IS NULL) OR (scope = 'project' AND project_item_id IS NOT NULL)", name='ck_pdf_annotations_project_item_scope'),
     sa.CheckConstraint("kind IN ('highlight', 'underline', 'strikeout', 'note', 'free_text', 'ink', 'rectangle', 'ellipse', 'line', 'arrow')", name='ck_pdf_annotations_kind'),
     sa.CheckConstraint("scope IN ('private', 'project')", name='ck_pdf_annotations_scope'),
     sa.ForeignKeyConstraint(['author_id'], ['users.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['file_revision_id'], ['file_revisions.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['id'], ['pdf_annotation_objects.id'], name='fk_pdf_annotations_object_id'),
-    sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['item_file_revision_id', 'item_id'], ['item_file_revisions.id', 'item_file_revisions.item_id'], name='fk_pdf_annotations_item_file_revision', ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['project_item_id', 'item_id'], ['project_items.id', 'project_items.item_id'], name='fk_pdf_annotations_project_item', ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_pdf_annotations_author_id'), 'pdf_annotations', ['author_id'], unique=False)
-    op.create_index(op.f('ix_pdf_annotations_file_revision_id'), 'pdf_annotations', ['file_revision_id'], unique=False)
-    op.create_index(op.f('ix_pdf_annotations_project_id'), 'pdf_annotations', ['project_id'], unique=False)
+    op.create_index(op.f('ix_pdf_annotations_item_file_revision_id'), 'pdf_annotations', ['item_file_revision_id'], unique=False)
+    op.create_index(op.f('ix_pdf_annotations_item_id'), 'pdf_annotations', ['item_id'], unique=False)
+    op.create_index(op.f('ix_pdf_annotations_project_item_id'), 'pdf_annotations', ['project_item_id'], unique=False)
+    op.create_table('personal_item_tags',
+    sa.Column('item_id', sa.String(length=36), nullable=False),
+    sa.Column('tag_id', sa.String(length=36), nullable=False),
+    sa.Column('owner_id', sa.String(length=36), nullable=False),
+    sa.ForeignKeyConstraint(['item_id', 'owner_id'], ['items.id', 'items.owner_id'], name='fk_personal_item_tags_item_owner', ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['tag_id', 'owner_id'], ['tags.id', 'tags.user_id'], name='fk_personal_item_tags_tag_owner', ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('item_id', 'tag_id')
+    )
+    op.create_index(op.f('ix_personal_item_tags_owner_id'), 'personal_item_tags', ['owner_id'], unique=False)
+    op.create_table('project_item_tags',
+    sa.Column('project_item_id', sa.String(length=36), nullable=False),
+    sa.Column('tag_id', sa.String(length=36), nullable=False),
+    sa.Column('project_id', sa.String(length=36), nullable=False),
+    sa.ForeignKeyConstraint(['project_item_id', 'project_id'], ['project_items.id', 'project_items.project_id'], name='fk_project_item_tags_project_item', ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['tag_id', 'project_id'], ['tags.id', 'tags.project_id'], name='fk_project_item_tags_tag_project', ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('project_item_id', 'tag_id')
+    )
+    op.create_index(op.f('ix_project_item_tags_project_id'), 'project_item_tags', ['project_id'], unique=False)
     op.create_table('pdf_annotation_replies',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('annotation_id', sa.String(length=36), nullable=False),
@@ -386,7 +440,6 @@ def upgrade() -> None:
     sa.Column('version', sa.Integer(), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
-    sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
     sa.ForeignKeyConstraint(['annotation_id'], ['pdf_annotations.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['author_id'], ['users.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['id'], ['pdf_annotation_objects.id'], name='fk_pdf_annotation_replies_object_id'),
@@ -394,52 +447,42 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_pdf_annotation_replies_annotation_id'), 'pdf_annotation_replies', ['annotation_id'], unique=False)
     op.create_index(op.f('ix_pdf_annotation_replies_author_id'), 'pdf_annotation_replies', ['author_id'], unique=False)
-    # ### end Alembic commands ###
-
-    # The full-text search projections are dialect-specific and invisible to autogenerate.
-    if op.get_bind().dialect.name == "postgresql":
-        op.execute(
-            """
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        op.execute("""
             CREATE TABLE item_search (
                 item_id varchar(36) PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
                 document tsvector NOT NULL
             )
-            """
-        )
+        """)
         op.execute("CREATE INDEX ix_item_search_document ON item_search USING gin(document)")
-        op.execute(
-            """
+        op.execute("""
             CREATE TABLE revision_search (
-                revision_id varchar(36) PRIMARY KEY REFERENCES file_revisions(id) ON DELETE CASCADE,
+                revision_id varchar(36) NOT NULL REFERENCES file_revisions(id) ON DELETE CASCADE,
                 item_id varchar(36) NOT NULL,
-                document tsvector NOT NULL
+                document tsvector NOT NULL,
+                PRIMARY KEY (revision_id, item_id)
             )
-            """
-        )
-        op.execute(
-            "CREATE INDEX ix_revision_search_document ON revision_search USING gin(document)"
-        )
+        """)
+        op.execute("CREATE INDEX ix_revision_search_document ON revision_search USING gin(document)")
         op.execute("CREATE INDEX ix_revision_search_item_id ON revision_search(item_id)")
     else:
-        op.execute(
-            """
+        op.execute("""
             CREATE VIRTUAL TABLE item_search USING fts5(
                 item_id UNINDEXED,
                 content,
                 tokenize='unicode61 remove_diacritics 2'
             )
-            """
-        )
-        op.execute(
-            """
+        """)
+        op.execute("""
             CREATE VIRTUAL TABLE revision_search USING fts5(
                 revision_id UNINDEXED,
                 item_id UNINDEXED,
                 content,
                 tokenize='unicode61 remove_diacritics 2'
             )
-            """
-        )
+        """)
+    # ### end Alembic commands ###
 
 
 def downgrade() -> None:
@@ -450,13 +493,26 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_pdf_annotation_replies_author_id'), table_name='pdf_annotation_replies')
     op.drop_index(op.f('ix_pdf_annotation_replies_annotation_id'), table_name='pdf_annotation_replies')
     op.drop_table('pdf_annotation_replies')
-    op.drop_index(op.f('ix_pdf_annotations_project_id'), table_name='pdf_annotations')
-    op.drop_index(op.f('ix_pdf_annotations_file_revision_id'), table_name='pdf_annotations')
+    op.drop_index(op.f('ix_project_item_tags_project_id'), table_name='project_item_tags')
+    op.drop_table('project_item_tags')
+    op.drop_index(op.f('ix_personal_item_tags_owner_id'), table_name='personal_item_tags')
+    op.drop_table('personal_item_tags')
+    op.drop_index(op.f('ix_pdf_annotations_project_item_id'), table_name='pdf_annotations')
+    op.drop_index(op.f('ix_pdf_annotations_item_id'), table_name='pdf_annotations')
+    op.drop_index(op.f('ix_pdf_annotations_item_file_revision_id'), table_name='pdf_annotations')
     op.drop_index(op.f('ix_pdf_annotations_author_id'), table_name='pdf_annotations')
     op.drop_table('pdf_annotations')
+    op.drop_index(op.f('ix_discussion_messages_project_item_id'), table_name='discussion_messages')
+    op.drop_index(op.f('ix_discussion_messages_author_id'), table_name='discussion_messages')
+    op.drop_table('discussion_messages')
+    op.drop_index(op.f('ix_tags_user_id'), table_name='tags')
+    op.drop_index(op.f('ix_tags_project_id'), table_name='tags')
+    op.drop_table('tags')
     op.drop_table('project_members')
+    op.drop_index(op.f('ix_project_items_project_id'), table_name='project_items')
+    op.drop_index(op.f('ix_project_items_item_id'), table_name='project_items')
+    op.drop_index(op.f('ix_project_items_added_by'), table_name='project_items')
     op.drop_table('project_items')
-    op.drop_table('item_tags')
     op.drop_index(op.f('ix_item_tag_recommendations_workflow_id'), table_name='item_tag_recommendations')
     op.drop_index(op.f('ix_item_tag_recommendations_item_id'), table_name='item_tag_recommendations')
     op.drop_table('item_tag_recommendations')
@@ -466,28 +522,22 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_item_identifiers_provider'), table_name='item_identifiers')
     op.drop_index(op.f('ix_item_identifiers_item_id'), table_name='item_identifiers')
     op.drop_table('item_identifiers')
+    op.drop_index(op.f('ix_item_file_revisions_item_id'), table_name='item_file_revisions')
+    op.drop_index(op.f('ix_item_file_revisions_file_revision_id'), table_name='item_file_revisions')
+    op.drop_table('item_file_revisions')
     op.drop_index(op.f('ix_item_authors_item_id'), table_name='item_authors')
     op.drop_index(op.f('ix_item_authors_author_id'), table_name='item_authors')
     op.drop_table('item_authors')
-    op.drop_index(op.f('ix_file_revisions_thumbnail_object_key'), table_name='file_revisions')
-    op.drop_index(op.f('ix_file_revisions_object_key'), table_name='file_revisions')
-    op.drop_index(op.f('ix_file_revisions_item_id'), table_name='file_revisions')
-    op.drop_table('file_revisions')
-    op.drop_index(op.f('ix_discussion_messages_item_id'), table_name='discussion_messages')
-    op.drop_index(op.f('ix_discussion_messages_author_id'), table_name='discussion_messages')
-    op.drop_table('discussion_messages')
-    op.drop_index(op.f('ix_attachments_object_key'), table_name='attachments')
-    op.drop_index(op.f('ix_attachments_item_id'), table_name='attachments')
-    op.drop_table('attachments')
-    op.drop_index(op.f('ix_tags_name'), table_name='tags')
-    op.drop_table('tags')
+    op.drop_index(op.f('ix_item_attachments_item_id'), table_name='item_attachments')
+    op.drop_index(op.f('ix_item_attachments_attachment_id'), table_name='item_attachments')
+    op.drop_table('item_attachments')
     op.drop_table('system_settings')
-    op.drop_index(op.f('ix_projects_owner_id'), table_name='projects')
     op.drop_table('projects')
     op.drop_index(op.f('ix_login_sessions_token_hash'), table_name='login_sessions')
     op.drop_index(op.f('ix_login_sessions_expires_at'), table_name='login_sessions')
     op.drop_table('login_sessions')
     op.drop_index(op.f('ix_items_title'), table_name='items')
+    op.drop_index(op.f('ix_items_owner_id'), table_name='items')
     op.drop_index(op.f('ix_items_doi'), table_name='items')
     op.drop_index(op.f('ix_items_bibtex_id'), table_name='items')
     op.drop_table('items')
@@ -498,10 +548,15 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_import_batches_owner_id'), table_name='import_batches')
     op.drop_index(op.f('ix_import_batches_created_at'), table_name='import_batches')
     op.drop_table('import_batches')
+    op.drop_index(op.f('ix_file_revisions_thumbnail_object_key'), table_name='file_revisions')
+    op.drop_index(op.f('ix_file_revisions_object_key'), table_name='file_revisions')
+    op.drop_table('file_revisions')
     op.drop_index(op.f('ix_citation_styles_created_by'), table_name='citation_styles')
     op.drop_table('citation_styles')
     op.drop_index(op.f('ix_audit_events_action'), table_name='audit_events')
     op.drop_table('audit_events')
+    op.drop_index(op.f('ix_attachments_object_key'), table_name='attachments')
+    op.drop_table('attachments')
     op.drop_index(op.f('ix_api_tokens_user_id'), table_name='api_tokens')
     op.drop_index(op.f('ix_api_tokens_token_hash'), table_name='api_tokens')
     op.drop_index(op.f('ix_api_tokens_expires_at'), table_name='api_tokens')

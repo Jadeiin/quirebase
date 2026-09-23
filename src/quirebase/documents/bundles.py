@@ -25,7 +25,15 @@ from quirebase.core.storage import get_object_store
 from quirebase.core.timezones import annotation_export_timezone, as_utc
 from quirebase.documents.annotations import select_visible_annotations
 from quirebase.documents.pdf import export_annotations
-from quirebase.models import Attachment, FileRevision, Item, PdfAnnotation, User
+from quirebase.models import (
+    Attachment,
+    FileRevision,
+    Item,
+    ItemAttachment,
+    ItemFileRevision,
+    PdfAnnotation,
+    User,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterable, AsyncIterator
@@ -157,15 +165,21 @@ async def _bytes_body(value: bytes) -> AsyncIterator[bytes]:
     yield value
 
 
-async def _own_annotations(db: AsyncSession, user: User, revision_id: str) -> list[PdfAnnotation]:
+async def _own_annotations(
+    db: AsyncSession, user: User, revision_id: str, item_id: str
+) -> list[PdfAnnotation]:
     return list(
         (
             await db.scalars(
                 select(PdfAnnotation)
                 .where(
-                    PdfAnnotation.file_revision_id == revision_id,
+                    PdfAnnotation.item_file_revision_id.in_(
+                        select(ItemFileRevision.id).where(
+                            ItemFileRevision.file_revision_id == revision_id,
+                            ItemFileRevision.item_id == item_id,
+                        )
+                    ),
                     PdfAnnotation.author_id == user.id,
-                    PdfAnnotation.deleted_at.is_(None),
                 )
                 .order_by(PdfAnnotation.created_at)
             )
@@ -177,6 +191,7 @@ async def _revision_member(
     db: AsyncSession,
     user: User,
     revision: FileRevision,
+    item_id: str,
     filename: str,
     *,
     include_annotations: bool,
@@ -185,7 +200,7 @@ async def _revision_member(
 ) -> AsyncMemberFile:
     store = get_object_store()
     if include_annotations:
-        annotations = await _own_annotations(db, user, revision.id)
+        annotations = await _own_annotations(db, user, revision.id, item_id)
     else:
         annotations = []
     if annotations:
@@ -232,7 +247,8 @@ async def _item_members(
 ) -> AsyncIterator[AsyncMemberFile]:
     query = (
         select(FileRevision)
-        .where(FileRevision.item_id == item.id)
+        .join(ItemFileRevision, ItemFileRevision.file_revision_id == FileRevision.id)
+        .where(ItemFileRevision.item_id == item.id)
         .order_by(FileRevision.created_at.desc())
     )
     if revision_ids:
@@ -249,6 +265,7 @@ async def _item_members(
             db,
             user,
             revision,
+            item.id,
             archive_filename,
             include_annotations=include_annotations,
             timezone=timezone,
@@ -277,7 +294,8 @@ async def _item_members(
         attachments = (
             await db.scalars(
                 select(Attachment)
-                .where(Attachment.item_id == item.id)
+                .join(ItemAttachment, ItemAttachment.attachment_id == Attachment.id)
+                .where(ItemAttachment.item_id == item.id)
                 .order_by(Attachment.created_at)
             )
         ).all()
@@ -440,7 +458,15 @@ async def export_revision_pdf(
     timezone: str | None = None,
 ) -> ExportedRevision:
     revision = await require_revision(db, user, revision_id)
-    if revision.item_id != item_id:
+    if (
+        await db.scalar(
+            select(ItemFileRevision.item_id).where(
+                ItemFileRevision.file_revision_id == revision_id,
+                ItemFileRevision.item_id == item_id,
+            )
+        )
+        is None
+    ):
         raise ResourceNotFound("revision not found for item")
     annotations = (
         await select_visible_annotations(db, user, revision.id, item_id, project_id)

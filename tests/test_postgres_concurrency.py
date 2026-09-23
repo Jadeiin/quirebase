@@ -28,8 +28,9 @@ from quirebase.models import (
     FileRevisionProcessingState,
     ImportBatch,
     Item,
-    ItemTag,
+    ItemFileRevision,
     LoginThrottle,
+    PersonalItemTag,
     Project,
     ProjectItem,
     ProjectMember,
@@ -128,7 +129,7 @@ async def _create_user_and_item(
         user = User(username=f"race-{uuid4()}", password_hash="hash")
         db.add(user)
         await db.flush()
-        item = Item(title=title, created_by=user.id)
+        item = Item(title=title, owner_id=user.id, created_by=user.id)
         db.add(item)
         await db.commit()
         return user.id, item.id
@@ -221,12 +222,12 @@ async def test_item_delete_wins_against_project_editor_upload_finalizer(postgres
         editor = User(username=f"editor-{uuid4()}", password_hash="hash")
         db.add_all([owner, editor])
         await db.flush()
-        item = Item(title="Project delete race", created_by=owner.id)
+        item = Item(title="Project delete race", owner_id=owner.id, created_by=owner.id)
         project = Project(name="Project delete gate", created_by=owner.id)
         db.add_all([item, project])
         await db.flush()
         db.add_all([
-            ProjectMember(project_id=project.id, user_id=owner.id, role=ProjectRole.owner),
+            ProjectMember(project_id=project.id, user_id=owner.id, role=ProjectRole.admin),
             ProjectMember(project_id=project.id, user_id=editor.id, role=ProjectRole.editor),
             ProjectItem(project_id=project.id, item_id=item.id),
         ])
@@ -308,12 +309,12 @@ async def test_project_item_removal_serializes_with_upload_finalizer(postgres_se
         editor = User(username=f"editor-{uuid4()}", password_hash="hash")
         db.add_all([owner, editor])
         await db.flush()
-        item = Item(title="Project item race", created_by=owner.id)
+        item = Item(title="Project item race", owner_id=owner.id, created_by=owner.id)
         project = Project(name="Project item gate", created_by=owner.id)
         db.add_all([item, project])
         await db.flush()
         db.add_all([
-            ProjectMember(project_id=project.id, user_id=owner.id, role=ProjectRole.owner),
+            ProjectMember(project_id=project.id, user_id=owner.id, role=ProjectRole.admin),
             ProjectMember(project_id=project.id, user_id=editor.id, role=ProjectRole.editor),
             ProjectItem(project_id=project.id, item_id=item.id),
         ])
@@ -382,12 +383,12 @@ async def test_project_member_revoke_wins_against_upload_finalizer(postgres_sess
         editor = User(username=f"editor-{uuid4()}", password_hash="hash")
         db.add_all([owner, editor])
         await db.flush()
-        item = Item(title="Permission race", created_by=owner.id)
+        item = Item(title="Permission race", owner_id=owner.id, created_by=owner.id)
         project = Project(name="Permission gate", created_by=owner.id)
         db.add_all([item, project])
         await db.flush()
         db.add_all([
-            ProjectMember(project_id=project.id, user_id=owner.id, role=ProjectRole.owner),
+            ProjectMember(project_id=project.id, user_id=owner.id, role=ProjectRole.admin),
             ProjectMember(project_id=project.id, user_id=editor.id, role=ProjectRole.editor),
             ProjectItem(project_id=project.id, item_id=item.id),
         ])
@@ -421,17 +422,17 @@ async def test_project_member_revoke_wins_against_upload_finalizer(postgres_sess
 async def test_metadata_cas_races_pdf_doi_rescan(postgres_sessions):
     user_id, item_id = await _create_user_and_item(postgres_sessions, title="Original")
     async with postgres_sessions() as db:
-        db.add(
-            FileRevision(
-                item_id=item_id,
-                object_key="race/doi.pdf",
-                size=10,
-                original_name="doi.pdf",
-                processing_state=FileRevisionProcessingState.ready,
-                full_text="doi: 10.1038/s41586-020-2649-2",
-                created_by=user_id,
-            )
+        revision = FileRevision(
+            object_key="race/doi.pdf",
+            size=10,
+            original_name="doi.pdf",
+            processing_state=FileRevisionProcessingState.ready,
+            full_text="doi: 10.1038/s41586-020-2649-2",
+            created_by=user_id,
         )
+        db.add(revision)
+        await db.flush()
+        db.add(ItemFileRevision(item_id=item_id, file_revision_id=revision.id))
         await search_index(db).index_item(db, item_id)
         await db.commit()
 
@@ -471,7 +472,12 @@ async def test_tag_rename_does_not_wait_on_item_gate(postgres_sessions):
     async with postgres_sessions() as db:
         user = await db.get(User, user_id)
         assert user is not None
-        tag = Tag(name="Before rename", created_by=user_id)
+        tag = Tag(
+            user_id=user_id,
+            name="Before rename",
+            normalized_name="before rename",
+            created_by=user_id,
+        )
         db.add(tag)
         await db.flush()
         await add_tag_to_item(db, user, item_id, tag.name)
@@ -493,7 +499,7 @@ async def test_tag_rename_does_not_wait_on_item_gate(postgres_sessions):
     async with postgres_sessions() as db:
         renamed = await db.get(Tag, tag_id)
         assert renamed is not None and renamed.name == "After rename"
-        assignment = await db.get(ItemTag, (item_id, tag_id))
+        assignment = await db.get(PersonalItemTag, (item_id, tag_id))
         assert assignment is not None
 
 

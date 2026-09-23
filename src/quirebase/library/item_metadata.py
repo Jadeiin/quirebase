@@ -249,6 +249,7 @@ async def _create_item(
     values.update(
         custom_fields=_serialize_custom_fields(metadata.custom_fields),
         created_by=actor.id,
+        owner_id=actor.id,
     )
     item = Item(**values)
     db.add(item)

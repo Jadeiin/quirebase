@@ -2,17 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import event, select, text
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access.annotations import can_edit_annotation, editable_annotation_reply_ids
 from quirebase.core.errors import ResourceUnavailable, ValidationFailure, VersionConflict
 from quirebase.documents.annotations import (
-    _annotation_views,
     create_annotation_reply,
     create_document_annotation,
     update_document_annotation,
@@ -30,6 +28,7 @@ from quirebase.models import (
     FileRevision,
     FileRevisionProcessingState,
     Item,
+    ItemFileRevision,
     PdfAnnotation,
     PdfAnnotationObject,
     PdfAnnotationReply,
@@ -47,7 +46,6 @@ from quirebase.projects.lifecycle import (
     rename_project,
     set_project_state,
     set_project_visibility,
-    transfer_project_ownership,
     update_project_settings,
 )
 from quirebase.projects.members import (
@@ -69,13 +67,12 @@ async def state_records(db):
     user = User(username="state-owner", password_hash="unused")
     db.add(user)
     await db.flush()
-    item = Item(title="State constraints", created_by=user.id)
+    item = Item(title="State constraints", owner_id=user.id, created_by=user.id)
     project = Project(name="State project", created_by=user.id)
     db.add_all([item, project])
     await db.flush()
-    member = ProjectMember(project_id=project.id, user_id=user.id, role=ProjectRole.owner)
+    member = ProjectMember(project_id=project.id, user_id=user.id, role=ProjectRole.admin)
     revision = FileRevision(
-        item_id=item.id,
         object_key="state.pdf",
         size=1,
         original_name="state.pdf",
@@ -83,8 +80,12 @@ async def state_records(db):
     )
     db.add_all([member, revision])
     await db.flush()
+    link = ItemFileRevision(item_id=item.id, file_revision_id=revision.id)
+    db.add(link)
+    await db.flush()
     annotation = PdfAnnotation(
-        file_revision_id=revision.id,
+        item_file_revision_id=link.id,
+        item_id=item.id,
         page_index=0,
         author_id=user.id,
         kind=AnnotationKind.note,
@@ -97,6 +98,8 @@ async def state_records(db):
     )
     db.add(annotation)
     await db.commit()
+    await db.refresh(member)
+    await db.refresh(project)
     return member, revision, annotation, project
 
 
@@ -114,11 +117,10 @@ async def test_annotation_object_ids_are_atomic_across_roots_and_replies(
         user = User(username="annotation-id-race", password_hash="unused")
         db.add(user)
         await db.flush()
-        item = Item(title="Annotation ID race", created_by=user.id)
+        item = Item(title="Annotation ID race", owner_id=user.id, created_by=user.id)
         db.add(item)
         await db.flush()
         revision = FileRevision(
-            item_id=item.id,
             object_key="annotation-id-race.pdf",
             size=1,
             original_name="annotation-id-race.pdf",
@@ -129,8 +131,12 @@ async def test_annotation_object_ids_are_atomic_across_roots_and_replies(
         )
         db.add(revision)
         await db.flush()
+        link = ItemFileRevision(item_id=item.id, file_revision_id=revision.id)
+        db.add(link)
+        await db.flush()
         parent = PdfAnnotation(
-            file_revision_id=revision.id,
+            item_file_revision_id=link.id,
+            item_id=item.id,
             page_index=0,
             author_id=user.id,
             kind=AnnotationKind.note,
@@ -199,7 +205,7 @@ async def test_closed_domain_states_are_loaded_as_domain_types(async_db):
     loaded_member = await db.get(ProjectMember, keys[:2])
     loaded_revision = await db.get(FileRevision, keys[2])
     loaded_annotation = await db.get(PdfAnnotation, keys[3])
-    assert loaded_member is not None and loaded_member.role is ProjectRole.owner
+    assert loaded_member is not None and loaded_member.role is ProjectRole.admin
     assert loaded_revision is not None
     assert loaded_revision.processing_state is FileRevisionProcessingState.pending
     assert loaded_annotation is not None and loaded_annotation.kind is AnnotationKind.note
@@ -240,16 +246,17 @@ async def test_annotation_editability_follows_author_admin_and_project_owner_rul
     db.add(project)
     await db.flush()
     db.add_all([
-        ProjectMember(project_id=project.id, user_id=owner.id, role=ProjectRole.owner),
+        ProjectMember(project_id=project.id, user_id=owner.id, role=ProjectRole.admin),
         ProjectMember(project_id=project.id, user_id=member.id, role=ProjectRole.editor),
     ])
     project_annotation = PdfAnnotation(
-        file_revision_id="revision",
+        item_file_revision_id="revision",
+        item_id="item",
         page_index=0,
         author_id=author.id,
         kind=AnnotationKind.note,
         scope=AnnotationScope.project,
-        project_id=project.id,
+        project_item_id="project-item",
         payload={
             "type": "note",
             "rect": {"x": 1, "y": 2, "width": 24, "height": 24},
@@ -257,7 +264,8 @@ async def test_annotation_editability_follows_author_admin_and_project_owner_rul
         },
     )
     private_annotation = PdfAnnotation(
-        file_revision_id="revision",
+        item_file_revision_id="revision",
+        item_id="item",
         page_index=0,
         author_id=author.id,
         kind=AnnotationKind.note,
@@ -269,11 +277,11 @@ async def test_annotation_editability_follows_author_admin_and_project_owner_rul
         },
     )
 
-    assert await can_edit_annotation(db, author, project_annotation) is True
-    assert await can_edit_annotation(db, administrator, project_annotation) is True
-    assert await can_edit_annotation(db, owner, project_annotation) is True
-    assert await can_edit_annotation(db, member, project_annotation) is False
-    assert await can_edit_annotation(db, owner, private_annotation) is False
+    assert can_edit_annotation(author, project_annotation) is True
+    assert can_edit_annotation(administrator, project_annotation) is False
+    assert can_edit_annotation(author, project_annotation) is True
+    assert can_edit_annotation(owner, project_annotation) is False
+    assert can_edit_annotation(owner, private_annotation) is False
 
     replies = [
         PdfAnnotationReply(
@@ -289,14 +297,9 @@ async def test_annotation_editability_follows_author_admin_and_project_owner_rul
             body="Author",
         ),
     ]
-    parents = {project_annotation.id: project_annotation}
-    assert await editable_annotation_reply_ids(db, member, replies, parents) == {replies[0].id}
-    assert await editable_annotation_reply_ids(db, owner, replies, parents) == {
-        reply.id for reply in replies
-    }
-    assert await editable_annotation_reply_ids(db, administrator, replies, parents) == {
-        reply.id for reply in replies
-    }
+    assert editable_annotation_reply_ids(member, replies) == {replies[0].id}
+    assert editable_annotation_reply_ids(owner, replies) == set()
+    assert editable_annotation_reply_ids(administrator, replies) == set()
 
 
 @pytest.mark.anyio
@@ -306,13 +309,12 @@ async def test_annotation_update_recomputes_editability_after_scope_or_project_c
     owner = User(username="scope-change-owner", password_hash="unused")
     db.add_all([author, owner])
     await db.flush()
-    item = Item(title="Scope change", created_by=author.id)
+    item = Item(title="Scope change", owner_id=author.id, created_by=author.id)
     source_project = Project(name="Owned source project", created_by=owner.id)
     target_project = Project(name="Editable target project", created_by=author.id)
     db.add_all([item, source_project, target_project])
     await db.flush()
     revision = FileRevision(
-        item_id=item.id,
         object_key="scope-change.pdf",
         size=1,
         original_name="scope-change.pdf",
@@ -325,22 +327,31 @@ async def test_annotation_update_recomputes_editability_after_scope_or_project_c
         revision,
         ProjectItem(project_id=source_project.id, item_id=item.id),
         ProjectItem(project_id=target_project.id, item_id=item.id),
-        ProjectMember(project_id=source_project.id, user_id=owner.id, role=ProjectRole.owner),
+        ProjectMember(project_id=source_project.id, user_id=owner.id, role=ProjectRole.admin),
         ProjectMember(project_id=target_project.id, user_id=owner.id, role=ProjectRole.editor),
     ])
     await db.flush()
+    revision_link = ItemFileRevision(item_id=item.id, file_revision_id=revision.id)
+    db.add(revision_link)
+    await db.flush()
+    source_link = await db.scalar(
+        select(ProjectItem).where(
+            ProjectItem.project_id == source_project.id, ProjectItem.item_id == item.id
+        )
+    )
     payload = {
         "type": "note",
         "rect": {"x": 1, "y": 2, "width": 24, "height": 24},
     }
     annotations = [
         PdfAnnotation(
-            file_revision_id=revision.id,
+            item_file_revision_id=revision_link.id,
+            item_id=item.id,
             page_index=0,
             author_id=author.id,
             kind=AnnotationKind.note,
             scope=AnnotationScope.project,
-            project_id=source_project.id,
+            project_item_id=source_link.id,
             payload=payload,
         )
         for _ in range(2)
@@ -348,36 +359,21 @@ async def test_annotation_update_recomputes_editability_after_scope_or_project_c
     db.add_all(annotations)
     await db.commit()
 
-    moved_private = await update_document_annotation(
-        db,
-        owner,
-        item.id,
-        annotations[0].id,
-        AnnotationUpdate(
-            version=1,
-            page_index=0,
-            kind=AnnotationKind.note,
-            scope=AnnotationScope.private,
-            payload=payload,
-        ),
-    )
-    moved_project = await update_document_annotation(
-        db,
-        owner,
-        item.id,
-        annotations[1].id,
-        AnnotationUpdate(
-            version=1,
-            page_index=0,
-            kind=AnnotationKind.note,
-            scope=AnnotationScope.project,
-            project_id=target_project.id,
-            payload=payload,
-        ),
-    )
-
-    assert moved_private["editable"] is False
-    assert moved_project["editable"] is False
+    with pytest.raises(ResourceUnavailable, match="cannot be edited"):
+        await update_document_annotation(
+            db,
+            owner,
+            item.id,
+            annotations[0].id,
+            AnnotationUpdate(
+                version=1,
+                page_index=0,
+                kind=AnnotationKind.note,
+                scope=AnnotationScope.project,
+                project_id=source_project.id,
+                payload=payload,
+            ),
+        )
 
 
 @pytest.mark.parametrize(
@@ -391,7 +387,6 @@ async def test_annotation_update_recomputes_editability_after_scope_or_project_c
 )
 def test_annotation_payload_child_geometry_must_be_enclosed_by_its_rect(kind, geometry):
     revision = FileRevision(
-        item_id="item",
         object_key="geometry.pdf",
         size=1,
         original_name="geometry.pdf",
@@ -414,62 +409,6 @@ def test_annotation_payload_child_geometry_must_be_enclosed_by_its_rect(kind, ge
 
     with pytest.raises(ValidationFailure, match="enclosing rectangle"):
         validate_payload(data.page_index, data.payload, revision)
-
-
-@pytest.mark.anyio
-async def test_annotation_views_batch_project_owner_editability_queries(async_db):
-    db = async_db
-    author = User(username="batch-annotation-author", password_hash="unused")
-    owner = User(username="batch-annotation-owner", password_hash="unused")
-    db.add_all([author, owner])
-    await db.flush()
-    projects = [
-        Project(name=f"Batch annotation project {index}", created_by=owner.id) for index in range(3)
-    ]
-    db.add_all(projects)
-    await db.flush()
-    db.add_all([
-        ProjectMember(project_id=project.id, user_id=owner.id, role=ProjectRole.owner)
-        for project in projects
-    ])
-    await db.commit()
-    db.expunge_all()
-
-    records = [
-        PdfAnnotation(
-            id=f"00000000-0000-4000-8000-00000000001{index}",
-            file_revision_id="revision",
-            page_index=0,
-            author_id=author.id,
-            kind=AnnotationKind.note,
-            scope=AnnotationScope.project,
-            project_id=project.id,
-            payload={
-                "type": "note",
-                "rect": {"x": 1, "y": 2, "width": 24, "height": 24},
-                "style": {},
-            },
-            version=1,
-            created_at=datetime(2026, 1, 1, tzinfo=UTC),
-            updated_at=datetime(2026, 1, 1, tzinfo=UTC),
-        )
-        for index, project in enumerate(projects)
-    ]
-    statements = []
-
-    def capture_project_member_queries(_conn, _cursor, statement, *_args):
-        if "FROM project_members" in statement:
-            statements.append(statement)
-
-    sync_engine = db.bind.sync_engine
-    event.listen(sync_engine, "before_cursor_execute", capture_project_member_queries)
-    try:
-        views = await _annotation_views(db, owner, records)
-    finally:
-        event.remove(sync_engine, "before_cursor_execute", capture_project_member_queries)
-
-    assert all(view["editable"] for view in views)
-    assert len(statements) == 1
 
 
 def test_annotation_commands_use_domain_types():
@@ -495,7 +434,7 @@ async def test_project_membership_preserves_an_owner_and_returns_domain_roles(as
     await db.commit()
     project = await create_project(db, owner, "Lifecycle project")
 
-    with pytest.raises(ProjectMemberConflict, match="retain an owner"):
+    with pytest.raises(ProjectMemberConflict, match="retain an active admin"):
         await remove_project_member(db, owner, project.id, owner.id)
 
     added = await add_project_member(db, owner, project.id, teammate.username, ProjectRole.editor)
@@ -504,7 +443,7 @@ async def test_project_membership_preserves_an_owner_and_returns_domain_roles(as
         (member.user.username, member.role)
         for member in (await open_project_workspace(db, owner, project.id)).members
     ] == [
-        (owner.username, ProjectRole.owner),
+        (owner.username, ProjectRole.admin),
         (teammate.username, ProjectRole.editor),
     ]
 
@@ -512,14 +451,14 @@ async def test_project_membership_preserves_an_owner_and_returns_domain_roles(as
     assert [
         (member.user.username, member.role)
         for member in (await open_project_workspace(db, owner, project.id)).members
-    ] == [(owner.username, ProjectRole.owner)]
-    event = await db.scalar(
+    ] == [(owner.username, ProjectRole.admin)]
+    audit_event = await db.scalar(
         select(AuditEvent).where(
             AuditEvent.action == "project.member.remove", AuditEvent.target_id == project.id
         )
     )
-    assert event is not None
-    assert json.loads(event.detail) == {"user_id": teammate.id}
+    assert audit_event is not None
+    assert json.loads(audit_event.detail) == {"user_id": teammate.id}
 
 
 @pytest.mark.anyio
@@ -533,33 +472,12 @@ async def test_create_project_rejects_names_longer_than_storage_limit(async_db):
 
 
 @pytest.mark.anyio
-async def test_project_ownership_transfer_rejects_inactive_target(async_db):
-    db = async_db
-    owner = User(username="active-transfer-owner", password_hash="unused")
-    inactive = User(username="inactive-transfer-target", password_hash="unused")
-    db.add_all([owner, inactive])
-    await db.commit()
-    project = await create_project(db, owner, "Inactive transfer project")
-    await add_project_member(db, owner, project.id, inactive.username, ProjectRole.editor)
-    inactive.active = False
-    await db.commit()
-
-    with pytest.raises(ValidationFailure, match="target user must be active"):
-        await transfer_project_ownership(db, owner, project.id, inactive.id)
-
-    owner_member = await db.get(ProjectMember, (project.id, owner.id))
-    inactive_member = await db.get(ProjectMember, (project.id, inactive.id))
-    assert owner_member is not None and owner_member.role == ProjectRole.owner
-    assert inactive_member is not None and inactive_member.role == ProjectRole.editor
-
-
-@pytest.mark.anyio
 async def test_project_rename_and_delete_do_not_change_item_search(async_db):
     db = async_db
     owner = User(username="project-search-owner", password_hash="unused")
     db.add(owner)
     await db.flush()
-    item = Item(title="Unrelated title", created_by=owner.id)
+    item = Item(title="Unrelated title", owner_id=owner.id, created_by=owner.id)
     db.add(item)
     await db.commit()
     project = await create_project(db, owner, "OriginalProjectToken")
@@ -683,8 +601,8 @@ async def test_item_assignment_revalidates_stale_project_state(async_db, async_s
     owner = User(username="assignment-race-owner", password_hash="unused")
     async_db.add(owner)
     await async_db.flush()
-    add_item = Item(title="Add race", created_by=owner.id)
-    remove_item = Item(title="Remove race", created_by=owner.id)
+    add_item = Item(title="Add race", owner_id=owner.id, created_by=owner.id)
+    remove_item = Item(title="Remove race", owner_id=owner.id, created_by=owner.id)
     async_db.add_all([add_item, remove_item])
     await async_db.commit()
     add_project = await create_project(async_db, owner, "Add assignment race")
@@ -703,8 +621,11 @@ async def test_item_assignment_revalidates_stale_project_state(async_db, async_s
         stale_add_member = await add_session.get(ProjectMember, (add_project.id, owner.id))
         stale_remove_project = await remove_session.get(Project, remove_project.id)
         stale_remove_member = await remove_session.get(ProjectMember, (remove_project.id, owner.id))
-        stale_assignment = await remove_session.get(
-            ProjectItem, (remove_project.id, remove_item.id)
+        stale_assignment = await remove_session.scalar(
+            select(ProjectItem).where(
+                ProjectItem.project_id == remove_project.id,
+                ProjectItem.item_id == remove_item.id,
+            )
         )
         assert add_owner is not None and remove_owner is not None
         assert stale_add_project is not None and stale_add_member is not None
@@ -730,8 +651,22 @@ async def test_item_assignment_revalidates_stale_project_state(async_db, async_s
             )
 
     async_db.expire_all()
-    assert await async_db.get(ProjectItem, add_key) is None
-    assert await async_db.get(ProjectItem, remove_key) is not None
+    assert (
+        await async_db.scalar(
+            select(ProjectItem.id).where(
+                ProjectItem.project_id == add_key[0], ProjectItem.item_id == add_key[1]
+            )
+        )
+        is None
+    )
+    assert (
+        await async_db.scalar(
+            select(ProjectItem.id).where(
+                ProjectItem.project_id == remove_key[0], ProjectItem.item_id == remove_key[1]
+            )
+        )
+        is not None
+    )
 
 
 @pytest.mark.anyio
@@ -788,13 +723,13 @@ async def assert_closed_state_constraints(db) -> None:
     )
     await assert_rejected(
         db,
-        "UPDATE pdf_annotations SET scope = 'project', project_id = NULL WHERE id = :id",
+        "UPDATE pdf_annotations SET scope = 'project', project_item_id = NULL WHERE id = :id",
         {"id": annotation_id},
     )
     await assert_rejected(
         db,
-        "UPDATE pdf_annotations SET scope = 'private', project_id = :project_id WHERE id = :id",
-        {"project_id": project_id, "id": annotation_id},
+        "UPDATE pdf_annotations SET scope = 'private', project_item_id = :project_item_id WHERE id = :id",
+        {"project_item_id": project_id, "id": annotation_id},
     )
 
 

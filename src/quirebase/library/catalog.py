@@ -13,8 +13,8 @@ from quirebase.core.errors import ValidationFailure
 from quirebase.models import (
     Item,
     ItemRead,
-    ItemTag,
     LoginSession,
+    PersonalItemTag,
     ProjectItem,
     Tag,
     User,
@@ -45,8 +45,8 @@ async def search_library(
     if tag:
         item_query = item_query.where(
             Item.id.in_(
-                select(ItemTag.item_id)
-                .join(Tag, Tag.id == ItemTag.tag_id)
+                select(PersonalItemTag.item_id)
+                .join(Tag, Tag.id == PersonalItemTag.tag_id)
                 .where(or_(Tag.id == tag, Tag.name == tag))
             )
         )
@@ -76,8 +76,8 @@ async def search_library(
         (
             await db.scalars(
                 select(Tag)
-                .join(ItemTag, ItemTag.tag_id == Tag.id)
-                .where(ItemTag.item_id.in_(select(accessible_ids.c.id)))
+                .join(PersonalItemTag, PersonalItemTag.tag_id == Tag.id)
+                .where(PersonalItemTag.item_id.in_(select(accessible_ids.c.id)))
                 .distinct()
                 .order_by(Tag.name)
             )

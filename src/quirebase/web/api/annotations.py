@@ -14,8 +14,6 @@ from quirebase.documents import (
     delete_annotation_reply,
     delete_document_annotation,
     list_document_annotations,
-    restore_annotation_reply,
-    restore_document_annotation,
     review_item_annotations,
     update_annotation_reply,
     update_document_annotation,
@@ -124,15 +122,6 @@ async def delete_annotation(
     return OkView()
 
 
-@router.post("/items/{item_id}/annotations/{annotation_id}/restore", response_model=AnnotationView)
-async def restore_annotation(
-    item_id: str, annotation_id: str, version: int, user: ApiUser, db: Database
-) -> AnnotationView:
-    return AnnotationView.model_validate(
-        await restore_document_annotation(db, user, item_id, annotation_id, version)
-    )
-
-
 @router.post(
     "/items/{item_id}/annotations/{annotation_id}/replies",
     response_model=AnnotationReplyView,
@@ -181,20 +170,3 @@ async def delete_reply(
 ) -> OkView:
     await delete_annotation_reply(db, user, item_id, annotation_id, reply_id, version)
     return OkView()
-
-
-@router.post(
-    "/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}/restore",
-    response_model=AnnotationReplyView,
-)
-async def restore_reply(
-    item_id: str,
-    annotation_id: str,
-    reply_id: str,
-    version: int,
-    user: ApiUser,
-    db: Database,
-) -> AnnotationReplyView:
-    return AnnotationReplyView.model_validate(
-        await restore_annotation_reply(db, user, item_id, annotation_id, reply_id, version)
-    )

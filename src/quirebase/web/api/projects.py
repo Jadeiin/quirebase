@@ -6,6 +6,7 @@ from quirebase.models import ProjectState
 from quirebase.projects import (
     add_item_to_project,
     add_project_member,
+    change_project_sharing_mode,
     create_project,
     delete_project,
     join_project,
@@ -16,7 +17,6 @@ from quirebase.projects import (
     remove_item_from_project,
     set_project_state,
     set_project_visibility,
-    transfer_project_ownership,
     update_project_description,
     update_project_settings,
 )
@@ -34,6 +34,7 @@ from quirebase.web.api.project_schemas import (
     ProjectMemberRequest,
     ProjectMemberView,
     ProjectSettingsRequest,
+    ProjectSharingModeRequest,
     ProjectSummaryView,
     ProjectVisibilityRequest,
     project_detail_view,
@@ -54,6 +55,7 @@ async def list_projects(user: ApiUser, db: Database) -> list[ProjectSummaryView]
             state=project.state.value,
             visibility=project.visibility.value,
             description=project.description,
+            sharing_mode=project.sharing_mode.value,
         )
         for project, role, count in rows
     ]
@@ -70,6 +72,7 @@ async def list_projects_available_to_join(user: ApiUser, db: Database):
             "state": project.state.value,
             "visibility": project.visibility.value,
             "description": project.description,
+            "sharing_mode": project.sharing_mode.value,
         }
         for project, count in rows
     ]
@@ -83,7 +86,9 @@ async def list_projects_available_to_join(user: ApiUser, db: Database):
 async def create_user_project(
     data: ProjectCreateRequest, user: ApiUser, db: Database
 ) -> WriteResult:
-    project = await create_project(db, user, data.name, data.visibility, data.description)
+    project = await create_project(
+        db, user, data.name, data.visibility, data.description, data.sharing_mode
+    )
     return WriteResult(id=project.id)
 
 
@@ -106,6 +111,7 @@ async def update_project(
         name=data.name,
         description=data.description,
         visibility=data.visibility,
+        sharing_mode=data.sharing_mode,
     )
     return WriteResult(id=project.id)
 
@@ -146,6 +152,14 @@ async def set_project_visibility_api(
     return OkView()
 
 
+@router.post("/projects/{project_id}/sharing-mode", response_model=OkView)
+async def set_project_sharing_mode(
+    project_id: str, data: ProjectSharingModeRequest, user: ApiUser, db: Database
+) -> OkView:
+    await change_project_sharing_mode(db, user, project_id, data.sharing_mode)
+    return OkView()
+
+
 @router.post("/projects/{project_id}/leave", response_model=OkView)
 async def leave_user_project(project_id: str, user: ApiUser, db: Database) -> OkView:
     await leave_project(db, user, project_id)
@@ -155,17 +169,6 @@ async def leave_user_project(project_id: str, user: ApiUser, db: Database) -> Ok
 @router.post("/projects/{project_id}/join", response_model=OkView)
 async def join_public_project(project_id: str, user: ApiUser, db: Database) -> OkView:
     await join_project(db, user, project_id)
-    return OkView()
-
-
-@router.post(
-    "/projects/{project_id}/ownership/{user_id}",
-    response_model=OkView,
-)
-async def transfer_user_project(
-    project_id: str, user_id: str, user: ApiUser, db: Database
-) -> OkView:
-    await transfer_project_ownership(db, user, project_id, user_id)
     return OkView()
 
 

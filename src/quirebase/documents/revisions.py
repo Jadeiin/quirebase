@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from quirebase.access.documents import require_attachment, require_revision
 from quirebase.access.items import (
@@ -58,6 +58,8 @@ from quirebase.models import (
     FileRevision,
     ImportBatch,
     Item,
+    ItemAttachment,
+    ItemFileRevision,
     Project,
     ProjectItem,
     ProjectMember,
@@ -117,6 +119,18 @@ class ItemThumbnailSource:
     media_type: str
     source_kind: str
     source_id: str
+
+
+async def _revision_linked_to_item(db: AsyncSession, revision_id: str, item_id: str) -> bool:
+    return (
+        await db.scalar(
+            select(ItemFileRevision.id).where(
+                ItemFileRevision.file_revision_id == revision_id,
+                ItemFileRevision.item_id == item_id,
+            )
+        )
+        is not None
+    )
 
 
 async def _validate_staged_pdf(store: ObjectStore, object_key: str) -> None:
@@ -209,7 +223,6 @@ async def attach_staged_pdf(
 ) -> FileRevision:
     key, size, original_name = staged
     revision = FileRevision(
-        item_id=item.id,
         object_key=key,
         size=size,
         original_name=original_name,
@@ -217,6 +230,7 @@ async def attach_staged_pdf(
     )
     db.add(revision)
     await db.flush()
+    db.add(ItemFileRevision(item_id=item.id, file_revision_id=revision.id))
     thumbnail_object_id = uuid4()
     thumbnail_key = object_key(thumbnail_object_id, ObjectSuffix.PNG)
     await durable_operations().enqueue_in_transaction(
@@ -564,7 +578,7 @@ async def get_revision_file(
     byte_range: tuple[int, int] | None = None,
 ) -> tuple[ObjectResponse, str, str]:
     revision = await require_revision(db, user, revision_id)
-    if revision.item_id != item_id:
+    if not await _revision_linked_to_item(db, revision_id, item_id):
         raise ResourceNotFound("revision not found for item")
     store = get_object_store()
     response = (
@@ -579,7 +593,7 @@ async def head_revision_file(
     db: AsyncSession, user: User, item_id: str, revision_id: str
 ) -> tuple[ObjectMetadata, str, str]:
     revision = await require_revision(db, user, revision_id)
-    if revision.item_id != item_id:
+    if not await _revision_linked_to_item(db, revision_id, item_id):
         raise ResourceNotFound("revision not found for item")
     return (
         await get_object_store().head(revision.object_key),
@@ -592,7 +606,7 @@ async def get_revision_thumbnail(
     db: AsyncSession, user: User, item_id: str, revision_id: str
 ) -> ObjectResponse:
     revision = await require_revision(db, user, revision_id)
-    if revision.item_id != item_id:
+    if not await _revision_linked_to_item(db, revision_id, item_id):
         raise ResourceNotFound("revision not found for item")
     key = revision.thumbnail_object_key
     if key is None:
@@ -606,7 +620,7 @@ async def head_revision_thumbnail(
     db: AsyncSession, user: User, item_id: str, revision_id: str
 ) -> ObjectMetadata:
     revision = await require_revision(db, user, revision_id)
-    if revision.item_id != item_id:
+    if not await _revision_linked_to_item(db, revision_id, item_id):
         raise ResourceNotFound("revision not found for item")
     key = revision.thumbnail_object_key
     if key is None:
@@ -620,10 +634,12 @@ async def head_revision_thumbnail(
 async def resolve_item_thumbnail(db: AsyncSession, user: User, item_id: str) -> ItemThumbnailSource:
     await require_readable_item(db, user, item_id)
     graphical_abstract = await db.scalar(
-        select(Attachment).where(
-            Attachment.item_id == item_id,
-            Attachment.role == AttachmentRole.graphical_abstract,
+        select(Attachment)
+        .where(
+            ItemAttachment.item_id == item_id,
+            ItemAttachment.role == AttachmentRole.graphical_abstract,
         )
+        .join(ItemAttachment, ItemAttachment.attachment_id == Attachment.id)
     )
     if graphical_abstract is not None:
         store = get_object_store()
@@ -638,9 +654,10 @@ async def resolve_item_thumbnail(db: AsyncSession, user: User, item_id: str) -> 
         await db.scalars(
             select(FileRevision)
             .where(
-                FileRevision.item_id == item_id,
+                ItemFileRevision.item_id == item_id,
                 FileRevision.processing_state == "ready",
             )
+            .join(ItemFileRevision, ItemFileRevision.file_revision_id == FileRevision.id)
             .order_by(FileRevision.created_at.desc())
         )
     ).all()
@@ -686,12 +703,25 @@ async def delete_file_revision(
     revision = await db.scalar(
         select(FileRevision).where(FileRevision.id == revision_id).with_for_update()
     )
-    if revision is None or revision.item_id != item_id:
+    if revision is None or not await _revision_linked_to_item(db, revision_id, item_id):
         raise ResourceNotFound("file revision not found")
     object_key = revision.object_key
     thumbnail_key = revision.thumbnail_object_key
-    await search_index(db).remove_revision(db, revision.id)
-    await db.delete(revision)
+    await db.execute(
+        delete(ItemFileRevision).where(
+            ItemFileRevision.item_id == item_id,
+            ItemFileRevision.file_revision_id == revision_id,
+        )
+    )
+    remaining = await db.scalar(
+        select(ItemFileRevision.id).where(ItemFileRevision.file_revision_id == revision_id).limit(1)
+    )
+    unreferenced = remaining is None
+    if remaining is None:
+        await search_index(db).remove_revision(db, revision.id)
+        await db.delete(revision)
+    else:
+        await search_index(db).index_revision(db, revision.id)
     await db.flush()
     event_workflow_id = f"file-revision-deleted:{revision_id}"
     await durable_operations().enqueue_in_transaction(
@@ -704,13 +734,14 @@ async def delete_file_revision(
         workflow_id=event_workflow_id,
         attributes={"capability": "library", "item_id": item_id},
     )
-    await enqueue_object_cleanup(
-        db,
-        tuple(key for key in (object_key, thumbnail_key) if key),
-        owner_id=user.id,
-        operation="file_revision_delete",
-        target_id=revision.id,
-    )
+    if unreferenced:
+        await enqueue_object_cleanup(
+            db,
+            tuple(key for key in (object_key, thumbnail_key) if key),
+            owner_id=user.id,
+            operation="file_revision_delete",
+            target_id=revision.id,
+        )
     record_event(db, user.id, "pdf.delete", "file_revision", revision.id)
     await db.commit()
 
@@ -725,17 +756,37 @@ async def delete_attachment(db: AsyncSession, user: User, item_id: str, attachme
     ):
         raise ResourceNotFound("item not found")
     attachment = await db.get(Attachment, attachment_id)
-    if attachment is None or attachment.item_id != item_id:
+    linked = (
+        attachment is not None
+        and await db.scalar(
+            select(ItemAttachment.id).where(
+                ItemAttachment.item_id == item_id, ItemAttachment.attachment_id == attachment_id
+            )
+        )
+        is not None
+    )
+    if attachment is None or not linked:
         raise ResourceNotFound("attachment not found")
     object_key = attachment.object_key
-    await db.delete(attachment)
-    await enqueue_object_cleanup(
-        db,
-        (object_key,),
-        owner_id=user.id,
-        operation="attachment_delete",
-        target_id=attachment.id,
+    await db.execute(
+        delete(ItemAttachment).where(
+            ItemAttachment.item_id == item_id,
+            ItemAttachment.attachment_id == attachment_id,
+        )
     )
+    remaining = await db.scalar(
+        select(ItemAttachment.id).where(ItemAttachment.attachment_id == attachment_id).limit(1)
+    )
+    unreferenced = remaining is None
+    if unreferenced:
+        await db.delete(attachment)
+        await enqueue_object_cleanup(
+            db,
+            (object_key,),
+            owner_id=user.id,
+            operation="attachment_delete",
+            target_id=attachment.id,
+        )
     record_event(db, user.id, "attachment.delete", "attachment", attachment.id)
     await db.commit()
 
@@ -744,7 +795,7 @@ async def get_pdf_viewer_data(
     db: AsyncSession, user: User, item_id: str, revision_id: str
 ) -> dict[str, Any]:
     revision = await require_revision(db, user, revision_id)
-    if revision.item_id != item_id:
+    if not await _revision_linked_to_item(db, revision_id, item_id):
         raise ResourceNotFound("revision not found for item")
     projects = list(
         (
@@ -752,13 +803,18 @@ async def get_pdf_viewer_data(
                 select(Project)
                 .join(ProjectMember, ProjectMember.project_id == Project.id)
                 .join(ProjectItem, ProjectItem.project_id == Project.id)
-                .where(ProjectMember.user_id == user.id, ProjectItem.item_id == item_id)
+                .join(ItemFileRevision, ItemFileRevision.item_id == ProjectItem.item_id)
+                .where(
+                    ProjectMember.user_id == user.id,
+                    ProjectItem.item_id == item_id,
+                    ItemFileRevision.file_revision_id == revision_id,
+                )
                 .order_by(Project.name)
             )
         ).all()
     )
     return {
-        "item": revision.item,
+        "item": await db.get(Item, item_id),
         "revision": revision,
         "projects": projects,
     }

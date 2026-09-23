@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import String, false, select, text
 
-from quirebase.models import FileRevision, Item
+from quirebase.models import FileRevision, Item, ItemFileRevision
 from quirebase.search.content import search_text_for_item, search_text_for_revision
 
 if TYPE_CHECKING:
@@ -38,18 +38,32 @@ class SQLiteSearchIndex:
             select(FileRevision).where(FileRevision.id == revision_id).with_for_update(read=True)
         )
         await self.remove_revision(db, revision_id)
-        if revision is not None and revision.full_text:
-            await db.execute(
-                text(
-                    "INSERT INTO revision_search(revision_id, item_id, content) "
-                    "VALUES (:revision_id, :item_id, :content)"
-                ),
-                {
-                    "revision_id": revision.id,
-                    "item_id": revision.item_id,
-                    "content": search_text_for_revision(revision),
-                },
+        item_ids = (
+            []
+            if revision is None
+            else list(
+                (
+                    await db.scalars(
+                        select(ItemFileRevision.item_id).where(
+                            ItemFileRevision.file_revision_id == revision_id
+                        )
+                    )
+                ).all()
             )
+        )
+        if revision is not None and revision.full_text:
+            for item_id in item_ids:
+                await db.execute(
+                    text(
+                        "INSERT INTO revision_search(revision_id, item_id, content) "
+                        "VALUES (:revision_id, :item_id, :content)"
+                    ),
+                    {
+                        "revision_id": revision.id,
+                        "item_id": item_id,
+                        "content": search_text_for_revision(revision),
+                    },
+                )
 
     async def remove_revision(self, db: AsyncSession, revision_id: str) -> None:
         await db.execute(

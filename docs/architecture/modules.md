@@ -187,8 +187,8 @@ Event in one transaction; the Web adapter sends the form as one request and does
 partial Project updates.
 
 Project-scoped mutations lock the Project root only when changing Project state or membership;
-ownership is represented by `Project.owner_id` and transfer updates the owner and membership rows
-atomically. Item assignments use the Project root plus FK/primary-key idempotency and do not
+administration is represented by one or more active `admin` memberships, with no singular Project
+owner or ownership-transfer operation. Item assignments use the Project root plus FK/primary-key idempotency and do not
 participate in a global lock graph. Library bulk assignment crosses this Projects interface while
 retaining ownership of the surrounding bulk-operation transaction and Audit Event.
 
@@ -286,7 +286,7 @@ directions are:
 | Source | May depend on | Ownership reason |
 | --- | --- | --- |
 | `access` | `core`, `models` | Evaluate policies using persisted identities and domain errors |
-| `accounts` | `audit`, `core`, `models` | Authentication persistence and Audit Event recording |
+| `accounts` | `audit`, `core`, `models`, `projects` | Authentication persistence and Audit Event recording; account deactivation invokes Project Item forking before removing an active synchronization source |
 | `audit` | `core`, `models` | Authorization errors and Audit Event persistence |
 | `library` | `access`, `audit`, `core`, `documents`, `models`, `operations`, `projects`, `search` | Authorization, persistence and auditing; selected-Item document assembly; Project-gated bulk assignment; runtime Provider/import settings; Library-owned workflows and search-index synchronization |
 | `projects` | `access`, `audit`, `core`, `models` | Authorization, Project persistence and audit recording |

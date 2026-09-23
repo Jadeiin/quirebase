@@ -17,7 +17,7 @@ async def visible_projects(db: AsyncSession, user: User) -> list[Project]:
         member_project_ids = select(ProjectMember.project_id).where(
             ProjectMember.user_id == user.id
         )
-        query = query.where((Project.owner_id == user.id) | Project.id.in_(member_project_ids))
+        query = query.where(Project.id.in_(member_project_ids))
     return list((await db.scalars(query)).all())
 
 
@@ -28,11 +28,10 @@ async def editable_projects(db: AsyncSession, user: User) -> list[Project]:
                 select(Project)
                 .where(
                     Project.state == ProjectState.active,
-                    (Project.owner_id == user.id)
-                    | Project.id.in_(
+                    Project.id.in_(
                         select(ProjectMember.project_id).where(
                             ProjectMember.user_id == user.id,
-                            ProjectMember.role == ProjectRole.editor,
+                            ProjectMember.role.in_((ProjectRole.admin, ProjectRole.editor)),
                         )
                     ),
                 )
@@ -59,9 +58,7 @@ async def require_project_member(
             project = await db.get(Project, project_id)
             if project is None:
                 raise ResourceUnavailable("project not found")
-            return ProjectMember(
-                project_id=project_id, user_id=user.id, role=SystemRole.administrator.value
-            )
+            return ProjectMember(project_id=project_id, user_id=user.id, role=ProjectRole.admin)
         raise ResourceUnavailable("project not found or membership required")
     if allowed_roles and member.role not in allowed_roles:
         raise PermissionDenied("insufficient project role permissions")

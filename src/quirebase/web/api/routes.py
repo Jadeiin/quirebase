@@ -30,7 +30,8 @@ if TYPE_CHECKING:
 def generate_operation_id(route: APIRoute) -> str:
     """Generate the API contract ID from its capability module and endpoint name."""
     module = route.endpoint.__module__.rsplit(".", 1)[-1]
-    return f"{module}.{route.endpoint.__name__}"
+    scope = ".project" if "/projects/" in route.path else ""
+    return f"{module}.{route.endpoint.__name__}{scope}"
 
 
 CAPABILITY_ROUTERS = (

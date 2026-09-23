@@ -35,9 +35,18 @@ from quirebase.web.api.serialization import enum_value
 router = APIRouter(tags=["HTTP API"])
 
 
-@router.get("/items/{item_id}/workspace", response_model=ItemWorkspaceView)
-async def item_workspace(item_id: str, user: ApiUser, db: Database):
-    workspace = await open_item_workspace(db, user, item_id, WorkspaceSection.summary)
+@router.get(
+    "/items/{item_id}/workspace",
+    response_model=ItemWorkspaceView,
+    operation_id="items.item_workspace",
+)
+@router.get(
+    "/projects/{project_id}/items/{item_id}/workspace",
+    response_model=ItemWorkspaceView,
+    operation_id="items.item_workspace.project",
+)
+async def item_workspace(item_id: str, user: ApiUser, db: Database, project_id: str | None = None):
+    workspace = await open_item_workspace(db, user, item_id, WorkspaceSection.summary, project_id)
     if not isinstance(workspace, SummaryWorkspace):  # pragma: no cover
         raise TypeError("item summary workspace mismatch")
     latest = workspace.revisions[0] if workspace.revisions else None
@@ -58,7 +67,11 @@ async def item_workspace(item_id: str, user: ApiUser, db: Database):
             "discussion": workspace.message_count,
         },
         "tags": [{"id": tag.id, "name": tag.name} for tag in workspace.tags],
-        "owner": {"id": workspace.item_owner.id, "username": workspace.item_owner.username},
+        "owner": (
+            {"id": workspace.item_owner.id, "username": workspace.item_owner.username}
+            if workspace.item_owner is not None
+            else None
+        ),
         "identifiers": [
             {"provider": identifier.provider, "value": identifier.value}
             for identifier in workspace.identifiers
@@ -78,10 +91,21 @@ async def item_workspace(item_id: str, user: ApiUser, db: Database):
     }
 
 
-@router.get("/items/{item_id}/organize", response_model=ItemOrganizeView)
-async def item_organize_workspace(item_id: str, user: ApiUser, db: Database):
+@router.get(
+    "/items/{item_id}/organize",
+    response_model=ItemOrganizeView,
+    operation_id="items.item_organize_workspace",
+)
+@router.get(
+    "/projects/{project_id}/items/{item_id}/organize",
+    response_model=ItemOrganizeView,
+    operation_id="items.item_organize_workspace.project",
+)
+async def item_organize_workspace(
+    item_id: str, user: ApiUser, db: Database, project_id: str | None = None
+):
 
-    workspace = await open_item_workspace(db, user, item_id, WorkspaceSection.organize)
+    workspace = await open_item_workspace(db, user, item_id, WorkspaceSection.organize, project_id)
     if not isinstance(workspace, OrganizeWorkspace):  # pragma: no cover
         raise TypeError("item organize workspace mismatch")
     matrix = workspace.tag_matrix

@@ -101,14 +101,12 @@ its required projection backfill. Running Alembic directly is an advanced mainte
 after a schema-only upgrade, operators should run the explicit batched Search reindex before
 relying on Search results.
 
-## Project ownership
+## Project administration
 
-Project ownership is represented authoritatively by `Project.owner_id`. The owner is also a
-ProjectMember with the `owner` role as a presentation mirror, but authorization never grants owner
-authority from that mirrored role. Non-owner edit authority is granted only by an `editor`
-membership. Ownership transfer locks the Project row and updates `owner_id` plus the two mirrored
-membership roles atomically. Removing or leaving the authoritative owner is rejected; no
-owner-count scan or multi-owner race is needed.
+Projects have no singular owner. Administration is represented by one or more `admin`
+ProjectMember rows. Project mutations lock the Project root and membership changes must leave at
+least one active admin. Item Owner authority is a separate Personal Library relationship and is
+never inferred from Project administration.
 
 ## Import confirmation
 
@@ -131,9 +129,12 @@ ID, per-child operation ID or deterministic child-key derivation.
 - This is an alpha, forward-only cutover. No compatibility shim is provided for removed APIs,
   stored columns or persisted workflow parameters.
 
-The schema cutover is intentionally delivered as one revision after the current head. The
-revision may rebuild SQLite tables as needed, but must preserve all child rows while doing so; it
-does not retain transitional columns or aliases for older application contracts.
+The alpha schema cutover is delivered as a replacement initial migration rather than an in-place
+compatibility revision. Existing migration revisions are removed and a fresh initial schema is
+generated from the canonical ORM mapping. Existing databases and persisted workflow inputs are not
+supported across this cutover; deployments provision a new database and re-import content. The
+application does not retain transitional columns, aliases or compatibility readers for older
+contracts.
 
 ## Rejected alternatives
 

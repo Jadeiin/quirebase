@@ -24,7 +24,7 @@ from quirebase.library.identifiers import (
     set_item_identifiers,
     sync_metadata_from_upstream,
 )
-from quirebase.models import AuditEvent, FileRevision, Item, User
+from quirebase.models import AuditEvent, FileRevision, Item, ItemFileRevision, User
 
 
 async def _return_async(value):
@@ -81,7 +81,7 @@ async def test_apply_metadata_record_rejects_overlong_reference_type(async_db):
     user = User(username="reference-type-owner", password_hash="hash")
     async_db.add(user)
     await async_db.flush()
-    item = Item(title="Reference type", created_by=user.id)
+    item = Item(title="Reference type", owner_id=user.id, created_by=user.id)
     async_db.add(item)
     await async_db.flush()
 
@@ -101,7 +101,7 @@ async def test_set_and_get_item_identifiers(async_db):
     db.add(user)
     await db.flush()
 
-    item = Item(title="Information Theory", created_by=user.id)
+    item = Item(title="Information Theory", owner_id=user.id, created_by=user.id)
     db.add(item)
     await db.flush()
 
@@ -138,6 +138,7 @@ async def test_generate_bibtex_key(async_db):
         title="A Mathematical Theory of Communication",
         authors="Shannon, Claude; Weaver, Warren",
         publication_date="1948-07-01",
+        owner_id=user.id,
         created_by=user.id,
     )
     db.add(item)
@@ -157,6 +158,7 @@ async def test_generate_bibtex_key_parses_first_last_author_name(async_db):
         title="Computing Machinery and Intelligence",
         authors="Alan Turing",
         publication_date="1950",
+        owner_id=user.id,
         created_by=user.id,
     )
 
@@ -170,12 +172,11 @@ async def test_rescan_pdf_doi(async_db):
     db.add(user)
     await db.flush()
 
-    item = Item(title="Scanned Paper", created_by=user.id)
+    item = Item(title="Scanned Paper", owner_id=user.id, created_by=user.id)
     db.add(item)
     await db.flush()
 
     revision = FileRevision(
-        item_id=item.id,
         object_key="rev-1",
         size=1024,
         original_name="paper.pdf",
@@ -184,6 +185,7 @@ async def test_rescan_pdf_doi(async_db):
     )
     db.add(revision)
     await db.flush()
+    db.add(ItemFileRevision(item_id=item.id, file_revision_id=revision.id))
 
     initial_version = item.version
     with patch("quirebase.library.identifiers.search_index") as search_index_factory:
@@ -205,17 +207,27 @@ async def test_rescan_pdf_doi_does_not_replace_manual_doi(async_db):
     user = User(username="pdf_doi_manual", password_hash="hash")
     db.add(user)
     await db.flush()
-    item = Item(title="Manual DOI", doi="10.1000/manual", created_by=user.id)
+    item = Item(title="Manual DOI", doi="10.1000/manual", owner_id=user.id, created_by=user.id)
     db.add(item)
     await db.flush()
     db.add(
         FileRevision(
-            item_id=item.id,
             object_key="manual-rev",
             size=1,
             original_name="manual.pdf",
             full_text="doi: 10.1000/detected",
             created_by=user.id,
+        )
+    )
+    await db.flush()
+    db.add(
+        ItemFileRevision(
+            item_id=item.id,
+            file_revision_id=(
+                await db.scalar(
+                    select(FileRevision.id).where(FileRevision.object_key == "manual-rev")
+                )
+            ),
         )
     )
     await db.commit()
@@ -236,7 +248,7 @@ async def test_sync_metadata_from_upstream(async_db):
     db.add(user)
     await db.flush()
 
-    item = Item(title="Initial Title", created_by=user.id)
+    item = Item(title="Initial Title", owner_id=user.id, created_by=user.id)
     db.add(item)
     await db.commit()
 
@@ -302,7 +314,7 @@ async def test_sync_metadata_translates_inquiro_errors_at_library_interface(
     user = User(username=f"sync-error-{domain_error.__name__}", password_hash="hash")
     db.add(user)
     await db.flush()
-    item = Item(title="Original title", created_by=user.id)
+    item = Item(title="Original title", owner_id=user.id, created_by=user.id)
     db.add(item)
     await db.commit()
     item_id = item.id
@@ -342,7 +354,7 @@ async def test_sync_by_doi_does_not_store_doi_as_provider_identifier(async_db):
     user = User(username="canonical_doi_sync", password_hash="hash")
     db.add(user)
     await db.flush()
-    item = Item(title="Initial", created_by=user.id)
+    item = Item(title="Initial", owner_id=user.id, created_by=user.id)
     db.add(item)
     await db.commit()
 
@@ -370,7 +382,7 @@ async def test_non_doi_sync_preserves_existing_canonical_doi_when_upstream_omits
     user = User(username="preserve_canonical_doi", password_hash="hash")
     db.add(user)
     await db.flush()
-    item = Item(title="Initial", doi="10.1000/existing", created_by=user.id)
+    item = Item(title="Initial", doi="10.1000/existing", owner_id=user.id, created_by=user.id)
     db.add(item)
     await db.commit()
 
@@ -404,7 +416,7 @@ async def test_sync_metadata_cleans_html_and_syncs_bibtex_type(async_db):
     db.add(user)
     await db.flush()
 
-    item = Item(title="Draft Title", created_by=user.id)
+    item = Item(title="Draft Title", owner_id=user.id, created_by=user.id)
     db.add(item)
     await db.commit()
 
@@ -472,7 +484,7 @@ async def test_sync_metadata_from_upstream_rejects_a_stale_version(async_db, asy
     owner = User(username="concurrent_sync_owner", password_hash="hash")
     db.add(owner)
     await db.flush()
-    item = Item(title="Original title", created_by=owner.id)
+    item = Item(title="Original title", owner_id=owner.id, created_by=owner.id)
     db.add(item)
     await db.commit()
     owner_id = owner.id
@@ -523,7 +535,7 @@ async def test_sync_metadata_uses_normalized_upstream_identifier(async_db):
     user = User(username="normalized_upstream_sync", password_hash="hash")
     db.add(user)
     await db.flush()
-    item = Item(title="Initial", doi="10.1000/canonical", created_by=user.id)
+    item = Item(title="Initial", doi="10.1000/canonical", owner_id=user.id, created_by=user.id)
     db.add(item)
     await db.commit()
 
