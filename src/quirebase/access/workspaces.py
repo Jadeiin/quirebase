@@ -59,6 +59,10 @@ class Capability(StrEnum):
 
 
 _READ_CAPABILITIES = frozenset({Capability.workspace_read, Capability.workspace_export})
+_PROJECT_CONTENT_WRITE_CAPABILITIES = frozenset({
+    Capability.discussion_write,
+    Capability.annotations_project_write,
+})
 _VIEWER = _READ_CAPABILITIES | {Capability.annotations_private_write}
 _REVIEWER = _VIEWER | {
     Capability.discussion_write,
@@ -323,11 +327,12 @@ async def require_project_context(
         db,
         workspace,
         project,
-        # ``operation`` may be a Project-scoped capability such as discussion
-        # or annotation write. Those operations need their Workspace capability
-        # but do not depend on Project participation.
         write=False,
-        require_participation=operation in _READ_CAPABILITIES,
+        # Project lifecycle and management operations are capability-only. Project
+        # content remains subject to managed-Project participation, just like reads.
+        require_participation=(
+            operation in _READ_CAPABILITIES or operation in _PROJECT_CONTENT_WRITE_CAPABILITIES
+        ),
     )
     if operation not in _READ_CAPABILITIES and project.state is not ProjectState.active:
         raise WorkspaceLifecycleError("Project is read-only")

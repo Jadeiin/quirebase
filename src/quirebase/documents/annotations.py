@@ -937,8 +937,13 @@ async def create_annotation_reply(
     annotation_id: str,
     data: AnnotationReplyCreate,
 ) -> dict[str, Any]:
-    locked_user, _annotation = await require_visible_annotation_for_reply_mutation(
+    locked_user, annotation = await require_visible_annotation_for_reply_mutation(
         db, user, workspace_id, item_id, annotation_id
+    )
+    authorization_capability = (
+        Capability.annotations_private_write
+        if annotation.scope is AnnotationScope.private
+        else Capability.annotations_project_write
     )
     object_id = str(data.id)
     record = PdfAnnotationReply(
@@ -961,7 +966,7 @@ async def create_annotation_reply(
         "pdf_annotation_reply",
         record.id,
         workspace_id=workspace_id,
-        authorization_capability=Capability.annotations_project_write.value,
+        authorization_capability=authorization_capability.value,
     )
     await db.commit()
     return annotation_reply_json(
@@ -981,8 +986,13 @@ async def update_annotation_reply(
     reply_id: str,
     data: AnnotationReplyUpdate,
 ) -> dict[str, Any]:
-    _annotation, reply = await _editable_reply(
+    annotation, reply = await _editable_reply(
         db, user, workspace_id, item_id, annotation_id, reply_id
+    )
+    authorization_capability = (
+        Capability.annotations_private_write
+        if annotation.scope is AnnotationScope.private
+        else Capability.annotations_project_write
     )
     new_version = await db.scalar(
         update(PdfAnnotationReply)
@@ -1015,7 +1025,7 @@ async def update_annotation_reply(
         "pdf_annotation_reply",
         reply.id,
         workspace_id=workspace_id,
-        authorization_capability=Capability.annotations_project_write.value,
+        authorization_capability=authorization_capability.value,
     )
     await db.commit()
     author_name = await db.scalar(select(User.username).where(User.id == reply.author_id)) or ""
@@ -1036,8 +1046,13 @@ async def delete_annotation_reply(
     reply_id: str,
     version: int,
 ) -> None:
-    _annotation, reply = await _editable_reply(
+    annotation, reply = await _editable_reply(
         db, user, workspace_id, item_id, annotation_id, reply_id
+    )
+    authorization_capability = (
+        Capability.annotations_private_write
+        if annotation.scope is AnnotationScope.private
+        else Capability.annotations_project_write
     )
     deleted_at = datetime.now(UTC)
     new_version = await db.scalar(
@@ -1070,7 +1085,7 @@ async def delete_annotation_reply(
         "pdf_annotation_reply",
         reply.id,
         workspace_id=workspace_id,
-        authorization_capability=Capability.annotations_project_write.value,
+        authorization_capability=authorization_capability.value,
     )
     await db.commit()
 
@@ -1086,6 +1101,11 @@ async def restore_annotation_reply(
 ) -> dict[str, Any]:
     locked_user, annotation = await require_visible_annotation_for_reply_mutation(
         db, user, workspace_id, item_id, annotation_id
+    )
+    authorization_capability = (
+        Capability.annotations_private_write
+        if annotation.scope is AnnotationScope.private
+        else Capability.annotations_project_write
     )
     reply = await db.scalar(
         select(PdfAnnotationReply)
@@ -1136,7 +1156,7 @@ async def restore_annotation_reply(
         "pdf_annotation_reply",
         reply.id,
         workspace_id=workspace_id,
-        authorization_capability=Capability.annotations_project_write.value,
+        authorization_capability=authorization_capability.value,
     )
     await db.commit()
     author_name = await db.scalar(select(User.username).where(User.id == reply.author_id)) or ""

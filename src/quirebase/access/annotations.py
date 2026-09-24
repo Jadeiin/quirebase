@@ -105,26 +105,35 @@ async def editable_annotation_reply_ids(
 ) -> set[str]:
     if not replies:
         return set()
-    try:
-        await require_workspace_capability(
-            db, user, workspace_id, Capability.annotations_project_write
-        )
-    except (PermissionDenied, WorkspaceLifecycleError, WorkspaceMembershipRequired):
-        return set()
     editable: set[str] = set()
     writable_project_items: dict[str, bool] = {}
+    private_write: bool | None = None
     for reply in replies:
         annotation = annotations.get(reply.annotation_id)
         if (
             reply.workspace_id != workspace_id
             or reply.author_id != user.id
             or annotation is None
-            or annotation.scope is not AnnotationScope.project
             or annotation.hidden_at is not None
             or annotation.archived_at is not None
             or annotation.locked_at is not None
-            or annotation.project_item_id is None
         ):
+            continue
+        if annotation.scope is AnnotationScope.private:
+            if annotation.author_id != user.id:
+                continue
+            if private_write is None:
+                try:
+                    await require_workspace_capability(
+                        db, user, workspace_id, Capability.annotations_private_write
+                    )
+                    private_write = True
+                except (PermissionDenied, WorkspaceLifecycleError, WorkspaceMembershipRequired):
+                    private_write = False
+            if private_write:
+                editable.add(reply.id)
+            continue
+        if annotation.project_item_id is None:
             continue
         project_item_id = annotation.project_item_id
         if project_item_id not in writable_project_items:
@@ -243,9 +252,12 @@ async def require_visible_annotation_for_reply_mutation(
     annotation_id: str,
 ) -> tuple[User, PdfAnnotation]:
     record = await require_visible_annotation(db, user, workspace_id, item_id, annotation_id)
-    if record.scope is not AnnotationScope.project:
-        raise PermissionDenied("Replies require a Project Annotation")
     if record.locked_at is not None:
         raise PermissionDenied("Annotation is locked")
-    await _require_annotation_project_write(db, user, workspace_id, record)
+    if record.scope is AnnotationScope.private:
+        await require_workspace_capability(
+            db, user, workspace_id, Capability.annotations_private_write
+        )
+    else:
+        await _require_annotation_project_write(db, user, workspace_id, record)
     return user, record

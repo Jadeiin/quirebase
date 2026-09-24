@@ -42,6 +42,7 @@ from quirebase.documents.annotations import (
     create_annotation_reply,
     delete_annotation_reply,
     delete_document_annotation,
+    restore_annotation_reply,
     restore_document_annotation,
     update_annotation_reply,
     update_document_annotation,
@@ -1096,6 +1097,14 @@ async def test_project_discussion_uses_visibility_and_workspace_capabilities(asy
     )
     await async_db.commit()
 
+    with pytest.raises(ResourceUnavailable, match="Project not found"):
+        await add_project_discussion_message(
+            async_db,
+            outsider,
+            fixture_workspace_id(owner),
+            project.id,
+            "Unauthorized note",
+        )
     message = await add_project_discussion_message(
         async_db,
         reviewer,
@@ -1114,6 +1123,65 @@ async def test_project_discussion_uses_visibility_and_workspace_capabilities(asy
         await list_project_discussion_messages(
             async_db, outsider, fixture_workspace_id(owner), project.id
         )
+
+
+@pytest.mark.anyio
+async def test_private_annotation_author_can_manage_own_replies(async_db):
+    author, viewer, item, _project, _revision, annotation, reply = await _shared_annotation_context(
+        async_db, "private-annotation-replies"
+    )
+    workspace_id = fixture_workspace_id(author)
+    annotation.scope = AnnotationScope.private
+    annotation.project_item_id = None
+    await async_db.commit()
+
+    assert await editable_annotation_reply_ids(
+        async_db, author, workspace_id, [reply], {annotation.id: annotation}
+    ) == {reply.id}
+    assert (
+        await editable_annotation_reply_ids(
+            async_db, viewer, workspace_id, [reply], {annotation.id: annotation}
+        )
+        == set()
+    )
+
+    created = await create_annotation_reply(
+        async_db,
+        author,
+        workspace_id,
+        item.id,
+        annotation.id,
+        AnnotationReplyCreate(id=uuid4(), body="Private reply"),
+    )
+    private_reply_id = created["id"]
+    updated = await update_annotation_reply(
+        async_db,
+        author,
+        workspace_id,
+        item.id,
+        annotation.id,
+        private_reply_id,
+        AnnotationReplyUpdate(version=created["version"], body="Updated private reply"),
+    )
+    await delete_annotation_reply(
+        async_db,
+        author,
+        workspace_id,
+        item.id,
+        annotation.id,
+        private_reply_id,
+        updated["version"],
+    )
+    restored = await restore_annotation_reply(
+        async_db,
+        author,
+        workspace_id,
+        item.id,
+        annotation.id,
+        private_reply_id,
+        updated["version"] + 1,
+    )
+    assert restored["body"] == "Updated private reply"
 
 
 @pytest.mark.anyio
