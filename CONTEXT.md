@@ -11,11 +11,17 @@ A bibliographic record representing a paper, book, preprint, manuscript or
 other research output.
 _Avoid_: Paper, Work, Document when referring to the stored bibliographic record
 
+**Item Section**:
+A Web navigation and read-model section for one Item, such as Overview, Metadata, Files,
+Organize, Annotations or Discussion. It is a presentation projection, not a Workspace or a
+separate domain aggregate.
+_Avoid_: Item Workspace
+
 **Workspace**:
-A shared knowledge space and the data-governance and authorization boundary for its Items,
+A knowledge space and the data-governance and authorization boundary for its Items,
 Documents, Tags, Discussions and Projects. Every Workspace-owned resource has one Workspace
-lineage. A User receives an initial Workspace when provisioning succeeds; that initial Workspace
-is a product-level Personal Library label, not a separate authorization kind.
+lineage. Workspaces all use the same domain and authorization rules; there is no personal/shared
+Workspace kind. User provisioning creates an ordinary Workspace for its new User.
 _Avoid_: Tenant when discussing research data
 
 **Workspace Member**:
@@ -49,20 +55,23 @@ _Avoid_: Creator, User
 **Project**:
 A collaboration context inside one Workspace that organizes a working set of Items and contains
 Project-scoped annotations, discussions and notes. A Project does not grant access to an Item or
-raise a User's Workspace capability.
+raise a User's Workspace capability. A Project has no owner; `created_by` is provenance only.
 _Avoid_: Folder, Group
 
 **Project Member**:
-An explicit User–Project participation and visibility-scope association without a Project role.
-For a Project with `visibility=members`, an active Project Member is required to read or mutate
-the Project context; for `visibility=workspace`, membership is optional and does not add
-authority.
+An explicit User–Project association that records a User's selected Project working context. It
+has no Project role and grants no Workspace capability. It controls discoverability of `managed`
+Projects only; it never grants access to canonical Workspace Items. Workspace-participation
+Projects have implicit participation and no Project Member rows.
 
 **Project Visibility**:
-The Project-context visibility setting `workspace` or `members`. `workspace` exposes the
-Project context to active Workspace members for reading, while writes still require the relevant
-Workspace capability; `members` limits context visibility to active Project Members. Visibility
-never changes the underlying Workspace Item ACL.
+The retained Project field that expresses discoverability and participation policy, not a Project
+role or Workspace capability: `workspace` means all active Workspace members can discover and
+implicitly participate, with no Project Member rows; `open` means all active Workspace members can
+discover the Project and may choose to join or leave; `managed` means only Project Members and
+Workspace owners/admins can discover the Project and its Project-scoped content, with participation
+curated by Workspace governance. Managed visibility never changes access to canonical Workspace
+Items.
 
 **ProjectItem**:
 An association placing an Item from the same Workspace in a Project working set. ProjectItem
@@ -228,7 +237,7 @@ for invalidating a Login Session or API Token without deleting its audit/persist
   zero or more Workspaces through Workspace Members.
 - An Item has zero or more Contributors in an ordered bibliographic role. A Contributor may have a split first/last name or a single-field literal name.
 - An Invitation provisions or registers one new User with an assigned System Role; successful
-  provisioning also creates that User's initial Workspace and owner membership.
+  provisioning also creates an ordinary Workspace and owner membership for that User.
 - A Workspace has Workspace Members, a canonical Item Library, shared Tags, Item Discussions and
   Projects. Workspace ownership and access are evaluated through Workspace capabilities.
 - An Item has zero or more File Revisions, Attachments, Tags, and Discussion Messages, and at most
@@ -238,9 +247,12 @@ for invalidating a Login Session or API Token without deleting its audit/persist
 - An Item has at most one current Item Tag Recommendation generation.
 - An Item may belong to multiple Projects in the same Workspace; ProjectItem is an organizational
   association and never grants Item access.
-- A Project has zero or more Project Members without roles and one Project Visibility setting. A
-  Project has no owner authority; Project lifecycle and membership operations use Workspace
-  capabilities.
+- A Project has Project Members only when its visibility is `open` or `managed`; these
+  role-less associations record participation. For `managed` Projects they also gate Project
+  discoverability, but never grant access to canonical Workspace Items. A `workspace` Project has
+  implicit participation and no Project Member rows. A Project has no owner or ownership-transfer
+  operation; `created_by` is provenance, while Project lifecycle and participation operations use
+  Workspace capabilities.
 - An Annotation belongs to exactly one File Revision.
 - An Annotation has zero or more Annotation Replies.
 - An Annotation Export Artifact is derived from one File Revision and expires independently of it.

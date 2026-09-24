@@ -533,7 +533,7 @@ async def test_citation_routes_enforce_custom_style_ownership(
 
 
 @pytest.mark.anyio
-async def test_custom_styles_accessible_in_item_workspace(
+async def test_custom_styles_accessible_in_item_sections(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
     from test_http import authenticated_async_client

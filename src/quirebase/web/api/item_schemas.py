@@ -23,12 +23,12 @@ class RemoteAttachmentRequest(RemoteRevisionRequest):
     graphical_abstract: bool = False
 
 
-class ItemWorkspacePermissionsView(BaseModel):
+class ItemAllowedActionsView(BaseModel):
     edit: bool
     delete: bool
 
 
-class ItemWorkspaceCountsView(BaseModel):
+class ItemOverviewCountsView(BaseModel):
     revisions: int
     attachments: int
     annotations: int
@@ -58,10 +58,10 @@ class ItemThumbnailView(BaseModel):
     source_id: str
 
 
-class ItemWorkspaceView(BaseModel):
+class ItemOverviewView(BaseModel):
     item: ItemSearchView
-    permissions: ItemWorkspacePermissionsView
-    counts: ItemWorkspaceCountsView
+    allowed_actions: ItemAllowedActionsView
+    counts: ItemOverviewCountsView
     tags: list[ItemTagView]
     identifiers: list[ItemIdentifierView]
     latest_revision: ItemLatestRevisionView | None = None
@@ -93,7 +93,7 @@ class TagMatrixView(BaseModel):
 
 class ItemOrganizeView(BaseModel):
     item: ItemSearchView
-    permissions: ItemWorkspacePermissionsView
+    allowed_actions: ItemAllowedActionsView
     tags: list[ItemTagView]
     projects: list[ItemOrganizeProjectView]
     tag_matrix: TagMatrixView

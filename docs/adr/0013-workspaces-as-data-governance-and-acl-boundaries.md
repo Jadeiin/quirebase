@@ -8,10 +8,11 @@ capabilities govern canonical Items, Documents, Tags and shared discussions; a P
 Workspace-local research collaboration context and never grants or propagates Workspace Item
 authority.
 
-This decision supersedes the Item Owner authorization concept and the Project ownership,
-Project Role and Project-membership-as-Item-access assumptions recorded in the domain glossary
-and in the relevant portions of ADR 0011 and ADR 0004. Quirebase is alpha software, so this is a
-forward-only model change with no compatibility layer for the previous assumptions.
+This decision supersedes the Item Owner authorization concept and the Project ownership, Project
+Role and Project-membership-as-Item-access assumptions recorded in the domain glossary and in the
+relevant portions of ADR 0011 and ADR 0004. Project `created_by` is provenance only; Projects have
+no owner or ownership-transfer operation. Quirebase is alpha software, so this is a forward-only
+model change with no compatibility layer for the previous assumptions.
 
 ## Context
 
@@ -54,10 +55,10 @@ the Workspace Item Library, including canonical Item metadata, File Revisions, A
 Item Discussions. A suspended or terminated membership has no effective access; it does not alter
 resource provenance.
 
-The initial Workspace created during successful User provisioning is a normal Workspace with one
-owner. “Personal Library” is a product label for this initial state, not a separate Workspace
-kind or ACL mode. It may be renamed, shared, archived, restored, transferred or deleted using the
-same rules as another Workspace.
+All Workspaces have the same domain and authorization semantics, regardless of whether one is
+created during User provisioning or later. There is no personal/shared Workspace kind or ACL mode.
+Each Workspace may be renamed, shared, archived, restored, transferred or deleted using the same
+rules.
 
 ### Workspace roles and capabilities
 
@@ -77,8 +78,10 @@ The initial role presets are:
 | Create/attach/detach Tags | yes | yes | yes | no | no |
 | Rename/merge/delete shared Tags | yes | yes | no | no | no |
 | Manage shared Citation Styles | yes | yes | yes | no | no |
-| Create/update/archive Projects | yes | yes | yes | no | no |
-| Manage Project membership | yes | yes | no | no | no |
+| Create Workspace/open Projects | yes | yes | yes | no | no |
+| Create managed Projects | yes | yes | no | no | no |
+| Update/archive existing Projects | yes | yes | yes | no | no |
+| Manage managed-Project participation | yes | yes | no | no | no |
 | Write Item or Project Discussion/Notes | yes | yes | yes | yes | no |
 | Create/edit own private or Project Annotation | yes | yes | yes | yes | private only |
 | Moderate another author's Annotation | yes | yes | no | no | no |
@@ -118,41 +121,74 @@ Additional Workspace creation is controlled by instance-level `workspace_creatio
 - `admins_only`: only instance administrators create additional Workspaces;
 - `members_allowed`: any active User may create one and becomes its owner.
 
-The policy never blocks automatic creation of the initial Workspace during User provisioning.
+Under `admins_only`, the administrator must specify an active Workspace owner by exact username.
+The administrator is not added as a Workspace member unless explicitly selected as that owner;
+Workspace creation does not grant instance administrators implicit content access. The lookup is
+exact and does not expose a browsable instance-wide user directory.
+
+The policy never blocks creation of an ordinary Workspace as part of User provisioning.
 Quota and rate limits are intentionally separate concerns.
 
 A User with no active Workspace membership may still log in and use account-level operations, but
 all Library, Project, Tag and Document operations fail with a typed membership-required error.
-The system does not silently create another Personal Library; an explicit repair or create action
-is required. User records do not store an initial Workspace pointer or provisioning state.
+The system does not silently create another Workspace or repair membership. A new Workspace may
+be created only through the ordinary creation policy; membership restoration and ownership changes
+use their explicit governance operations. User records do not store an active Workspace pointer or
+provisioning state.
 
-### Project is a collaboration context, not an ACL root
+### Project is a working context, not an ACL root
 
 A Project belongs to exactly one Workspace and organizes a working set of Items plus Project-scoped
-Annotations, Discussions and Notes. `Project.owner_id` is not retained as an authority field.
-`created_by` is provenance only. Project lifecycle, metadata, membership and moderation are
+Annotations, Discussions and Notes. A Project has no owner field or ownership-transfer operation;
+`created_by` is provenance only. Project lifecycle, metadata, participation and moderation are
 controlled by Workspace capabilities.
 
-`ProjectMember` contains participation information, such as `project_id`, `user_id`, `added_by`
-and timestamps, but no role. It is a scope gate, not an authority grant:
+The Project `visibility` field defines Project discoverability and participation policy. It does
+not create another role or Workspace capability. `ProjectMember` is a role-less association
+recording a User's selected working context; it grants no Workspace capability and never grants
+access to canonical Workspace Items:
 
-- `visibility=workspace`: every active Workspace member may read the Project context. A Project
-  may have no ProjectMember rows. Mutations require the caller's Workspace capability.
-- `visibility=members`: an active ProjectMember is required to read or mutate the Project context;
-  at least one active member is required for this visibility mode. Mutations still require the
-  caller's Workspace capability.
+- `visibility=workspace`: every active Workspace member can discover the Project and participates
+  implicitly. The Project has no ProjectMember associations and offers no join, leave or
+  member-management operations. Users with `projects.create` may create one.
+- `visibility=open`: every active Workspace member can discover the Project and may choose to join
+  or leave. Creating or switching to this mode enrolls the actor as a participant. Users with
+  `projects.create` may create one.
+- `visibility=managed`: only ProjectMembers and Workspace owners/admins can discover the Project and
+  its Project-scoped content. Members cannot self-join or leave; Workspace owners/admins curate
+  participation with `projects.members.manage`. Only users with `projects.create_managed` may
+  create one, and a new managed Project starts with zero participants.
 
-Project membership never grants `items.edit`, `files.manage`, `items.delete`, Tag governance or
-any other Workspace capability. ProjectItem means only “this Item is in this Project working
-set”; it cannot create a durable Item access grant or be used to cross a Workspace boundary.
+Switching to `workspace` removes ProjectMember associations in the same transaction. Switching
+between `open` and `managed` preserves selected participants; transitioning from `workspace` to
+`open` enrolls the actor, while transitioning to `managed` does not. An empty participant list is
+valid for `open` and `managed`. No Project has an owner, ownership transfer, or minimum-member
+invariant. Workspace membership and capabilities remain the authorization boundary for canonical
+Workspace data and Project mutations; ProjectMember affects only managed Project discoverability.
 
-Project membership management is an owner/admin Workspace capability (`projects.members.manage`).
-If delegation is needed later, it is represented by a capability grant rather than a Project role.
+Project membership never grants `items.read`, `items.edit`, `files.manage`, `items.delete`, Tag
+governance or any other Workspace capability. ProjectItem means only “this Item is in this Project
+working set”; it cannot create a durable Item access grant or be used to cross a Workspace
+boundary. Canonical Items remain accessible according to Workspace membership and capabilities,
+even when their association with a managed Project is hidden.
+
+Managing participation for an active managed Project is an owner/admin Workspace capability
+(`projects.members.manage`). Open Projects allow self-service participation, while Workspace
+Projects have no ProjectMember lifecycle. If delegation is needed later, it is represented by a
+capability grant rather than a Project role.
+
+No Project creator or participant must transfer ownership before leaving, suspension, termination
+or account deactivation. Those lifecycle operations remain governed by Workspace membership and
+the independent Workspace-owner invariant; ProjectMember associations are removed or become
+inactive as appropriate without preserving a minimum participant count.
 
 ### Project-scoped content
 
-Item Discussion is Workspace-scoped and is visible through Item access. Project Discussion and
-Notes are Project-scoped and follow Project visibility plus the caller's Workspace capability.
+Item Discussion is Workspace-scoped and is visible through Item access. Project Discussion, Notes
+and Project Annotations are Project-scoped: `workspace` and `open` Projects are visible to all
+active Workspace members, while managed Project content is visible only to ProjectMembers and
+Workspace owners/admins. Mutations still require the caller's Workspace capability, and
+participation never grants that capability.
 
 Annotations have exactly two scopes:
 
@@ -160,8 +196,8 @@ Annotations have exactly two scopes:
   edit their own private Annotation.
 - A Project Annotation is authored content in Project context and must bind to a `ProjectItem`,
   which proves that the Project contains the Item and both belong to the same Workspace. Editors
-  and reviewers may create/edit their own Project Annotations when the Project scope gate and
-  Workspace capability allow it.
+  and reviewers may create/edit their own Project Annotations when Workspace membership and
+  capability allow it.
 
 Workspace owner/admin may moderate another author's Project Annotation through operations such as
 hide, archive, lock, restore or delete. Moderation must not rewrite authored content or attribution.
@@ -223,18 +259,23 @@ constraints enforce lineage for ProjectItem, ItemTag, Project Annotation and oth
 associations. Service-layer checks provide typed errors and capability decisions, but the database
 is the final boundary against cross-Workspace references.
 
-The schema must also enforce one owner membership per Workspace, unique active membership identity,
-Workspace-local Tag uniqueness such as `UNIQUE(workspace_id, normalized_name)`, and the invariant
-that a members-visible Project cannot be left without an active ProjectMember.
+The schema must also enforce one owner membership per Workspace, unique active membership identity
+and Workspace-local Tag uniqueness such as `UNIQUE(workspace_id, normalized_name)`. Projects have no
+owner invariant. The schema must not materialize implicit Workspace-wide participation or require
+a minimum ProjectMember count.
 
 ## Consequences
 
-- A single-team deployment remains simple: the automatically created initial Workspace can hide the
-  Workspace selector while retaining the same explicit backend boundary.
+- A single-team deployment remains simple: when a User has one accessible Workspace, the UI may
+  de-emphasize the selector while retaining the same explicit backend boundary.
 - Item stewardship, file access, Tag governance, Discussions, Annotations and Agent context have
   one auditable root instead of inheriting accidental Project or creator semantics.
-- Project membership can organize a working set and restrict Project context without becoming a
-  hidden Item ACL propagation mechanism.
+- Project membership records selected working contexts only. Workspace-wide participation remains
+  implicit, open participation is self-service, and managed participation is private-like and
+  explicitly curated. Managed membership exposes Project-scoped content but does not create
+  canonical Item grants or Workspace capabilities.
+- Project creators are recorded only as provenance. Workspace governance—not Project ownership—
+  maintains managed participation and Project lifecycle.
 - The Access Module becomes the sole policy evaluator for Workspace roles and capabilities; Web,
   MCP, jobs and business Modules must call it rather than branch on role strings.
 - Database lineage constraints, explicit Workspace context and finalizer re-authorization add
@@ -243,7 +284,7 @@ that a members-visible Project cannot be left without an active ProjectMember.
   access; break-glass access is visible and reviewable.
 - This is an alpha forward-only cutover. Existing instance-global ownership assumptions, Project
   roles and Project-derived Item grants are removed rather than adapted through compatibility
-  aliases. Existing data is initialized under the current deployment's initial Workspace policy;
+  aliases. Existing data is initialized under the current deployment's Workspace policy;
   quota and large-scale migration policy are separate work.
 
 ## Rejected alternatives

@@ -29,10 +29,10 @@ from quirebase.documents import (
     store_pdf_revision,
 )
 from quirebase.library import (
-    FilesWorkspace,
-    WorkspaceSection,
+    ItemFilesData,
+    ItemSection,
     acquire_remote_pdf,
-    open_item_workspace,
+    open_item_section,
 )
 from quirebase.models import AttachmentRole
 from quirebase.operations.settings import get_effective_setting, get_effective_settings_model
@@ -50,7 +50,7 @@ from quirebase.web.errors import ApiHTTPException
 from quirebase.web.responses import content_disposition
 from quirebase.web.uploads import upload_chunks
 
-router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["Documents"])
+router = APIRouter(tags=["Documents"])
 
 RANGE_PATTERN = re.compile(r"bytes=(\d*)-(\d*)$")
 THUMBNAIL_CONTENT_TYPES = {
@@ -184,10 +184,10 @@ async def ranged_object(request: Request, metadata, filename: str, object_get):
 async def list_documents(
     workspace_id: str, item_id: str, user: ApiUser, db: Database
 ) -> DocumentListView:
-    workspace = await open_item_workspace(db, user, workspace_id, item_id, WorkspaceSection.files)
-    if not isinstance(workspace, FilesWorkspace):  # pragma: no cover
-        raise TypeError("item files workspace mismatch")
-    return document_list_view(item_id, workspace)
+    item_files = await open_item_section(db, user, workspace_id, item_id, ItemSection.files)
+    if not isinstance(item_files, ItemFilesData):  # pragma: no cover
+        raise TypeError("item files section mismatch")
+    return document_list_view(item_id, item_files)
 
 
 @router.get(

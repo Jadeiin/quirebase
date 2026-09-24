@@ -13,7 +13,9 @@
 
 	let { job, visible = true } = $props<{ job: TrackedJob; visible?: boolean }>();
 	const center = getWorkflowCenter();
-	const status = createQuery(() => workflowStatusQuery(job.id, () => !job.outcome));
+	const status = createQuery(() =>
+		workflowStatusQuery(job.workspaceId, job.id, () => !job.outcome)
+	);
 	const state = $derived(job.outcome?.state ?? status.data?.state);
 
 	$effect(() => {

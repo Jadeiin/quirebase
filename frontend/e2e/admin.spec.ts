@@ -142,60 +142,122 @@ test('administrators can respond to compromised user accounts', async ({ page })
 		});
 });
 
-test('administration filters and paginates server-side collections', async ({ page }) => {
+test('Workspace governance suspends, recovers, and performs reason-bound break-glass inspection', async ({
+	page
+}) => {
 	await mockSession(page, 'administrator');
-	const requests: string[] = [];
-	await page.route('**/api/v1/admin/items*', (route) => {
-		requests.push(route.request().url());
-		const pageNumber = Number(new URL(route.request().url()).searchParams.get('page') ?? '1');
+	let suspended = false;
+	let suspendRequests = 0;
+	let recoverRequests = 0;
+	let inspectionBody: unknown;
+	await page.route('**/api/v1/admin/workspaces', (route) =>
+		route.fulfill({
+			json: [
+				{
+					id: 'workspace-1',
+					name: 'Research',
+					owner_id: 'user-1',
+					state: 'active',
+					governance_suspended_at: suspended ? '2026-09-01T00:00:00Z' : null,
+					governance_suspended_by: suspended ? 'admin-1' : null
+				}
+			]
+		})
+	);
+	await page.route('**/api/v1/admin/workspaces/workspace-1/suspend', (route) => {
+		suspendRequests += 1;
+		suspended = true;
+		return route.fulfill({ json: { ok: true } });
+	});
+	await page.route('**/api/v1/admin/workspaces/workspace-1/recover', (route) => {
+		recoverRequests += 1;
+		suspended = false;
+		return route.fulfill({ json: { ok: true } });
+	});
+	await page.route('**/api/v1/admin/workspaces/workspace-1/break-glass/items', (route) => {
+		inspectionBody = route.request().postDataJSON();
 		return route.fulfill({
-			json: {
-				items: [],
-				total: 40,
-				page: pageNumber,
-				per_page: 20,
-				storage: { total_disk_bytes: 0 }
-			}
+			json: [
+				{
+					id: 'item-1',
+					title_html: 'Read-only inspection',
+					authors: 'A. Reader',
+					publication_date: '2026',
+					publication_title: null,
+					doi: null,
+					version: 1
+				}
+			]
 		});
 	});
 
-	await page.goto('/admin/items');
-	await page.getByLabel('PDF availability').selectOption('true');
-	await page.getByRole('button', { name: 'Apply filters' }).click();
+	await page.goto('/admin/workspaces');
+	await expect(page.locator('article').getByText('Research', { exact: true })).toBeVisible();
+	await page.getByRole('button', { name: 'Suspend governance' }).click();
+	await expect.poll(() => suspendRequests).toBe(1);
+	await page.getByRole('button', { name: 'Recover' }).click();
+	await expect.poll(() => recoverRequests).toBe(1);
+	await page.getByLabel('Target Workspace').selectOption('workspace-1');
+	await page.getByLabel(/Reason/).fill('Investigating a reported access issue');
+	await page.getByRole('button', { name: 'Inspect Items once' }).click();
 	await expect
-		.poll(() => requests.some((url) => new URL(url).searchParams.get('has_pdf') === 'true'))
-		.toBe(true);
-	await page.getByRole('button', { name: 'Next' }).click();
-	await expect
-		.poll(() => requests.some((url) => new URL(url).searchParams.get('page') === '2'))
-		.toBe(true);
+		.poll(() => inspectionBody)
+		.toEqual({ reason: 'Investigating a reported access issue' });
+	await expect(page.getByText('BREAK GLASS', { exact: true }).last()).toBeVisible();
+	await expect(page.getByText('Read-only inspection')).toBeVisible();
 });
 
-test('administration resets section-specific filters during navigation', async ({ page }) => {
+test('break-glass inspection keeps the Workspace that authorized the displayed result', async ({
+	page
+}) => {
 	await mockSession(page, 'administrator');
-	await page.route('**/api/v1/admin/users*', (route) =>
+	await page.route('**/api/v1/admin/workspaces', (route) =>
 		route.fulfill({
-			json: { users: [], total: 0, page: 1, per_page: 20, invitations: [] }
+			json: [
+				{
+					id: 'workspace-1',
+					name: 'Research',
+					owner_id: 'owner-1',
+					state: 'active',
+					governance_suspended_at: null,
+					governance_suspended_by: null
+				},
+				{
+					id: 'workspace-2',
+					name: 'Archive',
+					owner_id: 'owner-2',
+					state: 'active',
+					governance_suspended_at: null,
+					governance_suspended_by: null
+				}
+			]
 		})
 	);
-	let projectRequest = '';
-	await page.route('**/api/v1/admin/projects*', (route) => {
-		projectRequest = route.request().url();
-		return route.fulfill({ json: { projects: [], total: 0, page: 1, per_page: 20 } });
+	await page.route('**/api/v1/admin/workspaces/*/break-glass/items', (route) => {
+		const workspaceId = new URL(route.request().url()).pathname.split('/')[5];
+		return route.fulfill({
+			json: [
+				{
+					id: `item-${workspaceId}`,
+					title_html: `Inspected ${workspaceId}`,
+					authors: null,
+					publication_date: null,
+					publication_title: null,
+					doi: null,
+					version: 1
+				}
+			]
+		});
 	});
 
-	await page.goto('/admin/users');
-	await page.getByLabel('Role').selectOption('member');
-	await page.getByRole('button', { name: 'Apply filters' }).click();
-	await page
-		.getByRole('navigation', { name: 'Administration sections' })
-		.getByRole('link', { name: 'Projects' })
-		.click();
-
-	await expect.poll(() => projectRequest).not.toBe('');
-	expect(new URL(projectRequest).searchParams.get('state')).toBeNull();
-	expect(new URL(projectRequest).searchParams.get('visibility')).toBeNull();
-	expect(new URL(projectRequest).searchParams.get('page')).toBe('1');
+	await page.goto('/admin/workspaces');
+	await page.getByLabel('Target Workspace').selectOption('workspace-1');
+	await page.getByLabel(/Reason/).fill('Investigating a reported access issue');
+	await page.getByRole('button', { name: 'Inspect Items once' }).click();
+	await expect(page.getByText('Inspected workspace-1')).toBeVisible();
+	await page.getByLabel('Target Workspace').selectOption('workspace-2');
+	await expect(page.getByText('Scope: Workspace workspace-1')).toBeVisible();
+	await expect(page.getByText('Scope: Workspace workspace-2')).toHaveCount(0);
 });
 
 test('admin workflow rows render their state contract', async ({ page }) => {

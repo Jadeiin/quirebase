@@ -1,11 +1,10 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { useQueryClient } from '@tanstack/svelte-query';
 	import { onDestroy, onMount } from 'svelte';
 	import { SvelteMap } from 'svelte/reactivity';
-	import { apiRequest } from '$lib/api/client';
 	import { apiErrorMessage } from '$lib/api/errors';
 	import type { components } from '$lib/api/schema';
 	import Panel from '$lib/design/Panel.svelte';
@@ -17,6 +16,8 @@
 	import { invalidateLibrary } from '$lib/query/invalidation';
 	import { msg, t } from '$lib/i18n';
 	import Button from '$lib/design/Button.svelte';
+	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
+	import { workspaceHref } from '$lib/workspaces/href';
 
 	type ImportBatch = components['schemas']['ImportBatchView'];
 
@@ -31,6 +32,8 @@
 	let pdfInput: HTMLInputElement;
 	let pollingAbort: AbortController | null = null;
 	const queryClient = useQueryClient();
+	const workspace = getWorkspaceContext();
+	const { workspaceId } = workspace;
 	const workflows = getWorkflowCenter();
 	const emptyMetadata: components['schemas']['ItemMetadata-Input'] = {
 		title: '',
@@ -60,7 +63,7 @@
 		error = '';
 		try {
 			acceptBatch(
-				await apiRequest('GET', '/imports/{batch_id}', {
+				await workspace.api.request('GET', '/workspaces/{workspace_id}/imports/{batch_id}', {
 					params: { path: { batch_id: batchId } }
 				})
 			);
@@ -76,6 +79,7 @@
 		pollingAbort = controller;
 		try {
 			await workflows.track(workflowId, {
+				workspaceId,
 				label: $t('Import processing'),
 				successMessage: msg('Import processing completed'),
 				failureMessage: msg('Import processing failed')
@@ -87,9 +91,13 @@
 		}
 		if (controller.signal.aborted || batch?.id !== batchId) return;
 		try {
-			const refreshed = await apiRequest('GET', '/imports/{batch_id}', {
-				params: { path: { batch_id: batchId } }
-			});
+			const refreshed = await workspace.api.request(
+				'GET',
+				'/workspaces/{workspace_id}/imports/{batch_id}',
+				{
+					params: { path: { batch_id: batchId } }
+				}
+			);
 			if (controller.signal.aborted || batch?.id !== batchId) return;
 			acceptBatch(refreshed);
 			error = '';
@@ -103,7 +111,7 @@
 		error = '';
 		try {
 			acceptBatch(
-				await apiRequest('POST', '/imports/identifier', {
+				await workspace.api.request('POST', '/workspaces/{workspace_id}/imports/identifier', {
 					body: { identifier, provider }
 				})
 			);
@@ -126,8 +134,10 @@
 			}
 			const uploaded =
 				kind === 'pdfs'
-					? await apiRequest('POST', '/imports/pdfs', { body })
-					: await apiRequest('POST', '/imports/bibliography', { body });
+					? await workspace.api.request('POST', '/workspaces/{workspace_id}/imports/pdfs', { body })
+					: await workspace.api.request('POST', '/workspaces/{workspace_id}/imports/bibliography', {
+							body
+						});
 			acceptBatch(uploaded);
 			if (kind === 'pdfs') {
 				pdfFiles = [];
@@ -161,9 +171,13 @@
 		busy = true;
 		error = '';
 		try {
-			const result = await apiRequest('POST', '/imports/{batch_id}/retry', {
-				params: { path: { batch_id: batch.id } }
-			});
+			const result = await workspace.api.request(
+				'POST',
+				'/workspaces/{workspace_id}/imports/{batch_id}/retry',
+				{
+					params: { path: { batch_id: batch.id } }
+				}
+			);
 			acceptBatch({ ...batch, ...result, errors: [] });
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Unable to retry Import'));
@@ -177,12 +191,12 @@
 		busy = true;
 		error = '';
 		try {
-			await apiRequest('POST', '/imports/{batch_id}/commit', {
+			await workspace.api.request('POST', '/workspaces/{workspace_id}/imports/{batch_id}/commit', {
 				params: { path: { batch_id: batch.id } }
 			});
 			stopPolling();
-			await invalidateLibrary(queryClient);
-			await goto(resolve('/library'));
+			await invalidateLibrary(queryClient, workspaceId);
+			await goto(resolve(workspaceHref(workspaceId, 'library')));
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Unable to commit Import'));
 		} finally {
@@ -195,7 +209,7 @@
 		busy = true;
 		error = '';
 		try {
-			await apiRequest('DELETE', '/imports/{batch_id}', {
+			await workspace.api.request('DELETE', '/workspaces/{workspace_id}/imports/{batch_id}', {
 				params: { path: { batch_id: batch.id } }
 			});
 			stopPolling();
@@ -211,9 +225,11 @@
 		busy = true;
 		error = '';
 		try {
-			const item = await apiRequest('POST', '/items', { body: metadata });
-			await invalidateLibrary(queryClient);
-			await goto(resolve('/(app)/item/[itemId]', { itemId: item.id }));
+			const item = await workspace.api.request('POST', '/workspaces/{workspace_id}/items', {
+				body: metadata
+			});
+			await invalidateLibrary(queryClient, workspaceId);
+			await goto(resolve(workspaceHref(workspaceId, `item/${item.id}`)));
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Unable to create Item'));
 		} finally {

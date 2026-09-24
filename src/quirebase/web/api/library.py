@@ -6,10 +6,10 @@ from fastapi import APIRouter, Query, status
 
 from quirebase.access import Capability, resolve_workspace_context, role_has_capability
 from quirebase.library import (
-    DiscussionWorkspace,
+    ItemDiscussionData,
     ItemMetadata,
-    MetadataWorkspace,
-    WorkspaceSection,
+    ItemMetadataData,
+    ItemSection,
     add_discussion_message,
     add_tag_to_item,
     apply_bulk_item_action,
@@ -19,7 +19,7 @@ from quirebase.library import (
     delete_discussion_message,
     get_item_citation_text_response,
     list_accessible_tags_with_counts,
-    open_item_workspace,
+    open_item_section,
     remove_tag_from_item,
     revise_item_metadata,
     search_library,
@@ -30,6 +30,7 @@ from quirebase.web.api.library_schemas import (
     BulkActionRequest,
     CitationView,
     CrossWorkspaceCopyRequest,
+    CrossWorkspaceCopyView,
     DiscussionMessageView,
     DiscussionRequest,
     ItemDetailView,
@@ -43,7 +44,7 @@ from quirebase.web.api.library_schemas import (
     item_search_view,
 )
 
-router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["Library"])
+router = APIRouter(tags=["Library"])
 
 
 @router.post("/items/bulk", response_model=OkView)
@@ -114,12 +115,10 @@ async def create_library_item(
 async def get_library_item(
     workspace_id: str, item_id: str, user: ApiUser, db: Database
 ) -> ItemDetailView:
-    workspace = await open_item_workspace(
-        db, user, workspace_id, item_id, WorkspaceSection.metadata
-    )
-    if not isinstance(workspace, MetadataWorkspace):  # pragma: no cover
-        raise TypeError("item metadata workspace mismatch")
-    return item_detail_view(workspace)
+    view = await open_item_section(db, user, workspace_id, item_id, ItemSection.metadata)
+    if not isinstance(view, ItemMetadataData):  # pragma: no cover
+        raise TypeError("item metadata section mismatch")
+    return item_detail_view(view)
 
 
 @router.put("/items/{item_id}", response_model=WriteResult)
@@ -134,7 +133,7 @@ async def update_library_item(
 
 @router.post(
     "/items/{item_id}/copy",
-    response_model=WriteResult,
+    response_model=CrossWorkspaceCopyView,
     status_code=status.HTTP_201_CREATED,
 )
 async def copy_library_item(
@@ -143,9 +142,14 @@ async def copy_library_item(
     data: CrossWorkspaceCopyRequest,
     user: ApiUser,
     db: Database,
-) -> WriteResult:
+) -> CrossWorkspaceCopyView:
     copied = await copy_item_to_workspace(db, user, workspace_id, data.target_workspace_id, item_id)
-    return WriteResult(id=copied.id, version=copied.version)
+    return CrossWorkspaceCopyView(
+        source_workspace_id=workspace_id,
+        source_item_id=item_id,
+        target_workspace_id=copied.workspace_id,
+        target_item_id=copied.id,
+    )
 
 
 @router.get(
@@ -224,12 +228,10 @@ async def set_item_tag_selection(
 async def list_discussions(
     workspace_id: str, item_id: str, user: ApiUser, db: Database
 ) -> list[DiscussionMessageView]:
-    workspace = await open_item_workspace(
-        db, user, workspace_id, item_id, WorkspaceSection.discussion
-    )
-    if not isinstance(workspace, DiscussionWorkspace):  # pragma: no cover
-        raise TypeError("item discussion workspace mismatch")
-    return discussion_message_views(workspace)
+    view = await open_item_section(db, user, workspace_id, item_id, ItemSection.discussion)
+    if not isinstance(view, ItemDiscussionData):  # pragma: no cover
+        raise TypeError("item discussion section mismatch")
+    return discussion_message_views(view)
 
 
 @router.post(

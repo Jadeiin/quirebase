@@ -12,8 +12,10 @@ class ProjectSummaryView(BaseModel):
     name: str
     item_count: int
     state: str
-    visibility: str
+    visibility: Literal["workspace", "open", "managed"]
+    is_member: bool
     description: str = ""
+    allowed_actions: list[str]
 
 
 class ProjectMemberView(BaseModel):
@@ -26,14 +28,20 @@ class ProjectDetailView(ProjectSummaryView):
     items: list[ItemSearchView]
 
 
-def project_detail_view(workspace: Any) -> ProjectDetailView:
+def project_detail_view(
+    workspace: Any,
+    *,
+    allowed_actions: list[str],
+) -> ProjectDetailView:
     return ProjectDetailView(
         id=workspace.project.id,
         name=workspace.project.name,
         item_count=len(workspace.items),
         state=workspace.project.state.value,
         visibility=workspace.project.visibility.value,
+        is_member=workspace.is_member,
         description=workspace.project.description,
+        allowed_actions=allowed_actions,
         members=[
             ProjectMemberView(user_id=member.user.id, username=member.user.username)
             for member in workspace.members
@@ -44,18 +52,18 @@ def project_detail_view(workspace: Any) -> ProjectDetailView:
 
 class ProjectCreateRequest(BaseModel):
     name: str = Field(max_length=240)
-    visibility: Literal["workspace", "members"] = "workspace"
+    visibility: Literal["workspace", "open", "managed"] = "workspace"
     description: str = Field(default="", max_length=2000)
 
 
 class ProjectSettingsRequest(BaseModel):
     name: str = Field(max_length=240)
-    visibility: Literal["workspace", "members"]
+    visibility: Literal["workspace", "open", "managed"]
     description: str = Field(max_length=2000)
 
 
 class ProjectVisibilityRequest(BaseModel):
-    visibility: Literal["workspace", "members"]
+    visibility: Literal["workspace", "open", "managed"]
 
 
 class ProjectDescriptionRequest(BaseModel):

@@ -1,7 +1,7 @@
 # Item UI/UX 改进规划
 
 本文把条目（Item）详情页、引用导出、文件操作和上游元数据同步视为一个
-“Item workspace”体验来规划。参考 `~/Code/i-librarian-free` 的可发现操作、
+“Item detail”体验来规划。参考 `~/Code/i-librarian-free` 的可发现操作、
 导出对话框、剪贴板和摘要卡片，但沿用 Quirebase 已有的 Item、Document、
 File Revision、Attachment、Annotation、Tag 和 Citation Style 领域语言。
 
@@ -52,7 +52,7 @@ File Revision、Attachment、Annotation、Tag 和 Citation Style 领域语言。
 ### 本地导航
 
 保留现有 `Overview / Metadata / Files / Organize / Notes and annotations /
-Discussion` 六个 workspace section；在 `Overview` 只放“判断和行动”内容。
+Discussion` 六个 Item section；在 `Overview` 只放“判断和行动”内容。
 导航项显示计数徽标（例如 `Files (2)`、`Notes & annotations (5)`、`Discussion (1)`），
 计数为 0 时仍保留入口，避免用户猜测功能是否存在。
 

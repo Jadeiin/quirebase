@@ -19,6 +19,8 @@ from quirebase.projects.loaders import (
 from quirebase.projects.members import (
     ProjectMemberConflict,
     add_project_member,
+    join_project,
+    leave_project,
     remove_project_member,
 )
 from quirebase.projects.workspaces import (
@@ -27,7 +29,8 @@ from quirebase.projects.workspaces import (
     add_item_to_project,
     add_items_to_project,
     create_project,
-    list_user_projects,
+    list_joinable_projects,
+    list_workspace_projects,
     open_project_workspace,
     remove_item_from_project,
 )
@@ -44,7 +47,10 @@ __all__ = [
     "get_project",
     "get_project_for_update",
     "get_project_item",
-    "list_user_projects",
+    "join_project",
+    "leave_project",
+    "list_joinable_projects",
+    "list_workspace_projects",
     "open_project_workspace",
     "remove_item_from_project",
     "remove_project_member",

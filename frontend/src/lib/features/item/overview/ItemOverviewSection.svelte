@@ -1,18 +1,21 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import type { WorkspaceView } from '$lib/api/client';
+	import type { ItemOverviewView } from '$lib/api/client';
 	import Panel from '$lib/design/Panel.svelte';
 	import RichText from '$lib/design/RichText.svelte';
 	import { t } from '$lib/i18n';
 	import type { ItemDetail } from '../types';
+	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
+	import { workspaceHref } from '$lib/workspaces/href';
 
 	let { itemId, data, details } = $props<{
 		itemId: string;
-		data: WorkspaceView;
+		data: ItemOverviewView;
 		details?: ItemDetail;
 	}>();
 
 	let imageLoadFailed = $state(false);
+	const { workspaceId } = getWorkspaceContext();
 
 	function isSafeExternalUrl(value: string): boolean {
 		try {
@@ -47,10 +50,10 @@
 		<Panel padding="none">
 			<header class="flex items-center justify-between border-b border-surface-300-700 px-5 py-4">
 				<h2 class="m-0 text-lg">{$t('Publication details')}</h2>
-				{#if data.permissions.edit}
+				{#if data.allowed_actions.edit}
 					<a
 						class="text-sm font-semibold text-primary-700-300 no-underline"
-						href={resolve('/(app)/item/[itemId]/(workspace)/metadata', { itemId })}
+						href={resolve(workspaceHref(workspaceId, `item/${itemId}/metadata`))}
 						>{$t('Edit metadata')}</a
 					>
 				{/if}
@@ -128,16 +131,13 @@
 				<a
 					class="group block overflow-hidden rounded-lg bg-surface-100-900 transition hover:opacity-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
 					href={data.thumbnail.source_kind === 'pdf_thumbnail'
-						? resolve('/(app)/item/[itemId]/pdf/[revisionId]', {
-								itemId,
-								revisionId: data.thumbnail.source_id
-							})
-						: resolve('/(app)/item/[itemId]/(workspace)/files', { itemId })}
+						? resolve(workspaceHref(workspaceId, `item/${itemId}/pdf/${data.thumbnail.source_id}`))
+						: resolve(workspaceHref(workspaceId, `item/${itemId}/files`))}
 					aria-label={$t('Item thumbnail')}
 				>
 					<img
 						class="block max-h-80 w-full rounded-md bg-white object-contain transition-transform duration-200 group-hover:scale-[1.01] dark:bg-surface-950"
-						src={`/api/v1/items/${encodeURIComponent(itemId)}/thumbnail?source=${encodeURIComponent(data.thumbnail.source_id)}`}
+						src={`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/items/${encodeURIComponent(itemId)}/thumbnail?source=${encodeURIComponent(data.thumbnail.source_id)}`}
 						alt={$t('Item thumbnail')}
 						loading="lazy"
 						onerror={() => {
@@ -204,12 +204,8 @@
 			<h2 class="m-0 mb-4 text-lg">{$t('Record')}</h2>
 			<dl class="grid grid-cols-1 gap-3 text-sm">
 				<div>
-					<dt class="text-surface-600-400">{$t('Owner')}</dt>
-					<dd class="m-0">{data.owner.username}</dd>
-				</div>
-				<div>
 					<dt class="text-surface-600-400">{$t('Permissions')}</dt>
-					<dd class="m-0">{data.permissions.edit ? $t('Can edit') : $t('Read only')}</dd>
+					<dd class="m-0">{data.allowed_actions.edit ? $t('Can edit') : $t('Read only')}</dd>
 				</div>
 				<div>
 					<dt class="text-surface-600-400">{$t('Citation key')}</dt>

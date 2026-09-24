@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import func, select
+from sqlalchemy import delete
 
 from quirebase.access import (
     Capability,
+    require,
     require_project_context,
     require_workspace_capability,
 )
@@ -17,13 +18,11 @@ from quirebase.models import (
     ProjectState,
     ProjectVisibility,
     User,
-    WorkspaceMember,
-    WorkspaceMemberState,
 )
 
 from ._locking import (
     lock_project_delete,
-    lock_project_membership_workspace,
+    lock_project_participation_workspace,
     lock_project_root,
 )
 
@@ -68,36 +67,38 @@ async def update_project_settings(
         normalized_visibility = ProjectVisibility(visibility)
     except ValueError as error:
         raise ValidationFailure("invalid Project visibility") from error
-    await lock_project_membership_workspace(db, workspace_id)
+    await lock_project_participation_workspace(db, workspace_id)
     project = await lock_project_root(db, project_id, workspace_id, state=ProjectState.active)
     context = await require_project_context(
         db, user, workspace_id, project_id, Capability.projects_manage
     )
-    if normalized_visibility is ProjectVisibility.members:
-        count = await db.scalar(
-            select(func.count(ProjectMember.id))
-            .join(User, User.id == ProjectMember.user_id)
-            .join(
-                WorkspaceMember,
-                (WorkspaceMember.workspace_id == ProjectMember.workspace_id)
-                & (WorkspaceMember.user_id == ProjectMember.user_id),
-            )
-            .where(
+    visibility_changed = normalized_visibility is not project.visibility
+    if visibility_changed and (
+        project.visibility is ProjectVisibility.managed
+        or normalized_visibility is ProjectVisibility.managed
+    ):
+        require(context.workspace, Capability.projects_members_manage)
+    if normalized_visibility is ProjectVisibility.workspace or (
+        visibility_changed and project.visibility is ProjectVisibility.workspace
+    ):
+        await db.execute(
+            delete(ProjectMember).where(
                 ProjectMember.workspace_id == workspace_id,
                 ProjectMember.project_id == project_id,
-                User.active.is_(True),
-                WorkspaceMember.state == WorkspaceMemberState.active,
-                WorkspaceMember.terminated_at.is_(None),
             )
         )
-        if not count:
-            db.add(
-                ProjectMember(
-                    workspace_id=workspace_id,
-                    project_id=project_id,
-                    user_id=user.id,
-                )
+    if (
+        visibility_changed
+        and normalized_visibility is ProjectVisibility.open
+        and project.visibility is ProjectVisibility.workspace
+    ):
+        db.add(
+            ProjectMember(
+                workspace_id=workspace_id,
+                project_id=project_id,
+                user_id=user.id,
             )
+        )
     old = {
         "name": project.name,
         "description": project.description,
@@ -132,7 +133,7 @@ async def update_project_settings(
 async def rename_project(
     db: AsyncSession, user: User, workspace_id: str, project_id: str, name: str
 ) -> Project:
-    await lock_project_membership_workspace(db, workspace_id)
+    await lock_project_participation_workspace(db, workspace_id)
     context = await require_project_context(
         db, user, workspace_id, project_id, Capability.projects_manage
     )
@@ -151,7 +152,7 @@ async def rename_project(
 async def update_project_description(
     db: AsyncSession, user: User, workspace_id: str, project_id: str, description: str
 ) -> Project:
-    await lock_project_membership_workspace(db, workspace_id)
+    await lock_project_participation_workspace(db, workspace_id)
     context = await require_project_context(
         db, user, workspace_id, project_id, Capability.projects_manage
     )
@@ -174,7 +175,7 @@ async def set_project_visibility(
     project_id: str,
     visibility: ProjectVisibility | str,
 ) -> Project:
-    await lock_project_membership_workspace(db, workspace_id)
+    await lock_project_participation_workspace(db, workspace_id)
     context = await require_project_context(
         db, user, workspace_id, project_id, Capability.projects_manage
     )
@@ -209,16 +210,6 @@ async def set_project_state(
     workspace = await require_workspace_capability(
         db, user, workspace_id, Capability.projects_manage
     )
-    if project.visibility is ProjectVisibility.members:
-        member = await db.scalar(
-            select(ProjectMember.id).where(
-                ProjectMember.workspace_id == workspace_id,
-                ProjectMember.project_id == project_id,
-                ProjectMember.user_id == user.id,
-            )
-        )
-        if member is None:
-            raise ResourceUnavailable("Project not found")
     project.state = desired
     record_event(
         db,
@@ -242,11 +233,10 @@ async def delete_project(
     project_id: str,
     confirmation: str,
 ) -> None:
-    await require_workspace_capability(db, user, workspace_id, Capability.projects_delete)
+    context = await require_workspace_capability(db, user, workspace_id, Capability.projects_delete)
     project = await lock_project_delete(db, project_id, workspace_id)
-    context = await require_project_context(
-        db, user, workspace_id, project_id, Capability.projects_delete
-    )
+    if project.workspace_id != workspace_id or project.state is ProjectState.deleted:
+        raise ResourceUnavailable("Project not found")
     if confirmation.strip() != project.name:
         raise ValidationFailure("Project name confirmation does not match")
     project.state = ProjectState.deleted
@@ -259,7 +249,7 @@ async def delete_project(
         detail={"name": project.name},
         workspace_id=workspace_id,
         project_id=project_id,
-        authorization_role=context.workspace.role.value,
+        authorization_role=context.role.value,
         authorization_capability=Capability.projects_delete.value,
     )
     await db.commit()

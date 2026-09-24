@@ -16,14 +16,14 @@ from quirebase.core.crypto import token_hash
 from quirebase.core.errors import ResourceNotFound, WorkspaceMembershipRequired
 from quirebase.core.storage import ObjectSuffix, get_object_store
 from quirebase.library import (
-    AnnotationsWorkspace,
-    DiscussionWorkspace,
-    FilesWorkspace,
-    MetadataWorkspace,
-    OrganizeWorkspace,
-    SummaryWorkspace,
-    WorkspaceSection,
-    open_item_workspace,
+    ItemAnnotationsData,
+    ItemDiscussionData,
+    ItemFilesData,
+    ItemMetadataData,
+    ItemOrganizationData,
+    ItemOverviewData,
+    ItemSection,
+    open_item_section,
 )
 from quirebase.models import (
     Attachment,
@@ -38,7 +38,6 @@ from quirebase.models import (
     PdfAnnotation,
     Project,
     ProjectItem,
-    ProjectMember,
     Tag,
     User,
     WorkspaceMember,
@@ -48,23 +47,23 @@ from quirebase.web.api import documents as documents_api
 
 
 @pytest.mark.anyio
-async def test_open_summary_workspace_returns_a_typed_view_and_records_reading(async_db):
+async def test_open_item_overview_returns_a_typed_view_and_records_reading(async_db):
     db = async_db
-    user = User(username="workspace-reader", password_hash="unused")
+    user = User(username="section-reader", password_hash="unused")
     db.add(user)
     await db.flush()
     await provision_initial_workspace(db, user)
     item = Item(
-        workspace_id=fixture_workspace_id(user), title="Typed workspace", created_by=user.id
+        workspace_id=fixture_workspace_id(user), title="Typed Item section", created_by=user.id
     )
     db.add(item)
     await db.commit()
 
-    view = await open_item_workspace(
-        db, user, fixture_workspace_id(user), item.id, WorkspaceSection.summary
+    view = await open_item_section(
+        db, user, fixture_workspace_id(user), item.id, ItemSection.overview
     )
 
-    assert isinstance(view, SummaryWorkspace)
+    assert isinstance(view, ItemOverviewData)
     assert view.item.id == item.id
     assert view.can_edit is True
     assert view.can_delete is True
@@ -73,13 +72,13 @@ async def test_open_summary_workspace_returns_a_typed_view_and_records_reading(a
     assert await db.get(ItemRead, (user.id, item.id)) is not None
 
 
-def test_workspace_section_rejects_unknown_names_before_query_branching():
+def test_item_section_rejects_unknown_names_before_query_branching():
     with pytest.raises(ResourceNotFound, match="unknown item section"):
-        WorkspaceSection.parse("unknown")
+        ItemSection.parse("unknown")
 
 
 @pytest.mark.anyio
-async def test_open_item_workspace_returns_a_section_specific_view(async_db):
+async def test_open_item_sections_return_section_specific_views(async_db):
     db = async_db
     user = User(username="section-reader", password_hash="unused")
     db.add(user)
@@ -90,16 +89,16 @@ async def test_open_item_workspace_returns_a_section_specific_view(async_db):
     await db.commit()
 
     expected_types = {
-        WorkspaceSection.summary: SummaryWorkspace,
-        WorkspaceSection.metadata: MetadataWorkspace,
-        WorkspaceSection.files: FilesWorkspace,
-        WorkspaceSection.organize: OrganizeWorkspace,
-        WorkspaceSection.annotations: AnnotationsWorkspace,
-        WorkspaceSection.discussion: DiscussionWorkspace,
+        ItemSection.overview: ItemOverviewData,
+        ItemSection.metadata: ItemMetadataData,
+        ItemSection.files: ItemFilesData,
+        ItemSection.organize: ItemOrganizationData,
+        ItemSection.annotations: ItemAnnotationsData,
+        ItemSection.discussion: ItemDiscussionData,
     }
     for section, expected_type in expected_types.items():
         assert isinstance(
-            await open_item_workspace(db, user, fixture_workspace_id(user), item.id, section),
+            await open_item_section(db, user, fixture_workspace_id(user), item.id, section),
             expected_type,
         )
 
@@ -107,29 +106,29 @@ async def test_open_item_workspace_returns_a_section_specific_view(async_db):
 @pytest.mark.anyio
 async def test_inaccessible_item_never_records_reading(async_db):
     db = async_db
-    owner = User(username="workspace-owner", password_hash="unused")
-    outsider = User(username="workspace-outsider", password_hash="unused")
+    owner = User(username="section-owner", password_hash="unused")
+    outsider = User(username="section-outsider", password_hash="unused")
     db.add_all([owner, outsider])
     await db.flush()
     await provision_initial_workspace(db, owner)
     await provision_initial_workspace(db, outsider)
     item = Item(
-        workspace_id=fixture_workspace_id(owner), title="Private workspace", created_by=owner.id
+        workspace_id=fixture_workspace_id(owner), title="Private Item section", created_by=owner.id
     )
     db.add(item)
     await db.commit()
     outsider_id, item_id = outsider.id, item.id
 
     with pytest.raises(WorkspaceMembershipRequired):
-        await open_item_workspace(
-            db, outsider, fixture_workspace_id(owner), item_id, WorkspaceSection.summary
+        await open_item_section(
+            db, outsider, fixture_workspace_id(owner), item_id, ItemSection.overview
         )
 
     assert await db.get(ItemRead, (outsider_id, item_id)) is None
 
 
 @pytest.mark.anyio
-async def test_item_workspace_separates_page_responsibilities(
+async def test_item_sections_separate_page_responsibilities(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
     db = async_db
@@ -155,7 +154,7 @@ async def test_item_workspace_separates_page_responsibilities(
         ])
         await db.commit()
         workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
-        summary = await client.get(f"{workspace_base}/items/{item.id}/workspace")
+        summary = await client.get(f"{workspace_base}/items/{item.id}/overview")
         assert summary.status_code == 200
         assert summary.json()["latest_revision"]["id"] == revision.id
         assert summary.json()["thumbnail"] is None
@@ -279,7 +278,7 @@ async def test_project_editor_can_edit_item_without_seeing_permanent_delete(
     owner_client, item, _revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
-    editor = User(username="workspace-editor", password_hash="unused")
+    editor = User(username="section-editor", password_hash="unused")
     project = Project(
         workspace_id=item.workspace_id,
         name="Shared editing",
@@ -300,11 +299,6 @@ async def test_project_editor_can_edit_item_without_seeing_permanent_delete(
             item_id=item.id,
             added_by=item.created_by,
         ),
-        ProjectMember(
-            workspace_id=item.workspace_id,
-            project_id=project.id,
-            user_id=editor.id,
-        ),
         LoginSession(
             token_hash=token_hash("editor-session"),
             user_id=editor.id,
@@ -315,18 +309,16 @@ async def test_project_editor_can_edit_item_without_seeing_permanent_delete(
 
     try:
         workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
-        owner_page = await owner_client.get(f"{workspace_base}/items/{item.id}/workspace")
-        assert owner_page.json()["permissions"] == {"edit": True, "delete": True}
+        owner_page = await owner_client.get(f"{workspace_base}/items/{item.id}/overview")
+        assert owner_page.json()["allowed_actions"] == {"edit": True, "delete": True}
 
         editor_client = owner_client
         editor_client.cookies.set(get_settings().session_cookie, "editor-session")
-        editor_page = await editor_client.get(f"{workspace_base}/items/{item.id}/workspace")
+        editor_page = await editor_client.get(f"{workspace_base}/items/{item.id}/overview")
         assert editor_page.status_code == 200
-        assert editor_page.json()["permissions"] == {"edit": True, "delete": False}
+        assert editor_page.json()["allowed_actions"] == {"edit": True, "delete": False}
 
-        view = await open_item_workspace(
-            db, editor, item.workspace_id, item.id, WorkspaceSection.summary
-        )
+        view = await open_item_section(db, editor, item.workspace_id, item.id, ItemSection.overview)
         assert view.can_edit is True
         assert view.can_delete is False
     finally:
@@ -351,11 +343,6 @@ async def test_item_citation_export_and_project_removal(
         db.add(project)
         await db.flush()
         db.add_all([
-            ProjectMember(
-                workspace_id=item.workspace_id,
-                project_id=project.id,
-                user_id=item.created_by,
-            ),
             ProjectItem(
                 workspace_id=item.workspace_id,
                 project_id=project.id,
@@ -476,9 +463,7 @@ async def test_item_summary_reports_exact_activity_counts(
         ])
         await db.commit()
 
-        data = await open_item_workspace(
-            db, user, item.workspace_id, item.id, WorkspaceSection.summary
-        )
+        data = await open_item_section(db, user, item.workspace_id, item.id, ItemSection.overview)
 
         assert data.revision_count == 1
         assert data.attachment_count == 1
@@ -509,7 +494,7 @@ async def test_item_header_keeps_pdf_link_on_lightweight_sections(
 
 
 @pytest.mark.anyio
-async def test_item_workspace_projection_includes_thumbnail_metadata(
+async def test_item_overview_projection_includes_thumbnail_metadata(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
     db = async_db
@@ -518,7 +503,7 @@ async def test_item_workspace_projection_includes_thumbnail_metadata(
     )
     try:
         workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
-        response = await client.get(f"{workspace_base}/items/{item.id}/workspace")
+        response = await client.get(f"{workspace_base}/items/{item.id}/overview")
         assert response.status_code == 200
         assert response.json()["thumbnail"] is None
 
@@ -529,7 +514,7 @@ async def test_item_workspace_projection_includes_thumbnail_metadata(
         revision.thumbnail_object_key = thumb.key
         await db.commit()
 
-        response = await client.get(f"{workspace_base}/items/{item.id}/workspace")
+        response = await client.get(f"{workspace_base}/items/{item.id}/overview")
         assert response.status_code == 200
         assert response.json()["thumbnail"] == {
             "source_kind": "pdf_thumbnail",
@@ -552,7 +537,7 @@ async def test_item_workspace_projection_includes_thumbnail_metadata(
         db.add(graphical_abstract)
         await db.commit()
 
-        response = await client.get(f"{workspace_base}/items/{item.id}/workspace")
+        response = await client.get(f"{workspace_base}/items/{item.id}/overview")
         assert response.status_code == 200
         assert response.json()["thumbnail"] == {
             "source_kind": "graphical_abstract",

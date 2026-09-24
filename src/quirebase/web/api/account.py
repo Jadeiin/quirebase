@@ -32,7 +32,7 @@ from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.session_schemas import LoginSessionView
 from quirebase.web.errors import ApiHTTPException
 
-router = APIRouter(tags=["HTTP API"])
+router = APIRouter(tags=["Accounts and invitations"])
 
 
 @router.get("/invitations/{token}", response_model=InvitationDetailsView)

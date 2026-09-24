@@ -7,7 +7,9 @@
 	import { domainLabel } from '$lib/domain-labels';
 	import { t } from '$lib/i18n';
 	import { navigation, themeOptions } from './navigation';
+	import { workspaceHref } from '$lib/workspaces/href';
 	import type { ThemePreference } from '$lib/theme';
+	import WorkspaceMenu from './WorkspaceMenu.svelte';
 
 	let {
 		user,
@@ -17,7 +19,8 @@
 		themePreference,
 		onThemeChange,
 		actionBusy,
-		onLogout
+		onLogout,
+		workspaceId
 	} = $props<{
 		user?: components['schemas']['SessionUserView'] | null;
 		collapsed: boolean;
@@ -27,21 +30,21 @@
 		onThemeChange: (preference: ThemePreference) => void;
 		actionBusy: boolean;
 		onLogout: () => void;
+		workspaceId?: string;
 	}>();
+	const navItems = $derived(
+		navigation.map(
+			([section, label, icon]) =>
+				[workspaceId ? workspaceHref(workspaceId, section) : '/workspace', label, icon] as const
+		)
+	);
 </script>
 
 <aside
 	class={`sticky top-0 hidden h-screen flex-col gap-4 bg-primary-950 py-5 text-primary-50 transition-[padding] md:flex ${collapsed ? 'px-2.5' : 'px-3.5'}`}
 >
 	<div class="flex items-center gap-1 pb-3">
-		<a
-			class={`flex min-w-0 flex-1 items-center gap-3 text-xl font-extrabold tracking-tight text-white no-underline ${collapsed ? 'justify-center' : 'px-2'}`}
-			href={resolve('/')}
-			><span
-				class="grid size-8 shrink-0 grid-cols-1 place-items-center rounded-xl bg-primary-50 font-serif text-xl text-primary-800"
-				>Q</span
-			>{#if !collapsed}<span>Quirebase</span>{/if}</a
-		>
+		<WorkspaceMenu {workspaceId} compact={collapsed} />
 		{#if !collapsed}<button
 				type="button"
 				class="grid size-8 shrink-0 cursor-pointer grid-cols-1 place-items-center rounded-md border-0 bg-transparent text-surface-400 hover:bg-white/10 hover:text-white"
@@ -54,18 +57,15 @@
 			class="mx-auto grid size-8 cursor-pointer grid-cols-1 place-items-center rounded-md border-0 bg-white/7 text-surface-400 hover:bg-white/12 hover:text-white"
 			aria-label={$t('Expand sidebar')}
 			onclick={onToggle}><Icon name="chevron-right" size={16} /></button
-		>{:else}<p
-			class="mx-3 mt-1 text-[0.68rem] font-bold tracking-[0.11em] text-surface-400 uppercase"
 		>
-			{$t('Workspace')}
-		</p>{/if}
+	{/if}
 	<nav class="grid grid-cols-1 gap-1" aria-label={$t('Main navigation')}>
-		{#each navigation as [route, label, icon] (route)}
+		{#each navItems as [route, label, icon] (label)}
 			<a
 				class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-surface-400 no-underline transition-colors hover:bg-white/9 hover:text-white aria-[current=page]:bg-white/10 aria-[current=page]:text-white"
 				href={resolve(route)}
 				title={collapsed ? $t(label) : undefined}
-				aria-current={routeIsActive(route) ? 'page' : undefined}
+				aria-current={workspaceId && routeIsActive(route) ? 'page' : undefined}
 				><Icon name={icon} />{#if !collapsed}<span>{$t(label)}</span>{/if}</a
 			>
 		{/each}

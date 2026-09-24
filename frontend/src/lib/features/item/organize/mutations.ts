@@ -1,9 +1,10 @@
 import { mutationOptions, type QueryClient } from '@tanstack/svelte-query';
-import { apiRequest } from '$lib/api/client';
+import { createWorkspaceApi } from '$lib/api/client';
 import { invalidateItemOrganize } from '$lib/query/invalidation';
+import { workspaceKeys } from '$lib/workspaces/keys';
 import type { OrganizeView } from '../types';
 
-export type ProjectMembershipMutation = {
+export type ProjectAssignmentMutation = {
 	project: OrganizeView['projects'][number];
 };
 
@@ -23,41 +24,60 @@ export type SuggestedTagMutation = {
 
 type TagTracker = (workflowId: string) => Promise<unknown>;
 
-export function projectMembershipMutationOptions(itemId: string, queryClient: QueryClient) {
+export function projectAssignmentMutationOptions(
+	workspaceId: string,
+	itemId: string,
+	queryClient: QueryClient
+) {
+	const api = createWorkspaceApi(workspaceId);
 	return mutationOptions({
-		mutationKey: ['item-project-membership', itemId],
-		mutationFn: ({ project }: ProjectMembershipMutation) =>
+		mutationKey: workspaceKeys.mutation(workspaceId, 'item-project-assignment', itemId),
+		mutationFn: ({ project }: ProjectAssignmentMutation) =>
 			project.assigned
-				? apiRequest('DELETE', '/projects/{project_id}/items/{item_id}', {
-						params: { path: { project_id: project.id, item_id: itemId } }
-					})
-				: apiRequest('PUT', '/projects/{project_id}/items/{item_id}', {
+				? api.request(
+						'DELETE',
+						'/workspaces/{workspace_id}/projects/{project_id}/items/{item_id}',
+						{
+							params: { path: { project_id: project.id, item_id: itemId } }
+						}
+					)
+				: api.request('PUT', '/workspaces/{workspace_id}/projects/{project_id}/items/{item_id}', {
 						params: { path: { project_id: project.id, item_id: itemId } }
 					}),
-		onSuccess: () => invalidateItemOrganize(queryClient, itemId)
+		onSuccess: () => invalidateItemOrganize(queryClient, workspaceId, itemId)
 	});
 }
 
-export function addTagMutationOptions(itemId: string, queryClient: QueryClient) {
+export function addTagMutationOptions(
+	workspaceId: string,
+	itemId: string,
+	queryClient: QueryClient
+) {
+	const api = createWorkspaceApi(workspaceId);
 	return mutationOptions({
-		mutationKey: ['item-add-tag', itemId],
+		mutationKey: workspaceKeys.mutation(workspaceId, 'item-add-tag', itemId),
 		mutationFn: ({ name }: AddTagMutation) =>
-			apiRequest('POST', '/items/{item_id}/tags', {
+			api.request('POST', '/workspaces/{workspace_id}/items/{item_id}/tags', {
 				params: { path: { item_id: itemId } },
 				body: { name }
 			}),
 		onSuccess: async (_saved, { form }) => {
 			form.reset();
-			await invalidateItemOrganize(queryClient, itemId);
+			await invalidateItemOrganize(queryClient, workspaceId, itemId);
 		}
 	});
 }
 
-export function toggleTagMutationOptions(itemId: string, queryClient: QueryClient) {
+export function toggleTagMutationOptions(
+	workspaceId: string,
+	itemId: string,
+	queryClient: QueryClient
+) {
+	const api = createWorkspaceApi(workspaceId);
 	return mutationOptions({
-		mutationKey: ['item-toggle-tag', itemId],
+		mutationKey: workspaceKeys.mutation(workspaceId, 'item-toggle-tag', itemId),
 		mutationFn: ({ tagId, assigned }: ToggleTagMutation) =>
-			apiRequest('PUT', '/items/{item_id}/tags', {
+			api.request('PUT', '/workspaces/{workspace_id}/items/{item_id}/tags', {
 				params: { path: { item_id: itemId } },
 				body: {
 					add_tag_ids: assigned ? [] : [tagId],
@@ -65,35 +85,46 @@ export function toggleTagMutationOptions(itemId: string, queryClient: QueryClien
 					new_names: []
 				}
 			}),
-		onSuccess: () => invalidateItemOrganize(queryClient, itemId)
+		onSuccess: () => invalidateItemOrganize(queryClient, workspaceId, itemId)
 	});
 }
 
-export function suggestedTagMutationOptions(itemId: string, queryClient: QueryClient) {
+export function suggestedTagMutationOptions(
+	workspaceId: string,
+	itemId: string,
+	queryClient: QueryClient
+) {
+	const api = createWorkspaceApi(workspaceId);
 	return mutationOptions({
-		mutationKey: ['item-suggested-tag', itemId],
+		mutationKey: workspaceKeys.mutation(workspaceId, 'item-suggested-tag', itemId),
 		mutationFn: ({ name }: SuggestedTagMutation) =>
-			apiRequest('PUT', '/items/{item_id}/tags', {
+			api.request('PUT', '/workspaces/{workspace_id}/items/{item_id}/tags', {
 				params: { path: { item_id: itemId } },
 				body: { add_tag_ids: [], remove_tag_ids: [], new_names: [name] }
 			}),
-		onSuccess: () => invalidateItemOrganize(queryClient, itemId)
+		onSuccess: () => invalidateItemOrganize(queryClient, workspaceId, itemId)
 	});
 }
 
 export function tagRecommendationsMutationOptions(
+	workspaceId: string,
 	itemId: string,
 	queryClient: QueryClient,
 	trackRecommendations: TagTracker
 ) {
+	const api = createWorkspaceApi(workspaceId);
 	return mutationOptions({
-		mutationKey: ['item-tag-recommendations', itemId],
+		mutationKey: workspaceKeys.mutation(workspaceId, 'item-tag-recommendations', itemId),
 		mutationFn: async () => {
-			const workflow = await apiRequest('POST', '/items/{item_id}/tag-recommendations', {
-				params: { path: { item_id: itemId } }
-			});
+			const workflow = await api.request(
+				'POST',
+				'/workspaces/{workspace_id}/items/{item_id}/tag-recommendations',
+				{
+					params: { path: { item_id: itemId } }
+				}
+			);
 			await trackRecommendations(workflow.id);
 		},
-		onSuccess: () => invalidateItemOrganize(queryClient, itemId)
+		onSuccess: () => invalidateItemOrganize(queryClient, workspaceId, itemId)
 	});
 }

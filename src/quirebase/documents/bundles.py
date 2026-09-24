@@ -17,7 +17,7 @@ import stream_zip
 from inquiro.richtext import convert_rich_text
 from sqlalchemy import and_, or_, select
 
-from quirebase.access import Capability
+from quirebase.access import Capability, require_workspace_capability, visible_project_ids_query
 from quirebase.access.documents import require_revision
 from quirebase.access.items import require_accessible_items
 from quirebase.audit import record_event
@@ -32,11 +32,7 @@ from quirebase.models import (
     FileRevision,
     Item,
     PdfAnnotation,
-    Project,
     ProjectItem,
-    ProjectMember,
-    ProjectState,
-    ProjectVisibility,
     User,
 )
 
@@ -174,18 +170,8 @@ async def _own_annotations(
     db: AsyncSession, user: User, revision: FileRevision
 ) -> list[PdfAnnotation]:
     workspace_id = revision.workspace_id
-    participating_projects = select(ProjectMember.project_id).where(
-        ProjectMember.workspace_id == workspace_id,
-        ProjectMember.user_id == user.id,
-    )
-    visible_projects = select(Project.id).where(
-        Project.workspace_id == workspace_id,
-        Project.state != ProjectState.deleted,
-        or_(
-            Project.visibility == ProjectVisibility.workspace,
-            Project.id.in_(participating_projects),
-        ),
-    )
+    context = await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    visible_projects = visible_project_ids_query(context)
     visible_project_items = select(ProjectItem.id).where(
         ProjectItem.workspace_id == workspace_id,
         ProjectItem.item_id == revision.item_id,

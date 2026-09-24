@@ -7,25 +7,27 @@ test('PDF reader uses the built-in EmbedPDF viewer with Quirebase annotations', 
 	await page.setViewportSize({ width: 1280, height: 800 });
 	await mockSession(page);
 	const annotationRequests: string[] = [];
-	await page.route('**/api/v1/items/item-1/revisions/revision-1/viewer', (route) =>
-		route.fulfill({
-			json: {
-				item: { id: 'item-1', title_html: 'Reader item', version: 1 },
-				editable: true,
-				annotation_author: 'reader',
-				revision: {
-					id: 'revision-1',
-					original_name: 'paper.pdf',
-					page_count: 1,
-					processing_state: 'ready',
-					page_geometry: [[0, 0, 300, 400]],
-					content_url: '/api/v1/items/item-1/revisions/revision-1/content'
-				},
-				projects: [{ id: 'project-1', name: 'Shared' }]
-			}
-		})
+	await page.route(
+		'**/api/v1/workspaces/workspace-1/items/item-1/revisions/revision-1/viewer',
+		(route) =>
+			route.fulfill({
+				json: {
+					item: { id: 'item-1', title_html: 'Reader item', version: 1 },
+					editable: true,
+					annotation_author: 'reader',
+					revision: {
+						id: 'revision-1',
+						original_name: 'paper.pdf',
+						page_count: 1,
+						processing_state: 'ready',
+						page_geometry: [[0, 0, 300, 400]],
+						content_url: '/api/v1/workspaces/workspace-1/items/item-1/revisions/revision-1/content'
+					},
+					projects: [{ id: 'project-1', name: 'Shared' }]
+				}
+			})
 	);
-	await page.route('**/api/v1/items/item-1/annotations**', (route) => {
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/annotations**', (route) => {
 		annotationRequests.push(new URL(route.request().url()).search);
 		if (route.request().method() === 'GET') {
 			return route.fulfill({
@@ -64,11 +66,12 @@ test('PDF reader uses the built-in EmbedPDF viewer with Quirebase annotations', 
 		}
 		return route.fulfill({ json: { ok: true } });
 	});
-	await page.route('**/api/v1/items/item-1/revisions/revision-1/content', (route) =>
-		route.fulfill({ contentType: 'application/pdf', body: minimalPdf() })
+	await page.route(
+		'**/api/v1/workspaces/workspace-1/items/item-1/revisions/revision-1/content',
+		(route) => route.fulfill({ contentType: 'application/pdf', body: minimalPdf() })
 	);
 
-	await page.goto('/item/item-1/pdf/revision-1');
+	await page.goto('/workspace/workspace-1/item/item-1/pdf/revision-1');
 	await expect(page.getByRole('button', { name: 'Document Menu' })).toBeVisible();
 	await expect(page.locator('[data-epdf-i="comment-button"]')).toBeAttached();
 	await expect(page.getByText('1 annotation loaded')).toBeVisible();
@@ -88,34 +91,38 @@ test.describe('touch-first PDF reader', () => {
 
 	test('matches the built-in viewer annotation modes', async ({ page }) => {
 		await mockSession(page);
-		await page.route('**/api/v1/items/item-1/revisions/revision-1/viewer', (route) =>
-			route.fulfill({
-				json: {
-					item: { id: 'item-1', title_html: 'Reader item', version: 1 },
-					editable: true,
-					annotation_author: 'reader',
-					revision: {
-						id: 'revision-1',
-						original_name: 'paper.pdf',
-						page_count: 1,
-						processing_state: 'ready',
-						page_geometry: [[0, 0, 300, 400]],
-						content_url: '/api/v1/items/item-1/revisions/revision-1/content'
-					},
-					projects: []
-				}
-			})
+		await page.route(
+			'**/api/v1/workspaces/workspace-1/items/item-1/revisions/revision-1/viewer',
+			(route) =>
+				route.fulfill({
+					json: {
+						item: { id: 'item-1', title_html: 'Reader item', version: 1 },
+						editable: true,
+						annotation_author: 'reader',
+						revision: {
+							id: 'revision-1',
+							original_name: 'paper.pdf',
+							page_count: 1,
+							processing_state: 'ready',
+							page_geometry: [[0, 0, 300, 400]],
+							content_url:
+								'/api/v1/workspaces/workspace-1/items/item-1/revisions/revision-1/content'
+						},
+						projects: []
+					}
+				})
 		);
-		await page.route('**/api/v1/items/item-1/annotations**', (route) =>
+		await page.route('**/api/v1/workspaces/workspace-1/items/item-1/annotations**', (route) =>
 			route.request().method() === 'GET'
 				? route.fulfill({ json: [] })
 				: route.fulfill({ json: { ok: true } })
 		);
-		await page.route('**/api/v1/items/item-1/revisions/revision-1/content', (route) =>
-			route.fulfill({ contentType: 'application/pdf', body: minimalPdf() })
+		await page.route(
+			'**/api/v1/workspaces/workspace-1/items/item-1/revisions/revision-1/content',
+			(route) => route.fulfill({ contentType: 'application/pdf', body: minimalPdf() })
 		);
 
-		await page.goto('/item/item-1/pdf/revision-1');
+		await page.goto('/workspace/workspace-1/item/item-1/pdf/revision-1');
 		await expect(page.getByRole('button', { name: 'Document Menu' })).toBeVisible();
 		await page.locator('[data-epdf-i="mode-select-button"] button').click();
 		await expect(page.locator('[data-epdf-i="mode:annotate"]')).toBeVisible();

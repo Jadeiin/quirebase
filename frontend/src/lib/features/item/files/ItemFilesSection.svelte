@@ -7,6 +7,8 @@
 	import type { FileRow, FilesView, ItemDetail } from '../types';
 	import Button from '$lib/design/Button.svelte';
 	import ItemRow from '$lib/design/ItemRow.svelte';
+	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
+	import { workspaceHref } from '$lib/workspaces/href';
 
 	let { itemId, data, details, canEdit, busy, onUpload, onUploadFromUrl, onDownload, onDelete } =
 		$props<{
@@ -20,6 +22,7 @@
 			onDownload: (file: FileRow) => void;
 			onDelete: (file: FileRow) => void;
 		}>();
+	const { workspaceId } = getWorkspaceContext();
 </script>
 
 <div class="grid grid-cols-1 gap-4 min-[800px]:grid-cols-[minmax(0,2fr)_minmax(16rem,1fr)]">
@@ -39,10 +42,8 @@
 					{#if file.kind === 'revision' && file.processing_state === 'ready'}
 						<Button
 							as="a"
-							href={resolve('/(app)/item/[itemId]/pdf/[revisionId]', {
-								itemId,
-								revisionId: file.id
-							})}>{$t('Read')}</Button
+							href={resolve(workspaceHref(workspaceId, `item/${itemId}/pdf/${file.id}`))}
+							>{$t('Read')}</Button
 						>
 					{/if}
 					<Button onclick={() => onDownload(file)}>{$t('Download')}</Button>

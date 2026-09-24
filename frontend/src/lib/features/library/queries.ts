@@ -1,6 +1,7 @@
 import { queryOptions } from '@tanstack/svelte-query';
-import { apiRequest } from '$lib/api/client';
+import { createWorkspaceApi } from '$lib/api/client';
 import type { components } from '$lib/api/schema';
+import { workspaceKeys } from '$lib/workspaces/keys';
 
 export type LibraryFilters = {
 	query: string;
@@ -12,16 +13,18 @@ export type LibraryFilters = {
 };
 
 export const libraryKeys = {
-	all: ['library'] as const,
-	lists: () => [...libraryKeys.all, 'list'] as const,
-	list: (filters: LibraryFilters, page: number) => [...libraryKeys.lists(), filters, page] as const
+	all: (workspaceId: string) => workspaceKeys.items(workspaceId),
+	lists: (workspaceId: string) => [...libraryKeys.all(workspaceId), 'list'] as const,
+	list: (workspaceId: string, filters: LibraryFilters, page: number) =>
+		[...libraryKeys.lists(workspaceId), filters, page] as const
 };
 
-export function libraryListQuery(filters: LibraryFilters, page: number) {
+export function libraryListQuery(workspaceId: string, filters: LibraryFilters, page: number) {
+	const api = createWorkspaceApi(workspaceId);
 	return queryOptions({
-		queryKey: libraryKeys.list(filters, page),
+		queryKey: libraryKeys.list(workspaceId, filters, page),
 		queryFn: ({ signal }) =>
-			apiRequest('GET', '/items', {
+			api.request('GET', '/workspaces/{workspace_id}/items', {
 				params: {
 					query: {
 						page,

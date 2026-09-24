@@ -8,9 +8,9 @@
 	import ItemRow from '$lib/design/ItemRow.svelte';
 
 	type Workflow = components['schemas']['WorkflowSummaryView'];
-	type Operation = 'reindex_all' | 'check_objects' | 'backup' | 'recommend_tags_all';
+	type Operation = 'check_objects';
 
-	let { maintenance, operations, busy, onRun, onDownloadBackup } = $props<{
+	let { maintenance, operations, busy, onRun } = $props<{
 		maintenance: {
 			storage: { items_count: number; total_disk_bytes: number };
 			workflows: Workflow[];
@@ -18,7 +18,6 @@
 		operations: ReadonlyArray<readonly [Operation, MessageKey]>;
 		busy: boolean;
 		onRun: (operation: Operation) => void;
-		onDownloadBackup: (workflowId: string) => void;
 	}>();
 </script>
 
@@ -42,9 +41,6 @@
 			<strong>{workflow.name || workflow.id || $t('Operation')}</strong><span
 				class="text-surface-600-400">{$t(domainLabel(workflow.state))}</span
 			>
-			{#if workflow.state === 'succeeded' && (workflow.name ?? '').includes('backup') && workflow.id}
-				<Button onclick={() => onDownloadBackup(workflow.id)}>{$t('Download backup')}</Button>
-			{/if}
 		</ItemRow>
 	{:else}
 		<p class="text-surface-600-400">{$t('No maintenance workflows.')}</p>

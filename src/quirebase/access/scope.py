@@ -13,8 +13,8 @@ if TYPE_CHECKING:
 def workspace_select(model: Any, ctx: WorkspaceContext) -> Select[Any]:
     """Select rows belonging to the context's Workspace.
 
-    This helper intentionally does not perform membership, capability, or
-    Project visibility checks.  Those belong to the Access/domain boundary.
+    This helper only adds Workspace lineage. Membership, capabilities and managed-Project
+    discoverability are explicit Access decisions, never implicit tenant filters.
     """
 
     return select(model).where(model.workspace_id == ctx.workspace_id)

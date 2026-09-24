@@ -104,11 +104,11 @@ def item_search_view(item: Any) -> ItemSearchView:
     )
 
 
-def item_detail_view(workspace: Any) -> ItemDetailView:
-    item = workspace.item
+def item_detail_view(view: Any) -> ItemDetailView:
+    item = view.item
     return ItemDetailView(
         **item_search_view(item).model_dump(),
-        metadata=workspace.metadata,
+        metadata=view.metadata,
         abstract_html=item.abstract,
         editors=[
             ContributorView(
@@ -116,7 +116,7 @@ def item_detail_view(workspace: Any) -> ItemDetailView:
                 last_name=row.author.last_name,
                 is_corresponding=row.is_corresponding,
             )
-            for row in workspace.editors
+            for row in view.editors
         ],
         structured_authors=[
             ContributorView(
@@ -124,7 +124,7 @@ def item_detail_view(workspace: Any) -> ItemDetailView:
                 last_name=row.author.last_name,
                 is_corresponding=row.is_corresponding,
             )
-            for row in workspace.authors
+            for row in view.authors
         ],
         reference_type=item.reference_type,
         volume=item.volume,
@@ -159,6 +159,13 @@ class ItemUpdateRequest(BaseModel):
 
 class CrossWorkspaceCopyRequest(BaseModel):
     target_workspace_id: str = Field(min_length=1, max_length=36)
+
+
+class CrossWorkspaceCopyView(BaseModel):
+    source_workspace_id: str
+    source_item_id: str
+    target_workspace_id: str
+    target_item_id: str
 
 
 class NameRequest(BaseModel):

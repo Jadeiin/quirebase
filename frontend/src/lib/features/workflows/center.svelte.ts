@@ -7,6 +7,7 @@ import type { WorkflowStatus } from './queries';
 
 export type TrackedJob = {
 	id: string;
+	workspaceId?: string;
 	label: string;
 	successMessage: MessageKey;
 	failureMessage: MessageKey;
@@ -16,6 +17,7 @@ export type TrackedJob = {
 
 export type TrackedWorkflow = {
 	id: string;
+	workspaceId?: string;
 	label: string;
 	successMessage: string;
 	failureMessage: string;
@@ -28,6 +30,7 @@ export type WorkflowLedger = {
 };
 
 export type TrackOptions = {
+	workspaceId?: string;
 	label: string;
 	successMessage: MessageKey;
 	failureMessage: MessageKey;
@@ -71,6 +74,7 @@ export class WorkflowCenter {
 		for (const entry of this.ledger.read()) {
 			if (this.dismissed.has(entry.id) || this.jobs.some((job) => job.id === entry.id)) continue;
 			const tracked = this.track(entry.id, {
+				workspaceId: entry.workspaceId,
 				label: entry.label,
 				successMessage: entry.successMessage as MessageKey,
 				failureMessage: entry.failureMessage as MessageKey
@@ -90,6 +94,7 @@ export class WorkflowCenter {
 				.filter((job) => !job.outcome)
 				.map((job) => ({
 					id: job.id,
+					workspaceId: job.workspaceId,
 					label: job.label,
 					successMessage: job.successMessage,
 					failureMessage: job.failureMessage,
@@ -117,6 +122,7 @@ export class WorkflowCenter {
 		}
 		const job: TrackedJob = {
 			id: workflowId,
+			workspaceId: options.workspaceId,
 			label: options.label,
 			successMessage: options.successMessage,
 			failureMessage: options.failureMessage,
@@ -195,11 +201,12 @@ export class WorkflowCenter {
 
 	dismiss(workflowId: string) {
 		this.dismissed.add(workflowId);
+		const job = this.jobs.find((candidate) => candidate.id === workflowId);
 		// Hand waiters back to direct polling so local busy states always settle.
 		const pending = this.waiters.get(workflowId) ?? [];
 		this.waiters.delete(workflowId);
 		if (pending.length > 0) {
-			void waitForWorkflow(workflowId).then(
+			void waitForWorkflow(workflowId, { workspaceId: job?.workspaceId }).then(
 				(status) => {
 					for (const waiter of pending) waiter.resolve(status);
 				},

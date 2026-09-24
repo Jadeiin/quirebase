@@ -1,7 +1,8 @@
 import { mutationOptions, type QueryClient } from '@tanstack/svelte-query';
-import { apiDownload, apiRequest } from '$lib/api/client';
+import { createWorkspaceApi } from '$lib/api/client';
 import { invalidateLibrary, invalidateProject } from '$lib/query/invalidation';
 import type { ExportPreferences } from '$lib/export-preferences';
+import { workspaceKeys } from '$lib/workspaces/keys';
 
 export type LibraryBulkAction = 'add_project' | 'add_tag' | 'bibliography' | 'documents' | 'delete';
 
@@ -32,11 +33,15 @@ function archiveFilename(includeAnnotations: boolean, includeSupplements: boolea
 	return `quirebase-selected-${kind}.zip`;
 }
 
-export async function runLibraryBulkDownload(input: LibraryBulkInput): Promise<void> {
+export async function runLibraryBulkDownload(
+	workspaceId: string,
+	input: LibraryBulkInput
+): Promise<void> {
+	const api = createWorkspaceApi(workspaceId);
 	if (input.action === 'bibliography') {
 		const citation = input.preferences.citation;
-		await apiDownload(
-			'/items/bibliography',
+		await api.download(
+			'/workspaces/{workspace_id}/items/bibliography',
 			{
 				body: {
 					item_ids: input.itemIds,
@@ -63,8 +68,8 @@ export async function runLibraryBulkDownload(input: LibraryBulkInput): Promise<v
 		);
 		return;
 	}
-	await apiDownload(
-		'/items/documents/archive',
+	await api.download(
+		'/workspaces/{workspace_id}/items/documents/archive',
 		{
 			body: {
 				item_ids: input.itemIds,
@@ -83,10 +88,12 @@ export async function runLibraryBulkDownload(input: LibraryBulkInput): Promise<v
 }
 
 export async function runLibraryBulkMutation(
+	workspaceId: string,
 	input: LibraryBulkInput,
 	queryClient: QueryClient
 ): Promise<void> {
-	await apiRequest('POST', '/items/bulk', {
+	const api = createWorkspaceApi(workspaceId);
+	await api.request('POST', '/workspaces/{workspace_id}/items/bulk', {
 		body: {
 			item_ids: input.itemIds,
 			action: input.action,
@@ -95,9 +102,9 @@ export async function runLibraryBulkMutation(
 			confirmation: input.action === 'delete' ? 'delete' : ''
 		}
 	});
-	const invalidations = [invalidateLibrary(queryClient)];
+	const invalidations = [invalidateLibrary(queryClient, workspaceId)];
 	if (input.action === 'add_project' && input.projectId) {
-		invalidations.push(invalidateProject(queryClient, input.projectId));
+		invalidations.push(invalidateProject(queryClient, workspaceId, input.projectId));
 	}
 	await Promise.all(invalidations);
 }
@@ -107,15 +114,15 @@ export type LibraryBulkMutation = {
 	afterMutation?: () => void;
 };
 
-export function libraryBulkMutationOptions(queryClient: QueryClient) {
+export function libraryBulkMutationOptions(workspaceId: string, queryClient: QueryClient) {
 	return mutationOptions({
-		mutationKey: ['library-bulk'],
+		mutationKey: workspaceKeys.mutation(workspaceId, 'library-bulk'),
 		mutationFn: async ({ input }: LibraryBulkMutation) => {
 			if (input.action === 'bibliography' || input.action === 'documents') {
-				await runLibraryBulkDownload(input);
+				await runLibraryBulkDownload(workspaceId, input);
 				return;
 			}
-			await runLibraryBulkMutation(input, queryClient);
+			await runLibraryBulkMutation(workspaceId, input, queryClient);
 		},
 		onSuccess: async (_result, mutation) => {
 			mutation.afterMutation?.();

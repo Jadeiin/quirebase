@@ -1,9 +1,12 @@
 from quirebase.workspaces.service import (
     accept_workspace_invitation,
+    accept_workspace_invitation_by_token,
     archive_workspace,
     create_workspace,
     get_workspace,
+    get_workspace_invitation_by_token,
     invite_workspace_member,
+    list_workspace_governance_members,
     list_workspace_invitations,
     list_workspace_members,
     list_workspaces,
@@ -13,7 +16,6 @@ from quirebase.workspaces.service import (
     reactivate_workspace_member,
     read_workspace_items_break_glass,
     recover_workspace_governance,
-    repair_initial_workspace,
     restore_workspace,
     revoke_workspace_invitation,
     set_workspace_member_role,
@@ -22,14 +24,18 @@ from quirebase.workspaces.service import (
     terminate_workspace_member,
     transfer_workspace_ownership,
     update_workspace,
+    workspace_creation_options,
 )
 
 __all__ = [
     "accept_workspace_invitation",
+    "accept_workspace_invitation_by_token",
     "archive_workspace",
     "create_workspace",
     "get_workspace",
+    "get_workspace_invitation_by_token",
     "invite_workspace_member",
+    "list_workspace_governance_members",
     "list_workspace_invitations",
     "list_workspace_members",
     "list_workspaces",
@@ -39,7 +45,6 @@ __all__ = [
     "reactivate_workspace_member",
     "read_workspace_items_break_glass",
     "recover_workspace_governance",
-    "repair_initial_workspace",
     "restore_workspace",
     "revoke_workspace_invitation",
     "set_workspace_member_role",
@@ -48,4 +53,5 @@ __all__ = [
     "terminate_workspace_member",
     "transfer_workspace_ownership",
     "update_workspace",
+    "workspace_creation_options",
 ]

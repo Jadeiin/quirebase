@@ -42,7 +42,7 @@ async def create_export_job(
             )
         )
         if project_item is None:
-            raise ResourceUnavailable("project membership or project item not found")
+            raise ResourceUnavailable("Project item not found")
     object_id = uuid4()
     export_key = object_key(object_id, ObjectSuffix.PDF)
     workflow_id = f"annotation-export:{uuid4()}"

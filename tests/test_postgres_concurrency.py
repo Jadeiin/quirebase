@@ -12,7 +12,11 @@ from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.access import Capability, require_workspace_capability
 from quirebase.core.database import Base, make_async_engine
-from quirebase.core.errors import PermissionDenied, ValidationFailure, WorkspaceLifecycleError
+from quirebase.core.errors import (
+    PermissionDenied,
+    WorkspaceLifecycleError,
+    WorkspaceMembershipRequired,
+)
 from quirebase.library import (
     add_discussion_message,
     add_existing_tag_to_item,
@@ -34,14 +38,16 @@ from quirebase.models import (
     WorkspaceState,
 )
 from quirebase.projects import (
+    ProjectMemberConflict,
     add_item_to_project,
+    add_project_member,
     create_project,
-    remove_project_member,
+    join_project,
     rename_project,
+    set_project_visibility,
 )
 from quirebase.workspaces import (
     archive_workspace,
-    repair_initial_workspace,
     suspend_workspace_member,
     transfer_workspace_ownership,
 )
@@ -138,7 +144,11 @@ async def test_project_discussion_waits_for_archive_and_rechecks_state(postgres_
     async with postgres_sessions() as db:
         owner = await _user(db, "project-archive-race")
         workspace_id, owner_id = fixture_workspace_id(owner), owner.id
-        project = Project(workspace_id=workspace_id, name="Archiving")
+        project = Project(
+            workspace_id=workspace_id,
+            name="Archiving",
+            created_by=owner_id,
+        )
         db.add(project)
         await db.commit()
         project_id = project.id
@@ -296,65 +306,6 @@ async def test_concurrent_ownership_transfer_reauthorizes_after_root_lock(postgr
         assert workspace.owner_id in {first.id, second.id}
 
 
-async def test_repair_initial_workspace_serializes_with_ownership_transfer(postgres_sessions):
-    async with postgres_sessions() as db:
-        initial_owner = await _user(db, "repair-transfer-owner")
-        successor = await _user(db, "repair-transfer-successor")
-        workspace_id = fixture_workspace_id(initial_owner)
-        initial_owner_id = initial_owner.id
-        successor_id = successor.id
-        successor_membership = WorkspaceMember(
-            workspace_id=workspace_id,
-            user_id=successor_id,
-            role=WorkspaceRole.editor,
-            invited_by=initial_owner_id,
-        )
-        db.add(successor_membership)
-        await db.commit()
-        successor_membership_id = successor_membership.id
-
-    transfer_has_root_lock = asyncio.Event()
-    allow_transfer_to_finish = asyncio.Event()
-
-    async def transfer():
-        async with postgres_sessions() as db:
-            actor = await db.get(User, initial_owner_id)
-            assert actor is not None
-            await db.scalar(select(Workspace).where(Workspace.id == workspace_id).with_for_update())
-            transfer_has_root_lock.set()
-            await allow_transfer_to_finish.wait()
-            await transfer_workspace_ownership(db, actor, workspace_id, successor_membership_id)
-
-    async def repair():
-        async with postgres_sessions() as db:
-            actor = await db.get(User, initial_owner_id)
-            assert actor is not None
-            return await repair_initial_workspace(db, actor)
-
-    transfer_task = asyncio.create_task(transfer())
-    await transfer_has_root_lock.wait()
-    repair_task = asyncio.create_task(repair())
-    try:
-        await asyncio.sleep(0.05)
-        assert not repair_task.done()
-    finally:
-        allow_transfer_to_finish.set()
-        await asyncio.gather(transfer_task, repair_task)
-
-    async with postgres_sessions() as db:
-        workspace = await db.get(Workspace, workspace_id)
-        assert workspace is not None
-        assert workspace.owner_id == successor_id
-        owner_count = await db.scalar(
-            select(func.count(WorkspaceMember.id)).where(
-                WorkspaceMember.workspace_id == workspace_id,
-                WorkspaceMember.role == WorkspaceRole.owner,
-                WorkspaceMember.terminated_at.is_(None),
-            )
-        )
-        assert owner_count == 1
-
-
 async def test_concurrent_project_renames_do_not_upgrade_shared_workspace_locks(
     postgres_sessions,
 ):
@@ -389,10 +340,10 @@ async def test_concurrent_project_renames_do_not_upgrade_shared_workspace_locks(
         assert project.name in {"First name", "Second name"}
 
 
-async def test_project_member_removal_races_workspace_member_suspension(postgres_sessions):
+async def test_project_participation_add_races_switch_to_workspace_mode(postgres_sessions):
     async with postgres_sessions() as db:
-        owner = await _user(db, "scope-owner")
-        target = await _user(db, "scope-target")
+        owner = await _user(db, "participation-owner")
+        target = await _user(db, "participation-target")
         workspace_id = fixture_workspace_id(owner)
         owner_id = owner.id
         target_id = target.id
@@ -404,30 +355,16 @@ async def test_project_member_removal_races_workspace_member_suspension(postgres
         )
         db.add(membership)
         await db.commit()
-        membership_id = membership.id
         project = await create_project(
-            db, owner, workspace_id, "Concurrent scope", ProjectVisibility.members
+            db, owner, workspace_id, "Concurrent participation", ProjectVisibility.managed
         )
-        db.add_all([
-            ProjectMember(
-                workspace_id=workspace_id,
-                project_id=project.id,
-                user_id=target_id,
-            ),
-            ProjectMember(
-                workspace_id=workspace_id,
-                project_id=project.id,
-                user_id=owner_id,
-            ),
-        ])
-        await db.commit()
         project_id = project.id
 
     gate = asyncio.Event()
     ready = 0
     ready_lock = asyncio.Lock()
 
-    async def change_scope(remove_project_membership: bool):
+    async def change_participation(switch_to_workspace: bool):
         nonlocal ready
         async with postgres_sessions() as db:
             actor = await db.get(User, owner_id)
@@ -438,17 +375,98 @@ async def test_project_member_removal_races_workspace_member_suspension(postgres
                     gate.set()
             await gate.wait()
             try:
-                if remove_project_membership:
-                    await remove_project_member(db, actor, workspace_id, project_id, owner_id)
+                if switch_to_workspace:
+                    await set_project_visibility(
+                        db, actor, workspace_id, project_id, ProjectVisibility.workspace
+                    )
                 else:
-                    await suspend_workspace_member(db, actor, workspace_id, membership_id)
+                    await add_project_member(
+                        db, actor, workspace_id, project_id, "participation-target"
+                    )
                 return "committed"
-            except ValidationFailure:
+            except ProjectMemberConflict:
                 await db.rollback()
                 return "rejected"
 
-    outcomes = await asyncio.gather(change_scope(True), change_scope(False))
-    assert sorted(outcomes) == ["committed", "rejected"]
+    outcomes = await asyncio.gather(change_participation(True), change_participation(False))
+    assert sorted(outcomes) in (["committed", "committed"], ["committed", "rejected"])
+
+    async with postgres_sessions() as db:
+        project = await db.get(Project, project_id)
+        assert project is not None
+        assert project.visibility is ProjectVisibility.workspace
+        participants = await db.scalar(
+            select(func.count(ProjectMember.id)).where(
+                ProjectMember.workspace_id == workspace_id,
+                ProjectMember.project_id == project_id,
+            )
+        )
+        assert participants == 0
+
+
+async def test_open_project_join_races_workspace_member_suspension(postgres_sessions):
+    async with postgres_sessions() as db:
+        owner = await _user(db, "join-race-owner")
+        target = await _user(db, "join-race-target")
+        workspace_id = fixture_workspace_id(owner)
+        owner_id, target_id = owner.id, target.id
+        membership = WorkspaceMember(
+            workspace_id=workspace_id,
+            user_id=target_id,
+            role=WorkspaceRole.editor,
+            invited_by=owner_id,
+        )
+        db.add(membership)
+        await db.commit()
+        membership_id = membership.id
+        project = await create_project(
+            db, owner, workspace_id, "Open join race", ProjectVisibility.open
+        )
+        project_id = project.id
+
+    gate = asyncio.Event()
+    ready = 0
+    ready_lock = asyncio.Lock()
+
+    async def change_membership(suspend: bool):
+        nonlocal ready
+        async with postgres_sessions() as db:
+            actor_id = target_id if not suspend else owner_id
+            actor = await db.get(User, actor_id)
+            assert actor is not None
+            async with ready_lock:
+                ready += 1
+                if ready == 2:
+                    gate.set()
+            await gate.wait()
+            try:
+                if suspend:
+                    await suspend_workspace_member(db, actor, workspace_id, membership_id)
+                else:
+                    await join_project(db, actor, workspace_id, project_id)
+                return "committed"
+            except WorkspaceMembershipRequired:
+                await db.rollback()
+                return "rejected"
+
+    outcomes = await asyncio.gather(change_membership(False), change_membership(True))
+    assert sorted(outcomes) in (["committed", "committed"], ["committed", "rejected"])
+
+    async with postgres_sessions() as db:
+        membership = await db.get(WorkspaceMember, membership_id)
+        assert membership is not None
+        assert membership.state.value == "suspended"
+        participant = await db.scalar(
+            select(ProjectMember).where(
+                ProjectMember.workspace_id == workspace_id,
+                ProjectMember.project_id == project_id,
+                ProjectMember.user_id == target_id,
+            )
+        )
+        if "rejected" in outcomes:
+            assert participant is None
+        else:
+            assert participant is not None
 
 
 async def test_concurrent_project_item_add_is_idempotent(postgres_sessions):

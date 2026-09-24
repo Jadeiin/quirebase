@@ -22,6 +22,9 @@ from quirebase.models import (
     PdfAnnotation,
     Project,
     ProjectItem,
+    ProjectMember,
+    ProjectState,
+    ProjectVisibility,
     SystemRole,
     User,
     WorkspaceMember,
@@ -477,14 +480,33 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
         workspace_id=workspace_id,
         name="Unjoined annotation project",
         created_by=author.id,
+        visibility=ProjectVisibility.managed,
     )
-    db.add_all([item, project])
+    archived_project = Project(
+        workspace_id=workspace_id,
+        name="Archived annotation project",
+        created_by=author.id,
+        visibility=ProjectVisibility.managed,
+        state=ProjectState.archived,
+    )
+    db.add_all([item, project, archived_project])
     await db.flush()
     project_item = ProjectItem(
         workspace_id=workspace_id,
         project_id=project.id,
         item_id=item.id,
         added_by=author.id,
+    )
+    archived_project_item = ProjectItem(
+        workspace_id=workspace_id,
+        project_id=archived_project.id,
+        item_id=item.id,
+        added_by=author.id,
+    )
+    archived_project_member = ProjectMember(
+        workspace_id=workspace_id,
+        project_id=archived_project.id,
+        user_id=administrator.id,
     )
     revision = FileRevision(
         workspace_id=workspace_id,
@@ -498,7 +520,7 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
         processing_state="ready",
         created_by=author.id,
     )
-    db.add_all([revision, project_item])
+    db.add_all([revision, project_item, archived_project_item, archived_project_member])
     await db.flush()
     payload = {
         "type": "note",
@@ -528,7 +550,18 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
             payload=payload,
         ),
     ]
-    db.add_all(annotations)
+    archived_annotation = PdfAnnotation(
+        workspace_id=workspace_id,
+        file_revision_id=revision.id,
+        item_id=item.id,
+        page_index=0,
+        author_id=author.id,
+        kind=AnnotationKind.note,
+        scope=AnnotationScope.project,
+        project_item_id=archived_project_item.id,
+        payload=payload,
+    )
+    db.add_all([*annotations, archived_annotation])
     await db.commit()
     grant = await create_api_token(
         db, administrator, "Administrator annotations", expires_in_days=30
@@ -541,10 +574,13 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
             headers=headers,
         )
         assert review.status_code == 200
-        assert {entry["id"] for entry in review.json()["annotations"]} == {
-            annotation.id for annotation in annotations
+        reviewed = {entry["id"]: entry for entry in review.json()["annotations"]}
+        assert set(reviewed) == {annotation.id for annotation in annotations} | {
+            archived_annotation.id
         }
-        assert review.json()["total"] == 2
+        assert review.json()["total"] == 3
+        assert set(reviewed[archived_annotation.id]["allowed_actions"]) == set()
+        assert set(reviewed[annotations[0].id]["allowed_actions"]) >= {"hide", "archive", "lock"}
         assert review.json()["page"] == 1
         assert review.json()["per_page"] == 50
         paged_reviews = [
@@ -553,13 +589,18 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
                 headers=headers,
                 params={"page": page, "per_page": 1},
             )
-            for page in (1, 2)
+            for page in (1, 2, 3)
         ]
         assert all(response.status_code == 200 for response in paged_reviews)
-        assert {response.json()["annotations"][0]["id"] for response in paged_reviews} == {
-            annotation.id for annotation in annotations
-        }
-        assert all(response.json()["total"] == 2 for response in paged_reviews)
+        assert {response.json()["annotations"][0]["id"] for response in paged_reviews} == set(
+            reviewed
+        )
+        assert all(response.json()["total"] == 3 for response in paged_reviews)
+        assert all(
+            set(response.json()["annotations"][0]["allowed_actions"]) >= {"hide", "archive", "lock"}
+            for response in paged_reviews
+            if response.json()["annotations"][0]["id"] != archived_annotation.id
+        )
 
         for annotation, action in zip(annotations, ("hide", "archive"), strict=True):
             moderated = await client.post(
@@ -572,3 +613,117 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
             assert moderated.json()["body"] is None
             assert moderated.json()["version"] == 2
             assert moderated.json()["moderated_by"] == administrator.id
+
+
+@pytest.mark.anyio
+async def test_project_participation_does_not_gate_workspace_project_access(
+    async_db, async_session_factory
+):
+    db = async_db
+    owner = User(username="project-governance-owner", password_hash="unused")
+    administrator = User(username="project-governance-admin", password_hash="unused")
+    db.add_all([owner, administrator])
+    await db.flush()
+    await provision_initial_workspace(db, owner)
+    workspace_id = fixture_workspace_id(owner)
+    db.add(
+        WorkspaceMember(
+            workspace_id=workspace_id,
+            user_id=administrator.id,
+            role=WorkspaceRole.admin,
+            invited_by=owner.id,
+        )
+    )
+    active = Project(
+        workspace_id=workspace_id,
+        name="Managed active Project",
+        created_by=owner.id,
+        visibility=ProjectVisibility.managed,
+    )
+    archived = Project(
+        workspace_id=workspace_id,
+        name="Managed archived Project",
+        created_by=owner.id,
+        visibility=ProjectVisibility.managed,
+        state=ProjectState.archived,
+    )
+    workspace_visible = Project(
+        workspace_id=workspace_id,
+        name="Workspace-visible Project",
+        created_by=owner.id,
+        visibility=ProjectVisibility.workspace,
+    )
+    db.add_all([active, archived, workspace_visible])
+    await db.commit()
+    grant = await create_api_token(db, administrator, "Project governance", expires_in_days=30)
+    headers = bearer(grant.raw_token)
+    base = f"/api/v1/workspaces/{workspace_id}/projects"
+
+    async with api_client(async_session_factory) as (client, _app):
+        projects = await client.get(base, headers=headers)
+        assert projects.status_code == 200
+        summaries = {project["id"]: project for project in projects.json()}
+        active_actions = set(summaries[active.id]["allowed_actions"])
+        archived_actions = set(summaries[archived.id]["allowed_actions"])
+        assert summaries[active.id]["is_member"] is False
+        assert "members.manage" in active_actions
+        assert "settings" in active_actions
+        assert "archive" in active_actions
+        assert "restore" in archived_actions
+        assert "members.manage" not in archived_actions
+        assert "settings" not in archived_actions
+
+        active_detail = await client.get(f"{base}/{active.id}", headers=headers)
+        assert active_detail.status_code == 200
+        assert active_detail.json()["members"] == []
+        assert active_detail.json()["allowed_actions"] == summaries[active.id]["allowed_actions"]
+
+        workspace_summary = next(
+            row for row in projects.json() if row["id"] == workspace_visible.id
+        )
+        assert workspace_summary["is_member"] is True
+        assert "members.manage" not in workspace_summary["allowed_actions"]
+        workspace_detail = await client.get(f"{base}/{workspace_visible.id}", headers=headers)
+        assert workspace_detail.json()["members"] == []
+        add_workspace_member = await client.put(
+            f"{base}/{workspace_visible.id}/members",
+            headers=headers,
+            json={"username": administrator.username},
+        )
+        remove_workspace_member = await client.delete(
+            f"{base}/{workspace_visible.id}/members/{administrator.id}", headers=headers
+        )
+        assert add_workspace_member.status_code == 409
+        assert add_workspace_member.json()["code"] == "project_member_conflict"
+        assert remove_workspace_member.status_code == 409
+        assert remove_workspace_member.json()["code"] == "project_member_conflict"
+
+        settings = await client.patch(
+            f"{base}/{active.id}",
+            headers=headers,
+            json={"name": "Still accessible", "description": "", "visibility": "open"},
+        )
+        assert settings.status_code == 200
+        join = await client.post(f"{base}/{active.id}/join", headers=headers)
+        assert join.status_code == 200
+        project_detail = await client.get(f"{base}/{active.id}", headers=headers)
+        assert project_detail.status_code == 200
+        assert project_detail.json()["is_member"] is True
+        leave = await client.post(f"{base}/{active.id}/leave", headers=headers)
+        assert leave.status_code == 200
+        project_detail = await client.get(f"{base}/{active.id}", headers=headers)
+        assert project_detail.status_code == 200
+        assert project_detail.json()["is_member"] is False
+
+        managed_settings = await client.patch(
+            f"{base}/{active.id}",
+            headers=headers,
+            json={"name": "Still accessible", "description": "", "visibility": "managed"},
+        )
+        assert managed_settings.status_code == 200
+        participant = await client.put(
+            f"{base}/{active.id}/members",
+            headers=headers,
+            json={"username": owner.username},
+        )
+        assert participant.status_code == 200

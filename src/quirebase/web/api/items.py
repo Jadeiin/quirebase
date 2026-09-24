@@ -9,11 +9,11 @@ from quirebase.documents import (
     resolve_item_thumbnail,
 )
 from quirebase.library import (
-    OrganizeWorkspace,
-    SummaryWorkspace,
-    WorkspaceSection,
+    ItemOrganizationData,
+    ItemOverviewData,
+    ItemSection,
     delete_item,
-    open_item_workspace,
+    open_item_section,
     regenerate_bibtex_key,
     regenerate_item_tag_recommendation,
     rescan_pdf_doi,
@@ -26,21 +26,21 @@ from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.item_schemas import (
     DeleteConfirmationRequest,
     ItemOrganizeView,
-    ItemWorkspaceView,
+    ItemOverviewView,
     MetadataSyncRequest,
 )
 from quirebase.web.api.library_schemas import AuthorSuggestionView, item_search_view
 from quirebase.web.api.serialization import enum_value
 
-router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["HTTP API"])
+router = APIRouter(tags=["Items"])
 
 
-@router.get("/items/{item_id}/workspace", response_model=ItemWorkspaceView)
-async def item_workspace(workspace_id: str, item_id: str, user: ApiUser, db: Database):
-    workspace = await open_item_workspace(db, user, workspace_id, item_id, WorkspaceSection.summary)
-    if not isinstance(workspace, SummaryWorkspace):  # pragma: no cover
-        raise TypeError("item summary workspace mismatch")
-    latest = workspace.revisions[0] if workspace.revisions else None
+@router.get("/items/{item_id}/overview", response_model=ItemOverviewView)
+async def item_overview(workspace_id: str, item_id: str, user: ApiUser, db: Database):
+    view = await open_item_section(db, user, workspace_id, item_id, ItemSection.overview)
+    if not isinstance(view, ItemOverviewData):  # pragma: no cover
+        raise TypeError("item overview section mismatch")
+    latest = view.revisions[0] if view.revisions else None
     thumbnail = None
     with suppress(ResourceNotFound):
         resolved = await resolve_item_thumbnail(db, user, workspace_id, item_id)
@@ -49,18 +49,18 @@ async def item_workspace(workspace_id: str, item_id: str, user: ApiUser, db: Dat
             "source_id": resolved.source_id,
         }
     return {
-        "item": item_search_view(workspace.item),
-        "permissions": {"edit": workspace.can_edit, "delete": workspace.can_delete},
+        "item": item_search_view(view.item),
+        "allowed_actions": {"edit": view.can_edit, "delete": view.can_delete},
         "counts": {
-            "revisions": workspace.revision_count,
-            "attachments": workspace.attachment_count,
-            "annotations": workspace.annotation_count,
-            "discussion": workspace.message_count,
+            "revisions": view.revision_count,
+            "attachments": view.attachment_count,
+            "annotations": view.annotation_count,
+            "discussion": view.message_count,
         },
-        "tags": [{"id": tag.id, "name": tag.name} for tag in workspace.tags],
+        "tags": [{"id": tag.id, "name": tag.name} for tag in view.tags],
         "identifiers": [
             {"provider": identifier.provider, "value": identifier.value}
-            for identifier in workspace.identifiers
+            for identifier in view.identifiers
         ],
         "latest_revision": (
             {
@@ -78,25 +78,23 @@ async def item_workspace(workspace_id: str, item_id: str, user: ApiUser, db: Dat
 
 
 @router.get("/items/{item_id}/organize", response_model=ItemOrganizeView)
-async def item_organize_workspace(workspace_id: str, item_id: str, user: ApiUser, db: Database):
+async def item_organize(workspace_id: str, item_id: str, user: ApiUser, db: Database):
 
-    workspace = await open_item_workspace(
-        db, user, workspace_id, item_id, WorkspaceSection.organize
-    )
-    if not isinstance(workspace, OrganizeWorkspace):  # pragma: no cover
-        raise TypeError("item organize workspace mismatch")
-    matrix = workspace.tag_matrix
+    view = await open_item_section(db, user, workspace_id, item_id, ItemSection.organize)
+    if not isinstance(view, ItemOrganizationData):  # pragma: no cover
+        raise TypeError("item organize section mismatch")
+    matrix = view.tag_matrix
     return {
-        "item": item_search_view(workspace.item),
-        "permissions": {"edit": workspace.can_edit, "delete": workspace.can_delete},
-        "tags": [{"id": tag.id, "name": tag.name} for tag in workspace.tags],
+        "item": item_search_view(view.item),
+        "allowed_actions": {"edit": view.can_edit, "delete": view.can_delete},
+        "tags": [{"id": tag.id, "name": tag.name} for tag in view.tags],
         "projects": [
             {
-                "id": membership.project.id,
-                "name": membership.project.name,
-                "assigned": membership.project.id in workspace.assigned_project_ids,
+                "id": project_option.project.id,
+                "name": project_option.project.name,
+                "assigned": project_option.project.id in view.assigned_project_ids,
             }
-            for membership in workspace.memberships
+            for project_option in view.projects
         ],
         "tag_matrix": {
             "groups": [

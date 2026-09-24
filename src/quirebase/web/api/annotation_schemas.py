@@ -50,6 +50,7 @@ class AnnotationView(BaseModel):
     author_display_name: str
     mine: bool
     editable: bool
+    allowed_actions: list[Literal["edit", "delete", "hide", "archive", "restore", "lock", "unlock"]]
     hidden_at: str | None = None
     archived_at: str | None = None
     locked_at: str | None = None
@@ -64,7 +65,7 @@ class AnnotationModerationRequest(BaseModel):
     version: int = Field(ge=1)
 
 
-def document_list_view(item_id: str, workspace: Any) -> DocumentListView:
+def document_list_view(item_id: str, item_files: Any) -> DocumentListView:
     revisions = [
         FileView(
             id=row.id,
@@ -76,7 +77,7 @@ def document_list_view(item_id: str, workspace: Any) -> DocumentListView:
             page_count=row.page_count,
             processing_state=row.processing_state,
         )
-        for row in workspace.revisions
+        for row in item_files.revisions
     ]
     attachments = [
         FileView(
@@ -87,7 +88,7 @@ def document_list_view(item_id: str, workspace: Any) -> DocumentListView:
             size=row.size,
             created_at=as_utc(row.created_at).isoformat(),
         )
-        for row in workspace.attachments
+        for row in item_files.attachments
     ]
     return DocumentListView(item_id=item_id, files=[*revisions, *attachments])
 

@@ -21,6 +21,8 @@
 	} from '$lib/theme';
 	import AppSidebar from './AppSidebar.svelte';
 	import MobileNavigation from './MobileNavigation.svelte';
+	import WorkspaceMenu from './WorkspaceMenu.svelte';
+	import { isRouteActive } from './navigation';
 
 	let { children } = $props<{ children: Snippet }>();
 	const session = createQuery(() => sessionQuery());
@@ -35,7 +37,13 @@
 		workflowCenter.bindLedger(localStorageWorkflowLedger(userId));
 	});
 	const routeIsActive = (route: string) =>
-		route === '/' ? page.url.pathname === route : page.url.pathname.startsWith(route);
+		isRouteActive(
+			page.url.pathname,
+			route,
+			route === '/' ||
+				(route === '/workspace' && !page.params.workspaceId) ||
+				route === (page.params.workspaceId ? `/workspace/${page.params.workspaceId}` : '')
+		);
 	const readerRoute = $derived(/\/item\/[^/]+\/pdf\/[^/]+$/.test(page.url.pathname));
 	let sidebarCollapsed = $state(false);
 	let actionError = $state('');
@@ -97,12 +105,7 @@
 	<div
 		class={`sticky top-0 z-40 items-center justify-between bg-primary-950 px-4 py-3 text-white md:hidden ${readerRoute ? 'hidden' : 'flex'}`}
 	>
-		<a class="flex items-center gap-2 font-bold no-underline" href={resolve('/')}
-			><span
-				class="grid size-7 grid-cols-1 place-items-center rounded-lg bg-white text-sm font-extrabold text-primary-800"
-				>Q</span
-			>Quirebase</a
-		>
+		<WorkspaceMenu workspaceId={page.params.workspaceId} mobile />
 		<a
 			class="grid size-8 grid-cols-1 place-items-center rounded-full bg-primary-100 font-extrabold text-primary-800 no-underline"
 			href={resolve('/account')}>{session.data.user?.username.slice(0, 1).toUpperCase()}</a
@@ -113,6 +116,7 @@
 	>
 		<AppSidebar
 			user={session.data.user}
+			workspaceId={page.params.workspaceId}
 			collapsed={sidebarCollapsed}
 			{routeIsActive}
 			onToggle={toggleSidebar}
@@ -132,6 +136,7 @@
 	</div>
 	<MobileNavigation
 		user={session.data.user}
+		workspaceId={page.params.workspaceId}
 		{routeIsActive}
 		{readerRoute}
 		{themePreference}

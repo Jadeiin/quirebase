@@ -22,6 +22,8 @@
 	);
 	const busy = $derived(adminMutation.isPending);
 	const settingFields: ReadonlyArray<readonly [keyof Settings, MessageKey]> = [
+		['registration_policy', msg('Registration policy')],
+		['workspace_creation_policy', msg('Workspace creation policy')],
 		['metadata_contact_email', msg('Metadata contact email')],
 		['ncbi_api_key', msg('NCBI API key')],
 		['openalex_api_key', msg('OpenAlex API key')],

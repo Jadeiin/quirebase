@@ -20,12 +20,7 @@
 		adminMutationOptions('maintenance', () => maintenance.refetch())
 	);
 	const busy = $derived(adminMutation.isPending);
-	const maintenanceOperations = [
-		['reindex_all', msg('Reindex all Items')],
-		['check_objects', msg('Check stored objects')],
-		['backup', msg('Create backup')],
-		['recommend_tags_all', msg('Recommend Tags for all Items')]
-	] as const;
+	const maintenanceOperations = [['check_objects', msg('Check stored objects')]] as const;
 
 	function runMaintenance(operation: (typeof maintenanceOperations)[number][0]) {
 		error = '';
@@ -54,10 +49,6 @@
 				error = apiErrorMessage(reason, $t('Maintenance operation failed'));
 			});
 	}
-
-	function downloadBackup(workflowId: string) {
-		location.assign(`/api/v1/admin/maintenance/backups/${workflowId}/content`);
-	}
 </script>
 
 <AdminNotices {error} {notice} />
@@ -71,6 +62,5 @@
 		operations={maintenanceOperations}
 		{busy}
 		onRun={runMaintenance}
-		onDownloadBackup={downloadBackup}
 	/>
 </AdminSectionState>

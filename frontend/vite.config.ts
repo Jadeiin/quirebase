@@ -8,6 +8,7 @@ export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
 	server: {
 		strictPort: true,
+		origin: process.env.QUIREBASE_EXTERNAL_ORIGIN,
 		proxy: {
 			'/api': { target: apiOrigin },
 			'/docs': { target: apiOrigin },

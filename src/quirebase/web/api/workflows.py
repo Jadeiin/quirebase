@@ -8,7 +8,7 @@ from quirebase.core.workflows import durable_operations
 from quirebase.web.api.common import WorkflowStatusView
 from quirebase.web.api.dependencies import ApiUser, Database
 
-router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["Workflows"])
+router = APIRouter(tags=["Workflows"])
 
 
 @router.get("/workflows/{workflow_id}", response_model=WorkflowStatusView)

@@ -95,11 +95,11 @@ test('only validated Citation Key formulas replace the saved preference', async 
 			}
 		})
 	);
-	await page.route('**/api/v1/citation-styles*', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/citation-styles*', (route) =>
 		route.fulfill({ json: { styles: [{ key: 'apa', name: 'APA' }] } })
 	);
 	let previewedFormula = '';
-	await page.route('**/api/v1/citation-key-preview*', (route) => {
+	await page.route('**/api/v1/workspaces/workspace-1/citation-key-preview*', (route) => {
 		previewedFormula = new URL(route.request().url()).searchParams.get('formula') ?? '';
 		return previewedFormula === 'broken('
 			? route.fulfill({ status: 422, json: { detail: 'invalid Citation Key formula' } })
@@ -107,6 +107,7 @@ test('only validated Citation Key formulas replace the saved preference', async 
 	});
 
 	await page.goto('/account');
+	await page.getByLabel('Workspace for citation style and key preview').selectOption('workspace-1');
 	const formula = page.getByLabel('Citation Key formula');
 	await expect(formula).toHaveValue(defaultCitationKeyFormula);
 	await formula.fill('broken(');

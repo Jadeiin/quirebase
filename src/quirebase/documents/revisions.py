@@ -10,7 +10,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import select
 
-from quirebase.access import Capability
+from quirebase.access import Capability, require_workspace_capability, visible_project_ids_query
 from quirebase.access.documents import require_attachment, require_revision
 from quirebase.access.items import (
     can_edit_item,
@@ -60,9 +60,7 @@ from quirebase.models import (
     Item,
     Project,
     ProjectItem,
-    ProjectMember,
     ProjectState,
-    ProjectVisibility,
     User,
 )
 from quirebase.search import search_index
@@ -814,6 +812,7 @@ async def get_pdf_viewer_data(
     revision = await require_revision(db, user, workspace_id, revision_id)
     if revision.item_id != item_id:
         raise ResourceNotFound("revision not found for item")
+    context = await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
     projects = list(
         (
             await db.scalars(
@@ -822,13 +821,7 @@ async def get_pdf_viewer_data(
                 .where(
                     Project.workspace_id == workspace_id,
                     Project.state != ProjectState.deleted,
-                    (Project.visibility == ProjectVisibility.workspace)
-                    | Project.id.in_(
-                        select(ProjectMember.project_id).where(
-                            ProjectMember.workspace_id == workspace_id,
-                            ProjectMember.user_id == user.id,
-                        )
-                    ),
+                    Project.id.in_(visible_project_ids_query(context)),
                     ProjectItem.workspace_id == workspace_id,
                     ProjectItem.item_id == item_id,
                 )

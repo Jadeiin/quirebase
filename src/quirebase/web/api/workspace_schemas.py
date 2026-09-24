@@ -8,7 +8,12 @@ from pydantic import BaseModel, Field
 
 class WorkspaceCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=240)
-    owner_id: str | None = None
+    owner_username: str | None = Field(default=None, min_length=1, max_length=120)
+
+
+class WorkspaceCreationAvailabilityView(BaseModel):
+    allowed: bool
+    owner_username_required: bool
 
 
 class WorkspaceUpdateRequest(BaseModel):
@@ -20,16 +25,24 @@ class WorkspaceView(BaseModel):
     name: str
     owner_id: str
     state: str
-    role: str
-    permissions: list[str]
+    current_role: str
+    governance_suspended: bool
+    effective_capabilities: list[str]
 
 
-class WorkspaceMemberView(BaseModel):
-    id: str
+class WorkspaceMemberDirectoryView(BaseModel):
     user_id: str
+    username: str
+    role: str
+
+
+class WorkspaceGovernanceMemberView(BaseModel):
+    membership_id: str
+    user_id: str
+    username: str
     role: str
     state: str
-    created_at: datetime
+    joined_at: datetime
 
 
 class WorkspaceRoleRequest(BaseModel):
@@ -37,13 +50,15 @@ class WorkspaceRoleRequest(BaseModel):
 
 
 class WorkspaceInvitationRequest(BaseModel):
-    user_id: str
+    username: str = Field(min_length=1, max_length=120)
     role: Literal["editor", "reviewer", "viewer"] = "viewer"
+    expires_at: datetime
 
 
 class WorkspaceInvitationCreatedView(BaseModel):
     id: str
     user_id: str
+    username: str
     role: str
     expires_at: datetime
     token: str
@@ -52,11 +67,19 @@ class WorkspaceInvitationCreatedView(BaseModel):
 class WorkspaceInvitationView(BaseModel):
     id: str
     user_id: str
+    username: str
     role: str
     invited_by: str
     expires_at: datetime
     created_at: datetime
 
 
-class InitialWorkspaceRepairRequest(BaseModel):
-    user_id: str | None = None
+class WorkspaceInvitationDetailsView(BaseModel):
+    username: str
+    role: str
+    workspace_name: str
+    expires_at: datetime
+
+
+class WorkspaceInvitationAcceptanceView(BaseModel):
+    workspace_id: str

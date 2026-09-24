@@ -12,7 +12,7 @@ from quirebase.library import (
 from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.responses import content_disposition
 
-router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["Citations"])
+router = APIRouter(tags=["Citations"])
 
 BIBLIOGRAPHY_CONTENT_TYPES = {
     "text/plain": {"schema": {"type": "string"}},

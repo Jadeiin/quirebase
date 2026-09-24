@@ -32,7 +32,7 @@ from quirebase.web.api.annotation_schemas import (
 from quirebase.web.api.common import OkView
 from quirebase.web.api.dependencies import ApiUser, Database
 
-router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["Annotations"])
+router = APIRouter(tags=["Annotations"])
 
 
 @router.get("/items/{item_id}/annotations/review", response_model=AnnotationReviewView)

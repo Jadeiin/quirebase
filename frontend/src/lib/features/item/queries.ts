@@ -1,75 +1,85 @@
 import { queryOptions } from '@tanstack/svelte-query';
-import { apiRequest } from '$lib/api/client';
-import type { WorkspaceView } from '$lib/api/client';
+import { createWorkspaceApi, type ItemOverviewView } from '$lib/api/client';
+import { workspaceKeys } from '$lib/workspaces/keys';
 
 export type ItemSection =
 	'overview' | 'metadata' | 'files' | 'organize' | 'annotations' | 'discussion';
 
 export const itemKeys = {
-	all: ['items'] as const,
-	detail: (itemId: string) => [...itemKeys.all, itemId] as const,
-	workspace: (itemId: string) => [...itemKeys.detail(itemId), 'workspace'] as const,
-	files: (itemId: string) => [...itemKeys.detail(itemId), 'files'] as const,
-	organize: (itemId: string) => [...itemKeys.detail(itemId), 'organize'] as const,
-	discussion: (itemId: string) => [...itemKeys.detail(itemId), 'discussion'] as const,
-	annotations: (itemId: string) => [...itemKeys.detail(itemId), 'annotations'] as const,
-	annotationsReview: (itemId: string, revisionId: string, page: number) =>
-		[...itemKeys.annotations(itemId), 'review', revisionId, page] as const
+	all: (workspaceId: string) => workspaceKeys.items(workspaceId),
+	detail: (workspaceId: string, itemId: string) => workspaceKeys.item(workspaceId, itemId),
+	overview: (workspaceId: string, itemId: string) =>
+		[...itemKeys.detail(workspaceId, itemId), 'overview'] as const,
+	files: (workspaceId: string, itemId: string) =>
+		[...itemKeys.detail(workspaceId, itemId), 'files'] as const,
+	organize: (workspaceId: string, itemId: string) =>
+		[...itemKeys.detail(workspaceId, itemId), 'organize'] as const,
+	discussion: (workspaceId: string, itemId: string) =>
+		[...itemKeys.detail(workspaceId, itemId), 'discussion'] as const,
+	annotations: (workspaceId: string, itemId: string) =>
+		[...itemKeys.detail(workspaceId, itemId), 'annotations'] as const,
+	annotationsReview: (workspaceId: string, itemId: string, revisionId: string, page: number) =>
+		[...itemKeys.annotations(workspaceId, itemId), 'review', revisionId, page] as const
 };
 
-export function itemWorkspaceQuery(itemId: string) {
+export function itemOverviewQuery(workspaceId: string, itemId: string) {
+	const api = createWorkspaceApi(workspaceId);
 	return queryOptions({
-		queryKey: itemKeys.workspace(itemId),
+		queryKey: itemKeys.overview(workspaceId, itemId),
 		queryFn: ({ signal }) =>
-			apiRequest('GET', '/items/{item_id}/workspace', {
+			api.request('GET', '/workspaces/{workspace_id}/items/{item_id}/overview', {
 				params: { path: { item_id: itemId } },
 				signal
 			})
 	});
 }
 
-export function itemDetailsQuery(itemId: string, enabled: boolean) {
+export function itemDetailsQuery(workspaceId: string, itemId: string, enabled: boolean) {
+	const api = createWorkspaceApi(workspaceId);
 	return queryOptions({
-		queryKey: itemKeys.detail(itemId),
+		queryKey: itemKeys.detail(workspaceId, itemId),
 		enabled,
 		queryFn: ({ signal }) =>
-			apiRequest('GET', '/items/{item_id}', {
+			api.request('GET', '/workspaces/{workspace_id}/items/{item_id}', {
 				params: { path: { item_id: itemId } },
 				signal
 			})
 	});
 }
 
-export function itemFilesQuery(itemId: string, enabled = true) {
+export function itemFilesQuery(workspaceId: string, itemId: string, enabled = true) {
+	const api = createWorkspaceApi(workspaceId);
 	return queryOptions({
-		queryKey: itemKeys.files(itemId),
+		queryKey: itemKeys.files(workspaceId, itemId),
 		enabled,
 		queryFn: ({ signal }) =>
-			apiRequest('GET', '/items/{item_id}/documents', {
+			api.request('GET', '/workspaces/{workspace_id}/items/{item_id}/documents', {
 				params: { path: { item_id: itemId } },
 				signal
 			})
 	});
 }
 
-export function itemOrganizeQuery(itemId: string, enabled = true) {
+export function itemOrganizeQuery(workspaceId: string, itemId: string, enabled = true) {
+	const api = createWorkspaceApi(workspaceId);
 	return queryOptions({
-		queryKey: itemKeys.organize(itemId),
+		queryKey: itemKeys.organize(workspaceId, itemId),
 		enabled,
 		queryFn: ({ signal }) =>
-			apiRequest('GET', '/items/{item_id}/organize', {
+			api.request('GET', '/workspaces/{workspace_id}/items/{item_id}/organize', {
 				params: { path: { item_id: itemId } },
 				signal
 			})
 	});
 }
 
-export function itemDiscussionQuery(itemId: string, enabled = true) {
+export function itemDiscussionQuery(workspaceId: string, itemId: string, enabled = true) {
+	const api = createWorkspaceApi(workspaceId);
 	return queryOptions({
-		queryKey: itemKeys.discussion(itemId),
+		queryKey: itemKeys.discussion(workspaceId, itemId),
 		enabled,
 		queryFn: ({ signal }) =>
-			apiRequest('GET', '/items/{item_id}/discussions', {
+			api.request('GET', '/workspaces/{workspace_id}/items/{item_id}/discussions', {
 				params: { path: { item_id: itemId } },
 				signal
 			})
@@ -77,16 +87,18 @@ export function itemDiscussionQuery(itemId: string, enabled = true) {
 }
 
 export function itemAnnotationsReviewQuery(
+	workspaceId: string,
 	itemId: string,
 	revisionId: string,
 	page: number,
 	enabled: boolean
 ) {
+	const api = createWorkspaceApi(workspaceId);
 	return queryOptions({
-		queryKey: itemKeys.annotationsReview(itemId, revisionId, page),
+		queryKey: itemKeys.annotationsReview(workspaceId, itemId, revisionId, page),
 		enabled,
 		queryFn: ({ signal }) =>
-			apiRequest('GET', '/items/{item_id}/annotations/review', {
+			api.request('GET', '/workspaces/{workspace_id}/items/{item_id}/annotations/review', {
 				params: {
 					path: { item_id: itemId },
 					query: {
@@ -99,4 +111,4 @@ export function itemAnnotationsReviewQuery(
 	});
 }
 
-export type ItemWorkspace = WorkspaceView;
+export type ItemOverview = ItemOverviewView;

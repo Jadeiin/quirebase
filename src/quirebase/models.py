@@ -95,7 +95,8 @@ class ProjectState(StrEnum):
 
 class ProjectVisibility(StrEnum):
     workspace = "workspace"
-    members = "members"
+    open = "open"
+    managed = "managed"
 
 
 class AnnotationKind(StrEnum):
@@ -396,7 +397,9 @@ class Project(Base):
     __tablename__ = "projects"
     __table_args__ = (
         CheckConstraint("state IN ('active', 'archived', 'deleted')", name="ck_projects_state"),
-        CheckConstraint("visibility IN ('workspace', 'members')", name="ck_projects_visibility"),
+        CheckConstraint(
+            "visibility IN ('workspace', 'open', 'managed')", name="ck_projects_visibility"
+        ),
         UniqueConstraint("workspace_id", "id", name="uq_projects_workspace_id"),
     )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)

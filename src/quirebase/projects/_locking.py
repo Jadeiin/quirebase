@@ -11,11 +11,11 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
-async def lock_project_membership_workspace(db: AsyncSession, workspace_id: str) -> None:
-    """Serialize Project participation with Workspace membership and User deactivation.
+async def lock_project_participation_workspace(db: AsyncSession, workspace_id: str) -> None:
+    """Serialize explicit Project participation changes with Workspace membership changes.
 
-    Call before locking a Project root. Both commands can change the set of active
-    participants in a members-visible Project, so they need one common root lock.
+    Call before locking a Project root. This prevents a participant mutation from racing with a
+    transition to/from implicit Workspace participation or Workspace-member termination.
     """
     workspace = await db.scalar(
         select(Workspace.id).where(Workspace.id == workspace_id).with_for_update()

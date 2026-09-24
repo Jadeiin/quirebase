@@ -6,9 +6,11 @@
 	import RichText from '$lib/design/RichText.svelte';
 	import type { LibrarySearch } from '$lib/features/library/queries';
 	import { t } from '$lib/i18n';
+	import { workspaceHref } from '$lib/workspaces/href';
 
 	let {
 		data,
+		workspaceId,
 		isPending,
 		isError,
 		pageNumber,
@@ -20,6 +22,7 @@
 		onPage
 	} = $props<{
 		data?: LibrarySearch;
+		workspaceId: string;
 		isPending: boolean;
 		isError: boolean;
 		pageNumber: number;
@@ -67,7 +70,7 @@
 					/>
 					<a
 						class="grid min-w-0 grid-cols-1 gap-1 no-underline"
-						href={resolve('/(app)/item/[itemId]', { itemId: item.id })}
+						href={resolve(workspaceHref(workspaceId, `item/${item.id}`))}
 						><strong class="text-[0.98rem] leading-snug group-hover:text-primary-800-200"
 							><RichText html={item.title_html} /></strong
 						><span class="truncate text-sm text-surface-600-400"

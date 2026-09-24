@@ -3,8 +3,11 @@ from __future__ import annotations
 from app_helpers import create_web_test_app
 from fastapi.routing import APIRoute
 
+from quirebase.web.api.dependencies import current_api_workspace
 from quirebase.web.api.routes import CAPABILITY_ROUTERS, generate_operation_id
 from quirebase.web.api.routes import router as api_router
+from quirebase.web.api.workspace_routes import WORKSPACE_ROUTERS
+from quirebase.web.api.workspace_routes import router as workspace_api_router
 
 OPENAPI = create_web_test_app().openapi()
 
@@ -16,12 +19,27 @@ def test_api_version_prefix_is_owned_by_composition_root() -> None:
         "",
         "/admin",
         "/workspaces/{workspace_id}",
-        "/workspaces/{workspace_id}/projects",
     }
     admin_router_prefixes = [
         router.prefix for router in CAPABILITY_ROUTERS if router.prefix == "/admin"
     ]
     assert admin_router_prefixes == ["/admin"]
+
+
+def test_workspace_scoped_routers_share_one_prefix_and_authorization_boundary() -> None:
+    """Workspace-owned capability routers mount under one explicit context root."""
+    workspace_routers = [
+        router for router in CAPABILITY_ROUTERS if router.prefix == "/workspaces/{workspace_id}"
+    ]
+
+    assert len(workspace_routers) == 1
+    assert len(CAPABILITY_ROUTERS) < 10
+    assert workspace_api_router.prefix == "/workspaces/{workspace_id}"
+    assert {router.prefix for router in WORKSPACE_ROUTERS} <= {"", "/projects"}
+    assert any(
+        dependency.dependency is current_api_workspace
+        for dependency in workspace_api_router.dependencies
+    )
 
 
 def test_api_routes_have_unique_stable_operation_ids() -> None:
@@ -46,7 +64,7 @@ def test_api_routes_have_unique_stable_operation_ids() -> None:
 
     expected_ids = {
         generate_operation_id(route)
-        for capability_router in CAPABILITY_ROUTERS
+        for capability_router in (*CAPABILITY_ROUTERS, *WORKSPACE_ROUTERS)
         for route in capability_router.routes
         if isinstance(route, APIRoute)
     }
@@ -96,6 +114,42 @@ def test_openapi_contract_has_no_untyped_endpoints() -> None:
         + "\n".join(
             f"  {method} {path} ({code}): {reason}" for path, method, code, reason in untyped
         )
+    )
+
+
+def test_workspace_and_item_contracts_use_current_domain_vocabulary() -> None:
+    paths = OPENAPI["paths"]
+    schemas = OPENAPI["components"]["schemas"]
+
+    assert "/api/v1/workspaces/creation-availability" in paths
+    assert "/api/v1/account/initial-workspace/repair" not in paths
+    assert "/api/v1/workspaces/{workspace_id}/items/{item_id}/workspace" not in paths
+    overview_path = "/api/v1/workspaces/{workspace_id}/items/{item_id}/overview"
+    assert overview_path in paths
+    assert "ItemOverviewView" in schemas
+    assert "ItemWorkspaceView" not in schemas
+    assert "ItemWorkspacePermissionsView" not in schemas
+    assert "InitialWorkspaceRepairRequest" not in schemas
+    assert set(schemas["WorkspaceCreateRequest"]["properties"]) == {"name", "owner_username"}
+    assert set(schemas["WorkspaceCreationAvailabilityView"]["properties"]) == {
+        "allowed",
+        "owner_username_required",
+    }
+
+
+def test_openapi_tags_name_the_capability_instead_of_the_transport() -> None:
+    paths = OPENAPI["paths"]
+
+    assert paths["/api/v1/account"]["get"]["tags"] == ["Accounts and invitations"]
+    assert paths["/api/v1/workspaces/{workspace_id}/items/{item_id}/overview"]["get"]["tags"] == [
+        "Items"
+    ]
+    assert paths["/api/v1/admin/workspaces"]["get"]["tags"] == ["Instance administration"]
+    assert all(
+        tag not in operation.get("tags", [])
+        for path in paths.values()
+        for operation in path.values()
+        for tag in ("HTTP API", "HTTP API administration")
     )
 
 

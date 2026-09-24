@@ -15,20 +15,23 @@
 	} from '$lib/export-preferences';
 	import { t } from '$lib/i18n';
 	import Button from '$lib/design/Button.svelte';
+	import { workspaceListQuery } from '$lib/workspaces/queries';
 
 	let { userId } = $props<{ userId: string }>();
 	let preferences = $state<ExportPreferences>(structuredClone(defaultExportPreferences));
 	let citationKeyFormula = $state(defaultExportPreferences.citation.citationKeyFormula);
 	let citationKeyForceAscii = $state(defaultExportPreferences.citation.citationKeyForceAscii);
 	let styleQuery = $state('');
+	let workspaceId = $state('');
 	let ready = $state(false);
 	let saved = $state(false);
 	let savedTimer: number | undefined;
+	const workspaces = createQuery(() => workspaceListQuery());
 	const styles = createQuery(() =>
-		exportCitationStylesQuery(styleQuery, preferences.citation.style)
+		exportCitationStylesQuery(workspaceId, styleQuery, preferences.citation.style)
 	);
 	const citationPreview = createQuery(() =>
-		citationKeyPreviewQuery(citationKeyFormula, citationKeyForceAscii, ready)
+		citationKeyPreviewQuery(workspaceId, citationKeyFormula, citationKeyForceAscii, ready)
 	);
 
 	onMount(() => {
@@ -89,6 +92,21 @@
 	<p class="text-surface-600-400">
 		{$t('Configure defaults used by Library and Item export actions on this browser.')}
 	</p>
+	<label class="grid max-w-xl grid-cols-1 gap-1"
+		>{$t('Workspace for citation style and key preview')}<select
+			class="select"
+			bind:value={workspaceId}
+			><option value="">{$t('Choose a Workspace explicitly')}</option
+			>{#each workspaces.data ?? [] as workspace (workspace.id)}<option value={workspace.id}
+					>{workspace.name}</option
+				>{/each}</select
+		></label
+	>
+	{#if !workspaceId}<p class="text-sm text-surface-600-400">
+			{$t(
+				'Select a Workspace to load its citation styles and preview endpoint. The account route does not infer a Workspace from stored preferences.'
+			)}
+		</p>{/if}
 	<div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
 		<section class="grid grid-cols-1 gap-3 rounded-lg border border-surface-300-700 p-3">
 			<h3>{$t('General citation options')}</h3>

@@ -15,7 +15,7 @@ from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.export_schemas import BibliographyExportRequest, DocumentArchiveRequest
 from quirebase.web.responses import content_disposition
 
-router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["Library exports"])
+router = APIRouter(tags=["Library exports"])
 
 
 def _bibliography_options(data: BibliographyExportRequest) -> BibliographyExportOptions:

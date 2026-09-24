@@ -129,7 +129,17 @@ async def test_cross_workspace_copy_api_checks_target_membership_and_capability(
         await async_db.commit()
         copied = await client.post(url, headers=headers, json=request)
         assert copied.status_code == 201
-        copied_id = copied.json()["id"]
+        copy_view = copied.json()
+        assert set(copy_view) == {
+            "source_workspace_id",
+            "source_item_id",
+            "target_workspace_id",
+            "target_item_id",
+        }
+        assert copy_view["source_workspace_id"] == source.workspace_id
+        assert copy_view["source_item_id"] == source.id
+        assert copy_view["target_workspace_id"] == target_workspace_id
+        copied_id = copy_view["target_item_id"]
         copied_item = await async_db.get(Item, copied_id)
         copied_revision = await async_db.scalar(
             select(FileRevision).where(FileRevision.item_id == copied_id)
@@ -442,7 +452,7 @@ async def test_project_viewer_can_create_annotations(
         workspace_id=item.workspace_id,
         name="Readable annotations",
         created_by=item.created_by,
-        visibility="members",
+        visibility="managed",
     )
     db.add_all([viewer, project])
     await db.flush()

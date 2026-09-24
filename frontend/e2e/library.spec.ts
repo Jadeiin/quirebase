@@ -5,7 +5,11 @@ test('library renders canonical rich titles and exposes later pages', async ({ p
 	await mockSession(page);
 	const requestedPages: number[] = [];
 	const requestedQueries: Array<{ query: string | null; q: string | null }> = [];
-	await page.route('**/api/v1/items*', (route) => {
+	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) =>
+		route.fulfill({ json: [] })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items*', (route) => {
 		const searchParameters = new URL(route.request().url()).searchParams;
 		const requestedPage = Number(searchParameters.get('page') ?? '1');
 		requestedPages.push(requestedPage);
@@ -30,13 +34,13 @@ test('library renders canonical rich titles and exposes later pages', async ({ p
 		});
 	});
 
-	await page.goto('/library');
+	await page.goto('/workspace/workspace-1/library');
 	await expect(page.locator('strong i', { hasText: 'Visible' })).toBeVisible();
 	await expect(page.locator('strong math msup')).toBeVisible();
 	await expect(page.getByText('$x^2$', { exact: false })).toHaveCount(0);
 	await page.getByPlaceholder('Search title, author, Tag, or full text').fill('quantum fields');
 	await page.getByRole('button', { name: 'Search', exact: true }).click();
-	await expect(page).toHaveURL(/\/library\?q=quantum\+fields$/);
+	await expect(page).toHaveURL(/\/workspace\/workspace-1\/library\?q=quantum\+fields$/);
 	await expect.poll(() => requestedQueries).toContainEqual({ query: 'quantum fields', q: null });
 	await page.getByRole('button', { name: 'Next page' }).click();
 	await expect.poll(() => requestedPages).toContain(2);
@@ -58,9 +62,11 @@ test('Library page selection toggles and icon pagination reaches every boundary'
 			}
 		})
 	);
-	await page.route('**/api/v1/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/projects', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/items?*', (route) => {
+	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) =>
+		route.fulfill({ json: [] })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) => {
 		const currentPage = Number(new URL(route.request().url()).searchParams.get('page') ?? '1');
 		requestedPages.push(currentPage);
 		return route.fulfill({
@@ -81,7 +87,7 @@ test('Library page selection toggles and icon pagination reaches every boundary'
 		});
 	});
 
-	await page.goto('/library');
+	await page.goto('/workspace/workspace-1/library');
 	const pageSelection = page.getByLabel('Select this page');
 	const itemSelections = page.locator('article input[type="checkbox"]');
 	await pageSelection.check();
@@ -95,7 +101,7 @@ test('Library page selection toggles and icon pagination reaches every boundary'
 	await page.getByRole('button', { name: 'Previous page' }).click();
 	await expect.poll(() => requestedPages.at(-1)).toBe(2);
 	await page.getByRole('button', { name: 'First page' }).click();
-	await expect(page).toHaveURL(/\/library$/);
+	await expect(page).toHaveURL(/\/workspace\/workspace-1\/library$/);
 	await expect(page.getByText('Page 1 Item 1')).toBeVisible();
 	await page.getByRole('button', { name: 'Next page' }).click();
 	await expect(page).toHaveURL(/page=2/);
@@ -104,9 +110,11 @@ test('Library page selection toggles and icon pagination reaches every boundary'
 
 test('Library history navigation restores filter drafts and clears selection', async ({ page }) => {
 	await mockSession(page);
-	await page.route('**/api/v1/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/projects', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/items?*', (route) => {
+	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) =>
+		route.fulfill({ json: [] })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) => {
 		const query = new URL(route.request().url()).searchParams.get('query') ?? 'all';
 		return route.fulfill({
 			json: {
@@ -128,22 +136,22 @@ test('Library history navigation restores filter drafts and clears selection', a
 		});
 	});
 
-	await page.goto('/library');
+	await page.goto('/workspace/workspace-1/library');
 	const search = page.getByPlaceholder('Search title, author, Tag, or full text');
 	await search.fill('foo');
 	await page.getByRole('button', { name: 'Search', exact: true }).click();
-	await expect(page).toHaveURL(/q=foo/);
+	await expect(page).toHaveURL(/\/workspace\/workspace-1\/library\?q=foo/);
 	await expect(page.getByText('Result for foo')).toBeVisible();
 
 	await search.fill('bar');
 	await page.getByRole('button', { name: 'Search', exact: true }).click();
-	await expect(page).toHaveURL(/q=bar/);
+	await expect(page).toHaveURL(/\/workspace\/workspace-1\/library\?q=bar/);
 	await expect(page.getByText('Result for bar')).toBeVisible();
 	await page.locator('article input[type="checkbox"]').check();
 	await expect(page.getByText('1 selected')).toBeVisible();
 
 	await page.goBack();
-	await expect(page).toHaveURL(/q=foo/);
+	await expect(page).toHaveURL(/\/workspace\/workspace-1\/library\?q=foo/);
 	await expect(page.getByText('Result for foo')).toBeVisible();
 	await expect(search).toHaveValue('foo');
 	await expect(page.getByText('1 selected')).toHaveCount(0);
@@ -153,19 +161,21 @@ test('adding a Library Item invalidates a previously opened Project', async ({ p
 	await mockSession(page);
 	let added = false;
 	let projectReads = 0;
-	await page.route('**/api/v1/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/projects/joinable', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/projects/project-1', (route) => {
+	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/discussions', (route) =>
+		route.fulfill({ json: [] })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1', (route) => {
 		projectReads += 1;
 		return route.fulfill({
 			json: {
 				id: 'project-1',
 				name: 'Research',
 				description: 'Reading list',
-				role: 'owner',
+				allowed_actions: ['settings', 'archive', 'items.manage', 'members.manage', 'delete'],
 				item_count: added ? 1 : 0,
 				state: 'active',
-				visibility: 'private',
+				visibility: 'workspace',
 				items: added
 					? [
 							{
@@ -179,26 +189,26 @@ test('adding a Library Item invalidates a previously opened Project', async ({ p
 							}
 						]
 					: [],
-				members: [{ user_id: 'user-1', username: 'reader', role: 'owner' }]
+				members: [{ user_id: 'user-1', username: 'reader' }]
 			}
 		});
 	});
-	await page.route('**/api/v1/projects', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) =>
 		route.fulfill({
 			json: [
 				{
 					id: 'project-1',
 					name: 'Research',
-					role: 'owner',
+					allowed_actions: ['settings', 'archive', 'items.manage', 'members.manage', 'delete'],
 					item_count: added ? 1 : 0,
 					state: 'active',
-					visibility: 'private',
+					visibility: 'workspace',
 					description: 'Reading list'
 				}
 			]
 		})
 	);
-	await page.route('**/api/v1/items?*', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) =>
 		route.fulfill({
 			json: {
 				items: [
@@ -218,12 +228,12 @@ test('adding a Library Item invalidates a previously opened Project', async ({ p
 			}
 		})
 	);
-	await page.route('**/api/v1/items/bulk', (route) => {
+	await page.route('**/api/v1/workspaces/workspace-1/items/bulk', (route) => {
 		added = true;
 		return route.fulfill({ json: { ok: true } });
 	});
 
-	await page.goto('/projects/project-1');
+	await page.goto('/workspace/workspace-1/projects/project-1');
 	await expect.poll(() => projectReads).toBe(1);
 	await page.getByRole('link', { name: 'Library', exact: true }).first().click();
 	await page.getByLabel('Select this page').check();
@@ -248,7 +258,7 @@ test('saved export preferences flow into Library bibliography requests', async (
 			}
 		})
 	);
-	await page.route('**/api/v1/citation-styles*', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/citation-styles*', (route) =>
 		route.fulfill({ json: { styles: [{ key: 'apa', name: 'APA' }] } })
 	);
 	await page.route('**/api/v1/citation-key-preview*', (route) =>
@@ -269,7 +279,7 @@ test('saved export preferences flow into Library bibliography requests', async (
 		.toMatchObject({ format: 'bibtex', includeIdentifiers: true });
 
 	let exportBody: Record<string, unknown> | null = null;
-	await page.route('**/api/v1/items*', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/items*', (route) =>
 		route.fulfill({
 			json: {
 				items: [
@@ -289,9 +299,11 @@ test('saved export preferences flow into Library bibliography requests', async (
 			}
 		})
 	);
-	await page.route('**/api/v1/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/projects', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/items/bibliography', (route) => {
+	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) =>
+		route.fulfill({ json: [] })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items/bibliography', (route) => {
 		exportBody = route.request().postDataJSON();
 		return route.fulfill({
 			body: '@article{Reader2026}',
@@ -299,7 +311,7 @@ test('saved export preferences flow into Library bibliography requests', async (
 		});
 	});
 
-	await page.goto('/library');
+	await page.goto('/workspace/workspace-1/library');
 	await page.getByLabel('Select A. Author').check();
 	await page.getByLabel('Bulk action').selectOption('bibliography');
 	await page.getByRole('button', { name: 'Apply' }).click();
@@ -314,13 +326,15 @@ test('saved export preferences flow into Library bibliography requests', async (
 test('library filters do not overflow narrow viewports', async ({ page }) => {
 	await page.setViewportSize({ width: 320, height: 720 });
 	await mockSession(page);
-	await page.route('**/api/v1/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/projects', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/items*', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) =>
+		route.fulfill({ json: [] })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items*', (route) =>
 		route.fulfill({ json: { items: [], total: 0, page: 1, per_page: 25 } })
 	);
 
-	await page.goto('/library');
+	await page.goto('/workspace/workspace-1/library');
 	await expect(page.getByPlaceholder('Search title, author, Tag, or full text')).toBeVisible();
 	const { scrollWidth, innerWidth } = await page.evaluate(() => ({
 		scrollWidth: document.documentElement.scrollWidth,

@@ -5,7 +5,7 @@
 	import ItemSectionState from '$lib/features/item/ItemSectionState.svelte';
 	import {
 		addTagMutationOptions,
-		projectMembershipMutationOptions,
+		projectAssignmentMutationOptions,
 		suggestedTagMutationOptions,
 		tagRecommendationsMutationOptions,
 		toggleTagMutationOptions
@@ -21,31 +21,39 @@
 	let mutationError = $state('');
 	const queryClient = useQueryClient();
 	const workflows = getWorkflowCenter();
-	const organize = createQuery(() => itemOrganizeQuery(params.itemId, true));
+	const organize = createQuery(() => itemOrganizeQuery(params.workspaceId, params.itemId, true));
 
 	async function trackTagRecommendations(workflowId: string) {
 		await workflows.track(workflowId, {
+			workspaceId: params.workspaceId,
 			label: $t('Tag recommendation'),
 			successMessage: msg('Tag recommendations updated'),
 			failureMessage: msg('Tag recommendation failed')
 		}).settled;
 	}
 
-	const projectMembership = createMutation(() =>
-		projectMembershipMutationOptions(params.itemId, queryClient)
+	const projectAssignment = createMutation(() =>
+		projectAssignmentMutationOptions(params.workspaceId, params.itemId, queryClient)
 	);
-	const addTagMutation = createMutation(() => addTagMutationOptions(params.itemId, queryClient));
+	const addTagMutation = createMutation(() =>
+		addTagMutationOptions(params.workspaceId, params.itemId, queryClient)
+	);
 	const toggleTagMutation = createMutation(() =>
-		toggleTagMutationOptions(params.itemId, queryClient)
+		toggleTagMutationOptions(params.workspaceId, params.itemId, queryClient)
 	);
 	const suggestedTagMutation = createMutation(() =>
-		suggestedTagMutationOptions(params.itemId, queryClient)
+		suggestedTagMutationOptions(params.workspaceId, params.itemId, queryClient)
 	);
 	const tagRecommendationsMutation = createMutation(() =>
-		tagRecommendationsMutationOptions(params.itemId, queryClient, trackTagRecommendations)
+		tagRecommendationsMutationOptions(
+			params.workspaceId,
+			params.itemId,
+			queryClient,
+			trackTagRecommendations
+		)
 	);
 	const busy = $derived(
-		projectMembership.isPending ||
+		projectAssignment.isPending ||
 			addTagMutation.isPending ||
 			toggleTagMutation.isPending ||
 			suggestedTagMutation.isPending ||
@@ -60,7 +68,7 @@
 	}
 
 	function toggleProject(project: OrganizeView['projects'][number]) {
-		track(projectMembership.mutateAsync({ project }));
+		track(projectAssignment.mutateAsync({ project }));
 	}
 
 	function addTag(event: SubmitEvent) {

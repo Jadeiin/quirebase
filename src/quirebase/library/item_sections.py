@@ -1,4 +1,4 @@
-"""Open one Item and build the read model for its selected workspace section."""
+"""Open one Item section and build its section-specific read model."""
 
 from __future__ import annotations
 
@@ -10,7 +10,12 @@ from typing import TYPE_CHECKING, Any, cast
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import selectinload
 
-from quirebase.access import Capability, require_workspace_capability, role_has_capability
+from quirebase.access import (
+    Capability,
+    require_workspace_capability,
+    role_has_capability,
+    visible_project_ids_query,
+)
 from quirebase.access.items import can_delete_item, can_edit_item, require_readable_item
 from quirebase.core.errors import ResourceNotFound
 from quirebase.library.authors import get_item_authors
@@ -29,7 +34,6 @@ from quirebase.models import (
     PdfAnnotation,
     Project,
     ProjectItem,
-    ProjectMember,
     ProjectState,
     Tag,
     User,
@@ -39,8 +43,8 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
-class WorkspaceSection(StrEnum):
-    summary = "summary"
+class ItemSection(StrEnum):
+    overview = "overview"
     metadata = "metadata"
     files = "files"
     organize = "organize"
@@ -48,7 +52,7 @@ class WorkspaceSection(StrEnum):
     discussion = "discussion"
 
     @classmethod
-    def parse(cls, value: str) -> WorkspaceSection:
+    def parse(cls, value: str) -> ItemSection:
         try:
             return cls(value)
         except ValueError as error:
@@ -56,7 +60,7 @@ class WorkspaceSection(StrEnum):
 
 
 @dataclass(frozen=True)
-class WorkspaceView:
+class ItemSectionData:
     item: Item
     can_edit: bool
     can_delete: bool
@@ -64,7 +68,7 @@ class WorkspaceView:
 
 
 @dataclass(frozen=True)
-class SummaryWorkspace(WorkspaceView):
+class ItemOverviewData(ItemSectionData):
     revision_count: int
     attachment_count: int
     annotation_count: int
@@ -75,19 +79,19 @@ class SummaryWorkspace(WorkspaceView):
 
 
 @dataclass(frozen=True)
-class MetadataWorkspace(WorkspaceView):
+class ItemMetadataData(ItemSectionData):
     authors: tuple[ItemAuthor, ...]
     editors: tuple[ItemAuthor, ...]
     metadata: ItemMetadata
 
 
 @dataclass(frozen=True)
-class FilesWorkspace(WorkspaceView):
+class ItemFilesData(ItemSectionData):
     attachments: tuple[Attachment, ...]
 
 
 @dataclass(frozen=True)
-class ProjectMembership:
+class ProjectAssignmentOption:
     project: Project
 
 
@@ -111,9 +115,9 @@ class TagMatrix:
 
 
 @dataclass(frozen=True)
-class OrganizeWorkspace(WorkspaceView):
+class ItemOrganizationData(ItemSectionData):
     tags: tuple[Tag, ...]
-    memberships: tuple[ProjectMembership, ...]
+    projects: tuple[ProjectAssignmentOption, ...]
     assigned_project_ids: frozenset[str]
     tag_matrix: TagMatrix
 
@@ -126,22 +130,22 @@ class AnnotationView:
 
 
 @dataclass(frozen=True)
-class AnnotationsWorkspace(WorkspaceView):
+class ItemAnnotationsData(ItemSectionData):
     annotations: tuple[AnnotationView, ...]
 
 
 @dataclass(frozen=True)
-class DiscussionWorkspace(WorkspaceView):
+class ItemDiscussionData(ItemSectionData):
     messages: tuple[DiscussionMessage, ...]
 
 
-type ItemWorkspace = (
-    SummaryWorkspace
-    | MetadataWorkspace
-    | FilesWorkspace
-    | OrganizeWorkspace
-    | AnnotationsWorkspace
-    | DiscussionWorkspace
+type ItemSectionResult = (
+    ItemOverviewData
+    | ItemMetadataData
+    | ItemFilesData
+    | ItemOrganizationData
+    | ItemAnnotationsData
+    | ItemDiscussionData
 )
 
 
@@ -153,7 +157,7 @@ async def _record_read(db: AsyncSession, user: User, workspace_id: str, item_id:
         read.last_read_at = datetime.now(UTC)
 
 
-async def _open_summary(db: AsyncSession, user: User, item: Item) -> SummaryWorkspace:
+async def _open_overview(db: AsyncSession, user: User, item: Item) -> ItemOverviewData:
     context = await require_workspace_capability(
         db, user, item.workspace_id, Capability.workspace_read
     )
@@ -170,17 +174,13 @@ async def _open_summary(db: AsyncSession, user: User, item: Item) -> SummaryWork
             )
         ).all()
     )
-    member_projects = select(ProjectMember.project_id).where(
-        ProjectMember.workspace_id == item.workspace_id,
-        ProjectMember.user_id == user.id,
-    )
     visible_project_items = (
         select(ProjectItem.id)
         .join(Project, Project.id == ProjectItem.project_id)
         .where(
             ProjectItem.workspace_id == item.workspace_id,
             Project.state != ProjectState.deleted,
-            (Project.visibility == "workspace") | Project.id.in_(member_projects),
+            Project.id.in_(visible_project_ids_query(context)),
         )
     )
     revision_ids = [revision.id for revision in revisions]
@@ -249,7 +249,7 @@ async def _open_summary(db: AsyncSession, user: User, item: Item) -> SummaryWork
             )
         ).all()
     )
-    return SummaryWorkspace(
+    return ItemOverviewData(
         item=item,
         can_edit=await can_edit_item(db, user, item.workspace_id, item.id),
         can_delete=await can_delete_item(db, user, item.workspace_id, item.id),
@@ -277,13 +277,13 @@ async def _revisions(
     return tuple((await db.scalars(query)).all())
 
 
-async def _open_metadata(db: AsyncSession, user: User, item: Item) -> MetadataWorkspace:
+async def _open_metadata(db: AsyncSession, user: User, item: Item) -> ItemMetadataData:
     authors = tuple(await get_item_authors(db, item.id, role="author"))
     editors = tuple(await get_item_authors(db, item.id, role="editor"))
     identifiers = tuple(
         (await db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item.id))).all()
     )
-    return MetadataWorkspace(
+    return ItemMetadataData(
         item=item,
         can_edit=await can_edit_item(db, user, item.workspace_id, item.id),
         can_delete=await can_delete_item(db, user, item.workspace_id, item.id),
@@ -294,7 +294,7 @@ async def _open_metadata(db: AsyncSession, user: User, item: Item) -> MetadataWo
     )
 
 
-async def _open_files(db: AsyncSession, user: User, item: Item) -> FilesWorkspace:
+async def _open_files(db: AsyncSession, user: User, item: Item) -> ItemFilesData:
     attachments = tuple(
         (
             await db.scalars(
@@ -307,7 +307,7 @@ async def _open_files(db: AsyncSession, user: User, item: Item) -> FilesWorkspac
             )
         ).all()
     )
-    return FilesWorkspace(
+    return ItemFilesData(
         item=item,
         can_edit=await can_edit_item(db, user, item.workspace_id, item.id),
         can_delete=await can_delete_item(db, user, item.workspace_id, item.id),
@@ -339,7 +339,10 @@ def _typed_tag_matrix(raw: dict[str, Any]) -> TagMatrix:
     )
 
 
-async def _open_organize(db: AsyncSession, user: User, item: Item) -> OrganizeWorkspace:
+async def _open_organize(db: AsyncSession, user: User, item: Item) -> ItemOrganizationData:
+    context = await require_workspace_capability(
+        db, user, item.workspace_id, Capability.workspace_read
+    )
     tags = tuple(
         (
             await db.scalars(
@@ -354,27 +357,19 @@ async def _open_organize(db: AsyncSession, user: User, item: Item) -> OrganizeWo
             )
         ).all()
     )
-    membership_rows = (
-        (
-            await db.execute(
-                select(Project)
-                .outerjoin(
-                    ProjectMember,
-                    (ProjectMember.project_id == Project.id) & (ProjectMember.user_id == user.id),
-                )
-                .where(
-                    Project.workspace_id == item.workspace_id,
-                    Project.state != ProjectState.deleted,
-                    (Project.visibility == "workspace") | ProjectMember.id.is_not(None),
-                )
-                .order_by(Project.name)
+    project_rows = (
+        await db.scalars(
+            select(Project)
+            .where(
+                Project.workspace_id == item.workspace_id,
+                Project.state == ProjectState.active,
+                Project.id.in_(visible_project_ids_query(context)),
             )
+            .order_by(Project.name)
         )
-        .scalars()
-        .all()
-    )
-    memberships = tuple(ProjectMembership(project=row) for row in membership_rows)
-    visible_project_ids = {membership.project.id for membership in memberships}
+    ).all()
+    project_options = tuple(ProjectAssignmentOption(project=row) for row in project_rows)
+    visible_project_ids = {option.project.id for option in project_options}
     assigned_project_ids = frozenset(
         (
             await db.scalars(
@@ -386,13 +381,13 @@ async def _open_organize(db: AsyncSession, user: User, item: Item) -> OrganizeWo
             )
         ).all()
     )
-    return OrganizeWorkspace(
+    return ItemOrganizationData(
         item=item,
         can_edit=await can_edit_item(db, user, item.workspace_id, item.id),
         can_delete=await can_delete_item(db, user, item.workspace_id, item.id),
         revisions=await _revisions(db, item.workspace_id, item.id),
         tags=tags,
-        memberships=memberships,
+        projects=project_options,
         assigned_project_ids=assigned_project_ids,
         tag_matrix=_typed_tag_matrix(
             await get_tag_matrix_for_item(db, user, item.workspace_id, item.id)
@@ -400,7 +395,7 @@ async def _open_organize(db: AsyncSession, user: User, item: Item) -> OrganizeWo
     )
 
 
-async def _open_annotations(db: AsyncSession, user: User, item: Item) -> AnnotationsWorkspace:
+async def _open_annotations(db: AsyncSession, user: User, item: Item) -> ItemAnnotationsData:
     context = await require_workspace_capability(
         db, user, item.workspace_id, Capability.workspace_read
     )
@@ -408,17 +403,13 @@ async def _open_annotations(db: AsyncSession, user: User, item: Item) -> Annotat
     revisions = await _revisions(db, item.workspace_id, item.id, all_revisions=True)
     annotations: tuple[AnnotationView, ...] = ()
     if revisions:
-        member_projects = select(ProjectMember.project_id).where(
-            ProjectMember.workspace_id == item.workspace_id,
-            ProjectMember.user_id == user.id,
-        )
         visible_project_items = (
             select(ProjectItem.id)
             .join(Project, Project.id == ProjectItem.project_id)
             .where(
                 ProjectItem.workspace_id == item.workspace_id,
                 Project.state != ProjectState.deleted,
-                (Project.visibility == "workspace") | Project.id.in_(member_projects),
+                Project.id.in_(visible_project_ids_query(context)),
             )
         )
         rows = (
@@ -455,7 +446,7 @@ async def _open_annotations(db: AsyncSession, user: User, item: Item) -> Annotat
         annotations = tuple(
             AnnotationView(annotation=row[0], revision=row[1], author=row[2]) for row in rows
         )
-    return AnnotationsWorkspace(
+    return ItemAnnotationsData(
         item=item,
         can_edit=await can_edit_item(db, user, item.workspace_id, item.id),
         can_delete=await can_delete_item(db, user, item.workspace_id, item.id),
@@ -464,7 +455,7 @@ async def _open_annotations(db: AsyncSession, user: User, item: Item) -> Annotat
     )
 
 
-async def _open_discussion(db: AsyncSession, user: User, item: Item) -> DiscussionWorkspace:
+async def _open_discussion(db: AsyncSession, user: User, item: Item) -> ItemDiscussionData:
     messages = tuple(
         (
             await db.scalars(
@@ -478,7 +469,7 @@ async def _open_discussion(db: AsyncSession, user: User, item: Item) -> Discussi
             )
         ).all()
     )
-    return DiscussionWorkspace(
+    return ItemDiscussionData(
         item=item,
         can_edit=await can_edit_item(db, user, item.workspace_id, item.id),
         can_delete=await can_delete_item(db, user, item.workspace_id, item.id),
@@ -487,28 +478,28 @@ async def _open_discussion(db: AsyncSession, user: User, item: Item) -> Discussi
     )
 
 
-async def open_item_workspace(
+async def open_item_section(
     db: AsyncSession,
     user: User,
     workspace_id: str,
     item_id: str,
-    section: WorkspaceSection,
-) -> ItemWorkspace:
+    section: ItemSection,
+) -> ItemSectionResult:
     try:
         item = await require_readable_item(db, user, workspace_id, item_id)
-        view: ItemWorkspace
+        view: ItemSectionResult
         match section:
-            case WorkspaceSection.summary:
-                view = await _open_summary(db, user, item)
-            case WorkspaceSection.metadata:
+            case ItemSection.overview:
+                view = await _open_overview(db, user, item)
+            case ItemSection.metadata:
                 view = await _open_metadata(db, user, item)
-            case WorkspaceSection.files:
+            case ItemSection.files:
                 view = await _open_files(db, user, item)
-            case WorkspaceSection.organize:
+            case ItemSection.organize:
                 view = await _open_organize(db, user, item)
-            case WorkspaceSection.annotations:
+            case ItemSection.annotations:
                 view = await _open_annotations(db, user, item)
-            case WorkspaceSection.discussion:
+            case ItemSection.discussion:
                 view = await _open_discussion(db, user, item)
         await _record_read(db, user, workspace_id, item.id)
         await db.commit()

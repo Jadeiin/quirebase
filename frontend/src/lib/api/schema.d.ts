@@ -57,15 +57,33 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/dashboard': {
+	'/api/v1/workspaces': {
 		parameters: {
 			query?: never;
 			header?: never;
 			path?: never;
 			cookie?: never;
 		};
-		/** Dashboard */
-		get: operations['dashboard.dashboard'];
+		/** Get Workspaces */
+		get: operations['workspaces.get_workspaces'];
+		put?: never;
+		/** Create User Workspace */
+		post: operations['workspaces.create_user_workspace'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/creation-availability': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Get Workspace Creation Availability */
+		get: operations['workspaces.get_workspace_creation_availability'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -74,69 +92,15 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/bulk': {
+	'/api/v1/workspace-invitations/{token}': {
 		parameters: {
 			query?: never;
 			header?: never;
 			path?: never;
 			cookie?: never;
 		};
-		get?: never;
-		put?: never;
-		/** Apply Item Bulk Action */
-		post: operations['library.apply_item_bulk_action'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Search Items */
-		get: operations['library.search_items'];
-		put?: never;
-		/** Create Library Item */
-		post: operations['library.create_library_item'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Get Library Item */
-		get: operations['library.get_library_item'];
-		/** Update Library Item */
-		put: operations['library.update_library_item'];
-		post?: never;
-		/** Delete Library Item */
-		delete: operations['items.delete_library_item'];
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/citation': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Format Item Citation */
-		get: operations['library.format_item_citation'];
+		/** Workspace Invitation Details */
+		get: operations['workspaces.workspace_invitation_details'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -145,643 +109,40 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/tags': {
+	'/api/v1/workspace-invitations/{token}/accept': {
 		parameters: {
 			query?: never;
 			header?: never;
 			path?: never;
 			cookie?: never;
 		};
-		/** List Tags */
-		get: operations['library.list_tags'];
+		get?: never;
+		put?: never;
+		/** Accept Workspace Invitation Api */
+		post: operations['workspaces.accept_workspace_invitation_api'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Get User Workspace */
+		get: operations['workspaces.get_user_workspace'];
 		put?: never;
 		post?: never;
-		delete?: never;
+		/** Delete User Workspace */
+		delete: operations['workspaces.delete_user_workspace'];
 		options?: never;
 		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/tags': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		/** Set Item Tag Selection */
-		put: operations['library.set_item_tag_selection'];
-		/** Add Item Tag */
-		post: operations['library.add_item_tag'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/tags/{tag_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		post?: never;
-		/** Remove Item Tag */
-		delete: operations['library.remove_item_tag'];
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/discussions': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** List Discussions */
-		get: operations['library.list_discussions'];
-		put?: never;
-		/** Create Discussion */
-		post: operations['library.create_discussion'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/discussions/{message_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		post?: never;
-		/** Delete Discussion */
-		delete: operations['library.delete_discussion'];
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/bibliography': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Export Item Selection */
-		post: operations['library_exports.export_item_selection'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/documents/archive': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Download Item Selection */
-		post: operations['library_exports.download_item_selection'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/bibliography': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Export Library Bibliography */
-		get: operations['library_exports.export_library_bibliography'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/imports/bibliography': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Stage Bibliography Import */
-		post: operations['imports.stage_bibliography_import'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/imports/identifier': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Stage Identifier Import */
-		post: operations['imports.stage_identifier_import'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/imports/pdfs': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Stage Pdf Import */
-		post: operations['imports.stage_pdf_import'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/imports/{batch_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Import Batch */
-		get: operations['imports.import_batch'];
-		put?: never;
-		post?: never;
-		/** Discard Staged Import */
-		delete: operations['imports.discard_staged_import'];
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/imports/{batch_id}/retry': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Retry Import Batch */
-		post: operations['imports.retry_import_batch'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/imports/{batch_id}/commit': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Commit Staged Import */
-		post: operations['imports.commit_staged_import'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/projects': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** List Projects */
-		get: operations['projects.list_projects'];
-		put?: never;
-		/** Create User Project */
-		post: operations['projects.create_user_project'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/projects/joinable': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** List Projects Available To Join */
-		get: operations['projects.list_projects_available_to_join'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/projects/{project_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Get Project */
-		get: operations['projects.get_project'];
-		put?: never;
-		post?: never;
-		/** Delete User Project */
-		delete: operations['projects.delete_user_project'];
-		options?: never;
-		head?: never;
-		/** Update Project */
-		patch: operations['projects.update_project'];
-		trace?: never;
-	};
-	'/api/v1/projects/{project_id}/description': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Update Project Description Api */
-		post: operations['projects.update_project_description_api'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/projects/{project_id}/archive': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Archive Project */
-		post: operations['projects.archive_project'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/projects/{project_id}/restore': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Restore Project */
-		post: operations['projects.restore_project'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/projects/{project_id}/visibility': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Set Project Visibility Api */
-		post: operations['projects.set_project_visibility_api'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/projects/{project_id}/leave': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Leave User Project */
-		post: operations['projects.leave_user_project'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/projects/{project_id}/join': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Join Public Project */
-		post: operations['projects.join_public_project'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/projects/{project_id}/ownership/{user_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Transfer User Project */
-		post: operations['projects.transfer_user_project'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/projects/{project_id}/items/{item_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		/** Add Project Item */
-		put: operations['projects.add_project_item'];
-		post?: never;
-		/** Remove Project Item */
-		delete: operations['projects.remove_project_item'];
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/projects/{project_id}/members': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		/** Set Project Member */
-		put: operations['projects.set_project_member'];
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/projects/{project_id}/members/{user_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		post?: never;
-		/** Remove Project Member */
-		delete: operations['projects.remove_project_member'];
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/annotations/review': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Review Annotations */
-		get: operations['annotations.review_annotations'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/annotations': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** List Annotations */
-		get: operations['annotations.list_annotations'];
-		put?: never;
-		/** Create Annotation */
-		post: operations['annotations.create_annotation'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/annotations/{annotation_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		post?: never;
-		/** Delete Annotation */
-		delete: operations['annotations.delete_annotation'];
-		options?: never;
-		head?: never;
-		/** Update Annotation */
-		patch: operations['annotations.update_annotation'];
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/annotations/{annotation_id}/restore': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Restore Annotation */
-		post: operations['annotations.restore_annotation'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/annotations/{annotation_id}/replies': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Create Reply */
-		post: operations['annotations.create_reply'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		post?: never;
-		/** Delete Reply */
-		delete: operations['annotations.delete_reply'];
-		options?: never;
-		head?: never;
-		/** Update Reply */
-		patch: operations['annotations.update_reply'];
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}/restore': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Restore Reply */
-		post: operations['annotations.restore_reply'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/discovery/search': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Search Discovery */
-		post: operations['discovery.search_discovery'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/discovery/providers': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Discovery Providers */
-		get: operations['discovery.discovery_providers'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/workflows/{workflow_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Workflow Status */
-		get: operations['workflows.workflow_status'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
+		/** Update User Workspace */
+		patch: operations['workspaces.update_user_workspace'];
 		trace?: never;
 	};
 	'/api/v1/invitations/{token}': {
@@ -812,6 +173,23 @@ export interface paths {
 		put?: never;
 		/** Accept User Invitation */
 		post: operations['account.accept_user_invitation'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/register': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Register Account */
+		post: operations['account.register_account'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -1040,57 +418,6 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/admin/projects': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Admin Projects */
-		get: operations['admin.admin_projects'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/admin/items': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Admin Items */
-		get: operations['admin.admin_items'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/admin/items/{item_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		post?: never;
-		/** Admin Delete Item */
-		delete: operations['admin.admin_delete_item'];
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
 	'/api/v1/admin/audit': {
 		parameters: {
 			query?: never;
@@ -1160,6 +487,74 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/admin/workspaces': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Admin Workspaces */
+		get: operations['admin.admin_workspaces'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/admin/workspaces/{workspace_id}/suspend': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Admin Suspend Workspace */
+		post: operations['admin.admin_suspend_workspace'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/admin/workspaces/{workspace_id}/recover': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Admin Recover Workspace */
+		post: operations['admin.admin_recover_workspace'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/admin/workspaces/{workspace_id}/break-glass/items': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Admin Break Glass Items */
+		post: operations['admin.admin_break_glass_items'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/admin/maintenance/{operation}': {
 		parameters: {
 			query?: never;
@@ -1171,23 +566,6 @@ export interface paths {
 		put?: never;
 		/** Run Maintenance */
 		post: operations['admin.run_maintenance'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/admin/maintenance/backups/{workflow_id}/content': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Download Backup */
-		get: operations['admin.download_backup'];
-		put?: never;
-		post?: never;
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -1211,7 +589,991 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/bibliography': {
+	'/api/v1/workspaces/{workspace_id}/members': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Get Workspace Members */
+		get: operations['workspaces.get_workspace_members'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/governance/members': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Get Workspace Governance Members */
+		get: operations['workspaces.get_workspace_governance_members'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/invitations': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Get Workspace Invitations */
+		get: operations['workspaces.get_workspace_invitations'];
+		put?: never;
+		/** Create Workspace Invitation */
+		post: operations['workspaces.create_workspace_invitation'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/invitations/{invitation_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Revoke Workspace Invitation Api */
+		delete: operations['workspaces.revoke_workspace_invitation_api'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/members/{membership_id}/role': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Change Workspace Member Role */
+		put: operations['workspaces.change_workspace_member_role'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/members/{membership_id}/suspend': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Suspend Member */
+		post: operations['workspaces.suspend_member'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/members/{membership_id}/reactivate': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Reactivate Member */
+		post: operations['workspaces.reactivate_member'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/members/{membership_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Terminate Member */
+		delete: operations['workspaces.terminate_member'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/ownership/{membership_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Transfer Ownership */
+		post: operations['workspaces.transfer_ownership'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/archive': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Archive User Workspace */
+		post: operations['workspaces.archive_user_workspace'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/restore': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Restore User Workspace */
+		post: operations['workspaces.restore_user_workspace'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/maintenance/reindex': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Reindex Workspace */
+		post: operations['workspaces.reindex_workspace'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/dashboard': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Dashboard */
+		get: operations['dashboard.dashboard'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/bulk': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Apply Item Bulk Action */
+		post: operations['library.apply_item_bulk_action'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Search Items */
+		get: operations['library.search_items'];
+		put?: never;
+		/** Create Library Item */
+		post: operations['library.create_library_item'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Get Library Item */
+		get: operations['library.get_library_item'];
+		/** Update Library Item */
+		put: operations['library.update_library_item'];
+		post?: never;
+		/** Delete Library Item */
+		delete: operations['items.delete_library_item'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/copy': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Copy Library Item */
+		post: operations['library.copy_library_item'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/citation': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Format Item Citation */
+		get: operations['library.format_item_citation'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/tags': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** List Tags */
+		get: operations['library.list_tags'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/tags': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Set Item Tag Selection */
+		put: operations['library.set_item_tag_selection'];
+		/** Add Item Tag */
+		post: operations['library.add_item_tag'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/tags/{tag_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Remove Item Tag */
+		delete: operations['library.remove_item_tag'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/discussions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** List Discussions */
+		get: operations['library.list_discussions'];
+		put?: never;
+		/** Create Discussion */
+		post: operations['library.create_discussion'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/discussions/{message_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Delete Discussion */
+		delete: operations['library.delete_discussion'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/bibliography': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Export Item Selection */
+		post: operations['library_exports.export_item_selection'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/documents/archive': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Download Item Selection */
+		post: operations['library_exports.download_item_selection'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/bibliography': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Export Library Bibliography */
+		get: operations['library_exports.export_library_bibliography'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/imports/bibliography': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Stage Bibliography Import */
+		post: operations['imports.stage_bibliography_import'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/imports/identifier': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Stage Identifier Import */
+		post: operations['imports.stage_identifier_import'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/imports/pdfs': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Stage Pdf Import */
+		post: operations['imports.stage_pdf_import'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/imports/{batch_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Import Batch */
+		get: operations['imports.import_batch'];
+		put?: never;
+		post?: never;
+		/** Discard Staged Import */
+		delete: operations['imports.discard_staged_import'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/imports/{batch_id}/retry': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Retry Import Batch */
+		post: operations['imports.retry_import_batch'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/imports/{batch_id}/commit': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Commit Staged Import */
+		post: operations['imports.commit_staged_import'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/projects': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** List Projects */
+		get: operations['projects.list_projects'];
+		put?: never;
+		/** Create User Project */
+		post: operations['projects.create_user_project'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/projects/joinable': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** List Joinable Projects Api */
+		get: operations['projects.list_joinable_projects_api'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/projects/{project_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Get Project */
+		get: operations['projects.get_project'];
+		put?: never;
+		post?: never;
+		/** Delete User Project */
+		delete: operations['projects.delete_user_project'];
+		options?: never;
+		head?: never;
+		/** Update Project */
+		patch: operations['projects.update_project'];
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/description': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Update Project Description Api */
+		post: operations['projects.update_project_description_api'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/archive': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Archive Project */
+		post: operations['projects.archive_project'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/restore': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Restore Project */
+		post: operations['projects.restore_project'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/visibility': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Set Project Visibility Api */
+		post: operations['projects.set_project_visibility_api'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/items/{item_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Add Project Item */
+		put: operations['projects.add_project_item'];
+		post?: never;
+		/** Remove Project Item */
+		delete: operations['projects.remove_project_item'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/join': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Join Project Api */
+		post: operations['projects.join_project_api'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/leave': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Leave Project Api */
+		post: operations['projects.leave_project_api'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/members': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Set Project Member */
+		put: operations['projects.set_project_member'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/members/{user_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Remove Project Member */
+		delete: operations['projects.remove_project_member'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/discussions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** List Project Discussions */
+		get: operations['projects.list_project_discussions'];
+		put?: never;
+		/** Create Project Discussion */
+		post: operations['projects.create_project_discussion'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/discussions/{message_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Delete Project Discussion */
+		delete: operations['projects.delete_project_discussion'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/annotations/review': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Review Annotations */
+		get: operations['annotations.review_annotations'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/annotations': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** List Annotations */
+		get: operations['annotations.list_annotations'];
+		put?: never;
+		/** Create Annotation */
+		post: operations['annotations.create_annotation'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/annotations/{annotation_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Delete Annotation */
+		delete: operations['annotations.delete_annotation'];
+		options?: never;
+		head?: never;
+		/** Update Annotation */
+		patch: operations['annotations.update_annotation'];
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/annotations/{annotation_id}/restore': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Restore Annotation */
+		post: operations['annotations.restore_annotation'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/annotations/{annotation_id}/moderation': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Moderate Annotation */
+		post: operations['annotations.moderate_annotation'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/annotations/{annotation_id}/replies': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Create Reply */
+		post: operations['annotations.create_reply'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Delete Reply */
+		delete: operations['annotations.delete_reply'];
+		options?: never;
+		head?: never;
+		/** Update Reply */
+		patch: operations['annotations.update_reply'];
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}/restore': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Restore Reply */
+		post: operations['annotations.restore_reply'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/discovery/search': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Search Discovery */
+		post: operations['discovery.search_discovery'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/discovery/providers': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Discovery Providers */
+		get: operations['discovery.discovery_providers'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/workflows/{workflow_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Workflow Status */
+		get: operations['workflows.workflow_status'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/bibliography': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1228,7 +1590,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/bibliography/content': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/bibliography/content': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1245,7 +1607,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/citation/content': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/citation/content': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1262,7 +1624,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/documents': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/documents': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1279,7 +1641,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/archive': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/archive': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1296,7 +1658,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/attachments': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/attachments': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1313,7 +1675,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/attachments/remote': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/attachments/remote': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1330,7 +1692,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/attachments/{attachment_id}/content': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/attachments/{attachment_id}/content': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1347,7 +1709,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/attachments/{attachment_id}': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/attachments/{attachment_id}': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1364,7 +1726,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/revisions': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/revisions': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1381,7 +1743,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/revisions/remote': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/revisions/remote': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1398,7 +1760,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/revisions/{revision_id}': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/revisions/{revision_id}': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1415,7 +1777,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/revisions/{revision_id}/viewer': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/revisions/{revision_id}/viewer': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1432,7 +1794,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/revisions/{revision_id}/content': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/revisions/{revision_id}/content': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1449,7 +1811,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/revisions/{revision_id}/thumbnail': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/revisions/{revision_id}/thumbnail': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1466,7 +1828,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/thumbnail': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/thumbnail': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1483,7 +1845,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/revisions/{revision_id}/export': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/revisions/{revision_id}/export': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1500,7 +1862,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/annotation-exports': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/annotation-exports': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1517,7 +1879,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/annotation-exports/{workflow_id}': {
+	'/api/v1/workspaces/{workspace_id}/annotation-exports/{workflow_id}': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1534,7 +1896,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/annotation-exports/{workflow_id}/content': {
+	'/api/v1/workspaces/{workspace_id}/annotation-exports/{workflow_id}/content': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1551,15 +1913,15 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/workspace': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/overview': {
 		parameters: {
 			query?: never;
 			header?: never;
 			path?: never;
 			cookie?: never;
 		};
-		/** Item Workspace */
-		get: operations['items.item_workspace'];
+		/** Item Overview */
+		get: operations['items.item_overview'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -1568,15 +1930,15 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/organize': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/organize': {
 		parameters: {
 			query?: never;
 			header?: never;
 			path?: never;
 			cookie?: never;
 		};
-		/** Item Organize Workspace */
-		get: operations['items.item_organize_workspace'];
+		/** Item Organize */
+		get: operations['items.item_organize'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -1585,7 +1947,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/metadata/sync': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/metadata/sync': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1602,7 +1964,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/doi/rescan': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/doi/rescan': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1619,7 +1981,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/citation-key/regenerate': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/citation-key/regenerate': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1636,7 +1998,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/tag-recommendations': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/tag-recommendations': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1653,7 +2015,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/authors': {
+	'/api/v1/workspaces/{workspace_id}/authors': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1670,7 +2032,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/citation-key-preview': {
+	'/api/v1/workspaces/{workspace_id}/citation-key-preview': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1687,7 +2049,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/citation-styles': {
+	'/api/v1/workspaces/{workspace_id}/citation-styles': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1705,7 +2067,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/duplicates': {
+	'/api/v1/workspaces/{workspace_id}/duplicates': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1722,7 +2084,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/citation-styles/{style_id}': {
+	'/api/v1/workspaces/{workspace_id}/citation-styles/{style_id}': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1739,7 +2101,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/tags/merge': {
+	'/api/v1/workspaces/{workspace_id}/tags/merge': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1756,7 +2118,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/tags/{tag_id}': {
+	'/api/v1/workspaces/{workspace_id}/tags/{tag_id}': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1792,12 +2154,26 @@ export interface components {
 			id: string;
 			/** Actor Id */
 			actor_id?: string | null;
+			/** Workspace Id */
+			workspace_id?: string | null;
+			/** Project Id */
+			project_id?: string | null;
 			/** Action */
 			action: string;
 			/** Target Type */
 			target_type: string;
 			/** Target Id */
 			target_id?: string | null;
+			/** Target Ids */
+			target_ids?: string[] | null;
+			/** Authorization Role */
+			authorization_role?: string | null;
+			/** Authorization Capability */
+			authorization_capability?: string | null;
+			/** Result */
+			result?: string | null;
+			/** Source */
+			source?: string | null;
 			/** Detail */
 			detail?: unknown | null;
 			/**
@@ -1851,18 +2227,6 @@ export interface components {
 			/** Accepted At */
 			accepted_at?: string | null;
 		};
-		/** AdminItemsView */
-		AdminItemsView: {
-			/** Items */
-			items: components['schemas']['ItemSearchView'][];
-			/** Total */
-			total: number;
-			/** Page */
-			page: number;
-			/** Per Page */
-			per_page: number;
-			storage: components['schemas']['StorageMetricsView'];
-		};
 		/** AdminMaintenanceView */
 		AdminMaintenanceView: {
 			storage: components['schemas']['StorageMetricsView'];
@@ -1881,44 +2245,18 @@ export interface components {
 			/** Recent Events */
 			recent_events: components['schemas']['AdminAuditEventView'][];
 		};
-		/** AdminProjectItemView */
-		AdminProjectItemView: {
-			/** Id */
-			id: string;
-			/** Name */
-			name: string;
-			/** Description */
-			description: string;
-			/** State */
-			state: string;
-			/** Visibility */
-			visibility: string;
-			creator: components['schemas']['AdminProjectUserView'];
-			/** Member Count */
-			member_count: number;
-			/** Item Count */
-			item_count: number;
-		};
-		/** AdminProjectUserView */
-		AdminProjectUserView: {
-			/** Id */
-			id: string;
-			/** Username */
-			username: string;
-		};
-		/** AdminProjectsView */
-		AdminProjectsView: {
-			/** Projects */
-			projects: components['schemas']['AdminProjectItemView'][];
-			/** Total */
-			total: number;
-			/** Page */
-			page: number;
-			/** Per Page */
-			per_page: number;
-		};
 		/** AdminSettingsView */
 		AdminSettingsView: {
+			/**
+			 * Registration Policy
+			 * @enum {string}
+			 */
+			registration_policy: 'open' | 'closed' | 'invitation_only';
+			/**
+			 * Workspace Creation Policy
+			 * @enum {string}
+			 */
+			workspace_creation_policy: 'admins_only' | 'members_allowed';
 			/** Metadata Contact Email */
 			metadata_contact_email: string;
 			/** Ncbi Api Key */
@@ -1989,6 +2327,21 @@ export interface components {
 			/** Workflows */
 			workflows: components['schemas']['WorkflowSummaryView'][];
 		};
+		/** AdminWorkspaceView */
+		AdminWorkspaceView: {
+			/** Id */
+			id: string;
+			/** Name */
+			name: string;
+			/** Owner Id */
+			owner_id: string;
+			/** State */
+			state: string;
+			/** Governance Suspended At */
+			governance_suspended_at?: string | null;
+			/** Governance Suspended By */
+			governance_suspended_by?: string | null;
+		};
 		/** AnnotationCreate */
 		AnnotationCreate: {
 			/**
@@ -2044,6 +2397,16 @@ export interface components {
 			| 'ellipse'
 			| 'line'
 			| 'arrow';
+		/** AnnotationModerationRequest */
+		AnnotationModerationRequest: {
+			/**
+			 * Action
+			 * @enum {string}
+			 */
+			action: 'hide' | 'archive' | 'restore' | 'lock' | 'unlock';
+			/** Version */
+			version: number;
+		};
 		/** AnnotationReplyCreate */
 		AnnotationReplyCreate: {
 			/**
@@ -2116,6 +2479,16 @@ export interface components {
 			mine: boolean;
 			/** Editable */
 			editable: boolean;
+			/** Allowed Actions */
+			allowed_actions: ('edit' | 'delete' | 'hide' | 'archive' | 'restore' | 'lock' | 'unlock')[];
+			/** Hidden At */
+			hidden_at?: string | null;
+			/** Archived At */
+			archived_at?: string | null;
+			/** Locked At */
+			locked_at?: string | null;
+			/** Moderated By */
+			moderated_by?: string | null;
 			/** Created At */
 			created_at: string;
 			/** Updated At */
@@ -2230,6 +2603,16 @@ export interface components {
 			mine: boolean;
 			/** Editable */
 			editable: boolean;
+			/** Allowed Actions */
+			allowed_actions: ('edit' | 'delete' | 'hide' | 'archive' | 'restore' | 'lock' | 'unlock')[];
+			/** Hidden At */
+			hidden_at?: string | null;
+			/** Archived At */
+			archived_at?: string | null;
+			/** Locked At */
+			locked_at?: string | null;
+			/** Moderated By */
+			moderated_by?: string | null;
 			/** Created At */
 			created_at: string;
 			/** Updated At */
@@ -2418,6 +2801,11 @@ export interface components {
 			 */
 			citation_key_force_ascii: boolean;
 		};
+		/** BreakGlassReadRequest */
+		BreakGlassReadRequest: {
+			/** Reason */
+			reason: string;
+		};
 		/** BulkActionRequest */
 		BulkActionRequest: {
 			/** Item Ids */
@@ -2539,6 +2927,22 @@ export interface components {
 			 */
 			is_corresponding: boolean;
 		};
+		/** CrossWorkspaceCopyRequest */
+		CrossWorkspaceCopyRequest: {
+			/** Target Workspace Id */
+			target_workspace_id: string;
+		};
+		/** CrossWorkspaceCopyView */
+		CrossWorkspaceCopyView: {
+			/** Source Workspace Id */
+			source_workspace_id: string;
+			/** Source Item Id */
+			source_item_id: string;
+			/** Target Workspace Id */
+			target_workspace_id: string;
+			/** Target Item Id */
+			target_item_id: string;
+		};
 		/** CustomField */
 		'CustomField-Input': {
 			/** Name */
@@ -2632,7 +3036,9 @@ export interface components {
 			/** Id */
 			id: string;
 			/** Item Id */
-			item_id: string;
+			item_id?: string | null;
+			/** Project Id */
+			project_id?: string | null;
 			/** Author Id */
 			author_id: string;
 			/** Author Username */
@@ -2863,6 +3269,13 @@ export interface components {
 			 */
 			expires_at: string;
 		};
+		/** ItemAllowedActionsView */
+		ItemAllowedActionsView: {
+			/** Edit */
+			edit: boolean;
+			/** Delete */
+			delete: boolean;
+		};
 		/** ItemDetailView */
 		ItemDetailView: {
 			/** Id */
@@ -3051,27 +3464,41 @@ export interface components {
 			id: string;
 			/** Name */
 			name: string;
-			/** Role */
-			role: string;
 			/** Assigned */
 			assigned: boolean;
 		};
 		/** ItemOrganizeView */
 		ItemOrganizeView: {
 			item: components['schemas']['ItemSearchView'];
-			permissions: components['schemas']['ItemWorkspacePermissionsView'];
+			allowed_actions: components['schemas']['ItemAllowedActionsView'];
 			/** Tags */
 			tags: components['schemas']['ItemTagView'][];
 			/** Projects */
 			projects: components['schemas']['ItemOrganizeProjectView'][];
 			tag_matrix: components['schemas']['TagMatrixView'];
 		};
-		/** ItemOwnerView */
-		ItemOwnerView: {
-			/** Id */
-			id: string;
-			/** Username */
-			username: string;
+		/** ItemOverviewCountsView */
+		ItemOverviewCountsView: {
+			/** Revisions */
+			revisions: number;
+			/** Attachments */
+			attachments: number;
+			/** Annotations */
+			annotations: number;
+			/** Discussion */
+			discussion: number;
+		};
+		/** ItemOverviewView */
+		ItemOverviewView: {
+			item: components['schemas']['ItemSearchView'];
+			allowed_actions: components['schemas']['ItemAllowedActionsView'];
+			counts: components['schemas']['ItemOverviewCountsView'];
+			/** Tags */
+			tags: components['schemas']['ItemTagView'][];
+			/** Identifiers */
+			identifiers: components['schemas']['ItemIdentifierView'][];
+			latest_revision?: components['schemas']['ItemLatestRevisionView'] | null;
+			thumbnail?: components['schemas']['ItemThumbnailView'] | null;
 		};
 		/** ItemSearchView */
 		ItemSearchView: {
@@ -3109,55 +3536,6 @@ export interface components {
 			/** Expected Version */
 			expected_version: number;
 			metadata: components['schemas']['ItemMetadata-Input'];
-		};
-		/** ItemWorkspaceCountsView */
-		ItemWorkspaceCountsView: {
-			/** Revisions */
-			revisions: number;
-			/** Attachments */
-			attachments: number;
-			/** Annotations */
-			annotations: number;
-			/** Discussion */
-			discussion: number;
-		};
-		/** ItemWorkspacePermissionsView */
-		ItemWorkspacePermissionsView: {
-			/** Edit */
-			edit: boolean;
-			/** Delete */
-			delete: boolean;
-		};
-		/** ItemWorkspaceView */
-		ItemWorkspaceView: {
-			item: components['schemas']['ItemSearchView'];
-			permissions: components['schemas']['ItemWorkspacePermissionsView'];
-			counts: components['schemas']['ItemWorkspaceCountsView'];
-			/** Tags */
-			tags: components['schemas']['ItemTagView'][];
-			owner: components['schemas']['ItemOwnerView'];
-			/** Identifiers */
-			identifiers: components['schemas']['ItemIdentifierView'][];
-			latest_revision?: components['schemas']['ItemLatestRevisionView'] | null;
-			thumbnail?: components['schemas']['ItemThumbnailView'] | null;
-		};
-		/** JoinableProjectView */
-		JoinableProjectView: {
-			/** Id */
-			id: string;
-			/** Name */
-			name: string;
-			/** Item Count */
-			item_count: number;
-			/** State */
-			state: string;
-			/** Visibility */
-			visibility: string;
-			/**
-			 * Description
-			 * @default
-			 */
-			description: string;
 		};
 		'JsonValue-Input':
 			| string
@@ -3349,10 +3727,10 @@ export interface components {
 			name: string;
 			/**
 			 * Visibility
-			 * @default private
+			 * @default workspace
 			 * @enum {string}
 			 */
-			visibility: 'private' | 'public';
+			visibility: 'workspace' | 'open' | 'managed';
 			/**
 			 * Description
 			 * @default
@@ -3375,19 +3753,24 @@ export interface components {
 			id: string;
 			/** Name */
 			name: string;
-			/** Role */
-			role: string;
 			/** Item Count */
 			item_count: number;
 			/** State */
 			state: string;
-			/** Visibility */
-			visibility: string;
+			/**
+			 * Visibility
+			 * @enum {string}
+			 */
+			visibility: 'workspace' | 'open' | 'managed';
+			/** Is Member */
+			is_member: boolean;
 			/**
 			 * Description
 			 * @default
 			 */
 			description: string;
+			/** Allowed Actions */
+			allowed_actions: string[];
 			/** Members */
 			members: components['schemas']['ProjectMemberView'][];
 			/** Items */
@@ -3397,12 +3780,6 @@ export interface components {
 		ProjectMemberRequest: {
 			/** Username */
 			username: string;
-			/**
-			 * Role
-			 * @default viewer
-			 * @enum {string}
-			 */
-			role: 'editor' | 'viewer';
 		};
 		/** ProjectMemberView */
 		ProjectMemberView: {
@@ -3410,8 +3787,6 @@ export interface components {
 			user_id: string;
 			/** Username */
 			username: string;
-			/** Role */
-			role: string;
 		};
 		/** ProjectSettingsRequest */
 		ProjectSettingsRequest: {
@@ -3421,7 +3796,7 @@ export interface components {
 			 * Visibility
 			 * @enum {string}
 			 */
-			visibility: 'private' | 'public';
+			visibility: 'workspace' | 'open' | 'managed';
 			/** Description */
 			description: string;
 		};
@@ -3431,19 +3806,24 @@ export interface components {
 			id: string;
 			/** Name */
 			name: string;
-			/** Role */
-			role: string;
 			/** Item Count */
 			item_count: number;
 			/** State */
 			state: string;
-			/** Visibility */
-			visibility: string;
+			/**
+			 * Visibility
+			 * @enum {string}
+			 */
+			visibility: 'workspace' | 'open' | 'managed';
+			/** Is Member */
+			is_member: boolean;
 			/**
 			 * Description
 			 * @default
 			 */
 			description: string;
+			/** Allowed Actions */
+			allowed_actions: string[];
 		};
 		/** ProjectVisibilityRequest */
 		ProjectVisibilityRequest: {
@@ -3451,7 +3831,7 @@ export interface components {
 			 * Visibility
 			 * @enum {string}
 			 */
-			visibility: 'private' | 'public';
+			visibility: 'workspace' | 'open' | 'managed';
 		};
 		/** Rect */
 		Rect: {
@@ -3474,6 +3854,13 @@ export interface components {
 			 */
 			type: 'rectangle';
 		};
+		/** RegisterRequest */
+		RegisterRequest: {
+			/** Username */
+			username: string;
+			/** Password */
+			password: string;
+		};
 		/** RemoteAttachmentRequest */
 		RemoteAttachmentRequest: {
 			/** Source */
@@ -3491,6 +3878,18 @@ export interface components {
 		};
 		/** RuntimeSettingsRequest */
 		RuntimeSettingsRequest: {
+			/**
+			 * Registration Policy
+			 * @default invitation_only
+			 * @enum {string}
+			 */
+			registration_policy: 'open' | 'closed' | 'invitation_only';
+			/**
+			 * Workspace Creation Policy
+			 * @default admins_only
+			 * @enum {string}
+			 */
+			workspace_creation_policy: 'admins_only' | 'members_allowed';
 			/**
 			 * Metadata Contact Email
 			 * @default
@@ -3698,6 +4097,153 @@ export interface components {
 			/** Authenticated User */
 			authenticated_user?: string | null;
 		};
+		/** WorkspaceCreateRequest */
+		WorkspaceCreateRequest: {
+			/** Name */
+			name: string;
+			/** Owner Username */
+			owner_username?: string | null;
+		};
+		/** WorkspaceCreationAvailabilityView */
+		WorkspaceCreationAvailabilityView: {
+			/** Allowed */
+			allowed: boolean;
+			/** Owner Username Required */
+			owner_username_required: boolean;
+		};
+		/** WorkspaceGovernanceMemberView */
+		WorkspaceGovernanceMemberView: {
+			/** Membership Id */
+			membership_id: string;
+			/** User Id */
+			user_id: string;
+			/** Username */
+			username: string;
+			/** Role */
+			role: string;
+			/** State */
+			state: string;
+			/**
+			 * Joined At
+			 * Format: date-time
+			 */
+			joined_at: string;
+		};
+		/** WorkspaceInvitationAcceptanceView */
+		WorkspaceInvitationAcceptanceView: {
+			/** Workspace Id */
+			workspace_id: string;
+		};
+		/** WorkspaceInvitationCreatedView */
+		WorkspaceInvitationCreatedView: {
+			/** Id */
+			id: string;
+			/** User Id */
+			user_id: string;
+			/** Username */
+			username: string;
+			/** Role */
+			role: string;
+			/**
+			 * Expires At
+			 * Format: date-time
+			 */
+			expires_at: string;
+			/** Token */
+			token: string;
+		};
+		/** WorkspaceInvitationDetailsView */
+		WorkspaceInvitationDetailsView: {
+			/** Username */
+			username: string;
+			/** Role */
+			role: string;
+			/** Workspace Name */
+			workspace_name: string;
+			/**
+			 * Expires At
+			 * Format: date-time
+			 */
+			expires_at: string;
+		};
+		/** WorkspaceInvitationRequest */
+		WorkspaceInvitationRequest: {
+			/** Username */
+			username: string;
+			/**
+			 * Role
+			 * @default viewer
+			 * @enum {string}
+			 */
+			role: 'editor' | 'reviewer' | 'viewer';
+			/**
+			 * Expires At
+			 * Format: date-time
+			 */
+			expires_at: string;
+		};
+		/** WorkspaceInvitationView */
+		WorkspaceInvitationView: {
+			/** Id */
+			id: string;
+			/** User Id */
+			user_id: string;
+			/** Username */
+			username: string;
+			/** Role */
+			role: string;
+			/** Invited By */
+			invited_by: string;
+			/**
+			 * Expires At
+			 * Format: date-time
+			 */
+			expires_at: string;
+			/**
+			 * Created At
+			 * Format: date-time
+			 */
+			created_at: string;
+		};
+		/** WorkspaceMemberDirectoryView */
+		WorkspaceMemberDirectoryView: {
+			/** User Id */
+			user_id: string;
+			/** Username */
+			username: string;
+			/** Role */
+			role: string;
+		};
+		/** WorkspaceRoleRequest */
+		WorkspaceRoleRequest: {
+			/**
+			 * Role
+			 * @enum {string}
+			 */
+			role: 'admin' | 'editor' | 'reviewer' | 'viewer';
+		};
+		/** WorkspaceUpdateRequest */
+		WorkspaceUpdateRequest: {
+			/** Name */
+			name: string;
+		};
+		/** WorkspaceView */
+		WorkspaceView: {
+			/** Id */
+			id: string;
+			/** Name */
+			name: string;
+			/** Owner Id */
+			owner_id: string;
+			/** State */
+			state: string;
+			/** Current Role */
+			current_role: string;
+			/** Governance Suspended */
+			governance_suspended: boolean;
+			/** Effective Capabilities */
+			effective_capabilities: string[];
+		};
 		/** WriteResult */
 		WriteResult: {
 			/** Id */
@@ -3897,7 +4443,7 @@ export interface operations {
 			};
 		};
 	};
-	'dashboard.dashboard': {
+	'workspaces.get_workspaces': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -3912,7 +4458,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['DashboardView'];
+					'application/json': components['schemas']['WorkspaceView'][];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -3935,7 +4481,7 @@ export interface operations {
 			};
 		};
 	};
-	'library.apply_item_bulk_action': {
+	'workspaces.create_user_workspace': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -3944,95 +4490,7 @@ export interface operations {
 		};
 		requestBody: {
 			content: {
-				'application/json': components['schemas']['BulkActionRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'library.search_items': {
-		parameters: {
-			query?: {
-				query?: string;
-				tag?: string;
-				project?: string;
-				year?: string;
-				keyword?: string;
-				author?: string;
-				page?: number;
-			};
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['LibrarySearchView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'library.create_library_item': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['ItemMetadata-Input'];
+				'application/json': components['schemas']['WorkspaceCreateRequest'];
 			};
 		};
 		responses: {
@@ -4065,13 +4523,11 @@ export interface operations {
 			};
 		};
 	};
-	'library.get_library_item': {
+	'workspaces.get_workspace_creation_availability': {
 		parameters: {
 			query?: never;
 			header?: never;
-			path: {
-				item_id: string;
-			};
+			path?: never;
 			cookie?: never;
 		};
 		requestBody?: never;
@@ -4082,7 +4538,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['ItemDetailView'];
+					'application/json': components['schemas']['WorkspaceCreationAvailabilityView'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -4105,18 +4561,178 @@ export interface operations {
 			};
 		};
 	};
-	'library.update_library_item': {
+	'workspaces.workspace_invitation_details': {
 		parameters: {
 			query?: never;
 			header?: never;
 			path: {
-				item_id: string;
+				token: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WorkspaceInvitationDetailsView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.accept_workspace_invitation_api': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				token: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WorkspaceInvitationAcceptanceView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.get_user_workspace': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WorkspaceView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.delete_user_workspace': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.update_user_workspace': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
 			};
 			cookie?: never;
 		};
 		requestBody: {
 			content: {
-				'application/json': components['schemas']['ItemUpdateRequest'];
+				'application/json': components['schemas']['WorkspaceUpdateRequest'];
 			};
 		};
 		responses: {
@@ -4127,2065 +4743,6 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['WriteResult'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'items.delete_library_item': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['DeleteConfirmationRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'library.format_item_citation': {
-		parameters: {
-			query?: {
-				style?: string;
-				output?: string;
-			};
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['CitationView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'library.list_tags': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['TagView'][];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'library.set_item_tag_selection': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['TagSetRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'library.add_item_tag': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['NameRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['WriteResult'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'library.remove_item_tag': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-				tag_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'library.list_discussions': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['DiscussionMessageView'][];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'library.create_discussion': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['DiscussionRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			201: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['WriteResult'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'library.delete_discussion': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-				message_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'library_exports.export_item_selection': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['BibliographyExportRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'text/plain': string;
-					'application/x-bibtex': string;
-					'application/x-research-info-systems': string;
-					'application/x-endnote-refer': string;
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'library_exports.download_item_selection': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['DocumentArchiveRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/zip': string;
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'library_exports.export_library_bibliography': {
-		parameters: {
-			query: {
-				file_format: string;
-				style?: string;
-			};
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'text/plain': string;
-					'application/x-bibtex': string;
-					'application/x-research-info-systems': string;
-					'application/x-endnote-refer': string;
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'imports.stage_bibliography_import': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'multipart/form-data': components['schemas']['stage_bibliography_import'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			201: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ImportBatchView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'imports.stage_identifier_import': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['IdentifierImportRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			201: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ImportBatchView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'imports.stage_pdf_import': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'multipart/form-data': components['schemas']['stage_pdf_import'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			202: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ImportBatchView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'imports.import_batch': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				batch_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ImportBatchView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'imports.discard_staged_import': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				batch_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'imports.retry_import_batch': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				batch_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ImportBatchRetryView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'imports.commit_staged_import': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				batch_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.list_projects': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ProjectSummaryView'][];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.create_user_project': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['ProjectCreateRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			201: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['WriteResult'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.list_projects_available_to_join': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['JoinableProjectView'][];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.get_project': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ProjectDetailView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.delete_user_project': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['ProjectDeleteRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.update_project': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['ProjectSettingsRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['WriteResult'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.update_project_description_api': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['ProjectDescriptionRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['WriteResult'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.archive_project': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.restore_project': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.set_project_visibility_api': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['ProjectVisibilityRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.leave_user_project': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.join_public_project': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.transfer_user_project': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-				user_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.add_project_item': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.remove_project_item': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.set_project_member': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['ProjectMemberRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ProjectMemberView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.remove_project_member': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-				user_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'annotations.review_annotations': {
-		parameters: {
-			query?: {
-				page?: number;
-				per_page?: number;
-				revision_id?: string | null;
-			};
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['AnnotationReviewView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'annotations.list_annotations': {
-		parameters: {
-			query: {
-				revision_id: string;
-				project_id?: string | null;
-			};
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['AnnotationView'][];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'annotations.create_annotation': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['AnnotationCreate'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			201: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['AnnotationView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'annotations.delete_annotation': {
-		parameters: {
-			query: {
-				version: number;
-			};
-			header?: never;
-			path: {
-				item_id: string;
-				annotation_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'annotations.update_annotation': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-				annotation_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['AnnotationUpdate'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['AnnotationView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'annotations.restore_annotation': {
-		parameters: {
-			query: {
-				version: number;
-			};
-			header?: never;
-			path: {
-				item_id: string;
-				annotation_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['AnnotationView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'annotations.create_reply': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-				annotation_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['AnnotationReplyCreate'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			201: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['AnnotationReplyView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'annotations.delete_reply': {
-		parameters: {
-			query: {
-				version: number;
-			};
-			header?: never;
-			path: {
-				item_id: string;
-				annotation_id: string;
-				reply_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'annotations.update_reply': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-				annotation_id: string;
-				reply_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['AnnotationReplyUpdate'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['AnnotationReplyView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'annotations.restore_reply': {
-		parameters: {
-			query: {
-				version: number;
-			};
-			header?: never;
-			path: {
-				item_id: string;
-				annotation_id: string;
-				reply_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['AnnotationReplyView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'discovery.search_discovery': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['DiscoverySearchRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['CandidatePageView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'discovery.discovery_providers': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['DiscoveryProviderView'][];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'workflows.workflow_status': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				workflow_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['WorkflowStatusView'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -6265,6 +4822,48 @@ export interface operations {
 		responses: {
 			/** @description Successful Response */
 			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'account.register_account': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['RegisterRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			201: {
 				headers: {
 					[name: string]: unknown;
 				};
@@ -6869,131 +5468,6 @@ export interface operations {
 			};
 		};
 	};
-	'admin.admin_projects': {
-		parameters: {
-			query?: {
-				search?: string;
-				state?: string;
-				visibility?: string;
-				page?: number;
-			};
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['AdminProjectsView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'admin.admin_items': {
-		parameters: {
-			query?: {
-				search?: string;
-				has_pdf?: boolean | null;
-				page?: number;
-			};
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['AdminItemsView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'admin.admin_delete_item': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
 	'admin.admin_audit': {
 		parameters: {
 			query?: {
@@ -7196,13 +5670,11 @@ export interface operations {
 			};
 		};
 	};
-	'admin.run_maintenance': {
+	'admin.admin_workspaces': {
 		parameters: {
 			query?: never;
 			header?: never;
-			path: {
-				operation: 'reindex_all' | 'check_objects' | 'backup' | 'recommend_tags_all';
-			};
+			path?: never;
 			cookie?: never;
 		};
 		requestBody?: never;
@@ -7213,7 +5685,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['WriteResult'];
+					'application/json': components['schemas']['AdminWorkspaceView'][];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -7236,12 +5708,12 @@ export interface operations {
 			};
 		};
 	};
-	'admin.download_backup': {
+	'admin.admin_suspend_workspace': {
 		parameters: {
 			query?: never;
 			header?: never;
 			path: {
-				workflow_id: string;
+				workspace_id: string;
 			};
 			cookie?: never;
 		};
@@ -7253,7 +5725,131 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/zip': string;
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'admin.admin_recover_workspace': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'admin.admin_break_glass_items': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['BreakGlassReadRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ItemSearchView'][];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'admin.run_maintenance': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				operation: 'check_objects';
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WriteResult'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -7316,6 +5912,3099 @@ export interface operations {
 			};
 		};
 	};
+	'workspaces.get_workspace_members': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WorkspaceMemberDirectoryView'][];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.get_workspace_governance_members': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WorkspaceGovernanceMemberView'][];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.get_workspace_invitations': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WorkspaceInvitationView'][];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.create_workspace_invitation': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['WorkspaceInvitationRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WorkspaceInvitationCreatedView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.revoke_workspace_invitation_api': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				invitation_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.change_workspace_member_role': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				membership_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['WorkspaceRoleRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.suspend_member': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				membership_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.reactivate_member': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				membership_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.terminate_member': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				membership_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.transfer_ownership': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				membership_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.archive_user_workspace': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.restore_user_workspace': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.reindex_workspace': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WriteResult'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'dashboard.dashboard': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['DashboardView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.apply_item_bulk_action': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['BulkActionRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.search_items': {
+		parameters: {
+			query?: {
+				query?: string;
+				tag?: string;
+				project?: string;
+				year?: string;
+				keyword?: string;
+				author?: string;
+				page?: number;
+			};
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['LibrarySearchView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.create_library_item': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ItemMetadata-Input'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WriteResult'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.get_library_item': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ItemDetailView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.update_library_item': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ItemUpdateRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WriteResult'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'items.delete_library_item': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['DeleteConfirmationRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.copy_library_item': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CrossWorkspaceCopyRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CrossWorkspaceCopyView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.format_item_citation': {
+		parameters: {
+			query?: {
+				style?: string;
+				output?: string;
+			};
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CitationView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.list_tags': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TagView'][];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.set_item_tag_selection': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['TagSetRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.add_item_tag': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['NameRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WriteResult'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.remove_item_tag': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+				tag_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.list_discussions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['DiscussionMessageView'][];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.create_discussion': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['DiscussionRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WriteResult'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.delete_discussion': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+				message_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library_exports.export_item_selection': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['BibliographyExportRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'text/plain': string;
+					'application/x-bibtex': string;
+					'application/x-research-info-systems': string;
+					'application/x-endnote-refer': string;
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library_exports.download_item_selection': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['DocumentArchiveRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/zip': string;
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library_exports.export_library_bibliography': {
+		parameters: {
+			query: {
+				file_format: string;
+				style?: string;
+			};
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'text/plain': string;
+					'application/x-bibtex': string;
+					'application/x-research-info-systems': string;
+					'application/x-endnote-refer': string;
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'imports.stage_bibliography_import': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'multipart/form-data': components['schemas']['stage_bibliography_import'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ImportBatchView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'imports.stage_identifier_import': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['IdentifierImportRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ImportBatchView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'imports.stage_pdf_import': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'multipart/form-data': components['schemas']['stage_pdf_import'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			202: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ImportBatchView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'imports.import_batch': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				batch_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ImportBatchView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'imports.discard_staged_import': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				batch_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'imports.retry_import_batch': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				batch_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ImportBatchRetryView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'imports.commit_staged_import': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				batch_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.list_projects': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ProjectSummaryView'][];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.create_user_project': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ProjectCreateRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WriteResult'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.list_joinable_projects_api': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ProjectSummaryView'][];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.get_project': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ProjectDetailView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.delete_user_project': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ProjectDeleteRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.update_project': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ProjectSettingsRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WriteResult'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.update_project_description_api': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ProjectDescriptionRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WriteResult'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.archive_project': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.restore_project': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.set_project_visibility_api': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ProjectVisibilityRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.add_project_item': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.remove_project_item': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.join_project_api': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ProjectMemberView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.leave_project_api': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.set_project_member': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ProjectMemberRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ProjectMemberView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.remove_project_member': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+				user_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.list_project_discussions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['DiscussionMessageView'][];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.create_project_discussion': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['DiscussionRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['DiscussionMessageView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.delete_project_discussion': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+				message_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'annotations.review_annotations': {
+		parameters: {
+			query?: {
+				page?: number;
+				per_page?: number;
+				revision_id?: string | null;
+			};
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AnnotationReviewView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'annotations.list_annotations': {
+		parameters: {
+			query: {
+				revision_id: string;
+				project_id?: string | null;
+			};
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AnnotationView'][];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'annotations.create_annotation': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['AnnotationCreate'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AnnotationView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'annotations.delete_annotation': {
+		parameters: {
+			query: {
+				version: number;
+			};
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+				annotation_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'annotations.update_annotation': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+				annotation_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['AnnotationUpdate'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AnnotationView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'annotations.restore_annotation': {
+		parameters: {
+			query: {
+				version: number;
+			};
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+				annotation_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AnnotationView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'annotations.moderate_annotation': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+				annotation_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['AnnotationModerationRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AnnotationView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'annotations.create_reply': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+				annotation_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['AnnotationReplyCreate'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AnnotationReplyView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'annotations.delete_reply': {
+		parameters: {
+			query: {
+				version: number;
+			};
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+				annotation_id: string;
+				reply_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'annotations.update_reply': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+				annotation_id: string;
+				reply_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['AnnotationReplyUpdate'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AnnotationReplyView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'annotations.restore_reply': {
+		parameters: {
+			query: {
+				version: number;
+			};
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+				annotation_id: string;
+				reply_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AnnotationReplyView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'discovery.search_discovery': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['DiscoverySearchRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CandidatePageView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'discovery.discovery_providers': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['DiscoveryProviderView'][];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workflows.workflow_status': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				workflow_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WorkflowStatusView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
 	'citations.export_item_bibliography': {
 		parameters: {
 			query: {
@@ -7336,6 +9025,7 @@ export interface operations {
 			};
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -7394,6 +9084,7 @@ export interface operations {
 			};
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -7437,6 +9128,7 @@ export interface operations {
 			};
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -7478,6 +9170,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -7523,6 +9216,7 @@ export interface operations {
 			};
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -7563,6 +9257,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -7607,6 +9302,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -7651,6 +9347,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 				attachment_id: string;
 			};
@@ -7692,6 +9389,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 				attachment_id: string;
 			};
@@ -7733,6 +9431,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -7777,6 +9476,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -7821,6 +9521,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 				revision_id: string;
 			};
@@ -7862,6 +9563,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 				revision_id: string;
 			};
@@ -7903,6 +9605,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 				revision_id: string;
 			};
@@ -7953,6 +9656,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 				revision_id: string;
 			};
@@ -7994,6 +9698,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -8041,6 +9746,7 @@ export interface operations {
 			};
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 				revision_id: string;
 			};
@@ -8082,6 +9788,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -8126,6 +9833,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				workflow_id: string;
 			};
 			cookie?: never;
@@ -8166,6 +9874,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				workflow_id: string;
 			};
 			cookie?: never;
@@ -8201,11 +9910,12 @@ export interface operations {
 			};
 		};
 	};
-	'items.item_workspace': {
+	'items.item_overview': {
 		parameters: {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -8218,7 +9928,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['ItemWorkspaceView'];
+					'application/json': components['schemas']['ItemOverviewView'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -8241,11 +9951,12 @@ export interface operations {
 			};
 		};
 	};
-	'items.item_organize_workspace': {
+	'items.item_organize': {
 		parameters: {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -8286,6 +9997,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -8330,6 +10042,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -8370,6 +10083,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -8410,6 +10124,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -8451,7 +10166,9 @@ export interface operations {
 				query?: string;
 			};
 			header?: never;
-			path?: never;
+			path: {
+				workspace_id: string;
+			};
 			cookie?: never;
 		};
 		requestBody?: never;
@@ -8492,7 +10209,9 @@ export interface operations {
 				force_ascii?: boolean;
 			};
 			header?: never;
-			path?: never;
+			path: {
+				workspace_id: string;
+			};
 			cookie?: never;
 		};
 		requestBody?: never;
@@ -8534,7 +10253,9 @@ export interface operations {
 				include?: string;
 			};
 			header?: never;
-			path?: never;
+			path: {
+				workspace_id: string;
+			};
 			cookie?: never;
 		};
 		requestBody?: never;
@@ -8572,7 +10293,9 @@ export interface operations {
 		parameters: {
 			query?: never;
 			header?: never;
-			path?: never;
+			path: {
+				workspace_id: string;
+			};
 			cookie?: never;
 		};
 		requestBody: {
@@ -8616,7 +10339,9 @@ export interface operations {
 				mode?: string;
 			};
 			header?: never;
-			path?: never;
+			path: {
+				workspace_id: string;
+			};
 			cookie?: never;
 		};
 		requestBody?: never;
@@ -8655,6 +10380,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				style_id: string;
 			};
 			cookie?: never;
@@ -8694,7 +10420,9 @@ export interface operations {
 		parameters: {
 			query?: never;
 			header?: never;
-			path?: never;
+			path: {
+				workspace_id: string;
+			};
 			cookie?: never;
 		};
 		requestBody: {
@@ -8737,6 +10465,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				tag_id: string;
 			};
 			cookie?: never;
@@ -8777,6 +10506,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				tag_id: string;
 			};
 			cookie?: never;

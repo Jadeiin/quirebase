@@ -3,14 +3,15 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-	apiDownload,
-	apiDownloadGet,
 	apiRequest,
-	apiText,
+	createWorkspaceApi,
 	DownloadCancelledError,
 	downloadFilename,
-	onAuthenticationRequired
+	onAuthenticationRequired,
+	onWorkspaceUnavailable
 } from './client';
+
+const workspaceApi = createWorkspaceApi('workspace-1');
 
 describe('apiRequest', () => {
 	it('uses the shared API and browser credentials without a CSRF token', async () => {
@@ -20,9 +21,9 @@ describe('apiRequest', () => {
 			return new Response(JSON.stringify({ ok: true }));
 		};
 
-		await apiRequest(
+		await workspaceApi.request(
 			'POST',
-			'/items',
+			'/workspaces/{workspace_id}/items',
 			{
 				body: {
 					title: 'Item',
@@ -37,7 +38,7 @@ describe('apiRequest', () => {
 			fetcher
 		);
 
-		expect(new URL(received!.url).pathname).toBe('/api/v1/items');
+		expect(new URL(received!.url).pathname).toBe('/api/v1/workspaces/workspace-1/items');
 		expect(received?.method).toBe('POST');
 		expect(received?.headers.get('Content-Type')).toBe('application/json');
 		expect(received?.headers.has('X-CSRF-Token')).toBe(false);
@@ -50,9 +51,9 @@ describe('apiRequest', () => {
 			return new Response(JSON.stringify([]));
 		};
 
-		await apiRequest(
+		await workspaceApi.request(
 			'GET',
-			'/items/{item_id}/annotations',
+			'/workspaces/{workspace_id}/items/{item_id}/annotations',
 			{
 				params: {
 					path: { item_id: 'item/with slash' },
@@ -63,7 +64,9 @@ describe('apiRequest', () => {
 		);
 
 		const url = new URL(received!.url);
-		expect(url.pathname).toBe('/api/v1/items/item%2Fwith%20slash/annotations');
+		expect(url.pathname).toBe(
+			'/api/v1/workspaces/workspace-1/items/item%2Fwith%20slash/annotations'
+		);
 		expect(url.searchParams.get('revision_id')).toBe('revision-1');
 		expect(url.searchParams.get('project_id')).toBe('project-1');
 	});
@@ -75,9 +78,35 @@ describe('apiRequest', () => {
 			return new Response(JSON.stringify({ total: 0, page: 1, per_page: 25, items: [] }));
 		};
 
-		await apiRequest('GET', '/items', { params: { query: { query: '', author: 'ada' } } }, fetcher);
+		await workspaceApi.request(
+			'GET',
+			'/workspaces/{workspace_id}/items',
+			{ params: { query: { query: '', author: 'ada' } } },
+			fetcher
+		);
 
 		expect(new URL(received!.url).search).toBe('?author=ada');
+	});
+
+	it('uses only the explicitly bound Workspace ID, ignoring the stored default', async () => {
+		let received: Request | undefined;
+		localStorage.setItem('quirebase:default-workspace', 'workspace-from-storage');
+		const fetcher: typeof fetch = async (input) => {
+			received = input as Request;
+			return new Response(JSON.stringify({ id: 'workflow-1', state: 'running', error: null }));
+		};
+
+		await createWorkspaceApi('workspace-from-url').request(
+			'GET',
+			'/workspaces/{workspace_id}/workflows/{workflow_id}',
+			{ params: { path: { workflow_id: 'workflow-1' } } },
+			fetcher
+		);
+
+		expect(new URL(received!.url).pathname).toBe(
+			'/api/v1/workspaces/workspace-from-url/workflows/workflow-1'
+		);
+		localStorage.removeItem('quirebase:default-workspace');
 	});
 
 	it('keeps method, path, parameters, body, and response tied to OpenAPI at compile time', () => {
@@ -141,8 +170,8 @@ describe('GET downloads', () => {
 		vi.stubGlobal('fetch', fetcher);
 		vi.stubGlobal('showSaveFilePicker', showSaveFilePicker);
 
-		await apiDownloadGet(
-			'/items/{item_id}/attachments/{attachment_id}/content',
+		await workspaceApi.downloadGet(
+			'/workspaces/{workspace_id}/items/{item_id}/attachments/{attachment_id}/content',
 			{ params: { path: { item_id: 'item-1', attachment_id: 'attachment-1' } } },
 			{ suggestedName: 'paper.pdf' }
 		);
@@ -172,9 +201,12 @@ describe('GET downloads', () => {
 		vi.stubGlobal('fetch', fetcher);
 		vi.stubGlobal('showSaveFilePicker', showSaveFilePicker);
 
-		await apiDownloadGet('/items/{item_id}/attachments/{attachment_id}/content', {
-			params: { path: { item_id: 'item-1', attachment_id: 'attachment-1' } }
-		});
+		await workspaceApi.downloadGet(
+			'/workspaces/{workspace_id}/items/{item_id}/attachments/{attachment_id}/content',
+			{
+				params: { path: { item_id: 'item-1', attachment_id: 'attachment-1' } }
+			}
+		);
 
 		expect(click).toHaveBeenCalledOnce();
 		expect(revokeObjectURL).toHaveBeenCalledWith('blob:fallback');
@@ -198,9 +230,12 @@ describe('GET downloads', () => {
 		) as typeof fetch;
 		vi.stubGlobal('fetch', fetcher);
 
-		await apiDownloadGet('/items/{item_id}/attachments/{attachment_id}/content', {
-			params: { path: { item_id: 'item-1', attachment_id: 'attachment-1' } }
-		});
+		await workspaceApi.downloadGet(
+			'/workspaces/{workspace_id}/items/{item_id}/attachments/{attachment_id}/content',
+			{
+				params: { path: { item_id: 'item-1', attachment_id: 'attachment-1' } }
+			}
+		);
 
 		expect(createObjectURL).toHaveBeenCalledWith(expect.objectContaining({ size: 0 }));
 		expect(link.download).toBe('empty.txt');
@@ -221,8 +256,8 @@ describe('GET downloads', () => {
 			});
 		}) as typeof fetch;
 
-		await apiDownloadGet(
-			'/items/{item_id}/attachments/{attachment_id}/content',
+		await workspaceApi.downloadGet(
+			'/workspaces/{workspace_id}/items/{item_id}/attachments/{attachment_id}/content',
 			{ params: { path: { item_id: 'item-1', attachment_id: 'attachment-1' } } },
 			fetcher
 		);
@@ -244,8 +279,8 @@ describe('GET downloads', () => {
 		) as typeof fetch;
 
 		await expect(
-			apiDownloadGet(
-				'/items/{item_id}/revisions/{revision_id}/export',
+			workspaceApi.downloadGet(
+				'/workspaces/{workspace_id}/items/{item_id}/revisions/{revision_id}/export',
 				{ params: { path: { item_id: 'item-1', revision_id: 'revision-1' } } },
 				fetcher
 			)
@@ -266,7 +301,7 @@ describe('POST downloads', () => {
 		vi.stubGlobal('showSaveFilePicker', showSaveFilePicker);
 
 		await expect(
-			apiDownload('/items/documents/archive', {
+			workspaceApi.download('/workspaces/{workspace_id}/items/documents/archive', {
 				body: {
 					item_ids: ['item-1'],
 					include_annotations: false,
@@ -283,8 +318,8 @@ describe('non-JSON API errors', () => {
 		[
 			'download',
 			(fetcher: typeof fetch) =>
-				apiDownloadGet(
-					'/items/{item_id}/attachments/{attachment_id}/content',
+				workspaceApi.downloadGet(
+					'/workspaces/{workspace_id}/items/{item_id}/attachments/{attachment_id}/content',
 					{ params: { path: { item_id: 'item-1', attachment_id: 'attachment-1' } } },
 					fetcher
 				)
@@ -292,8 +327,8 @@ describe('non-JSON API errors', () => {
 		[
 			'text',
 			(fetcher: typeof fetch) =>
-				apiText(
-					'/items/{item_id}/citation/content',
+				workspaceApi.text(
+					'/workspaces/{workspace_id}/items/{item_id}/citation/content',
 					{ params: { path: { item_id: 'item-1' } } },
 					fetcher
 				)
@@ -315,6 +350,30 @@ describe('non-JSON API errors', () => {
 });
 
 describe('structured API errors', () => {
+	it('signals Workspace membership loss so the URL owner can recover context', async () => {
+		const unavailable = vi.fn();
+		const unregister = onWorkspaceUnavailable(unavailable);
+		const fetcher = (async () => {
+			const response = new Response(
+				JSON.stringify({ code: 'workspace_membership_required', message: 'removed' }),
+				{
+					status: 403,
+					headers: { 'Content-Type': 'application/json' }
+				}
+			);
+			Object.defineProperty(response, 'url', {
+				value: 'https://quirebase.test/api/v1/workspaces/workspace-1/items'
+			});
+			return response;
+		}) as typeof fetch;
+
+		await expect(
+			workspaceApi.request('GET', '/workspaces/{workspace_id}/items', undefined, fetcher)
+		).rejects.toMatchObject({ code: 'workspace_membership_required' });
+		expect(unavailable).toHaveBeenCalledWith('workspace-1');
+		unregister();
+	});
+
 	it('notifies the session owner for authentication failures', async () => {
 		let notified = 0;
 		const unregister = onAuthenticationRequired(() => {
@@ -326,7 +385,9 @@ describe('structured API errors', () => {
 				headers: { 'Content-Type': 'application/json' }
 			})) as typeof fetch;
 
-		await expect(apiRequest('GET', '/items', undefined, fetcher)).rejects.toMatchObject({
+		await expect(
+			workspaceApi.request('GET', '/workspaces/{workspace_id}/items', undefined, fetcher)
+		).rejects.toMatchObject({
 			status: 401,
 			code: 'authentication_required'
 		});
@@ -347,9 +408,9 @@ describe('structured API errors', () => {
 			)) as typeof fetch;
 
 		await expect(
-			apiRequest(
+			workspaceApi.request(
 				'POST',
-				'/items',
+				'/workspaces/{workspace_id}/items',
 				{
 					body: {
 						title: 'Item',

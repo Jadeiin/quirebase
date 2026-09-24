@@ -44,7 +44,7 @@ async def test_tags_discussion_and_search(async_db, async_session_factory, tmp_p
         assert workflow_id.startswith("upload-attachment:")
         status = await client.get(f"{workspace_base}/workflows/{workflow_id}")
         assert status.json()["state"] == "pending"
-        workspace = await client.get(f"{workspace_base}/items/{item_id}/workspace")
+        workspace = await client.get(f"{workspace_base}/items/{item_id}/overview")
         assert workspace.json()["counts"]["attachments"] == 0
         assert workspace.headers["x-content-type-options"] == "nosniff"
     finally:

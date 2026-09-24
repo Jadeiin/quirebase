@@ -1,13 +1,15 @@
 import { queryOptions } from '@tanstack/svelte-query';
-import { ApiError, apiRequest } from '$lib/api/client';
+import { ApiError, apiRequest, createWorkspaceApi } from '$lib/api/client';
 import type { components } from '$lib/api/schema';
+import { workspaceKeys } from '$lib/workspaces/keys';
 
 export type WorkflowStatus = components['schemas']['WorkflowStatusView'];
 export type WorkflowState = WorkflowStatus['state'];
 
 export const workflowKeys = {
-	all: ['workflows'] as const,
-	status: (workflowId: string) => [...workflowKeys.all, workflowId] as const
+	all: (workspaceId: string) => [...workspaceKeys.root(workspaceId), 'workflows'] as const,
+	status: (workspaceId: string, workflowId: string) =>
+		[...workflowKeys.all(workspaceId), workflowId] as const
 };
 
 export function isTerminalWorkflowState(state: WorkflowState | undefined): boolean {
@@ -21,14 +23,29 @@ export function isRecoverableWorkflowStatusError(error: unknown): boolean {
 	);
 }
 
-export function workflowStatusQuery(workflowId: string, shouldPoll?: () => boolean) {
+export function workflowStatusQuery(
+	workspaceId: string | undefined,
+	workflowId: string,
+	shouldPoll?: () => boolean
+) {
 	return queryOptions({
-		queryKey: workflowKeys.status(workflowId),
+		queryKey: workspaceId
+			? workflowKeys.status(workspaceId, workflowId)
+			: ['admin', 'workflow', workflowId],
 		queryFn: ({ signal }) =>
-			apiRequest('GET', '/workflows/{workflow_id}', {
-				params: { path: { workflow_id: workflowId } },
-				signal
-			}),
+			workspaceId
+				? createWorkspaceApi(workspaceId).request(
+						'GET',
+						'/workspaces/{workspace_id}/workflows/{workflow_id}',
+						{
+							params: { path: { workflow_id: workflowId } },
+							signal
+						}
+					)
+				: apiRequest('GET', '/admin/workflows/{workflow_id}', {
+						params: { path: { workflow_id: workflowId } },
+						signal
+					}),
 		refetchInterval: (query) => {
 			if (shouldPoll && !shouldPoll()) return false;
 			return isTerminalWorkflowState(query.state.data?.state) ? false : 2000;

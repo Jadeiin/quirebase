@@ -21,6 +21,7 @@
 
 	let {
 		itemId,
+		workspaceId,
 		documentId,
 		name,
 		url,
@@ -31,6 +32,7 @@
 		onstatus
 	} = $props<{
 		itemId: string;
+		workspaceId: string;
 		documentId: string;
 		name: string;
 		url: string;
@@ -94,6 +96,7 @@
 	let cancelDocumentWait = () => {};
 	// svelte-ignore state_referenced_locally
 	const sync = createAnnotationSync({
+		workspaceId,
 		itemId,
 		documentId,
 		pageGeometry,

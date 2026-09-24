@@ -1,32 +1,37 @@
 import { queryOptions } from '@tanstack/svelte-query';
-import { apiRequest } from '$lib/api/client';
+import { createWorkspaceApi } from '$lib/api/client';
+import { workspaceKeys } from '$lib/workspaces/keys';
 
 export const projectKeys = {
-	all: ['projects'] as const,
-	lists: () => [...projectKeys.all, 'list'] as const,
-	joinable: () => [...projectKeys.all, 'joinable'] as const,
-	detail: (projectId: string) => [...projectKeys.all, 'detail', projectId] as const
+	all: (workspaceId: string) => workspaceKeys.projects(workspaceId),
+	lists: (workspaceId: string) => [...projectKeys.all(workspaceId), 'list'] as const,
+	joinable: (workspaceId: string) => [...projectKeys.all(workspaceId), 'joinable'] as const,
+	detail: (workspaceId: string, projectId: string) => workspaceKeys.project(workspaceId, projectId),
 };
 
-export function projectListQuery() {
+export function projectListQuery(workspaceId: string) {
+	const api = createWorkspaceApi(workspaceId);
 	return queryOptions({
-		queryKey: projectKeys.lists(),
-		queryFn: ({ signal }) => apiRequest('GET', '/projects', { signal })
+		queryKey: projectKeys.lists(workspaceId),
+		queryFn: ({ signal }) => api.request('GET', '/workspaces/{workspace_id}/projects', { signal })
 	});
 }
 
-export function joinableProjectsQuery() {
+export function joinableProjectsQuery(workspaceId: string) {
+	const api = createWorkspaceApi(workspaceId);
 	return queryOptions({
-		queryKey: projectKeys.joinable(),
-		queryFn: ({ signal }) => apiRequest('GET', '/projects/joinable', { signal })
-	});
-}
-
-export function projectDetailQuery(projectId: string) {
-	return queryOptions({
-		queryKey: projectKeys.detail(projectId),
+		queryKey: projectKeys.joinable(workspaceId),
 		queryFn: ({ signal }) =>
-			apiRequest('GET', '/projects/{project_id}', {
+			api.request('GET', '/workspaces/{workspace_id}/projects/joinable', { signal })
+	});
+}
+
+export function projectDetailQuery(workspaceId: string, projectId: string) {
+	const api = createWorkspaceApi(workspaceId);
+	return queryOptions({
+		queryKey: projectKeys.detail(workspaceId, projectId),
+		queryFn: ({ signal }) =>
+			api.request('GET', '/workspaces/{workspace_id}/projects/{project_id}', {
 				params: { path: { project_id: projectId } },
 				signal
 			})

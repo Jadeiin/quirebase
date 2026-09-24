@@ -13,7 +13,7 @@ from quirebase.web.api.common import WorkflowStatusView
 from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.export_schemas import AnnotationExportCreatedView
 
-router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["Document exports"])
+router = APIRouter(tags=["Document exports"])
 
 
 @router.post(

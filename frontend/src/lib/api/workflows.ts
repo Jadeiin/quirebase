@@ -1,4 +1,5 @@
 import { apiRequest } from '$lib/api/client';
+import { createWorkspaceApi } from '$lib/api/client';
 import { translate } from '$lib/i18n';
 import type { components } from '$lib/api/schema';
 
@@ -48,16 +49,22 @@ function waitUntilVisible(signal?: AbortSignal): Promise<void> {
 
 export async function waitForWorkflow(
 	workflowId: string,
-	options: { signal?: AbortSignal; failureMessage?: string } = {}
+	options: { signal?: AbortSignal; failureMessage?: string; workspaceId?: string } = {}
 ): Promise<WorkflowStatus> {
 	let interval = 500;
 	for (;;) {
 		if (options.signal?.aborted) throw abortError();
 		await waitUntilVisible(options.signal);
-		const workflow = await apiRequest('GET', '/workflows/{workflow_id}', {
-			params: { path: { workflow_id: workflowId } },
-			signal: options.signal
-		});
+		const workflow = options.workspaceId
+			? await createWorkspaceApi(options.workspaceId).request(
+					'GET',
+					'/workspaces/{workspace_id}/workflows/{workflow_id}',
+					{ params: { path: { workflow_id: workflowId } }, signal: options.signal }
+				)
+			: await apiRequest('GET', '/admin/workflows/{workflow_id}', {
+					params: { path: { workflow_id: workflowId } },
+					signal: options.signal
+				});
 		if (workflow.state === 'succeeded') return workflow;
 		if (workflow.state === 'failed' || workflow.state === 'cancelled') {
 			throw new Error(workflow.error || options.failureMessage || translate('Workflow failed'));

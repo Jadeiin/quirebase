@@ -2,21 +2,25 @@
 	import { resolve } from '$app/paths';
 	import { Menu, Portal } from '@skeletonlabs/skeleton-svelte';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { apiDownloadGet, isDownloadCancelled } from '$lib/api/client';
+	import { isDownloadCancelled } from '$lib/api/client';
 	import { apiErrorMessage } from '$lib/api/errors';
 	import Icon from '$lib/design/Icon.svelte';
 	import RichText from '$lib/design/RichText.svelte';
 	import { pdfViewerQuery } from '$lib/features/pdf-reader/queries';
 	import { t } from '$lib/i18n';
 	import EmbeddedPdfViewer from '$lib/pdf/EmbeddedPdfViewer.svelte';
+	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
+	import { workspaceHref } from '$lib/workspaces/href';
 
 	let { itemId, revisionId } = $props<{ itemId: string; revisionId: string }>();
+	const workspace = getWorkspaceContext();
+	const { workspaceId } = workspace;
 	let exportProjectId = $state('');
 	let selectedProject = $state('');
 	let annotationStatus = $state('');
 	let annotationSyncFailed = $state(false);
 	let downloadError = $state('');
-	const viewer = createQuery(() => pdfViewerQuery(itemId, revisionId));
+	const viewer = createQuery(() => pdfViewerQuery(workspaceId, itemId, revisionId));
 
 	async function download(operation: Promise<void>) {
 		downloadError = '';
@@ -31,8 +35,8 @@
 	function downloadOriginal() {
 		if (!viewer.data) return;
 		void download(
-			apiDownloadGet(
-				'/items/{item_id}/revisions/{revision_id}/content',
+			workspace.api.downloadGet(
+				'/workspaces/{workspace_id}/items/{item_id}/revisions/{revision_id}/content',
 				{
 					params: { path: { item_id: itemId, revision_id: revisionId } }
 				},
@@ -45,8 +49,8 @@
 		if (!viewer.data) return;
 		const originalName = viewer.data.revision.original_name;
 		void download(
-			apiDownloadGet(
-				'/items/{item_id}/revisions/{revision_id}/export',
+			workspace.api.downloadGet(
+				'/workspaces/{workspace_id}/items/{item_id}/revisions/{revision_id}/export',
 				{
 					params: {
 						path: { item_id: itemId, revision_id: revisionId },
@@ -73,7 +77,7 @@
 	>
 		<a
 			class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-surface-300-700 bg-surface-50-950 px-2.5 py-1.5 text-sm font-semibold text-surface-700-300 no-underline transition-colors hover:bg-surface-200-800 hover:text-primary-800-200"
-			href={resolve('/(app)/item/[itemId]', { itemId })}
+			href={resolve(workspaceHref(workspaceId, `item/${itemId}`))}
 			><Icon name="chevron-left" /> <span>{$t('Item')}</span></a
 		>
 		<div class="grid min-w-0 flex-1 grid-cols-1">
@@ -196,6 +200,7 @@
 			</div>
 		{:else if viewer.data}{#key revisionId}<EmbeddedPdfViewer
 					{itemId}
+					{workspaceId}
 					documentId={revisionId}
 					name={viewer.data.revision.original_name}
 					url={viewer.data.revision.content_url}

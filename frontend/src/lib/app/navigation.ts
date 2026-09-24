@@ -1,27 +1,28 @@
-import type { Pathname } from '$app/types';
 import { msg, type MessageKey } from '$lib/i18n';
 
-export type NavigationItem = readonly [Pathname, MessageKey, string];
+export type NavigationPath =
+	'' | 'library' | 'import' | 'discovery' | 'projects' | 'tools' | '/workspace';
+export type NavigationItem = readonly [NavigationPath | '/account', MessageKey, string];
 
 export const navigation: readonly NavigationItem[] = [
-	['/', msg('Dashboard'), 'dashboard'],
-	['/library', msg('Library'), 'library'],
-	['/import', msg('Import'), 'import'],
-	['/discovery', msg('Discovery'), 'search'],
-	['/projects', msg('Projects'), 'projects'],
-	['/tools', msg('Tools'), 'tools']
+	['', msg('Dashboard'), 'dashboard'],
+	['library', msg('Library'), 'library'],
+	['import', msg('Import'), 'import'],
+	['discovery', msg('Discovery'), 'search'],
+	['projects', msg('Projects'), 'projects'],
+	['tools', msg('Tools'), 'tools']
 ];
 
 export const mobileNavigation: readonly NavigationItem[] = [
-	['/library', msg('Library'), 'library'],
-	['/discovery', msg('Discovery'), 'search'],
-	['/projects', msg('Projects'), 'projects']
+	['library', msg('Library'), 'library'],
+	['discovery', msg('Discovery'), 'search'],
+	['projects', msg('Projects'), 'projects']
 ];
 
 export const mobileMoreNavigation: readonly NavigationItem[] = [
-	['/', msg('Dashboard'), 'dashboard'],
-	['/import', msg('Import'), 'import'],
-	['/tools', msg('Tools'), 'tools'],
+	['', msg('Dashboard'), 'dashboard'],
+	['import', msg('Import'), 'import'],
+	['tools', msg('Tools'), 'tools'],
 	['/account', msg('Account settings'), 'user']
 ];
 
@@ -30,3 +31,11 @@ export const themeOptions = [
 	['light', msg('Light theme'), 'sun'],
 	['dark', msg('Dark theme'), 'moon']
 ] as const;
+
+export function isRouteActive(pathname: string, route: string, exact = false): boolean {
+	const normalizedRoute = route.length > 1 ? route.replace(/\/$/, '') : route;
+	return (
+		pathname === normalizedRoute ||
+		(!exact && normalizedRoute !== '/' && pathname.startsWith(`${normalizedRoute}/`))
+	);
+}

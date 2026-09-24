@@ -1,6 +1,7 @@
 import { mutationOptions, type QueryClient } from '@tanstack/svelte-query';
-import { apiRequest } from '$lib/api/client';
+import { createWorkspaceApi } from '$lib/api/client';
 import { invalidateItemFiles } from '$lib/query/invalidation';
+import { workspaceKeys } from '$lib/workspaces/keys';
 import type { FileRow } from '../types';
 
 export type FileUploadMutation = {
@@ -17,12 +18,14 @@ export type FileDeleteMutation = {
 type DocumentTracker = (workflowId: string) => Promise<unknown>;
 
 export function fileUploadMutationOptions(
+	workspaceId: string,
 	itemId: string,
 	queryClient: QueryClient,
 	trackDocument: DocumentTracker
 ) {
+	const api = createWorkspaceApi(workspaceId);
 	return mutationOptions({
-		mutationKey: ['item-file-upload', itemId],
+		mutationKey: workspaceKeys.mutation(workspaceId, 'item-file-upload', itemId),
 		mutationFn: async ({ form, kind }: FileUploadMutation) => {
 			const options = {
 				params: { path: { item_id: itemId } },
@@ -30,60 +33,91 @@ export function fileUploadMutationOptions(
 			};
 			const workflow =
 				kind === 'revision'
-					? await apiRequest('POST', '/items/{item_id}/revisions', options)
-					: await apiRequest('POST', '/items/{item_id}/attachments', options);
+					? await api.request(
+							'POST',
+							'/workspaces/{workspace_id}/items/{item_id}/revisions',
+							options
+						)
+					: await api.request(
+							'POST',
+							'/workspaces/{workspace_id}/items/{item_id}/attachments',
+							options
+						);
 			await trackDocument(workflow.id);
 		},
 		onSuccess: async (_result, { form }) => {
 			form.reset();
-			await invalidateItemFiles(queryClient, itemId);
+			await invalidateItemFiles(queryClient, workspaceId, itemId);
 		}
 	});
 }
 
 export function fileRemoteUploadMutationOptions(
+	workspaceId: string,
 	itemId: string,
 	queryClient: QueryClient,
 	trackDocument: DocumentTracker
 ) {
+	const api = createWorkspaceApi(workspaceId);
 	return mutationOptions({
-		mutationKey: ['item-file-remote-upload', itemId],
+		mutationKey: workspaceKeys.mutation(workspaceId, 'item-file-remote-upload', itemId),
 		mutationFn: async ({ form, kind }: FileRemoteUploadMutation) => {
 			const fields = new FormData(form);
 			const source = String(fields.get('url'));
 			const workflow =
 				kind === 'revision'
-					? await apiRequest('POST', '/items/{item_id}/revisions/remote', {
-							params: { path: { item_id: itemId } },
-							body: { source }
-						})
-					: await apiRequest('POST', '/items/{item_id}/attachments/remote', {
-							params: { path: { item_id: itemId } },
-							body: {
-								source,
-								graphical_abstract: fields.has('graphical_abstract')
+					? await api.request(
+							'POST',
+							'/workspaces/{workspace_id}/items/{item_id}/revisions/remote',
+							{
+								params: { path: { item_id: itemId } },
+								body: { source }
 							}
-						});
+						)
+					: await api.request(
+							'POST',
+							'/workspaces/{workspace_id}/items/{item_id}/attachments/remote',
+							{
+								params: { path: { item_id: itemId } },
+								body: {
+									source,
+									graphical_abstract: fields.has('graphical_abstract')
+								}
+							}
+						);
 			await trackDocument(workflow.id);
 		},
 		onSuccess: async (_result, { form }) => {
 			form.reset();
-			await invalidateItemFiles(queryClient, itemId);
+			await invalidateItemFiles(queryClient, workspaceId, itemId);
 		}
 	});
 }
 
-export function fileDeleteMutationOptions(itemId: string, queryClient: QueryClient) {
+export function fileDeleteMutationOptions(
+	workspaceId: string,
+	itemId: string,
+	queryClient: QueryClient
+) {
+	const api = createWorkspaceApi(workspaceId);
 	return mutationOptions({
-		mutationKey: ['item-file-delete', itemId],
+		mutationKey: workspaceKeys.mutation(workspaceId, 'item-file-delete', itemId),
 		mutationFn: ({ file }: FileDeleteMutation) =>
 			file.kind === 'revision'
-				? apiRequest('DELETE', '/items/{item_id}/revisions/{revision_id}', {
-						params: { path: { item_id: itemId, revision_id: file.id } }
-					})
-				: apiRequest('DELETE', '/items/{item_id}/attachments/{attachment_id}', {
-						params: { path: { item_id: itemId, attachment_id: file.id } }
-					}),
-		onSuccess: () => invalidateItemFiles(queryClient, itemId)
+				? api.request(
+						'DELETE',
+						'/workspaces/{workspace_id}/items/{item_id}/revisions/{revision_id}',
+						{
+							params: { path: { item_id: itemId, revision_id: file.id } }
+						}
+					)
+				: api.request(
+						'DELETE',
+						'/workspaces/{workspace_id}/items/{item_id}/attachments/{attachment_id}',
+						{
+							params: { path: { item_id: itemId, attachment_id: file.id } }
+						}
+					),
+		onSuccess: () => invalidateItemFiles(queryClient, workspaceId, itemId)
 	});
 }

@@ -72,7 +72,7 @@ def require_api_admin(user: ApiUser) -> User:
 AdminUser = Annotated[User, Depends(require_api_admin)]
 router = APIRouter(
     prefix="/admin",
-    tags=["HTTP API administration"],
+    tags=["Instance administration"],
 )
 
 

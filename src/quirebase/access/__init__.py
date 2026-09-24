@@ -14,13 +14,6 @@ from quirebase.access.items import (
     visible_items_query,
     workspace_items_query,
 )
-from quirebase.access.projects import (
-    editable_projects,
-    project_member,
-    require_project_member,
-    visible_projects,
-    visible_projects_for_context,
-)
 from quirebase.access.scope import workspace_id_predicate, workspace_select
 from quirebase.access.tags import visible_tags_query
 from quirebase.access.workspaces import (
@@ -28,6 +21,7 @@ from quirebase.access.workspaces import (
     Capability,
     ProjectContext,
     WorkspaceContext,
+    effective_capabilities,
     require,
     require_project_access,
     require_project_context,
@@ -35,6 +29,7 @@ from quirebase.access.workspaces import (
     require_workspace_membership,
     resolve_workspace_context,
     role_has_capability,
+    visible_project_ids_query,
 )
 
 __all__ = [
@@ -46,10 +41,9 @@ __all__ = [
     "can_edit_annotation",
     "can_edit_item",
     "can_read_item",
-    "editable_projects",
+    "effective_capabilities",
     "get_item",
     "get_item_for_update",
-    "project_member",
     "require",
     "require_accessible_items",
     "require_attachment",
@@ -57,7 +51,6 @@ __all__ = [
     "require_editable_item",
     "require_project_access",
     "require_project_context",
-    "require_project_member",
     "require_readable_item",
     "require_revision",
     "require_workspace_capability",
@@ -65,8 +58,7 @@ __all__ = [
     "resolve_workspace_context",
     "role_has_capability",
     "visible_items_query",
-    "visible_projects",
-    "visible_projects_for_context",
+    "visible_project_ids_query",
     "visible_tags_query",
     "workspace_id_predicate",
     "workspace_items_query",

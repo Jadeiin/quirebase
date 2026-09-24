@@ -1,17 +1,11 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { goto } from '$app/navigation';
 	import { Dialog, Portal } from '@skeletonlabs/skeleton-svelte';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { onMount } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
-	import {
-		apiDownloadGet,
-		apiRequest,
-		apiText,
-		isDownloadCancelled,
-		type WorkspaceView
-	} from '$lib/api/client';
+	import { isDownloadCancelled, type ItemOverviewView } from '$lib/api/client';
 	import { apiErrorMessage } from '$lib/api/errors';
 	import Button from '$lib/design/Button.svelte';
 	import DialogCloseButton from '$lib/design/DialogCloseButton.svelte';
@@ -26,12 +20,16 @@
 	import { itemFilesQuery } from '$lib/features/item/queries';
 	import { invalidateLibrary } from '$lib/query/invalidation';
 	import { t } from '$lib/i18n';
+	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
+	import { workspaceHref } from '$lib/workspaces/href';
+	import { workspaceListQuery } from '$lib/workspaces/queries';
+	import { workspaceKeys } from '$lib/workspaces/keys';
 
-	type ActionSection = 'documents' | 'citation' | 'sources' | 'danger';
+	type ActionSection = 'documents' | 'citation' | 'sources' | 'danger' | 'copy';
 
-	let { itemId, workspace, userId, onchanged } = $props<{
+	let { itemId, overview, userId, onchanged } = $props<{
 		itemId: string;
-		workspace: WorkspaceView;
+		overview: ItemOverviewView;
 		userId: string;
 		onchanged: () => Promise<unknown>;
 	}>();
@@ -47,8 +45,26 @@
 	let revisionSelectionInitialized = false;
 	let deleteArmed = $state(false);
 	const queryClient = useQueryClient();
-	const files = createQuery(() => itemFilesQuery(itemId, open && section === 'documents'));
+	const workspaceContext = getWorkspaceContext();
+	const { workspaceId } = workspaceContext;
+	const workspaces = createQuery(() => workspaceListQuery());
+	let targetWorkspaceId = $state('');
+	let copiedItemUrl = $state('');
+	const files = createQuery(() =>
+		itemFilesQuery(workspaceId, itemId, open && section === 'documents')
+	);
 	const revisions = $derived(files.data?.files.filter((file) => file.kind === 'revision') ?? []);
+	const copyDestinations = $derived(
+		(workspaces.data ?? []).filter(
+			(candidate) =>
+				candidate.id !== workspaceId && candidate.effective_capabilities.includes('items.create')
+		)
+	);
+	const externalIdentifiers = $derived(
+		overview.identifiers.filter(
+			(identifier: ItemOverviewView['identifiers'][number]) => identifier.provider !== 'doi'
+		)
+	);
 
 	onMount(() => {
 		preferences = readExportPreferences(userId);
@@ -127,8 +143,8 @@
 	function downloadBibliography() {
 		void action(
 			() =>
-				apiDownloadGet(
-					'/items/{item_id}/bibliography',
+				workspaceContext.api.downloadGet(
+					'/workspaces/{workspace_id}/items/{item_id}/bibliography',
 					{
 						params: { path: { item_id: itemId }, query: bibliographyParameters() }
 					},
@@ -140,9 +156,12 @@
 
 	function copyBibliography() {
 		void action(async () => {
-			const content = await apiText('/items/{item_id}/bibliography/content', {
-				params: { path: { item_id: itemId }, query: bibliographyParameters() }
-			});
+			const content = await workspaceContext.api.text(
+				'/workspaces/{workspace_id}/items/{item_id}/bibliography/content',
+				{
+					params: { path: { item_id: itemId }, query: bibliographyParameters() }
+				}
+			);
 			await navigator.clipboard.writeText(content);
 		}, $t('Copied to clipboard'));
 	}
@@ -150,8 +169,8 @@
 	function downloadDocuments() {
 		void action(
 			() =>
-				apiDownloadGet(
-					'/items/{item_id}/archive',
+				workspaceContext.api.downloadGet(
+					'/workspaces/{workspace_id}/items/{item_id}/archive',
 					{
 						params: {
 							path: { item_id: itemId },
@@ -171,28 +190,40 @@
 
 	function synchronize(provider: string, uid: string) {
 		void action(async () => {
-			await apiRequest('POST', '/items/{item_id}/metadata/sync', {
-				params: { path: { item_id: itemId } },
-				body: { expected_version: workspace.item.version, provider, uid }
-			});
+			await workspaceContext.api.request(
+				'POST',
+				'/workspaces/{workspace_id}/items/{item_id}/metadata/sync',
+				{
+					params: { path: { item_id: itemId } },
+					body: { expected_version: overview.item.version, provider, uid }
+				}
+			);
 			await onchanged();
 		}, $t('Metadata synchronized'));
 	}
 
 	function regenerateCitationKey() {
 		void action(async () => {
-			await apiRequest('POST', '/items/{item_id}/citation-key/regenerate', {
-				params: { path: { item_id: itemId } }
-			});
+			await workspaceContext.api.request(
+				'POST',
+				'/workspaces/{workspace_id}/items/{item_id}/citation-key/regenerate',
+				{
+					params: { path: { item_id: itemId } }
+				}
+			);
 			await onchanged();
 		}, $t('Citation key updated'));
 	}
 
 	function rescanDoi() {
 		void action(async () => {
-			await apiRequest('POST', '/items/{item_id}/doi/rescan', {
-				params: { path: { item_id: itemId } }
-			});
+			await workspaceContext.api.request(
+				'POST',
+				'/workspaces/{workspace_id}/items/{item_id}/doi/rescan',
+				{
+					params: { path: { item_id: itemId } }
+				}
+			);
 			await onchanged();
 		}, $t('PDF scanned for a DOI'));
 	}
@@ -204,33 +235,55 @@
 	function confirmDeleteItem() {
 		deleteArmed = false;
 		void action(async () => {
-			await apiRequest('DELETE', '/items/{item_id}', {
+			await workspaceContext.api.request('DELETE', '/workspaces/{workspace_id}/items/{item_id}', {
 				params: { path: { item_id: itemId } },
 				body: { confirmation: 'delete' }
 			});
-			await invalidateLibrary(queryClient);
-			await goto(resolve('/library'));
+			await invalidateLibrary(queryClient, workspaceId);
+			await goto(resolve(workspaceHref(workspaceId, 'library')));
 		}, $t('Item deleted'));
+	}
+
+	function copyItem() {
+		if (!targetWorkspaceId) return;
+		void action(async () => {
+			const copied = await workspaceContext.api.request(
+				'POST',
+				'/workspaces/{workspace_id}/items/{item_id}/copy',
+				{
+					params: { path: { item_id: itemId } },
+					body: { target_workspace_id: targetWorkspaceId }
+				}
+			);
+			await queryClient.invalidateQueries({
+				queryKey: workspaceKeys.items(copied.target_workspace_id)
+			});
+			copiedItemUrl = resolve(
+				workspaceHref(copied.target_workspace_id, `item/${copied.target_item_id}`)
+			);
+		}, $t('Item copied to Workspace'));
 	}
 </script>
 
 <div class="flex flex-wrap gap-2">
-	{#if workspace.latest_revision}<Button
+	{#if overview.latest_revision}<Button
 			as="a"
 			variant="filled"
 			class="inline-flex items-center gap-2"
-			href={resolve('/(app)/item/[itemId]/pdf/[revisionId]', {
-				itemId,
-				revisionId: workspace.latest_revision.id
-			})}>{$t('Read PDF')}</Button
+			href={resolve(
+				workspaceHref(workspaceId, `item/${itemId}/pdf/${overview.latest_revision.id}`)
+			)}>{$t('Read PDF')}</Button
 		><Button class="inline-flex items-center gap-2" onclick={() => show('documents')}
 			><Icon name="download" /> {$t('Download')}</Button
 		>{/if}
 	<Button onclick={() => show('citation')}>{$t('Export')}</Button>
-	{#if workspace.permissions.edit}<Button onclick={() => show('sources')}
-			>{$t('Record tools')}</Button
+	{#if overview.allowed_actions.edit && workspaceContext.can('items.edit')}<Button
+			onclick={() => show('sources')}>{$t('Record tools')}</Button
 		>{/if}
-	{#if workspace.permissions.delete}<Button variant="danger" onclick={() => show('danger')}
+	{#if copyDestinations.length}<Button variant="tonal" onclick={() => show('copy')}
+			>{$t('Copy to Workspace')}</Button
+		>{/if}
+	{#if overview.allowed_actions.delete}<Button variant="danger" onclick={() => show('danger')}
 			>{$t('More')}</Button
 		>{/if}
 </div>
@@ -255,17 +308,22 @@
 						data-active={section === 'citation'}
 						onclick={() => (section = 'citation')}>{$t('Citation')}</button
 					>
-					{#if workspace.latest_revision}<button
+					{#if copyDestinations.length}<button
+							class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold data-[active=true]:border-primary-700-300 data-[active=true]:text-primary-700-300"
+							data-active={section === 'copy'}
+							onclick={() => (section = 'copy')}>{$t('Copy')}</button
+						>{/if}
+					{#if overview.latest_revision}<button
 							class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold data-[active=true]:border-primary-700-300 data-[active=true]:text-primary-700-300"
 							data-active={section === 'documents'}
 							onclick={() => (section = 'documents')}>{$t('Documents')}</button
 						>{/if}
-					{#if workspace.permissions.edit}<button
+					{#if overview.allowed_actions.edit && workspaceContext.can('items.edit')}<button
 							class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold data-[active=true]:border-primary-700-300 data-[active=true]:text-primary-700-300"
 							data-active={section === 'sources'}
 							onclick={() => (section = 'sources')}>{$t('Metadata sources')}</button
 						>{/if}
-					{#if workspace.permissions.delete}<button
+					{#if overview.allowed_actions.delete}<button
 							class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold text-error-700-300 data-[active=true]:border-error-700-300"
 							data-active={section === 'danger'}
 							onclick={() => (section = 'danger')}>{$t('Danger zone')}</button
@@ -296,6 +354,29 @@
 								><Button disabled={busy} onclick={copyBibliography}
 									>{$t('Copy to clipboard')}</Button
 								><Button onclick={() => goto(resolve('/account'))}>{$t('Export settings')}</Button>
+							</div>
+						</div>
+					{:else if section === 'copy'}
+						<div class="grid max-w-xl grid-cols-1 gap-3">
+							<h2>{$t('Copy to another Workspace')}</h2>
+							<p class="text-surface-600-400">
+								{$t(
+									'A copy creates a new canonical Item. Only Workspaces where you can create Items are offered.'
+								)}
+							</p>
+							<label class="grid grid-cols-1 gap-1"
+								>{$t('Target Workspace')}<select class="select" bind:value={targetWorkspaceId}
+									><option value="">{$t('Choose a Workspace')}</option
+									>{#each copyDestinations as target (target.id)}<option value={target.id}
+											>{target.name}</option
+										>{/each}</select
+								></label
+							>
+							<div class="flex flex-wrap gap-2">
+								<Button variant="filled" disabled={busy || !targetWorkspaceId} onclick={copyItem}
+									>{$t('Create copy')}</Button
+								>{#if copiedItemUrl}<Button as="a" href={copiedItemUrl}>{$t('Open copy')}</Button
+									>{/if}
 							</div>
 						</div>
 					{:else if section === 'documents'}
@@ -347,12 +428,12 @@
 									{$t('Refresh this record from an upstream identifier.')}
 								</p>
 							</div>
-							{#if workspace.item.doi}<div
+							{#if overview.item.doi}<div
 									class="grid grid-cols-1 gap-3 rounded-lg border border-surface-300-700 p-3 sm:grid-cols-[1fr_auto] sm:items-center"
 								>
 									<div>
 										<strong>DOI</strong><span class="block text-sm text-surface-600-400"
-											>{workspace.item.doi}</span
+											>{overview.item.doi}</span
 										>
 									</div>
 									<div class="flex flex-wrap items-center gap-2">
@@ -368,15 +449,14 @@
 										</select>
 										<Button
 											disabled={busy}
-											onclick={() => synchronize(doiProvider, workspace.item.doi!)}
+											onclick={() => synchronize(doiProvider, overview.item.doi!)}
 											>{$t('Autoupdate')}</Button
 										>
 									</div>
-								</div>{:else if workspace.latest_revision}<Button
-									disabled={busy}
-									onclick={rescanDoi}>{$t('Rescan PDF for DOI')}</Button
+								</div>{:else if overview.latest_revision}<Button disabled={busy} onclick={rescanDoi}
+									>{$t('Rescan PDF for DOI')}</Button
 								>{/if}
-							{#each workspace.identifiers.filter((identifier: WorkspaceView['identifiers'][number]) => identifier.provider !== 'doi') as identifier (`${identifier.provider}:${identifier.value}`)}<div
+							{#each externalIdentifiers as identifier (`${identifier.provider}:${identifier.value}`)}<div
 									class="grid grid-cols-1 gap-3 rounded-lg border border-surface-300-700 p-3 sm:grid-cols-[1fr_auto] sm:items-center"
 								>
 									<div>

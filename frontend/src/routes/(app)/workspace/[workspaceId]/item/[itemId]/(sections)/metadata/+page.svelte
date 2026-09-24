@@ -6,7 +6,7 @@
 	import ItemSectionState from '$lib/features/item/ItemSectionState.svelte';
 	import ItemMetadataSection from '$lib/features/item/metadata/ItemMetadataSection.svelte';
 	import { metadataMutationOptions } from '$lib/features/item/metadata/mutations';
-	import { itemDetailsQuery, itemWorkspaceQuery } from '$lib/features/item/queries';
+	import { itemDetailsQuery, itemOverviewQuery } from '$lib/features/item/queries';
 	import type { ItemDetail } from '$lib/features/item/types';
 	import { t } from '$lib/i18n';
 	import type { PageProps } from './$types';
@@ -14,10 +14,10 @@
 	let { params }: PageProps = $props();
 	let mutationError = $state('');
 	const queryClient = useQueryClient();
-	const workspace = createQuery(() => itemWorkspaceQuery(params.itemId));
-	const details = createQuery(() => itemDetailsQuery(params.itemId, true));
+	const overview = createQuery(() => itemOverviewQuery(params.workspaceId, params.itemId));
+	const details = createQuery(() => itemDetailsQuery(params.workspaceId, params.itemId, true));
 	const metadataMutation = createMutation(() =>
-		metadataMutationOptions(params.itemId, queryClient)
+		metadataMutationOptions(params.workspaceId, params.itemId, queryClient)
 	);
 
 	function updateMetadata(item: ItemDetail, metadata: components['schemas']['ItemMetadata-Input']) {
@@ -32,7 +32,7 @@
 <ItemSectionState loading={details.isPending} failed={details.isError}>
 	<ItemMetadataSection
 		item={details.data!}
-		canEdit={workspace.data?.permissions.edit ?? false}
+		canEdit={overview.data?.allowed_actions.edit ?? false}
 		busy={metadataMutation.isPending}
 		onSubmit={updateMetadata}
 	/>

@@ -8,10 +8,16 @@ import type { components, paths } from '$lib/api/schema';
 type ApiErrorView = components['schemas']['ApiErrorView'];
 
 const authenticationRequiredHandlers = new Set<() => void>();
+const workspaceUnavailableHandlers = new Set<(workspaceId: string) => void>();
 
 export function onAuthenticationRequired(handler: () => void): () => void {
 	authenticationRequiredHandlers.add(handler);
 	return () => authenticationRequiredHandlers.delete(handler);
+}
+
+export function onWorkspaceUnavailable(handler: (workspaceId: string) => void): () => void {
+	workspaceUnavailableHandlers.add(handler);
+	return () => workspaceUnavailableHandlers.delete(handler);
 }
 
 export class ApiError extends Error {
@@ -65,6 +71,11 @@ type PathsWithMethod<Method extends HttpMethod> = {
 	[Path in ApiPath]: [Operation<Path, Method>] extends [never] ? never : Path;
 }[ApiPath];
 
+type WorkspaceApiPath = Extract<ApiPath, `/workspaces/{workspace_id}${string}`>;
+type WorkspacePathsWithMethod<Method extends HttpMethod> = {
+	[Path in WorkspaceApiPath]: [Operation<Path, Method>] extends [never] ? never : Path;
+}[WorkspaceApiPath];
+
 type RequiredKeys<Value> = Value extends object
 	? { [Key in keyof Value]-?: object extends Pick<Value, Key> ? never : Key }[keyof Value]
 	: never;
@@ -116,6 +127,35 @@ export type ApiResponse<Path extends ApiPath, Method extends HttpMethod> = Respo
 	SuccessResponse<Operation<Path, Method>>
 >;
 
+type RequestParams<Path extends ApiPath, Method extends HttpMethod> =
+	ApiRequestOptions<Path, Method> extends { params?: infer Params } ? NonNullable<Params> : object;
+type PathParams<Path extends ApiPath, Method extends HttpMethod> =
+	RequestParams<Path, Method> extends { path?: infer Params }
+		? NonNullable<Params>
+		: RequestParams<Path, Method> extends { path: infer Params }
+			? Params
+			: object;
+type WorkspacePathParams<Path extends WorkspaceApiPath, Method extends HttpMethod> = Omit<
+	PathParams<Path, Method>,
+	'workspace_id'
+>;
+type WorkspacePathOption<Path extends WorkspaceApiPath, Method extends HttpMethod> =
+	RequiredKeys<WorkspacePathParams<Path, Method>> extends never
+		? { path?: WorkspacePathParams<Path, Method> }
+		: { path: WorkspacePathParams<Path, Method> };
+type WorkspaceParams<Path extends WorkspaceApiPath, Method extends HttpMethod> = Omit<
+	RequestParams<Path, Method>,
+	'path'
+> &
+	WorkspacePathOption<Path, Method>;
+export type WorkspaceApiRequestOptions<
+	Path extends WorkspaceApiPath,
+	Method extends HttpMethod
+> = Omit<ApiRequestOptions<Path, Method>, 'params'> &
+	(RequiredKeys<WorkspaceParams<Path, Method>> extends never
+		? { params?: WorkspaceParams<Path, Method> }
+		: { params: WorkspaceParams<Path, Method> });
+
 const serializeQuery = createQuerySerializer();
 const client = createClient<paths>({
 	baseUrl: `${typeof location === 'undefined' ? '' : location.origin}/api/v1`,
@@ -150,6 +190,19 @@ function responseError(response: Response, payload: unknown): ApiError {
 					message: response.statusText || `HTTP ${response.status}`
 				}
 	);
+	if (error.code === 'workspace_context_required') {
+		console.error('Workspace scoped request was missing its URL context', {
+			status: error.status,
+			code: error.code,
+			path: response.url
+		});
+	}
+	if (response.status === 404 || error.code === 'workspace_membership_required') {
+		const workspaceId = response.url.match(/\/api\/v1\/workspaces\/([^/]+)/)?.[1];
+		if (workspaceId) {
+			for (const handler of workspaceUnavailableHandlers) handler(decodeURIComponent(workspaceId));
+		}
+	}
 	if (error.status === 401 && error.code === 'authentication_required') {
 		for (const handler of authenticationRequiredHandlers) handler();
 	}
@@ -354,8 +407,63 @@ export async function apiText<Path extends PathsWithMethod<'get'>>(
 	return (data as string) ?? '';
 }
 
+type WorkspaceRequestArguments<
+	Path extends WorkspaceApiPath,
+	Method extends HttpMethod
+> = OptionsArguments<WorkspaceApiRequestOptions<Path, Method>>;
+
+function withWorkspacePath<Path extends WorkspaceApiPath, Method extends HttpMethod>(
+	workspaceId: string,
+	options: WorkspaceApiRequestOptions<Path, Method> | undefined
+): ApiRequestOptions<Path, Method> {
+	const resolved = (options ?? {}) as Record<string, unknown>;
+	const params = (resolved.params ?? {}) as Record<string, unknown>;
+	const path = (params.path ?? {}) as Record<string, unknown>;
+	return {
+		...resolved,
+		params: { ...params, path: { ...path, workspace_id: workspaceId } }
+	} as unknown as ApiRequestOptions<Path, Method>;
+}
+
+/** Bind every Workspace-scoped request to an explicit URL Workspace ID. */
+export function createWorkspaceApi(workspaceId: string) {
+	return {
+		request: async <
+			Method extends RequestMethod,
+			Path extends WorkspacePathsWithMethod<Lowercase<Method> & HttpMethod>
+		>(
+			method: Method,
+			path: Path,
+			...args: WorkspaceRequestArguments<Path, Lowercase<Method> & HttpMethod>
+		): Promise<ApiResponse<Path, Lowercase<Method> & HttpMethod>> => {
+			const options = args[0] as
+				WorkspaceApiRequestOptions<Path, Lowercase<Method> & HttpMethod> | undefined;
+			const fetcher = args[1] as typeof fetch | undefined;
+			return apiRequest(method, path, withWorkspacePath(workspaceId, options), fetcher);
+		},
+		download: async <Path extends WorkspacePathsWithMethod<'post'>>(
+			path: Path,
+			options: WorkspaceApiRequestOptions<Path, 'post'>,
+			fetcherOrOptions: typeof fetch | ApiDownloadOptions = fetch
+		): Promise<void> =>
+			apiDownload(path, withWorkspacePath(workspaceId, options), fetcherOrOptions),
+		downloadGet: async <Path extends WorkspacePathsWithMethod<'get'>>(
+			path: Path,
+			options: WorkspaceApiRequestOptions<Path, 'get'>,
+			fetcherOrOptions: typeof fetch | ApiDownloadOptions = fetch
+		): Promise<void> =>
+			apiDownloadGet(path, withWorkspacePath(workspaceId, options), fetcherOrOptions),
+		text: async <Path extends WorkspacePathsWithMethod<'get'>>(
+			path: Path,
+			options: WorkspaceApiRequestOptions<Path, 'get'>,
+			fetcher: typeof fetch = fetch
+		): Promise<string> => apiText(path, withWorkspacePath(workspaceId, options), fetcher)
+	};
+}
+
 export type SessionView = components['schemas']['SessionView'];
 export type ItemSummary = components['schemas']['ItemSearchView'];
 export type ProjectSummary = components['schemas']['ProjectSummaryView'];
-export type WorkspaceView = components['schemas']['ItemWorkspaceView'];
+export type WorkspaceView = components['schemas']['WorkspaceView'];
+export type ItemOverviewView = components['schemas']['ItemOverviewView'];
 export type LibraryView = components['schemas']['LibrarySearchView'];

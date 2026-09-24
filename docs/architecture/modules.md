@@ -102,8 +102,9 @@ Workspace authorization is resolved once at an inbound request or workflow bound
 `access.WorkspaceContext`. Business operations may use the thin `access.workspace_select()`
 lineage primitive and Module-owned aggregate loaders (`get_item`, `get_project`,
 `get_project_item`, and document loaders). The primitive only adds the Workspace lineage
-predicate; capability checks and Project visibility remain explicit Access gates, while mutation
-statements retain their Workspace and CAS predicates at the linearization point. No generic
+predicate; capability checks remain explicit Access gates while Project visibility is a
+participation projection, and mutation statements retain their Workspace and CAS predicates at
+the linearization point. No generic
 Repository or implicit ORM tenant filter is part of this seam.
 
 Citation Style lookup and access control cross the Library Interface. Library delegates CSL
@@ -152,13 +153,13 @@ Operations over a user-selected set of Items live in `library.bulk_items`. This 
 bulk-operation transaction, all-selected authorization rule, audit event and post-commit file
 cleanup. Multi-Item document download crosses this Library seam; its implementation may call the
 Documents assembly interface for archive construction after selection authorization. Library does
-not define single-Item metadata behaviour or Item workspace queries.
+not define single-Item metadata behaviour or Item section queries.
 
-Opening an Item crosses the Library interface through `open_item_workspace` with a typed
-`WorkspaceSection`. Summary, Metadata, Files, Organize, Annotations and Discussion each return a
+Opening an Item crosses the Library interface through `open_item_section` with a typed
+`ItemSection`. Overview, Metadata, Files, Organize, Annotations and Discussion each return a
 section-specific read model; only the Web adapter maps those views to API projections. Access
 validation, section query selection and recent-reading persistence remain coordinated behind the
-same operation seam. The implementation lives in `library.item_workspace`, which owns reads for
+same operation seam. The implementation lives in `library.item_sections`, which owns reads for
 one opened Item and no Item mutation or bulk behaviour.
 
 Annotation and Annotation Reply CRUD cross the Documents interface through typed create/update
@@ -167,7 +168,7 @@ authorization coordination, optimistic versioning, annotation soft deletion, Aud
 PDF export. Web, REST and MCP are inbound Adapters over that Interface; EmbedPDF objects are
 translated only inside the Web asset and never enter Documents persistence or API wire contracts.
 
-Tag selection is presented by the Item Workspace and committed through additive/remove commands
+Tag selection is presented by the Item Organize section and committed through additive/remove commands
 (`add_tag_to_item` and `remove_tag_from_item`). Existing Tags may be matched case-insensitively
 against an Item Tag Recommendation, while candidates absent from the taxonomy are returned as
 suggested names. Tag reads expose the selected Workspace's taxonomy to its active members.
@@ -187,21 +188,32 @@ identifier. Library metadata writes enqueue generation transactionally through C
 Adapter, and the Library-owned workflow invokes the Library operation.
 
 Opening a Project crosses the Projects interface through `open_project_workspace`, which returns
-a typed read model containing the Project, optional caller participation, members and assigned
-Items. Workspace membership/capability and Project visibility authorization remain coordinated
-behind that operation; only the Web adapter maps the typed view to an API projection.
+a typed read model containing the Project, explicit participants for `open` and `managed` modes,
+the caller's participation state, and assigned Items. Workspace membership and required Workspace
+capabilities are authorized behind that operation. ProjectMember gates discoverability only for
+`managed` Projects; it never grants Workspace capability or canonical Item access. Projects have
+no owner or ownership-transfer operation; `created_by` is provenance only. Only the Web adapter
+maps the typed view to an API projection.
 
 The Project settings form crosses the Projects interface through `update_project_settings`.
 Name, description and visibility are validated before mutation and committed with their Audit
 Event in one transaction; the Web adapter sends the form as one request and does not coordinate
 partial Project updates.
 
-Project-scoped mutations lock the Project root only when changing Project state, visibility or
-membership. Project authority comes exclusively from Workspace capabilities; ProjectMember has no
-role and is only a visibility/participation scope gate. Item assignments use the Project root plus
-FK/unique-key idempotency and do not participate in a global lock graph. Library bulk assignment
-crosses this Projects interface while retaining ownership of the surrounding bulk-operation
-transaction and Audit Event.
+Project-scoped mutations lock the Project root only when changing Project state, participation
+policy or explicit participant associations. Project mutation authority comes from Workspace
+capabilities; ProjectMember has no role and never grants capabilities. `workspace` participation
+is implicit with no ProjectMember rows; `open` Projects are discoverable to all active Workspace
+members and permit self-join/leave; `managed` Projects are discoverable only to participants and
+Workspace governors, who curate participation. Only Workspace governors may create managed
+Projects. Moving to `workspace` clears explicit associations in the same transaction; switching
+between `open` and `managed` preserves them. There is no last-participant or Project ownership
+invariant, and Workspace-member lifecycle only removes terminated participants rather than
+synchronizing implicit Project participants. Managed Project scope never changes access to
+canonical Workspace Items. Item assignments use the Project root plus FK/unique-key
+idempotency and do not participate in a global lock graph. Library bulk assignment crosses this
+Projects interface while retaining ownership of the surrounding bulk-operation transaction and
+Audit Event.
 
 Instance administrators do not receive an implicit Projects interface. They may inspect Workspace
 tenancy metadata and suspend or recover governance, but Project content remains behind Workspace
@@ -296,7 +308,7 @@ directions are:
 | Source | May depend on | Ownership reason |
 | --- | --- | --- |
 | `access` | `core`, `models` | Evaluate policies using persisted identities and domain errors |
-| `accounts` | `audit`, `core`, `models`, `operations`, `workspaces` | Authentication persistence, Audit Event recording, runtime registration policy and initial Workspace provisioning |
+| `accounts` | `audit`, `core`, `models`, `operations`, `workspaces` | Authentication persistence, Audit Event recording, runtime registration policy and Workspace provisioning for new Users |
 | `audit` | `core`, `models` | Authorization errors and Audit Event persistence |
 | `library` | `access`, `audit`, `core`, `documents`, `models`, `operations`, `projects`, `search` | Authorization, persistence and auditing; selected-Item document assembly; Project-gated bulk assignment; runtime Provider/import settings; Library-owned workflows and search-index synchronization |
 | `projects` | `access`, `audit`, `core`, `documents`, `models` | Authorization, Project persistence and audit recording; Documents-owned Annotation cleanup when detaching a ProjectItem |

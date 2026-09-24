@@ -20,10 +20,10 @@ from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.config import get_settings
 from quirebase.library import (
-    MetadataWorkspace,
-    SummaryWorkspace,
-    WorkspaceSection,
-    open_item_workspace,
+    ItemMetadataData,
+    ItemOverviewData,
+    ItemSection,
+    open_item_section,
 )
 from quirebase.library.identifiers import sync_metadata_from_upstream
 from quirebase.library.imports import (
@@ -379,7 +379,7 @@ async def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(
         item_id = item.id
         item_version = item.version
 
-        # 1. Fetch workspace view
+        # 1. Fetch Item detail
         resp = await client.get(f"/api/v1/workspaces/{seed_item.workspace_id}/items/{item_id}")
         assert resp.status_code == 200
         assert resp.json()["title_html"] == item.title
@@ -416,18 +416,14 @@ async def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(
         db.expire_all()
         user = await db.get(User, user_id)
         assert user is not None
-        workspace_data = await open_item_workspace(
-            db, user, workspace_id, item_id, WorkspaceSection.summary
-        )
-        assert isinstance(workspace_data, SummaryWorkspace)
+        overview = await open_item_section(db, user, workspace_id, item_id, ItemSection.overview)
+        assert isinstance(overview, ItemOverviewData)
         assert (
-            workspace_data.item.title
+            overview.item.title
             == "Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives"
         )
-        metadata = await open_item_workspace(
-            db, user, workspace_id, item_id, WorkspaceSection.metadata
-        )
-        assert isinstance(metadata, MetadataWorkspace)
+        metadata = await open_item_section(db, user, workspace_id, item_id, ItemSection.metadata)
+        assert isinstance(metadata, ItemMetadataData)
         author_links = metadata.authors
         assert len(author_links) == 2
         assert author_links[0].author.last_name == "Hasanein"

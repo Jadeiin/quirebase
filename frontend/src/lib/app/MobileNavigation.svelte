@@ -7,41 +7,65 @@
 	import { t } from '$lib/i18n';
 	import type { ThemePreference } from '$lib/theme';
 	import { mobileMoreNavigation, mobileNavigation, themeOptions } from './navigation';
+	import { workspaceHref } from '$lib/workspaces/href';
 
-	let { routeIsActive, user, readerRoute, themePreference, onThemeChange } = $props<{
+	let { routeIsActive, user, readerRoute, themePreference, onThemeChange, workspaceId } = $props<{
 		routeIsActive: (route: string) => boolean;
 		user?: { role: string } | null;
 		readerRoute: boolean;
+		workspaceId?: string;
 		themePreference: ThemePreference;
 		onThemeChange: (preference: ThemePreference) => void;
 	}>();
+	const mobileItems = $derived(
+		mobileNavigation.map(
+			([section, label, icon]) =>
+				[workspaceId ? workspaceHref(workspaceId, section) : '/workspace', label, icon] as const
+		)
+	);
+	const moreItems = $derived(
+		mobileMoreNavigation.map(
+			([section, label, icon]) =>
+				[
+					section === '/account'
+						? section
+						: workspaceId
+							? workspaceHref(workspaceId, section)
+							: '/workspace',
+					label,
+					icon
+				] as const
+		)
+	);
+	const moreActive = $derived(
+		moreItems.some(([route]) =>
+			route === '/account' ? routeIsActive(route) : Boolean(workspaceId) && routeIsActive(route)
+		)
+	);
 </script>
 
 <nav
 	class={`fixed inset-x-0 bottom-0 z-50 overflow-x-auto bg-primary-950 text-surface-300 md:hidden ${readerRoute ? 'hidden' : 'flex'}`}
 	aria-label={$t('Mobile navigation')}
 >
-	{#each mobileNavigation as [route, label, icon] (route)}
+	{#each mobileItems as [route, label, icon] (label)}
 		<a
 			class="flex min-w-18 flex-1 flex-col items-center gap-1 px-1.5 py-2 text-xs no-underline aria-[current=page]:bg-white/10 aria-[current=page]:text-white"
 			href={resolve(route)}
-			aria-current={route === '/library'
-				? routeIsActive(route) || page.url.pathname.startsWith('/item/')
-					? 'page'
-					: undefined
-				: routeIsActive(route)
-					? 'page'
-					: undefined}><Icon name={icon} size={19} /><span>{$t(label)}</span></a
+			aria-current={workspaceId &&
+				(route.endsWith('/library')
+					? routeIsActive(route) || page.url.pathname.includes('/item/')
+						? 'page'
+						: undefined
+					: routeIsActive(route)
+						? 'page'
+						: undefined)}><Icon name={icon} size={19} /><span>{$t(label)}</span></a
 		>
 	{/each}
 	<Menu positioning={{ placement: 'top-end', gutter: 8 }}>
 		<Menu.Trigger
 			class="flex min-w-18 flex-1 cursor-pointer flex-col items-center gap-1 border-0 bg-transparent px-1.5 py-2 text-xs text-inherit aria-[current=page]:bg-white/10 aria-[current=page]:text-white"
-			aria-current={['/', '/import', '/tools', '/admin', '/account'].some((route) =>
-				routeIsActive(route)
-			)
-				? 'page'
-				: undefined}
+			aria-current={moreActive ? 'page' : undefined}
 		>
 			<Icon name="more" size={19} /><span>{$t('More')}</span>
 		</Menu.Trigger>
@@ -50,7 +74,7 @@
 				<Menu.Content
 					class="min-w-52 rounded-container border border-surface-300-700 bg-surface-50-950 p-1 text-surface-900-100 shadow-xl"
 				>
-					{#each mobileMoreNavigation as [route, label, icon] (route)}
+					{#each moreItems as [route, label, icon] (label)}
 						<Menu.Item
 							value={route}
 							class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"

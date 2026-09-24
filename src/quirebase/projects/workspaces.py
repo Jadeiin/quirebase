@@ -12,6 +12,7 @@ from quirebase.access import (
     Capability,
     require_project_context,
     require_workspace_capability,
+    visible_project_ids_query,
     workspace_select,
 )
 from quirebase.audit import record_event
@@ -29,9 +30,11 @@ from quirebase.models import (
     WorkspaceMemberState,
 )
 
-from ._locking import guard_project, lock_project_membership_workspace
+from ._locking import guard_project, lock_project_participation_workspace
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -43,9 +46,9 @@ class ProjectWorkspaceMember:
 @dataclass(frozen=True)
 class ProjectWorkspace:
     project: Project
-    membership: ProjectMember | None
     members: tuple[ProjectWorkspaceMember, ...]
     items: tuple[Item, ...]
+    is_member: bool
 
 
 async def create_project(
@@ -66,9 +69,14 @@ async def create_project(
     normalized_description = description.replace("\r\n", "\n").replace("\r", "\n").strip()
     if len(normalized_description) > 2000:
         raise ValidationFailure("Project description is too long")
-    if parsed_visibility is ProjectVisibility.members:
-        await lock_project_membership_workspace(db, workspace_id)
-    context = await require_workspace_capability(db, user, workspace_id, Capability.projects_manage)
+    if parsed_visibility is ProjectVisibility.open:
+        await lock_project_participation_workspace(db, workspace_id)
+    create_capability = (
+        Capability.projects_create_managed
+        if parsed_visibility is ProjectVisibility.managed
+        else Capability.projects_create
+    )
+    context = await require_workspace_capability(db, user, workspace_id, create_capability)
     project = Project(
         workspace_id=workspace_id,
         name=normalized,
@@ -78,7 +86,7 @@ async def create_project(
     )
     db.add(project)
     await db.flush()
-    if parsed_visibility is ProjectVisibility.members:
+    if parsed_visibility is ProjectVisibility.open:
         db.add(
             ProjectMember(
                 workspace_id=workspace_id,
@@ -95,40 +103,68 @@ async def create_project(
         workspace_id=workspace_id,
         project_id=project.id,
         authorization_role=context.role.value,
-        authorization_capability=Capability.projects_manage.value,
+        authorization_capability=create_capability.value,
     )
     await db.commit()
     return project
 
 
-async def list_user_projects(
+async def list_workspace_projects(
     db: AsyncSession, user: User, workspace_id: str
-) -> list[tuple[Project, int]]:
+) -> list[tuple[Project, int, bool]]:
     context = await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
     member_ids = (
         workspace_select(ProjectMember, context)
-        .where(
-            ProjectMember.user_id == user.id,
-        )
+        .join(Project, Project.id == ProjectMember.project_id)
+        .where(ProjectMember.user_id == user.id)
         .with_only_columns(ProjectMember.project_id)
     )
     rows = (
         await db.execute(
             workspace_select(Project, context)
-            .with_only_columns(Project, func.count(ProjectItem.id))
+            .with_only_columns(
+                Project,
+                func.count(ProjectItem.id),
+                (Project.visibility == ProjectVisibility.workspace) | Project.id.in_(member_ids),
+            )
             .outerjoin(
                 ProjectItem,
                 ProjectItem.project_id == Project.id,
             )
             .where(
                 Project.state != ProjectState.deleted,
-                (Project.visibility == ProjectVisibility.workspace) | Project.id.in_(member_ids),
+                Project.id.in_(visible_project_ids_query(context)),
             )
             .group_by(Project.id)
             .order_by(Project.name)
         )
     ).all()
-    return [(row[0], row[1]) for row in rows]
+    return [(row[0], row[1], bool(row[2])) for row in rows]
+
+
+async def list_joinable_projects(
+    db: AsyncSession, user: User, workspace_id: str
+) -> list[tuple[Project, int]]:
+    """List active open Projects the current Workspace member has not joined."""
+    context = await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    member_ids = (
+        workspace_select(ProjectMember, context)
+        .where(ProjectMember.user_id == user.id)
+        .with_only_columns(ProjectMember.project_id)
+    )
+    rows = await db.execute(
+        workspace_select(Project, context)
+        .with_only_columns(Project, func.count(ProjectItem.id))
+        .outerjoin(ProjectItem, ProjectItem.project_id == Project.id)
+        .where(
+            Project.state == ProjectState.active,
+            Project.visibility == ProjectVisibility.open,
+            ~Project.id.in_(member_ids),
+        )
+        .group_by(Project.id)
+        .order_by(Project.name)
+    )
+    return [(row[0], row[1]) for row in rows.all()]
 
 
 async def open_project_workspace(
@@ -137,27 +173,40 @@ async def open_project_workspace(
     context = await require_project_context(
         db, user, workspace_id, project_id, Capability.workspace_read
     )
-    members_rows = (
-        await db.scalars(
-            select(User)
-            .join(ProjectMember, ProjectMember.user_id == User.id)
-            .join(
-                WorkspaceMember,
-                (WorkspaceMember.workspace_id == ProjectMember.workspace_id)
-                & (WorkspaceMember.user_id == User.id),
+    members_rows: Sequence[User] = ()
+    is_member = context.project.visibility is ProjectVisibility.workspace
+    if context.project.visibility is not ProjectVisibility.workspace:
+        members_rows = (
+            await db.scalars(
+                select(User)
+                .join(ProjectMember, ProjectMember.user_id == User.id)
+                .join(
+                    WorkspaceMember,
+                    (WorkspaceMember.workspace_id == ProjectMember.workspace_id)
+                    & (WorkspaceMember.user_id == User.id),
+                )
+                .where(
+                    ProjectMember.workspace_id == workspace_id,
+                    ProjectMember.project_id == project_id,
+                    User.active.is_(True),
+                    WorkspaceMember.workspace_id == workspace_id,
+                    WorkspaceMember.user_id == User.id,
+                    WorkspaceMember.state == WorkspaceMemberState.active,
+                    WorkspaceMember.terminated_at.is_(None),
+                )
+                .order_by(User.username)
             )
-            .where(
-                ProjectMember.workspace_id == workspace_id,
-                ProjectMember.project_id == project_id,
-                User.active.is_(True),
-                WorkspaceMember.workspace_id == workspace_id,
-                WorkspaceMember.user_id == User.id,
-                WorkspaceMember.state == WorkspaceMemberState.active,
-                WorkspaceMember.terminated_at.is_(None),
+        ).all()
+        is_member = (
+            await db.scalar(
+                select(ProjectMember.id).where(
+                    ProjectMember.workspace_id == workspace_id,
+                    ProjectMember.project_id == project_id,
+                    ProjectMember.user_id == user.id,
+                )
             )
-            .order_by(User.username)
+            is not None
         )
-    ).all()
     items = tuple(
         (
             await db.scalars(
@@ -172,9 +221,9 @@ async def open_project_workspace(
     )
     return ProjectWorkspace(
         project=context.project,
-        membership=context.membership,
         members=tuple(ProjectWorkspaceMember(user=row) for row in members_rows),
         items=items,
+        is_member=is_member,
     )
 
 

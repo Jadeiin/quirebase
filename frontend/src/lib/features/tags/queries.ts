@@ -1,13 +1,15 @@
 import { queryOptions } from '@tanstack/svelte-query';
-import { apiRequest } from '$lib/api/client';
+import { createWorkspaceApi } from '$lib/api/client';
+import { workspaceKeys } from '$lib/workspaces/keys';
 
 export const tagKeys = {
-	all: ['tags'] as const
+	all: (workspaceId: string) => [...workspaceKeys.root(workspaceId), 'tags'] as const
 };
 
-export function tagsQuery() {
+export function tagsQuery(workspaceId: string) {
+	const api = createWorkspaceApi(workspaceId);
 	return queryOptions({
-		queryKey: tagKeys.all,
-		queryFn: ({ signal }) => apiRequest('GET', '/tags', { signal })
+		queryKey: tagKeys.all(workspaceId),
+		queryFn: ({ signal }) => api.request('GET', '/workspaces/{workspace_id}/tags', { signal })
 	});
 }

@@ -9,11 +9,11 @@ from quirebase.library import (
     Contributor,
     ExternalIdentifier,
     ItemMetadata,
-    MetadataWorkspace,
-    SummaryWorkspace,
-    WorkspaceSection,
+    ItemMetadataData,
+    ItemOverviewData,
+    ItemSection,
     create_item,
-    open_item_workspace,
+    open_item_section,
     regenerate_bibtex_key,
     revise_item_metadata,
     search_library,
@@ -58,11 +58,11 @@ async def test_regenerate_bibtex_key_is_a_narrow_atomic_item_mutation(async_db):
 
     result = await regenerate_bibtex_key(db, owner, fixture_workspace_id(owner), item_id)
 
-    workspace = await open_item_workspace(
-        db, owner, fixture_workspace_id(owner), item_id, WorkspaceSection.metadata
+    item_view = await open_item_section(
+        db, owner, fixture_workspace_id(owner), item_id, ItemSection.metadata
     )
-    assert isinstance(workspace, MetadataWorkspace)
-    updated = workspace.item
+    assert isinstance(item_view, ItemMetadataData)
+    updated = item_view.item
     events, total = await query_events(db, owner, action="item.bibtex_key.regenerate")
     assert result.item_id == item_id
     assert result.version == 2
@@ -151,12 +151,12 @@ async def test_revise_item_metadata_makes_the_dedicated_doi_authoritative(async_
         ),
     )
 
-    workspace = await open_item_workspace(
-        db, owner, fixture_workspace_id(owner), item_id, WorkspaceSection.summary
+    item_view = await open_item_section(
+        db, owner, fixture_workspace_id(owner), item_id, ItemSection.overview
     )
-    assert isinstance(workspace, SummaryWorkspace)
-    updated = workspace.item
-    identifiers = {link.provider: link.value for link in workspace.identifiers}
+    assert isinstance(item_view, ItemOverviewData)
+    updated = item_view.item
+    identifiers = {link.provider: link.value for link in item_view.identifiers}
     assert result.version == 2
     assert updated.doi == "10.1000/new"
     assert identifiers == {"arxiv": "2401.12345"}
@@ -199,18 +199,18 @@ async def test_revise_item_metadata_replaces_contributors_in_order(async_db):
         ),
     )
 
-    workspace = await open_item_workspace(
-        db, owner, fixture_workspace_id(owner), item_id, WorkspaceSection.metadata
+    item_view = await open_item_section(
+        db, owner, fixture_workspace_id(owner), item_id, ItemSection.metadata
     )
-    assert isinstance(workspace, MetadataWorkspace)
-    assert workspace.item.authors == "Shannon, Claude; Weaver, Warren"
-    assert workspace.item.editors is None
-    assert [link.author.last_name for link in workspace.authors] == [
+    assert isinstance(item_view, ItemMetadataData)
+    assert item_view.item.authors == "Shannon, Claude; Weaver, Warren"
+    assert item_view.item.editors is None
+    assert [link.author.last_name for link in item_view.authors] == [
         "Shannon",
         "Weaver",
     ]
-    assert [link.position for link in workspace.authors] == [1, 2]
-    assert workspace.authors[0].is_corresponding
+    assert [link.position for link in item_view.authors] == [1, 2]
+    assert item_view.authors[0].is_corresponding
     matches, total, _, _ = await search_library(
         db, owner, fixture_workspace_id(owner), q="Contributor replacement"
     )
@@ -262,11 +262,11 @@ async def test_create_item_accepts_typed_metadata_and_returns_a_mutation_result(
         ),
     )
 
-    workspace = await open_item_workspace(
-        db, owner, fixture_workspace_id(owner), result.item_id, WorkspaceSection.summary
+    item_view = await open_item_section(
+        db, owner, fixture_workspace_id(owner), result.item_id, ItemSection.overview
     )
-    assert isinstance(workspace, SummaryWorkspace)
-    created = workspace.item
+    assert isinstance(item_view, ItemOverviewData)
+    created = item_view.item
     assert result.version == 1
     assert created.title == "A Mathematical Theory of Communication"
     assert created.created_by == owner.id

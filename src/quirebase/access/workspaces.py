@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import inspect, select
+from sqlalchemy import inspect, or_, select
 
 from quirebase.access.scope import workspace_select
 from quirebase.core.errors import (
@@ -47,6 +47,8 @@ class Capability(StrEnum):
     tags_create = "tags.create"
     tags_manage = "tags.manage"
     citation_styles_manage = "citation_styles.manage"
+    projects_create = "projects.create"
+    projects_create_managed = "projects.create_managed"
     projects_manage = "projects.manage"
     projects_delete = "projects.delete"
     projects_members_manage = "projects.members.manage"
@@ -69,6 +71,7 @@ _EDITOR = _REVIEWER | {
     Capability.tags_use,
     Capability.tags_create,
     Capability.citation_styles_manage,
+    Capability.projects_create,
     Capability.projects_manage,
 }
 _ADMIN = _EDITOR | {
@@ -78,6 +81,7 @@ _ADMIN = _EDITOR | {
     Capability.items_delete,
     Capability.tags_manage,
     Capability.projects_delete,
+    Capability.projects_create_managed,
     Capability.projects_members_manage,
     Capability.annotations_moderate,
 }
@@ -113,14 +117,17 @@ class WorkspaceContext:
 
     @property
     def capabilities(self) -> frozenset[Capability]:
-        return ROLE_CAPABILITIES[self.role]
+        return effective_capabilities(
+            self.role,
+            self.workspace.state,
+            governance_suspended=self.workspace.governance_suspended_at is not None,
+        )
 
 
 @dataclass(frozen=True, slots=True)
 class ProjectContext:
     workspace: WorkspaceContext
     project: Project
-    membership: ProjectMember | None
 
 
 async def resolve_workspace_context(
@@ -152,6 +159,25 @@ def require(ctx: WorkspaceContext, capability: Capability) -> WorkspaceContext:
 
 def role_has_capability(role: WorkspaceRole, capability: Capability) -> bool:
     return capability in ROLE_CAPABILITIES[role]
+
+
+def effective_capabilities(
+    role: WorkspaceRole,
+    state: WorkspaceState,
+    *,
+    governance_suspended: bool = False,
+) -> frozenset[Capability]:
+    """Return capabilities currently available in a Workspace lifecycle state."""
+
+    role_capabilities = ROLE_CAPABILITIES[role]
+    if governance_suspended:
+        return _READ_CAPABILITIES & role_capabilities
+    if state is WorkspaceState.active:
+        return role_capabilities
+    lifecycle_capabilities = _READ_CAPABILITIES | {Capability.workspace_archive}
+    if Capability.workspace_delete in role_capabilities:
+        lifecycle_capabilities |= {Capability.workspace_delete}
+    return role_capabilities & lifecycle_capabilities
 
 
 async def require_workspace_membership(
@@ -207,31 +233,67 @@ async def require_workspace_capability(
     return require(await require_workspace_membership(db, actor, workspace_id), capability)
 
 
+def visible_project_ids_query(ctx: WorkspaceContext):
+    """Select Projects discoverable to this active Workspace member.
+
+    `workspace` and `open` Projects are visible to all active Workspace members. A `managed`
+    Project is visible to its explicit participants and Workspace governors. The role preset is
+    used only inside Access to preserve governor discovery in read-only Workspace lifecycle
+    states; mutations still require effective capabilities through `require`.
+    """
+    query = select(Project.id).where(
+        Project.workspace_id == ctx.workspace_id,
+        Project.state != ProjectState.deleted,
+    )
+    if role_has_capability(ctx.role, Capability.projects_members_manage):
+        return query
+    member_project_ids = select(ProjectMember.project_id).where(
+        ProjectMember.workspace_id == ctx.workspace_id,
+        ProjectMember.user_id == ctx.actor_id,
+    )
+    return query.where(
+        or_(
+            Project.visibility != ProjectVisibility.managed,
+            Project.id.in_(member_project_ids),
+        )
+    )
+
+
 async def require_project_access(
     db: AsyncSession,
     ctx: WorkspaceContext,
     project: Project,
     *,
     write: bool = False,
+    require_participation: bool = True,
 ) -> ProjectContext:
-    """Apply Project visibility/lifecycle after Workspace authorization."""
+    """Apply Project lineage/lifecycle after Workspace authorization.
+
+    `ProjectMember` gates discoverability only for managed Projects. It never grants Workspace
+    capabilities or access to canonical Workspace Items.
+    """
 
     require(ctx, Capability.projects_manage if write else Capability.workspace_read)
     if project.workspace_id != ctx.workspace.id or project.state is ProjectState.deleted:
         raise ResourceUnavailable("Project not found")
+    if (
+        require_participation
+        and not write
+        and project.visibility is ProjectVisibility.managed
+        and not role_has_capability(ctx.role, Capability.projects_members_manage)
+    ):
+        member_id = await db.scalar(
+            select(ProjectMember.id).where(
+                ProjectMember.workspace_id == ctx.workspace_id,
+                ProjectMember.project_id == project.id,
+                ProjectMember.user_id == ctx.actor_id,
+            )
+        )
+        if member_id is None:
+            raise ResourceUnavailable("Project not found")
     if write and project.state is not ProjectState.active:
         raise WorkspaceLifecycleError("Project is read-only")
-    membership = await db.scalar(
-        workspace_select(ProjectMember, ctx)
-        .where(
-            ProjectMember.project_id == project.id,
-            ProjectMember.user_id == ctx.actor.id,
-        )
-        .execution_options(populate_existing=True)
-    )
-    if project.visibility is ProjectVisibility.members and membership is None:
-        raise ResourceUnavailable("Project not found")
-    return ProjectContext(ctx, project, membership)
+    return ProjectContext(ctx, project)
 
 
 async def require_project_context(
@@ -262,9 +324,10 @@ async def require_project_context(
         workspace,
         project,
         # ``operation`` may be a Project-scoped capability such as discussion
-        # or annotation write.  Those operations need the Project visibility
-        # gate but must not require the structural ``projects.manage`` role.
+        # or annotation write. Those operations need their Workspace capability
+        # but do not depend on Project participation.
         write=False,
+        require_participation=operation in _READ_CAPABILITIES,
     )
     if operation not in _READ_CAPABILITIES and project.state is not ProjectState.active:
         raise WorkspaceLifecycleError("Project is read-only")

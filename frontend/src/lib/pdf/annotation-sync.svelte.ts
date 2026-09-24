@@ -5,7 +5,7 @@ import {
 	type PdfAnnotationObject
 } from '@embedpdf/svelte-pdf-viewer';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-import { apiRequest } from '$lib/api/client';
+import { createWorkspaceApi } from '$lib/api/client';
 import {
 	canonicalAnnotationFromView,
 	createAnnotationAdapter,
@@ -14,6 +14,7 @@ import {
 } from '$lib/pdf/annotation-adapter';
 import {
 	createWriteQueue,
+	createAnnotationReplyApi,
 	persistReplyEvent,
 	selectNativeAnnotationIds
 } from '$lib/pdf/annotation-writes';
@@ -30,6 +31,7 @@ export type AnnotationSyncStatus =
 type WritableAnnotationEvent = Exclude<AnnotationEvent, { type: 'loaded' }>;
 
 export type AnnotationSyncOptions = {
+	workspaceId: string;
 	itemId: string;
 	documentId: string;
 	pageGeometry: number[][];
@@ -40,6 +42,7 @@ export type AnnotationSyncOptions = {
 
 export function createAnnotationSync(options: AnnotationSyncOptions) {
 	const adapter = createAnnotationAdapter(options.pageGeometry);
+	const workspaceApi = createWorkspaceApi(options.workspaceId);
 	const writeQueue = createWriteQueue();
 	const records = new SvelteMap<string, CanonicalAnnotation>();
 	const importedIds = new SvelteMap<string, number>();
@@ -57,7 +60,7 @@ export function createAnnotationSync(options: AnnotationSyncOptions) {
 		const generation = ++loadGeneration;
 		options.onStatus({ state: 'loading' });
 		const rows = (
-			await apiRequest('GET', '/items/{item_id}/annotations', {
+			await workspaceApi.request('GET', '/workspaces/{workspace_id}/items/{item_id}/annotations', {
 				params: {
 					path: { item_id: options.itemId },
 					query: {
@@ -117,6 +120,7 @@ export function createAnnotationSync(options: AnnotationSyncOptions) {
 				const result = await persistReplyEvent({
 					event,
 					itemId: options.itemId,
+					api: createAnnotationReplyApi(options.workspaceId),
 					records,
 					tombstones: replyTombstones
 				});
@@ -131,22 +135,30 @@ export function createAnnotationSync(options: AnnotationSyncOptions) {
 				options.onStatus({ state: 'saving-annotation' });
 				const tombstone = tombstones.get(id);
 				const savedView = tombstone
-					? await apiRequest('POST', '/items/{item_id}/annotations/{annotation_id}/restore', {
-							params: {
-								path: { item_id: options.itemId, annotation_id: id },
-								query: { version: tombstone.version }
+					? await workspaceApi.request(
+							'POST',
+							'/workspaces/{workspace_id}/items/{item_id}/annotations/{annotation_id}/restore',
+							{
+								params: {
+									path: { item_id: options.itemId, annotation_id: id },
+									query: { version: tombstone.version }
+								}
 							}
-						})
-					: await apiRequest('POST', '/items/{item_id}/annotations', {
-							params: { path: { item_id: options.itemId } },
-							body: {
-								id,
-								revision_id: options.documentId,
-								scope: scopeProject ? 'project' : 'private',
-								project_id: scopeProject || null,
-								...adapter.canonicalFromVendor(event.annotation, event.pageIndex)
+						)
+					: await workspaceApi.request(
+							'POST',
+							'/workspaces/{workspace_id}/items/{item_id}/annotations',
+							{
+								params: { path: { item_id: options.itemId } },
+								body: {
+									id,
+									revision_id: options.documentId,
+									scope: scopeProject ? 'project' : 'private',
+									project_id: scopeProject || null,
+									...adapter.canonicalFromVendor(event.annotation, event.pageIndex)
+								}
 							}
-						});
+						);
 				const saved = canonicalAnnotationFromView(savedView);
 				tombstones.delete(id);
 				records.set(id, saved);
@@ -156,19 +168,23 @@ export function createAnnotationSync(options: AnnotationSyncOptions) {
 				if (!existing) return;
 				options.onStatus({ state: 'saving-annotation' });
 				const saved = canonicalAnnotationFromView(
-					await apiRequest('PATCH', '/items/{item_id}/annotations/{annotation_id}', {
-						params: { path: { item_id: options.itemId, annotation_id: id } },
-						body: {
-							version: existing.version,
-							scope: existing.scope,
-							project_id: existing.project_id,
-							...adapter.canonicalFromVendor(
-								{ ...event.annotation, ...event.patch } as PdfAnnotationObject,
-								event.pageIndex,
-								existing
-							)
+					await workspaceApi.request(
+						'PATCH',
+						'/workspaces/{workspace_id}/items/{item_id}/annotations/{annotation_id}',
+						{
+							params: { path: { item_id: options.itemId, annotation_id: id } },
+							body: {
+								version: existing.version,
+								scope: existing.scope,
+								project_id: existing.project_id,
+								...adapter.canonicalFromVendor(
+									{ ...event.annotation, ...event.patch } as PdfAnnotationObject,
+									event.pageIndex,
+									existing
+								)
+							}
 						}
-					})
+					)
 				);
 				records.set(id, saved);
 				scope.syncAnnotationObject(id, adapter.vendorFromCanonical(saved));
@@ -176,12 +192,16 @@ export function createAnnotationSync(options: AnnotationSyncOptions) {
 				const existing = records.get(id);
 				if (!existing) return;
 				options.onStatus({ state: 'saving-annotation' });
-				await apiRequest('DELETE', '/items/{item_id}/annotations/{annotation_id}', {
-					params: {
-						path: { item_id: options.itemId, annotation_id: id },
-						query: { version: existing.version }
+				await workspaceApi.request(
+					'DELETE',
+					'/workspaces/{workspace_id}/items/{item_id}/annotations/{annotation_id}',
+					{
+						params: {
+							path: { item_id: options.itemId, annotation_id: id },
+							query: { version: existing.version }
+						}
 					}
-				});
+				);
 				tombstones.set(id, { ...existing, version: existing.version + 1 });
 				records.delete(id);
 				importedIds.delete(id);

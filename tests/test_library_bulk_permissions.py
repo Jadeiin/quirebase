@@ -27,6 +27,7 @@ from quirebase.models import (
     ProjectItem,
     ProjectMember,
     ProjectState,
+    ProjectVisibility,
     User,
     WorkspaceMember,
     WorkspaceRole,
@@ -89,7 +90,7 @@ async def test_bulk_action_blocks_unauthorized_assignment_to_project(
         db, async_session_factory, tmp_path, monkeypatch
     )
 
-    # Owner of target project, but viewer of source project where item resides
+    # Creator of the target Project, but viewer of the source Project where the Item resides
     viewer_user = User(
         username="viewer_user",
         password_hash=hash_password("password1234"),
@@ -107,7 +108,10 @@ async def test_bulk_action_blocks_unauthorized_assignment_to_project(
 
     # Source project where item is shared and viewer is a viewer
     source_project = Project(
-        workspace_id=item.workspace_id, name="Source Project", created_by=item.created_by
+        workspace_id=item.workspace_id,
+        name="Source Project",
+        created_by=item.created_by,
+        visibility=ProjectVisibility.managed,
     )
     db.add(source_project)
     await db.flush()
@@ -120,9 +124,12 @@ async def test_bulk_action_blocks_unauthorized_assignment_to_project(
         )
     )
 
-    # Target project owned by viewer
+    # Target Project created by the viewer
     target_project = Project(
-        workspace_id=item.workspace_id, name="Target Project", created_by=viewer_user.id
+        workspace_id=item.workspace_id,
+        name="Target Project",
+        created_by=viewer_user.id,
+        visibility=ProjectVisibility.managed,
     )
     db.add(target_project)
     await db.flush()
@@ -167,7 +174,12 @@ async def test_bulk_action_records_single_bulk_audit_event(
     owner = await db.get(User, item.created_by)
     assert owner is not None
 
-    target_project = Project(workspace_id=item.workspace_id, name="My Project", created_by=owner.id)
+    target_project = Project(
+        workspace_id=item.workspace_id,
+        name="My Project",
+        created_by=owner.id,
+        visibility=ProjectVisibility.managed,
+    )
     db.add(target_project)
     await db.flush()
     db.add(
@@ -211,6 +223,7 @@ async def test_bulk_action_rejects_archived_project_assignment(
         name="Archived Project",
         created_by=owner.id,
         state=ProjectState.archived,
+        visibility=ProjectVisibility.managed,
     )
     db.add(target_project)
     await db.flush()
@@ -255,7 +268,10 @@ async def test_bulk_action_revalidates_stale_project_state(async_db, async_sessi
         workspace_id=fixture_workspace_id(owner), title="Bulk project race", created_by=owner.id
     )
     project = Project(
-        workspace_id=fixture_workspace_id(owner), name="Bulk project race", created_by=owner.id
+        workspace_id=fixture_workspace_id(owner),
+        name="Bulk project race",
+        created_by=owner.id,
+        visibility=ProjectVisibility.managed,
     )
     async_db.add_all([item, project])
     await async_db.flush()

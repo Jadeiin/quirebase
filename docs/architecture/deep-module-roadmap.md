@@ -11,7 +11,7 @@ Tracking issue: [#4 Roadmap: deepen domain modules and interfaces](https://githu
 - `library` exposes 39 package symbols and `discovery` exposes 40.
 - `ItemMetadataUpdate` contains more than twenty scalar strings plus JSON-encoded identifiers,
   JSON-encoded custom fields and dictionary-shaped contributors.
-- `get_item_workspace_data` returns `dict[str, Any]` whose shape changes across six string
+- `get_item_sections_data` returned `dict[str, Any]` whose shape changed across six string
   section values; its Web caller must know keys, placeholder defaults and loaded relationships.
 - Audit operations live under `library`, although Accounts, Documents, Projects, Discovery,
   Operations and Pipeline record Audit Events.
@@ -26,7 +26,7 @@ Tracking issue: [#4 Roadmap: deepen domain modules and interfaces](https://githu
 | --- | --- | --- | --- | --- |
 | 1 | Audit Event ownership | Correct behavior behind the wrong owner creates false Library dependencies | A small `quirebase.audit` business interface for recording and administrative queries | SQLAlchemy is local-substitutable; test through the business interface with the real SQLite database |
 | 2 | Item metadata mutation | Callers understand JSON parsing, contributor synchronization, identifier precedence, version checks, indexing, auditing and commit order | Typed create/revise commands returning a small mutation result | Real SQLite plus SQLite/PostgreSQL Search adapters; no repository port |
-| 3 | Item Workspace | A section-dependent untyped dictionary leaks query and ORM-loading knowledge | Typed section selector and typed read models; opening owns recent-read recording | Business-operation tests per section plus one HTTP tracer bullet |
+| 3 | Item sections | A section-dependent untyped dictionary leaks query and ORM-loading knowledge | Typed section selector and typed read models; opening owns recent-read recording | Business-operation tests per section plus one HTTP tracer bullet |
 | 4 | Discovery Providers | Public interface is deep, but one Provider change is spread across registries, aliases, credentials and large central files | Internal Provider registration and per-Provider locality behind unchanged search/lookup interfaces | True external boundary; shared adapter contracts use `httpx.MockTransport` |
 | 5 | ORM mappings and facades | Shared mapping and large export surfaces may encode obsolete coupling | Select a mapping layout only after ownership stabilizes; export use cases/results/errors | Prototype alternatives, migration/import tests and unchanged behavior suites |
 
@@ -62,12 +62,12 @@ Done means public commands contain no JSON-encoded values or `dict[str, Any]` co
 permission, concurrency, persistence, Search synchronization and Audit recording remain atomic
 behind the selected operation seam.
 
-### 3. Introduce typed Item Workspace read models
+### 3. Introduce typed Item section read models
 
-Issue: [#7 Replace Item Workspace dictionaries with typed read models](https://github.com/Jadeiin/quirebase/issues/7)
+Issue: [#7 Replace Item section dictionaries with typed read models](https://github.com/Jadeiin/quirebase/issues/7)
 
-Treat each workspace section as a caller-visible result type while retaining one cohesive query
-Module. Move recent-read recording behind the open-workspace operation so callers cannot forget
+Treat each Item section as a caller-visible result type while retaining one cohesive query
+Module. Move recent-read recording behind the open-section operation so callers cannot forget
 the side effect or record reads for inaccessible Items.
 
 Done means the HTTP API receives typed views or a Web-owned projection and no business operation

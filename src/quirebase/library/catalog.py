@@ -11,7 +11,7 @@ from quirebase.access import (
     Capability,
     require_project_context,
     require_workspace_capability,
-    visible_projects_for_context,
+    role_has_capability,
     workspace_items_query,
 )
 from quirebase.access.scope import workspace_select
@@ -22,9 +22,11 @@ from quirebase.models import (
     ItemTag,
     LoginSession,
     ProjectItem,
+    ProjectVisibility,
     Tag,
     User,
 )
+from quirebase.projects import list_workspace_projects
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
@@ -136,7 +138,15 @@ async def get_dashboard_data(db: AsyncSession, user: User, workspace_id: str) ->
             )
         ).all()
     )
-    projects = await visible_projects_for_context(db, context)
+    projects = [
+        project
+        for project, _, is_member in await list_workspace_projects(db, user, workspace_id)
+        if is_member
+        or (
+            project.visibility is ProjectVisibility.managed
+            and role_has_capability(context.role, Capability.projects_members_manage)
+        )
+    ]
     sessions = list(
         (
             await db.scalars(

@@ -19,7 +19,7 @@
 		}>();
 
 	let tagFilter = $state('');
-	const canEdit = $derived(data.permissions.edit);
+	const canEdit = $derived(data.allowed_actions.edit);
 	const groups = $derived(
 		data.tag_matrix.groups
 			.map((group: components['schemas']['TagMatrixGroupView']) => ({

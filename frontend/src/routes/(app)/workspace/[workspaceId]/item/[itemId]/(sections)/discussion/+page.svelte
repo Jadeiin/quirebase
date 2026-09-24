@@ -17,12 +17,14 @@
 	let mutationError = $state('');
 	const queryClient = useQueryClient();
 	const { query: session } = getSession();
-	const discussion = createQuery(() => itemDiscussionQuery(params.itemId, true));
+	const discussion = createQuery(() =>
+		itemDiscussionQuery(params.workspaceId, params.itemId, true)
+	);
 	const discussionCreate = createMutation(() =>
-		discussionCreateMutationOptions(params.itemId, queryClient)
+		discussionCreateMutationOptions(params.workspaceId, params.itemId, queryClient)
 	);
 	const discussionDelete = createMutation(() =>
-		discussionDeleteMutationOptions(params.itemId, queryClient)
+		discussionDeleteMutationOptions(params.workspaceId, params.itemId, queryClient)
 	);
 
 	function track(promise: Promise<unknown>) {

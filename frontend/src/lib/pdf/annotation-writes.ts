@@ -1,5 +1,5 @@
 import type { AnnotationEvent } from '@embedpdf/svelte-pdf-viewer';
-import { apiRequest } from '$lib/api/client';
+import { createWorkspaceApi } from '$lib/api/client';
 import type { CanonicalAnnotation, CanonicalReply } from '$lib/pdf/annotation-adapter';
 
 type WritableAnnotationEvent = Exclude<AnnotationEvent, { type: 'loaded' }>;
@@ -11,32 +11,51 @@ export type AnnotationReplyApi = {
 	delete(input: ReplyIdentity & { version: number }): Promise<unknown>;
 };
 
-export const annotationReplyApi: AnnotationReplyApi = {
-	create: ({ itemId, annotationId, replyId, body }) =>
-		apiRequest('POST', '/items/{item_id}/annotations/{annotation_id}/replies', {
-			params: { path: { item_id: itemId, annotation_id: annotationId } },
-			body: { id: replyId, body }
-		}),
-	restore: ({ itemId, annotationId, replyId, version }) =>
-		apiRequest('POST', '/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}/restore', {
-			params: {
-				path: { item_id: itemId, annotation_id: annotationId, reply_id: replyId },
-				query: { version }
-			}
-		}),
-	update: ({ itemId, annotationId, replyId, version, body }) =>
-		apiRequest('PATCH', '/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}', {
-			params: { path: { item_id: itemId, annotation_id: annotationId, reply_id: replyId } },
-			body: { version, body }
-		}),
-	delete: ({ itemId, annotationId, replyId, version }) =>
-		apiRequest('DELETE', '/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}', {
-			params: {
-				path: { item_id: itemId, annotation_id: annotationId, reply_id: replyId },
-				query: { version }
-			}
-		})
-};
+export function createAnnotationReplyApi(workspaceId: string): AnnotationReplyApi {
+	const api = createWorkspaceApi(workspaceId);
+	return {
+		create: ({ itemId, annotationId, replyId, body }) =>
+			api.request(
+				'POST',
+				'/workspaces/{workspace_id}/items/{item_id}/annotations/{annotation_id}/replies',
+				{
+					params: { path: { item_id: itemId, annotation_id: annotationId } },
+					body: { id: replyId, body }
+				}
+			),
+		restore: ({ itemId, annotationId, replyId, version }) =>
+			api.request(
+				'POST',
+				'/workspaces/{workspace_id}/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}/restore',
+				{
+					params: {
+						path: { item_id: itemId, annotation_id: annotationId, reply_id: replyId },
+						query: { version }
+					}
+				}
+			),
+		update: ({ itemId, annotationId, replyId, version, body }) =>
+			api.request(
+				'PATCH',
+				'/workspaces/{workspace_id}/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}',
+				{
+					params: { path: { item_id: itemId, annotation_id: annotationId, reply_id: replyId } },
+					body: { version, body }
+				}
+			),
+		delete: ({ itemId, annotationId, replyId, version }) =>
+			api.request(
+				'DELETE',
+				'/workspaces/{workspace_id}/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}',
+				{
+					params: {
+						path: { item_id: itemId, annotation_id: annotationId, reply_id: replyId },
+						query: { version }
+					}
+				}
+			)
+	};
+}
 
 export function selectNativeAnnotationIds(
 	annotationIds: Iterable<string>,
@@ -81,13 +100,13 @@ export async function persistReplyEvent({
 	itemId,
 	records,
 	tombstones,
-	api = annotationReplyApi
+	api
 }: {
 	event: WritableAnnotationEvent;
 	itemId: string;
 	records: Map<string, CanonicalAnnotation>;
 	tombstones: Map<string, CanonicalReply>;
-	api?: AnnotationReplyApi;
+	api: AnnotationReplyApi;
 }): Promise<{ parent: CanonicalAnnotation; reply: CanonicalReply | null } | null> {
 	const parentId = event.annotation.inReplyToId;
 	if (!parentId) return null;

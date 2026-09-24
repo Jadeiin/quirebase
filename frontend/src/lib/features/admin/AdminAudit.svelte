@@ -14,6 +14,19 @@
 		<ItemRow>
 			<strong>{event.action}</strong><span
 				>{event.target_type}{event.target_id ? ` · ${event.target_id}` : ''}</span
+			>
+			<span class="text-xs text-surface-600-400"
+				>{[
+					event.workspace_id ? `Workspace ${event.workspace_id}` : '',
+					event.project_id ? `Project ${event.project_id}` : '',
+					event.authorization_capability ? `Capability ${event.authorization_capability}` : '',
+					event.authorization_role ? `Role ${event.authorization_role}` : '',
+					event.source ? `Source ${event.source}` : '',
+					event.result ? `Result ${event.result}` : ''
+				]
+					.filter(Boolean)
+					.join(' · ')}</span
+			>
 			><span class="text-surface-600-400"
 				>{event.actor_id
 					? `${$t('Actor: {actor}', { actor: event.actor_id })} · `

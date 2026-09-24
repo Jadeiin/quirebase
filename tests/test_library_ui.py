@@ -43,7 +43,6 @@ from quirebase.models import (
     ItemTag,
     Project,
     ProjectItem,
-    ProjectMember,
     Tag,
     User,
 )
@@ -516,7 +515,7 @@ async def test_dashboard_sidebar_limits_and_recent_reading(
         assert "Dashboard paper 11" in titles
         assert "Dashboard paper 0" not in titles
 
-        opened = await client.get(f"{workspace_base}/items/{item.id}/workspace")
+        opened = await client.get(f"{workspace_base}/items/{item.id}/overview")
         assert opened.status_code == 200
         assert await db.get(ItemRead, (item.created_by, item.id)) is not None
         refreshed = await client.get(f"{workspace_base}/dashboard")
@@ -552,10 +551,10 @@ async def test_item_page_validates_access_before_recording_read(
 
     try:
         assert (
-            await client.get(f"{workspace_base}/items/missing-item/workspace")
+            await client.get(f"{workspace_base}/items/missing-item/overview")
         ).status_code == 404
         assert (
-            await client.get(f"{workspace_base}/items/{private_item_id}/workspace")
+            await client.get(f"{workspace_base}/items/{private_item_id}/overview")
         ).status_code == 404
         assert await db.get(ItemRead, (reader_id, "missing-item")) is None
         assert await db.get(ItemRead, (reader_id, private_item_id)) is None
@@ -591,18 +590,6 @@ async def test_library_pagination_filters_and_bulk_actions(
         )
         db.add_all([project, second_project, tag])
         await db.flush()
-        db.add_all([
-            ProjectMember(
-                workspace_id=original.workspace_id,
-                project_id=project.id,
-                user_id=original.created_by,
-            ),
-            ProjectMember(
-                workspace_id=original.workspace_id,
-                project_id=second_project.id,
-                user_id=original.created_by,
-            ),
-        ])
         selected = []
         for number in range(30):
             item = Item(

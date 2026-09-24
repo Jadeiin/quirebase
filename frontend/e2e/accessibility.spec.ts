@@ -1,7 +1,9 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
+import { mockWorkspaces } from './helpers';
 
 async function mockSession(page: Page, role: 'member' | 'administrator' = 'member') {
+	await mockWorkspaces(page);
 	await page.route('**/api/v1/session', (route) =>
 		route.fulfill({
 			json: {
@@ -44,7 +46,7 @@ test('login has no high-impact accessibility violations', async ({ page }) => {
 test('dashboard shell has no high-impact accessibility violations', async ({ page }) => {
 	await useDarkTheme(page);
 	await mockSession(page);
-	await page.route('**/api/v1/dashboard', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/dashboard', (route) =>
 		route.fulfill({
 			json: { new_items: [], recent_items: [], projects: [], session_count: 1 }
 		})
@@ -56,10 +58,10 @@ test('dashboard shell has no high-impact accessibility violations', async ({ pag
 	await expectNoHighImpactViolations(page);
 });
 
-test('Item workspace has no high-impact accessibility violations', async ({ page }) => {
+test('Item detail has no high-impact accessibility violations', async ({ page }) => {
 	await useDarkTheme(page);
 	await mockSession(page);
-	await page.route('**/api/v1/items/item-1/workspace', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
 		route.fulfill({
 			json: {
 				item: {
@@ -72,7 +74,7 @@ test('Item workspace has no high-impact accessibility violations', async ({ page
 					version: 1
 				},
 				latest_revision: null,
-				permissions: { edit: true, delete: true },
+				allowed_actions: { edit: true, delete: true },
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
 				tags: [],
 				owner: { id: 'user-1', username: 'reader' },
@@ -80,7 +82,7 @@ test('Item workspace has no high-impact accessibility violations', async ({ page
 			}
 		})
 	);
-	await page.route('**/api/v1/items/item-1', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1', (route) =>
 		route.fulfill({
 			json: {
 				id: 'item-1',
@@ -104,7 +106,7 @@ test('Item workspace has no high-impact accessibility violations', async ({ page
 		})
 	);
 
-	await page.goto('/item/item-1');
+	await page.goto('/workspace/workspace-1/item/item-1');
 	await expect(page.locator('html')).toHaveAttribute('data-mode', 'dark');
 	await expect(page.getByRole('heading', { name: 'Accessible Item' })).toBeVisible();
 	await expectNoHighImpactViolations(page);

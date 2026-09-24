@@ -5,11 +5,13 @@
 	import RichText from '$lib/design/RichText.svelte';
 	import ItemActions from '$lib/features/item/ItemActions.svelte';
 	import { msg, t, type MessageKey } from '$lib/i18n';
-	import type { ItemSection, ItemWorkspace } from './queries';
+	import type { ItemOverview, ItemSection } from './queries';
+	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
+	import { workspaceHref } from '$lib/workspaces/href';
 
-	let { itemId, workspace, user, onChanged } = $props<{
+	let { itemId, overview, user, onChanged } = $props<{
 		itemId: string;
-		workspace?: ItemWorkspace;
+		overview?: ItemOverview;
 		user?: components['schemas']['SessionUserView'] | null;
 		onChanged: () => Promise<unknown>;
 	}>();
@@ -23,14 +25,18 @@
 		discussion: msg('Discussion')
 	};
 	const sectionKeys = Object.keys(labels) as ItemSection[];
+	const { workspaceId } = getWorkspaceContext();
 	const section = $derived.by(() => {
-		const candidate = page.url.pathname.split('/').filter(Boolean)[2];
+		const candidate = page.url.pathname.split('/').filter(Boolean)[4];
 		return sectionKeys.find((key) => key === candidate) ?? 'overview';
 	});
-	const title = $derived(workspace?.item.title_html);
+	const title = $derived(overview?.item.title_html);
 
 	function sectionPath(key: string) {
-		return key === 'overview' ? (`/item/${itemId}` as const) : (`/item/${itemId}/${key}` as const);
+		return workspaceHref(
+			workspaceId,
+			key === 'overview' ? `item/${itemId}` : `item/${itemId}/${key}`
+		);
 	}
 </script>
 
@@ -38,27 +44,27 @@
 	<div class="min-w-0">
 		<a
 			class="mb-2 inline-flex items-center gap-1 text-xs font-bold tracking-[0.1em] text-primary-700-300 uppercase no-underline hover:text-primary-800-200"
-			href={resolve('/library')}>{$t('Library')}</a
+			href={resolve(workspaceHref(workspaceId, 'library'))}>{$t('Library')}</a
 		>
 		<h1 class="max-w-4xl text-balance">
-			{#if title}<RichText html={title} />{:else}{$t('Item workspace')}{/if}
+			{#if title}<RichText html={title} />{:else}{$t('Item details')}{/if}
 		</h1>
-		{#if workspace}<p class="mt-2 text-sm text-surface-700-300">
-				{workspace.item.authors || $t('Unknown authors')}{#if workspace.item.publication_title}
-					· {workspace.item.publication_title}{/if}{#if workspace.item.publication_date}
-					· {workspace.item.publication_date}{/if}
+		{#if overview}<p class="mt-2 text-sm text-surface-700-300">
+				{overview.item.authors || $t('Unknown authors')}{#if overview.item.publication_title}
+					· {overview.item.publication_title}{/if}{#if overview.item.publication_date}
+					· {overview.item.publication_date}{/if}
 			</p>{/if}
 	</div>
-	{#if workspace && user}{#key itemId}<ItemActions
+	{#if overview && user}{#key itemId}<ItemActions
 				{itemId}
-				{workspace}
+				{overview}
 				userId={user.id}
 				onchanged={onChanged}
 			/>{/key}{/if}
 </div>
 <nav
 	class="mb-6 flex gap-1 overflow-x-auto border-b border-surface-300-700"
-	aria-label={$t('Item workspace')}
+	aria-label={$t('Item sections')}
 >
 	{#each Object.entries(labels) as [key, label] (key)}
 		<a

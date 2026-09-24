@@ -9,6 +9,7 @@ from quirebase.access.workspaces import (
     ProjectContext,
     WorkspaceContext,
     require_project_access,
+    visible_project_ids_query,
 )
 from quirebase.core.errors import ResourceUnavailable
 from quirebase.models import Project, ProjectItem, ProjectState
@@ -22,6 +23,7 @@ async def get_project(db: AsyncSession, ctx: WorkspaceContext, project_id: str) 
         workspace_select(Project, ctx).where(
             Project.id == project_id,
             Project.state != ProjectState.deleted,
+            Project.id.in_(visible_project_ids_query(ctx)),
         )
     )
 
@@ -32,6 +34,7 @@ async def get_project_for_update(
     return await db.scalar(
         workspace_select(Project, ctx)
         .where(Project.id == project_id, Project.state != ProjectState.deleted)
+        .where(Project.id.in_(visible_project_ids_query(ctx)))
         .with_for_update()
     )
 
@@ -40,7 +43,12 @@ async def get_project_item(
     db: AsyncSession, ctx: WorkspaceContext, project_item_id: str
 ) -> ProjectItem | None:
     return await db.scalar(
-        workspace_select(ProjectItem, ctx).where(ProjectItem.id == project_item_id)
+        workspace_select(ProjectItem, ctx)
+        .join(Project, Project.id == ProjectItem.project_id)
+        .where(
+            ProjectItem.id == project_item_id,
+            Project.id.in_(visible_project_ids_query(ctx)),
+        )
     )
 
 

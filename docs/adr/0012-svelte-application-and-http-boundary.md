@@ -37,7 +37,7 @@ queries and mutations it reads; the shared Item layout sits in a route group tha
 reader outside the workspace shell. Feature views live under `src/lib/features/<feature>` as typed TanStack queries,
 mutations and presentational components (`Library` and `ProjectWorkspace` are feature
 orchestrators, not root-level views); Item and Admin workspaces are composed by their route
-layouts, `ItemWorkspaceHeader`, `AdminShell` and literal section pages. Cross-feature product
+layouts, `ItemHeader`, `AdminShell` and literal section pages. Cross-feature product
 patterns (`ConfirmDialog`,
 `PromptDialog`, `StatusNotice`, `EmptyState`, `Toast`) live in `src/lib/design`. Destructive or
 text-confirmed actions use those dialog patterns; `window.confirm` and `window.prompt` are not

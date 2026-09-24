@@ -3,7 +3,7 @@ import { apiRequest } from '$lib/api/client';
 import type { components } from '$lib/api/schema';
 
 export type AdminSection =
-	'overview' | 'users' | 'projects' | 'items' | 'audit' | 'workflows' | 'settings' | 'maintenance';
+	'overview' | 'users' | 'workspaces' | 'audit' | 'workflows' | 'settings' | 'maintenance';
 
 export type AdminFilters = {
 	page: number;
@@ -43,40 +43,11 @@ export function adminUsersQuery(filters: AdminFilters, enabled = true) {
 	});
 }
 
-export function adminProjectsQuery(filters: AdminFilters, enabled = true) {
+export function adminWorkspacesQuery(filters: AdminFilters, enabled = true) {
 	return queryOptions({
-		queryKey: adminKeys.section('projects', filters),
+		queryKey: adminKeys.section('workspaces', filters),
 		enabled,
-		queryFn: ({ signal }) =>
-			apiRequest('GET', '/admin/projects', {
-				params: {
-					query: {
-						page: filters.page,
-						search: filters.search,
-						state: filters.filterA,
-						visibility: filters.filterB
-					}
-				},
-				signal
-			})
-	});
-}
-
-export function adminItemsQuery(filters: AdminFilters, enabled = true) {
-	return queryOptions({
-		queryKey: adminKeys.section('items', filters),
-		enabled,
-		queryFn: ({ signal }) =>
-			apiRequest('GET', '/admin/items', {
-				params: {
-					query: {
-						page: filters.page,
-						search: filters.search,
-						has_pdf: filters.filterA ? filters.filterA === 'true' : undefined
-					}
-				},
-				signal
-			})
+		queryFn: ({ signal }) => apiRequest('GET', '/admin/workspaces', { signal })
 	});
 }
 
@@ -129,8 +100,7 @@ export function adminMaintenanceQuery(filters: AdminFilters, enabled = true) {
 
 export type AdminOverview = components['schemas']['AdminOverviewView'];
 export type AdminUsers = components['schemas']['AdminUsersView'];
-export type AdminProjects = components['schemas']['AdminProjectsView'];
-export type AdminItems = components['schemas']['AdminItemsView'];
+export type AdminWorkspaces = components['schemas']['AdminWorkspaceView'][];
 export type AdminAudit = components['schemas']['AdminAuditView'];
 export type AdminWorkflows = components['schemas']['AdminWorkflowsView'];
 export type AdminSettings = components['schemas']['AdminSettingsView'];

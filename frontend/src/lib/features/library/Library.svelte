@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
@@ -25,6 +25,8 @@
 		type ExportPreferences
 	} from '$lib/export-preferences';
 	import { t } from '$lib/i18n';
+	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
+	import { workspaceHref } from '$lib/workspaces/href';
 
 	const submitted = $derived({
 		query: page.url.searchParams.get('q')?.trim() ?? '',
@@ -52,8 +54,9 @@
 	let confirmDeleteOpen = $state(false);
 	let exportPreferences = $state<ExportPreferences>(structuredClone(defaultExportPreferences));
 	const queryClient = useQueryClient();
+	const { workspaceId } = getWorkspaceContext();
 	const { query: session } = getSession();
-	const bulkMutation = createMutation(() => libraryBulkMutationOptions(queryClient));
+	const bulkMutation = createMutation(() => libraryBulkMutationOptions(workspaceId, queryClient));
 	const busy = $derived(bulkMutation.isPending);
 
 	let previousSearch = page.url.search;
@@ -70,9 +73,9 @@
 		selected.clear();
 	});
 
-	const library = createQuery(() => libraryListQuery(submitted, pageNumber));
-	const tags = createQuery(() => tagsQuery());
-	const projects = createQuery(() => projectListQuery());
+	const library = createQuery(() => libraryListQuery(workspaceId, submitted, pageNumber));
+	const tags = createQuery(() => tagsQuery(workspaceId));
+	const projects = createQuery(() => projectListQuery(workspaceId));
 	const totalPages = $derived(
 		Math.max(1, Math.ceil((library.data?.total ?? 0) / (library.data?.per_page ?? 25)))
 	);
@@ -109,7 +112,7 @@
 	function updateUrl(nextPage = 1) {
 		const values = parameters(nextPage).toString();
 		selected.clear();
-		void goto(resolve(values ? `/library?${values}` : '/library'), {
+		void goto(resolve(workspaceHref(workspaceId, values ? `library?${values}` : 'library')), {
 			keepFocus: true,
 			noScroll: true
 		});
@@ -227,6 +230,7 @@
 <StatusNotice {error} {notice} />
 
 <LibraryResults
+	{workspaceId}
 	data={library.data}
 	isPending={library.isPending ?? false}
 	isError={library.isError ?? false}

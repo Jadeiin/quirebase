@@ -7,7 +7,7 @@ from quirebase.operations.settings import get_effective_settings_model
 from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.discovery_schemas import DiscoveryProviderView, DiscoverySearchRequest
 
-router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["Discovery"])
+router = APIRouter(tags=["Discovery"])
 
 
 @router.post("/discovery/search", response_model=CandidatePageView)

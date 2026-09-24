@@ -22,14 +22,18 @@ from quirebase.access.workspaces import (
     require_project_context,
     require_workspace_capability,
     role_has_capability,
+    visible_project_ids_query,
 )
 from quirebase.audit import record_event
 from quirebase.core.errors import (
     DomainError,
+    PermissionDenied,
     ResourceNotFound,
     ResourceUnavailable,
     ValidationFailure,
     VersionConflict,
+    WorkspaceLifecycleError,
+    WorkspaceMembershipRequired,
 )
 from quirebase.core.timezones import as_utc
 from quirebase.documents.schemas import ArrowPayload, InkPayload, LinePayload, TextMarkupPayload
@@ -42,9 +46,7 @@ from quirebase.models import (
     PdfAnnotationReply,
     Project,
     ProjectItem,
-    ProjectMember,
     ProjectState,
-    ProjectVisibility,
     User,
 )
 
@@ -129,6 +131,7 @@ def annotation_json(
     *,
     author_display_name: str,
     editable: bool,
+    allowed_actions: list[str] | None = None,
     project_id: str | None = None,
     replies: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
@@ -146,6 +149,11 @@ def annotation_json(
         "author_display_name": author_display_name,
         "mine": record.author_id == current_user_id,
         "editable": editable,
+        "allowed_actions": (
+            allowed_actions
+            if allowed_actions is not None
+            else (["edit", "delete"] if editable else [])
+        ),
         "hidden_at": as_utc(record.hidden_at).isoformat() if record.hidden_at else None,
         "archived_at": as_utc(record.archived_at).isoformat() if record.archived_at else None,
         "locked_at": as_utc(record.locked_at).isoformat() if record.locked_at else None,
@@ -274,7 +282,7 @@ async def select_visible_annotations(
             )
         )
         if project_item is None:
-            raise ResourceUnavailable("project membership or project item not found")
+            raise ResourceUnavailable("ProjectItem not found")
         scopes.append(
             and_(
                 PdfAnnotation.scope == AnnotationScope.project,
@@ -332,18 +340,28 @@ async def _annotation_views(
     project_item_ids = {
         record.project_item_id for record in records if record.project_item_id is not None
     }
-    project_ids_by_item: dict[str, str] = {
-        row[0]: row[1]
-        for row in (
-            await db.execute(
-                select(ProjectItem.id, ProjectItem.project_id).where(
-                    ProjectItem.workspace_id == workspace_id,
-                    ProjectItem.id.in_(project_item_ids),
-                )
+    project_rows = (
+        await db.execute(
+            select(ProjectItem.id, ProjectItem.project_id, Project.state)
+            .join(Project, Project.id == ProjectItem.project_id)
+            .where(
+                ProjectItem.workspace_id == workspace_id,
+                ProjectItem.id.in_(project_item_ids),
             )
-        ).all()
-    }
+        )
+    ).all()
+    project_ids_by_item: dict[str, str] = {row[0]: row[1] for row in project_rows}
+    project_states_by_item: dict[str, ProjectState] = {row[0]: row[2] for row in project_rows}
     editable_ids = await editable_annotation_ids(db, user, workspace_id, records)
+    try:
+        await require_workspace_capability(db, user, workspace_id, Capability.annotations_moderate)
+        can_moderate = True
+    except (
+        PermissionDenied,
+        WorkspaceLifecycleError,
+        WorkspaceMembershipRequired,
+    ):
+        can_moderate = False
     records_by_id = {record.id: record for record in records}
     editable_reply_ids = await editable_annotation_reply_ids(
         db, user, workspace_id, replies, records_by_id
@@ -366,6 +384,30 @@ async def _annotation_views(
             user.id,
             author_display_name=authors.get(record.author_id, ""),
             editable=record.id in editable_ids,
+            allowed_actions=[
+                *(["edit", "delete"] if record.id in editable_ids else []),
+                *(
+                    (
+                        ["restore"]
+                        if record.hidden_at is not None or record.archived_at is not None
+                        else []
+                    )
+                    + (
+                        ["hide", "archive"]
+                        if record.hidden_at is None and record.archived_at is None
+                        else []
+                    )
+                    + (["unlock"] if record.locked_at is not None else ["lock"])
+                    if (
+                        can_moderate
+                        and record.scope is AnnotationScope.project
+                        and record.project_item_id is not None
+                        and project_states_by_item.get(record.project_item_id)
+                        is ProjectState.active
+                    )
+                    else []
+                ),
+            ],
             project_id=(
                 project_ids_by_item.get(record.project_item_id)
                 if record.project_item_id is not None
@@ -460,18 +502,7 @@ async def review_item_annotations(
         PdfAnnotation.scope == AnnotationScope.private,
         PdfAnnotation.author_id == user.id,
     )
-    member_project_ids = select(ProjectMember.project_id).where(
-        ProjectMember.workspace_id == workspace_id,
-        ProjectMember.user_id == user.id,
-    )
-    visible_project_ids = select(Project.id).where(
-        Project.workspace_id == workspace_id,
-        Project.state != ProjectState.deleted,
-        or_(
-            Project.visibility == ProjectVisibility.workspace,
-            Project.id.in_(member_project_ids),
-        ),
-    )
+    visible_project_ids = visible_project_ids_query(workspace)
     visible_project_item_ids = select(ProjectItem.id).where(
         ProjectItem.workspace_id == workspace_id,
         ProjectItem.item_id == item_id,
@@ -548,7 +579,7 @@ async def create_document_annotation(
             )
         )
         if project_item is None:
-            raise ResourceUnavailable("project membership or project item not found")
+            raise ResourceUnavailable("ProjectItem not found")
     else:
         await require_workspace_capability(
             db, user, workspace_id, Capability.annotations_private_write
@@ -629,7 +660,7 @@ async def update_document_annotation(
             )
         )
         if project_item is None:
-            raise ResourceUnavailable("project membership or project item not found")
+            raise ResourceUnavailable("ProjectItem not found")
     else:
         await require_workspace_capability(
             db, user, workspace_id, Capability.annotations_private_write
@@ -826,6 +857,15 @@ async def moderate_document_annotation(
     )
     if project_item is None:
         raise ResourceUnavailable("Annotation not found")
+    project = await db.scalar(
+        select(Project).where(
+            Project.id == project_item.project_id,
+            Project.workspace_id == workspace_id,
+            Project.state != ProjectState.deleted,
+        )
+    )
+    if project is None:
+        raise ResourceUnavailable("Annotation Project not found")
     await require_project_context(
         db,
         user,

@@ -30,17 +30,10 @@ msgstr "{count, plural, other {# 条诊断}}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminMaintenance.svelte
-#: src/lib/features/admin/AdminProjects.svelte
 #: src/lib/features/library/Library.svelte
-#: src/lib/features/projects/Projects.svelte
 #: src/lib/features/tools/Tools.svelte
 msgid "{count, plural, one {# Item} other {# Items}}"
 msgstr "{count, plural, other {# 条文献}}"
-
-#. js-lingui-explicit-id
-#: src/lib/features/admin/AdminProjects.svelte
-msgid "{count, plural, one {# member} other {# members}}"
-msgstr "{count, plural, other {# 名成员}}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
@@ -78,11 +71,6 @@ msgid "{size} MB"
 msgstr "{size} MB"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminItems.svelte
-msgid "{size} MB stored"
-msgstr "已存储 {size} MB"
-
-#. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 msgid "30 days"
 msgstr "30 天"
@@ -103,6 +91,16 @@ msgid "90 days"
 msgstr "90 天"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "A copy creates a new canonical Item. Only Workspaces where you can create Items are offered."
+msgstr "复制会在目标工作区创建新的规范条目。这里只列出你有权创建条目的工作区。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "A managed Project starts with no participants; Workspace owners/admins can add them."
+msgstr "管理制项目初始没有参与者；工作区所有者/管理员可以添加成员。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Abbreviation only"
 msgstr "仅使用缩写"
@@ -114,6 +112,11 @@ msgstr "仅使用缩写"
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Abstract"
 msgstr "摘要"
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
+msgid "Accept invitation"
+msgstr "接受邀请"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminUsers.svelte
@@ -143,11 +146,16 @@ msgid "Action"
 msgstr "动作"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Actions"
+msgstr "操作"
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminUsers.svelte
 msgid "active"
 msgstr "启用"
 
-#. Project state.
+#. Workspace or Project lifecycle state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 #: src/lib/features/admin/AdminShell.svelte
@@ -158,6 +166,11 @@ msgstr "正常"
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "active sessions"
 msgstr "个活跃会话"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Active Workspace members can choose to join or leave this Project."
+msgstr "活跃工作区成员可自行加入或退出此项目。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminAudit.svelte
@@ -221,8 +234,8 @@ msgstr "添加消息"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Add or update member"
-msgstr "添加或更新成员"
+msgid "Add participant"
+msgstr "添加参与者"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/files/ItemFilesSection.svelte
@@ -254,6 +267,13 @@ msgstr "添加到文献库"
 msgid "Add to Project"
 msgstr "添加到项目"
 
+#. Workspace role.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "admin"
+msgstr "管理员"
+
 #. js-lingui-explicit-id
 #: src/lib/app/AppSidebar.svelte
 #: src/lib/app/MobileNavigation.svelte
@@ -262,7 +282,6 @@ msgid "Administration"
 msgstr "管理"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/admin/items/+page.svelte
 #: src/routes/(app)/admin/settings/+page.svelte
 #: src/routes/(app)/admin/users/+page.svelte
 msgid "Administration action failed"
@@ -270,8 +289,6 @@ msgstr "管理操作失败"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/admin/audit/+page.svelte
-#: src/routes/(app)/admin/items/+page.svelte
-#: src/routes/(app)/admin/projects/+page.svelte
 #: src/routes/(app)/admin/users/+page.svelte
 msgid "Administration pages"
 msgstr "管理页面分页"
@@ -290,11 +307,32 @@ msgid "Administrator"
 msgstr "管理员"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminSettings.svelte
+msgid "Administrators only"
+msgstr "仅限管理员"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/ItemMetadataForm.svelte
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Affiliation"
 msgstr "机构单位"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "All active Workspace members participate in this Project."
+msgstr "所有活跃的工作区成员都参与此项目。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "All active Workspace members will participate in this Project."
+msgstr "所有活跃的工作区成员都将参与此项目。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminSettings.svelte
+msgid "All members"
+msgstr "所有成员"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryFilters.svelte
@@ -343,7 +381,7 @@ msgstr "批注可见范围"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
-#: src/lib/features/item/ItemWorkspaceHeader.svelte
+#: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Annotations"
 msgstr "批注"
@@ -364,19 +402,9 @@ msgid "Another condition"
 msgstr "另一个条件"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminShell.svelte
-msgid "Any"
-msgstr "不限"
-
-#. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
 msgid "Any field"
 msgstr "任意字段"
-
-#. js-lingui-explicit-id
-#: src/lib/features/projects/Projects.svelte
-msgid "Any signed-in User can discover and join this Project."
-msgstr "任何已登录用户都可以发现并加入此项目。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
@@ -387,11 +415,6 @@ msgstr "任意状态"
 #: src/lib/features/admin/AdminShell.svelte
 msgid "Any status"
 msgstr "任意状态"
-
-#. js-lingui-explicit-id
-#: src/lib/features/admin/AdminShell.svelte
-msgid "Any visibility"
-msgstr "任意可见性"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -421,21 +444,40 @@ msgstr "应用筛选"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Archive Project"
-msgstr "归档项目"
+msgid "Archive"
+msgstr "归档"
 
-#. Project state.
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Archive pauses normal changes while preserving readable content. You can restore it later."
+msgstr "工作区归档后，常规内容变更将暂停，但仍可读取。之后可以恢复。"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Archive workspace"
+msgstr "归档工作区"
+
+#. Workspace or Project lifecycle state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/features/admin/AdminShell.svelte
 msgid "Archived"
 msgstr "已归档"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
+msgid "Archived workspace · read-only content. Workspace governance actions remain available according to your capabilities."
+msgstr "工作区已归档 · 内容只读。仍可依据你的权限执行工作区治理操作。"
 
 #. PDF shape annotation kind.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 msgid "Arrow"
 msgstr "箭头"
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
+msgid "as"
+msgstr "作为"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -528,6 +570,16 @@ msgid "Boolean operator"
 msgstr "布尔运算符"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "BREAK GLASS"
+msgstr "紧急授权审查（BREAK GLASS）"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "BREAK GLASS · read-only item inspection"
+msgstr "BREAK GLASS · 条目只读审查"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Bring records into Quirebase from an identifier, a bibliography, or published PDFs."
 msgstr "通过标识符、文献目录或已发表的 PDF 将记录导入 Quirebase。"
@@ -612,6 +664,11 @@ msgid "Checking invitation…"
 msgstr "正在检查邀请…"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Checking workspace creation availability…"
+msgstr "正在检查创建工作区的权限…"
+
+#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "Choose a new name for this Tag."
 msgstr "为该标签输入一个新名称。"
@@ -622,9 +679,30 @@ msgid "Choose a source"
 msgstr "选择来源"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Choose a workspace"
+msgstr "选择工作区"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Choose a Workspace"
+msgstr "选择工作区"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Choose a Workspace explicitly"
+msgstr "明确选择一个工作区"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/BulkActions.svelte
 msgid "Choose action"
 msgstr "选择操作"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Choose an active user to own this workspace. Instance administrators do not automatically get content access."
+msgstr "请选择一位活跃用户作为此工作区所有者。实例管理员不会因此自动获得内容访问权限。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -640,6 +718,11 @@ msgstr "选择要按已保存的下载偏好打包的 PDF 版本。"
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Choose PDFs more than once to add them to the same batch."
 msgstr "可多次选择 PDF，将它们加入同一批次。"
+
+#. js-lingui-explicit-id
+#: src/lib/app/WorkspaceMenu.svelte
+msgid "Choose workspace"
+msgstr "选择工作区"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -722,6 +805,11 @@ msgid "Close editor"
 msgstr "关闭编辑器"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminSettings.svelte
+msgid "Closed"
+msgstr "关闭"
+
+#. js-lingui-explicit-id
 #: src/lib/features/projects/Projects.svelte
 msgid "Collaboration"
 msgstr "协作"
@@ -793,6 +881,16 @@ msgid "Copied to clipboard"
 msgstr "已复制到剪贴板"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Copy"
+msgstr "复制"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Copy one-time link"
+msgstr "复制一次性链接"
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminUsers.svelte
 msgid "Copy this invitation URL now"
 msgstr "请立即复制此邀请链接"
@@ -804,8 +902,18 @@ msgstr "请立即复制此令牌"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
+msgid "Copy to another Workspace"
+msgstr "复制到另一个工作区"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
 msgid "Copy to clipboard"
 msgstr "复制到剪贴板"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Copy to Workspace"
+msgstr "复制到工作区"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemMetadataForm.svelte
@@ -823,6 +931,11 @@ msgid "Create a password for"
 msgstr "为以下用户创建密码："
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Create a workspace"
+msgstr "创建工作区"
+
+#. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
 msgid "Create account"
 msgstr "创建账号"
@@ -833,12 +946,13 @@ msgid "Create an Item manually"
 msgstr "手动创建条目"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/admin/maintenance/+page.svelte
-msgid "Create backup"
-msgstr "创建备份"
+#: src/lib/features/item/ItemActions.svelte
+msgid "Create copy"
+msgstr "创建副本"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminUsers.svelte
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Create invitation"
 msgstr "创建邀请"
 
@@ -863,6 +977,11 @@ msgid "Create user"
 msgstr "创建用户"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Create workspace"
+msgstr "创建工作区"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 msgid "Created"
 msgstr "创建于"
@@ -871,6 +990,11 @@ msgstr "创建于"
 #: src/lib/features/tools/Tools.svelte
 msgid "CSL XML"
 msgstr "CSL XML"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Current backend MVP requires a reason for each read request. This response is not a durable access grant; it has no persistent scope, expiry, or revocation endpoint."
+msgstr "当前后端 MVP 要求每次读取请求都提供原因。本次响应不会授予持久访问权限，也没有持续有效的范围、过期时间或撤销端点。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -934,6 +1058,11 @@ msgid "Date unknown"
 msgstr "日期未知"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Default"
+msgstr "默认"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Default citation format"
 msgstr "默认引文格式"
@@ -949,9 +1078,9 @@ msgid "Defaults"
 msgstr "默认值"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminItems.svelte
 #: src/lib/features/item/discussion/ItemDiscussionSection.svelte
 #: src/lib/features/item/files/ItemFilesSection.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/lib/features/tools/Tools.svelte
 msgid "Delete"
 msgstr "删除"
@@ -967,7 +1096,7 @@ msgid "Delete Item permanently"
 msgstr "永久删除条目"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/item/[itemId]/(workspace)/files/+page.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/files/+page.svelte
 msgid "Delete permanently"
 msgstr "永久删除"
 
@@ -992,7 +1121,7 @@ msgid "Delete this Citation Style?"
 msgstr "删除此引用样式？"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/item/[itemId]/(workspace)/files/+page.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/files/+page.svelte
 msgid "Delete this file permanently?"
 msgstr "永久删除此文件？"
 
@@ -1050,9 +1179,20 @@ msgstr "发现结果分页"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/discussion/ItemDiscussionSection.svelte
-#: src/lib/features/item/ItemWorkspaceHeader.svelte
+#: src/lib/features/item/ItemHeader.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Discussion"
 msgstr "讨论"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Discussion message deleted"
+msgstr "讨论消息已删除"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Discussion posted"
+msgstr "讨论已发布"
 
 #. js-lingui-explicit-id
 #: src/lib/design/Toast.svelte
@@ -1072,17 +1212,17 @@ msgid "Document download options"
 msgstr "文档下载选项"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/item/[itemId]/(workspace)/files/+page.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/files/+page.svelte
 msgid "Document processing"
 msgstr "文档处理中"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/item/[itemId]/(workspace)/files/+page.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/files/+page.svelte
 msgid "Document processing completed"
 msgstr "文档处理已完成"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/item/[itemId]/(workspace)/files/+page.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/files/+page.svelte
 msgid "Document processing failed"
 msgstr "文档处理失败"
 
@@ -1129,11 +1269,6 @@ msgid "Download and add PDF"
 msgstr "下载并添加 PDF"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminMaintenance.svelte
-msgid "Download backup"
-msgstr "下载备份"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
 msgid "Download bundle"
 msgstr "下载文档包"
@@ -1175,14 +1310,23 @@ msgid "Durable workflows"
 msgstr "持久工作流"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Each workspace follows the same access and governance rules. Choose one to open its library and projects."
+msgstr "所有工作区遵循相同的访问和治理规则。选择一个以打开其文献库和项目。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Edit metadata"
 msgstr "编辑元数据"
 
-#. Project member role.
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "editor"
+msgstr "编辑者"
+
+#. Workspace role.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Editor"
 msgstr "编辑者"
 
@@ -1191,6 +1335,11 @@ msgstr "编辑者"
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
 msgid "Editors"
 msgstr "编者"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Effective Workspace capabilities determine which governance actions are available."
+msgstr "可用的治理操作由后端返回的工作区有效能力决定。"
 
 #. PDF shape annotation kind.
 #. js-lingui-explicit-id
@@ -1209,6 +1358,12 @@ msgid "Encoding"
 msgstr "编码"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Exact username"
+msgstr "精确用户名"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
 msgid "excluded"
 msgstr "不包含"
@@ -1223,11 +1378,21 @@ msgstr "排除字段"
 msgid "Expand sidebar"
 msgstr "展开侧边栏"
 
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Expiration: single response; no continuing access is granted"
+msgstr "有效期：仅限本次响应；不会授予持续访问权限"
+
 #. API Token or invitation state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 msgid "Expired"
 msgstr "已过期"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "expires"
+msgstr "到期时间"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -1238,6 +1403,11 @@ msgstr "到期于"
 #: src/lib/features/account/Account.svelte
 msgid "Expires after"
 msgstr "有效期"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Expires in days"
+msgstr "有效天数"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -1314,7 +1484,7 @@ msgstr "文件格式"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/files/ItemFilesSection.svelte
-#: src/lib/features/item/ItemWorkspaceHeader.svelte
+#: src/lib/features/item/ItemHeader.svelte
 msgid "Files"
 msgstr "文件"
 
@@ -1371,6 +1541,11 @@ msgid "Full title"
 msgstr "完整名称"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "General"
+msgstr "常规"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "General citation options"
 msgstr "通用引用选项"
@@ -1379,11 +1554,6 @@ msgstr "通用引用选项"
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Get started"
 msgstr "开始使用"
-
-#. js-lingui-explicit-id
-#: src/lib/features/admin/AdminShell.svelte
-msgid "Has PDF"
-msgstr "包含 PDF"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -1505,9 +1675,19 @@ msgid "Ink"
 msgstr "墨迹"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Inspect Items once"
+msgstr "单次检查条目"
+
+#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "Install Citation Style"
 msgstr "安装引文样式"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Instance administrators can suspend or recover Workspace governance. This does not grant ordinary content access."
+msgstr "实例管理员可以暂停或恢复工作区治理；此操作不会授予普通内容访问权限。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
@@ -1525,7 +1705,28 @@ msgid "Invitation created"
 msgstr "邀请已创建"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Invitation created. Copy this token now; it will not be shown again."
+msgstr "邀请已创建。请立即复制此令牌；此后将不再显示。"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Invitation link copied"
+msgstr "已复制邀请链接"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminSettings.svelte
+msgid "Invitation only"
+msgstr "仅限邀请"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Invitation revoked"
+msgstr "邀请已撤销"
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminUsers.svelte
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Invitations"
 msgstr "邀请"
 
@@ -1558,14 +1759,33 @@ msgstr "条目操作"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
-#: src/routes/(app)/admin/items/+page.svelte
+msgid "Item copied to Workspace"
+msgstr "条目已复制到工作区"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
 msgid "Item deleted"
 msgstr "条目已删除"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/ItemHeader.svelte
+msgid "Item details"
+msgstr "条目详情"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Item list read-only"
+msgstr "条目列表只读"
+
+#. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Item removed from Project"
-msgstr "条目已从项目移除"
+msgstr "已从项目移除条目"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemHeader.svelte
+msgid "Item sections"
+msgstr "条目分区"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
@@ -1578,33 +1798,37 @@ msgid "Item thumbnail"
 msgstr "条目缩略图"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemWorkspaceHeader.svelte
-msgid "Item workspace"
-msgstr "条目工作区"
-
-#. js-lingui-explicit-id
-#: src/lib/features/admin/AdminItems.svelte
 #: src/lib/features/admin/AdminOverview.svelte
-#: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/projects/Projects.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
-#: src/routes/(app)/admin/items/+page.svelte
 msgid "Items"
 msgstr "条目"
 
 #. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
 #: src/lib/features/projects/Projects.svelte
 msgid "Join"
 msgstr "加入"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/Projects.svelte
-msgid "Join open research collections from this instance."
-msgstr "加入此实例中的开放研究集合。"
+msgid "Join an open research direction to add it to Your Projects."
+msgstr "加入开放的研究方向，将其添加到你的项目列表。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Join Project"
+msgstr "加入项目"
 
 #. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
 msgid "Join Quirebase"
 msgstr "加入 Quirebase"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Joined Project"
+msgstr "已加入项目"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemMetadataForm.svelte
@@ -1657,12 +1881,17 @@ msgstr "最后一页"
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Leave Project"
-msgstr "离开项目"
+msgstr "退出项目"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Left Project"
+msgstr "已退出项目"
 
 #. js-lingui-explicit-id
 #: src/lib/app/navigation.ts
 #: src/lib/features/dashboard/Dashboard.svelte
-#: src/lib/features/item/ItemWorkspaceHeader.svelte
+#: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/library/Library.svelte
 msgid "Library"
 msgstr "文献库"
@@ -1686,6 +1915,11 @@ msgstr "文献库分页"
 #: src/lib/features/tools/Tools.svelte
 msgid "Library tools"
 msgstr "文献库工具"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Lifecycle"
+msgstr "生命周期"
 
 #. js-lingui-explicit-id
 #: src/lib/app/navigation.ts
@@ -1726,9 +1960,19 @@ msgid "Loading dashboard…"
 msgstr "正在加载概览…"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Loading discussion…"
+msgstr "正在加载讨论…"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Loading Library…"
 msgstr "正在加载文献库…"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Loading members…"
+msgstr "正在加载成员…"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -1749,6 +1993,19 @@ msgstr "正在加载 Quirebase…"
 #: src/lib/features/pdf-reader/PdfWorkspace.svelte
 msgid "Loading reader configuration…"
 msgstr "正在加载阅读器配置…"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
+msgid "Loading workspace…"
+msgstr "正在加载工作区…"
+
+#. js-lingui-explicit-id
+#: src/lib/app/WorkspaceMenu.svelte
+#: src/routes/(app)/+page.svelte
+#: src/routes/(app)/admin/workspaces/+page.svelte
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Loading workspaces…"
+msgstr "正在加载工作区列表…"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -1793,14 +2050,36 @@ msgid "Maintenance: {operation}"
 msgstr "维护：{operation}"
 
 #. js-lingui-explicit-id
-#: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Make owner"
-msgstr "设为所有者"
-
-#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "Manage Tags"
 msgstr "管理标签"
+
+#. js-lingui-explicit-id
+#: src/lib/app/WorkspaceMenu.svelte
+msgid "Manage workspaces"
+msgstr "管理工作区"
+
+#. Project participation policy.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "Managed"
+msgstr "管理制"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Managed participation"
+msgstr "管理制项目"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Managed Projects are visible only to their participants and Workspace owners/admins."
+msgstr "管理制项目仅对其参与者和工作区所有者/管理员可见。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Managed Projects are visible to participants and Workspace owners/admins; Workspace owners/admins curate their participant lists."
+msgstr "管理制项目对参与者及工作区所有者/管理员可见；参与者名单由工作区所有者/管理员维护。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -1831,7 +2110,27 @@ msgid "Member"
 msgstr "成员"
 
 #. js-lingui-explicit-id
-#: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Member reactivated"
+msgstr "成员已恢复"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Member removed"
+msgstr "成员已移除"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Member role updated"
+msgstr "成员角色已更新"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Member suspended"
+msgstr "成员已暂停"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Members"
 msgstr "成员"
 
@@ -1846,7 +2145,7 @@ msgid "Messages"
 msgstr "消息"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemWorkspaceHeader.svelte
+#: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
 msgid "Metadata"
 msgstr "元数据"
@@ -1872,6 +2171,11 @@ msgid "Mobile navigation"
 msgstr "移动端导航"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "Moderator actions"
+msgstr "审核操作"
+
+#. js-lingui-explicit-id
 #: src/lib/app/MobileNavigation.svelte
 #: src/lib/features/item/ItemActions.svelte
 msgid "More"
@@ -1885,6 +2189,7 @@ msgstr "将源标签的全部关联转移到目标标签。"
 #. js-lingui-explicit-id
 #: src/lib/features/projects/Projects.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Name"
 msgstr "名称"
 
@@ -1987,6 +2292,11 @@ msgid "No description"
 msgstr "暂无描述"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "No discussion messages yet."
+msgstr "暂无讨论消息。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/discussion/ItemDiscussionSection.svelte
 msgid "No discussion messages."
 msgstr "暂无讨论消息。"
@@ -2013,6 +2323,7 @@ msgstr "暂无邀请。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryResults.svelte
+#: src/routes/(app)/admin/workspaces/+page.svelte
 msgid "No Items found."
 msgstr "未找到条目。"
 
@@ -2020,11 +2331,6 @@ msgstr "未找到条目。"
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "No Items in this Project."
 msgstr "此项目中暂无条目。"
-
-#. js-lingui-explicit-id
-#: src/lib/features/admin/AdminItems.svelte
-msgid "No Items."
-msgstr "暂无条目。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
@@ -2047,6 +2353,16 @@ msgid "No note text"
 msgstr "无批注文字"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "No open Projects are available to join."
+msgstr "暂无可加入的开放项目。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "No Project participants yet."
+msgstr "暂无项目参与者。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "No projects yet."
 msgstr "暂无项目。"
@@ -2055,16 +2371,6 @@ msgstr "暂无项目。"
 #: src/lib/features/projects/Projects.svelte
 msgid "No Projects yet."
 msgstr "暂无项目。"
-
-#. js-lingui-explicit-id
-#: src/lib/features/admin/AdminProjects.svelte
-msgid "No projects."
-msgstr "暂无项目。"
-
-#. js-lingui-explicit-id
-#: src/lib/features/projects/Projects.svelte
-msgid "No public Projects are available to join."
-msgstr "暂无可加入的公开项目。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -2096,6 +2402,21 @@ msgstr "暂无用户。"
 #: src/lib/features/admin/AdminWorkflows.svelte
 msgid "No workflows."
 msgstr "暂无工作流。"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "No workspaces are available for this account yet."
+msgstr "此账号当前没有可用的工作区。"
+
+#. js-lingui-explicit-id
+#: src/lib/app/WorkspaceMenu.svelte
+msgid "No workspaces available"
+msgstr "暂无可用工作区"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "No workspaces."
+msgstr "没有工作区。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
@@ -2130,13 +2451,15 @@ msgstr "存在 DOI 时省略"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/Projects.svelte
-msgid "Only invited members can access this Project."
-msgstr "只有受邀成员才能访问此项目。"
+msgid "Only Workspace owners and admins can create managed Projects and curate participation."
+msgstr "只有工作区所有者和管理员可以创建管理制项目并维护参与者。"
 
+#. Project participation policy.
 #. js-lingui-explicit-id
-#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+#: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminSettings.svelte
 msgid "Open"
-msgstr "打开"
+msgstr "开放"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
@@ -2149,9 +2472,14 @@ msgid "Open annotation workspace"
 msgstr "打开批注工作区"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Open copy"
+msgstr "打开副本"
+
+#. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Open in Library"
-msgstr "在文献库中打开"
+msgstr "在资料库中打开"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
@@ -2169,6 +2497,31 @@ msgid "Open metadata editor"
 msgstr "打开元数据编辑器"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "Open PDF"
+msgstr "打开 PDF"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Open Projects"
+msgstr "开放项目"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Open Projects are visible to all Workspace members. Joining one adds it to Your Projects."
+msgstr "开放项目对所有工作区成员可见。加入后会显示在你的项目列表中。"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Open Workspace"
+msgstr "打开工作区"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Open workspace {name}"
+msgstr "打开工作区 {name}"
+
+#. js-lingui-explicit-id
 #: src/routes/(app)/admin/settings/+page.svelte
 msgid "OpenAlex API key"
 msgstr "OpenAlex API 密钥"
@@ -2177,6 +2530,11 @@ msgstr "OpenAlex API 密钥"
 #: src/lib/features/account/Account.svelte
 msgid "OpenAPI"
 msgstr "OpenAPI"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/+page.svelte
+msgid "Opening your workspace…"
+msgstr "正在打开你的工作区…"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminMaintenance.svelte
@@ -2189,7 +2547,7 @@ msgid "OR"
 msgstr "或"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemWorkspaceHeader.svelte
+#: src/lib/features/item/ItemHeader.svelte
 msgid "Organize"
 msgstr "整理"
 
@@ -2205,17 +2563,31 @@ msgstr "输出排序"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
-#: src/lib/features/item/ItemWorkspaceHeader.svelte
+#: src/lib/features/item/ItemHeader.svelte
 #: src/routes/(app)/admin/+page.svelte
 msgid "Overview"
 msgstr "概览"
 
-#. Project member role.
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "owner"
+msgstr "所有者"
+
+#. Workspace role or resource owner label.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Owner"
 msgstr "所有者"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Owner username (exact match)"
+msgstr "所有者用户名（精确匹配）"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Ownership transferred"
+msgstr "所有权已转移"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
@@ -2236,6 +2608,12 @@ msgid "Pages"
 msgstr "页码 (Pages)"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Participation"
+msgstr "参与方式"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 #: src/lib/features/admin/AdminUsers.svelte
 #: src/lib/features/auth/Invitation.svelte
@@ -2253,11 +2631,6 @@ msgstr "密码已更改"
 #: src/lib/domain-labels.ts
 msgid "PDF"
 msgstr "PDF"
-
-#. js-lingui-explicit-id
-#: src/lib/features/admin/AdminShell.svelte
-msgid "PDF availability"
-msgstr "PDF 可用性"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -2302,9 +2675,13 @@ msgid "Pending invitations"
 msgstr "待处理邀请"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Permanent deletion"
+msgstr "永久删除"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/BulkActions.svelte
 #: src/lib/features/library/Library.svelte
-#: src/routes/(app)/admin/items/+page.svelte
 msgid "Permanently delete"
 msgstr "永久删除"
 
@@ -2314,14 +2691,14 @@ msgid "Permanently delete the selected Items?"
 msgstr "永久删除所选条目？"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/admin/items/+page.svelte
-msgid "Permanently delete this Item?"
-msgstr "永久删除此条目？"
-
-#. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Permanently delete this Project?"
 msgstr "永久删除此项目？"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Permanently delete workspace"
+msgstr "永久删除工作区"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
@@ -2347,6 +2724,11 @@ msgstr "请检查提交的内容。"
 #: src/lib/api/errors.ts
 msgid "Please sign in again."
 msgstr "请重新登录。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Post"
+msgstr "发布"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/discussion/ItemDiscussionSection.svelte
@@ -2411,9 +2793,6 @@ msgstr "上一页"
 #. Project visibility or annotation scope.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/features/admin/AdminShell.svelte
-#: src/lib/features/projects/Projects.svelte
-#: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Private"
 msgstr "私有"
 
@@ -2444,23 +2823,8 @@ msgstr "项目操作失败"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Project archived"
-msgstr "项目已归档"
-
-#. js-lingui-explicit-id
-#: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Project lifecycle"
-msgstr "项目生命周期"
-
-#. js-lingui-explicit-id
-#: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Project member removed"
-msgstr "项目成员已移除"
-
-#. js-lingui-explicit-id
-#: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Project member saved"
-msgstr "项目成员已保存"
+msgid "Project deleted"
+msgstr "项目已删除"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -2469,13 +2833,13 @@ msgstr "项目名称"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Project ownership transferred"
-msgstr "项目所有权已转移"
+msgid "Project participant added"
+msgstr "已添加项目参与者"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Project restored"
-msgstr "项目已恢复"
+msgid "Project participant removed"
+msgstr "已移除项目参与者"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -2489,15 +2853,17 @@ msgstr "项目设置已保存"
 
 #. js-lingui-explicit-id
 #: src/lib/app/navigation.ts
-#: src/lib/features/admin/AdminProjects.svelte
-#: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/dashboard/Dashboard.svelte
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 #: src/lib/features/projects/Projects.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
-#: src/routes/(app)/admin/projects/+page.svelte
 msgid "Projects"
 msgstr "项目"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Projects are research working contexts inside this Workspace."
+msgstr "项目是此工作区中的研究工作上下文。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
@@ -2509,16 +2875,8 @@ msgstr "提供方"
 #. Project visibility or annotation scope.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/features/admin/AdminShell.svelte
-#: src/lib/features/projects/Projects.svelte
-#: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Public"
 msgstr "公开"
-
-#. js-lingui-explicit-id
-#: src/lib/features/projects/Projects.svelte
-msgid "Public Projects"
-msgstr "公开项目"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
@@ -2562,6 +2920,11 @@ msgid "Quirebase will not inspect your Library until you start the check."
 msgstr "在你主动开始检查前，Quirebase 不会扫描文献库。"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Reactivate"
+msgstr "恢复成员"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/files/ItemFilesSection.svelte
 msgid "Read"
 msgstr "阅读"
@@ -2588,6 +2951,16 @@ msgid "Ready"
 msgstr "已就绪"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Reason (at least 10 characters)"
+msgstr "原因（至少 10 个字符）"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Reason:"
+msgstr "原因："
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "recent additions"
 msgstr "条最近新增"
@@ -2608,11 +2981,6 @@ msgid "Recently added"
 msgstr "最近新增"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/admin/maintenance/+page.svelte
-msgid "Recommend Tags for all Items"
-msgstr "为所有条目推荐标签"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Record"
 msgstr "记录"
@@ -2621,6 +2989,11 @@ msgstr "记录"
 #: src/lib/features/item/ItemActions.svelte
 msgid "Record tools"
 msgstr "记录工具"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Recover"
+msgstr "恢复"
 
 #. PDF shape annotation kind.
 #. js-lingui-explicit-id
@@ -2640,6 +3013,11 @@ msgid "Refresh"
 msgstr "刷新"
 
 #. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "Refresh the page to restore Workspace context."
+msgstr "请刷新页面以恢复工作区上下文。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
 msgid "Refresh this record from an upstream identifier."
 msgstr "通过上游标识符刷新此记录。"
@@ -2650,9 +3028,9 @@ msgid "Regenerate citation key"
 msgstr "重新生成引用键"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/admin/maintenance/+page.svelte
-msgid "Reindex all Items"
-msgstr "重建所有条目索引"
+#: src/routes/(app)/admin/settings/+page.svelte
+msgid "Registration policy"
+msgstr "注册策略"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
@@ -2695,8 +3073,13 @@ msgstr "恢复默认设置"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Restore Project"
-msgstr "恢复项目"
+msgid "Restore"
+msgstr "还原"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Restore workspace"
+msgstr "恢复工作区"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
@@ -2722,6 +3105,18 @@ msgstr "审核重复条目、维护标签并安装引文样式。"
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Review the preview"
 msgstr "审阅预览"
+
+#. Workspace role.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "reviewer"
+msgstr "审阅者"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Revoke"
+msgstr "撤销"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -2756,11 +3151,13 @@ msgstr "已撤销"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Role"
 msgstr "角色"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminUsers.svelte
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Role for {username}"
 msgstr "{username} 的角色"
 
@@ -2797,14 +3194,14 @@ msgid "Same title"
 msgstr "相同标题"
 
 #. js-lingui-explicit-id
-#: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Save member"
-msgstr "保存成员"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
 msgid "Save metadata"
 msgstr "保存元数据"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Save name"
+msgstr "保存名称"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -2846,6 +3243,11 @@ msgstr "正在保存回复…"
 #: src/lib/features/tools/Tools.svelte
 msgid "Scanning…"
 msgstr "正在扫描…"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Scope: Workspace"
+msgstr "范围：工作区"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
@@ -2929,6 +3331,11 @@ msgid "Select a Tag"
 msgstr "选择标签"
 
 #. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Select a Workspace to load its citation styles and preview endpoint. The account route does not infer a Workspace from stored preferences."
+msgstr "请选择一个工作区以加载其引文样式和预览接口。账号页面不会从已保存的偏好设置中推断工作区。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/BulkActions.svelte
 msgid "Select Project"
 msgstr "选择项目"
@@ -2980,11 +3387,6 @@ msgid "Settings saved"
 msgstr "设置已保存"
 
 #. js-lingui-explicit-id
-#: src/lib/features/projects/Projects.svelte
-msgid "Shared collections with explicit membership and roles."
-msgstr "具有明确成员与角色的共享集合。"
-
-#. js-lingui-explicit-id
 #: src/lib/features/auth/Login.svelte
 msgid "Sign in"
 msgstr "登录"
@@ -2993,6 +3395,11 @@ msgstr "登录"
 #: src/lib/features/auth/Login.svelte
 msgid "Sign in to your research workspace."
 msgstr "登录您的研究工作区。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
+msgid "Sign in with the invited account to accept this invitation."
+msgstr "请使用受邀账号登录以接受此邀请。"
 
 #. js-lingui-explicit-id
 #: src/lib/app/AppSidebar.svelte
@@ -3048,6 +3455,7 @@ msgstr "启动中…"
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "State"
 msgstr "状态"
 
@@ -3055,6 +3463,11 @@ msgstr "状态"
 #: src/lib/features/admin/AdminShell.svelte
 msgid "Status"
 msgstr "状态"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Status:"
+msgstr "状态："
 
 #. PDF annotation kind: text markup.
 #. js-lingui-explicit-id
@@ -3088,6 +3501,33 @@ msgstr "补充文件"
 #: src/lib/features/item/ItemActions.svelte
 msgid "Supplements: {state}"
 msgstr "补充材料：{state}"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Suspend"
+msgstr "暂停"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Suspend governance"
+msgstr "暂停治理"
+
+#. Workspace member state.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "suspended"
+msgstr "已暂停"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Switching between open and managed participation preserves current participants."
+msgstr "在“开放”和“管理制”之间切换会保留现有参与者。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Switching from Workspace-wide participation starts with you as the first participant."
+msgstr "从“全工作区”切换后，你会成为首位参与者。"
 
 #. js-lingui-explicit-id
 #: src/lib/app/navigation.ts
@@ -3125,12 +3565,12 @@ msgid "Tag pages"
 msgstr "标签分页"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/item/[itemId]/(workspace)/organize/+page.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/organize/+page.svelte
 msgid "Tag recommendation"
 msgstr "标签推荐"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/item/[itemId]/(workspace)/organize/+page.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/organize/+page.svelte
 msgid "Tag recommendation failed"
 msgstr "标签推荐失败"
 
@@ -3140,7 +3580,7 @@ msgid "Tag Recommendations"
 msgstr "标签推荐"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/item/[itemId]/(workspace)/organize/+page.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/organize/+page.svelte
 msgid "Tag recommendations updated"
 msgstr "标签推荐已更新"
 
@@ -3173,6 +3613,17 @@ msgstr "目标标签"
 #: src/lib/features/admin/AdminShell.svelte
 msgid "Target type"
 msgstr "目标类型"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Target Workspace"
+msgstr "目标工作区"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Terminate"
+msgstr "终止成员关系"
 
 #. js-lingui-explicit-id
 #: src/lib/api/errors.ts
@@ -3216,7 +3667,6 @@ msgstr "此操作不可用。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/Library.svelte
-#: src/routes/(app)/admin/items/+page.svelte
 msgid "This cannot be undone."
 msgstr "此操作无法撤销。"
 
@@ -3261,6 +3711,11 @@ msgid "This invitation is invalid or has expired."
 msgstr "此邀请无效或已过期。"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "This permanently removes the workspace and its content after the archive retention period. This cannot be undone."
+msgstr "归档保留期结束后，此操作会永久删除工作区及其内容，且无法撤销。"
+
+#. js-lingui-explicit-id
 #: src/lib/api/errors.ts
 msgid "This Project membership changed. Refresh and try again."
 msgstr "此项目的成员关系已更改。请刷新后重试。"
@@ -3279,6 +3734,16 @@ msgstr "此请求来自非预期来源。"
 #: src/lib/api/errors.ts
 msgid "This Tag conflicts with an existing Tag."
 msgstr "此标签与现有标签冲突。"
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "This Workspace is read only in its current state."
+msgstr "此工作区在当前状态下为只读。"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
+msgid "This workspace is unavailable. Choose another workspace."
+msgstr "此工作区不可用。请选择其他工作区。"
 
 #. js-lingui-explicit-id
 #: src/routes/+error.svelte
@@ -3325,6 +3790,11 @@ msgid "Tools"
 msgstr "工具"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Transfer ownership"
+msgstr "转移所有权"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Try a different Library Search."
 msgstr "请尝试其他文献库搜索条件。"
@@ -3348,6 +3818,11 @@ msgstr "无法接受邀请"
 #: src/lib/features/tools/Tools.svelte
 msgid "Unable to add Citation Style"
 msgstr "无法添加引文样式"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Unable to check whether you can create a workspace. Refresh and try again."
+msgstr "无法检查你是否可以创建工作区。请刷新后重试。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -3405,6 +3880,21 @@ msgid "Unable to load Import preview"
 msgstr "无法加载导入预览"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Unable to load members."
+msgstr "无法加载成员。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Unable to load Project discussion."
+msgstr "无法加载项目讨论。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Unable to load Project."
+msgstr "无法加载项目。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/projects/Projects.svelte
 msgid "Unable to load Projects."
 msgstr "无法加载项目。"
@@ -3418,6 +3908,16 @@ msgstr "无法加载概览。"
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Unable to load the Library."
 msgstr "无法加载文献库。"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
+msgid "Unable to load workspace."
+msgstr "无法加载工作区。"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Unable to load workspaces."
+msgstr "无法加载工作区列表。"
 
 #. js-lingui-explicit-id
 #: src/routes/+error.svelte
@@ -3436,11 +3936,6 @@ msgid "Unable to open this PDF."
 msgstr "无法打开此 PDF。"
 
 #. js-lingui-explicit-id
-#: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Unable to open this Project."
-msgstr "无法打开此项目。"
-
-#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Unable to refresh Import preview"
 msgstr "无法刷新导入预览"
@@ -3451,10 +3946,10 @@ msgid "Unable to retry Import"
 msgstr "无法重试导入"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/item/[itemId]/(workspace)/discussion/+page.svelte
-#: src/routes/(app)/item/[itemId]/(workspace)/files/+page.svelte
-#: src/routes/(app)/item/[itemId]/(workspace)/metadata/+page.svelte
-#: src/routes/(app)/item/[itemId]/(workspace)/organize/+page.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion/+page.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/files/+page.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/metadata/+page.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/organize/+page.svelte
 msgid "Unable to save changes"
 msgstr "无法保存更改"
 
@@ -3470,9 +3965,8 @@ msgid "Underline"
 msgstr "下划线"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminItems.svelte
 #: src/lib/features/dashboard/Dashboard.svelte
-#: src/lib/features/item/ItemWorkspaceHeader.svelte
+#: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Unknown authors"
 msgstr "未知作者"
@@ -3492,6 +3986,11 @@ msgstr "未知出版物"
 #: src/lib/features/import/ImportBatchPreview.svelte
 msgid "Untitled"
 msgstr "无标题"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Update the name members see across this workspace."
+msgstr "更新成员在此工作区看到的名称。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -3590,8 +4089,9 @@ msgstr "用户会话已撤销"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminUsers.svelte
+#: src/lib/features/auth/Invitation.svelte
 #: src/lib/features/auth/Login.svelte
-#: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Username"
 msgstr "用户名"
 
@@ -3623,19 +4123,16 @@ msgstr "查看全部"
 msgid "View Items"
 msgstr "查看条目"
 
-#. Project member role.
 #. js-lingui-explicit-id
-#: src/lib/domain-labels.ts
-#: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Viewer"
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "viewer"
 msgstr "查看者"
 
+#. Workspace role.
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminShell.svelte
-#: src/lib/features/projects/Projects.svelte
-#: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Visibility"
-msgstr "可见范围"
+#: src/lib/domain-labels.ts
+msgid "Viewer"
+msgstr "查看者"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
@@ -3652,11 +4149,6 @@ msgstr "卷号 (Volume)"
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Volume / Issue"
 msgstr "卷 / 期"
-
-#. js-lingui-explicit-id
-#: src/lib/features/admin/AdminShell.svelte
-msgid "Without PDF"
-msgstr "无 PDF"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminWorkflows.svelte
@@ -3676,10 +4168,95 @@ msgid "Workflows"
 msgstr "工作流"
 
 #. js-lingui-explicit-id
-#: src/lib/app/AppSidebar.svelte
+#: src/lib/app/WorkspaceMenu.svelte
 #: src/lib/features/library/Library.svelte
+#: src/routes/(app)/workspace/+page.svelte
 msgid "Workspace"
 msgstr "工作区"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace archived"
+msgstr "工作区已归档"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Workspace created. Its owner can open it; you have no content access unless you are also a member."
+msgstr "工作区已创建。其所有者现在可以访问；除非你另行成为成员，否则无法访问其内容。"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Workspace creation is restricted by the instance policy. Ask an administrator for access."
+msgstr "实例策略限制了工作区创建。请联系管理员申请权限。"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/settings/+page.svelte
+msgid "Workspace creation policy"
+msgstr "工作区创建策略"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace deleted"
+msgstr "工作区已删除"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Workspace for citation style and key preview"
+msgstr "用于引文样式和引用键预览的工作区"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace governance"
+msgstr "工作区治理"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Workspace name"
+msgstr "工作区名称"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace name updated"
+msgstr "工作区名称已更新"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace restored"
+msgstr "工作区已恢复"
+
+#. js-lingui-explicit-id
+#: src/lib/app/WorkspaceMenu.svelte
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace settings"
+msgstr "工作区设置"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace settings · Quirebase"
+msgstr "工作区设置 · Quirebase"
+
+#. Project participation policy.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "Workspace-wide"
+msgstr "全工作区"
+
+#. js-lingui-explicit-id
+#: src/lib/app/WorkspaceMenu.svelte
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Workspaces"
+msgstr "工作区"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Workspaces · Quirebase"
+msgstr "工作区 · Quirebase"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Write a message"
+msgstr "输入消息"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
@@ -3693,6 +4270,16 @@ msgid "You do not have permission to perform this action."
 msgstr "你无权执行此操作。"
 
 #. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "You no longer have access to this Workspace."
+msgstr "你已无法访问此工作区。"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "You will become its owner and can invite other members later."
+msgstr "你将成为此工作区的所有者，之后可以邀请其他成员。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Your library is empty. Import a paper to begin."
 msgstr "文献库为空。请先导入一篇文献。"
@@ -3700,4 +4287,19 @@ msgstr "文献库为空。请先导入一篇文献。"
 #. js-lingui-explicit-id
 #: src/lib/features/projects/Projects.svelte
 msgid "Your Projects"
-msgstr "你的项目"
+msgstr "我的项目"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Your role:"
+msgstr "你的角色："
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Your workspace URL determines which data and permissions are in use."
+msgstr "工作区 URL 决定当前使用的数据和权限。"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Your workspaces"
+msgstr "你的工作区"
