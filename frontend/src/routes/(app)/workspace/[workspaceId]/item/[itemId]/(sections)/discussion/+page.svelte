@@ -2,22 +2,24 @@
 	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { apiErrorMessage } from '$lib/api/errors';
 	import Notice from '$lib/design/Notice.svelte';
+	import PromptDialog from '$lib/design/PromptDialog.svelte';
 	import {
 		discussionCreateMutationOptions,
-		discussionDeleteMutationOptions
+		discussionDeleteMutationOptions,
+		discussionModerationMutationOptions
 	} from '$lib/features/item/discussion/mutations';
 	import ItemDiscussionSection from '$lib/features/item/discussion/ItemDiscussionSection.svelte';
 	import ItemSectionState from '$lib/features/item/ItemSectionState.svelte';
 	import { itemDiscussionQuery } from '$lib/features/item/queries';
 	import { t } from '$lib/i18n';
-	import { getSession } from '$lib/session';
 	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
 	import type { PageProps } from './$types';
 
 	let { params }: PageProps = $props();
 	let mutationError = $state('');
+	let moderationMessageId = $state<string | null>(null);
+	let moderationDialogOpen = $state(false);
 	const queryClient = useQueryClient();
-	const { query: session } = getSession();
 	const workspace = getWorkspaceContext();
 	const discussion = createQuery(() =>
 		itemDiscussionQuery(params.workspaceId, params.itemId, true)
@@ -27,6 +29,9 @@
 	);
 	const discussionDelete = createMutation(() =>
 		discussionDeleteMutationOptions(params.workspaceId, params.itemId, queryClient)
+	);
+	const discussionModerate = createMutation(() =>
+		discussionModerationMutationOptions(params.workspaceId, params.itemId, queryClient)
 	);
 
 	function track(promise: Promise<unknown>) {
@@ -46,13 +51,26 @@
 
 	function deleteDiscussion(messageId: string) {
 		if (
-			!workspace.can('discussion.write') ||
 			!discussion.data?.some(
-				(message) => message.id === messageId && message.author_id === session.data?.user?.id
+				(message) => message.id === messageId && message.allowed_actions.includes('delete')
 			)
 		)
 			return;
 		track(discussionDelete.mutateAsync({ messageId }));
+	}
+
+	function moderateDiscussion(reason: string) {
+		const messageId = moderationMessageId;
+		if (
+			!messageId ||
+			!reason.trim() ||
+			!discussion.data?.some(
+				(message) => message.id === messageId && message.allowed_actions.includes('moderate')
+			)
+		)
+			return;
+		moderationDialogOpen = false;
+		track(discussionModerate.mutateAsync({ messageId, reason: reason.trim() }));
 	}
 </script>
 
@@ -60,10 +78,22 @@
 <ItemSectionState loading={discussion.isPending} failed={discussion.isError}>
 	<ItemDiscussionSection
 		messages={discussion.data!}
-		userId={session.data?.user?.id}
 		canWrite={workspace.can('discussion.write')}
-		busy={discussionCreate.isPending || discussionDelete.isPending}
+		busy={discussionCreate.isPending || discussionDelete.isPending || discussionModerate.isPending}
 		onAdd={addDiscussion}
 		onDelete={deleteDiscussion}
+		onModerate={(messageId) => {
+			moderationMessageId = messageId;
+			moderationDialogOpen = true;
+		}}
 	/>
 </ItemSectionState>
+<PromptDialog
+	bind:open={moderationDialogOpen}
+	title={$t('Moderate Discussion message')}
+	body={$t('Give a reason for removing this message. The action is recorded in the audit log.')}
+	label={$t('Moderation reason')}
+	confirmLabel={$t('Remove message')}
+	busy={discussionModerate.isPending}
+	onConfirm={moderateDiscussion}
+/>

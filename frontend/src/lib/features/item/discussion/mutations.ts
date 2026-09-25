@@ -12,6 +12,8 @@ export type DiscussionDeleteMutation = {
 	messageId: string;
 };
 
+export type DiscussionModerationMutation = DiscussionDeleteMutation & { reason: string };
+
 export function discussionCreateMutationOptions(
 	workspaceId: string,
 	itemId: string,
@@ -44,6 +46,27 @@ export function discussionDeleteMutationOptions(
 			api.request('DELETE', '/workspaces/{workspace_id}/items/{item_id}/discussions/{message_id}', {
 				params: { path: { item_id: itemId, message_id: messageId } }
 			}),
+		onSuccess: () => invalidateItemDiscussion(queryClient, workspaceId, itemId)
+	});
+}
+
+export function discussionModerationMutationOptions(
+	workspaceId: string,
+	itemId: string,
+	queryClient: QueryClient
+) {
+	const api = createWorkspaceApi(workspaceId);
+	return mutationOptions({
+		mutationKey: workspaceKeys.mutation(workspaceId, 'item-discussion-moderate', itemId),
+		mutationFn: ({ messageId, reason }: DiscussionModerationMutation) =>
+			api.request(
+				'POST',
+				'/workspaces/{workspace_id}/items/{item_id}/discussions/{message_id}/moderation',
+				{
+					params: { path: { item_id: itemId, message_id: messageId } },
+					body: { reason }
+				}
+			),
 		onSuccess: () => invalidateItemDiscussion(queryClient, workspaceId, itemId)
 	});
 }

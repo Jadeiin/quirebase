@@ -16,7 +16,6 @@
 	import { t } from '$lib/i18n';
 	import { toaster } from '$lib/toaster';
 	import { invalidateProject } from '$lib/query/invalidation';
-	import { getSession } from '$lib/session';
 	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
 	import { workspaceHref } from '$lib/workspaces/href';
 	import { workspaceKeys } from '$lib/workspaces/keys';
@@ -24,7 +23,6 @@
 	let { projectId } = $props<{ projectId: string }>();
 	const workspace = getWorkspaceContext();
 	const workspaceId = workspace.workspaceId;
-	const session = getSession();
 	const queryClient = useQueryClient();
 	const detail = createQuery(() => projectDetailQuery(workspaceId, projectId));
 	const project = $derived(detail.data);
@@ -47,6 +45,8 @@
 	let settingsDescription = $state('');
 	let settingsVisibility = $state<'workspace' | 'open' | 'managed'>('workspace');
 	let deleteDialogOpen = $state(false);
+	let moderationMessageId = $state<string | null>(null);
+	let moderationDialogOpen = $state(false);
 
 	$effect(() => {
 		if (!project) return;
@@ -195,6 +195,12 @@
 	}
 
 	async function deleteDiscussion(messageId: string) {
+		if (
+			!discussions.data?.some(
+				(message) => message.id === messageId && message.allowed_actions.includes('delete')
+			)
+		)
+			return;
 		await mutate(
 			() =>
 				workspace.api.request(
@@ -203,6 +209,31 @@
 					{ params: { path: { project_id: projectId, message_id: messageId } } }
 				),
 			$t('Discussion message deleted')
+		);
+	}
+
+	async function moderateDiscussion(reason: string) {
+		const messageId = moderationMessageId;
+		if (
+			!messageId ||
+			!reason.trim() ||
+			!discussions.data?.some(
+				(message) => message.id === messageId && message.allowed_actions.includes('moderate')
+			)
+		)
+			return;
+		moderationDialogOpen = false;
+		await mutate(
+			() =>
+				workspace.api.request(
+					'POST',
+					'/workspaces/{workspace_id}/projects/{project_id}/discussions/{message_id}/moderation',
+					{
+						params: { path: { project_id: projectId, message_id: messageId } },
+						body: { reason: reason.trim() }
+					}
+				),
+			$t('Discussion message moderated')
 		);
 	}
 </script>
@@ -402,11 +433,20 @@
 					<article class="grid grid-cols-1 gap-1 border-t border-surface-300-700 py-3">
 						<div class="flex items-center justify-between gap-2">
 							<strong>{message.author_username}</strong>
-							{#if can('discussion.write') && message.author_id === session.query.data?.user?.id}<Button
+							{#if message.allowed_actions.includes('delete')}<Button
 									size="sm"
 									variant="tonal"
 									disabled={busy}
 									onclick={() => void deleteDiscussion(message.id)}>{$t('Delete')}</Button
+								>{/if}
+							{#if message.allowed_actions.includes('moderate')}<Button
+									size="sm"
+									variant="tonal"
+									disabled={busy}
+									onclick={() => {
+										moderationMessageId = message.id;
+										moderationDialogOpen = true;
+									}}>{$t('Moderate')}</Button
 								>{/if}
 						</div>
 						<p class="whitespace-pre-wrap">{message.body}</p>
@@ -438,5 +478,14 @@
 		confirmLabel={$t('Delete Project')}
 		{busy}
 		onConfirm={(value) => void confirmDeleteProject(value)}
+	/>
+	<PromptDialog
+		bind:open={moderationDialogOpen}
+		title={$t('Moderate Discussion message')}
+		body={$t('Give a reason for removing this message. The action is recorded in the audit log.')}
+		label={$t('Moderation reason')}
+		confirmLabel={$t('Remove message')}
+		{busy}
+		onConfirm={(reason) => void moderateDiscussion(reason)}
 	/>
 </section>

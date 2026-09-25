@@ -6,13 +6,13 @@
 	import Button from '$lib/design/Button.svelte';
 	import ItemRow from '$lib/design/ItemRow.svelte';
 
-	let { messages, userId, canWrite, busy, onAdd, onDelete } = $props<{
+	let { messages, canWrite, busy, onAdd, onDelete, onModerate } = $props<{
 		messages: DiscussionMessage[];
-		userId?: string;
 		canWrite: boolean;
 		busy: boolean;
 		onAdd: (event: SubmitEvent) => void;
 		onDelete: (messageId: string) => void;
+		onModerate: (messageId: string) => void;
 	}>();
 </script>
 
@@ -22,11 +22,15 @@
 		<ItemRow>
 			<div class="flex flex-wrap justify-between gap-2">
 				<strong>{message.author_username}</strong>
-				{#if canWrite && message.author_id === userId}
+				{#if message.allowed_actions.includes('delete')}
 					<Button variant="danger" disabled={busy} onclick={() => onDelete(message.id)}
 						>{$t('Delete')}</Button
 					>
 				{/if}
+				{#if message.allowed_actions.includes('moderate')}
+					<Button variant="danger" disabled={busy} onclick={() => onModerate(message.id)}
+						>{$t('Moderate')}</Button
+					>{/if}
 			</div>
 			<span>{message.body}</span><span class="text-surface-600-400"
 				>{$dateTimeFormat.format(new Date(message.created_at))}</span

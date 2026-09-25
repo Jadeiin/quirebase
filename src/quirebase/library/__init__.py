@@ -45,6 +45,8 @@ from quirebase.library.discussions import (
     delete_discussion_message,
     delete_project_discussion_message,
     list_project_discussion_messages,
+    moderate_discussion_message,
+    moderate_project_discussion_message,
 )
 from quirebase.library.identifiers import (
     create_item_from_metadata_record,
@@ -171,6 +173,8 @@ __all__ = [
     "list_custom_citation_styles",
     "list_project_discussion_messages",
     "merge_tags",
+    "moderate_discussion_message",
+    "moderate_project_discussion_message",
     "open_item_section",
     "parse_author_list_string",
     "preview_citation_key",

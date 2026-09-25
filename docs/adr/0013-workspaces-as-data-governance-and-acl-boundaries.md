@@ -83,6 +83,7 @@ The initial role presets are:
 | Update/archive existing Projects | yes | yes | yes | no | no |
 | Manage managed-Project participation | yes | yes | no | no | no |
 | Write Item or Project Discussion/Notes | yes | yes | yes | yes | no |
+| Moderate another author's Item or Project Discussion | yes | yes | no | no | no |
 | Create/edit own private or Project Annotation | yes | yes | yes | yes | private only |
 | Moderate another author's Annotation | yes | yes | no | no | no |
 | Permanently delete shared Items or Documents | yes | yes | no | no | no |
@@ -190,6 +191,14 @@ active Workspace members, while managed Project content is visible only to Proje
 Workspace owners/admins. Mutations still require the caller's Workspace capability, and
 participation never grants that capability.
 
+Discussion authors may delete their own messages when `discussion.write` is effective. Workspace
+owners and admins have a separate `discussion.moderate` capability to remove another author's Item
+or Project Discussion message with a required reason and an audit event. Project moderation follows
+Project lineage and lifecycle rules; governors can reach managed Project content without becoming
+ProjectMembers. Moderation does not rewrite authored content or attribution. An instance
+administrator has no implicit Discussion moderation authority, and read-only break-glass cannot
+perform a moderation mutation.
+
 Annotations have exactly two scopes:
 
 - A private Annotation is visible and editable only by its author. Even a `viewer` may create and
@@ -249,7 +258,7 @@ membership/capability before committing. A stale or terminated grant rejects fin
 than inheriting request-time authority.
 
 Instance administrators may invoke only an explicit `workspace.break_glass` operation. It is
-temporary, reason-required, fully audited and read-only by default. Write/delete break-glass
+temporary, reason-required, fully audited and read-only in the current contract. Write/delete break-glass
 semantics require a later security decision; ordinary endpoints never infer this authority.
 
 ### Database invariants

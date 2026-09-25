@@ -986,6 +986,23 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/discussions/{message_id}/moderation': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Moderate Discussion */
+		post: operations['library.moderate_discussion'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/workspaces/{workspace_id}/items/bibliography': {
 		parameters: {
 			query?: never;
@@ -1378,6 +1395,23 @@ export interface paths {
 		post?: never;
 		/** Delete Project Discussion */
 		delete: operations['projects.delete_project_discussion'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/discussions/{message_id}/moderation': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Moderate Project Discussion */
+		post: operations['projects.moderate_project_discussion'];
+		delete?: never;
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -3049,6 +3083,13 @@ export interface components {
 			created_at: string;
 			/** Updated At */
 			updated_at: string;
+			/** Allowed Actions */
+			allowed_actions: string[];
+		};
+		/** DiscussionModerationRequest */
+		DiscussionModerationRequest: {
+			/** Reason */
+			reason: string;
 		};
 		/** DiscussionRequest */
 		DiscussionRequest: {
@@ -7142,6 +7183,52 @@ export interface operations {
 			};
 		};
 	};
+	'library.moderate_discussion': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+				message_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['DiscussionModerationRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
 	'library_exports.export_item_selection': {
 		parameters: {
 			query?: never;
@@ -8353,6 +8440,52 @@ export interface operations {
 			cookie?: never;
 		};
 		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.moderate_project_discussion': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+				message_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['DiscussionModerationRequest'];
+			};
+		};
 		responses: {
 			/** @description Successful Response */
 			200: {

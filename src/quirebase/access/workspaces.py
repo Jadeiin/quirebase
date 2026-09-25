@@ -53,6 +53,7 @@ class Capability(StrEnum):
     projects_delete = "projects.delete"
     projects_members_manage = "projects.members.manage"
     discussion_write = "discussion.write"
+    discussion_moderate = "discussion.moderate"
     annotations_private_write = "annotations.private.write"
     annotations_project_write = "annotations.project.write"
     annotations_moderate = "annotations.moderate"
@@ -88,6 +89,7 @@ _ADMIN = _EDITOR | {
     Capability.projects_create_managed,
     Capability.projects_members_manage,
     Capability.annotations_moderate,
+    Capability.discussion_moderate,
 }
 _OWNER = _ADMIN | {
     Capability.workspace_admins_manage,

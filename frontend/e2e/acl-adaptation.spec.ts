@@ -47,6 +47,7 @@ test('instance administrator gets no Item Discussion privilege without Workspace
 					author_id: 'user-1',
 					author_username: 'reader',
 					body: 'Own message',
+					allowed_actions: [],
 					created_at: '2026-09-01T00:00:00Z'
 				},
 				{
@@ -54,6 +55,7 @@ test('instance administrator gets no Item Discussion privilege without Workspace
 					author_id: 'user-2',
 					author_username: 'other',
 					body: 'Other message',
+					allowed_actions: [],
 					created_at: '2026-09-01T00:00:00Z'
 				}
 			]
@@ -79,6 +81,7 @@ test('Discussion writer can delete only their own message', async ({ page }) => 
 					author_id: 'user-1',
 					author_username: 'reader',
 					body: 'Own message',
+					allowed_actions: ['delete'],
 					created_at: '2026-09-01T00:00:00Z'
 				},
 				{
@@ -86,6 +89,7 @@ test('Discussion writer can delete only their own message', async ({ page }) => 
 					author_id: 'user-2',
 					author_username: 'other',
 					body: 'Other message',
+					allowed_actions: [],
 					created_at: '2026-09-01T00:00:00Z'
 				}
 			]
@@ -94,6 +98,48 @@ test('Discussion writer can delete only their own message', async ({ page }) => 
 	await page.goto('/workspace/workspace-1/item/item-1/discussion');
 	await expect(page.getByRole('button', { name: 'Post message' })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Delete' })).toHaveCount(1);
+});
+
+test('Workspace admin moderates Discussion with a reason and separate endpoint', async ({
+	page
+}) => {
+	await mockSession(page);
+	await projectCapabilities(page, 'admin', [
+		'workspace.read',
+		'discussion.write',
+		'discussion.moderate'
+	]);
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
+		route.fulfill({ json: overview })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/discussions', (route) =>
+		route.fulfill({
+			json: [
+				{
+					id: 'other',
+					author_id: 'user-2',
+					author_username: 'other',
+					body: 'Other message',
+					created_at: '2026-09-01T00:00:00Z',
+					allowed_actions: ['moderate']
+				}
+			]
+		})
+	);
+	let moderationReason = '';
+	await page.route(
+		'**/api/v1/workspaces/workspace-1/items/item-1/discussions/other/moderation',
+		async (route) => {
+			moderationReason = (route.request().postDataJSON() as { reason: string }).reason;
+			await route.fulfill({ json: { ok: true } });
+		}
+	);
+	await page.goto('/workspace/workspace-1/item/item-1/discussion');
+	await expect(page.getByRole('button', { name: 'Delete' })).toHaveCount(0);
+	await page.getByRole('button', { name: 'Moderate' }).click();
+	await page.getByRole('textbox', { name: 'Moderation reason' }).fill('Policy violation');
+	await page.getByRole('button', { name: 'Remove message' }).click();
+	await expect.poll(() => moderationReason).toBe('Policy violation');
 });
 
 for (const [role, capabilities, visible] of [

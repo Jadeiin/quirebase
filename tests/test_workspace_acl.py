@@ -60,10 +60,13 @@ from quirebase.documents.workflows import (
 )
 from quirebase.library import (
     ItemSection,
+    add_discussion_message,
     add_project_discussion_message,
     copy_item_to_workspace,
     get_dashboard_data,
     list_project_discussion_messages,
+    moderate_discussion_message,
+    moderate_project_discussion_message,
     open_item_section,
     search_library,
 )
@@ -115,6 +118,7 @@ from quirebase.projects import (
     update_project_settings,
 )
 from quirebase.search import search_index
+from quirebase.web.api.library_schemas import discussion_message_view
 from quirebase.web.api.workflows import workflow_status
 from quirebase.workspaces import (
     accept_workspace_invitation,
@@ -1123,6 +1127,157 @@ async def test_project_discussion_uses_visibility_and_workspace_capabilities(asy
         await list_project_discussion_messages(
             async_db, outsider, fixture_workspace_id(owner), project.id
         )
+
+
+@pytest.mark.anyio
+async def test_discussion_moderation_is_workspace_governance_with_audited_reason(async_db):
+    owner = await _user(async_db, "discussion-moderator-owner")
+    admin = await _user(async_db, "discussion-moderator-admin")
+    editor = await _user(async_db, "discussion-moderator-editor")
+    author = await _user(async_db, "discussion-moderator-author")
+    instance_admin = await _user(async_db, "discussion-instance-admin")
+    instance_admin.role = "administrator"
+    workspace_id = fixture_workspace_id(owner)
+    async_db.add_all([
+        WorkspaceMember(
+            workspace_id=workspace_id,
+            user_id=admin.id,
+            role=WorkspaceRole.admin,
+            invited_by=owner.id,
+        ),
+        WorkspaceMember(
+            workspace_id=workspace_id,
+            user_id=editor.id,
+            role=WorkspaceRole.editor,
+            invited_by=owner.id,
+        ),
+        WorkspaceMember(
+            workspace_id=workspace_id,
+            user_id=author.id,
+            role=WorkspaceRole.reviewer,
+            invited_by=owner.id,
+        ),
+    ])
+    item = Item(workspace_id=workspace_id, title="Moderated Item", created_by=owner.id)
+    async_db.add(item)
+    await async_db.commit()
+    message = await add_discussion_message(
+        async_db, author, workspace_id, item.id, "Needs moderation"
+    )
+    message.author = author
+    owner_context = await resolve_workspace_context(async_db, owner, workspace_id)
+    author_context = await resolve_workspace_context(async_db, author, workspace_id)
+    assert discussion_message_view(message, owner_context).allowed_actions == ["moderate"]
+    assert discussion_message_view(message, author_context).allowed_actions == ["delete"]
+    assert discussion_message_view(message, owner_context, writable=False).allowed_actions == []
+
+    assert (
+        Capability.discussion_moderate
+        in (await resolve_workspace_context(async_db, owner, workspace_id)).capabilities
+    )
+    assert (
+        Capability.discussion_moderate
+        in (await resolve_workspace_context(async_db, admin, workspace_id)).capabilities
+    )
+    assert (
+        Capability.discussion_moderate
+        not in (await resolve_workspace_context(async_db, editor, workspace_id)).capabilities
+    )
+    with pytest.raises(PermissionDenied):
+        await moderate_discussion_message(
+            async_db, editor, workspace_id, item.id, message.id, "Policy"
+        )
+    assert item.id in {
+        row.id
+        for row in await read_workspace_items_break_glass(
+            async_db, instance_admin, workspace_id, "Investigating policy violation"
+        )
+    }
+    with pytest.raises(WorkspaceMembershipRequired):
+        await moderate_discussion_message(
+            async_db, instance_admin, workspace_id, item.id, message.id, "Break-glass"
+        )
+    with pytest.raises(ResourceUnavailable):
+        await moderate_discussion_message(
+            async_db, admin, fixture_workspace_id(admin), item.id, message.id, "Wrong Workspace"
+        )
+    with pytest.raises(ValidationFailure):
+        await moderate_discussion_message(async_db, admin, workspace_id, item.id, message.id, "  ")
+    await moderate_discussion_message(
+        async_db, admin, workspace_id, item.id, message.id, "Policy violation"
+    )
+    with pytest.raises(ResourceUnavailable):
+        await moderate_discussion_message(
+            async_db, admin, workspace_id, item.id, message.id, "Retry"
+        )
+    assert await async_db.get(type(message), message.id) is None
+    event = await async_db.scalar(
+        select(AuditEvent).where(
+            AuditEvent.target_id == message.id, AuditEvent.action == "discussion.moderate.delete"
+        )
+    )
+    assert event.actor_id == admin.id
+    assert event.authorization_capability == Capability.discussion_moderate.value
+    assert json.loads(event.detail)["reason"] == "Policy violation"
+
+
+@pytest.mark.anyio
+async def test_project_discussion_moderation_respects_lifecycle_and_lineage(async_db):
+    owner = await _user(async_db, "project-discussion-moderator")
+    author = await _user(async_db, "project-discussion-author")
+    workspace_id = fixture_workspace_id(owner)
+    async_db.add(
+        WorkspaceMember(
+            workspace_id=workspace_id,
+            user_id=author.id,
+            role=WorkspaceRole.reviewer,
+            invited_by=owner.id,
+        )
+    )
+    await async_db.commit()
+    project = await create_project(
+        async_db, owner, workspace_id, "Moderated Project", ProjectVisibility.managed
+    )
+    async_db.add(ProjectMember(workspace_id=workspace_id, project_id=project.id, user_id=author.id))
+    await async_db.commit()
+    message = await add_project_discussion_message(
+        async_db, author, workspace_id, project.id, "Needs review"
+    )
+    with pytest.raises(ResourceUnavailable):
+        await moderate_project_discussion_message(
+            async_db, owner, workspace_id, "missing", message.id, "Policy"
+        )
+    with pytest.raises(ResourceUnavailable):
+        await moderate_project_discussion_message(
+            async_db, owner, workspace_id, project.id, "missing", "Policy"
+        )
+    project.state = ProjectState.archived
+    await async_db.commit()
+    with pytest.raises(WorkspaceLifecycleError):
+        await moderate_project_discussion_message(
+            async_db, owner, workspace_id, project.id, message.id, "Policy"
+        )
+    project.state = ProjectState.active
+    workspace = await async_db.get(Workspace, workspace_id)
+    workspace.state = WorkspaceState.archived
+    await async_db.commit()
+    with pytest.raises(WorkspaceLifecycleError):
+        await moderate_project_discussion_message(
+            async_db, owner, workspace_id, project.id, message.id, "Policy"
+        )
+    workspace.state = WorkspaceState.active
+    await async_db.commit()
+    await moderate_project_discussion_message(
+        async_db, owner, workspace_id, project.id, message.id, "Policy violation"
+    )
+    event = await async_db.scalar(
+        select(AuditEvent).where(
+            AuditEvent.target_id == message.id,
+            AuditEvent.action == "project.discussion.moderate.delete",
+        )
+    )
+    assert event.project_id == project.id
+    assert event.authorization_capability == Capability.discussion_moderate.value
 
 
 @pytest.mark.anyio

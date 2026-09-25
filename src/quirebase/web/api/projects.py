@@ -3,12 +3,14 @@ from __future__ import annotations
 from fastapi import APIRouter, status
 
 from quirebase.access import Capability, WorkspaceContext, require_workspace_capability
+from quirebase.core.errors import ResourceUnavailable
 from quirebase.library import (
     add_project_discussion_message,
     delete_project_discussion_message,
     list_project_discussion_messages,
+    moderate_project_discussion_message,
 )
-from quirebase.models import ProjectState, ProjectVisibility
+from quirebase.models import Project, ProjectState, ProjectVisibility
 from quirebase.projects import (
     add_item_to_project,
     add_project_member,
@@ -32,6 +34,7 @@ from quirebase.web.api.common import OkView, WriteResult
 from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.library_schemas import (
     DiscussionMessageView,
+    DiscussionModerationRequest,
     DiscussionRequest,
     discussion_message_view,
 )
@@ -75,6 +78,8 @@ def _project_allowed_actions(project, workspace: WorkspaceContext, *, is_member:
         actions.append("delete")
     if Capability.discussion_write in capabilities and project.state is ProjectState.active:
         actions.append("discussion.write")
+    if Capability.discussion_moderate in capabilities and project.state is ProjectState.active:
+        actions.append("discussion.moderate")
     return actions
 
 
@@ -270,9 +275,14 @@ async def remove_project_member(
 async def list_project_discussions(
     workspace_id: str, project_id: str, user: ApiUser, db: Database
 ) -> list[DiscussionMessageView]:
+    messages = await list_project_discussion_messages(db, user, workspace_id, project_id)
+    context = await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    project = await db.get(Project, project_id)
+    if project is None:
+        raise ResourceUnavailable("Project not found")
     return [
-        discussion_message_view(message)
-        for message in await list_project_discussion_messages(db, user, workspace_id, project_id)
+        discussion_message_view(message, context, writable=project.state is ProjectState.active)
+        for message in messages
     ]
 
 
@@ -288,9 +298,9 @@ async def create_project_discussion(
     user: ApiUser,
     db: Database,
 ) -> DiscussionMessageView:
-    return discussion_message_view(
-        await add_project_discussion_message(db, user, workspace_id, project_id, data.body)
-    )
+    message = await add_project_discussion_message(db, user, workspace_id, project_id, data.body)
+    context = await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    return discussion_message_view(message, context)
 
 
 @router.delete("/{project_id}/discussions/{message_id}", response_model=OkView)
@@ -302,4 +312,19 @@ async def delete_project_discussion(
     db: Database,
 ) -> OkView:
     await delete_project_discussion_message(db, user, workspace_id, project_id, message_id)
+    return OkView()
+
+
+@router.post("/{project_id}/discussions/{message_id}/moderation", response_model=OkView)
+async def moderate_project_discussion(
+    workspace_id: str,
+    project_id: str,
+    message_id: str,
+    data: DiscussionModerationRequest,
+    user: ApiUser,
+    db: Database,
+) -> OkView:
+    await moderate_project_discussion_message(
+        db, user, workspace_id, project_id, message_id, data.reason
+    )
     return OkView()

@@ -1191,6 +1191,11 @@ msgstr "讨论消息已删除"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Discussion message moderated"
+msgstr "已治理讨论消息"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Discussion posted"
 msgstr "讨论已发布"
 
@@ -1554,6 +1559,12 @@ msgstr "通用引用选项"
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Get started"
 msgstr "开始使用"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion/+page.svelte
+msgid "Give a reason for removing this message. The action is recorded in the audit log."
+msgstr "请填写移除此消息的原因。此操作会记入审计日志。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -2169,6 +2180,24 @@ msgstr "元数据已同步"
 #: src/lib/app/MobileNavigation.svelte
 msgid "Mobile navigation"
 msgstr "移动端导航"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/discussion/ItemDiscussionSection.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Moderate"
+msgstr "治理"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion/+page.svelte
+msgid "Moderate Discussion message"
+msgstr "治理讨论消息"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion/+page.svelte
+msgid "Moderation reason"
+msgstr "治理原因"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
@@ -3060,6 +3089,12 @@ msgstr "相关性"
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Remove"
 msgstr "移除"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion/+page.svelte
+msgid "Remove message"
+msgstr "移除消息"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte

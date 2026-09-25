@@ -94,6 +94,7 @@ test('Workspace viewers can read Project Discussion without mutation controls', 
 						author_id: 'editor-1',
 						author_username: 'editor',
 						body: 'Read-only project note',
+						allowed_actions: [],
 						created_at: '2026-09-01T12:00:00Z'
 					}
 				]
@@ -105,6 +106,51 @@ test('Workspace viewers can read Project Discussion without mutation controls', 
 	await expect(page.getByText('Read-only project note')).toBeVisible();
 	await expect(page.getByPlaceholder('Write a message')).toHaveCount(0);
 	await expect(page.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
+});
+
+test('Workspace admin moderates managed Project Discussion with an audited reason', async ({
+	page
+}) => {
+	await mockSession(page);
+	await mockWorkspaceRole(page, 'admin', [
+		'workspace.read',
+		'discussion.write',
+		'discussion.moderate'
+	]);
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1', (route) =>
+		route.fulfill({
+			json: { ...project, allowed_actions: ['discussion.write', 'discussion.moderate'] }
+		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/discussions', (route) =>
+		route.fulfill({
+			json: [
+				{
+					id: 'message-1',
+					author_id: 'member-1',
+					author_username: 'researcher',
+					body: 'Project note',
+					created_at: '2026-09-01T12:00:00Z',
+					allowed_actions: ['moderate']
+				}
+			]
+		})
+	);
+	let reason = '';
+	await page.route(
+		'**/api/v1/workspaces/workspace-1/projects/project-1/discussions/message-1/moderation',
+		async (route) => {
+			reason = (route.request().postDataJSON() as { reason: string }).reason;
+			await route.fulfill({ json: { ok: true } });
+		}
+	);
+	await page.goto('/workspace/workspace-1/projects/project-1');
+	await expect(page.getByText('Project note')).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
+	await page.getByRole('button', { name: 'Moderate' }).click();
+	await page.getByRole('textbox', { name: 'Moderation reason' }).fill('Off topic');
+	await page.getByRole('button', { name: 'Remove message' }).click();
+	await expect.poll(() => reason).toBe('Off topic');
 });
 
 test('a Workspace editor can create an open Project but not a managed Project', async ({

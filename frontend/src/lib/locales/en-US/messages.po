@@ -1191,6 +1191,11 @@ msgstr "Discussion message deleted"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Discussion message moderated"
+msgstr "Discussion message moderated"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Discussion posted"
 msgstr "Discussion posted"
 
@@ -1554,6 +1559,12 @@ msgstr "General citation options"
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Get started"
 msgstr "Get started"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion/+page.svelte
+msgid "Give a reason for removing this message. The action is recorded in the audit log."
+msgstr "Give a reason for removing this message. The action is recorded in the audit log."
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -2169,6 +2180,24 @@ msgstr "Metadata synchronized"
 #: src/lib/app/MobileNavigation.svelte
 msgid "Mobile navigation"
 msgstr "Mobile navigation"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/discussion/ItemDiscussionSection.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Moderate"
+msgstr "Moderate"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion/+page.svelte
+msgid "Moderate Discussion message"
+msgstr "Moderate Discussion message"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion/+page.svelte
+msgid "Moderation reason"
+msgstr "Moderation reason"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
@@ -3060,6 +3089,12 @@ msgstr "Relevance"
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Remove"
 msgstr "Remove"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion/+page.svelte
+msgid "Remove message"
+msgstr "Remove message"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte

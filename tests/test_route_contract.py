@@ -260,6 +260,42 @@ async def test_discussion_delete_conceals_missing_and_foreign_messages(
 
 
 @pytest.mark.anyio
+async def test_workspace_owner_moderates_foreign_item_discussion_with_reason(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    other_user = User(username="moderated-author", password_hash="unused")
+    db.add(other_user)
+    await db.flush()
+    message = DiscussionMessage(
+        workspace_id=item.workspace_id,
+        item_id=item.id,
+        author_id=other_user.id,
+        body="Remove this message",
+    )
+    db.add(message)
+    await db.commit()
+    base = f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/discussions"
+    try:
+        listing = await client.get(base)
+        assert listing.status_code == 200
+        assert listing.json()[0]["allowed_actions"] == ["moderate"]
+        invalid = await client.post(f"{base}/{message.id}/moderation", json={"reason": "  "})
+        assert invalid.status_code == 422
+        response = await client.post(
+            f"{base}/{message.id}/moderation", json={"reason": "Policy violation"}
+        )
+        assert response.status_code == 200
+        assert response.json() == {"ok": True}
+        assert await db.get(DiscussionMessage, message.id, populate_existing=True) is None
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.anyio
 async def test_invitation_creation_is_hidden_from_non_administrators(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):

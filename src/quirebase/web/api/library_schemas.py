@@ -4,6 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from quirebase.access import Capability, WorkspaceContext
 from quirebase.core.timezones import as_utc
 from quirebase.library import ItemMetadata
 
@@ -68,6 +69,7 @@ class DiscussionMessageView(BaseModel):
     body: str
     created_at: str
     updated_at: str
+    allowed_actions: list[str]
 
 
 class CitationView(BaseModel):
@@ -135,7 +137,21 @@ def item_detail_view(view: Any) -> ItemDetailView:
     )
 
 
-def discussion_message_view(row: Any) -> DiscussionMessageView:
+def discussion_message_view(
+    row: Any, context: WorkspaceContext, *, writable: bool = True
+) -> DiscussionMessageView:
+    actions = []
+    if writable:
+        if (
+            row.author_id == context.actor_id
+            and Capability.discussion_write in context.capabilities
+        ):
+            actions.append("delete")
+        if (
+            row.author_id != context.actor_id
+            and Capability.discussion_moderate in context.capabilities
+        ):
+            actions.append("moderate")
     return DiscussionMessageView(
         id=row.id,
         item_id=row.item_id,
@@ -145,11 +161,14 @@ def discussion_message_view(row: Any) -> DiscussionMessageView:
         body=row.body,
         created_at=as_utc(row.created_at).isoformat(),
         updated_at=as_utc(row.updated_at).isoformat(),
+        allowed_actions=actions,
     )
 
 
-def discussion_message_views(workspace: Any) -> list[DiscussionMessageView]:
-    return [discussion_message_view(row) for row in workspace.messages]
+def discussion_message_views(
+    workspace: Any, context: WorkspaceContext
+) -> list[DiscussionMessageView]:
+    return [discussion_message_view(row, context) for row in workspace.messages]
 
 
 class ItemUpdateRequest(BaseModel):
@@ -182,3 +201,7 @@ class TagSetRequest(BaseModel):
 
 class DiscussionRequest(BaseModel):
     body: str
+
+
+class DiscussionModerationRequest(BaseModel):
+    reason: str = Field(min_length=1, max_length=2000)

@@ -19,6 +19,7 @@ from quirebase.library import (
     delete_discussion_message,
     get_item_citation_text_response,
     list_accessible_tags_with_counts,
+    moderate_discussion_message,
     open_item_section,
     remove_tag_from_item,
     revise_item_metadata,
@@ -32,6 +33,7 @@ from quirebase.web.api.library_schemas import (
     CrossWorkspaceCopyRequest,
     CrossWorkspaceCopyView,
     DiscussionMessageView,
+    DiscussionModerationRequest,
     DiscussionRequest,
     ItemDetailView,
     ItemUpdateRequest,
@@ -231,7 +233,8 @@ async def list_discussions(
     view = await open_item_section(db, user, workspace_id, item_id, ItemSection.discussion)
     if not isinstance(view, ItemDiscussionData):  # pragma: no cover
         raise TypeError("item discussion section mismatch")
-    return discussion_message_views(view)
+    context = await resolve_workspace_context(db, user, workspace_id)
+    return discussion_message_views(view, context)
 
 
 @router.post(
@@ -254,4 +257,17 @@ async def delete_discussion(
     workspace_id: str, item_id: str, message_id: str, user: ApiUser, db: Database
 ) -> OkView:
     await delete_discussion_message(db, user, workspace_id, item_id, message_id)
+    return OkView()
+
+
+@router.post("/items/{item_id}/discussions/{message_id}/moderation", response_model=OkView)
+async def moderate_discussion(
+    workspace_id: str,
+    item_id: str,
+    message_id: str,
+    data: DiscussionModerationRequest,
+    user: ApiUser,
+    db: Database,
+) -> OkView:
+    await moderate_discussion_message(db, user, workspace_id, item_id, message_id, data.reason)
     return OkView()
