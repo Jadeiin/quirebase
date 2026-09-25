@@ -200,6 +200,7 @@ test('adding a Library Item invalidates a previously opened Project', async ({ p
 					id: 'project-1',
 					name: 'Research',
 					allowed_actions: ['settings', 'archive', 'items.manage', 'members.manage', 'delete'],
+					is_member: true,
 					item_count: added ? 1 : 0,
 					state: 'active',
 					visibility: 'workspace',

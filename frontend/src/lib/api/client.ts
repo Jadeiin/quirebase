@@ -9,6 +9,10 @@ type ApiErrorView = components['schemas']['ApiErrorView'];
 
 const authenticationRequiredHandlers = new Set<() => void>();
 const workspaceUnavailableHandlers = new Set<(workspaceId: string) => void>();
+const workspaceConflictHandlers = new Set<(workspaceId: string) => void>();
+const workspaceContextRequiredHandlers = new Set<
+	(diagnostic: { status: number; path: string }) => void
+>();
 
 export function onAuthenticationRequired(handler: () => void): () => void {
 	authenticationRequiredHandlers.add(handler);
@@ -18,6 +22,18 @@ export function onAuthenticationRequired(handler: () => void): () => void {
 export function onWorkspaceUnavailable(handler: (workspaceId: string) => void): () => void {
 	workspaceUnavailableHandlers.add(handler);
 	return () => workspaceUnavailableHandlers.delete(handler);
+}
+
+export function onWorkspaceConflict(handler: (workspaceId: string) => void): () => void {
+	workspaceConflictHandlers.add(handler);
+	return () => workspaceConflictHandlers.delete(handler);
+}
+
+export function onWorkspaceContextRequired(
+	handler: (diagnostic: { status: number; path: string }) => void
+): () => void {
+	workspaceContextRequiredHandlers.add(handler);
+	return () => workspaceContextRequiredHandlers.delete(handler);
 }
 
 export class ApiError extends Error {
@@ -191,14 +207,22 @@ function responseError(response: Response, payload: unknown): ApiError {
 				}
 	);
 	if (error.code === 'workspace_context_required') {
-		console.error('Workspace scoped request was missing its URL context', {
+		const diagnostic = {
 			status: error.status,
-			code: error.code,
 			path: response.url
-		});
+		};
+		console.error('Workspace scoped request was missing its URL context', diagnostic);
+		if (typeof window !== 'undefined')
+			window.dispatchEvent(
+				new CustomEvent('quirebase:api-diagnostic', { detail: { code: error.code, ...diagnostic } })
+			);
+		for (const handler of workspaceContextRequiredHandlers) handler(diagnostic);
+	}
+	const workspaceId = response.url.match(/\/api\/v1\/workspaces\/([^/]+)/)?.[1];
+	if (error.status === 409 && workspaceId) {
+		for (const handler of workspaceConflictHandlers) handler(decodeURIComponent(workspaceId));
 	}
 	if (response.status === 404 || error.code === 'workspace_membership_required') {
-		const workspaceId = response.url.match(/\/api\/v1\/workspaces\/([^/]+)/)?.[1];
 		if (workspaceId) {
 			for (const handler of workspaceUnavailableHandlers) handler(decodeURIComponent(workspaceId));
 		}

@@ -3,9 +3,14 @@
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { onMount, type Snippet } from 'svelte';
-	import { apiRequest, onAuthenticationRequired } from '$lib/api/client';
+	import {
+		apiRequest,
+		onAuthenticationRequired,
+		onWorkspaceContextRequired
+	} from '$lib/api/client';
 	import { apiErrorMessage } from '$lib/api/errors';
 	import Notice from '$lib/design/Notice.svelte';
+	import Button from '$lib/design/Button.svelte';
 	import Toast from '$lib/design/Toast.svelte';
 	import { t } from '$lib/i18n';
 	import Login from '$lib/features/auth/Login.svelte';
@@ -47,12 +52,16 @@
 	const readerRoute = $derived(/\/item\/[^/]+\/pdf\/[^/]+$/.test(page.url.pathname));
 	let sidebarCollapsed = $state(false);
 	let actionError = $state('');
+	let contextError = $state(false);
 	let actionBusy = $state(false);
 	let themePreference = $state<ThemePreference>('system');
 	let colorSchemeQuery: MediaQueryList | undefined;
 
 	onMount(() => {
 		const unregisterAuthenticationHandler = onAuthenticationRequired(() => void session.refetch());
+		const unregisterContextHandler = onWorkspaceContextRequired(() => {
+			contextError = true;
+		});
 		sidebarCollapsed = localStorage.getItem('quirebase:sidebar-collapsed') === 'true';
 		themePreference = readThemePreference();
 		colorSchemeQuery = matchMedia('(prefers-color-scheme: dark)');
@@ -64,6 +73,7 @@
 		colorSchemeQuery.addEventListener('change', handleColorSchemeChange);
 		return () => {
 			unregisterAuthenticationHandler();
+			unregisterContextHandler();
 			colorSchemeQuery?.removeEventListener('change', handleColorSchemeChange);
 		};
 	});
@@ -130,6 +140,10 @@
 				? 'mx-auto min-h-0 w-full max-w-[100rem] min-w-0'
 				: 'mx-auto w-full max-w-[100rem] min-w-0 p-4 md:p-[clamp(1.25rem,3vw,2.75rem)]'}
 		>
+			{#if contextError}<Notice variant="error"
+					>{$t('Workspace context could not be restored. Refresh the page to recover.')}
+					<Button onclick={() => location.reload()}>{$t('Refresh page')}</Button></Notice
+				>{/if}
 			{#if actionError}<Notice variant="error">{actionError}</Notice>{/if}
 			{@render children()}
 		</main>

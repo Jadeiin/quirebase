@@ -2961,6 +2961,11 @@ msgid "Reason:"
 msgstr "Reason:"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Rebuild search indexes for this Workspace."
+msgstr "Rebuild search indexes for this Workspace."
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "recent additions"
 msgstr "recent additions"
@@ -3013,6 +3018,11 @@ msgid "Refresh"
 msgstr "Refresh"
 
 #. js-lingui-explicit-id
+#: src/lib/app/AppShell.svelte
+msgid "Refresh page"
+msgstr "Refresh page"
+
+#. js-lingui-explicit-id
 #: src/lib/api/errors.ts
 msgid "Refresh the page to restore Workspace context."
 msgstr "Refresh the page to restore Workspace context."
@@ -3031,6 +3041,11 @@ msgstr "Regenerate citation key"
 #: src/routes/(app)/admin/settings/+page.svelte
 msgid "Registration policy"
 msgstr "Registration policy"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Reindex Workspace"
+msgstr "Reindex Workspace"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
@@ -3711,6 +3726,16 @@ msgid "This invitation is invalid or has expired."
 msgstr "This invitation is invalid or has expired."
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/metadata/+page.svelte
+msgid "This Item changed since it was loaded. Latest metadata was loaded; review it and submit again."
+msgstr "This Item changed since it was loaded. Latest metadata was loaded; review it and submit again."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "This Item changed. Latest state was loaded; review it and explicitly retry."
+msgstr "This Item changed. Latest state was loaded; review it and explicitly retry."
+
+#. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "This permanently removes the workspace and its content after the archive retention period. This cannot be undone."
 msgstr "This permanently removes the workspace and its content after the archive retention period. This cannot be undone."
@@ -4180,6 +4205,11 @@ msgid "Workspace archived"
 msgstr "Workspace archived"
 
 #. js-lingui-explicit-id
+#: src/lib/app/AppShell.svelte
+msgid "Workspace context could not be restored. Refresh the page to recover."
+msgstr "Workspace context could not be restored. Refresh the page to recover."
+
+#. js-lingui-explicit-id
 #: src/routes/(app)/workspace/+page.svelte
 msgid "Workspace created. Its owner can open it; you have no content access unless you are also a member."
 msgstr "Workspace created. Its owner can open it; you have no content access unless you are also a member."
@@ -4211,6 +4241,16 @@ msgid "Workspace governance"
 msgstr "Workspace governance"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
+msgid "Workspace governance is suspended. Content is read only until an instance administrator recovers this Workspace."
+msgstr "Workspace governance is suspended. Content is read only until an instance administrator recovers this Workspace."
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace maintenance"
+msgstr "Workspace maintenance"
+
+#. js-lingui-explicit-id
 #: src/routes/(app)/workspace/+page.svelte
 msgid "Workspace name"
 msgstr "Workspace name"
@@ -4219,6 +4259,26 @@ msgstr "Workspace name"
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Workspace name updated"
 msgstr "Workspace name updated"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace reindex"
+msgstr "Workspace reindex"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace reindex completed"
+msgstr "Workspace reindex completed"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace reindex failed"
+msgstr "Workspace reindex failed"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace reindex started"
+msgstr "Workspace reindex started"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte

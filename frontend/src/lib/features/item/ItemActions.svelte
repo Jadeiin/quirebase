@@ -5,7 +5,7 @@
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { onMount } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { isDownloadCancelled, type ItemOverviewView } from '$lib/api/client';
+	import { ApiError, isDownloadCancelled, type ItemOverviewView } from '$lib/api/client';
 	import { apiErrorMessage } from '$lib/api/errors';
 	import Button from '$lib/design/Button.svelte';
 	import DialogCloseButton from '$lib/design/DialogCloseButton.svelte';
@@ -24,6 +24,7 @@
 	import { workspaceHref } from '$lib/workspaces/href';
 	import { workspaceListQuery } from '$lib/workspaces/queries';
 	import { workspaceKeys } from '$lib/workspaces/keys';
+	import { canCopyItem } from '$lib/workspaces/actions';
 
 	type ActionSection = 'documents' | 'citation' | 'sources' | 'danger' | 'copy';
 
@@ -57,7 +58,8 @@
 	const copyDestinations = $derived(
 		(workspaces.data ?? []).filter(
 			(candidate) =>
-				candidate.id !== workspaceId && candidate.effective_capabilities.includes('items.create')
+				candidate.id !== workspaceId &&
+				canCopyItem(workspaceContext.can, candidate.effective_capabilities)
 		)
 	);
 	const externalIdentifiers = $derived(
@@ -134,6 +136,11 @@
 			notice = success;
 		} catch (reason) {
 			if (isDownloadCancelled(reason)) return;
+			if (reason instanceof ApiError && reason.status === 409) {
+				await onchanged();
+				error = $t('This Item changed. Latest state was loaded; review it and explicitly retry.');
+				return;
+			}
 			error = apiErrorMessage(reason, $t('Item action failed'));
 		} finally {
 			busy = false;
@@ -234,6 +241,7 @@
 
 	function confirmDeleteItem() {
 		deleteArmed = false;
+		if (!overview.allowed_actions.delete || !workspaceContext.can('items.delete')) return;
 		void action(async () => {
 			await workspaceContext.api.request('DELETE', '/workspaces/{workspace_id}/items/{item_id}', {
 				params: { path: { item_id: itemId } },
@@ -245,7 +253,11 @@
 	}
 
 	function copyItem() {
-		if (!targetWorkspaceId) return;
+		if (
+			!targetWorkspaceId ||
+			!copyDestinations.some((candidate) => candidate.id === targetWorkspaceId)
+		)
+			return;
 		void action(async () => {
 			const copied = await workspaceContext.api.request(
 				'POST',
@@ -273,18 +285,22 @@
 			href={resolve(
 				workspaceHref(workspaceId, `item/${itemId}/pdf/${overview.latest_revision.id}`)
 			)}>{$t('Read PDF')}</Button
-		><Button class="inline-flex items-center gap-2" onclick={() => show('documents')}
-			><Icon name="download" /> {$t('Download')}</Button
+		>{#if workspaceContext.can('workspace.export')}<Button
+				class="inline-flex items-center gap-2"
+				onclick={() => show('documents')}><Icon name="download" /> {$t('Download')}</Button
+			>{/if}{/if}
+	{#if workspaceContext.can('workspace.export')}<Button onclick={() => show('citation')}
+			>{$t('Export')}</Button
 		>{/if}
-	<Button onclick={() => show('citation')}>{$t('Export')}</Button>
 	{#if overview.allowed_actions.edit && workspaceContext.can('items.edit')}<Button
 			onclick={() => show('sources')}>{$t('Record tools')}</Button
 		>{/if}
 	{#if copyDestinations.length}<Button variant="tonal" onclick={() => show('copy')}
 			>{$t('Copy to Workspace')}</Button
 		>{/if}
-	{#if overview.allowed_actions.delete}<Button variant="danger" onclick={() => show('danger')}
-			>{$t('More')}</Button
+	{#if overview.allowed_actions.delete && workspaceContext.can('items.delete')}<Button
+			variant="danger"
+			onclick={() => show('danger')}>{$t('More')}</Button
 		>{/if}
 </div>
 
@@ -313,7 +329,7 @@
 							data-active={section === 'copy'}
 							onclick={() => (section = 'copy')}>{$t('Copy')}</button
 						>{/if}
-					{#if overview.latest_revision}<button
+					{#if overview.latest_revision && workspaceContext.can('workspace.export')}<button
 							class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold data-[active=true]:border-primary-700-300 data-[active=true]:text-primary-700-300"
 							data-active={section === 'documents'}
 							onclick={() => (section = 'documents')}>{$t('Documents')}</button
@@ -323,7 +339,7 @@
 							data-active={section === 'sources'}
 							onclick={() => (section = 'sources')}>{$t('Metadata sources')}</button
 						>{/if}
-					{#if overview.allowed_actions.delete}<button
+					{#if overview.allowed_actions.delete && workspaceContext.can('items.delete')}<button
 							class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold text-error-700-300 data-[active=true]:border-error-700-300"
 							data-active={section === 'danger'}
 							onclick={() => (section = 'danger')}>{$t('Danger zone')}</button

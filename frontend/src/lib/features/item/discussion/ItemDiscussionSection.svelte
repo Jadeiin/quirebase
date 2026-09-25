@@ -6,10 +6,10 @@
 	import Button from '$lib/design/Button.svelte';
 	import ItemRow from '$lib/design/ItemRow.svelte';
 
-	let { messages, userId, isAdministrator, busy, onAdd, onDelete } = $props<{
+	let { messages, userId, canWrite, busy, onAdd, onDelete } = $props<{
 		messages: DiscussionMessage[];
 		userId?: string;
-		isAdministrator: boolean;
+		canWrite: boolean;
 		busy: boolean;
 		onAdd: (event: SubmitEvent) => void;
 		onDelete: (messageId: string) => void;
@@ -22,7 +22,7 @@
 		<ItemRow>
 			<div class="flex flex-wrap justify-between gap-2">
 				<strong>{message.author_username}</strong>
-				{#if message.author_id === userId || isAdministrator}
+				{#if canWrite && message.author_id === userId}
 					<Button variant="danger" disabled={busy} onclick={() => onDelete(message.id)}
 						>{$t('Delete')}</Button
 					>
@@ -35,10 +35,10 @@
 	{:else}
 		<p class="text-surface-600-400">{$t('No discussion messages.')}</p>
 	{/each}
-	<form class="grid grid-cols-1 gap-3" onsubmit={onAdd}>
-		<label
-			>{$t('Add message')}<textarea class="textarea" name="body" rows="4" required
-			></textarea></label
-		><Button variant="filled" disabled={busy}>{$t('Post message')}</Button>
-	</form>
+	{#if canWrite}<form class="grid grid-cols-1 gap-3" onsubmit={onAdd}>
+			<label
+				>{$t('Add message')}<textarea class="textarea" name="body" rows="4" required
+				></textarea></label
+			><Button variant="filled" disabled={busy}>{$t('Post message')}</Button>
+		</form>{/if}
 </Panel>

@@ -2961,6 +2961,11 @@ msgid "Reason:"
 msgstr "原因："
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Rebuild search indexes for this Workspace."
+msgstr "重建此工作区的搜索索引。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "recent additions"
 msgstr "条最近新增"
@@ -3013,6 +3018,11 @@ msgid "Refresh"
 msgstr "刷新"
 
 #. js-lingui-explicit-id
+#: src/lib/app/AppShell.svelte
+msgid "Refresh page"
+msgstr "刷新页面"
+
+#. js-lingui-explicit-id
 #: src/lib/api/errors.ts
 msgid "Refresh the page to restore Workspace context."
 msgstr "请刷新页面以恢复工作区上下文。"
@@ -3031,6 +3041,11 @@ msgstr "重新生成引用键"
 #: src/routes/(app)/admin/settings/+page.svelte
 msgid "Registration policy"
 msgstr "注册策略"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Reindex Workspace"
+msgstr "重建工作区索引"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
@@ -3711,6 +3726,16 @@ msgid "This invitation is invalid or has expired."
 msgstr "此邀请无效或已过期。"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/metadata/+page.svelte
+msgid "This Item changed since it was loaded. Latest metadata was loaded; review it and submit again."
+msgstr "此条目在加载后已更改。已加载最新元数据；请检查后重新提交。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "This Item changed. Latest state was loaded; review it and explicitly retry."
+msgstr "此条目已更改。已加载最新状态；请检查后手动重试。"
+
+#. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "This permanently removes the workspace and its content after the archive retention period. This cannot be undone."
 msgstr "归档保留期结束后，此操作会永久删除工作区及其内容，且无法撤销。"
@@ -4180,6 +4205,11 @@ msgid "Workspace archived"
 msgstr "工作区已归档"
 
 #. js-lingui-explicit-id
+#: src/lib/app/AppShell.svelte
+msgid "Workspace context could not be restored. Refresh the page to recover."
+msgstr "无法恢复工作区上下文。请刷新页面以恢复。"
+
+#. js-lingui-explicit-id
 #: src/routes/(app)/workspace/+page.svelte
 msgid "Workspace created. Its owner can open it; you have no content access unless you are also a member."
 msgstr "工作区已创建。其所有者现在可以访问；除非你另行成为成员，否则无法访问其内容。"
@@ -4211,6 +4241,16 @@ msgid "Workspace governance"
 msgstr "工作区治理"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
+msgid "Workspace governance is suspended. Content is read only until an instance administrator recovers this Workspace."
+msgstr "工作区治理已暂停。在实例管理员恢复此工作区之前，内容为只读。"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace maintenance"
+msgstr "工作区维护"
+
+#. js-lingui-explicit-id
 #: src/routes/(app)/workspace/+page.svelte
 msgid "Workspace name"
 msgstr "工作区名称"
@@ -4219,6 +4259,26 @@ msgstr "工作区名称"
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Workspace name updated"
 msgstr "工作区名称已更新"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace reindex"
+msgstr "工作区索引重建"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace reindex completed"
+msgstr "工作区索引重建完成"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace reindex failed"
+msgstr "工作区索引重建失败"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace reindex started"
+msgstr "已开始重建工作区索引"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte

@@ -6,6 +6,7 @@
 	import type { components } from '$lib/api/schema';
 	import type { OrganizeView } from '../types';
 	import Button from '$lib/design/Button.svelte';
+	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
 
 	let { data, busy, onToggleProject, onAddTag, onToggleTag, onAddSuggestedTag, onRefresh } =
 		$props<{
@@ -20,6 +21,10 @@
 
 	let tagFilter = $state('');
 	const canEdit = $derived(data.allowed_actions.edit);
+	const workspace = getWorkspaceContext();
+	const canUseTags = $derived(canEdit && workspace.can('tags.use'));
+	const canCreateTags = $derived(canUseTags && workspace.can('tags.create'));
+	const canManageProjects = $derived(canEdit && workspace.can('projects.manage'));
 	const groups = $derived(
 		data.tag_matrix.groups
 			.map((group: components['schemas']['TagMatrixGroupView']) => ({
@@ -62,7 +67,7 @@
 									type="button"
 									variant={assigned ? 'primary' : 'surface'}
 									class={`cursor-pointer border ${assigned ? 'border-primary-700-300' : 'border-surface-300-700'}`}
-									disabled={busy || !canEdit}
+									disabled={busy || !canUseTags}
 									aria-pressed={assigned}
 									onclick={() => onToggleTag(tag.id, assigned)}
 									>{tag.name}{data.tag_matrix.recommended_ids.includes(tag.id) ? ' ★' : ''}</Badge
@@ -81,15 +86,12 @@
 					<div class="flex items-center justify-between gap-3 py-2">
 						<div class="flex min-w-0 items-center gap-2">
 							<strong class="truncate text-sm font-semibold">{project.name}</strong>
-							<Badge class="shrink-0 border border-surface-300-700"
-								>{$t(domainLabel(project.role))}</Badge
-							>
 						</div>
 						<Button
 							variant={project.assigned ? 'tonal' : 'primary'}
 							size="sm"
 							class={`shrink-0 border ${project.assigned ? 'border-surface-300-700' : 'border-primary-700-300/30'}`}
-							disabled={busy || !canEdit}
+							disabled={busy || !canManageProjects}
 							onclick={() => onToggleProject(project)}
 							>{project.assigned ? $t('Remove') : $t('Add')}</Button
 						>
@@ -113,25 +115,23 @@
 						type="button"
 						variant="primary"
 						class="cursor-pointer border border-primary-700-300/20"
-						disabled={busy || !canEdit}
+						disabled={busy || !canUseTags}
 						onclick={() => onToggleTag(tag.id, true)}>{tag.name} ×</Badge
 					>
 				{:else}
 					<span class="text-sm text-surface-600-400">{$t('No tags')}</span>
 				{/each}
 			</div>
-			<form class="mt-3 flex items-center gap-2" onsubmit={onAddTag}>
-				<input
-					class="input min-w-0 flex-1 border border-surface-300-700 field-sm"
-					name="name"
-					placeholder={$t('New tag')}
-					required
-				/><Button
-					size="sm"
-					class="shrink-0 border border-surface-300-700"
-					disabled={busy || !canEdit}>{$t('Add tag')}</Button
-				>
-			</form>
+			{#if canCreateTags}<form class="mt-3 flex items-center gap-2" onsubmit={onAddTag}>
+					<input
+						class="input min-w-0 flex-1 border border-surface-300-700 field-sm"
+						name="name"
+						placeholder={$t('New tag')}
+						required
+					/><Button size="sm" class="shrink-0 border border-surface-300-700" disabled={busy}
+						>{$t('Add tag')}</Button
+					>
+				</form>{/if}
 		</Panel>
 		<Panel>
 			<div class="flex items-start justify-between gap-3">
@@ -139,7 +139,7 @@
 				<Button
 					size="sm"
 					class="shrink-0 border border-surface-300-700"
-					disabled={busy || !canEdit}
+					disabled={busy || !canEdit || !workspace.can('items.edit')}
 					onclick={onRefresh}>{$t('Refresh')}</Button
 				>
 			</div>
@@ -156,7 +156,7 @@
 						type="button"
 						variant="warning"
 						class="cursor-pointer border border-warning-700-300/30"
-						disabled={busy || !canEdit}
+						disabled={busy || !canCreateTags}
 						onclick={() => onAddSuggestedTag(name)}>+ {name}</Badge
 					>
 				{:else}

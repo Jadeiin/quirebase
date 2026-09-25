@@ -8,7 +8,9 @@ import {
 	DownloadCancelledError,
 	downloadFilename,
 	onAuthenticationRequired,
-	onWorkspaceUnavailable
+	onWorkspaceUnavailable,
+	onWorkspaceConflict,
+	onWorkspaceContextRequired
 } from './client';
 
 const workspaceApi = createWorkspaceApi('workspace-1');
@@ -350,6 +352,47 @@ describe('non-JSON API errors', () => {
 });
 
 describe('structured API errors', () => {
+	it('reports a missing Workspace context and opens the global recovery hook', async () => {
+		const diagnostic = vi.fn();
+		const event = vi.fn();
+		const unregister = onWorkspaceContextRequired(diagnostic);
+		window.addEventListener('quirebase:api-diagnostic', event);
+		const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		const fetcher = (async () =>
+			new Response(JSON.stringify({ code: 'workspace_context_required', message: 'missing' }), {
+				status: 400,
+				headers: { 'Content-Type': 'application/json' }
+			})) as typeof fetch;
+		await expect(apiRequest('GET', '/workspaces', undefined, fetcher)).rejects.toMatchObject({
+			code: 'workspace_context_required'
+		});
+		expect(diagnostic).toHaveBeenCalledOnce();
+		expect(event).toHaveBeenCalledOnce();
+		expect(logged).toHaveBeenCalledOnce();
+		unregister();
+		window.removeEventListener('quirebase:api-diagnostic', event);
+		logged.mockRestore();
+	});
+
+	it('signals a scoped conflict without affecting another Workspace', async () => {
+		const conflict = vi.fn();
+		const unregister = onWorkspaceConflict(conflict);
+		const fetcher = (async () => {
+			const response = new Response(
+				JSON.stringify({ code: 'workspace_lifecycle_error', message: 'archived' }),
+				{ status: 409, headers: { 'Content-Type': 'application/json' } }
+			);
+			Object.defineProperty(response, 'url', {
+				value: 'https://quirebase.test/api/v1/workspaces/workspace-1/items'
+			});
+			return response;
+		}) as typeof fetch;
+		await expect(
+			workspaceApi.request('GET', '/workspaces/{workspace_id}/items', undefined, fetcher)
+		).rejects.toMatchObject({ status: 409 });
+		expect(conflict).toHaveBeenCalledWith('workspace-1');
+		unregister();
+	});
 	it('signals Workspace membership loss so the URL owner can recover context', async () => {
 		const unavailable = vi.fn();
 		const unregister = onWorkspaceUnavailable(unavailable);

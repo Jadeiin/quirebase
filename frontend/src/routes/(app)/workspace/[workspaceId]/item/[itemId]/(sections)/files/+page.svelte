@@ -16,12 +16,14 @@
 	import { getWorkflowCenter } from '$lib/features/workflows/center.svelte';
 	import { msg, t } from '$lib/i18n';
 	import type { PageProps } from './$types';
+	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
 
 	let { params }: PageProps = $props();
 	let mutationError = $state('');
 	let pendingFile = $state<FileRow | null>(null);
 	let confirmFileOpen = $state(false);
 	const queryClient = useQueryClient();
+	const workspace = getWorkspaceContext();
 	const workflows = getWorkflowCenter();
 	const workspaceApi = $derived(createWorkspaceApi(params.workspaceId));
 	const overview = createQuery(() => itemOverviewQuery(params.workspaceId, params.itemId));
@@ -68,6 +70,7 @@
 	}
 
 	function downloadFile(file: FileRow) {
+		if (!workspace.can('workspace.export')) return;
 		track(
 			file.kind === 'revision'
 				? workspaceApi.downloadGet(
@@ -118,7 +121,7 @@
 		itemId={params.itemId}
 		data={files.data!}
 		details={details.data}
-		canEdit={overview.data?.allowed_actions.edit ?? false}
+		canEdit={(overview.data?.allowed_actions.edit ?? false) && workspace.can('files.manage')}
 		busy={fileUpload.isPending || fileRemoteUpload.isPending || fileDelete.isPending}
 		onUpload={upload}
 		onUploadFromUrl={uploadFromUrl}

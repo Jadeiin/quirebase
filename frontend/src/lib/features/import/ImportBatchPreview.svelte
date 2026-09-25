@@ -12,10 +12,11 @@
 
 	type ImportBatch = components['schemas']['ImportBatchView'];
 
-	let { batch, page, busy, onDiscard, onRetry, onCommit, onPage } = $props<{
+	let { batch, page, busy, canCommit, onDiscard, onRetry, onCommit, onPage } = $props<{
 		batch: ImportBatch;
 		page: number;
 		busy: boolean;
+		canCommit: boolean;
 		onDiscard: () => void;
 		onRetry: () => void;
 		onCommit: () => void;
@@ -42,15 +43,15 @@
 			</p>
 		</div>
 		{#snippet actions()}
-			<div class="flex flex-wrap gap-2">
-				<Button onclick={onDiscard} disabled={busy}>{$t('Discard')}</Button>
-				{#if batch.status === 'failed'}
-					<Button onclick={onRetry} disabled={busy}>{$t('Retry')}</Button>
-				{/if}
-				<Button variant="filled" onclick={onCommit} disabled={busy || batch.status !== 'ready'}
-					>{$t('Commit')}</Button
-				>
-			</div>
+			{#if canCommit}<div class="flex flex-wrap gap-2">
+					<Button onclick={onDiscard} disabled={busy}>{$t('Discard')}</Button>
+					{#if batch.status === 'failed'}
+						<Button onclick={onRetry} disabled={busy}>{$t('Retry')}</Button>
+					{/if}
+					<Button variant="filled" onclick={onCommit} disabled={busy || batch.status !== 'ready'}
+						>{$t('Commit')}</Button
+					>
+				</div>{/if}
 		{/snippet}
 	</SectionHeader>
 	{#if batch.status === 'pending'}

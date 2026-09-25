@@ -22,7 +22,8 @@
 			onDownload: (file: FileRow) => void;
 			onDelete: (file: FileRow) => void;
 		}>();
-	const { workspaceId } = getWorkspaceContext();
+	const workspace = getWorkspaceContext();
+	const { workspaceId } = workspace;
 </script>
 
 <div class="grid grid-cols-1 gap-4 min-[800px]:grid-cols-[minmax(0,2fr)_minmax(16rem,1fr)]">
@@ -46,7 +47,9 @@
 							>{$t('Read')}</Button
 						>
 					{/if}
-					<Button onclick={() => onDownload(file)}>{$t('Download')}</Button>
+					{#if workspace.can('workspace.export')}<Button onclick={() => onDownload(file)}
+							>{$t('Download')}</Button
+						>{/if}
 					{#if canEdit}
 						<Button variant="danger" disabled={busy} onclick={() => onDelete(file)}
 							>{$t('Delete')}</Button

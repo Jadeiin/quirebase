@@ -26,6 +26,7 @@
 	} from '$lib/export-preferences';
 	import { t } from '$lib/i18n';
 	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
+	import { canRunBulkAction } from '$lib/workspaces/actions';
 	import { workspaceHref } from '$lib/workspaces/href';
 
 	const submitted = $derived({
@@ -54,7 +55,8 @@
 	let confirmDeleteOpen = $state(false);
 	let exportPreferences = $state<ExportPreferences>(structuredClone(defaultExportPreferences));
 	const queryClient = useQueryClient();
-	const { workspaceId } = getWorkspaceContext();
+	const workspace = getWorkspaceContext();
+	const { workspaceId } = workspace;
 	const { query: session } = getSession();
 	const bulkMutation = createMutation(() => libraryBulkMutationOptions(workspaceId, queryClient));
 	const busy = $derived(bulkMutation.isPending);
@@ -143,6 +145,7 @@
 
 	function requestBulkAction() {
 		if (!bulkAction || selected.size === 0 || bulkMutation.isPending) return;
+		if (!canRunBulkAction(workspace.can, bulkAction as LibraryBulkAction)) return;
 		if (bulkAction === 'delete') {
 			confirmDeleteOpen = true;
 			return;
@@ -152,6 +155,7 @@
 
 	async function executeBulkAction() {
 		confirmDeleteOpen = false;
+		if (!canRunBulkAction(workspace.can, bulkAction as LibraryBulkAction)) return;
 		error = '';
 		notice = '';
 		try {

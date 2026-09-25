@@ -29,7 +29,7 @@
 	let previewPage = $state(1);
 	let manualOpen = $state(false);
 	let pdfFiles = $state<File[]>([]);
-	let pdfInput: HTMLInputElement;
+	let pdfInput = $state<HTMLInputElement>();
 	let pollingAbort: AbortController | null = null;
 	const queryClient = useQueryClient();
 	const workspace = getWorkspaceContext();
@@ -107,6 +107,7 @@
 	}
 
 	async function importIdentifier() {
+		if (!workspace.can('items.create')) return;
 		busy = true;
 		error = '';
 		try {
@@ -123,6 +124,7 @@
 	}
 
 	async function upload(event: Event, kind: 'bibliography' | 'pdfs') {
+		if (!workspace.can('items.create')) return;
 		const form = event.currentTarget as HTMLFormElement;
 		busy = true;
 		error = '';
@@ -141,7 +143,7 @@
 			acceptBatch(uploaded);
 			if (kind === 'pdfs') {
 				pdfFiles = [];
-				pdfInput.value = '';
+				if (pdfInput) pdfInput.value = '';
 			}
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Upload failed'));
@@ -163,11 +165,11 @@
 
 	function removePdf(file: File) {
 		pdfFiles = pdfFiles.filter((candidate) => candidate !== file);
-		if (pdfFiles.length === 0) pdfInput.value = '';
+		if (pdfFiles.length === 0 && pdfInput) pdfInput.value = '';
 	}
 
 	async function retry() {
-		if (!batch) return;
+		if (!batch || !workspace.can('items.create')) return;
 		busy = true;
 		error = '';
 		try {
@@ -187,7 +189,7 @@
 	}
 
 	async function commit() {
-		if (!batch || batch.status !== 'ready' || busy) return;
+		if (!batch || batch.status !== 'ready' || busy || !workspace.can('items.create')) return;
 		busy = true;
 		error = '';
 		try {
@@ -205,7 +207,7 @@
 	}
 
 	async function discard() {
-		if (!batch || busy) return;
+		if (!batch || busy || !workspace.can('items.create')) return;
 		busy = true;
 		error = '';
 		try {
@@ -222,6 +224,7 @@
 	}
 
 	async function createItem(metadata: components['schemas']['ItemMetadata-Input']) {
+		if (!workspace.can('items.create')) return;
 		busy = true;
 		error = '';
 		try {
@@ -273,136 +276,140 @@
 	{/each}
 </ol>
 {#if error}<Notice variant="error">{error}</Notice>{/if}
-<div class="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
-	<ImportSourceForm
-		icon="search"
-		title={$t('Look up an identifier')}
-		description={$t('Fetch one record from DOI, PubMed, arXiv, and other scholarly providers.')}
-		{busy}
-		submitLabel={$t('Preview metadata')}
-		onsubmit={(event) => {
-			event.preventDefault();
-			importIdentifier();
-		}}
-	>
-		<label
-			>{$t('DOI, PMID, or arXiv ID')}<input
-				class="input"
-				bind:value={identifier}
-				placeholder="DOI, PMID, arXiv ID…"
-				required
-			/></label
-		>
-		<label
-			>{$t('Data source')}<select class="select" bind:value={provider}>
-				<option value="auto">{$t('Auto detect')}</option><option value="crossref">Crossref</option>
-				<option value="pubmed">PubMed</option><option value="arxiv">arXiv</option>
-				<option value="openalex">OpenAlex</option><option value="openlibrary">Open Library</option>
-				<option value="pmc">PMC</option><option value="nasa">NASA ADS</option><option value="ieee"
-					>IEEE Xplore</option
-				>
-			</select></label
-		>
-	</ImportSourceForm>
-	<ImportSourceForm
-		icon="library"
-		title={$t('Upload a bibliography')}
-		description={$t('Stage many records from a reference manager export.')}
-		{busy}
-		submitLabel={$t('Preview bibliography')}
-		onsubmit={(event) => {
-			event.preventDefault();
-			upload(event, 'bibliography');
-		}}
-	>
-		<label
-			>{$t('Bibliography file')}<input
-				class="input"
-				type="file"
-				name="bibliography"
-				required
-			/></label
-		>
-		<label
-			>{$t('File format')}<select class="select" name="file_format">
-				<option value="bibtex">BibTeX</option><option value="biblatex">BibLaTeX</option>
-				<option value="ris">RIS</option><option value="endnote">EndNote</option>
-			</select></label
-		>
-	</ImportSourceForm>
-	<ImportSourceForm
-		icon="import"
-		title={$t('Import published PDFs')}
-		description={$t('Extract metadata and keep the papers together in one Import Batch.')}
-		{busy}
-		submitLabel={$t('Stage PDFs')}
-		submitDisabled={pdfFiles.length === 0}
-		onsubmit={(event) => {
-			event.preventDefault();
-			upload(event, 'pdfs');
-		}}
-	>
-		<label
-			>{$t('PDF files')}<input
-				class="input"
-				type="file"
-				name="pdfs"
-				accept="application/pdf,.pdf"
-				multiple
-				required={pdfFiles.length === 0}
-				bind:this={pdfInput}
-				onchange={addPdfFiles}
-			/></label
-		>
-		<p class="text-sm text-surface-600-400">
-			{$t('Choose PDFs more than once to add them to the same batch.')}
-		</p>
-		{#if pdfFiles.length}<ul
-				class="m-0 grid min-w-0 list-none grid-cols-1 gap-2 p-0"
-				aria-live="polite"
-			>
-				{#each pdfFiles as file (`${file.name}:${file.size}:${file.lastModified}`)}<li
-						class="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-surface-300-700 px-3 py-2 text-sm"
-					>
-						<span class="min-w-0 flex-1 truncate" title={file.name}>{file.name}</span><Button
-							class="shrink-0"
-							type="button"
-							onclick={() => removePdf(file)}>{$t('Remove')}</Button
-						>
-					</li>{/each}
-			</ul>{/if}
-	</ImportSourceForm>
-</div>
-<section
-	class="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-dashed border-surface-400-600 bg-surface-50-950 px-5 py-4"
->
-	<div>
-		<h2 class="mb-1">{$t('Create an Item manually')}</h2>
-		<p class="mb-0 text-sm text-surface-600-400">
-			{$t('Use the metadata editor when no import source is available.')}
-		</p>
-	</div>
-	<Button onclick={() => (manualOpen = !manualOpen)}
-		>{manualOpen ? $t('Close editor') : $t('Open metadata editor')}</Button
-	>
-</section>
-{#if manualOpen}
-	<Panel class="mt-4 grid grid-cols-1 gap-3">
-		<div>
-			<p class="mb-1 text-sm font-medium text-primary-700-300">{$t('Manual creation')}</p>
-			<h2>{$t('New Item metadata')}</h2>
-		</div>
-		<ItemMetadataForm
-			metadata={emptyMetadata}
+{#if workspace.can('items.create')}<div class="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
+		<ImportSourceForm
+			icon="search"
+			title={$t('Look up an identifier')}
+			description={$t('Fetch one record from DOI, PubMed, arXiv, and other scholarly providers.')}
 			{busy}
-			submitLabel={$t('Create Item')}
-			onsubmit={createItem}
-		/>
-	</Panel>
+			submitLabel={$t('Preview metadata')}
+			onsubmit={(event) => {
+				event.preventDefault();
+				importIdentifier();
+			}}
+		>
+			<label
+				>{$t('DOI, PMID, or arXiv ID')}<input
+					class="input"
+					bind:value={identifier}
+					placeholder="DOI, PMID, arXiv ID…"
+					required
+				/></label
+			>
+			<label
+				>{$t('Data source')}<select class="select" bind:value={provider}>
+					<option value="auto">{$t('Auto detect')}</option><option value="crossref">Crossref</option
+					>
+					<option value="pubmed">PubMed</option><option value="arxiv">arXiv</option>
+					<option value="openalex">OpenAlex</option><option value="openlibrary">Open Library</option
+					>
+					<option value="pmc">PMC</option><option value="nasa">NASA ADS</option><option value="ieee"
+						>IEEE Xplore</option
+					>
+				</select></label
+			>
+		</ImportSourceForm>
+		<ImportSourceForm
+			icon="library"
+			title={$t('Upload a bibliography')}
+			description={$t('Stage many records from a reference manager export.')}
+			{busy}
+			submitLabel={$t('Preview bibliography')}
+			onsubmit={(event) => {
+				event.preventDefault();
+				upload(event, 'bibliography');
+			}}
+		>
+			<label
+				>{$t('Bibliography file')}<input
+					class="input"
+					type="file"
+					name="bibliography"
+					required
+				/></label
+			>
+			<label
+				>{$t('File format')}<select class="select" name="file_format">
+					<option value="bibtex">BibTeX</option><option value="biblatex">BibLaTeX</option>
+					<option value="ris">RIS</option><option value="endnote">EndNote</option>
+				</select></label
+			>
+		</ImportSourceForm>
+		<ImportSourceForm
+			icon="import"
+			title={$t('Import published PDFs')}
+			description={$t('Extract metadata and keep the papers together in one Import Batch.')}
+			{busy}
+			submitLabel={$t('Stage PDFs')}
+			submitDisabled={pdfFiles.length === 0}
+			onsubmit={(event) => {
+				event.preventDefault();
+				upload(event, 'pdfs');
+			}}
+		>
+			<label
+				>{$t('PDF files')}<input
+					class="input"
+					type="file"
+					name="pdfs"
+					accept="application/pdf,.pdf"
+					multiple
+					required={pdfFiles.length === 0}
+					bind:this={pdfInput}
+					onchange={addPdfFiles}
+				/></label
+			>
+			<p class="text-sm text-surface-600-400">
+				{$t('Choose PDFs more than once to add them to the same batch.')}
+			</p>
+			{#if pdfFiles.length}<ul
+					class="m-0 grid min-w-0 list-none grid-cols-1 gap-2 p-0"
+					aria-live="polite"
+				>
+					{#each pdfFiles as file (`${file.name}:${file.size}:${file.lastModified}`)}<li
+							class="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-surface-300-700 px-3 py-2 text-sm"
+						>
+							<span class="min-w-0 flex-1 truncate" title={file.name}>{file.name}</span><Button
+								class="shrink-0"
+								type="button"
+								onclick={() => removePdf(file)}>{$t('Remove')}</Button
+							>
+						</li>{/each}
+				</ul>{/if}
+		</ImportSourceForm>
+	</div>
+	<section
+		class="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-dashed border-surface-400-600 bg-surface-50-950 px-5 py-4"
+	>
+		<div>
+			<h2 class="mb-1">{$t('Create an Item manually')}</h2>
+			<p class="mb-0 text-sm text-surface-600-400">
+				{$t('Use the metadata editor when no import source is available.')}
+			</p>
+		</div>
+		<Button onclick={() => (manualOpen = !manualOpen)}
+			>{manualOpen ? $t('Close editor') : $t('Open metadata editor')}</Button
+		>
+	</section>
+	{#if manualOpen}
+		<Panel class="mt-4 grid grid-cols-1 gap-3">
+			<div>
+				<p class="mb-1 text-sm font-medium text-primary-700-300">{$t('Manual creation')}</p>
+				<h2>{$t('New Item metadata')}</h2>
+			</div>
+			<ItemMetadataForm
+				metadata={emptyMetadata}
+				{busy}
+				submitLabel={$t('Create Item')}
+				onsubmit={createItem}
+			/>
+		</Panel>
+	{/if}
 {/if}
 {#if batch}
 	<ImportBatchPreview
 		{batch}
+		canCommit={workspace.can('items.create')}
 		page={previewPage}
 		{busy}
 		onDiscard={discard}

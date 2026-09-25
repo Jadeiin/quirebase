@@ -5,11 +5,16 @@ export type WorkspaceContext = {
 	workspaceId: string;
 	api: ReturnType<typeof createWorkspaceApi>;
 	readonly view: WorkspaceView | undefined;
+	readonly role: string | undefined;
 	can: (capability: string) => boolean;
 };
 
 export function workspaceCan(view: WorkspaceView | undefined, capability: string): boolean {
 	return view?.effective_capabilities.includes(capability) ?? false;
+}
+
+export function workspaceRole(view: WorkspaceView | undefined): string | undefined {
+	return view?.current_role;
 }
 
 const [getWorkspaceContext, setWorkspaceContext] = createContext<WorkspaceContext>();
@@ -23,6 +28,9 @@ export function provideWorkspaceContext(
 		api: createWorkspaceApi(workspaceId),
 		get view() {
 			return getView();
+		},
+		get role() {
+			return workspaceRole(getView());
 		},
 		can(capability) {
 			return workspaceCan(getView(), capability);

@@ -5,12 +5,16 @@
 	import { apiErrorMessage } from '$lib/api/errors';
 	import Notice from '$lib/design/Notice.svelte';
 	import Button from '$lib/design/Button.svelte';
-	import { t } from '$lib/i18n';
+	import { msg, t } from '$lib/i18n';
 	import { domainLabel } from '$lib/domain-labels';
+	import { getWorkflowCenter } from '$lib/features/workflows/center.svelte';
+	import { resolve } from '$app/paths';
+	import { goto } from '$app/navigation';
 
 	const workspace = getWorkspaceContext();
 	const api = workspace.api;
 	const client = useQueryClient();
+	const workflows = getWorkflowCenter();
 	const directoryMembers = createQuery(() => ({
 		queryKey: workspaceKeys.members(workspace.workspaceId),
 		queryFn: ({ signal }: { signal: AbortSignal }) =>
@@ -38,7 +42,11 @@
 	let error = $state('');
 	let busyId = $state('');
 
-	async function run(id: string, action: () => Promise<unknown>, success: string) {
+	async function run(
+		id: string,
+		action: () => Promise<unknown>,
+		success: string
+	): Promise<boolean> {
 		busyId = id;
 		message = '';
 		error = '';
@@ -50,10 +58,13 @@
 					? governanceMembers.refetch()
 					: directoryMembers.refetch(),
 				workspace.can('workspace.members.manage') ? invitations.refetch() : Promise.resolve(),
-				client.invalidateQueries({ queryKey: workspaceKeys.root(workspace.workspaceId) })
+				client.invalidateQueries({ queryKey: workspaceKeys.root(workspace.workspaceId) }),
+				client.invalidateQueries({ queryKey: workspaceKeys.list() })
 			]);
+			return true;
 		} catch (reason) {
 			error = apiErrorMessage(reason, 'Workspace action failed');
+			return false;
 		} finally {
 			busyId = '';
 		}
@@ -78,7 +89,10 @@
 			oneTimeToken = created.token;
 			inviteUsername = '';
 			message = $t('Invitation created. Copy this token now; it will not be shown again.');
-			await invitations.refetch();
+			await Promise.all([
+				invitations.refetch(),
+				client.invalidateQueries({ queryKey: workspaceKeys.list() })
+			]);
 		} catch (reason) {
 			error = apiErrorMessage(reason, 'Unable to create invitation');
 		} finally {
@@ -95,11 +109,32 @@
 				`Permanently delete “${workspace.view?.name ?? 'this Workspace'}” and its content? This cannot be undone.`
 			)
 		)
-			await run(
-				'delete',
-				() => api.request('DELETE', '/workspaces/{workspace_id}'),
-				$t('Workspace deleted')
-			);
+			if (
+				await run(
+					'delete',
+					() => api.request('DELETE', '/workspaces/{workspace_id}'),
+					$t('Workspace deleted')
+				)
+			)
+				await goto(resolve('/workspace'), { replaceState: true });
+	}
+	async function reindex() {
+		if (!workspace.can('workspace.settings.manage')) return;
+		await run(
+			'reindex',
+			async () => {
+				const started = await api.request('POST', '/workspaces/{workspace_id}/maintenance/reindex');
+				void workflows
+					.track(started.id, {
+						workspaceId: workspace.workspaceId,
+						label: $t('Workspace reindex'),
+						successMessage: msg('Workspace reindex completed'),
+						failureMessage: msg('Workspace reindex failed')
+					})
+					.settled.catch(() => undefined);
+			},
+			$t('Workspace reindex started')
+		);
 	}
 	function confirmOwnershipTransfer(username: string): boolean {
 		return confirm(
@@ -151,6 +186,17 @@
 				>
 			</div>{/if}
 	</section>
+	{#if workspace.can('workspace.settings.manage')}
+		<section
+			class="grid max-w-2xl grid-cols-1 gap-3 rounded-container border border-surface-300-700 bg-surface-50-950 p-5"
+		>
+			<h2 class="text-xl font-semibold">{$t('Workspace maintenance')}</h2>
+			<p class="text-sm text-surface-600-400">{$t('Rebuild search indexes for this Workspace.')}</p>
+			<Button disabled={busyId !== ''} onclick={() => void reindex()}
+				>{$t('Reindex Workspace')}</Button
+			>
+		</section>
+	{/if}
 	{#if workspace.can('workspace.archive') || workspace.can('workspace.delete')}
 		<section
 			class="grid max-w-2xl grid-cols-1 gap-4 rounded-container border border-surface-300-700 bg-surface-50-950 p-5"
