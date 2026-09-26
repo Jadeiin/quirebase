@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.access import Capability, require_workspace_capability
-from quirebase.accounts import update_user_status
+from quirebase.accounts import change_user_role, update_user_status
 from quirebase.core.database import Base, make_async_engine
 from quirebase.core.errors import (
     PermissionDenied,
@@ -62,6 +62,8 @@ from quirebase.projects import (
 )
 from quirebase.workspaces import (
     archive_workspace,
+    invite_workspace_member,
+    suspend_workspace_governance,
     suspend_workspace_member,
     transfer_workspace_ownership,
 )
@@ -299,6 +301,130 @@ async def test_current_membership_partial_unique_serializes_rejoin(postgres_sess
 
     outcomes = await asyncio.gather(add_current_member(), add_current_member())
     assert sorted(outcomes) == ["committed", "conflict"]
+
+
+async def test_workspace_invitation_serializes_with_invitee_deactivation(postgres_sessions):
+    async with postgres_sessions() as db:
+        owner = await _user(db, "invite-deactivate-owner")
+        controller = await _user(db, "invite-deactivate-controller")
+        invitee = await _user(db, "invite-deactivate-target")
+        controller.role = "administrator"
+
+        # The invitee cannot be deactivated while owning its provisioned
+        # Workspace, so transfer that independent governance root first.
+        invitee_workspace_id = fixture_workspace_id(invitee)
+        controller_membership = WorkspaceMember(
+            workspace_id=invitee_workspace_id,
+            user_id=controller.id,
+            role=WorkspaceRole.admin,
+            invited_by=invitee.id,
+        )
+        db.add(controller_membership)
+        await db.flush()
+        await transfer_workspace_ownership(
+            db, invitee, invitee_workspace_id, controller_membership.id
+        )
+        workspace_id = fixture_workspace_id(owner)
+        owner_id, controller_id, invitee_id = owner.id, controller.id, invitee.id
+
+    invitation_started = asyncio.Event()
+    deactivation_started = asyncio.Event()
+
+    async def invite():
+        async with postgres_sessions() as db:
+            actor = await db.get(User, owner_id)
+            target = await db.get(User, invitee_id)
+            assert actor is not None and target is not None
+            invitation_started.set()
+            await invite_workspace_member(db, actor, workspace_id, target.id, WorkspaceRole.viewer)
+            return "invited"
+
+    async def deactivate():
+        async with postgres_sessions() as db:
+            actor = await db.get(User, controller_id)
+            assert actor is not None
+            deactivation_started.set()
+            await update_user_status(db, actor, invitee_id, active=False)
+            return "deactivated"
+
+    async with postgres_sessions() as blocker_db:
+        workspace = await blocker_db.scalar(
+            select(Workspace).where(Workspace.id == workspace_id).with_for_update()
+        )
+        assert workspace is not None
+
+        invitation_task = asyncio.create_task(invite())
+        await invitation_started.wait()
+        await asyncio.sleep(0.05)
+        assert not invitation_task.done()
+
+        deactivation_task = asyncio.create_task(deactivate())
+        await deactivation_started.wait()
+        await asyncio.sleep(0.05)
+        # Invitation holds the invitee's shared User lock while waiting for the
+        # Workspace, so deactivation cannot overtake it.
+        assert not deactivation_task.done()
+
+        await blocker_db.commit()
+        outcomes = await asyncio.wait_for(
+            asyncio.gather(invitation_task, deactivation_task), timeout=5
+        )
+
+    assert outcomes == ["invited", "deactivated"]
+
+
+async def test_workspace_governance_serializes_with_admin_demotion(postgres_sessions):
+    async with postgres_sessions() as db:
+        owner = await _user(db, "governance-demotion-owner")
+        governance_admin = await _user(db, "governance-demotion-target")
+        controller = await _user(db, "governance-demotion-controller")
+        governance_admin.role = "administrator"
+        controller.role = "administrator"
+        await db.commit()
+        workspace_id = fixture_workspace_id(owner)
+        governance_admin_id, controller_id = governance_admin.id, controller.id
+
+    governance_started = asyncio.Event()
+    demotion_started = asyncio.Event()
+
+    async def suspend_governance():
+        async with postgres_sessions() as db:
+            actor = await db.get(User, governance_admin_id)
+            assert actor is not None
+            governance_started.set()
+            await suspend_workspace_governance(db, actor, workspace_id)
+            return "suspended"
+
+    async def demote():
+        async with postgres_sessions() as db:
+            actor = await db.get(User, controller_id)
+            assert actor is not None
+            demotion_started.set()
+            await change_user_role(db, actor, governance_admin_id, "member")
+            return "demoted"
+
+    async with postgres_sessions() as blocker_db:
+        workspace = await blocker_db.scalar(
+            select(Workspace).where(Workspace.id == workspace_id).with_for_update()
+        )
+        assert workspace is not None
+
+        governance_task = asyncio.create_task(suspend_governance())
+        await governance_started.wait()
+        await asyncio.sleep(0.05)
+        assert not governance_task.done()
+
+        demotion_task = asyncio.create_task(demote())
+        await demotion_started.wait()
+        await asyncio.sleep(0.05)
+        # Governance holds current administrator authority under a shared User
+        # lock, so revocation cannot commit ahead of the operation.
+        assert not demotion_task.done()
+
+        await blocker_db.commit()
+        outcomes = await asyncio.wait_for(asyncio.gather(governance_task, demotion_task), timeout=5)
+
+    assert outcomes == ["suspended", "demoted"]
 
 
 async def test_concurrent_ownership_transfer_reauthorizes_after_root_lock(postgres_sessions):

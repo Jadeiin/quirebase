@@ -308,16 +308,24 @@ async def invite_workspace_member(
     *,
     expires_at: datetime | None = None,
 ) -> tuple[WorkspaceInvitation, str]:
+    requested = WorkspaceRole(role)
+    if requested in {WorkspaceRole.owner, WorkspaceRole.admin}:
+        raise ValidationFailure("owner/admin roles are assigned through governance operations")
+    # Account governance locks Users before Workspaces. Hold a shared User lock
+    # so deactivation either commits first and is observed here, or waits until
+    # the invitation transaction has committed.
+    target = await db.scalar(
+        select(User)
+        .where(User.id == user_id)
+        .execution_options(populate_existing=True)
+        .with_for_update(read=True)
+    )
+    if target is None or not target.active:
+        raise ValidationFailure("Workspace invitations require an existing active User")
     await _lock_workspace(db, workspace_id)
     context = await require_workspace_capability(
         db, actor, workspace_id, Capability.workspace_members_manage
     )
-    requested = WorkspaceRole(role)
-    if requested in {WorkspaceRole.owner, WorkspaceRole.admin}:
-        raise ValidationFailure("owner/admin roles are assigned through governance operations")
-    target = await db.get(User, user_id)
-    if target is None or not target.active:
-        raise ValidationFailure("Workspace invitations require an existing active User")
     now = datetime.now(UTC)
     if expires_at is None:
         normalized_expiry = now + timedelta(days=7)
@@ -962,28 +970,41 @@ async def permanently_delete_workspace(
     return workspace
 
 
-def _require_instance_administrator(actor: User) -> None:
-    if actor.role != SystemRole.administrator.value or not actor.active:
+async def _require_instance_administrator(
+    db: AsyncSession, actor: User, *, lock: bool = False
+) -> User:
+    query = select(User).where(User.id == actor.id).execution_options(populate_existing=True)
+    if lock:
+        # Account administration mutates authority under an exclusive User
+        # lock. This shared lock freezes that authority through our commit.
+        query = query.with_for_update(read=True)
+    current_actor = await db.scalar(query)
+    if (
+        current_actor is None
+        or current_actor.role != SystemRole.administrator.value
+        or not current_actor.active
+    ):
         raise ResourceNotFound("Workspace not found")
+    return current_actor
 
 
 async def list_workspaces_for_governance(db: AsyncSession, actor: User) -> list[Workspace]:
-    _require_instance_administrator(actor)
+    await _require_instance_administrator(db, actor)
     return list((await db.scalars(select(Workspace).order_by(Workspace.created_at.desc()))).all())
 
 
 async def suspend_workspace_governance(
     db: AsyncSession, actor: User, workspace_id: str
 ) -> Workspace:
-    _require_instance_administrator(actor)
+    current_actor = await _require_instance_administrator(db, actor, lock=True)
     workspace = await _lock_workspace(db, workspace_id)
     if workspace.state is WorkspaceState.deleted:
         raise ResourceNotFound("Workspace not found")
     workspace.governance_suspended_at = datetime.now(UTC)
-    workspace.governance_suspended_by = actor.id
+    workspace.governance_suspended_by = current_actor.id
     record_event(
         db,
-        actor.id,
+        current_actor.id,
         "admin.workspace.suspend",
         "workspace",
         workspace.id,
@@ -999,7 +1020,7 @@ async def suspend_workspace_governance(
 async def recover_workspace_governance(
     db: AsyncSession, actor: User, workspace_id: str
 ) -> Workspace:
-    _require_instance_administrator(actor)
+    current_actor = await _require_instance_administrator(db, actor, lock=True)
     workspace = await _lock_workspace(db, workspace_id)
     if workspace.state is WorkspaceState.deleted:
         raise ResourceNotFound("Workspace not found")
@@ -1007,7 +1028,7 @@ async def recover_workspace_governance(
     workspace.governance_suspended_by = None
     record_event(
         db,
-        actor.id,
+        current_actor.id,
         "admin.workspace.recover",
         "workspace",
         workspace.id,
@@ -1029,7 +1050,7 @@ async def read_workspace_items_break_glass(
     limit: int = 100,
 ) -> list[Item]:
     """Perform one reason-bound, read-only administrative content access."""
-    _require_instance_administrator(actor)
+    current_actor = await _require_instance_administrator(db, actor, lock=True)
     reason = reason.strip()
     if len(reason) < 10:
         raise ValidationFailure("break-glass reason must contain at least 10 characters")
@@ -1048,7 +1069,7 @@ async def read_workspace_items_break_glass(
     )
     record_event(
         db,
-        actor.id,
+        current_actor.id,
         "admin.workspace.break_glass.read",
         "workspace",
         workspace_id,

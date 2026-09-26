@@ -129,6 +129,7 @@ from quirebase.workspaces import (
     list_workspace_members,
     permanently_delete_workspace,
     read_workspace_items_break_glass,
+    recover_workspace_governance,
     set_workspace_member_role,
     suspend_workspace_governance,
     suspend_workspace_member,
@@ -391,6 +392,40 @@ async def test_invitation_acceptance_rechecks_user_status(async_db, async_sessio
                 WorkspaceMember.workspace_id == workspace_id,
                 WorkspaceMember.user_id == invitee.id,
                 WorkspaceMember.terminated_at.is_(None),
+            )
+        )
+        is None
+    )
+
+
+@pytest.mark.anyio
+async def test_invitation_creation_rechecks_user_status(async_db, async_session_factory):
+    owner = await _user(async_db, "invitation-create-status-owner")
+    invitee = await _user(async_db, "invitation-create-status-invitee")
+    workspace_id = fixture_workspace_id(owner)
+
+    # Match the HTTP handler, which resolves the target User before entering
+    # the service and therefore leaves a stale identity-map entry behind.
+    assert await async_db.get(User, invitee.id) is invitee
+    async with async_session_factory() as status_db:
+        current_invitee = await status_db.get(User, invitee.id)
+        assert current_invitee is not None
+        current_invitee.active = False
+        await status_db.commit()
+
+    with pytest.raises(ValidationFailure, match="existing active User"):
+        await invite_workspace_member(
+            async_db,
+            owner,
+            workspace_id,
+            invitee.id,
+            WorkspaceRole.viewer,
+        )
+    assert (
+        await async_db.scalar(
+            select(WorkspaceInvitation.id).where(
+                WorkspaceInvitation.workspace_id == workspace_id,
+                WorkspaceInvitation.user_id == invitee.id,
             )
         )
         is None
@@ -2026,6 +2061,42 @@ async def test_governance_suspension_is_read_only(async_db):
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("operation", ["suspend", "recover", "break_glass"])
+async def test_workspace_governance_rechecks_instance_admin_authority(
+    async_db, async_session_factory, operation
+):
+    owner = await _user(async_db, f"stale-governance-{operation}-owner")
+    admin = await _user(async_db, f"stale-governance-{operation}-admin")
+    admin.role = "administrator"
+    await async_db.commit()
+    workspace_id = fixture_workspace_id(owner)
+
+    async with async_session_factory() as authority_db:
+        current_admin = await authority_db.get(User, admin.id)
+        assert current_admin is not None
+        current_admin.role = "member"
+        await authority_db.commit()
+
+    if operation == "suspend":
+        governance_call = suspend_workspace_governance(async_db, admin, workspace_id)
+    elif operation == "recover":
+        governance_call = recover_workspace_governance(async_db, admin, workspace_id)
+    else:
+        governance_call = read_workspace_items_break_glass(
+            async_db, admin, workspace_id, "Investigate stale authority"
+        )
+    with pytest.raises(ResourceNotFound, match="Workspace not found"):
+        await governance_call
+
+    action = {
+        "suspend": "admin.workspace.suspend",
+        "recover": "admin.workspace.recover",
+        "break_glass": "admin.workspace.break_glass.read",
+    }[operation]
+    assert await async_db.scalar(select(AuditEvent.id).where(AuditEvent.action == action)) is None
+
+
+@pytest.mark.anyio
 async def test_workspace_reindex_payload_carries_actor_and_workspace(
     async_db, fake_durable_operations
 ):
@@ -2542,6 +2613,77 @@ async def test_cross_workspace_copy_creates_detached_item_and_file(async_db, mon
     assert await get_object_store().exists(source_revision.object_key)
     assert await get_object_store().exists(copied_revision.object_key)
     assert await search_index(async_db).search(async_db, "copied PDF search") == [copied.id]
+
+
+@pytest.mark.anyio
+async def test_cross_workspace_copy_preserves_objects_after_ambiguous_commit(async_db, monkeypatch):
+    actor = await _user(async_db, "ambiguous-copy-actor")
+    target_owner = await _user(async_db, "ambiguous-copy-target-owner")
+    target_workspace_id = fixture_workspace_id(target_owner)
+    async_db.add(
+        WorkspaceMember(
+            workspace_id=target_workspace_id,
+            user_id=actor.id,
+            role=WorkspaceRole.editor,
+            invited_by=target_owner.id,
+        )
+    )
+    source = Item(
+        workspace_id=fixture_workspace_id(actor),
+        title="Ambiguous commit source",
+        created_by=actor.id,
+    )
+    async_db.add(source)
+    await async_db.flush()
+    stored = await get_object_store().put_object(
+        uuid4(), ObjectSuffix.PDF, b"%PDF-ambiguous-copy", max_bytes=1024
+    )
+    async_db.add(
+        FileRevision(
+            workspace_id=source.workspace_id,
+            item_id=source.id,
+            object_key=stored.key,
+            size=stored.size,
+            original_name="ambiguous.pdf",
+            processing_state="ready",
+            created_by=actor.id,
+        )
+    )
+    await async_db.commit()
+
+    real_commit = async_db.commit
+    commit_count = 0
+
+    async def commit_then_lose_acknowledgement():
+        nonlocal commit_count
+        await real_commit()
+        commit_count += 1
+        if commit_count == 2:
+            raise ConnectionError("commit acknowledgement lost")
+
+    monkeypatch.setattr(async_db, "commit", commit_then_lose_acknowledgement)
+
+    with pytest.raises(ConnectionError, match="acknowledgement lost"):
+        await copy_item_to_workspace(
+            async_db,
+            actor,
+            source.workspace_id,
+            target_workspace_id,
+            source.id,
+        )
+
+    copied = await async_db.scalar(
+        select(Item).where(
+            Item.workspace_id == target_workspace_id,
+            Item.title == "Ambiguous commit source",
+        )
+    )
+    assert copied is not None
+    copied_revision = await async_db.scalar(
+        select(FileRevision).where(FileRevision.item_id == copied.id)
+    )
+    assert copied_revision is not None
+    assert await get_object_store().exists(copied_revision.object_key)
 
 
 @pytest.mark.anyio

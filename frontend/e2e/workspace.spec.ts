@@ -204,6 +204,73 @@ test('a user with no Workspace is sent to the chooser without a repair request',
 	expect(repairRequested).toBe(false);
 });
 
+test('the root route surfaces Workspace list failures and retries', async ({ page }) => {
+	await mockSession(page);
+	let listAvailable = false;
+	let listRequests = 0;
+	await page.route('**/api/v1/workspaces', (route) => {
+		listRequests += 1;
+		if (!listAvailable)
+			return route.fulfill({
+				status: 503,
+				json: { code: 'request_failed', message: 'temporarily unavailable' }
+			});
+		return route.fulfill({
+			json: [
+				{
+					id: 'workspace-1',
+					name: 'Research',
+					owner_id: 'user-1',
+					state: 'active',
+					current_role: 'owner',
+					governance_suspended: false,
+					effective_capabilities: ['workspace.read']
+				}
+			]
+		});
+	});
+	await page.route('**/api/v1/workspaces/workspace-1/dashboard', (route) =>
+		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 0 } })
+	);
+
+	await page.goto('/');
+	await expect(page.getByText('Unable to load workspaces.')).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
+
+	listAvailable = true;
+	await page.getByRole('button', { name: 'Retry' }).click();
+	await expect(page).toHaveURL(/\/workspace\/workspace-1$/);
+	await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+	expect(listRequests).toBeGreaterThanOrEqual(2);
+});
+
+test('a failed availability refetch preserves an explicit Workspace route', async ({ page }) => {
+	await mockSession(page);
+	let listRequests = 0;
+	await page.route('**/api/v1/workspaces', (route) => {
+		listRequests += 1;
+		return route.fulfill({
+			status: 503,
+			json: { code: 'request_failed', message: 'temporarily unavailable' }
+		});
+	});
+	await page.route('**/api/v1/workspaces/workspace-1', (route) =>
+		route.fulfill({
+			status: 503,
+			json: { code: 'request_failed', message: 'temporarily unavailable' }
+		})
+	);
+
+	await page.goto('/workspace/workspace-1');
+	await expect.poll(() => listRequests).toBeGreaterThanOrEqual(2);
+	await expect(page.getByRole('alert')).toContainText('The request could not be completed.');
+	expect(listRequests).toBe(2);
+	await expect(page).toHaveURL(/\/workspace\/workspace-1$/);
+	expect(await page.evaluate(() => localStorage.getItem('quirebase:default-workspace'))).toBe(
+		'workspace-1'
+	);
+});
+
 test('membership revoked while a page is open returns the user to the Workspace chooser', async ({
 	page
 }) => {

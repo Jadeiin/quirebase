@@ -14,6 +14,7 @@ from quirebase.access.workspaces import Capability, require_workspace_capability
 from quirebase.audit import record_event
 from quirebase.core.errors import ValidationFailure
 from quirebase.core.storage import ObjectSuffix, get_object_store
+from quirebase.documents.revisions import delete_unreferenced_objects
 from quirebase.models import (
     Attachment,
     AttachmentRole,
@@ -418,8 +419,9 @@ async def copy_item_to_workspace(
         return target
     except BaseException:
         await db.rollback()
-        store = get_object_store()
-        for key in copied_keys:
-            with suppress(Exception):
-                await store.delete(key)
+        # A commit can succeed on the database server while its acknowledgement
+        # is lost locally. Recheck durable references before deleting copied
+        # objects so an ambiguous commit cannot leave committed rows dangling.
+        with suppress(Exception):
+            await delete_unreferenced_objects(db, copied_keys)
         raise

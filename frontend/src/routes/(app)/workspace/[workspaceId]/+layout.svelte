@@ -20,6 +20,7 @@
 	const queryClient = useQueryClient();
 	let recoveryStarted = $state(false);
 	let unavailable = $state(false);
+	let checkedWorkspaceError = $state<unknown>();
 
 	onMount(() => {
 		const unregisterUnavailable = onWorkspaceUnavailable((failedWorkspaceId) => {
@@ -54,9 +55,19 @@
 	});
 
 	$effect(() => {
-		if (!workspace.isError || recoveryStarted) return;
+		if (!workspace.isError) {
+			checkedWorkspaceError = undefined;
+			return;
+		}
+		const currentError = workspace.error;
+		if (recoveryStarted || checkedWorkspaceError === currentError) return;
+		checkedWorkspaceError = currentError;
 		recoveryStarted = true;
 		void workspaceList.refetch().then((result) => {
+			if (result.isError) {
+				recoveryStarted = false;
+				return;
+			}
 			const stillAvailable = result.data?.some((candidate) => candidate.id === workspaceId);
 			if (!stillAvailable) clearDefaultWorkspacePreference();
 			unavailable = !stillAvailable;
