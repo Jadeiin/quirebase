@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -523,7 +524,11 @@ async def test_upload_finalizer_and_deactivation_follow_user_workspace_lock_orde
 
 async def test_import_confirmation_and_deactivation_follow_user_workspace_lock_order(
     postgres_sessions,
+    monkeypatch,
 ):
+    index = AsyncMock()
+    monkeypatch.setattr("quirebase.library.imports.search_index", lambda _db: index)
+
     async with postgres_sessions() as db:
         administrator = await _user(db, "import-deactivate-admin")
         administrator.role = "administrator"
@@ -593,6 +598,7 @@ async def test_import_confirmation_and_deactivation_follow_user_workspace_lock_o
         )
 
     assert outcomes == ["confirmed", "deactivated"]
+    index.index_item.assert_awaited_once()
 
 
 async def test_concurrent_project_renames_do_not_upgrade_shared_workspace_locks(
