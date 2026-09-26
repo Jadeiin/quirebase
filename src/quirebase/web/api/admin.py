@@ -216,7 +216,7 @@ async def admin_create_invitation(data: InvitationCreateRequest, user: AdminUser
         "role": invitation.role,
         "expires_at": invitation.expires_at,
         "token": token,
-        "accept_path": f"/invitation/{token}",
+        "accept_path": f"/invite/{token}",
     }
 
 

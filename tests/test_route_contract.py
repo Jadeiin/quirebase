@@ -384,6 +384,6 @@ async def test_administrator_can_create_invitation(
         )
 
         assert response.status_code == 201
-        assert response.json()["accept_path"].startswith("/invitation/")
+        assert response.json()["accept_path"] == f"/invite/{response.json()['token']}"
     finally:
         await client.aclose()

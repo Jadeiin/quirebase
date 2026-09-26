@@ -48,8 +48,13 @@ test('administrators receive the one-time invitation URL after creation', async 
 				role: 'member',
 				expires_at: '2026-10-01T00:00:00Z',
 				token: 'one-time-secret',
-				accept_path: '/invitation/one-time-secret'
+				accept_path: '/invite/one-time-secret'
 			}
+		})
+	);
+	await page.route('**/api/v1/invitations/one-time-secret', (route) =>
+		route.fulfill({
+			json: { username: 'invitee', role: 'member', expires_at: '2026-10-01T00:00:00Z' }
 		})
 	);
 
@@ -61,7 +66,11 @@ test('administrators receive the one-time invitation URL after creation', async 
 		.fill('invitee');
 	await page.getByRole('button', { name: 'Create invitation' }).click();
 
-	await expect(page.getByRole('link', { name: /invitation\/one-time-secret/ })).toBeVisible();
+	const invitationLink = page.getByRole('link', { name: /invite\/one-time-secret/ });
+	await expect(invitationLink).toHaveAttribute('href', /\/invite\/one-time-secret$/);
+	await invitationLink.click();
+	await expect(page).toHaveURL(/\/invite\/one-time-secret$/);
+	await expect(page.getByText('Create a password for')).toBeVisible();
 });
 
 test('administrators can respond to compromised user accounts', async ({ page }) => {
