@@ -271,6 +271,61 @@ test('a failed availability refetch preserves an explicit Workspace route', asyn
 	);
 });
 
+test('availability recovery releases its guard for a later membership revocation', async ({
+	page
+}) => {
+	await mockSession(page);
+	const workspace = {
+		id: 'workspace-1',
+		name: 'Research',
+		owner_id: 'user-1',
+		state: 'active',
+		current_role: 'owner',
+		governance_suspended: false,
+		effective_capabilities: ['workspace.read']
+	};
+	let detailRequests = 0;
+	let membershipRevoked = false;
+	await page.route('**/api/v1/workspaces', (route) =>
+		route.fulfill({ json: membershipRevoked ? [] : [workspace] })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1', (route) => {
+		detailRequests += 1;
+		if (detailRequests === 1)
+			return route.fulfill({
+				status: 503,
+				json: { code: 'request_failed', message: 'temporarily unavailable' }
+			});
+		return route.fulfill({ json: workspace });
+	});
+	await page.route('**/api/v1/workspaces/workspace-1/dashboard', (route) =>
+		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 0 } })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) =>
+		route.fulfill({ json: [] })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items*', (route) => {
+		if (membershipRevoked)
+			return route.fulfill({
+				status: 403,
+				json: { code: 'workspace_membership_required', message: 'membership revoked' }
+			});
+		return route.fulfill({ json: { items: [], total: 0, page: 1, per_page: 25 } });
+	});
+
+	await page.goto('/workspace/workspace-1');
+	await expect(page.getByRole('alert')).toContainText('The request could not be completed.');
+	await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
+	await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+
+	membershipRevoked = true;
+	await page.getByRole('link', { name: 'Library' }).first().click();
+
+	await expect(page).toHaveURL(/\/workspace$/);
+	await expect(page.getByText('No workspaces are available for this account yet.')).toBeVisible();
+});
+
 test('membership revoked while a page is open returns the user to the Workspace chooser', async ({
 	page
 }) => {

@@ -1083,6 +1083,7 @@ msgid "Defaults"
 msgstr "Defaults"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 #: src/lib/features/item/discussion/ItemDiscussionSection.svelte
 #: src/lib/features/item/files/ItemFilesSection.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -3138,6 +3139,7 @@ msgstr "Restore workspace"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
+#: src/routes/(app)/+page.svelte
 msgid "Retry"
 msgstr "Retry"
 
@@ -3721,6 +3723,7 @@ msgid "This action is not available."
 msgstr "This action is not available."
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 #: src/lib/features/library/Library.svelte
 msgid "This cannot be undone."
 msgstr "This cannot be undone."
@@ -3980,6 +3983,7 @@ msgid "Unable to load workspace."
 msgstr "Unable to load workspace."
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/+page.svelte
 #: src/routes/(app)/workspace/+page.svelte
 msgid "Unable to load workspaces."
 msgstr "Unable to load workspaces."

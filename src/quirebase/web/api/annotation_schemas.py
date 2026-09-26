@@ -61,7 +61,7 @@ class AnnotationView(BaseModel):
 
 
 class AnnotationModerationRequest(BaseModel):
-    action: Literal["hide", "archive", "restore", "lock", "unlock"]
+    action: Literal["hide", "archive", "restore", "lock", "unlock", "delete"]
     version: int = Field(ge=1)
 
 

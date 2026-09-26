@@ -2437,7 +2437,7 @@ export interface components {
 			 * Action
 			 * @enum {string}
 			 */
-			action: 'hide' | 'archive' | 'restore' | 'lock' | 'unlock';
+			action: 'hide' | 'archive' | 'restore' | 'lock' | 'unlock' | 'delete';
 			/** Version */
 			version: number;
 		};

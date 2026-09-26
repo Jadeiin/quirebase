@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, status
 
-from quirebase.access import Capability, resolve_workspace_context, role_has_capability
+from quirebase.access import Capability, resolve_workspace_context
 from quirebase.library import (
     ItemDiscussionData,
     ItemMetadata,
@@ -176,7 +176,7 @@ async def format_item_citation(
 async def list_tags(workspace_id: str, user: ApiUser, db: Database) -> list[TagView]:
     rows = await list_accessible_tags_with_counts(db, user, workspace_id)
     context = await resolve_workspace_context(db, user, workspace_id)
-    can_manage = role_has_capability(context.role, Capability.tags_manage)
+    can_manage = Capability.tags_manage in context.capabilities
     return [
         TagView(
             id=tag.id,

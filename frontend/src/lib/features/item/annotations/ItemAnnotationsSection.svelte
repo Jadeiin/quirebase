@@ -4,6 +4,7 @@
 	import { ApiError } from '$lib/api/client';
 	import { apiErrorMessage } from '$lib/api/errors';
 	import type { components } from '$lib/api/schema';
+	import ConfirmDialog from '$lib/design/ConfirmDialog.svelte';
 	import Notice from '$lib/design/Notice.svelte';
 	import { domainLabel } from '$lib/domain-labels';
 	import Panel from '$lib/design/Panel.svelte';
@@ -23,6 +24,8 @@
 	let page = $state(1);
 	let moderationError = $state('');
 	let moderating = $state('');
+	let confirmDeleteOpen = $state(false);
+	let pendingDelete = $state<components['schemas']['AnnotationReviewAnnotationView']>();
 	const annotations = createQuery(() =>
 		itemAnnotationsReviewQuery(workspaceId, itemId, revision, page, true)
 	);
@@ -35,7 +38,7 @@
 
 	async function moderate(
 		annotation: components['schemas']['AnnotationReviewAnnotationView'],
-		action: 'hide' | 'archive' | 'restore' | 'lock' | 'unlock'
+		action: 'hide' | 'archive' | 'restore' | 'lock' | 'unlock' | 'delete'
 	) {
 		moderating = annotation.id;
 		moderationError = '';
@@ -58,6 +61,18 @@
 		} finally {
 			moderating = '';
 		}
+	}
+
+	function requestDelete(annotation: components['schemas']['AnnotationReviewAnnotationView']) {
+		pendingDelete = annotation;
+		confirmDeleteOpen = true;
+	}
+
+	function confirmDelete() {
+		const annotation = pendingDelete;
+		pendingDelete = undefined;
+		confirmDeleteOpen = false;
+		if (annotation) void moderate(annotation, 'delete');
 	}
 </script>
 
@@ -107,16 +122,23 @@
 						count: (annotation.replies ?? []).length
 					})}</span
 				>
-				{#if annotation.allowed_actions.some( (action) => ['hide', 'archive', 'restore', 'lock', 'unlock'].includes(action) )}<div
+				{#if annotation.allowed_actions.some((action) => ['hide', 'archive', 'restore', 'lock', 'unlock'].includes(action) || (action === 'delete' && !annotation.mine))}<div
 						class="flex flex-wrap gap-2 border-t border-surface-300-700 pt-2"
 						aria-label={$t('Moderator actions')}
 					>
-						{#each (['hide', 'archive', 'restore', 'lock', 'unlock'] as const).filter( (action) => annotation.allowed_actions.includes(action) ) as action (action)}<Button
-								size="sm"
-								variant="tonal"
-								disabled={moderating !== ''}
-								onclick={() => void moderate(annotation, action)}>{action}</Button
-							>{/each}
+						{#each (['hide', 'archive', 'restore', 'lock', 'unlock', 'delete'] as const).filter((action) => annotation.allowed_actions.includes(action) && (action !== 'delete' || !annotation.mine)) as action (action)}
+							{#if action === 'delete'}<Button
+									size="sm"
+									variant="danger"
+									disabled={moderating !== ''}
+									onclick={() => requestDelete(annotation)}>{$t('Delete')}</Button
+								>{:else}<Button
+									size="sm"
+									variant="tonal"
+									disabled={moderating !== ''}
+									onclick={() => void moderate(annotation, action)}>{action}</Button
+								>{/if}
+						{/each}
 					</div>{/if}
 			</ItemRow>
 		{:else}
@@ -140,3 +162,11 @@
 		/>
 	{/if}
 </Panel>
+<ConfirmDialog
+	bind:open={confirmDeleteOpen}
+	title={$t('Delete')}
+	body={$t('This cannot be undone.')}
+	confirmLabel={$t('Delete')}
+	busy={moderating !== ''}
+	onConfirm={confirmDelete}
+/>

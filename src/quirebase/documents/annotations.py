@@ -398,8 +398,11 @@ async def _annotation_views(
                         else []
                     )
                     + (["unlock"] if record.locked_at is not None else ["lock"])
+                    + ["delete"]
                     if (
                         can_moderate
+                        and record.author_id != user.id
+                        and record.deleted_at is None
                         and record.scope is AnnotationScope.project
                         and record.project_item_id is not None
                         and project_states_by_item.get(record.project_item_id)
@@ -848,6 +851,8 @@ async def moderate_document_annotation(
     )
     if record is None or revision is None or record.scope is not AnnotationScope.project:
         raise ResourceUnavailable("Annotation not found")
+    if record.author_id == user.id:
+        raise ValidationFailure("authors cannot moderate their own Annotation")
     project_item = await db.scalar(
         select(ProjectItem).where(
             ProjectItem.id == record.project_item_id,
@@ -891,6 +896,8 @@ async def moderate_document_annotation(
         values["locked_at"] = changed_at
     elif action == "unlock":
         values["locked_at"] = None
+    elif action == "delete":
+        values["deleted_at"] = changed_at
     else:
         raise ValidationFailure("invalid Annotation moderation action")
 
@@ -920,6 +927,7 @@ async def moderate_document_annotation(
         f"annotation.moderate.{action}",
         "pdf_annotation",
         record.id,
+        detail={"author_id": record.author_id} if action == "delete" else None,
         workspace_id=workspace_id,
         project_id=project_item.project_id,
         authorization_role=workspace.role.value,

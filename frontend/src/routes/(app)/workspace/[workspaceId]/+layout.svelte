@@ -71,7 +71,11 @@
 			const stillAvailable = result.data?.some((candidate) => candidate.id === workspaceId);
 			if (!stillAvailable) clearDefaultWorkspacePreference();
 			unavailable = !stillAvailable;
-			if (!stillAvailable) void goto(resolve('/workspace'), { replaceState: true });
+			if (!stillAvailable) {
+				void goto(resolve('/workspace'), { replaceState: true });
+			} else {
+				recoveryStarted = false;
+			}
 		});
 	});
 </script>

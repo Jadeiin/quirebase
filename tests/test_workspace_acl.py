@@ -26,6 +26,7 @@ from quirebase.core.errors import (
     ResourceNotFound,
     ResourceUnavailable,
     ValidationFailure,
+    VersionConflict,
     WorkspaceLifecycleError,
     WorkspaceMembershipRequired,
 )
@@ -2250,6 +2251,66 @@ async def test_annotation_moderation_preserves_authored_content_and_hides_shared
     )
     assert not author_view.annotations
     assert [entry.annotation.id for entry in owner_view.annotations] == [annotation.id]
+
+
+@pytest.mark.anyio
+async def test_annotation_moderation_rejects_authors_and_audits_versioned_deletion(async_db):
+    (
+        author,
+        administrator,
+        item,
+        _project,
+        _revision,
+        annotation,
+        _reply,
+    ) = await _shared_annotation_context(async_db, "moderation-delete")
+    workspace_id = fixture_workspace_id(author)
+
+    author_review = await review_item_annotations(
+        async_db, author, workspace_id, item.id, page=1, per_page=20
+    )
+    assert author_review.annotations[0]["mine"] is True
+    assert set(author_review.annotations[0]["allowed_actions"]) == {"edit", "delete"}
+    with pytest.raises(ValidationFailure, match="cannot moderate their own"):
+        await moderate_document_annotation(
+            async_db, author, workspace_id, item.id, annotation.id, "hide", 1
+        )
+
+    membership = await async_db.scalar(
+        select(WorkspaceMember).where(
+            WorkspaceMember.workspace_id == workspace_id,
+            WorkspaceMember.user_id == administrator.id,
+        )
+    )
+    assert membership is not None
+    membership.role = WorkspaceRole.admin
+    await async_db.commit()
+
+    with pytest.raises(VersionConflict) as conflict:
+        await moderate_document_annotation(
+            async_db, administrator, workspace_id, item.id, annotation.id, "delete", 2
+        )
+    assert conflict.value.current_version == 1
+
+    deleted = await moderate_document_annotation(
+        async_db, administrator, workspace_id, item.id, annotation.id, "delete", 1
+    )
+    assert deleted["version"] == 2
+    assert deleted["allowed_actions"] == []
+    stored = await async_db.get(PdfAnnotation, annotation.id, populate_existing=True)
+    assert stored is not None
+    assert stored.deleted_at is not None
+
+    event = await async_db.scalar(
+        select(AuditEvent).where(
+            AuditEvent.action == "annotation.moderate.delete",
+            AuditEvent.target_id == annotation.id,
+        )
+    )
+    assert event is not None
+    assert event.actor_id == administrator.id
+    assert event.authorization_capability == Capability.annotations_moderate.value
+    assert json.loads(event.detail or "{}") == {"author_id": author.id}
 
 
 @pytest.mark.anyio

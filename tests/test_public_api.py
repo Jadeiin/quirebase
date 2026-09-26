@@ -26,10 +26,12 @@ from quirebase.models import (
     ProjectState,
     ProjectVisibility,
     SystemRole,
+    Tag,
     User,
     WorkspaceMember,
     WorkspaceRole,
 )
+from quirebase.workspaces import archive_workspace, suspend_workspace_governance
 
 
 @asynccontextmanager
@@ -580,7 +582,12 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
         }
         assert review.json()["total"] == 3
         assert set(reviewed[archived_annotation.id]["allowed_actions"]) == set()
-        assert set(reviewed[annotations[0].id]["allowed_actions"]) >= {"hide", "archive", "lock"}
+        assert set(reviewed[annotations[0].id]["allowed_actions"]) == {
+            "hide",
+            "archive",
+            "lock",
+            "delete",
+        }
         assert review.json()["page"] == 1
         assert review.json()["per_page"] == 50
         paged_reviews = [
@@ -597,7 +604,8 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
         )
         assert all(response.json()["total"] == 3 for response in paged_reviews)
         assert all(
-            set(response.json()["annotations"][0]["allowed_actions"]) >= {"hide", "archive", "lock"}
+            set(response.json()["annotations"][0]["allowed_actions"])
+            == {"hide", "archive", "lock", "delete"}
             for response in paged_reviews
             if response.json()["annotations"][0]["id"] != archived_annotation.id
         )
@@ -613,6 +621,79 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
             assert moderated.json()["body"] is None
             assert moderated.json()["version"] == 2
             assert moderated.json()["moderated_by"] == administrator.id
+
+        deleted = await client.post(
+            f"/api/v1/workspaces/{workspace_id}/items/{item.id}/annotations/"
+            f"{annotations[0].id}/moderation",
+            headers=headers,
+            json={"action": "delete", "version": 2},
+        )
+        assert deleted.status_code == 200
+        assert deleted.json()["version"] == 3
+        assert deleted.json()["allowed_actions"] == []
+        remaining = await client.get(
+            f"/api/v1/workspaces/{workspace_id}/items/{item.id}/annotations/review",
+            headers=headers,
+        )
+        assert remaining.status_code == 200
+        assert annotations[0].id not in {entry["id"] for entry in remaining.json()["annotations"]}
+
+    event = await db.scalar(
+        select(AuditEvent).where(
+            AuditEvent.action == "annotation.moderate.delete",
+            AuditEvent.target_id == annotations[0].id,
+        )
+    )
+    assert event is not None
+    assert event.authorization_capability == "annotations.moderate"
+    assert json.loads(event.detail or "{}")["author_id"] == author.id
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("read_only_mode", ["archived", "suspended"])
+async def test_http_api_tags_use_effective_management_capability(
+    async_db, async_session_factory, read_only_mode
+):
+    db = async_db
+    owner = User(username=f"tag-capability-owner-{read_only_mode}", password_hash="unused")
+    instance_administrator = User(
+        username=f"tag-capability-admin-{read_only_mode}",
+        password_hash="unused",
+        role=SystemRole.administrator,
+    )
+    db.add_all([owner, instance_administrator])
+    await db.flush()
+    await provision_initial_workspace(db, owner)
+    workspace_id = fixture_workspace_id(owner)
+    tag = Tag(
+        workspace_id=workspace_id,
+        name="Read only",
+        normalized_name="read only",
+        created_by=owner.id,
+    )
+    db.add(tag)
+    await db.commit()
+    grant = await create_api_token(db, owner, "Read-only Tags", expires_in_days=30)
+
+    if read_only_mode == "archived":
+        await archive_workspace(db, owner, workspace_id)
+    else:
+        await suspend_workspace_governance(db, instance_administrator, workspace_id)
+
+    async with api_client(async_session_factory) as (client, _app):
+        response = await client.get(
+            f"/api/v1/workspaces/{workspace_id}/tags", headers=bearer(grant.raw_token)
+        )
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "id": tag.id,
+            "name": "Read only",
+            "accessible_item_count": 0,
+            "can_manage": False,
+        }
+    ]
 
 
 @pytest.mark.anyio

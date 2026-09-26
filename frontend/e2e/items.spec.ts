@@ -433,7 +433,8 @@ test('Annotation moderation refreshes a stale version and requires an explicit r
 							body: latest ? 'Updated by another moderator' : 'Original moderation target',
 							selected_text: null,
 							author_display_name: 'author',
-							allowed_actions: ['hide'],
+							mine: false,
+							allowed_actions: ['hide', 'delete'],
 							replies: []
 						}
 					],
@@ -473,6 +474,16 @@ test('Annotation moderation refreshes a stale version and requires an explicit r
 		.toEqual([
 			{ action: 'hide', version: 1 },
 			{ action: 'hide', version: 2 }
+		]);
+
+	await page.getByRole('button', { name: 'Delete', exact: true }).click();
+	await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
+	await expect
+		.poll(() => moderationBodies)
+		.toEqual([
+			{ action: 'hide', version: 1 },
+			{ action: 'hide', version: 2 },
+			{ action: 'delete', version: 2 }
 		]);
 });
 
