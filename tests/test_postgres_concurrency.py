@@ -22,7 +22,12 @@ from quirebase.core.errors import (
     WorkspaceLifecycleError,
     WorkspaceMembershipRequired,
 )
-from quirebase.documents import AnnotationReplyCreate, create_annotation_reply
+from quirebase.documents import (
+    AnnotationReplyCreate,
+    AnnotationUpdate,
+    create_annotation_reply,
+    update_document_annotation,
+)
 from quirebase.documents.workflows import _lock_upload_authority
 from quirebase.library import (
     add_discussion_message,
@@ -101,8 +106,11 @@ async def _user(db: AsyncSession, prefix: str) -> User:
 
 
 async def _project_annotation_context(
-    db: AsyncSession, prefix: str
-) -> tuple[str, str, str, str, str]:
+    db: AsyncSession,
+    prefix: str,
+    *,
+    annotation_scope: AnnotationScope = AnnotationScope.project,
+) -> tuple[str, str, str, str, str, str]:
     owner = await _user(db, f"{prefix}-owner")
     workspace_id, owner_id = fixture_workspace_id(owner), owner.id
     item = Item(workspace_id=workspace_id, title=prefix, created_by=owner_id)
@@ -132,14 +140,14 @@ async def _project_annotation_context(
         page_index=0,
         author_id=owner_id,
         kind=AnnotationKind.note,
-        scope=AnnotationScope.project,
-        project_item_id=assignment.id,
+        scope=annotation_scope,
+        project_item_id=(assignment.id if annotation_scope is AnnotationScope.project else None),
         body="Reply target",
         payload={"type": "note", "rect": {"x": 1, "y": 1, "width": 1, "height": 1}},
     )
     db.add(annotation)
     await db.commit()
-    return workspace_id, owner_id, item.id, assignment.id, annotation.id
+    return workspace_id, owner_id, item.id, project.id, assignment.id, annotation.id
 
 
 async def test_write_authorization_serializes_with_workspace_archive(postgres_sessions):
@@ -830,6 +838,7 @@ async def test_reply_create_waits_for_annotation_moderation_and_rechecks(postgre
             workspace_id,
             owner_id,
             item_id,
+            _project_id,
             _assignment_id,
             annotation_id,
         ) = await _project_annotation_context(db, "reply-moderation")
@@ -879,6 +888,7 @@ async def test_reply_create_waits_for_project_item_detachment_and_rechecks(postg
             workspace_id,
             owner_id,
             item_id,
+            _project_id,
             assignment_id,
             annotation_id,
         ) = await _project_annotation_context(db, "reply-detachment")
@@ -920,6 +930,81 @@ async def test_reply_create_waits_for_project_item_detachment_and_rechecks(postg
         finally:
             await detach_db.commit()
         assert await asyncio.wait_for(reply_task, timeout=5) == "rejected"
+
+
+async def test_annotation_scope_update_waits_for_project_item_detachment_and_rechecks(
+    postgres_sessions,
+):
+    async with postgres_sessions() as db:
+        (
+            workspace_id,
+            owner_id,
+            item_id,
+            project_id,
+            assignment_id,
+            annotation_id,
+        ) = await _project_annotation_context(
+            db,
+            "annotation-scope-detachment",
+            annotation_scope=AnnotationScope.private,
+        )
+
+    async with postgres_sessions() as detach_db:
+        assignment = await detach_db.scalar(
+            select(ProjectItem).where(ProjectItem.id == assignment_id).with_for_update()
+        )
+        assert assignment is not None
+        await detach_db.delete(assignment)
+        await detach_db.flush()
+
+        started = asyncio.Event()
+
+        async def update_scope() -> str:
+            async with postgres_sessions() as db:
+                actor = await db.get(User, owner_id)
+                assert actor is not None
+                started.set()
+                try:
+                    await update_document_annotation(
+                        db,
+                        actor,
+                        workspace_id,
+                        item_id,
+                        annotation_id,
+                        AnnotationUpdate.model_validate({
+                            "version": 1,
+                            "page_index": 0,
+                            "kind": "note",
+                            "scope": "project",
+                            "project_id": project_id,
+                            "body": "Moved to Project scope",
+                            "payload": {
+                                "type": "note",
+                                "rect": {"x": 1, "y": 1, "width": 1, "height": 1},
+                            },
+                        }),
+                    )
+                except ResourceUnavailable:
+                    await db.rollback()
+                    return "rejected"
+                return "committed"
+
+        update_task = asyncio.create_task(update_scope())
+        try:
+            await started.wait()
+            await asyncio.sleep(0.05)
+            assert not update_task.done()
+        finally:
+            await detach_db.commit()
+        assert await asyncio.wait_for(update_task, timeout=5) == "rejected"
+
+    async with postgres_sessions() as db:
+        annotation = await db.get(PdfAnnotation, annotation_id)
+        assert annotation is not None
+        assert annotation.scope is AnnotationScope.private
+        assert annotation.project_item_id is None
+        assert annotation.version == 1
+        assert await db.get(ProjectItem, assignment_id) is None
 
 
 async def test_bulk_project_assignment_translates_item_delete_race(postgres_sessions):

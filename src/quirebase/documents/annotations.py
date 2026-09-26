@@ -66,6 +66,25 @@ class DocumentNotReady(DomainError):
     pass
 
 
+async def _lock_annotation_project_item(
+    db: AsyncSession, workspace_id: str, project_id: str, item_id: str
+) -> ProjectItem:
+    """Fence ProjectItem detachment while an Annotation write binds to it."""
+    project_item = await db.scalar(
+        select(ProjectItem)
+        .where(
+            ProjectItem.workspace_id == workspace_id,
+            ProjectItem.project_id == project_id,
+            ProjectItem.item_id == item_id,
+        )
+        .execution_options(populate_existing=True)
+        .with_for_update(read=True)
+    )
+    if project_item is None:
+        raise ResourceUnavailable("ProjectItem not found")
+    return project_item
+
+
 async def delete_project_item_annotations(
     db: AsyncSession, workspace_id: str, project_item_id: str
 ) -> None:
@@ -574,15 +593,12 @@ async def create_document_annotation(
             data.project_id,
             Capability.annotations_project_write,
         )
-        project_item = await db.scalar(
-            select(ProjectItem).where(
-                ProjectItem.workspace_id == workspace_id,
-                ProjectItem.project_id == data.project_id,
-                ProjectItem.item_id == item_id,
-            )
+        project_item = await _lock_annotation_project_item(
+            db,
+            workspace_id,
+            data.project_id,
+            item_id,
         )
-        if project_item is None:
-            raise ResourceUnavailable("ProjectItem not found")
     else:
         await require_workspace_capability(
             db, user, workspace_id, Capability.annotations_private_write
@@ -655,15 +671,12 @@ async def update_document_annotation(
             data.project_id,
             Capability.annotations_project_write,
         )
-        project_item = await db.scalar(
-            select(ProjectItem).where(
-                ProjectItem.workspace_id == workspace_id,
-                ProjectItem.project_id == data.project_id,
-                ProjectItem.item_id == item_id,
-            )
+        project_item = await _lock_annotation_project_item(
+            db,
+            workspace_id,
+            data.project_id,
+            item_id,
         )
-        if project_item is None:
-            raise ResourceUnavailable("ProjectItem not found")
     else:
         await require_workspace_capability(
             db, user, workspace_id, Capability.annotations_private_write
