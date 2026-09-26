@@ -238,7 +238,7 @@ def upgrade() -> None:
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('workspace_id', sa.String(length=36), nullable=False),
     sa.Column('name', sa.String(length=120), nullable=False),
-    sa.Column('normalized_name', sa.String(length=120), nullable=False),
+    sa.Column('normalized_name', sa.String(length=360), nullable=False),
     sa.Column('created_by', sa.String(length=36), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),

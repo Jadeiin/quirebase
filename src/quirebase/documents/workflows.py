@@ -56,14 +56,16 @@ async def _lock_upload_authority(
     *,
     role: AttachmentRole | None = None,
 ) -> tuple[User, Item]:
+    actor = await db.scalar(
+        select(User).where(User.id == actor_id, User.active.is_(True)).with_for_update(read=True)
+    )
+    if actor is None:
+        raise ValueError("Item is no longer writable")
     workspace = await db.scalar(
         select(Workspace).where(Workspace.id == workspace_id).with_for_update()
     )
     if workspace is None:
         raise ValueError("Workspace is no longer writable")
-    actor = await db.scalar(
-        select(User).where(User.id == actor_id, User.active.is_(True)).with_for_update(read=True)
-    )
     lock = (
         select(Item)
         .where(Item.id == item_id, Item.workspace_id == workspace_id)
@@ -74,7 +76,7 @@ async def _lock_upload_authority(
     else:
         lock = lock.with_for_update(read=True, key_share=True)
     item = await db.scalar(lock)
-    if actor is None or item is None:
+    if item is None:
         raise ValueError("Item is no longer writable")
     try:
         await require_workspace_capability(db, actor, workspace_id, Capability.files_manage)

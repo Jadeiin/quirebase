@@ -33,6 +33,7 @@ from quirebase.library.imports import (
     finalize_pdf_import_batch,
     lookup_pdf_import_candidate,
     prepare_pdf_import_candidate,
+    retry_pdf_import_batch,
     stage_pdf_import_batch,
 )
 from quirebase.models import (
@@ -45,7 +46,10 @@ from quirebase.models import (
     ProjectItem,
     Tag,
     User,
+    WorkspaceMember,
+    WorkspaceRole,
 )
+from quirebase.web.api.imports import import_batch as import_batch_api
 
 
 def provider_candidate(identifier: str, title: str, *, authors: str | None = None):
@@ -275,6 +279,72 @@ async def test_failed_pdf_import_can_retry_with_a_new_durable_workflow(
     finally:
         await client.aclose()
         get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_workspace_editor_retry_rebinds_pdf_batch_and_hides_actor_workflow(
+    async_db, fake_durable_operations
+):
+    owner = User(username="shared-retry-owner", password_hash="unused")
+    editor = User(username="shared-retry-editor", password_hash="unused")
+    async_db.add_all([owner, editor])
+    await async_db.flush()
+    await provision_initial_workspace(async_db, owner)
+    workspace_id = fixture_workspace_id(owner)
+    async_db.add(
+        WorkspaceMember(
+            workspace_id=workspace_id,
+            user_id=editor.id,
+            role=WorkspaceRole.editor,
+            invited_by=owner.id,
+        )
+    )
+    stored = await get_object_store().put_object(
+        uuid4(), ObjectSuffix.PDF, b"%PDF-shared-retry", max_bytes=100
+    )
+    pending = [
+        {
+            "_row": 1,
+            "_pdf": {
+                "object_key": stored.key,
+                "size": stored.size,
+                "original_name": "shared-retry.pdf",
+            },
+        }
+    ]
+    batch = ImportBatch(
+        workspace_id=workspace_id,
+        actor_id=owner.id,
+        file_format="pdf",
+        records=json.dumps(pending),
+        errors="[]",
+        status="failed",
+        workflow_id="prepare-pdf-import:shared-old",
+    )
+    async_db.add(batch)
+    await async_db.commit()
+
+    await retry_pdf_import_batch(async_db, editor, workspace_id, batch.id)
+    await async_db.refresh(batch)
+    enqueue = fake_durable_operations.enqueues[-1]
+
+    assert batch.actor_id == editor.id
+    assert enqueue["args"][0] == editor.id
+    assert enqueue["attributes"]["actor_id"] == editor.id
+    assert (await import_batch_api(workspace_id, batch.id, owner, async_db))["workflow_id"] is None
+    assert (await import_batch_api(workspace_id, batch.id, editor, async_db))[
+        "workflow_id"
+    ] == batch.workflow_id
+    assert await finalize_pdf_import_batch(
+        async_db,
+        editor.id,
+        workspace_id,
+        batch.id,
+        batch.workflow_id,
+        pending,
+        [],
+    )
+    assert batch.status == "ready"
 
 
 @pytest.mark.anyio

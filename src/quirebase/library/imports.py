@@ -579,6 +579,10 @@ async def retry_pdf_import_batch(
         raise BatchConflict("the failed import batch has no staged PDFs to retry")
 
     workflow_id = f"prepare-pdf-import:{batch.id}:{uuid4()}"
+    # A retry is a new authorization boundary.  Keep the Import Batch root,
+    # workflow arguments and workflow attributes bound to the same actor so a
+    # Workspace editor can successfully retry another member's failed batch.
+    batch.actor_id = user.id
     batch.status = "pending"
     batch.workflow_id = workflow_id
     await durable_operations().enqueue_in_transaction(
@@ -616,14 +620,15 @@ async def retry_pdf_import_batch(
 async def commit_import_batch(
     db: AsyncSession, user: User, workspace_id: str, batch_id: str
 ) -> list[str]:
-    # Revalidate the owner and hold a shared lock while the batch root is
-    # locked.  Account deactivation therefore cannot race a confirmation.
-    await require_workspace_capability(db, user, workspace_id, Capability.items_create)
-    owner = await db.scalar(
+    # Lock the confirmer before Workspace authorization. Account deactivation
+    # uses the same User-before-Workspace order, so it cannot deadlock a
+    # confirmation while the Import Batch root is being committed.
+    actor = await db.scalar(
         select(User).where(User.id == user.id, User.active.is_(True)).with_for_update(read=True)
     )
-    if owner is None:
+    if actor is None:
         raise ResourceUnavailable("user not available")
+    await require_workspace_capability(db, actor, workspace_id, Capability.items_create)
     # Confirmation mutates the Import Batch root and creates child Items.  A
     # full UPDATE lock serializes concurrent confirmations before either caller
     # can observe ``ready`` and create duplicate Items.
@@ -652,7 +657,7 @@ async def commit_import_batch(
     if batch.file_format == "pdf":
         known_dois = {
             value
-            for provider, value in await get_accessible_item_identifiers(db, owner, workspace_id)
+            for provider, value in await get_accessible_item_identifiers(db, actor, workspace_id)
             if provider == "doi"
         }
         candidate_dois: set[str] = set()
@@ -669,11 +674,11 @@ async def commit_import_batch(
     for record in records:
         candidate = dict(record)
         pdf = candidate.pop("_pdf", None)
-        item = await _create_item_from_record(db, owner, workspace_id, candidate)
+        item = await _create_item_from_record(db, actor, workspace_id, candidate)
         if pdf is not None:
             await attach_staged_pdf(
                 db,
-                owner,
+                actor,
                 item,
                 (
                     pdf["object_key"],
@@ -684,7 +689,7 @@ async def commit_import_batch(
         await search_index(db).index_item(db, item.id)
         record_event(
             db,
-            owner.id,
+            actor.id,
             "pdf.import" if pdf is not None else "bibliography.import",
             "item",
             item.id,

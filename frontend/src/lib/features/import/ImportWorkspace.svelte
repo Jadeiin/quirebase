@@ -50,12 +50,60 @@
 		pollingAbort = null;
 	}
 
+	function delay(milliseconds: number, signal: AbortSignal): Promise<void> {
+		return new Promise((resolveDelay, reject) => {
+			if (signal.aborted) return reject(new DOMException('Import polling aborted', 'AbortError'));
+			const completed = () => {
+				signal.removeEventListener('abort', aborted);
+				resolveDelay();
+			};
+			const aborted = () => {
+				window.clearTimeout(timer);
+				reject(new DOMException('Import polling aborted', 'AbortError'));
+			};
+			const timer = window.setTimeout(completed, milliseconds);
+			signal.addEventListener('abort', aborted, { once: true });
+		});
+	}
+
 	function acceptBatch(next: ImportBatch) {
 		stopPolling();
 		batch = next;
 		previewPage = 1;
-		if (next.status === 'pending' && next.workflow_id)
-			void followWorkflow(next.id, next.workflow_id);
+		if (next.status === 'pending') {
+			if (next.workflow_id) void followWorkflow(next.id, next.workflow_id);
+			else void followBatch(next.id);
+		}
+	}
+
+	async function followBatch(batchId: string) {
+		const controller = new AbortController();
+		pollingAbort = controller;
+		let interval = 500;
+		try {
+			for (;;) {
+				await delay(interval, controller.signal);
+				const refreshed = await workspace.api.request(
+					'GET',
+					'/workspaces/{workspace_id}/imports/{batch_id}',
+					{
+						params: { path: { batch_id: batchId } },
+						signal: controller.signal
+					}
+				);
+				if (controller.signal.aborted || batch?.id !== batchId) return;
+				if (refreshed.status !== 'pending' || refreshed.workflow_id) {
+					acceptBatch(refreshed);
+					error = '';
+					return;
+				}
+				batch = refreshed;
+				interval = Math.min(interval * 2, 4000);
+			}
+		} catch (reason) {
+			if (controller.signal.aborted) return;
+			error = apiErrorMessage(reason, $t('Unable to refresh Import preview'));
+		}
 	}
 
 	async function loadBatch(batchId: string) {

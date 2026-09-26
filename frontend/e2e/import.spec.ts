@@ -47,6 +47,38 @@ test('pending PDF imports refresh until they can be committed', async ({ page })
 	await expect(page.getByText('Imported PDF')).toBeVisible();
 });
 
+test('shared pending Import previews poll the batch without actor-only workflow access', async ({
+	page
+}) => {
+	await mockSession(page);
+	let previewRequests = 0;
+	let workflowRequests = 0;
+	await page.route('**/api/v1/workspaces/workspace-1/imports/batch-shared', (route) => {
+		previewRequests += 1;
+		return route.fulfill({
+			json: {
+				id: 'batch-shared',
+				file_format: 'pdf',
+				status: previewRequests > 1 ? 'ready' : 'pending',
+				workflow_id: null,
+				records: previewRequests > 1 ? [{ title: 'Shared imported PDF' }] : [],
+				errors: []
+			}
+		});
+	});
+	await page.route('**/api/v1/workspaces/workspace-1/workflows/*', (route) => {
+		workflowRequests += 1;
+		return route.fulfill({ status: 404, json: { code: 'resource_not_found' } });
+	});
+
+	await page.goto('/workspace/workspace-1/import?batch=batch-shared');
+
+	await expect.poll(() => previewRequests, { timeout: 5_000 }).toBeGreaterThan(1);
+	await expect(page.getByRole('button', { name: 'Commit' })).toBeEnabled();
+	await expect(page.getByText('Shared imported PDF')).toBeVisible();
+	expect(workflowRequests).toBe(0);
+});
+
 test('PDF import accumulates and deduplicates repeated file selections', async ({ page }) => {
 	await mockSession(page);
 	let uploadBody = '';

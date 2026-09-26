@@ -2469,7 +2469,7 @@ async def test_project_annotation_export_file_rejects_replaced_assignment(
 
 
 @pytest.mark.anyio
-async def test_cross_workspace_copy_creates_detached_item_and_file(async_db):
+async def test_cross_workspace_copy_creates_detached_item_and_file(async_db, monkeypatch):
     actor = await _user(async_db, "copy-actor")
     target_owner = await _user(async_db, "copy-target-owner")
     async_db.add(
@@ -2503,6 +2503,25 @@ async def test_cross_workspace_copy_creates_detached_item_and_file(async_db):
     )
     async_db.add(source_revision)
     await async_db.commit()
+
+    store = get_object_store()
+
+    class TransactionCheckingStore:
+        async def get(self, *args, **kwargs):
+            assert not async_db.in_transaction()
+            return await store.get(*args, **kwargs)
+
+        async def put_object(self, *args, **kwargs):
+            assert not async_db.in_transaction()
+            return await store.put_object(*args, **kwargs)
+
+        async def delete(self, *args, **kwargs):
+            return await store.delete(*args, **kwargs)
+
+    monkeypatch.setattr(
+        "quirebase.library.cross_workspace.get_object_store",
+        TransactionCheckingStore,
+    )
 
     copied = await copy_item_to_workspace(
         async_db,

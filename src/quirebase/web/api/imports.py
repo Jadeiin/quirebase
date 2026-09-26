@@ -26,12 +26,17 @@ from quirebase.web.uploads import upload_chunks
 router = APIRouter(tags=["Imports"])
 
 
-def _import_batch_view(batch, records: list[dict], errors: list[dict]) -> dict:
+def _import_batch_view(
+    batch, records: list[dict], errors: list[dict], *, include_workflow: bool = True
+) -> dict:
     return {
         "id": batch.id,
         "file_format": batch.file_format,
         "status": batch.status,
-        "workflow_id": batch.workflow_id,
+        # Workflow status remains visible only to the actor recorded in its
+        # durable attributes. Other Workspace members poll this shared Import
+        # Batch resource instead of receiving an actor-only workflow identity.
+        "workflow_id": batch.workflow_id if include_workflow else None,
         "records": records,
         "errors": errors,
         "created_at": batch.created_at,
@@ -96,7 +101,8 @@ async def stage_pdf_import(
 
 @router.get("/imports/{batch_id}", response_model=ImportBatchView)
 async def import_batch(workspace_id: str, batch_id: str, user: ApiUser, db: Database):
-    return _import_batch_view(*(await get_import_batch_preview(db, user, workspace_id, batch_id)))
+    result = await get_import_batch_preview(db, user, workspace_id, batch_id)
+    return _import_batch_view(*result, include_workflow=result[0].actor_id == user.id)
 
 
 @router.post("/imports/{batch_id}/retry", response_model=ImportBatchRetryView)

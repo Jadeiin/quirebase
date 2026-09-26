@@ -22,16 +22,19 @@ from quirebase.core.errors import (
     WorkspaceMembershipRequired,
 )
 from quirebase.documents import AnnotationReplyCreate, create_annotation_reply
+from quirebase.documents.workflows import _lock_upload_authority
 from quirebase.library import (
     add_discussion_message,
     add_existing_tag_to_item,
     add_project_discussion_message,
     apply_bulk_item_action,
+    commit_import_batch,
 )
 from quirebase.models import (
     AnnotationKind,
     AnnotationScope,
     FileRevision,
+    ImportBatch,
     Item,
     ItemTag,
     PdfAnnotation,
@@ -446,6 +449,150 @@ async def test_ownership_transfer_serializes_with_target_deactivation(
         assert target is not None
         assert workspace.owner_id == target.id
         assert target.active is True
+
+
+async def test_upload_finalizer_and_deactivation_follow_user_workspace_lock_order(
+    postgres_sessions,
+):
+    async with postgres_sessions() as db:
+        administrator = await _user(db, "upload-deactivate-admin")
+        administrator.role = "administrator"
+        actor = User(username=f"upload-deactivate-actor-{uuid4()}", password_hash="unused")
+        db.add(actor)
+        await db.flush()
+        workspace_id = fixture_workspace_id(administrator)
+        db.add(
+            WorkspaceMember(
+                workspace_id=workspace_id,
+                user_id=actor.id,
+                role=WorkspaceRole.editor,
+                invited_by=administrator.id,
+            )
+        )
+        item = Item(
+            workspace_id=workspace_id,
+            title="Upload finalizer lock order",
+            created_by=administrator.id,
+        )
+        db.add(item)
+        await db.commit()
+        administrator_id, actor_id, item_id = administrator.id, actor.id, item.id
+
+    finalizer_started = asyncio.Event()
+    deactivation_started = asyncio.Event()
+
+    async def finalize_upload() -> str:
+        async with postgres_sessions() as db:
+            finalizer_started.set()
+            await _lock_upload_authority(db, actor_id, workspace_id, item_id)
+            await db.commit()
+            return "finalized"
+
+    async def deactivate_actor() -> str:
+        async with postgres_sessions() as db:
+            administrator = await db.get(User, administrator_id)
+            assert administrator is not None
+            deactivation_started.set()
+            await update_user_status(db, administrator, actor_id, active=False)
+            return "deactivated"
+
+    async with postgres_sessions() as blocker_db:
+        workspace = await blocker_db.scalar(
+            select(Workspace).where(Workspace.id == workspace_id).with_for_update()
+        )
+        assert workspace is not None
+
+        finalizer_task = asyncio.create_task(finalize_upload())
+        await finalizer_started.wait()
+        await asyncio.sleep(0.05)
+        assert not finalizer_task.done()
+
+        deactivation_task = asyncio.create_task(deactivate_actor())
+        await deactivation_started.wait()
+        await asyncio.sleep(0.05)
+        assert not deactivation_task.done()
+
+        await blocker_db.commit()
+        outcomes = await asyncio.wait_for(
+            asyncio.gather(finalizer_task, deactivation_task, return_exceptions=True),
+            timeout=5,
+        )
+
+    assert outcomes == ["finalized", "deactivated"]
+
+
+async def test_import_confirmation_and_deactivation_follow_user_workspace_lock_order(
+    postgres_sessions,
+):
+    async with postgres_sessions() as db:
+        administrator = await _user(db, "import-deactivate-admin")
+        administrator.role = "administrator"
+        actor = User(username=f"import-deactivate-actor-{uuid4()}", password_hash="unused")
+        db.add(actor)
+        await db.flush()
+        workspace_id = fixture_workspace_id(administrator)
+        db.add(
+            WorkspaceMember(
+                workspace_id=workspace_id,
+                user_id=actor.id,
+                role=WorkspaceRole.editor,
+                invited_by=administrator.id,
+            )
+        )
+        batch = ImportBatch(
+            workspace_id=workspace_id,
+            actor_id=administrator.id,
+            file_format="bibtex",
+            records='[{"title": "Confirmed without a deadlock"}]',
+            errors="[]",
+            status="ready",
+        )
+        db.add(batch)
+        await db.commit()
+        administrator_id, actor_id, batch_id = administrator.id, actor.id, batch.id
+
+    confirmation_started = asyncio.Event()
+    deactivation_started = asyncio.Event()
+
+    async def confirm_import() -> str:
+        async with postgres_sessions() as db:
+            actor = await db.get(User, actor_id)
+            assert actor is not None
+            confirmation_started.set()
+            await commit_import_batch(db, actor, workspace_id, batch_id)
+            return "confirmed"
+
+    async def deactivate_actor() -> str:
+        async with postgres_sessions() as db:
+            administrator = await db.get(User, administrator_id)
+            assert administrator is not None
+            deactivation_started.set()
+            await update_user_status(db, administrator, actor_id, active=False)
+            return "deactivated"
+
+    async with postgres_sessions() as blocker_db:
+        workspace = await blocker_db.scalar(
+            select(Workspace).where(Workspace.id == workspace_id).with_for_update()
+        )
+        assert workspace is not None
+
+        confirmation_task = asyncio.create_task(confirm_import())
+        await confirmation_started.wait()
+        await asyncio.sleep(0.05)
+        assert not confirmation_task.done()
+
+        deactivation_task = asyncio.create_task(deactivate_actor())
+        await deactivation_started.wait()
+        await asyncio.sleep(0.05)
+        assert not deactivation_task.done()
+
+        await blocker_db.commit()
+        outcomes = await asyncio.wait_for(
+            asyncio.gather(confirmation_task, deactivation_task, return_exceptions=True),
+            timeout=5,
+        )
+
+    assert outcomes == ["confirmed", "deactivated"]
 
 
 async def test_concurrent_project_renames_do_not_upgrade_shared_workspace_locks(

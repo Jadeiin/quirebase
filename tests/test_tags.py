@@ -12,9 +12,11 @@ from quirebase.library.tags import (
     TagConflict,
     add_tag_to_item,
     apply_item_tag_selection,
+    get_or_create_tag,
     get_tag_matrix_for_item,
     merge_tags,
     remove_tag_from_item,
+    rename_tag,
 )
 from quirebase.models import (
     AuditEvent,
@@ -137,6 +139,19 @@ async def test_tag_matrix_and_normalized_names_are_workspace_scoped(async_db):
     assert names == {"Algorithms", "Bioinformatics", "Compiler"}
     assert tags[0].id in matrix["assigned_ids"]
     assert tags[2].id in matrix["recommended_ids"]
+
+
+@pytest.mark.anyio
+async def test_tag_normalized_key_allows_full_casefold_expansion(async_db):
+    user = await _user(async_db, "tag-casefold-expansion")
+    workspace_id = fixture_workspace_id(user)
+
+    tag = await get_or_create_tag(async_db, user, workspace_id, "ß" * 120)
+    assert tag.normalized_name == "ss" * 120
+    assert Tag.__table__.c.normalized_name.type.length == 360
+
+    renamed = await rename_tag(async_db, user, workspace_id, tag.id, "ﬃ" * 120)
+    assert renamed.normalized_name == "ffi" * 120
 
 
 @pytest.mark.anyio

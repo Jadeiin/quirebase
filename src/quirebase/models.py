@@ -481,7 +481,9 @@ class Tag(Base):
         ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
     )
     name: Mapped[str] = mapped_column(String(120), index=True)
-    normalized_name: Mapped[str] = mapped_column(String(120), index=True, default=_tag_name_default)
+    # Unicode case-folding can expand one display character to three code
+    # points (for example, the ligature "ﬃ" becomes "ffi").
+    normalized_name: Mapped[str] = mapped_column(String(360), index=True, default=_tag_name_default)
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
