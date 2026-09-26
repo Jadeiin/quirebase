@@ -718,6 +718,20 @@ async def terminate_workspace_member(
 async def transfer_workspace_ownership(
     db: AsyncSession, actor: User, workspace_id: str, target_membership_id: str
 ) -> Workspace:
+    # Account deactivation locks the User before every Workspace where it has a
+    # current membership.  Take the same order here so changing owner_id cannot
+    # deadlock with the foreign-key check against a concurrently deactivated User.
+    target_user = await db.scalar(
+        select(User)
+        .join(WorkspaceMember, WorkspaceMember.user_id == User.id)
+        .where(
+            WorkspaceMember.id == target_membership_id,
+            WorkspaceMember.workspace_id == workspace_id,
+            WorkspaceMember.terminated_at.is_(None),
+        )
+        .execution_options(populate_existing=True)
+        .with_for_update(read=True, of=User)
+    )
     workspace = await _lock_workspace(db, workspace_id)
     context = await require_workspace_capability(
         db, actor, workspace_id, Capability.workspace_transfer
@@ -725,8 +739,7 @@ async def transfer_workspace_ownership(
     target = await _current_member(db, workspace_id, target_membership_id)
     if target.state is not WorkspaceMemberState.active:
         raise ValidationFailure("new owner must be an active Workspace member")
-    target_user = await db.get(User, target.user_id)
-    if target_user is None or not target_user.active:
+    if target_user is None or target_user.id != target.user_id or not target_user.active:
         raise ValidationFailure("new owner must be an active User")
     current = await db.scalar(
         select(WorkspaceMember).where(

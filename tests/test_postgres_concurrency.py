@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.access import Capability, require_workspace_capability
+from quirebase.accounts import update_user_status
 from quirebase.core.database import Base, make_async_engine
 from quirebase.core.errors import (
     PermissionDenied,
@@ -304,6 +305,96 @@ async def test_concurrent_ownership_transfer_reauthorizes_after_root_lock(postgr
         )
         assert owner_count == 1
         assert workspace.owner_id in {first.id, second.id}
+
+
+async def test_ownership_transfer_serializes_with_target_deactivation(
+    postgres_sessions,
+):
+    async with postgres_sessions() as db:
+        owner = await _user(db, "transfer-deactivate-owner")
+        admin = await _user(db, "transfer-deactivate-admin")
+        target = await _user(db, "transfer-deactivate-target")
+        admin.role = "administrator"
+
+        target_workspace_id = fixture_workspace_id(target)
+        admin_membership = WorkspaceMember(
+            workspace_id=target_workspace_id,
+            user_id=admin.id,
+            role=WorkspaceRole.admin,
+            invited_by=target.id,
+        )
+        db.add(admin_membership)
+        await db.flush()
+        await transfer_workspace_ownership(db, target, target_workspace_id, admin_membership.id)
+
+        workspace_id = fixture_workspace_id(owner)
+        target_membership = WorkspaceMember(
+            workspace_id=workspace_id,
+            user_id=target.id,
+            role=WorkspaceRole.editor,
+            invited_by=owner.id,
+        )
+        db.add(target_membership)
+        await db.commit()
+        owner_id = owner.id
+        admin_id = admin.id
+        target_id = target.id
+        target_membership_id = target_membership.id
+
+    transfer_started = asyncio.Event()
+    deactivation_started = asyncio.Event()
+
+    async def transfer():
+        async with postgres_sessions() as db:
+            actor = await db.get(User, owner_id)
+            assert actor is not None
+            transfer_started.set()
+            await transfer_workspace_ownership(db, actor, workspace_id, target_membership_id)
+            return "transferred"
+
+    async def deactivate():
+        async with postgres_sessions() as db:
+            actor = await db.get(User, admin_id)
+            assert actor is not None
+            deactivation_started.set()
+            try:
+                await update_user_status(db, actor, target_id, active=False)
+            except PermissionDenied:
+                await db.rollback()
+                return "denied"
+            return "deactivated"
+
+    async with postgres_sessions() as blocker_db:
+        workspace = await blocker_db.scalar(
+            select(Workspace).where(Workspace.id == workspace_id).with_for_update()
+        )
+        assert workspace is not None
+
+        transfer_task = asyncio.create_task(transfer())
+        await transfer_started.wait()
+        await asyncio.sleep(0.05)
+        assert not transfer_task.done()
+
+        deactivation_task = asyncio.create_task(deactivate())
+        await deactivation_started.wait()
+        await asyncio.sleep(0.05)
+        assert not deactivation_task.done()
+
+        await blocker_db.commit()
+        outcomes = await asyncio.wait_for(
+            asyncio.gather(transfer_task, deactivation_task, return_exceptions=True),
+            timeout=5,
+        )
+
+    assert outcomes == ["transferred", "denied"]
+
+    async with postgres_sessions() as db:
+        workspace = await db.get(Workspace, workspace_id)
+        target = await db.get(User, target_id)
+        assert workspace is not None
+        assert target is not None
+        assert workspace.owner_id == target.id
+        assert target.active is True
 
 
 async def test_concurrent_project_renames_do_not_upgrade_shared_workspace_locks(
