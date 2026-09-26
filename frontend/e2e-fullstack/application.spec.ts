@@ -86,7 +86,8 @@ test('creates a Project through the real API', async ({ page }) => {
 	await page.getByLabel('Participation').selectOption('open');
 	await page.getByRole('button', { name: 'Create Project' }).click();
 
-	await expect(page.getByRole('link', { name: /Full-stack smoke Project/ })).toBeVisible();
+	await expect(page).toHaveURL(/\/workspace\/[^/]+\/projects\/[0-9a-f-]+$/);
+	await expect(page.getByRole('heading', { name: 'Full-stack smoke Project' })).toBeVisible();
 });
 
 test('runs a staged PDF Import through the durable worker', async ({ page }) => {
