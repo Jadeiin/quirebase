@@ -20,6 +20,8 @@ from quirebase.models import (
     ImportBatch,
     Item,
     ObjectIntegrityScan,
+    Project,
+    ProjectItem,
     User,
 )
 from quirebase.operations import health
@@ -526,6 +528,7 @@ async def test_annotation_export_workflow_records_expiring_artifact(monkeypatch)
         "size_bytes": 42,
         "revision_id": "revision-id",
         "project_id": None,
+        "project_item_id": None,
     }
     recorded = []
 
@@ -589,6 +592,7 @@ async def test_annotation_export_artifact_transaction_records_lifetime(async_db,
             "size_bytes": 42,
             "revision_id": revision.id,
             "project_id": None,
+            "project_item_id": None,
         },
     )
 
@@ -598,6 +602,66 @@ async def test_annotation_export_artifact_transaction_records_lifetime(async_db,
     assert artifact.filename == "artifact.pdf"
     assert artifact.size == 42
     assert artifact.expires_at.replace(tzinfo=UTC) >= before + timedelta(minutes=59)
+
+
+@pytest.mark.anyio
+async def test_project_annotation_export_rejects_replaced_assignment(async_db, monkeypatch):
+    async def one_hour(*_args, **_kwargs):
+        await asyncio.sleep(0)
+        return 1
+
+    monkeypatch.setattr("quirebase.operations.settings.get_effective_setting", one_hour)
+    user = await _provisioned_user(async_db, "stale-project-export-user")
+    workspace_id = fixture_workspace_id(user)
+    item = Item(workspace_id=workspace_id, title="Export item", created_by=user.id)
+    project = Project(workspace_id=workspace_id, name="Export project", created_by=user.id)
+    async_db.add_all([item, project])
+    await async_db.flush()
+    revision = FileRevision(
+        workspace_id=workspace_id,
+        item_id=item.id,
+        object_key="aa/bb/source.pdf",
+        size=42,
+        original_name="source.pdf",
+        created_by=user.id,
+    )
+    assignment = ProjectItem(
+        workspace_id=workspace_id,
+        project_id=project.id,
+        item_id=item.id,
+        added_by=user.id,
+    )
+    async_db.add_all([revision, assignment])
+    await async_db.commit()
+    original_assignment_id = assignment.id
+
+    await async_db.delete(assignment)
+    await async_db.commit()
+    async_db.add(
+        ProjectItem(
+            workspace_id=workspace_id,
+            project_id=project.id,
+            item_id=item.id,
+            added_by=user.id,
+        )
+    )
+    await async_db.commit()
+
+    with pytest.raises(PermissionError, match="project assignment no longer exists"):
+        await document_workflows.record_annotation_export_artifact(
+            "stale-project-workflow",
+            user.id,
+            workspace_id,
+            project.id,
+            {
+                "filename": "artifact.pdf",
+                "object_key": "aa/bb/stale-artifact.pdf",
+                "size_bytes": 42,
+                "revision_id": revision.id,
+                "project_id": project.id,
+                "project_item_id": original_assignment_id,
+            },
+        )
 
 
 @pytest.mark.anyio

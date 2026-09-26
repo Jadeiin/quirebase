@@ -108,9 +108,12 @@ async def get_export_file(
         await require_project_context(
             db, user, workspace_id, str(project_id), Capability.workspace_export
         )
+        project_item_id = workflow.output.get("project_item_id")
         if (
-            await db.scalar(
+            not isinstance(project_item_id, str)
+            or await db.scalar(
                 select(ProjectItem.id).where(
+                    ProjectItem.id == project_item_id,
                     ProjectItem.workspace_id == workspace_id,
                     ProjectItem.project_id == str(project_id),
                     ProjectItem.item_id == revision.item_id,

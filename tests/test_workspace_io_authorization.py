@@ -10,9 +10,17 @@ from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.config import get_settings
 from quirebase.core.errors import PermissionDenied, WorkspaceMembershipRequired
+from quirebase.library import export_accessible_bibliography, get_accessible_item_identifiers
 from quirebase.library.discovery import DiscoveryClause, search_candidate_records
 from quirebase.library.imports import stage_identifier_import_batch, stage_pdf_import_batch
-from quirebase.models import ImportBatch, User, WorkspaceMember, WorkspaceMemberState, WorkspaceRole
+from quirebase.models import (
+    ImportBatch,
+    Item,
+    User,
+    WorkspaceMember,
+    WorkspaceMemberState,
+    WorkspaceRole,
+)
 
 
 async def _member(async_db):
@@ -31,6 +39,45 @@ async def _member(async_db):
     async_db.add(membership)
     await async_db.commit()
     return member, membership.id, fixture_workspace_id(owner)
+
+
+@pytest.mark.anyio
+async def test_workspace_bibliography_export_requires_membership(async_db):
+    owner = User(username="bibliography-owner", password_hash="unused")
+    outsider = User(username="bibliography-outsider", password_hash="unused")
+    async_db.add_all([owner, outsider])
+    await async_db.flush()
+    await provision_initial_workspace(async_db, owner)
+    await provision_initial_workspace(async_db, outsider)
+    workspace_id = fixture_workspace_id(owner)
+    async_db.add(Item(workspace_id=workspace_id, title="Private metadata", created_by=owner.id))
+    await async_db.commit()
+
+    with pytest.raises(WorkspaceMembershipRequired):
+        await export_accessible_bibliography(async_db, outsider, workspace_id, file_format="bibtex")
+
+
+@pytest.mark.anyio
+async def test_workspace_identifier_enumeration_requires_membership(async_db):
+    owner = User(username="identifier-owner", password_hash="unused")
+    outsider = User(username="identifier-outsider", password_hash="unused")
+    async_db.add_all([owner, outsider])
+    await async_db.flush()
+    await provision_initial_workspace(async_db, owner)
+    await provision_initial_workspace(async_db, outsider)
+    workspace_id = fixture_workspace_id(owner)
+    async_db.add(
+        Item(
+            workspace_id=workspace_id,
+            title="Private identifiers",
+            doi="10.1000/private",
+            created_by=owner.id,
+        )
+    )
+    await async_db.commit()
+
+    with pytest.raises(WorkspaceMembershipRequired):
+        await get_accessible_item_identifiers(async_db, outsider, workspace_id)
 
 
 @pytest.mark.anyio

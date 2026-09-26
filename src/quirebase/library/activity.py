@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Protocol
 
 from sqlalchemy import func, select, tuple_
 
+from quirebase.access import Capability, require_workspace_capability
 from quirebase.access.items import visible_items_query
 from quirebase.audit import record_event
 from quirebase.models import Item, ItemIdentifier
@@ -48,6 +49,7 @@ async def record_discovery_search_audit(
 async def get_accessible_item_identifiers(
     db: AsyncSession, user: User, workspace_id: str
 ) -> set[tuple[str, str]]:
+    await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
     identifiers_by_provider: set[tuple[str, str]] = set()
     for item in (await db.scalars(visible_items_query(workspace_id))).all():
         if item.doi:

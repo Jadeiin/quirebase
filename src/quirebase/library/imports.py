@@ -745,6 +745,7 @@ async def export_accessible_bibliography(
     style_key: str = "apa",
     options: BibliographyExportOptions | None = None,
 ) -> tuple[str, str, str]:
+    await require_workspace_capability(db, user, workspace_id, Capability.workspace_export)
     items = list(
         (
             await db.scalars(

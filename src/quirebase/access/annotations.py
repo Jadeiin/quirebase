@@ -251,13 +251,69 @@ async def require_visible_annotation_for_reply_mutation(
     item_id: str,
     annotation_id: str,
 ) -> tuple[User, PdfAnnotation]:
-    record = await require_visible_annotation(db, user, workspace_id, item_id, annotation_id)
-    if record.locked_at is not None:
-        raise PermissionDenied("Annotation is locked")
-    if record.scope is AnnotationScope.private:
-        await require_workspace_capability(
+    """Authorize a reply write and fence every row that can revoke it until commit."""
+    candidate = await require_visible_annotation(db, user, workspace_id, item_id, annotation_id)
+    expected_scope = candidate.scope
+    expected_project_item_id = candidate.project_item_id
+    if expected_scope is AnnotationScope.private:
+        context = await require_workspace_capability(
             db, user, workspace_id, Capability.annotations_private_write
         )
+        locked_user = context.actor
     else:
-        await _require_annotation_project_write(db, user, workspace_id, record)
-    return user, record
+        if expected_project_item_id is None:
+            raise ResourceUnavailable("Annotation not found")
+        project_item = await db.scalar(
+            select(ProjectItem).where(
+                ProjectItem.id == expected_project_item_id,
+                ProjectItem.workspace_id == workspace_id,
+                ProjectItem.item_id == item_id,
+            )
+        )
+        if project_item is None:
+            raise ResourceUnavailable("Annotation not found")
+        project_context = await require_project_context(
+            db,
+            user,
+            workspace_id,
+            project_item.project_id,
+            Capability.annotations_project_write,
+        )
+        locked_project_item = await db.scalar(
+            select(ProjectItem)
+            .where(
+                ProjectItem.id == expected_project_item_id,
+                ProjectItem.workspace_id == workspace_id,
+                ProjectItem.project_id == project_item.project_id,
+                ProjectItem.item_id == item_id,
+            )
+            .execution_options(populate_existing=True)
+            .with_for_update(read=True)
+        )
+        if locked_project_item is None:
+            raise ResourceUnavailable("Annotation not found")
+        locked_user = project_context.workspace.actor
+
+    record = await db.scalar(
+        select(PdfAnnotation)
+        .where(
+            PdfAnnotation.id == annotation_id,
+            PdfAnnotation.workspace_id == workspace_id,
+            PdfAnnotation.deleted_at.is_(None),
+            PdfAnnotation.hidden_at.is_(None),
+            PdfAnnotation.archived_at.is_(None),
+        )
+        .execution_options(populate_existing=True)
+        .with_for_update(read=True)
+    )
+    if (
+        record is None
+        or record.item_id != item_id
+        or record.scope is not expected_scope
+        or record.project_item_id != expected_project_item_id
+        or (record.scope is AnnotationScope.private and record.author_id != locked_user.id)
+    ):
+        raise ResourceUnavailable("Annotation not found")
+    if record.locked_at is not None:
+        raise PermissionDenied("Annotation is locked")
+    return locked_user, record

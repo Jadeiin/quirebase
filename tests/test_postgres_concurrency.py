@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -15,17 +16,25 @@ from quirebase.accounts import update_user_status
 from quirebase.core.database import Base, make_async_engine
 from quirebase.core.errors import (
     PermissionDenied,
+    ResourceUnavailable,
+    ValidationFailure,
     WorkspaceLifecycleError,
     WorkspaceMembershipRequired,
 )
+from quirebase.documents import AnnotationReplyCreate, create_annotation_reply
 from quirebase.library import (
     add_discussion_message,
     add_existing_tag_to_item,
     add_project_discussion_message,
+    apply_bulk_item_action,
 )
 from quirebase.models import (
+    AnnotationKind,
+    AnnotationScope,
+    FileRevision,
     Item,
     ItemTag,
+    PdfAnnotation,
     Project,
     ProjectItem,
     ProjectMember,
@@ -83,6 +92,48 @@ async def _user(db: AsyncSession, prefix: str) -> User:
     await provision_initial_workspace(db, user)
     await db.commit()
     return user
+
+
+async def _project_annotation_context(
+    db: AsyncSession, prefix: str
+) -> tuple[str, str, str, str, str]:
+    owner = await _user(db, f"{prefix}-owner")
+    workspace_id, owner_id = fixture_workspace_id(owner), owner.id
+    item = Item(workspace_id=workspace_id, title=prefix, created_by=owner_id)
+    project = Project(workspace_id=workspace_id, name=prefix, created_by=owner_id)
+    db.add_all([item, project])
+    await db.flush()
+    assignment = ProjectItem(
+        workspace_id=workspace_id,
+        project_id=project.id,
+        item_id=item.id,
+        added_by=owner_id,
+    )
+    revision = FileRevision(
+        workspace_id=workspace_id,
+        item_id=item.id,
+        object_key=f"objects/{prefix}.pdf",
+        size=1,
+        original_name=f"{prefix}.pdf",
+        created_by=owner_id,
+    )
+    db.add_all([assignment, revision])
+    await db.flush()
+    annotation = PdfAnnotation(
+        workspace_id=workspace_id,
+        file_revision_id=revision.id,
+        item_id=item.id,
+        page_index=0,
+        author_id=owner_id,
+        kind=AnnotationKind.note,
+        scope=AnnotationScope.project,
+        project_item_id=assignment.id,
+        body="Reply target",
+        payload={"type": "note", "rect": {"x": 1, "y": 1, "width": 1, "height": 1}},
+    )
+    db.add(annotation)
+    await db.commit()
+    return workspace_id, owner_id, item.id, assignment.id, annotation.id
 
 
 async def test_write_authorization_serializes_with_workspace_archive(postgres_sessions):
@@ -438,6 +489,7 @@ async def test_project_participation_add_races_switch_to_workspace_mode(postgres
         workspace_id = fixture_workspace_id(owner)
         owner_id = owner.id
         target_id = target.id
+        target_username = target.username
         membership = WorkspaceMember(
             workspace_id=workspace_id,
             user_id=target_id,
@@ -471,9 +523,7 @@ async def test_project_participation_add_races_switch_to_workspace_mode(postgres
                         db, actor, workspace_id, project_id, ProjectVisibility.workspace
                     )
                 else:
-                    await add_project_member(
-                        db, actor, workspace_id, project_id, "participation-target"
-                    )
+                    await add_project_member(db, actor, workspace_id, project_id, target_username)
                 return "committed"
             except ProjectMemberConflict:
                 await db.rollback()
@@ -493,6 +543,151 @@ async def test_project_participation_add_races_switch_to_workspace_mode(postgres
             )
         )
         assert participants == 0
+
+
+async def test_reply_create_waits_for_annotation_moderation_and_rechecks(postgres_sessions):
+    async with postgres_sessions() as db:
+        (
+            workspace_id,
+            owner_id,
+            item_id,
+            _assignment_id,
+            annotation_id,
+        ) = await _project_annotation_context(db, "reply-moderation")
+
+    async with postgres_sessions() as moderator_db:
+        annotation = await moderator_db.scalar(
+            select(PdfAnnotation).where(PdfAnnotation.id == annotation_id).with_for_update()
+        )
+        assert annotation is not None
+        annotation.locked_at = datetime.now(UTC)
+        await moderator_db.flush()
+
+        started = asyncio.Event()
+
+        async def reply() -> str:
+            async with postgres_sessions() as db:
+                actor = await db.get(User, owner_id)
+                assert actor is not None
+                started.set()
+                try:
+                    await create_annotation_reply(
+                        db,
+                        actor,
+                        workspace_id,
+                        item_id,
+                        annotation_id,
+                        AnnotationReplyCreate(id=uuid4(), body="Concurrent reply"),
+                    )
+                except PermissionDenied:
+                    await db.rollback()
+                    return "rejected"
+                return "committed"
+
+        reply_task = asyncio.create_task(reply())
+        try:
+            await started.wait()
+            await asyncio.sleep(0.05)
+            assert not reply_task.done()
+        finally:
+            await moderator_db.commit()
+        assert await asyncio.wait_for(reply_task, timeout=5) == "rejected"
+
+
+async def test_reply_create_waits_for_project_item_detachment_and_rechecks(postgres_sessions):
+    async with postgres_sessions() as db:
+        (
+            workspace_id,
+            owner_id,
+            item_id,
+            assignment_id,
+            annotation_id,
+        ) = await _project_annotation_context(db, "reply-detachment")
+
+    async with postgres_sessions() as detach_db:
+        assignment = await detach_db.scalar(
+            select(ProjectItem).where(ProjectItem.id == assignment_id).with_for_update()
+        )
+        assert assignment is not None
+        await detach_db.delete(assignment)
+        await detach_db.flush()
+
+        started = asyncio.Event()
+
+        async def reply() -> str:
+            async with postgres_sessions() as db:
+                actor = await db.get(User, owner_id)
+                assert actor is not None
+                started.set()
+                try:
+                    await create_annotation_reply(
+                        db,
+                        actor,
+                        workspace_id,
+                        item_id,
+                        annotation_id,
+                        AnnotationReplyCreate(id=uuid4(), body="Concurrent reply"),
+                    )
+                except ResourceUnavailable:
+                    await db.rollback()
+                    return "rejected"
+                return "committed"
+
+        reply_task = asyncio.create_task(reply())
+        try:
+            await started.wait()
+            await asyncio.sleep(0.05)
+            assert not reply_task.done()
+        finally:
+            await detach_db.commit()
+        assert await asyncio.wait_for(reply_task, timeout=5) == "rejected"
+
+
+async def test_bulk_project_assignment_translates_item_delete_race(postgres_sessions):
+    async with postgres_sessions() as db:
+        owner = await _user(db, "bulk-delete-race-owner")
+        workspace_id, owner_id = fixture_workspace_id(owner), owner.id
+        item = Item(workspace_id=workspace_id, title="Delete race", created_by=owner_id)
+        project = Project(workspace_id=workspace_id, name="Delete race", created_by=owner_id)
+        db.add_all([item, project])
+        await db.commit()
+        item_id, project_id = item.id, project.id
+
+    async with postgres_sessions() as delete_db:
+        item = await delete_db.scalar(select(Item).where(Item.id == item_id).with_for_update())
+        assert item is not None
+        await delete_db.delete(item)
+        await delete_db.flush()
+
+        started = asyncio.Event()
+
+        async def assign() -> str:
+            async with postgres_sessions() as db:
+                actor = await db.get(User, owner_id)
+                assert actor is not None
+                started.set()
+                try:
+                    await apply_bulk_item_action(
+                        db,
+                        actor,
+                        workspace_id,
+                        item_ids=[item_id],
+                        action="add_project",
+                        project_id=project_id,
+                    )
+                except ValidationFailure:
+                    assert await db.scalar(select(func.count()).select_from(Project)) == 1
+                    return "rejected"
+                return "committed"
+
+        assignment_task = asyncio.create_task(assign())
+        try:
+            await started.wait()
+            await asyncio.sleep(0.05)
+            assert not assignment_task.done()
+        finally:
+            await delete_db.commit()
+        assert await asyncio.wait_for(assignment_task, timeout=5) == "rejected"
 
 
 async def test_open_project_join_races_workspace_member_suspension(postgres_sessions):

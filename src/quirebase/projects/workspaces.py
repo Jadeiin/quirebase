@@ -338,9 +338,13 @@ async def add_items_to_project(
     ]
     dialect = db.get_bind().dialect.name
     insert = pg_insert(ProjectItem) if dialect == "postgresql" else sqlite_insert(ProjectItem)
-    result = await db.execute(
-        insert.values(rows).on_conflict_do_nothing(
-            index_elements=["workspace_id", "project_id", "item_id"]
-        )
-    )
+    try:
+        async with db.begin_nested():
+            result = await db.execute(
+                insert.values(rows).on_conflict_do_nothing(
+                    index_elements=["workspace_id", "project_id", "item_id"]
+                )
+            )
+    except IntegrityError as error:
+        raise ResourceUnavailable("Item or Project not found") from error
     return int(getattr(result, "rowcount", 0) or 0)

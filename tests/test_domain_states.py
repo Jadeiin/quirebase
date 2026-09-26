@@ -48,7 +48,7 @@ async def assert_closed_state_constraints(db) -> None:
         db,
         "INSERT INTO workspace_members "
         "(id, workspace_id, user_id, role, state, invited_by, created_at) "
-        "VALUES (:id, :workspace_id, :user_id, 'superuser', 'active', :user_id, "
+        "VALUES (:id, :workspace_id, :user_id, 'invalid', 'active', :user_id, "
         "CURRENT_TIMESTAMP)",
         {"id": "invalid-workspace-role", "workspace_id": workspace.id, "user_id": user.id},
     )

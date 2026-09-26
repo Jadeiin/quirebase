@@ -2403,6 +2403,72 @@ async def test_annotation_export_status_and_file_are_requester_only(
 
 
 @pytest.mark.anyio
+async def test_project_annotation_export_file_rejects_replaced_assignment(
+    async_db, fake_durable_operations
+):
+    requester = await _user(async_db, "project-export-requester")
+    workspace_id = fixture_workspace_id(requester)
+    item = Item(workspace_id=workspace_id, title="Project export", created_by=requester.id)
+    project = Project(workspace_id=workspace_id, name="Project export", created_by=requester.id)
+    async_db.add_all([item, project])
+    await async_db.flush()
+    stored = await get_object_store().put_object(
+        uuid4(), ObjectSuffix.PDF, b"%PDF-project-export", max_bytes=1024
+    )
+    revision = FileRevision(
+        workspace_id=workspace_id,
+        item_id=item.id,
+        object_key="objects/source.pdf",
+        size=1,
+        original_name="source.pdf",
+        created_by=requester.id,
+    )
+    assignment = ProjectItem(
+        workspace_id=workspace_id,
+        project_id=project.id,
+        item_id=item.id,
+        added_by=requester.id,
+    )
+    async_db.add_all([revision, assignment])
+    await async_db.commit()
+    original_assignment_id = assignment.id
+
+    await async_db.delete(assignment)
+    await async_db.commit()
+    async_db.add(
+        ProjectItem(
+            workspace_id=workspace_id,
+            project_id=project.id,
+            item_id=item.id,
+            added_by=requester.id,
+        )
+    )
+    await async_db.commit()
+
+    workflow_id = f"annotation-export:{uuid4()}"
+    fake_durable_operations.workflows[workflow_id] = WorkflowSummary(
+        id=workflow_id,
+        name=ANNOTATION_EXPORT_WORKFLOW,
+        state="succeeded",
+        raw_status="SUCCESS",
+        queue_name=None,
+        executor_id=None,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        output={
+            "revision_id": revision.id,
+            "object_key": stored.key,
+            "project_id": project.id,
+            "project_item_id": original_assignment_id,
+        },
+        attributes={"actor_id": requester.id, "workspace_id": workspace_id},
+    )
+
+    with pytest.raises(ResourceUnavailable, match="project item not found"):
+        await get_export_file(async_db, requester, workspace_id, workflow_id)
+
+
+@pytest.mark.anyio
 async def test_cross_workspace_copy_creates_detached_item_and_file(async_db):
     actor = await _user(async_db, "copy-actor")
     target_owner = await _user(async_db, "copy-target-owner")

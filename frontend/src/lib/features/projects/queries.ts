@@ -6,7 +6,7 @@ export const projectKeys = {
 	all: (workspaceId: string) => workspaceKeys.projects(workspaceId),
 	lists: (workspaceId: string) => [...projectKeys.all(workspaceId), 'list'] as const,
 	joinable: (workspaceId: string) => [...projectKeys.all(workspaceId), 'joinable'] as const,
-	detail: (workspaceId: string, projectId: string) => workspaceKeys.project(workspaceId, projectId),
+	detail: (workspaceId: string, projectId: string) => workspaceKeys.project(workspaceId, projectId)
 };
 
 export function projectListQuery(workspaceId: string) {

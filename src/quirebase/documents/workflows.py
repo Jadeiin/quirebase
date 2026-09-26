@@ -133,6 +133,7 @@ class AnnotationExportResult(TypedDict):
     size_bytes: int
     revision_id: str
     project_id: str | None
+    project_item_id: str | None
 
 
 def _require_upload_receipt(value: Any, *, description: str) -> UploadReceipt:
@@ -551,6 +552,7 @@ async def build_annotation_export(
         if revision is None:
             raise ValueError("revision no longer exists")
         scopes = []
+        project_item_id: str | None = None
         if include_private:
             scopes.append(
                 and_(
@@ -571,6 +573,7 @@ async def build_annotation_export(
             )
             if assignment is None:
                 raise PermissionError("project assignment no longer exists")
+            project_item_id = assignment.id
             scopes.append(
                 and_(
                     PdfAnnotation.scope == AnnotationScope.project,
@@ -628,6 +631,7 @@ async def build_annotation_export(
             "size_bytes": stored.size,
             "revision_id": revision_id,
             "project_id": project_id,
+            "project_item_id": project_item_id,
         }
     finally:
         await asyncio.to_thread(output_path.unlink, missing_ok=True)
@@ -699,10 +703,28 @@ async def record_annotation_export_artifact(
     )
     if revision is None:
         raise ValueError("revision no longer exists")
+    if result["project_id"] != project_id or (
+        project_id is None and result["project_item_id"] is not None
+    ):
+        raise PermissionError("project assignment no longer exists")
     if project_id:
         await require_project_context(
             db, actor, workspace_id, project_id, Capability.workspace_export
         )
+        if result["project_item_id"] is None:
+            raise PermissionError("project assignment no longer exists")
+        assignment = await db.scalar(
+            select(ProjectItem)
+            .where(
+                ProjectItem.id == result["project_item_id"],
+                ProjectItem.workspace_id == workspace_id,
+                ProjectItem.project_id == project_id,
+                ProjectItem.item_id == revision.item_id,
+            )
+            .with_for_update(read=True, key_share=True)
+        )
+        if assignment is None:
+            raise PermissionError("project assignment no longer exists")
     ttl_hours = await get_effective_setting(db, "export_ttl_hours", get_settings().export_ttl_hours)
     db.add(
         ExportArtifact(
