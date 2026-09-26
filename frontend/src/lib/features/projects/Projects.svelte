@@ -31,6 +31,12 @@
 			(project) => project.visibility === 'managed' && !project.is_member
 		)
 	);
+	const archivedOpenProjects = $derived(
+		(projects.data ?? []).filter(
+			(project) =>
+				project.visibility === 'open' && project.state === 'archived' && !project.is_member
+		)
+	);
 
 	let createOpen = $state(false);
 	let name = $state('');
@@ -228,6 +234,25 @@
 				<span class="text-sm text-surface-600-400"
 					>{project.item_count} {$t('Items')} · {$t(domainLabel(project.state))}</span
 				>
+			</ItemRow>
+		{/each}
+	</Panel>
+{/if}
+
+{#if archivedOpenProjects.length > 0}
+	<Panel class="mt-5">
+		<h2>{$t('Archived Projects')}</h2>
+		{#each archivedOpenProjects as project (project.id)}
+			<ItemRow
+				as="a"
+				class="group rounded-lg px-2 hover:bg-surface-200-800"
+				href={resolve(workspaceHref(workspaceId, `projects/${project.id}`))}
+			>
+				<strong class="group-hover:text-primary-800-200">{project.name}</strong>
+				{#if project.description}<span class="text-sm text-surface-700-300"
+						>{project.description}</span
+					>{/if}
+				<span class="text-sm text-surface-600-400">{project.item_count} {$t('Items')}</span>
 			</ItemRow>
 		{/each}
 	</Panel>

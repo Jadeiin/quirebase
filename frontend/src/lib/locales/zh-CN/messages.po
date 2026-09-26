@@ -464,6 +464,11 @@ msgid "Archived"
 msgstr "已归档"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Archived Projects"
+msgstr "已归档项目"
+
+#. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
 msgid "Archived workspace · read-only content. Workspace governance actions remain available according to your capabilities."
 msgstr "工作区已归档 · 内容只读。仍可依据你的权限执行工作区治理操作。"

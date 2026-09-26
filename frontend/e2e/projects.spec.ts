@@ -108,6 +108,55 @@ test('Workspace viewers can read Project Discussion without mutation controls', 
 	await expect(page.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
 });
 
+test('an unjoined archived open Project stays discoverable and its Discussion loads', async ({
+	page
+}) => {
+	await mockSession(page);
+	await mockWorkspaceRole(page, 'viewer', ['workspace.read']);
+	const archivedProject = {
+		...project,
+		id: 'archived-open',
+		name: 'Archived reading group',
+		state: 'archived',
+		visibility: 'open',
+		is_member: false,
+		allowed_actions: [],
+		members: []
+	};
+	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) =>
+		route.fulfill({ json: [archivedProject] })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects/joinable', (route) =>
+		route.fulfill({ json: [] })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects/archived-open', (route) =>
+		route.fulfill({ json: archivedProject })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects/archived-open/discussions', (route) =>
+		route.fulfill({
+			json: [
+				{
+					id: 'archived-message',
+					author_id: 'editor-1',
+					author_username: 'editor',
+					body: 'Preserved discussion',
+					allowed_actions: [],
+					created_at: '2026-09-01T12:00:00Z'
+				}
+			]
+		})
+	);
+
+	await page.goto('/workspace/workspace-1/projects');
+	const archivedSection = page.getByRole('heading', { name: 'Archived Projects' }).locator('..');
+	await expect(archivedSection.getByRole('link', { name: /Archived reading group/ })).toBeVisible();
+	await expect(archivedSection.getByRole('button', { name: 'Join' })).toHaveCount(0);
+	await page.goto('/workspace/workspace-1/projects/archived-open');
+	await expect(page.getByText('Preserved discussion')).toBeVisible();
+	await expect(page.getByPlaceholder('Write a message')).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
+});
+
 test('Workspace admin moderates managed Project Discussion with an audited reason', async ({
 	page
 }) => {

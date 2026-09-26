@@ -3,7 +3,6 @@
 	import { resolve } from '$app/paths';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { apiErrorMessage } from '$lib/api/errors';
-	import Badge from '$lib/design/Badge.svelte';
 	import Button from '$lib/design/Button.svelte';
 	import ItemRow from '$lib/design/ItemRow.svelte';
 	import Notice from '$lib/design/Notice.svelte';
@@ -28,7 +27,7 @@
 	const project = $derived(detail.data);
 	const discussions = createQuery(() => ({
 		queryKey: workspaceKeys.projectDiscussions(workspaceId, projectId),
-		enabled: Boolean(project && project.state === 'active'),
+		enabled: Boolean(project),
 		queryFn: ({ signal }: { signal: AbortSignal }) =>
 			workspace.api.request('GET', '/workspaces/{workspace_id}/projects/{project_id}/discussions', {
 				params: { path: { project_id: projectId } },
