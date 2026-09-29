@@ -76,6 +76,13 @@ class WorkspaceRole(StrEnum):
     viewer = "viewer"
 
 
+class WorkspaceInvitationRole(StrEnum):
+    admin = "admin"
+    editor = "editor"
+    reviewer = "reviewer"
+    viewer = "viewer"
+
+
 class WorkspaceState(StrEnum):
     active = "active"
     archived = "archived"
@@ -93,7 +100,7 @@ class ProjectState(StrEnum):
     deleted = "deleted"
 
 
-class ProjectVisibility(StrEnum):
+class ProjectParticipation(StrEnum):
     workspace = "workspace"
     open = "open"
     managed = "managed"
@@ -160,7 +167,6 @@ class Workspace(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     name: Mapped[str] = mapped_column(String(240))
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
-    owner_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
     state: Mapped[WorkspaceState] = mapped_column(
         enum_type(WorkspaceState, "workspace_state"), default=WorkspaceState.active
     )
@@ -232,8 +238,8 @@ class WorkspaceInvitation(Base):
         ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
     )
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    role: Mapped[WorkspaceRole] = mapped_column(
-        enum_type(WorkspaceRole, "workspace_invitation_role")
+    role: Mapped[WorkspaceInvitationRole] = mapped_column(
+        enum_type(WorkspaceInvitationRole, "workspace_invitation_role")
     )
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     invited_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
@@ -398,7 +404,7 @@ class Project(Base):
     __table_args__ = (
         CheckConstraint("state IN ('active', 'archived', 'deleted')", name="ck_projects_state"),
         CheckConstraint(
-            "visibility IN ('workspace', 'open', 'managed')", name="ck_projects_visibility"
+            "participation IN ('workspace', 'open', 'managed')", name="ck_projects_participation"
         ),
         UniqueConstraint("workspace_id", "id", name="uq_projects_workspace_id"),
     )
@@ -414,8 +420,9 @@ class Project(Base):
     state: Mapped[ProjectState] = mapped_column(
         enum_type(ProjectState, "project_state"), default=ProjectState.active
     )
-    visibility: Mapped[ProjectVisibility] = mapped_column(
-        enum_type(ProjectVisibility, "project_visibility"), default=ProjectVisibility.workspace
+    participation: Mapped[ProjectParticipation] = mapped_column(
+        enum_type(ProjectParticipation, "project_participation"),
+        default=ProjectParticipation.workspace,
     )
 
 

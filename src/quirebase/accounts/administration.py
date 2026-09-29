@@ -20,6 +20,7 @@ from quirebase.models import (
     User,
     Workspace,
     WorkspaceMember,
+    WorkspaceRole,
 )
 from quirebase.workspaces import provision_initial_workspace
 
@@ -142,7 +143,14 @@ async def update_user_status(db: AsyncSession, admin: User, user_id: str, active
     if user.id == admin.id and not active:
         raise PermissionDenied("administrators cannot deactivate their own account")
     if not active and await db.scalar(
-        select(Workspace.id).where(Workspace.owner_id == user.id, Workspace.state != "deleted")
+        select(Workspace.id)
+        .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
+        .where(
+            WorkspaceMember.user_id == user.id,
+            WorkspaceMember.role == WorkspaceRole.owner,
+            WorkspaceMember.terminated_at.is_(None),
+            Workspace.state != "deleted",
+        )
     ):
         raise PermissionDenied("transfer Workspace ownership before deactivating this account")
     if not active:
@@ -165,7 +173,14 @@ async def update_user_status(db: AsyncSession, admin: User, user_id: str, active
                 select(Workspace.id).where(Workspace.id == workspace_id).with_for_update()
             )
         if await db.scalar(
-            select(Workspace.id).where(Workspace.owner_id == user.id, Workspace.state != "deleted")
+            select(Workspace.id)
+            .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
+            .where(
+                WorkspaceMember.user_id == user.id,
+                WorkspaceMember.role == WorkspaceRole.owner,
+                WorkspaceMember.terminated_at.is_(None),
+                Workspace.state != "deleted",
+            )
         ):
             raise PermissionDenied("transfer Workspace ownership before deactivating this account")
     user.active = active

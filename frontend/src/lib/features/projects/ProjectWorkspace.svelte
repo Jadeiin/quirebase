@@ -3,7 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { apiErrorMessage } from '$lib/api/errors';
-	import { can as isAllowed } from '$lib/authorization/can';
+	import { can as isAllowed, type AuthorizationAction } from '$lib/authorization/can';
 	import Button from '$lib/design/Button.svelte';
 	import ItemRow from '$lib/design/ItemRow.svelte';
 	import Notice from '$lib/design/Notice.svelte';
@@ -43,7 +43,7 @@
 	let body = $state('');
 	let settingsName = $state('');
 	let settingsDescription = $state('');
-	let settingsVisibility = $state<'workspace' | 'open' | 'managed'>('workspace');
+	let settingsParticipation = $state<'workspace' | 'open' | 'managed'>('workspace');
 	let deleteDialogOpen = $state(false);
 	let moderationMessageId = $state<string | null>(null);
 	let moderationDialogOpen = $state(false);
@@ -52,7 +52,7 @@
 		if (!project) return;
 		settingsName = project.name;
 		settingsDescription = project.description;
-		settingsVisibility = project.visibility as 'workspace' | 'open' | 'managed';
+		settingsParticipation = project.participation as 'workspace' | 'open' | 'managed';
 	});
 
 	async function mutate(
@@ -72,7 +72,7 @@
 				await Promise.all([
 					detail.refetch(),
 					discussions.refetch(),
-					invalidateProject(queryClient, workspaceId, projectId)
+					invalidateProject(queryClient, workspaceId)
 				]);
 			}
 			return true;
@@ -85,8 +85,8 @@
 		}
 	}
 
-	function can(resource: string, action: string) {
-		return isAllowed(project?.authorization, resource, action);
+	function can(action: AuthorizationAction, relation?: string) {
+		return isAllowed(project?.authorization, action, relation);
 	}
 
 	async function saveSettings(event: SubmitEvent) {
@@ -98,7 +98,7 @@
 					body: {
 						name: settingsName.trim(),
 						description: settingsDescription,
-						visibility: settingsVisibility
+						participation: settingsParticipation
 					}
 				}),
 			$t('Project settings saved')
@@ -200,7 +200,7 @@
 				(message) =>
 					message.id === messageId &&
 					message.mine &&
-					isAllowed(message.authorization, 'project_discussion', 'delete')
+					isAllowed(message.authorization, 'project_discussion.delete')
 			)
 		)
 			return;
@@ -224,7 +224,7 @@
 				(message) =>
 					message.id === messageId &&
 					!message.mine &&
-					isAllowed(message.authorization, 'project_discussion', 'delete')
+					isAllowed(message.authorization, 'project_discussion.delete')
 			)
 		)
 			return;
@@ -259,7 +259,7 @@
 		<SectionHeader>
 			<div>
 				<p class="mb-1 text-sm text-primary-700-300">
-					{$t(domainLabel(project.state))} · {$t(domainLabel(project.visibility))} · {project.item_count}
+					{$t(domainLabel(project.state))} · {$t(domainLabel(project.participation))} · {project.item_count}
 					{$t('Items')}
 				</p>
 				<h1>{project.name}</h1>
@@ -267,11 +267,11 @@
 			</div>
 			{#snippet actions()}
 				<div class="flex flex-wrap gap-2">
-					{#if can('project_membership', 'join')}<Button
+					{#if can('project_membership.join')}<Button
 							disabled={busy}
 							onclick={() => void joinProject()}>{$t('Join Project')}</Button
 						>{/if}
-					{#if can('project_membership', 'leave')}<Button
+					{#if can('project_membership.leave')}<Button
 							variant="tonal"
 							disabled={busy}
 							onclick={() => void leaveProject()}>{$t('Leave Project')}</Button
@@ -282,11 +282,11 @@
 							workspaceHref(workspaceId, `library?project=${encodeURIComponent(projectId)}`)
 						)}>{$t('Open in Library')}</Button
 					>
-					{#if can('project', 'archive')}<Button
+					{#if can('project.archive')}<Button
 							variant="tonal"
 							disabled={busy}
 							onclick={() => void changeState('archive')}>{$t('Archive')}</Button
-						>{:else if can('project', 'restore')}<Button
+						>{:else if can('project.restore')}<Button
 							disabled={busy}
 							onclick={() => void changeState('restore')}>{$t('Restore')}</Button
 						>{/if}
@@ -294,7 +294,7 @@
 			{/snippet}
 		</SectionHeader>
 
-		{#if can('project', 'update')}
+		{#if can('project.update')}
 			<Panel>
 				<form class="grid grid-cols-1 gap-3 md:grid-cols-2" onsubmit={saveSettings}>
 					<h2 class="text-xl font-semibold md:col-span-2">{$t('Project settings')}</h2>
@@ -307,27 +307,25 @@
 						/></label
 					>
 					<label class="grid grid-cols-1 gap-1"
-						>{$t('Participation')}<select class="select" bind:value={settingsVisibility}
-							>{#if project.visibility === 'managed' && !workspace.can('project', 'create', 'managed')}
-								<option value="managed" disabled>{$t(domainLabel('managed'))}</option>
-							{:else}
-								<option value="workspace">{$t(domainLabel('workspace'))}</option><option
-									value="open">{$t(domainLabel('open'))}</option
-								>{#if workspace.can('project', 'create', 'managed')}<option value="managed"
-										>{$t(domainLabel('managed'))}</option
-									>{/if}
-							{/if}</select
+						>{$t('Participation')}<select class="select" bind:value={settingsParticipation}
+							>{#if can('project.update', 'workspace')}<option value="workspace"
+									>{$t(domainLabel('workspace'))}</option
+								>{/if}{#if can('project.update', 'open')}<option value="open"
+									>{$t(domainLabel('open'))}</option
+								>{/if}{#if can('project.update', 'managed')}<option value="managed"
+									>{$t(domainLabel('managed'))}</option
+								>{/if}</select
 						></label
 					>
-					{#if settingsVisibility !== project.visibility}
+					{#if settingsParticipation !== project.participation}
 						<p class="text-sm text-surface-600-400 md:col-span-2">
-							{#if settingsVisibility === 'workspace'}
+							{#if settingsParticipation === 'workspace'}
 								{$t('All active Workspace members will participate in this Project.')}
-							{:else if settingsVisibility === 'managed'}
+							{:else if settingsParticipation === 'managed'}
 								{$t(
 									'A managed Project starts with no participants; Workspace owners/admins can add them.'
 								)}
-							{:else if project.visibility === 'workspace'}
+							{:else if project.participation === 'workspace'}
 								{$t(
 									'Switching from Workspace-wide participation starts with you as the first participant.'
 								)}
@@ -344,7 +342,7 @@
 					>
 					<div class="flex flex-wrap gap-2 md:col-span-2">
 						<Button disabled={busy || !settingsName.trim()}>{$t('Save Project settings')}</Button>
-						{#if can('project', 'delete')}<Button
+						{#if can('project.delete')}<Button
 								type="button"
 								variant="danger"
 								disabled={busy}
@@ -357,13 +355,13 @@
 
 		<Panel>
 			<h2>{$t('Participation')}</h2>
-			{#if project.visibility === 'workspace'}
+			{#if project.participation === 'workspace'}
 				<p class="text-sm text-surface-600-400">
 					{$t('All active Workspace members participate in this Project.')}
 				</p>
 			{:else}
 				<p class="text-sm text-surface-600-400">
-					{#if project.visibility === 'managed'}
+					{#if project.participation === 'managed'}
 						{$t(
 							'Managed Projects are visible only to their participants and Workspace owners/admins.'
 						)}
@@ -379,7 +377,7 @@
 								class="flex items-center justify-between gap-2 border-t border-surface-300-700 py-2"
 							>
 								<span>{member.username}</span>
-								{#if can('project_membership', 'manage')}<Button
+								{#if can('project_membership.manage')}<Button
 										size="sm"
 										variant="tonal"
 										disabled={busy}
@@ -390,7 +388,7 @@
 				{:else}<p class="mt-3 text-sm text-surface-600-400">
 						{$t('No Project participants yet.')}
 					</p>{/if}
-				{#if can('project_membership', 'manage')}<form
+				{#if can('project_membership.manage')}<form
 						class="mt-4 flex flex-wrap gap-2"
 						onsubmit={addMember}
 					>
@@ -415,7 +413,7 @@
 						><strong><RichText html={item.title_html} /></strong><span class="text-surface-600-400"
 							>{item.authors ?? ''}</span
 						></a
-					>{#if can('project_item', 'manage')}<Button
+					>{#if can('project_item.manage')}<Button
 							disabled={busy || project.state !== 'active'}
 							onclick={() =>
 								void mutate(
@@ -443,13 +441,13 @@
 					<article class="grid grid-cols-1 gap-1 border-t border-surface-300-700 py-3">
 						<div class="flex items-center justify-between gap-2">
 							<strong>{message.author_username}</strong>
-							{#if message.mine && isAllowed(message.authorization, 'project_discussion', 'delete')}<Button
+							{#if message.mine && isAllowed(message.authorization, 'project_discussion.delete')}<Button
 									size="sm"
 									variant="tonal"
 									disabled={busy}
 									onclick={() => void deleteDiscussion(message.id)}>{$t('Delete')}</Button
 								>{/if}
-							{#if !message.mine && isAllowed(message.authorization, 'project_discussion', 'delete')}<Button
+							{#if !message.mine && isAllowed(message.authorization, 'project_discussion.delete')}<Button
 									size="sm"
 									variant="tonal"
 									disabled={busy}
@@ -465,7 +463,7 @@
 						>
 					</article>
 				{:else}<p class="text-surface-600-400">{$t('No discussion messages yet.')}</p>{/each}{/if}
-			{#if can('project_discussion', 'create')}
+			{#if can('project_discussion.create')}
 				<form class="mt-3 grid grid-cols-1 gap-2" onsubmit={addDiscussion}>
 					<textarea
 						class="textarea min-h-24"

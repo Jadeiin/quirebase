@@ -25,6 +25,7 @@ from quirebase.workspaces.service import (
     transfer_workspace_ownership,
     update_workspace,
     workspace_creation_options,
+    workspace_owner_ids,
 )
 
 __all__ = [
@@ -54,4 +55,5 @@ __all__ = [
     "transfer_workspace_ownership",
     "update_workspace",
     "workspace_creation_options",
+    "workspace_owner_ids",
 ]

@@ -41,7 +41,7 @@ admin may perform `delete` on another author's `item_discussion`. Workspace line
 membership are established before the decision. A dotted key such as `item.update` is only the
 canonical API/audit serialization of the `resource=item`, `action=update` pair; it is not a separate
 capability namespace. When one resource-action varies by a canonical request fact, such as Project
-visibility, API authorization projections may also expose the allowed relations for that same key.
+participation, API authorization projections may also expose the allowed relations for that same key.
 
 **Item Stewardship**:
 The Workspace-governed authority to maintain or permanently delete a canonical Item. It is
@@ -68,13 +68,13 @@ has no Project role and grants no Workspace authority. It controls discoverabili
 Projects only; it never grants access to canonical Workspace Items. Workspace-participation
 Projects have implicit participation and no Project Member rows.
 
-**Project Visibility**:
-The retained Project field that expresses discoverability and participation policy, not a Project
+**Project Participation**:
+The Project `participation` field that expresses discoverability and participation policy, not a Project
 role or Workspace authority: `workspace` means all active Workspace members can discover and
 implicitly participate, with no Project Member rows; `open` means all active Workspace members can
 discover the Project and may choose to join or leave; `managed` means only Project Members and
 Workspace owners/admins can discover the Project and its Project-scoped content, with participation
-curated by Workspace governance. Managed visibility never changes access to canonical Workspace
+curated by Workspace governance. Managed participation never changes access to canonical Workspace
 Items.
 
 **ProjectItem**:
@@ -251,7 +251,7 @@ for invalidating a Login Session or API Token without deleting its audit/persist
 - An Item has at most one current Item Tag Recommendation generation.
 - An Item may belong to multiple Projects in the same Workspace; ProjectItem is an organizational
   association and never grants Item access.
-- A Project has Project Members only when its visibility is `open` or `managed`; these
+- A Project has Project Members only when its participation is `open` or `managed`; these
   role-less associations record participation. For `managed` Projects they also gate Project
   discoverability, but never grant access to canonical Workspace Items. A `workspace` Project has
   implicit participation and no Project Member rows. A Project has no owner or ownership-transfer

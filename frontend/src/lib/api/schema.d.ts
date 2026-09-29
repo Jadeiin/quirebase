@@ -1175,23 +1175,6 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/workspaces/{workspace_id}/projects/joinable': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** List Joinable Projects Api */
-		get: operations['projects.list_joinable_projects_api'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
 	'/api/v1/workspaces/{workspace_id}/projects/{project_id}': {
 		parameters: {
 			query?: never;
@@ -1262,7 +1245,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/visibility': {
+	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/participation': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1271,8 +1254,8 @@ export interface paths {
 		};
 		get?: never;
 		put?: never;
-		/** Set Project Visibility Api */
-		post: operations['projects.set_project_visibility_api'];
+		/** Set Project Participation Api */
+		post: operations['projects.set_project_participation_api'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -2770,7 +2753,7 @@ export interface components {
 		 */
 		AuthorizationView: {
 			/** Allowed */
-			allowed: string[];
+			allowed: (components['schemas']['ResourceAction'] | components['schemas']['SystemAction'])[];
 			/** Relations */
 			relations?: {
 				[key: string]: string[];
@@ -3005,8 +2988,8 @@ export interface components {
 			id: string;
 			/** Name */
 			name: string;
-			/** Visibility */
-			visibility: string;
+			/** Participation */
+			participation: string;
 		};
 		/** DashboardRecentItemView */
 		DashboardRecentItemView: {
@@ -3781,11 +3764,11 @@ export interface components {
 			/** Name */
 			name: string;
 			/**
-			 * Visibility
+			 * Participation
 			 * @default workspace
 			 * @enum {string}
 			 */
-			visibility: 'workspace' | 'open' | 'managed';
+			participation: 'workspace' | 'open' | 'managed';
 			/**
 			 * Description
 			 * @default
@@ -3813,10 +3796,10 @@ export interface components {
 			/** State */
 			state: string;
 			/**
-			 * Visibility
+			 * Participation
 			 * @enum {string}
 			 */
-			visibility: 'workspace' | 'open' | 'managed';
+			participation: 'workspace' | 'open' | 'managed';
 			/** Is Member */
 			is_member: boolean;
 			/**
@@ -3842,15 +3825,23 @@ export interface components {
 			/** Username */
 			username: string;
 		};
+		/** ProjectParticipationRequest */
+		ProjectParticipationRequest: {
+			/**
+			 * Participation
+			 * @enum {string}
+			 */
+			participation: 'workspace' | 'open' | 'managed';
+		};
 		/** ProjectSettingsRequest */
 		ProjectSettingsRequest: {
 			/** Name */
 			name: string;
 			/**
-			 * Visibility
+			 * Participation
 			 * @enum {string}
 			 */
-			visibility: 'workspace' | 'open' | 'managed';
+			participation: 'workspace' | 'open' | 'managed';
 			/** Description */
 			description: string;
 		};
@@ -3865,10 +3856,10 @@ export interface components {
 			/** State */
 			state: string;
 			/**
-			 * Visibility
+			 * Participation
 			 * @enum {string}
 			 */
-			visibility: 'workspace' | 'open' | 'managed';
+			participation: 'workspace' | 'open' | 'managed';
 			/** Is Member */
 			is_member: boolean;
 			/**
@@ -3877,14 +3868,6 @@ export interface components {
 			 */
 			description: string;
 			authorization: components['schemas']['AuthorizationView'];
-		};
-		/** ProjectVisibilityRequest */
-		ProjectVisibilityRequest: {
-			/**
-			 * Visibility
-			 * @enum {string}
-			 */
-			visibility: 'workspace' | 'open' | 'managed';
 		};
 		/** Rect */
 		Rect: {
@@ -3929,6 +3912,75 @@ export interface components {
 			/** Source */
 			source: string;
 		};
+		/**
+		 * ResourceAction
+		 * @description One canonical Workspace-scoped authorization resource/action pair.
+		 * @enum {string}
+		 */
+		ResourceAction:
+			| 'workspace.read'
+			| 'workspace.export'
+			| 'workspace.update'
+			| 'workspace.archive'
+			| 'workspace.restore'
+			| 'workspace.delete'
+			| 'item.copy'
+			| 'item.create'
+			| 'item.update'
+			| 'item.delete'
+			| 'file.manage'
+			| 'file.delete'
+			| 'tag.use'
+			| 'tag.create'
+			| 'tag.manage'
+			| 'citation_style.manage'
+			| 'project.create'
+			| 'project.update'
+			| 'project.archive'
+			| 'project.restore'
+			| 'project.delete'
+			| 'project_item.manage'
+			| 'project.discover'
+			| 'project_membership.join'
+			| 'project_membership.leave'
+			| 'project_membership.manage'
+			| 'workspace_invitation.read'
+			| 'workspace_invitation.create'
+			| 'workspace_invitation.revoke'
+			| 'workspace_member.read'
+			| 'workspace_member.change_role'
+			| 'workspace_member.promote'
+			| 'workspace_member.suspend'
+			| 'workspace_member.reactivate'
+			| 'workspace_member.terminate'
+			| 'workspace_member.transfer_ownership'
+			| 'item_discussion.create'
+			| 'item_discussion.delete'
+			| 'project_discussion.create'
+			| 'project_discussion.delete'
+			| 'private_annotation.create'
+			| 'private_annotation.read'
+			| 'private_annotation.update'
+			| 'private_annotation.delete'
+			| 'private_annotation.restore'
+			| 'project_annotation.create'
+			| 'project_annotation.read'
+			| 'project_annotation.review'
+			| 'project_annotation.update'
+			| 'project_annotation.delete'
+			| 'project_annotation.restore'
+			| 'project_annotation.hide'
+			| 'project_annotation.archive'
+			| 'project_annotation.lock'
+			| 'project_annotation.unlock'
+			| 'private_annotation_reply.create'
+			| 'private_annotation_reply.update'
+			| 'private_annotation_reply.delete'
+			| 'private_annotation_reply.restore'
+			| 'project_annotation_reply.create'
+			| 'project_annotation_reply.update'
+			| 'project_annotation_reply.delete'
+			| 'project_annotation_reply.restore';
 		/** RuntimeSettingsRequest */
 		RuntimeSettingsRequest: {
 			/**
@@ -4033,6 +4085,39 @@ export interface components {
 			/** Integrity Checked At */
 			integrity_checked_at?: string | null;
 		};
+		/**
+		 * SystemAction
+		 * @enum {string}
+		 */
+		SystemAction:
+			| 'account.change_password'
+			| 'api_token.create'
+			| 'api_token.read'
+			| 'api_token.revoke'
+			| 'login_session.read'
+			| 'login_session.revoke'
+			| 'user.read'
+			| 'user.create'
+			| 'user.manage_status'
+			| 'user.manage_role'
+			| 'user.reset_password'
+			| 'user.revoke_sessions'
+			| 'invitation.read'
+			| 'invitation.create'
+			| 'audit.read'
+			| 'workflow.read'
+			| 'setting.read'
+			| 'setting.manage'
+			| 'storage_metrics.read'
+			| 'maintenance.run'
+			| 'backup.read'
+			| 'system_metrics.read'
+			| 'workspace.create'
+			| 'workspace_invitation.accept'
+			| 'workspace_governance.read'
+			| 'workspace_governance.suspend'
+			| 'workspace_governance.recover'
+			| 'workspace_break_glass.read';
 		/** TagMatrixGroupView */
 		TagMatrixGroupView: {
 			/** Letter */
@@ -4224,18 +4309,16 @@ export interface components {
 		WorkspaceInvitationRequest: {
 			/** Username */
 			username: string;
-			/**
-			 * Role
-			 * @default viewer
-			 * @enum {string}
-			 */
-			role: 'editor' | 'reviewer' | 'viewer';
-			/**
-			 * Expires At
-			 * Format: date-time
-			 */
-			expires_at: string;
+			/** @default viewer */
+			role: components['schemas']['WorkspaceInvitationRole'];
+			/** Expires At */
+			expires_at?: string | null;
 		};
+		/**
+		 * WorkspaceInvitationRole
+		 * @enum {string}
+		 */
+		WorkspaceInvitationRole: 'admin' | 'editor' | 'reviewer' | 'viewer';
 		/** WorkspaceInvitationView */
 		WorkspaceInvitationView: {
 			/** Id */
@@ -7676,7 +7759,9 @@ export interface operations {
 	};
 	'projects.list_projects': {
 		parameters: {
-			query?: never;
+			query?: {
+				view?: 'mine' | 'joinable' | 'all';
+			};
 			header?: never;
 			path: {
 				workspace_id: string;
@@ -7736,46 +7821,6 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['WriteResult'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.list_joinable_projects_api': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				workspace_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ProjectSummaryView'][];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -8056,7 +8101,7 @@ export interface operations {
 			};
 		};
 	};
-	'projects.set_project_visibility_api': {
+	'projects.set_project_participation_api': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -8068,7 +8113,7 @@ export interface operations {
 		};
 		requestBody: {
 			content: {
-				'application/json': components['schemas']['ProjectVisibilityRequest'];
+				'application/json': components['schemas']['ProjectParticipationRequest'];
 			};
 		};
 		responses: {

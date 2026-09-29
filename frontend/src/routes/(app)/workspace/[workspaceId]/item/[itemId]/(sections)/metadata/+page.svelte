@@ -25,7 +25,7 @@
 	);
 
 	function updateMetadata(item: ItemDetail, metadata: components['schemas']['ItemMetadata-Input']) {
-		if (!workspace.can('item', 'update')) return;
+		if (!workspace.can('item.update')) return;
 		mutationError = '';
 		void metadataMutation.mutateAsync({ item, metadata }).catch(async (error) => {
 			if (error instanceof ApiError && error.status === 409) {
@@ -44,7 +44,7 @@
 <ItemSectionState loading={details.isPending} failed={details.isError}>
 	<ItemMetadataSection
 		item={details.data!}
-		canEdit={can(overview.data?.authorization, 'item', 'update')}
+		canEdit={can(overview.data?.authorization, 'item.update')}
 		busy={metadataMutation.isPending}
 		onSubmit={updateMetadata}
 	/>

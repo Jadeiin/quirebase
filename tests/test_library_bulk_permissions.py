@@ -26,8 +26,8 @@ from quirebase.models import (
     Project,
     ProjectItem,
     ProjectMember,
+    ProjectParticipation,
     ProjectState,
-    ProjectVisibility,
     User,
     WorkspaceMember,
     WorkspaceRole,
@@ -111,7 +111,7 @@ async def test_bulk_action_blocks_unauthorized_assignment_to_project(
         workspace_id=item.workspace_id,
         name="Source Project",
         created_by=item.created_by,
-        visibility=ProjectVisibility.managed,
+        participation=ProjectParticipation.managed,
     )
     db.add(source_project)
     await db.flush()
@@ -129,7 +129,7 @@ async def test_bulk_action_blocks_unauthorized_assignment_to_project(
         workspace_id=item.workspace_id,
         name="Target Project",
         created_by=viewer_user.id,
-        visibility=ProjectVisibility.managed,
+        participation=ProjectParticipation.managed,
     )
     db.add(target_project)
     await db.flush()
@@ -178,7 +178,7 @@ async def test_bulk_action_records_single_bulk_audit_event(
         workspace_id=item.workspace_id,
         name="My Project",
         created_by=owner.id,
-        visibility=ProjectVisibility.managed,
+        participation=ProjectParticipation.managed,
     )
     db.add(target_project)
     await db.flush()
@@ -223,7 +223,7 @@ async def test_bulk_action_rejects_archived_project_assignment(
         name="Archived Project",
         created_by=owner.id,
         state=ProjectState.archived,
-        visibility=ProjectVisibility.managed,
+        participation=ProjectParticipation.managed,
     )
     db.add(target_project)
     await db.flush()
@@ -271,7 +271,7 @@ async def test_bulk_action_revalidates_stale_project_state(async_db, async_sessi
         workspace_id=fixture_workspace_id(owner),
         name="Bulk project race",
         created_by=owner.id,
-        visibility=ProjectVisibility.managed,
+        participation=ProjectParticipation.managed,
     )
     async_db.add_all([item, project])
     await async_db.flush()

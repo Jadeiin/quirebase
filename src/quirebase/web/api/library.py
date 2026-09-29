@@ -5,9 +5,8 @@ from typing import Annotated
 from fastapi import APIRouter, Query, status
 
 from quirebase.access import (
-    ResourceAction,
-    action_allowed,
     resolve_workspace_context,
+    tag_decisions,
 )
 from quirebase.library import (
     ItemDiscussionData,
@@ -29,7 +28,7 @@ from quirebase.library import (
     revise_item_metadata,
     search_library,
 )
-from quirebase.web.api.common import AuthorizationView, OkView, WriteResult
+from quirebase.web.api.common import OkView, WriteResult, authorization_view
 from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.library_schemas import (
     BulkActionRequest,
@@ -180,15 +179,12 @@ async def format_item_citation(
 async def list_tags(workspace_id: str, user: ApiUser, db: Database) -> list[TagView]:
     rows = await list_accessible_tags_with_counts(db, user, workspace_id)
     context = await resolve_workspace_context(db, user, workspace_id)
-    can_manage = action_allowed(context, ResourceAction.tag_manage)
     return [
         TagView(
             id=tag.id,
             name=tag.name,
             accessible_item_count=count,
-            authorization=AuthorizationView(
-                allowed=[ResourceAction.tag_manage.value] if can_manage else []
-            ),
+            authorization=authorization_view(tag_decisions(context)),
         )
         for tag, count in rows
     ]

@@ -6,7 +6,7 @@ test('library renders canonical rich titles and exposes later pages', async ({ p
 	const requestedPages: number[] = [];
 	const requestedQueries: Array<{ query: string | null; q: string | null }> = [];
 	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
 		route.fulfill({ json: [] })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/items*', (route) => {
@@ -63,7 +63,7 @@ test('Library page selection toggles and icon pagination reaches every boundary'
 		})
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
 		route.fulfill({ json: [] })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) => {
@@ -111,7 +111,7 @@ test('Library page selection toggles and icon pagination reaches every boundary'
 test('Library history navigation restores filter drafts and clears selection', async ({ page }) => {
 	await mockSession(page);
 	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
 		route.fulfill({ json: [] })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) => {
@@ -183,7 +183,7 @@ test('adding a Library Item invalidates a previously opened Project', async ({ p
 				},
 				item_count: added ? 1 : 0,
 				state: 'active',
-				visibility: 'workspace',
+				participation: 'workspace',
 				items: added
 					? [
 							{
@@ -201,7 +201,7 @@ test('adding a Library Item invalidates a previously opened Project', async ({ p
 			}
 		});
 	});
-	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
 		route.fulfill({
 			json: [
 				{
@@ -219,7 +219,7 @@ test('adding a Library Item invalidates a previously opened Project', async ({ p
 					is_member: true,
 					item_count: added ? 1 : 0,
 					state: 'active',
-					visibility: 'workspace',
+					participation: 'workspace',
 					description: 'Reading list'
 				}
 			]
@@ -317,7 +317,7 @@ test('saved export preferences flow into Library bibliography requests', async (
 		})
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
 		route.fulfill({ json: [] })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/items/bibliography', (route) => {
@@ -344,7 +344,7 @@ test('library filters do not overflow narrow viewports', async ({ page }) => {
 	await page.setViewportSize({ width: 320, height: 720 });
 	await mockSession(page);
 	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
 		route.fulfill({ json: [] })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/items*', (route) =>

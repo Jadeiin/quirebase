@@ -10,7 +10,7 @@ from quirebase.models import Attachment, FileRevision, PdfAnnotation, PdfAnnotat
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from quirebase.access.workspaces import WorkspaceContext
+    from quirebase.access.context import WorkspaceContext
 
 
 async def get_revision(

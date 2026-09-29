@@ -16,11 +16,11 @@ const labels = {
 	managed: msg({ message: 'Managed', comment: 'Project participation policy.' }),
 	private: msg({
 		message: 'Private',
-		comment: 'Project visibility or annotation scope.'
+		comment: 'Project participation or annotation scope.'
 	}),
 	public: msg({
 		message: 'Public',
-		comment: 'Project visibility or annotation scope.'
+		comment: 'Project participation or annotation scope.'
 	}),
 	pending: msg({ message: 'Pending', comment: 'Workflow or record state.' }),
 	ready: msg({ message: 'Ready', comment: 'Workflow or record state.' }),

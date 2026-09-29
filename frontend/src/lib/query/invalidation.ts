@@ -45,19 +45,6 @@ export function invalidateItemDiscussion(
 export function invalidateLibrary(queryClient: QueryClient, workspaceId: string) {
 	return invalidate(queryClient, [libraryKeys.all(workspaceId), dashboardKeys.all(workspaceId)]);
 }
-export function invalidateProject(
-	queryClient: QueryClient,
-	workspaceId: string,
-	projectId?: string
-) {
-	return invalidate(
-		queryClient,
-		projectId
-			? [
-					projectKeys.detail(workspaceId, projectId),
-					projectKeys.lists(workspaceId),
-					projectKeys.joinable(workspaceId)
-				]
-			: [projectKeys.all(workspaceId)]
-	);
+export function invalidateProject(queryClient: QueryClient, workspaceId: string) {
+	return invalidate(queryClient, [projectKeys.all(workspaceId)]);
 }

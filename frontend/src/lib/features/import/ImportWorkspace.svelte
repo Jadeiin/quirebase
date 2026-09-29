@@ -155,7 +155,7 @@
 	}
 
 	async function importIdentifier() {
-		if (!workspace.can('item', 'create')) return;
+		if (!workspace.can('item.create')) return;
 		busy = true;
 		error = '';
 		try {
@@ -172,7 +172,7 @@
 	}
 
 	async function upload(event: Event, kind: 'bibliography' | 'pdfs') {
-		if (!workspace.can('item', 'create')) return;
+		if (!workspace.can('item.create')) return;
 		const form = event.currentTarget as HTMLFormElement;
 		busy = true;
 		error = '';
@@ -217,7 +217,7 @@
 	}
 
 	async function retry() {
-		if (!batch || !workspace.can('item', 'create')) return;
+		if (!batch || !workspace.can('item.create')) return;
 		busy = true;
 		error = '';
 		try {
@@ -237,7 +237,7 @@
 	}
 
 	async function commit() {
-		if (!batch || batch.status !== 'ready' || busy || !workspace.can('item', 'create')) return;
+		if (!batch || batch.status !== 'ready' || busy || !workspace.can('item.create')) return;
 		busy = true;
 		error = '';
 		try {
@@ -255,7 +255,7 @@
 	}
 
 	async function discard() {
-		if (!batch || busy || !workspace.can('item', 'create')) return;
+		if (!batch || busy || !workspace.can('item.create')) return;
 		busy = true;
 		error = '';
 		try {
@@ -272,7 +272,7 @@
 	}
 
 	async function createItem(metadata: components['schemas']['ItemMetadata-Input']) {
-		if (!workspace.can('item', 'create')) return;
+		if (!workspace.can('item.create')) return;
 		busy = true;
 		error = '';
 		try {
@@ -324,7 +324,7 @@
 	{/each}
 </ol>
 {#if error}<Notice variant="error">{error}</Notice>{/if}
-{#if workspace.can('item', 'create')}<div class="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
+{#if workspace.can('item.create')}<div class="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
 		<ImportSourceForm
 			icon="search"
 			title={$t('Look up an identifier')}
@@ -457,7 +457,7 @@
 {#if batch}
 	<ImportBatchPreview
 		{batch}
-		canCommit={workspace.can('item', 'create')}
+		canCommit={workspace.can('item.create')}
 		page={previewPage}
 		{busy}
 		onDiscard={discard}

@@ -5,6 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from quirebase.models import WorkspaceInvitationRole
 from quirebase.web.api.common import AuthorizationView
 
 
@@ -54,8 +55,8 @@ class WorkspaceRoleRequest(BaseModel):
 
 class WorkspaceInvitationRequest(BaseModel):
     username: str = Field(min_length=1, max_length=120)
-    role: Literal["editor", "reviewer", "viewer"] = "viewer"
-    expires_at: datetime
+    role: WorkspaceInvitationRole = WorkspaceInvitationRole.viewer
+    expires_at: datetime | None = None
 
 
 class WorkspaceInvitationCreatedView(BaseModel):

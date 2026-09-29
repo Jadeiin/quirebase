@@ -7,7 +7,7 @@ const project = {
 	description: 'A Workspace research context',
 	item_count: 0,
 	state: 'active',
-	visibility: 'managed',
+	participation: 'managed',
 	is_member: false,
 	authorization: {
 		allowed: [
@@ -53,10 +53,10 @@ test('Workspace admins can open and govern managed Projects without being partic
 		'project_membership.manage',
 		'project_discussion.create'
 	]);
-	await page.route('**/api/v1/workspaces/workspace-1/projects/joinable', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=joinable', (route) =>
 		route.fulfill({ json: [] })
 	);
-	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
 		route.fulfill({ json: [project] })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/discussions', (route) =>
@@ -86,7 +86,7 @@ test('Workspace viewers can read Project Discussion without mutation controls', 
 				...project,
 				id: 'visible-project',
 				name: 'Shared reading group',
-				visibility: 'workspace',
+				participation: 'workspace',
 				is_member: true,
 				authorization: { allowed: [] },
 				members: []
@@ -128,15 +128,15 @@ test('an unjoined archived open Project stays discoverable and its Discussion lo
 		id: 'archived-open',
 		name: 'Archived reading group',
 		state: 'archived',
-		visibility: 'open',
+		participation: 'open',
 		is_member: false,
 		authorization: { allowed: [] },
 		members: []
 	};
-	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
 		route.fulfill({ json: [archivedProject] })
 	);
-	await page.route('**/api/v1/workspaces/workspace-1/projects/joinable', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=joinable', (route) =>
 		route.fulfill({ json: [] })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/projects/archived-open', (route) =>
@@ -230,14 +230,14 @@ test('a Workspace editor can create an open Project but not a managed Project', 
 		{ 'project.create': ['open', 'workspace'] }
 	);
 	let creation: Record<string, unknown> | null = null;
-	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) => {
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) => {
 		if (route.request().method() === 'POST') {
 			creation = route.request().postDataJSON();
 			return route.fulfill({ status: 201, json: { id: 'project-1' } });
 		}
 		return route.fulfill({ json: [] });
 	});
-	await page.route('**/api/v1/workspaces/workspace-1/projects/joinable', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=joinable', (route) =>
 		route.fulfill({ json: [] })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/discussions', (route) =>
@@ -250,7 +250,7 @@ test('a Workspace editor can create an open Project but not a managed Project', 
 				name: 'Members research',
 				description: 'Scoped reading list',
 				is_member: true,
-				visibility: 'open',
+				participation: 'open',
 				authorization: {
 					allowed: [
 						'project.update',
@@ -274,7 +274,11 @@ test('a Workspace editor can create an open Project but not a managed Project', 
 	await expect(page).toHaveURL(/\/workspace\/workspace-1\/projects\/project-1$/);
 	await expect
 		.poll(() => creation)
-		.toEqual({ name: 'Members research', description: 'Scoped reading list', visibility: 'open' });
+		.toEqual({
+			name: 'Members research',
+			description: 'Scoped reading list',
+			participation: 'open'
+		});
 	await expect(page.getByRole('listitem').getByText('reader', { exact: true })).toBeVisible();
 });
 
@@ -287,14 +291,14 @@ test('a Workspace owner can create an empty managed Project', async ({ page }) =
 		{ 'project.create': ['managed', 'open', 'workspace'] }
 	);
 	let creation: Record<string, unknown> | null = null;
-	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) => {
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) => {
 		if (route.request().method() === 'POST') {
 			creation = route.request().postDataJSON();
 			return route.fulfill({ status: 201, json: { id: 'managed-project' } });
 		}
 		return route.fulfill({ json: [] });
 	});
-	await page.route('**/api/v1/workspaces/workspace-1/projects/joinable', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=joinable', (route) =>
 		route.fulfill({ json: [] })
 	);
 	await page.route(
@@ -307,7 +311,7 @@ test('a Workspace owner can create an empty managed Project', async ({ page }) =
 				...project,
 				id: 'managed-project',
 				name: 'ICRA 2027',
-				visibility: 'managed',
+				participation: 'managed',
 				authorization: {
 					allowed: [
 						'project.update',
@@ -327,7 +331,7 @@ test('a Workspace owner can create an empty managed Project', async ({ page }) =
 	await page.getByLabel('Participation').selectOption('managed');
 	await page.getByRole('button', { name: 'Create Project' }).click();
 	await expect(page).toHaveURL(/\/workspace\/workspace-1\/projects\/managed-project$/);
-	await expect.poll(() => creation).toMatchObject({ name: 'ICRA 2027', visibility: 'managed' });
+	await expect.poll(() => creation).toMatchObject({ name: 'ICRA 2027', participation: 'managed' });
 	await expect(page.getByText('No Project participants yet.')).toBeVisible();
 });
 
@@ -336,10 +340,10 @@ test('a Workspace viewer cannot discover or deep-link into a managed Project the
 }) => {
 	await mockSession(page);
 	await mockWorkspaceRole(page, 'viewer', ['workspace.read']);
-	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
 		route.fulfill({ json: [] })
 	);
-	await page.route('**/api/v1/workspaces/workspace-1/projects/joinable', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=joinable', (route) =>
 		route.fulfill({ json: [] })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/projects/managed-secret', (route) =>
@@ -373,7 +377,7 @@ test('Workspace resource actions govern Project settings and managed participati
 		{ 'project.create': ['managed', 'open', 'workspace'] }
 	);
 	const mutations: Array<{ method: string; path: string; body: unknown }> = [];
-	let currentVisibility: 'workspace' | 'managed' = 'workspace';
+	let currentParticipation: 'workspace' | 'managed' = 'workspace';
 	let participants: Array<{ user_id: string; username: string }> = [];
 	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1**', (route) => {
 		const request = route.request();
@@ -386,14 +390,14 @@ test('Workspace resource actions govern Project settings and managed participati
 					...project,
 					name: 'Research',
 					description: 'Initial',
-					visibility: currentVisibility,
-					is_member: currentVisibility === 'workspace',
+					participation: currentParticipation,
+					is_member: currentParticipation === 'workspace',
 					authorization: {
 						allowed: [
 							'project.update',
 							'project.archive',
 							'project_item.manage',
-							...(currentVisibility === 'managed' ? ['project_membership.manage'] : []),
+							...(currentParticipation === 'managed' ? ['project_membership.manage'] : []),
 							'project.delete',
 							'project_discussion.create'
 						]
@@ -404,12 +408,12 @@ test('Workspace resource actions govern Project settings and managed participati
 		const body = request.postDataJSON();
 		mutations.push({ method: request.method(), path, body });
 		if (request.method() === 'PATCH')
-			currentVisibility = body.visibility as 'workspace' | 'managed';
+			currentParticipation = body.participation as 'workspace' | 'managed';
 		if (request.method() === 'PUT')
 			participants = [...participants, { user_id: 'member-2', username: 'collaborator' }];
 		return route.fulfill({ json: { ok: true, id: 'project-1' } });
 	});
-	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
 		route.fulfill({ json: [] })
 	);
 
@@ -429,7 +433,7 @@ test('Workspace resource actions govern Project settings and managed participati
 		.toContainEqual({
 			method: 'PATCH',
 			path: '/api/v1/workspaces/workspace-1/projects/project-1',
-			body: { name: 'Renamed research', description: 'Updated', visibility: 'managed' }
+			body: { name: 'Renamed research', description: 'Updated', participation: 'managed' }
 		});
 	await page.getByPlaceholder('Exact username').fill('collaborator');
 	await page.getByRole('button', { name: 'Add participant' }).click();

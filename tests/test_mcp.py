@@ -116,7 +116,7 @@ async def test_tool_search_discovers_curated_tools(async_session_factory):
         "project_id",
         "name",
         "description",
-        "visibility",
+        "participation",
     }
 
 
@@ -140,7 +140,7 @@ async def test_generated_tool_schemas_come_from_the_api_contract(async_session_f
         "project_id",
         "name",
         "description",
-        "visibility",
+        "participation",
     }
     assert set(tools["annotations.update_annotation"].parameters["properties"]) == {
         "workspace_id",

@@ -20,23 +20,23 @@
 		queryKey: workspaceKeys.members(workspace.workspaceId),
 		queryFn: ({ signal }: { signal: AbortSignal }) =>
 			api.request('GET', '/workspaces/{workspace_id}/members', { signal }),
-		enabled: Boolean(workspace.view) && !workspace.can('workspace_member', 'read')
+		enabled: Boolean(workspace.view) && !workspace.can('workspace_member.read')
 	}));
 	const governanceMembers = createQuery(() => ({
 		queryKey: workspaceKeys.governanceMembers(workspace.workspaceId),
 		queryFn: ({ signal }: { signal: AbortSignal }) =>
 			api.request('GET', '/workspaces/{workspace_id}/governance/members', { signal }),
-		enabled: Boolean(workspace.view) && workspace.can('workspace_member', 'read')
+		enabled: Boolean(workspace.view) && workspace.can('workspace_member.read')
 	}));
 	const invitations = createQuery(() => ({
 		queryKey: workspaceKeys.invitations(workspace.workspaceId),
 		queryFn: ({ signal }: { signal: AbortSignal }) =>
 			api.request('GET', '/workspaces/{workspace_id}/invitations', { signal }),
-		enabled: workspace.can('workspace_invitation', 'read')
+		enabled: workspace.can('workspace_invitation.read')
 	}));
 	let name = $state(workspace.view?.name ?? '');
 	let inviteUsername = $state('');
-	let inviteRole = $state<'editor' | 'reviewer' | 'viewer'>('viewer');
+	let inviteRole = $state<'admin' | 'editor' | 'reviewer' | 'viewer'>('viewer');
 	let inviteDays = $state(7);
 	let oneTimeToken = $state('');
 	let message = $state('');
@@ -55,10 +55,10 @@
 			await action();
 			message = success;
 			await Promise.all([
-				workspace.can('workspace_member', 'read')
+				workspace.can('workspace_member.read')
 					? governanceMembers.refetch()
 					: directoryMembers.refetch(),
-				workspace.can('workspace_invitation', 'read') ? invitations.refetch() : Promise.resolve(),
+				workspace.can('workspace_invitation.read') ? invitations.refetch() : Promise.resolve(),
 				client.invalidateQueries({ queryKey: workspaceKeys.root(workspace.workspaceId) }),
 				client.invalidateQueries({ queryKey: workspaceKeys.list() })
 			]);
@@ -120,7 +120,7 @@
 				await goto(resolve('/workspace'), { replaceState: true });
 	}
 	async function reindex() {
-		if (!workspace.can('workspace', 'update')) return;
+		if (!workspace.can('workspace.update')) return;
 		await run(
 			'reindex',
 			async () => {
@@ -176,10 +176,10 @@
 				class="input"
 				bind:value={name}
 				maxlength="240"
-				disabled={!workspace.can('workspace', 'update')}
+				disabled={!workspace.can('workspace.update')}
 			/></label
 		>
-		{#if workspace.can('workspace', 'update')}<div>
+		{#if workspace.can('workspace.update')}<div>
 				<Button
 					variant="filled"
 					disabled={busyId !== '' || !name.trim() || name.trim() === workspace.view?.name}
@@ -187,7 +187,7 @@
 				>
 			</div>{/if}
 	</section>
-	{#if workspace.can('workspace', 'update')}
+	{#if workspace.can('workspace.update')}
 		<section
 			class="grid max-w-2xl grid-cols-1 gap-3 rounded-container border border-surface-300-700 bg-surface-50-950 p-5"
 		>
@@ -198,7 +198,7 @@
 			>
 		</section>
 	{/if}
-	{#if workspace.can('workspace', 'archive') || workspace.can('workspace', 'restore') || workspace.can('workspace', 'delete')}
+	{#if workspace.can('workspace.archive') || workspace.can('workspace.restore') || workspace.can('workspace.delete')}
 		<section
 			class="grid max-w-2xl grid-cols-1 gap-4 rounded-container border border-surface-300-700 bg-surface-50-950 p-5"
 			aria-labelledby="workspace-lifecycle-heading"
@@ -212,7 +212,7 @@
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
-				{#if workspace.can('workspace', 'archive') && workspace.view?.state === 'active'}<Button
+				{#if workspace.can('workspace.archive') && workspace.view?.state === 'active'}<Button
 						variant="warning"
 						disabled={busyId !== ''}
 						onclick={() => {
@@ -226,7 +226,7 @@
 								);
 						}}>{$t('Archive workspace')}</Button
 					>{/if}
-				{#if workspace.can('workspace', 'restore') && workspace.view?.state === 'archived'}<Button
+				{#if workspace.can('workspace.restore') && workspace.view?.state === 'archived'}<Button
 						variant="success"
 						disabled={busyId !== ''}
 						onclick={() =>
@@ -239,7 +239,7 @@
 			</div>
 		</section>
 	{/if}
-	{#if workspace.can('workspace', 'delete')}
+	{#if workspace.can('workspace.delete')}
 		<section
 			class="grid max-w-2xl grid-cols-1 gap-3 rounded-container border border-error-500/40 bg-error-50-950/30 p-5"
 			aria-labelledby="workspace-delete-heading"
@@ -263,7 +263,7 @@
 			</div>
 		</section>
 	{/if}
-	{#if workspace.can('workspace_member', 'read')}<section class="grid grid-cols-1 gap-3">
+	{#if workspace.can('workspace_member.read')}<section class="grid grid-cols-1 gap-3">
 			<div>
 				<h2 class="text-xl font-semibold">{$t('Members')}</h2>
 				<p class="text-sm text-surface-600-400">
@@ -295,7 +295,7 @@
 									><td class="p-3">{$t(domainLabel(member.state))}</td><td
 										class="flex flex-wrap gap-2 p-3"
 									>
-										{#if can(member.authorization, 'workspace_member', 'change_role')}
+										{#if can(member.authorization, 'workspace_member.change_role')}
 											<select
 												aria-label={$t('Role for {username}', { username: member.username })}
 												value={member.role}
@@ -319,14 +319,14 @@
 												><option
 													value="admin"
 													disabled={member.role !== 'admin' &&
-														!can(member.authorization, 'workspace_member', 'promote')}
+														!can(member.authorization, 'workspace_member.promote')}
 													>{$t('admin')}</option
 												><option value="editor">{$t('editor')}</option><option value="reviewer"
 													>{$t('reviewer')}</option
 												><option value="viewer">{$t('viewer')}</option></select
 											>
 										{/if}
-										{#if can(member.authorization, 'workspace_member', 'suspend')}<Button
+										{#if can(member.authorization, 'workspace_member.suspend')}<Button
 												size="sm"
 												variant="tonal"
 												disabled={busyId !== ''}
@@ -341,7 +341,7 @@
 															),
 														$t('Member suspended')
 													)}>{$t('Suspend')}</Button
-											>{:else if can(member.authorization, 'workspace_member', 'reactivate')}<Button
+											>{:else if can(member.authorization, 'workspace_member.reactivate')}<Button
 												size="sm"
 												variant="tonal"
 												disabled={busyId !== ''}
@@ -357,7 +357,7 @@
 														$t('Member reactivated')
 													)}>{$t('Reactivate')}</Button
 											>{/if}
-										{#if can(member.authorization, 'workspace_member', 'transfer_ownership')}<Button
+										{#if can(member.authorization, 'workspace_member.transfer_ownership')}<Button
 												size="sm"
 												variant="tonal"
 												disabled={busyId !== ''}
@@ -375,7 +375,7 @@
 														);
 												}}>{$t('Transfer ownership')}</Button
 											>{/if}
-										{#if can(member.authorization, 'workspace_member', 'terminate')}<Button
+										{#if can(member.authorization, 'workspace_member.terminate')}<Button
 												size="sm"
 												variant="tonal"
 												disabled={busyId !== ''}
@@ -433,12 +433,12 @@
 			{/if}
 		</section>
 	{/if}
-	{#if workspace.can('workspace_invitation', 'read')}
+	{#if workspace.can('workspace_invitation.read')}
 		<section
 			class="grid grid-cols-1 gap-4 rounded-container border border-surface-300-700 bg-surface-50-950 p-5"
 		>
 			<h2 class="text-xl font-semibold">{$t('Invitations')}</h2>
-			{#if workspace.can('workspace_invitation', 'create')}<form
+			{#if workspace.can('workspace_invitation.create')}<form
 					class="grid grid-cols-1 gap-3 md:grid-cols-4"
 					onsubmit={(event) => {
 						event.preventDefault();
@@ -454,9 +454,13 @@
 					>
 					<label class="grid grid-cols-1 gap-1"
 						>{$t('Role')}<select bind:value={inviteRole}
-							><option value="viewer">{$t('viewer')}</option><option value="reviewer"
-								>{$t('reviewer')}</option
-							><option value="editor">{$t('editor')}</option></select
+						>{#if workspace.can('workspace_invitation.create', 'admin')}<option value="admin"
+								>{$t('admin')}</option>
+							{/if}<option value="viewer"
+								>{$t('viewer')}</option
+							><option value="reviewer">{$t('reviewer')}</option><option value="editor"
+								>{$t('editor')}</option
+							></select
 						></label
 					>
 					<label class="grid grid-cols-1 gap-1"
@@ -487,7 +491,7 @@
 							<span
 								>{invitation.username} · {$t(domainLabel(invitation.role))} · {$t('expires')}
 								{new Date(invitation.expires_at).toLocaleDateString()}</span
-							>{#if workspace.can('workspace_invitation', 'revoke')}<Button
+							>{#if workspace.can('workspace_invitation.revoke')}<Button
 									size="sm"
 									variant="tonal"
 									disabled={busyId !== ''}

@@ -56,6 +56,7 @@ from quirebase.workspaces import (
     read_workspace_items_break_glass,
     recover_workspace_governance,
     suspend_workspace_governance,
+    workspace_owner_ids,
 )
 
 router = APIRouter(
@@ -279,16 +280,18 @@ async def admin_maintenance(user: ApiUser, db: Database):
 
 @router.get("/workspaces", response_model=list[AdminWorkspaceView])
 async def admin_workspaces(user: ApiUser, db: Database) -> list[AdminWorkspaceView]:
+    workspaces = await list_workspaces_for_governance(db, user)
+    owner_ids = await workspace_owner_ids(db, {workspace.id for workspace in workspaces})
     return [
         AdminWorkspaceView(
             id=workspace.id,
             name=workspace.name,
-            owner_id=workspace.owner_id,
+            owner_id=owner_ids[workspace.id],
             state=workspace.state.value,
             governance_suspended_at=workspace.governance_suspended_at,
             governance_suspended_by=workspace.governance_suspended_by,
         )
-        for workspace in await list_workspaces_for_governance(db, user)
+        for workspace in workspaces
     ]
 
 

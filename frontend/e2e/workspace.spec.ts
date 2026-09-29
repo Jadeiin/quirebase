@@ -13,7 +13,7 @@ test('Workspace switching and governance live in the Quirebase menu, not the dai
 	await page.route('**/api/v1/workspaces/workspace-1/dashboard', (route) =>
 		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 0 } })
 	);
-	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
 		route.fulfill({ json: [] })
 	);
 
@@ -87,7 +87,9 @@ test('an explicit Workspace URL wins over the saved default, and switching chang
 		});
 	});
 	await page.route('**/api/v1/workspaces/*/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/workspaces/*/projects', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/workspaces/*/projects?view=all', (route) =>
+		route.fulfill({ json: [] })
+	);
 	await page.route('**/api/v1/workspaces/*/dashboard', (route) =>
 		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 1 } })
 	);
@@ -304,7 +306,7 @@ test('availability recovery releases its guard for a later membership revocation
 		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 0 } })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
 		route.fulfill({ json: [] })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/items*', (route) => {
@@ -354,7 +356,7 @@ test('membership revoked while a page is open returns the user to the Workspace 
 		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 0 } })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
 		route.fulfill({ json: [] })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/items*', (route) => {
@@ -467,7 +469,9 @@ test('a pending Workspace A response cannot replace Workspace B after switching'
 		});
 	});
 	await page.route('**/api/v1/workspaces/*/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/workspaces/*/projects', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/workspaces/*/projects?view=all', (route) =>
+		route.fulfill({ json: [] })
+	);
 	await page.route('**/api/v1/workspaces/*/dashboard', (route) =>
 		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 1 } })
 	);
@@ -615,7 +619,7 @@ test('browser history and two tabs retain their explicit Workspace URLs across r
 			});
 		});
 		await activePage.route('**/api/v1/workspaces/*/tags', (route) => route.fulfill({ json: [] }));
-		await activePage.route('**/api/v1/workspaces/*/projects', (route) =>
+		await activePage.route('**/api/v1/workspaces/*/projects?view=all', (route) =>
 			route.fulfill({ json: [] })
 		);
 		await activePage.route('**/api/v1/workspaces/*/dashboard', (route) =>

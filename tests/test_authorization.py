@@ -33,12 +33,7 @@ def test_immutable_casbin_bundle_initializes():
 def test_every_declared_workspace_and_system_action_has_policy_coverage():
     rows = _policy_rows()
     workspace_actions = {(row[2], row[3]) for row in rows if row[1].startswith("workspace:")}
-    system_actions = {
-        (row[2], row[3])
-        for row in rows
-        if row[1].startswith("system:")
-        and row[2] not in {"api_token", "login_session", "account", "workspace_invitation"}
-    }
+    system_actions = {(row[2], row[3]) for row in rows if row[1].startswith("system:")}
 
     assert workspace_actions == {
         (resource_action.resource, resource_action.action) for resource_action in ResourceAction
@@ -95,11 +90,18 @@ def test_policy_regex_alternatives_are_stably_sorted():
 
 
 def test_system_roles_are_decided_only_by_the_casbin_action_matrix():
-    relation_constrained = SystemAction.workspaces_create
-    assert effective_system_actions(SystemRole.member) == frozenset()
-    assert effective_system_actions(SystemRole.administrator) == frozenset(SystemAction) - {
-        relation_constrained
+    unconstrained_policy_actions = {
+        (row[2], row[3])
+        for row in _policy_rows()
+        if row[1] in {"system:member", "system:administrator"} and row[5] == "any"
     }
+    assert effective_system_actions(SystemRole.member) == frozenset()
+    expected_unconstrained = {
+        action
+        for action in SystemAction
+        if (action.resource, action.action) in unconstrained_policy_actions
+    }
+    assert effective_system_actions(SystemRole.administrator) == frozenset(expected_unconstrained)
     assert all(not system_action_allowed(SystemRole.member, action) for action in SystemAction)
     assert system_action_allowed(
         SystemRole.member,
@@ -116,6 +118,12 @@ def test_system_roles_are_decided_only_by_the_casbin_action_matrix():
         SystemAction.workspaces_create,
         relation="admins_only",
     )
+    assert system_action_allowed(
+        SystemRole.member,
+        SystemAction.account_change_password,
+        relation="own",
+    )
+    assert not system_action_allowed(SystemRole.member, SystemAction.account_change_password)
 
 
 def test_policy_decisions_and_system_projection_reuse_immutable_results():

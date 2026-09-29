@@ -2825,7 +2825,7 @@ msgstr "Previous"
 msgid "Previous page"
 msgstr "Previous page"
 
-#. Project visibility or annotation scope.
+#. Project participation or annotation scope.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 msgid "Private"
@@ -2907,7 +2907,7 @@ msgstr "Projects are research working contexts inside this Workspace."
 msgid "Provider"
 msgstr "Provider"
 
-#. Project visibility or annotation scope.
+#. Project participation or annotation scope.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 msgid "Public"

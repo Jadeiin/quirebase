@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import event, select
+from sqlalchemy import event, select, text
 from sqlalchemy.exc import IntegrityError
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
@@ -15,6 +15,7 @@ from quirebase.access import (
     effective_resource_action_relations,
     effective_resource_actions,
     get_item,
+    project_decisions,
     require_action,
     require_project_context,
     require_workspace_action,
@@ -97,13 +98,14 @@ from quirebase.models import (
     Project,
     ProjectItem,
     ProjectMember,
+    ProjectParticipation,
     ProjectState,
-    ProjectVisibility,
     SystemSetting,
     Tag,
     User,
     Workspace,
     WorkspaceInvitation,
+    WorkspaceInvitationRole,
     WorkspaceMember,
     WorkspaceMemberState,
     WorkspaceRole,
@@ -159,7 +161,7 @@ def test_effective_resource_actions_follow_workspace_lifecycle():
 
     assert ResourceAction.item_create in active
     assert ResourceAction.item_copy in active
-    assert ResourceAction.workspace_delete in active
+    assert ResourceAction.workspace_delete not in active
     assert ResourceAction.project_create in active
     assert ResourceAction.file_delete in active
     assert ResourceAction.workspace_read in archived
@@ -451,7 +453,7 @@ async def test_annotation_editability_projection_respects_managed_project_partic
     )
     assert membership is not None
     membership.role = WorkspaceRole.reviewer
-    project.visibility = ProjectVisibility.managed
+    project.participation = ProjectParticipation.managed
     project_item = await async_db.scalar(
         select(ProjectItem).where(ProjectItem.project_id == project.id)
     )
@@ -605,7 +607,16 @@ async def test_ownership_transfer_does_not_prevent_another_workspace(async_db):
     async_db.add(SystemSetting(key="workspace_creation_policy", value="members_allowed"))
     await async_db.commit()
     additional = await create_workspace(async_db, first_owner, "New research space")
-    assert additional.owner_id == first_owner.id
+    assert (
+        await async_db.scalar(
+            select(WorkspaceMember.user_id).where(
+                WorkspaceMember.workspace_id == additional.id,
+                WorkspaceMember.role == WorkspaceRole.owner,
+                WorkspaceMember.terminated_at.is_(None),
+            )
+        )
+        == first_owner.id
+    )
     assert additional.id != workspace_id
     assert fixture_workspace_id(first_owner) == workspace_id
 
@@ -618,7 +629,16 @@ async def test_workspace_creation_allows_user_without_an_existing_workspace(asyn
     await async_db.commit()
 
     workspace = await create_workspace(async_db, user, "Explicitly created space")
-    assert workspace.owner_id == user.id
+    assert (
+        await async_db.scalar(
+            select(WorkspaceMember.user_id).where(
+                WorkspaceMember.workspace_id == workspace.id,
+                WorkspaceMember.role == WorkspaceRole.owner,
+                WorkspaceMember.terminated_at.is_(None),
+            )
+        )
+        == user.id
+    )
 
 
 @pytest.mark.anyio
@@ -707,6 +727,36 @@ async def test_invitation_creation_audit_references_invitation_and_invitee(async
 
 
 @pytest.mark.anyio
+async def test_database_accepts_admin_workspace_invitations(async_db):
+    owner = await _user(async_db, "invitation-check-owner")
+    invitee = await _user(async_db, "invitation-check-invitee")
+    workspace_id = fixture_workspace_id(owner)
+    now = datetime.now(UTC).isoformat()
+    invitation_id = str(uuid4())
+    await async_db.execute(
+        text(
+            "INSERT INTO workspace_invitations "
+            "(id, workspace_id, user_id, role, token_hash, invited_by, expires_at, created_at) "
+            "VALUES (:id, :workspace_id, :user_id, :role, :token_hash, :invited_by, "
+            ":expires_at, :created_at)"
+        ),
+        {
+            "id": invitation_id,
+            "workspace_id": workspace_id,
+            "user_id": invitee.id,
+            "role": "admin",
+            "token_hash": "a" * 64,
+            "invited_by": owner.id,
+            "expires_at": (datetime.now(UTC) + timedelta(days=1)).isoformat(),
+            "created_at": now,
+        },
+    )
+    await async_db.commit()
+    invitation = await async_db.get(WorkspaceInvitation, invitation_id)
+    assert invitation is not None and invitation.role is WorkspaceInvitationRole.admin
+
+
+@pytest.mark.anyio
 async def test_invitation_creation_rechecks_user_status(async_db, async_session_factory):
     owner = await _user(async_db, "invitation-create-status-owner")
     invitee = await _user(async_db, "invitation-create-status-invitee")
@@ -746,16 +796,19 @@ async def test_old_workspace_invitations_cannot_restore_access(async_db, members
     owner = await _user(async_db, f"stale-invitation-{membership_action}-owner")
     invitee = await _user(async_db, f"stale-invitation-{membership_action}-invitee")
     workspace_id = fixture_workspace_id(owner)
-    _first, first_token = await invite_workspace_member(
+    first, first_token = await invite_workspace_member(
         async_db, owner, workspace_id, invitee.id, WorkspaceRole.viewer
     )
     second, second_token = await invite_workspace_member(
         async_db, owner, workspace_id, invitee.id, WorkspaceRole.editor
     )
-    member = await accept_workspace_invitation(async_db, invitee, workspace_id, first_token)
-    assert (await async_db.get(WorkspaceInvitation, second.id)).revoked_at is not None
+    assert (await async_db.get(WorkspaceInvitation, first.id)).revoked_at is not None
+    with pytest.raises(ResourceNotFound, match="invitation"):
+        await accept_workspace_invitation(async_db, invitee, workspace_id, first_token)
+    member = await accept_workspace_invitation(async_db, invitee, workspace_id, second_token)
 
     # Cover a pending token left by an interrupted or older admission transaction.
+    second.accepted_at = None
     second.revoked_at = None
     await async_db.commit()
     if membership_action == "suspend":
@@ -793,7 +846,7 @@ async def test_pdf_viewer_hides_managed_project_contexts_from_nonmembers(async_d
         workspace_id=item.workspace_id,
         name="Managed participation",
         created_by=owner.id,
-        visibility=ProjectVisibility.managed,
+        participation=ProjectParticipation.managed,
     )
     async_db.add(managed_project)
     await async_db.flush()
@@ -868,8 +921,16 @@ async def test_admins_only_workspace_creation_requires_explicit_owner_username(a
         "Creator-owned",
         owner_username=administrator.username,
     )
-    assert created_by_admin.owner_id == administrator.id
     assert created_by_admin.created_by == administrator.id
+    assert (
+        await async_db.scalar(
+            select(WorkspaceMember.user_id).where(
+                WorkspaceMember.workspace_id == created_by_admin.id,
+                WorkspaceMember.role == WorkspaceRole.owner,
+            )
+        )
+        == administrator.id
+    )
 
     created = await create_workspace(
         async_db,
@@ -877,8 +938,16 @@ async def test_admins_only_workspace_creation_requires_explicit_owner_username(a
         "Admin-created",
         owner_username=initial_owner.username,
     )
-    assert created.owner_id == initial_owner.id
     assert created.created_by == administrator.id
+    assert (
+        await async_db.scalar(
+            select(WorkspaceMember.user_id).where(
+                WorkspaceMember.workspace_id == created.id,
+                WorkspaceMember.role == WorkspaceRole.owner,
+            )
+        )
+        == initial_owner.id
+    )
     assert (
         await async_db.scalar(
             select(WorkspaceMember.id).where(
@@ -998,6 +1067,8 @@ async def test_workspace_delete_waits_for_retention_and_purges_owned_data(
     item_id, project_id, tag_id = item.id, project.id, tag.id
     annotation_ids = (annotation.id, reply.id)
 
+    with pytest.raises(PermissionDenied):
+        await permanently_delete_workspace(async_db, owner, workspace_id)
     await archive_workspace(async_db, owner, workspace_id)
     with pytest.raises(WorkspaceLifecycleError, match="retention"):
         await permanently_delete_workspace(async_db, owner, workspace_id)
@@ -1107,7 +1178,7 @@ async def test_managed_project_loaders_require_participation_or_workspace_govern
         owner,
         fixture_workspace_id(owner),
         "Members only",
-        ProjectVisibility.managed,
+        ProjectParticipation.managed,
     )
     context = await resolve_workspace_context(async_db, outsider, fixture_workspace_id(owner))
     assert await get_project(async_db, context, project.id) is None
@@ -1211,14 +1282,14 @@ async def test_managed_project_is_visible_only_to_members_and_workspace_governor
             outsider,
             fixture_workspace_id(owner),
             "Editor cannot create managed Projects",
-            ProjectVisibility.managed,
+            ProjectParticipation.managed,
         )
     project = await create_project(
         async_db,
         owner,
         fixture_workspace_id(owner),
         "Scoped",
-        ProjectVisibility.managed,
+        ProjectParticipation.managed,
     )
     assert [
         row[0].id
@@ -1257,7 +1328,7 @@ async def test_managed_project_is_visible_only_to_members_and_workspace_governor
             project.id,
             name=project.name,
             description=project.description,
-            visibility=ProjectVisibility.open,
+            participation=ProjectParticipation.open,
         )
 
 
@@ -1276,13 +1347,31 @@ async def test_managed_project_mutations_use_resource_actions(async_db):
     )
     await async_db.commit()
     project = await create_project(
-        async_db, owner, workspace_id, "Managed editor mutations", ProjectVisibility.managed
+        async_db, owner, workspace_id, "Managed editor mutations", ProjectParticipation.managed
     )
     item = Item(workspace_id=workspace_id, title="Managed mutation Item", created_by=owner.id)
     async_db.add(item)
     await async_db.commit()
     assert await list_workspace_projects(async_db, editor, workspace_id) == []
 
+    with pytest.raises(ResourceUnavailable, match="Project not found"):
+        await update_project_settings(
+            async_db,
+            editor,
+            workspace_id,
+            project.id,
+            name="Hidden Project",
+            description=project.description,
+            participation=ProjectParticipation.managed,
+        )
+    with pytest.raises(ResourceUnavailable, match="Project not found"):
+        await add_item_to_project(async_db, editor, workspace_id, project.id, item.id)
+    with pytest.raises(ResourceUnavailable, match="Project not found"):
+        await set_project_state(async_db, editor, workspace_id, project.id, ProjectState.archived)
+    await async_db.refresh(project)
+    assert project.state is ProjectState.active
+
+    await add_project_member(async_db, owner, workspace_id, project.id, editor.username)
     await update_project_settings(
         async_db,
         editor,
@@ -1290,7 +1379,7 @@ async def test_managed_project_mutations_use_resource_actions(async_db):
         project.id,
         name="Managed editor mutations renamed",
         description=project.description,
-        visibility=ProjectVisibility.managed,
+        participation=ProjectParticipation.managed,
     )
     await add_item_to_project(async_db, editor, workspace_id, project.id, item.id)
     assert (
@@ -1315,6 +1404,46 @@ async def test_managed_project_mutations_use_resource_actions(async_db):
 
 
 @pytest.mark.anyio
+async def test_project_settings_projection_lists_allowed_participation_targets(async_db):
+    owner = await _user(async_db, "participation-projection-owner")
+    editor = await _user(async_db, "participation-projection-editor")
+    workspace_id = fixture_workspace_id(owner)
+    async_db.add(
+        WorkspaceMember(
+            workspace_id=workspace_id,
+            user_id=editor.id,
+            role=WorkspaceRole.editor,
+            invited_by=owner.id,
+        )
+    )
+    await async_db.commit()
+    project = await create_project(async_db, owner, workspace_id, "Participation projection")
+
+    editor_context = await resolve_workspace_context(async_db, editor, workspace_id)
+    editor_decisions = project_decisions(editor_context, project, is_member=False)
+    assert ResourceAction.project_update in editor_decisions.allowed
+    assert set(editor_decisions.relations[ResourceAction.project_update]) == {"workspace", "open"}
+
+    owner_context = await resolve_workspace_context(async_db, owner, workspace_id)
+    owner_decisions = project_decisions(owner_context, project, is_member=True)
+    assert set(owner_decisions.relations[ResourceAction.project_update]) == {
+        "workspace",
+        "open",
+        "managed",
+    }
+    with pytest.raises(PermissionDenied):
+        await update_project_settings(
+            async_db,
+            editor,
+            workspace_id,
+            project.id,
+            name=project.name,
+            description=project.description,
+            participation=ProjectParticipation.managed,
+        )
+
+
+@pytest.mark.anyio
 @pytest.mark.parametrize("read_only_mode", ["archived", "governance_suspended"])
 async def test_open_project_participation_rejects_read_only_workspaces(async_db, read_only_mode):
     owner = await _user(async_db, "open-lifecycle-owner")
@@ -1330,7 +1459,7 @@ async def test_open_project_participation_rejects_read_only_workspaces(async_db,
     )
     await async_db.commit()
     project = await create_project(
-        async_db, owner, workspace_id, "Open lifecycle", ProjectVisibility.open
+        async_db, owner, workspace_id, "Open lifecycle", ProjectParticipation.open
     )
     workspace = await async_db.get(Workspace, workspace_id)
     assert workspace is not None
@@ -1370,7 +1499,7 @@ async def test_dashboard_includes_managed_projects_for_workspace_governors(async
     owner = await _user(async_db, "dashboard-managed-owner")
     workspace_id = fixture_workspace_id(owner)
     project = await create_project(
-        async_db, owner, workspace_id, "Governor dashboard", ProjectVisibility.managed
+        async_db, owner, workspace_id, "Governor dashboard", ProjectParticipation.managed
     )
 
     dashboard = await get_dashboard_data(async_db, owner, workspace_id)
@@ -1379,7 +1508,7 @@ async def test_dashboard_includes_managed_projects_for_workspace_governors(async
 
 
 @pytest.mark.anyio
-async def test_project_filtered_library_search_obeys_project_visibility(async_db):
+async def test_project_filtered_library_search_obeys_project_participation(async_db):
     owner = await _user(async_db, "search-scope-owner")
     outsider = await _user(async_db, "search-scope-outsider")
     workspace_id = fixture_workspace_id(owner)
@@ -1395,7 +1524,7 @@ async def test_project_filtered_library_search_obeys_project_visibility(async_db
     async_db.add(item)
     await async_db.commit()
     project = await create_project(
-        async_db, owner, workspace_id, "Restricted working set", ProjectVisibility.managed
+        async_db, owner, workspace_id, "Restricted working set", ProjectParticipation.managed
     )
     await add_item_to_project(async_db, owner, workspace_id, project.id, item.id)
 
@@ -1413,7 +1542,7 @@ async def test_project_filtered_library_search_obeys_project_visibility(async_db
 
 
 @pytest.mark.anyio
-async def test_project_discussion_uses_visibility_and_resource_actions(async_db):
+async def test_project_discussion_uses_participation_and_resource_actions(async_db):
     owner = await _user(async_db, "discussion-owner")
     reviewer = await _user(async_db, "discussion-reviewer")
     outsider = await _user(async_db, "discussion-outsider")
@@ -1437,7 +1566,7 @@ async def test_project_discussion_uses_visibility_and_resource_actions(async_db)
         owner,
         fixture_workspace_id(owner),
         "Discussion scope",
-        ProjectVisibility.managed,
+        ProjectParticipation.managed,
     )
     async_db.add(
         ProjectMember(
@@ -1592,7 +1721,7 @@ async def test_project_discussion_moderation_respects_lifecycle_and_lineage(asyn
     )
     await async_db.commit()
     project = await create_project(
-        async_db, owner, workspace_id, "Moderated Project", ProjectVisibility.managed
+        async_db, owner, workspace_id, "Moderated Project", ProjectParticipation.managed
     )
     async_db.add(ProjectMember(workspace_id=workspace_id, project_id=project.id, user_id=author.id))
     await async_db.commit()
@@ -1950,7 +2079,7 @@ async def test_termination_clears_project_participation_without_affecting_access
         owner,
         fixture_workspace_id(owner),
         "Project Member invariant",
-        ProjectVisibility.managed,
+        ProjectParticipation.managed,
     )
     await add_project_member(
         async_db, owner, fixture_workspace_id(owner), project.id, editor.username
@@ -2009,7 +2138,7 @@ async def test_managed_project_participants_are_independent_of_workspace_governa
     await async_db.commit()
 
     project = await create_project(
-        async_db, owner, workspace_id, "Governed direction", ProjectVisibility.managed
+        async_db, owner, workspace_id, "Governed direction", ProjectParticipation.managed
     )
     project_id = project.id
     assert (
@@ -2057,7 +2186,7 @@ async def test_managed_project_can_have_no_participants(async_db):
     )
     await async_db.commit()
     project = await create_project(
-        async_db, owner, workspace_id, "Explicit members", ProjectVisibility.managed
+        async_db, owner, workspace_id, "Explicit members", ProjectParticipation.managed
     )
     await add_project_member(async_db, owner, workspace_id, project.id, editor.username)
     await remove_project_member(async_db, owner, workspace_id, project.id, editor.id)
@@ -2122,7 +2251,7 @@ async def test_workspace_project_has_implicit_participation_and_no_member_rows(a
         project.id,
         name=project.name,
         description=project.description,
-        visibility=ProjectVisibility.open,
+        participation=ProjectParticipation.open,
     )
     members = set(
         (
@@ -2152,7 +2281,7 @@ async def test_workspace_project_has_implicit_participation_and_no_member_rows(a
         project.id,
         name=project.name,
         description=project.description,
-        visibility=ProjectVisibility.managed,
+        participation=ProjectParticipation.managed,
     )
     members = set(
         (
@@ -2169,7 +2298,7 @@ async def test_workspace_project_has_implicit_participation_and_no_member_rows(a
         project.id,
         name=project.name,
         description=project.description,
-        visibility=ProjectVisibility.workspace,
+        participation=ProjectParticipation.workspace,
     )
     assert (
         await async_db.scalar(
@@ -2181,9 +2310,9 @@ async def test_workspace_project_has_implicit_participation_and_no_member_rows(a
 
 @pytest.mark.anyio
 async def test_workspace_ownership_transfer_preserves_project_participation(async_db):
-    owner = await _user(async_db, "visibility-manager-owner")
-    editor = await _user(async_db, "visibility-manager-editor")
-    successor = await _user(async_db, "visibility-manager-successor")
+    owner = await _user(async_db, "participation-manager-owner")
+    editor = await _user(async_db, "participation-manager-editor")
+    successor = await _user(async_db, "participation-manager-successor")
     workspace_id = fixture_workspace_id(owner)
     editor_membership = WorkspaceMember(
         workspace_id=workspace_id,
@@ -2208,7 +2337,7 @@ async def test_workspace_ownership_transfer_preserves_project_participation(asyn
         project.id,
         name=project.name,
         description=project.description,
-        visibility=ProjectVisibility.open,
+        participation=ProjectParticipation.open,
     )
     members = set(
         (
@@ -2274,7 +2403,7 @@ async def test_project_annotation_bundle_hides_managed_content_from_nonmembers(a
         project.id,
         name=project.name,
         description=project.description,
-        visibility=ProjectVisibility.managed,
+        participation=ProjectParticipation.managed,
     )
     project_item = await async_db.scalar(
         select(ProjectItem).where(ProjectItem.project_id == project.id)

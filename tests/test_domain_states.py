@@ -7,8 +7,8 @@ from workspace_helpers import provision_initial_workspace
 
 from quirebase.models import (
     Project,
+    ProjectParticipation,
     ProjectState,
-    ProjectVisibility,
     User,
     Workspace,
     WorkspaceMember,
@@ -39,7 +39,7 @@ async def assert_closed_state_constraints(db) -> None:
     await _assert_rejected(
         db,
         "INSERT INTO projects "
-        "(id, workspace_id, name, description, created_by, state, visibility, created_at, updated_at) "
+        "(id, workspace_id, name, description, created_by, state, participation, created_at, updated_at) "
         "VALUES (:id, :workspace_id, 'bad', '', :user_id, 'unknown', 'workspace', "
         "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
         {"id": "invalid-project-state", "workspace_id": workspace.id, "user_id": user.id},
@@ -65,7 +65,7 @@ async def test_closed_domain_states_are_loaded_as_domain_types(async_db):
         name="Typed",
         created_by=user.id,
         state=ProjectState.active,
-        visibility=ProjectVisibility.workspace,
+        participation=ProjectParticipation.workspace,
     )
     async_db.add(project)
     await async_db.commit()
@@ -82,7 +82,7 @@ async def test_closed_domain_states_are_loaded_as_domain_types(async_db):
 
     assert loaded_workspace is not None and loaded_workspace.state is WorkspaceState.active
     assert loaded_project is not None and loaded_project.state is ProjectState.active
-    assert loaded_project.visibility is ProjectVisibility.workspace
+    assert loaded_project.participation is ProjectParticipation.workspace
     assert membership is not None and membership.role is WorkspaceRole.owner
     assert membership.state is WorkspaceMemberState.active
 

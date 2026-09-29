@@ -22,7 +22,7 @@ from quirebase.models import (
     ItemTag,
     LoginSession,
     ProjectItem,
-    ProjectVisibility,
+    ProjectParticipation,
     Tag,
     User,
 )
@@ -145,7 +145,7 @@ async def get_dashboard_data(db: AsyncSession, user: User, workspace_id: str) ->
         for project, _, is_member in await list_workspace_projects(db, user, workspace_id)
         if is_member
         or (
-            project.visibility is ProjectVisibility.managed
+            project.participation is ProjectParticipation.managed
             and action_allowed(
                 context,
                 ResourceAction.project_discover,

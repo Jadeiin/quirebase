@@ -58,7 +58,7 @@
 							>{$t('Read')}</Button
 						>
 					{/if}
-					{#if workspace.can('workspace', 'export')}<Button onclick={() => onDownload(file)}
+					{#if workspace.can('workspace.export')}<Button onclick={() => onDownload(file)}
 							>{$t('Download')}</Button
 						>{/if}
 					{#if canDelete}

@@ -1,19 +1,56 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { createQuery } from '@tanstack/svelte-query';
+	import type { AuthorizationAction } from '$lib/authorization/can';
 	import Icon from '$lib/design/Icon.svelte';
 	import Panel from '$lib/design/Panel.svelte';
 	import RichText from '$lib/design/RichText.svelte';
 	import { domainLabel } from '$lib/domain-labels';
 	import { dashboardQuery } from '$lib/features/dashboard/queries';
 	import { dateFormat } from '$lib/format';
-	import { t } from '$lib/i18n';
+	import { msg, t } from '$lib/i18n';
 	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
 	import { workspaceHref } from '$lib/workspaces/href';
 
 	const workspace = getWorkspaceContext();
 	const { workspaceId } = workspace;
 	const dashboard = createQuery(() => dashboardQuery(workspaceId));
+	const quickActions = [
+		{
+			path: 'import',
+			icon: 'import',
+			title: msg('Import Items'),
+			detail: msg('DOI, files, or PDFs'),
+			action: 'item.create'
+		},
+		{
+			path: 'discovery',
+			icon: 'search',
+			title: msg('Discover'),
+			detail: msg('Search scholarly sources'),
+			action: 'workspace.read'
+		},
+		{
+			path: 'projects',
+			icon: 'projects',
+			title: msg('New Project'),
+			detail: msg('Organize a collection'),
+			action: 'project.create'
+		},
+		{
+			path: 'library',
+			icon: 'library',
+			title: msg('Search Library'),
+			detail: msg('Find saved research'),
+			action: 'workspace.read'
+		}
+	] satisfies readonly {
+		path: string;
+		icon: string;
+		title: string;
+		detail: string;
+		action: AuthorizationAction;
+	}[];
 </script>
 
 <div class="mb-8">
@@ -131,7 +168,7 @@
 						</p>
 						<h2 class="m-0 mt-1 text-lg">{$t('Recently added')}</h2>
 					</div>
-					{#if workspace.can('item', 'create')}<a
+					{#if workspace.can('item.create')}<a
 							class="text-sm font-semibold text-primary-700-300 no-underline"
 							href={resolve(workspaceHref(workspaceId, 'import'))}>{$t('Import more')}</a
 						>{/if}
@@ -168,7 +205,7 @@
 					<h2 class="m-0 mt-1 text-lg">{$t('Quick actions')}</h2>
 				</div>
 				<div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-					{#each [{ path: 'import', icon: 'import', title: $t('Import Items'), detail: $t('DOI, files, or PDFs'), resource: 'item', action: 'create' }, { path: 'discovery', icon: 'search', title: $t('Discover'), detail: $t('Search scholarly sources'), resource: 'workspace', action: 'read' }, { path: 'projects', icon: 'projects', title: $t('New Project'), detail: $t('Organize a collection'), resource: 'project', action: 'create' }, { path: 'library', icon: 'library', title: $t('Search Library'), detail: $t('Find saved research'), resource: 'workspace', action: 'read' }].filter( (entry) => workspace.can(entry.resource, entry.action) ) as action (action.path)}
+					{#each quickActions.filter( (entry) => workspace.can(entry.action) ) as action (action.path)}
 						<a
 							class="group grid grid-cols-1 gap-2 rounded-lg border border-surface-300-700 p-3 no-underline hover:border-primary-700-300/40 hover:bg-primary-50-950"
 							href={resolve(workspaceHref(workspaceId, action.path))}
@@ -176,8 +213,8 @@
 							<span class="text-primary-700-300"><Icon name={action.icon} size={18} /></span>
 							<span
 								><strong class="block text-sm group-hover:text-primary-800-200"
-									>{action.title}</strong
-								><small class="text-surface-600-400">{action.detail}</small></span
+									>{$t(action.title)}</strong
+								><small class="text-surface-600-400">{$t(action.detail)}</small></span
 							>
 						</a>
 					{/each}
@@ -197,7 +234,7 @@
 							class="flex items-center justify-between gap-3 rounded-lg bg-surface-200-800 px-3.5 py-3 no-underline hover:bg-primary-50-950"
 							href={resolve(workspaceHref(workspaceId, `projects/${project.id}`))}
 							><strong class="text-sm">{project.name}</strong><span
-								class="text-xs text-surface-600-400">{$t(domainLabel(project.visibility))}</span
+								class="text-xs text-surface-600-400">{$t(domainLabel(project.participation))}</span
 							></a
 						>
 					{:else}<p class="m-0 text-sm text-surface-600-400">{$t('No projects yet.')}</p>{/each}

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 
 from quirebase.core.errors import ResourceUnavailable
-from quirebase.models import Project, ProjectState, ProjectVisibility, Workspace
+from quirebase.models import Project, ProjectParticipation, ProjectState, Workspace
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,7 +30,7 @@ async def lock_project_root(
     workspace_id: str,
     *,
     state: ProjectState | None = None,
-    visibility: ProjectVisibility | None = None,
+    participation: ProjectParticipation | None = None,
     message: str = "project not found",
 ) -> Project:
     """Lock the Project root at a command's linearization point.
@@ -41,8 +41,8 @@ async def lock_project_root(
     predicates = [Project.id == project_id, Project.workspace_id == workspace_id]
     if state is not None:
         predicates.append(Project.state == state)
-    if visibility is not None:
-        predicates.append(Project.visibility == visibility)
+    if participation is not None:
+        predicates.append(Project.participation == participation)
     project = await db.scalar(
         select(Project)
         .where(*predicates)
@@ -78,15 +78,15 @@ async def guard_project(
     project_id: str,
     *,
     state: ProjectState | None = None,
-    visibility: ProjectVisibility | None = None,
+    participation: ProjectParticipation | None = None,
     message: str = "project not found",
 ) -> Project:
     """Acquire a shared root lock for short-lived association commands."""
     predicates = [Project.id == project_id]
     if state is not None:
         predicates.append(Project.state == state)
-    if visibility is not None:
-        predicates.append(Project.visibility == visibility)
+    if participation is not None:
+        predicates.append(Project.participation == participation)
     project = await db.scalar(
         select(Project)
         .where(*predicates)

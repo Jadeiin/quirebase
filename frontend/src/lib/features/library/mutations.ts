@@ -104,7 +104,7 @@ export async function runLibraryBulkMutation(
 	});
 	const invalidations = [invalidateLibrary(queryClient, workspaceId)];
 	if (input.action === 'add_project' && input.projectId) {
-		invalidations.push(invalidateProject(queryClient, workspaceId, input.projectId));
+		invalidations.push(invalidateProject(queryClient, workspaceId));
 	}
 	await Promise.all(invalidations);
 }

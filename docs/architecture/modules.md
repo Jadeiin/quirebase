@@ -103,7 +103,7 @@ Workspace authorization is resolved once at an inbound request or workflow bound
 lineage primitive and Module-owned aggregate loaders (`get_item`, `get_project`,
 `get_project_item`, and document loaders). The primitive only adds the Workspace lineage
 predicate; one concrete resource-action decision remains an explicit Access gate while Project
-visibility contributes a canonical relation fact, and mutation statements retain their Workspace
+participation contributes a canonical relation fact, and mutation statements retain their Workspace
 and CAS predicates at the linearization point. No generic
 Repository or implicit ORM tenant filter is part of this seam.
 
@@ -218,7 +218,7 @@ no owner or ownership-transfer operation; `created_by` is provenance only. Only 
 maps the typed view to an API projection.
 
 The Project settings form crosses the Projects interface through `update_project_settings`.
-Name, description and visibility are validated before mutation and committed with their Audit
+Name, description and participation are validated before mutation and committed with their Audit
 Event in one transaction; the Web adapter sends the form as one request and does not coordinate
 partial Project updates.
 

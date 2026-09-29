@@ -23,8 +23,8 @@ from quirebase.models import (
     Project,
     ProjectItem,
     ProjectMember,
+    ProjectParticipation,
     ProjectState,
-    ProjectVisibility,
     SystemRole,
     Tag,
     User,
@@ -100,7 +100,7 @@ async def test_http_api_includes_the_public_capability_set(
         ("PATCH", "/api/v1/workspaces/{workspace_id}/projects/{project_id}"),
         ("POST", "/api/v1/workspaces/{workspace_id}/projects/{project_id}/archive"),
         ("POST", "/api/v1/workspaces/{workspace_id}/projects/{project_id}/restore"),
-        ("POST", "/api/v1/workspaces/{workspace_id}/projects/{project_id}/visibility"),
+        ("POST", "/api/v1/workspaces/{workspace_id}/projects/{project_id}/participation"),
         ("PUT", "/api/v1/workspaces/{workspace_id}/projects/{project_id}/items/{item_id}"),
         ("DELETE", "/api/v1/workspaces/{workspace_id}/projects/{project_id}/items/{item_id}"),
         ("PUT", "/api/v1/workspaces/{workspace_id}/projects/{project_id}/members"),
@@ -482,13 +482,13 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
         workspace_id=workspace_id,
         name="Unjoined annotation project",
         created_by=author.id,
-        visibility=ProjectVisibility.managed,
+        participation=ProjectParticipation.managed,
     )
     archived_project = Project(
         workspace_id=workspace_id,
         name="Archived annotation project",
         created_by=author.id,
-        visibility=ProjectVisibility.managed,
+        participation=ProjectParticipation.managed,
         state=ProjectState.archived,
     )
     db.add_all([item, project, archived_project])
@@ -724,22 +724,28 @@ async def test_project_participation_does_not_gate_workspace_project_access(
         workspace_id=workspace_id,
         name="Managed active Project",
         created_by=owner.id,
-        visibility=ProjectVisibility.managed,
+        participation=ProjectParticipation.managed,
+    )
+    open_project = Project(
+        workspace_id=workspace_id,
+        name="Open Project",
+        created_by=owner.id,
+        participation=ProjectParticipation.open,
     )
     archived = Project(
         workspace_id=workspace_id,
         name="Managed archived Project",
         created_by=owner.id,
-        visibility=ProjectVisibility.managed,
+        participation=ProjectParticipation.managed,
         state=ProjectState.archived,
     )
     workspace_visible = Project(
         workspace_id=workspace_id,
         name="Workspace-visible Project",
         created_by=owner.id,
-        visibility=ProjectVisibility.workspace,
+        participation=ProjectParticipation.workspace,
     )
-    db.add_all([active, archived, workspace_visible])
+    db.add_all([active, archived, open_project, workspace_visible])
     await db.commit()
     grant = await create_api_token(db, administrator, "Project governance", expires_in_days=30)
     headers = bearer(grant.raw_token)
@@ -749,6 +755,15 @@ async def test_project_participation_does_not_gate_workspace_project_access(
         projects = await client.get(base, headers=headers)
         assert projects.status_code == 200
         summaries = {project["id"]: project for project in projects.json()}
+        mine = await client.get(f"{base}?view=mine", headers=headers)
+        joinable = await client.get(f"{base}?view=joinable", headers=headers)
+        invalid_view = await client.get(f"{base}?view=other", headers=headers)
+        assert mine.status_code == 200
+        assert {project["id"] for project in mine.json()} == {workspace_visible.id}
+        assert joinable.status_code == 200
+        assert {project["id"] for project in joinable.json()} == {open_project.id}
+        assert joinable.json()[0]["is_member"] is False
+        assert invalid_view.status_code == 422
         active_actions = set(summaries[active.id]["authorization"]["allowed"])
         archived_actions = set(summaries[archived.id]["authorization"]["allowed"])
         assert summaries[active.id]["is_member"] is False
@@ -787,16 +802,23 @@ async def test_project_participation_does_not_gate_workspace_project_access(
         settings = await client.patch(
             f"{base}/{active.id}",
             headers=headers,
-            json={"name": "Still accessible", "description": "", "visibility": "open"},
+            json={"name": "Still accessible", "description": "", "participation": "open"},
         )
         assert settings.status_code == 200
         join = await client.post(f"{base}/{active.id}/join", headers=headers)
         assert join.status_code == 200
+        joined_mine = await client.get(f"{base}?view=mine", headers=headers)
+        assert {project["id"] for project in joined_mine.json()} == {
+            active.id,
+            workspace_visible.id,
+        }
         project_detail = await client.get(f"{base}/{active.id}", headers=headers)
         assert project_detail.status_code == 200
         assert project_detail.json()["is_member"] is True
         leave = await client.post(f"{base}/{active.id}/leave", headers=headers)
         assert leave.status_code == 200
+        left_mine = await client.get(f"{base}?view=mine", headers=headers)
+        assert {project["id"] for project in left_mine.json()} == {workspace_visible.id}
         project_detail = await client.get(f"{base}/{active.id}", headers=headers)
         assert project_detail.status_code == 200
         assert project_detail.json()["is_member"] is False
@@ -804,7 +826,7 @@ async def test_project_participation_does_not_gate_workspace_project_access(
         managed_settings = await client.patch(
             f"{base}/{active.id}",
             headers=headers,
-            json={"name": "Still accessible", "description": "", "visibility": "managed"},
+            json={"name": "Still accessible", "description": "", "participation": "managed"},
         )
         assert managed_settings.status_code == 200
         participant = await client.put(

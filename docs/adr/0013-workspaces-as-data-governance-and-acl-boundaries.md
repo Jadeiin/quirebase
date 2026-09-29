@@ -91,7 +91,7 @@ Lifecycle and domain commands retain precise verbs such as `archive`, `restore`,
 `revoke`, `join` or `transfer_ownership`. `manage` is reserved for an intentionally indivisible
 family of subordinate mutations. Authorship or moderation does not create action aliases: the same
 `delete` or `restore` action is evaluated with `relation=own` or `relation=other`.
-Command variants also remain relations rather than action suffixes: Project visibility constrains
+Command variants also remain relations rather than action suffixes: Project participation constrains
 `project.create`, and the configured creation mode constrains `workspace.create`. When a client
 must choose among such variants, `AuthorizationView.relations` carries the server-evaluated
 relation set for the same resource-action key; it is not a second policy namespace.
@@ -174,18 +174,18 @@ Annotations, Discussions and Notes. A Project has no owner field or ownership-tr
 `created_by` is provenance only. Project lifecycle, metadata, participation and moderation are
 controlled by Workspace resource-action decisions.
 
-The Project `visibility` field defines Project discoverability and participation policy. It does
+The Project `participation` field defines Project discoverability and participation policy. It does
 not create another role or authorization axis. `ProjectMember` is a role-less association
 recording a User's selected working context; it grants no Workspace authority and never grants
 access to canonical Workspace Items:
 
-- `visibility=workspace`: every active Workspace member can discover the Project and participates
+- `participation=workspace`: every active Workspace member can discover the Project and participates
   implicitly. The Project has no ProjectMember associations and offers no join, leave or
   member-management operations. Users with `project.create` may create one.
-- `visibility=open`: every active Workspace member can discover the Project and may choose to join
+- `participation=open`: every active Workspace member can discover the Project and may choose to join
   or leave. Creating or switching to this mode enrolls the actor as a participant. Users with
   `project.create` may create one.
-- `visibility=managed`: only ProjectMembers and Workspace owners/admins can discover the Project and
+- `participation=managed`: only ProjectMembers and Workspace owners/admins can discover the Project and
   its Project-scoped content. Members cannot self-join or leave; Workspace owners/admins curate
   participation with `project_membership.manage`. Only users allowed `project.create` with
   `relation=managed` may create one, and a new managed Project starts with zero participants.

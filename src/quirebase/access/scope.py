@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import Select, select
 
 if TYPE_CHECKING:
-    from quirebase.access.workspaces import WorkspaceContext
+    from quirebase.access.context import WorkspaceContext
 
 
 def workspace_select(model: Any, ctx: WorkspaceContext) -> Select[Any]:

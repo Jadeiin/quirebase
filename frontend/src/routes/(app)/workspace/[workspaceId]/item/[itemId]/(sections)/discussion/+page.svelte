@@ -44,7 +44,7 @@
 
 	function addDiscussion(event: SubmitEvent) {
 		event.preventDefault();
-		if (!workspace.can('item_discussion', 'create')) return;
+		if (!workspace.can('item_discussion.create')) return;
 		const form = event.currentTarget as HTMLFormElement;
 		const body = String(new FormData(form).get('body') ?? '').trim();
 		if (body) track(discussionCreate.mutateAsync({ form, body }));
@@ -56,7 +56,7 @@
 				(message) =>
 					message.id === messageId &&
 					message.mine &&
-					can(message.authorization, 'item_discussion', 'delete')
+					can(message.authorization, 'item_discussion.delete')
 			)
 		)
 			return;
@@ -72,7 +72,7 @@
 				(message) =>
 					message.id === messageId &&
 					!message.mine &&
-					can(message.authorization, 'item_discussion', 'delete')
+					can(message.authorization, 'item_discussion.delete')
 			)
 		)
 			return;
@@ -85,7 +85,7 @@
 <ItemSectionState loading={discussion.isPending} failed={discussion.isError}>
 	<ItemDiscussionSection
 		messages={discussion.data!}
-		canWrite={workspace.can('item_discussion', 'create')}
+		canWrite={workspace.can('item_discussion.create')}
 		busy={discussionCreate.isPending || discussionDelete.isPending || discussionModerate.isPending}
 		onAdd={addDiscussion}
 		onDelete={deleteDiscussion}

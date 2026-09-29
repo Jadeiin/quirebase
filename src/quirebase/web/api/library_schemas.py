@@ -4,10 +4,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from quirebase.access import ResourceAction, WorkspaceContext, action_allowed
+from quirebase.access import WorkspaceContext, discussion_message_decisions
 from quirebase.core.timezones import as_utc
 from quirebase.library import ItemMetadata
-from quirebase.web.api.common import AuthorizationView
+from quirebase.web.api.common import AuthorizationView, authorization_view
 
 
 class ItemSearchView(BaseModel):
@@ -143,15 +143,6 @@ def discussion_message_view(
     row: Any, context: WorkspaceContext, *, writable: bool = True
 ) -> DiscussionMessageView:
     relation = "own" if row.author_id == context.actor_id else "other"
-    actions = []
-    if writable:
-        resource = "project_discussion" if row.project_id is not None else "item_discussion"
-        if action_allowed(
-            context,
-            ResourceAction(f"{resource}.delete"),
-            relation=relation,
-        ):
-            actions.append(f"{resource}.delete")
     return DiscussionMessageView(
         id=row.id,
         item_id=row.item_id,
@@ -162,7 +153,9 @@ def discussion_message_view(
         body=row.body,
         created_at=as_utc(row.created_at).isoformat(),
         updated_at=as_utc(row.updated_at).isoformat(),
-        authorization=AuthorizationView(allowed=actions),
+        authorization=authorization_view(
+            discussion_message_decisions(context, row, writable=writable)
+        ),
     )
 
 

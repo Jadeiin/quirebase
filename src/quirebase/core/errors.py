@@ -13,6 +13,10 @@ class ResourceUnavailable(DomainError):
     """The caller must not learn whether the resource exists."""
 
 
+class WorkspaceUnavailable(DomainError):
+    """The requested Workspace root does not exist or has been deleted."""
+
+
 class UpstreamServiceError(DomainError):
     pass
 

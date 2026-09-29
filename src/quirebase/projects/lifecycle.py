@@ -6,8 +6,9 @@ from sqlalchemy import delete
 
 from quirebase.access import (
     ResourceAction,
-    require_action,
+    require_project_access,
     require_project_context,
+    require_project_participation_change,
     require_workspace_action,
 )
 from quirebase.audit import record_event
@@ -15,8 +16,8 @@ from quirebase.core.errors import ResourceUnavailable, ValidationFailure
 from quirebase.models import (
     Project,
     ProjectMember,
+    ProjectParticipation,
     ProjectState,
-    ProjectVisibility,
     User,
 )
 
@@ -59,31 +60,28 @@ async def update_project_settings(
     *,
     name: str,
     description: str,
-    visibility: ProjectVisibility | str,
+    participation: ProjectParticipation | str,
 ) -> Project:
     normalized_name = _validate_name(name)
     normalized_description = _validate_description(description)
     try:
-        normalized_visibility = ProjectVisibility(visibility)
+        normalized_participation = ProjectParticipation(participation)
     except ValueError as error:
-        raise ValidationFailure("invalid Project visibility") from error
+        raise ValidationFailure("invalid Project participation") from error
     await lock_project_participation_workspace(db, workspace_id)
     project = await lock_project_root(db, project_id, workspace_id, state=ProjectState.active)
     context = await require_project_context(
         db, user, workspace_id, project_id, ResourceAction.project_update
     )
-    visibility_changed = normalized_visibility is not project.visibility
-    if visibility_changed and (
-        project.visibility is ProjectVisibility.managed
-        or normalized_visibility is ProjectVisibility.managed
-    ):
-        require_action(
+    participation_changed = normalized_participation is not project.participation
+    if participation_changed:
+        require_project_participation_change(
             context.workspace,
-            ResourceAction.project_membership_manage,
-            relation="managed",
+            project.participation,
+            normalized_participation,
         )
-    if normalized_visibility is ProjectVisibility.workspace or (
-        visibility_changed and project.visibility is ProjectVisibility.workspace
+    if normalized_participation is ProjectParticipation.workspace or (
+        participation_changed and project.participation is ProjectParticipation.workspace
     ):
         await db.execute(
             delete(ProjectMember).where(
@@ -92,9 +90,9 @@ async def update_project_settings(
             )
         )
     if (
-        visibility_changed
-        and normalized_visibility is ProjectVisibility.open
-        and project.visibility is ProjectVisibility.workspace
+        participation_changed
+        and normalized_participation is ProjectParticipation.open
+        and project.participation is ProjectParticipation.workspace
     ):
         db.add(
             ProjectMember(
@@ -106,11 +104,11 @@ async def update_project_settings(
     old = {
         "name": project.name,
         "description": project.description,
-        "visibility": project.visibility.value,
+        "participation": project.participation.value,
     }
     project.name = normalized_name
     project.description = normalized_description
-    project.visibility = normalized_visibility
+    project.participation = normalized_participation
     record_event(
         db,
         user.id,
@@ -122,7 +120,7 @@ async def update_project_settings(
             "new": {
                 "name": normalized_name,
                 "description": normalized_description,
-                "visibility": normalized_visibility.value,
+                "participation": normalized_participation.value,
             },
         },
         workspace_id=workspace_id,
@@ -149,7 +147,7 @@ async def rename_project(
         project_id,
         name=name,
         description=project.description,
-        visibility=project.visibility,
+        participation=project.participation,
     )
 
 
@@ -168,16 +166,16 @@ async def update_project_description(
         project_id,
         name=project.name,
         description=description,
-        visibility=project.visibility,
+        participation=project.participation,
     )
 
 
-async def set_project_visibility(
+async def set_project_participation(
     db: AsyncSession,
     user: User,
     workspace_id: str,
     project_id: str,
-    visibility: ProjectVisibility | str,
+    participation: ProjectParticipation | str,
 ) -> Project:
     await lock_project_participation_workspace(db, workspace_id)
     context = await require_project_context(
@@ -191,7 +189,7 @@ async def set_project_visibility(
         project_id,
         name=project.name,
         description=project.description,
-        visibility=visibility,
+        participation=participation,
     )
 
 
@@ -216,9 +214,7 @@ async def set_project_state(
     project = await lock_project_root(db, project_id, workspace_id)
     if project.workspace_id != workspace_id or project.state is ProjectState.deleted:
         raise ResourceUnavailable("Project not found")
-    workspace = await require_workspace_action(
-        db, user, workspace_id, authorization_resource_action
-    )
+    await require_project_access(db, workspace, project)
     project.state = desired
     record_event(
         db,
@@ -246,6 +242,7 @@ async def delete_project(
     project = await lock_project_delete(db, project_id, workspace_id)
     if project.workspace_id != workspace_id or project.state is ProjectState.deleted:
         raise ResourceUnavailable("Project not found")
+    await require_project_access(db, context, project)
     if confirmation.strip() != project.name:
         raise ValidationFailure("Project name confirmation does not match")
     project.state = ProjectState.deleted

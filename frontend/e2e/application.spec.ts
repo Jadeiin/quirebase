@@ -22,7 +22,7 @@ test('authenticated shell loads dashboard and navigates to Library', async ({ pa
 		route.fulfill({ json: { items: [], total: 0, page: 1, per_page: 25 } })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
 		route.fulfill({ json: [] })
 	);
 
@@ -136,7 +136,7 @@ test('mobile navigation keeps primary destinations visible and moves utilities i
 		route.fulfill({ json: { items: [], total: 0, page: 1, per_page: 25 } })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
 		route.fulfill({ json: [] })
 	);
 	await page.goto('/workspace/workspace-1/library');

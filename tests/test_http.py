@@ -452,7 +452,7 @@ async def test_project_viewer_can_create_annotations(
         workspace_id=item.workspace_id,
         name="Readable annotations",
         created_by=item.created_by,
-        visibility="managed",
+        participation="managed",
     )
     db.add_all([viewer, project])
     await db.flush()

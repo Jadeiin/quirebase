@@ -1,22 +1,21 @@
 import { createContext } from 'svelte';
 import { createWorkspaceApi, type WorkspaceView } from '$lib/api/client';
-import { can } from '$lib/authorization/can';
+import { can, type AuthorizationAction } from '$lib/authorization/can';
 
 export type WorkspaceContext = {
 	workspaceId: string;
 	api: ReturnType<typeof createWorkspaceApi>;
 	readonly view: WorkspaceView | undefined;
 	readonly role: string | undefined;
-	can: (resource: string, action: string, relation?: string) => boolean;
+	can: (action: AuthorizationAction, relation?: string) => boolean;
 };
 
 export function workspaceCan(
 	view: WorkspaceView | undefined,
-	resource: string,
-	action: string,
+	action: AuthorizationAction,
 	relation?: string
 ): boolean {
-	return can(view?.authorization, resource, action, relation);
+	return can(view?.authorization, action, relation);
 }
 
 export function workspaceRole(view: WorkspaceView | undefined): string | undefined {
@@ -38,8 +37,8 @@ export function provideWorkspaceContext(
 		get role() {
 			return workspaceRole(getView());
 		},
-		can(resource, action, relation) {
-			return workspaceCan(getView(), resource, action, relation);
+		can(action, relation) {
+			return workspaceCan(getView(), action, relation);
 		}
 	};
 	setWorkspaceContext(context);

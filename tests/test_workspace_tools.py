@@ -51,15 +51,15 @@ async def test_projects_have_a_dedicated_workspace(
             json={
                 "name": "Review complete",
                 "description": "Reviewed together",
-                "visibility": "workspace",
+                "participation": "workspace",
             },
         )
         assert updated.status_code == 200
         refreshed = await client.get(f"{workspace_base}/projects/{project.id}")
-        assert {key: refreshed.json()[key] for key in ("name", "description", "visibility")} == {
+        assert {key: refreshed.json()[key] for key in ("name", "description", "participation")} == {
             "name": "Review complete",
             "description": "Reviewed together",
-            "visibility": "workspace",
+            "participation": "workspace",
         }
         membership = await db.scalar(
             select(ProjectMember).where(
@@ -172,8 +172,9 @@ async def test_tools_detect_duplicates_and_manage_owned_tags(
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("invitation_role", ["editor", "admin"])
 async def test_workspace_invitation_uses_username_and_global_acceptance_route(
-    async_db, async_session_factory, tmp_path, monkeypatch
+    async_db, async_session_factory, tmp_path, monkeypatch, invitation_role
 ):
     client, item, _revision = await authenticated_async_client(
         async_db, async_session_factory, tmp_path, monkeypatch
@@ -232,19 +233,20 @@ async def test_workspace_invitation_uses_username_and_global_acceptance_route(
             "workspace_member.terminate",
         }
 
-        expected_expiry = datetime.now(UTC) + timedelta(days=4)
+        before_invitation = datetime.now(UTC)
         created = await client.post(
             f"{workspace_base}/invitations",
             json={
                 "username": invitee.username,
-                "role": "editor",
-                "expires_at": expected_expiry.isoformat(),
+                "role": invitation_role,
             },
         )
         assert created.status_code == 201
         assert created.json()["username"] == invitee.username
-        assert created.json()["role"] == "editor"
-        assert datetime.fromisoformat(created.json()["expires_at"]) == expected_expiry
+        assert created.json()["role"] == invitation_role
+        expiry = datetime.fromisoformat(created.json()["expires_at"])
+        assert before_invitation + timedelta(days=7) <= expiry
+        assert expiry <= datetime.now(UTC) + timedelta(days=7)
         token = created.json()["token"]
 
         details = await client.get(f"/api/v1/workspace-invitations/{token}")
@@ -265,6 +267,7 @@ async def test_workspace_invitation_uses_username_and_global_acceptance_route(
             )
         )
         assert member is not None and member.state is WorkspaceMemberState.active
+        assert member.role is WorkspaceRole(invitation_role)
     finally:
         await client.aclose()
         get_settings.cache_clear()

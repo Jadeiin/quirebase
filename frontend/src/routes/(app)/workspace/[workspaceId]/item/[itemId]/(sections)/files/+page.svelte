@@ -71,7 +71,7 @@
 	}
 
 	function downloadFile(file: FileRow) {
-		if (!workspace.can('workspace', 'export')) return;
+		if (!workspace.can('workspace.export')) return;
 		track(
 			file.kind === 'revision'
 				? workspaceApi.downloadGet(
@@ -92,7 +92,7 @@
 	}
 
 	function deleteFile(file: FileRow) {
-		if (!workspace.can('file', 'delete')) return;
+		if (!workspace.can('file.delete')) return;
 		pendingFile = file;
 		confirmFileOpen = true;
 	}
@@ -102,7 +102,7 @@
 		pendingFile = null;
 		confirmFileOpen = false;
 		if (!file) return;
-		if (!workspace.can('file', 'delete')) return;
+		if (!workspace.can('file.delete')) return;
 		track(fileDelete.mutateAsync({ file }));
 	}
 </script>
@@ -124,8 +124,8 @@
 		itemId={params.itemId}
 		data={files.data!}
 		details={details.data}
-		canEdit={can(overview.data?.authorization, 'file', 'manage')}
-		canDelete={can(overview.data?.authorization, 'file', 'delete')}
+		canEdit={can(overview.data?.authorization, 'file.manage')}
+		canDelete={can(overview.data?.authorization, 'file.delete')}
 		busy={fileUpload.isPending || fileRemoteUpload.isPending || fileDelete.isPending}
 		onUpload={upload}
 		onUploadFromUrl={uploadFromUrl}

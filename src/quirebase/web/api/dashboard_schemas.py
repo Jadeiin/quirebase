@@ -15,7 +15,7 @@ class DashboardRecentItemView(BaseModel):
 class DashboardProjectView(BaseModel):
     id: str
     name: str
-    visibility: str
+    participation: str
 
 
 class DashboardView(BaseModel):

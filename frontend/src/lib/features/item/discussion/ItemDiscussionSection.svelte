@@ -23,12 +23,12 @@
 		<ItemRow>
 			<div class="flex flex-wrap justify-between gap-2">
 				<strong>{message.author_username}</strong>
-				{#if message.mine && can(message.authorization, 'item_discussion', 'delete')}
+				{#if message.mine && can(message.authorization, 'item_discussion.delete')}
 					<Button variant="danger" disabled={busy} onclick={() => onDelete(message.id)}
 						>{$t('Delete')}</Button
 					>
 				{/if}
-				{#if !message.mine && can(message.authorization, 'item_discussion', 'delete')}
+				{#if !message.mine && can(message.authorization, 'item_discussion.delete')}
 					<Button variant="danger" disabled={busy} onclick={() => onModerate(message.id)}
 						>{$t('Moderate')}</Button
 					>{/if}

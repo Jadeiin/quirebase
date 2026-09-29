@@ -55,7 +55,7 @@
 	const revisions = $derived(files.data?.files.filter((file) => file.kind === 'revision') ?? []);
 	const copyDestinations = $derived(
 		overview.copy_targets.filter((candidate: ItemOverviewView['copy_targets'][number]) =>
-			can(candidate.authorization, 'item', 'copy')
+			can(candidate.authorization, 'item.copy')
 		)
 	);
 	const externalIdentifiers = $derived(
@@ -237,7 +237,7 @@
 
 	function confirmDeleteItem() {
 		deleteArmed = false;
-		if (!can(overview.authorization, 'item', 'delete')) return;
+		if (!can(overview.authorization, 'item.delete')) return;
 		void action(async () => {
 			await workspaceContext.api.request('DELETE', '/workspaces/{workspace_id}/items/{item_id}', {
 				params: { path: { item_id: itemId } },
@@ -283,20 +283,20 @@
 			href={resolve(
 				workspaceHref(workspaceId, `item/${itemId}/pdf/${overview.latest_revision.id}`)
 			)}>{$t('Read PDF')}</Button
-		>{#if can(overview.authorization, 'workspace', 'export')}<Button
+		>{#if can(overview.authorization, 'workspace.export')}<Button
 				class="inline-flex items-center gap-2"
 				onclick={() => show('documents')}><Icon name="download" /> {$t('Download')}</Button
 			>{/if}{/if}
-	{#if can(overview.authorization, 'workspace', 'export')}<Button onclick={() => show('citation')}
+	{#if can(overview.authorization, 'workspace.export')}<Button onclick={() => show('citation')}
 			>{$t('Export')}</Button
 		>{/if}
-	{#if can(overview.authorization, 'item', 'update')}<Button onclick={() => show('sources')}
+	{#if can(overview.authorization, 'item.update')}<Button onclick={() => show('sources')}
 			>{$t('Record tools')}</Button
 		>{/if}
 	{#if copyDestinations.length}<Button variant="tonal" onclick={() => show('copy')}
 			>{$t('Copy to Workspace')}</Button
 		>{/if}
-	{#if can(overview.authorization, 'item', 'delete')}<Button
+	{#if can(overview.authorization, 'item.delete')}<Button
 			variant="danger"
 			onclick={() => show('danger')}>{$t('More')}</Button
 		>{/if}
@@ -327,17 +327,17 @@
 							data-active={section === 'copy'}
 							onclick={() => (section = 'copy')}>{$t('Copy')}</button
 						>{/if}
-					{#if overview.latest_revision && can(overview.authorization, 'workspace', 'export')}<button
+					{#if overview.latest_revision && can(overview.authorization, 'workspace.export')}<button
 							class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold data-[active=true]:border-primary-700-300 data-[active=true]:text-primary-700-300"
 							data-active={section === 'documents'}
 							onclick={() => (section = 'documents')}>{$t('Documents')}</button
 						>{/if}
-					{#if can(overview.authorization, 'item', 'update')}<button
+					{#if can(overview.authorization, 'item.update')}<button
 							class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold data-[active=true]:border-primary-700-300 data-[active=true]:text-primary-700-300"
 							data-active={section === 'sources'}
 							onclick={() => (section = 'sources')}>{$t('Metadata sources')}</button
 						>{/if}
-					{#if can(overview.authorization, 'item', 'delete')}<button
+					{#if can(overview.authorization, 'item.delete')}<button
 							class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold text-error-700-300 data-[active=true]:border-error-700-300"
 							data-active={section === 'danger'}
 							onclick={() => (section = 'danger')}>{$t('Danger zone')}</button

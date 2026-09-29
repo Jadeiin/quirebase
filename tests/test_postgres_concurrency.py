@@ -54,8 +54,8 @@ from quirebase.models import (
     Project,
     ProjectItem,
     ProjectMember,
+    ProjectParticipation,
     ProjectState,
-    ProjectVisibility,
     Tag,
     User,
     Workspace,
@@ -70,7 +70,7 @@ from quirebase.projects import (
     create_project,
     join_project,
     rename_project,
-    set_project_visibility,
+    set_project_participation,
 )
 from quirebase.workspaces import (
     archive_workspace,
@@ -701,7 +701,14 @@ async def test_concurrent_ownership_transfer_reauthorizes_after_root_lock(postgr
             )
         )
         assert owner_count == 1
-        assert workspace.owner_id in {first.id, second.id}
+        current_owner_id = await db.scalar(
+            select(WorkspaceMember.user_id).where(
+                WorkspaceMember.workspace_id == workspace_id,
+                WorkspaceMember.role == WorkspaceRole.owner,
+                WorkspaceMember.terminated_at.is_(None),
+            )
+        )
+        assert current_owner_id in {first.id, second.id}
 
 
 async def test_ownership_transfer_serializes_with_target_deactivation(
@@ -790,7 +797,16 @@ async def test_ownership_transfer_serializes_with_target_deactivation(
         target = await db.get(User, target_id)
         assert workspace is not None
         assert target is not None
-        assert workspace.owner_id == target.id
+        assert (
+            await db.scalar(
+                select(WorkspaceMember.user_id).where(
+                    WorkspaceMember.workspace_id == workspace_id,
+                    WorkspaceMember.role == WorkspaceRole.owner,
+                    WorkspaceMember.terminated_at.is_(None),
+                )
+            )
+            == target.id
+        )
         assert target.active is True
 
 
@@ -994,7 +1010,7 @@ async def test_project_participation_add_races_switch_to_workspace_mode(postgres
         db.add(membership)
         await db.commit()
         project = await create_project(
-            db, owner, workspace_id, "Concurrent participation", ProjectVisibility.managed
+            db, owner, workspace_id, "Concurrent participation", ProjectParticipation.managed
         )
         project_id = project.id
 
@@ -1014,8 +1030,8 @@ async def test_project_participation_add_races_switch_to_workspace_mode(postgres
             await gate.wait()
             try:
                 if switch_to_workspace:
-                    await set_project_visibility(
-                        db, actor, workspace_id, project_id, ProjectVisibility.workspace
+                    await set_project_participation(
+                        db, actor, workspace_id, project_id, ProjectParticipation.workspace
                     )
                 else:
                     await add_project_member(db, actor, workspace_id, project_id, target_username)
@@ -1030,7 +1046,7 @@ async def test_project_participation_add_races_switch_to_workspace_mode(postgres
     async with postgres_sessions() as db:
         project = await db.get(Project, project_id)
         assert project is not None
-        assert project.visibility is ProjectVisibility.workspace
+        assert project.participation is ProjectParticipation.workspace
         participants = await db.scalar(
             select(func.count(ProjectMember.id)).where(
                 ProjectMember.workspace_id == workspace_id,
@@ -1278,7 +1294,7 @@ async def test_open_project_join_races_workspace_member_suspension(postgres_sess
         await db.commit()
         membership_id = membership.id
         project = await create_project(
-            db, owner, workspace_id, "Open join race", ProjectVisibility.open
+            db, owner, workspace_id, "Open join race", ProjectParticipation.open
         )
         project_id = project.id
 

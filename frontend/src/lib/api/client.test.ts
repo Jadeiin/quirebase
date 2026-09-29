@@ -417,6 +417,32 @@ describe('structured API errors', () => {
 		unregister();
 	});
 
+	it('does not treat a nested resource 404 as an unavailable Workspace', async () => {
+		const unavailable = vi.fn();
+		const unregister = onWorkspaceUnavailable(unavailable);
+		const fetcher = (async () => {
+			const response = new Response(
+				JSON.stringify({ code: 'not_found', message: 'Item not found' }),
+				{ status: 404, headers: { 'Content-Type': 'application/json' } }
+			);
+			Object.defineProperty(response, 'url', {
+				value: 'https://quirebase.test/api/v1/workspaces/workspace-1/items/item-1'
+			});
+			return response;
+		}) as typeof fetch;
+
+		await expect(
+			workspaceApi.request(
+				'GET',
+				'/workspaces/{workspace_id}/items/{item_id}',
+				{ params: { path: { item_id: 'item-1' } } },
+				fetcher
+			)
+		).rejects.toMatchObject({ code: 'not_found' });
+		expect(unavailable).not.toHaveBeenCalled();
+		unregister();
+	});
+
 	it('notifies the session owner for authentication failures', async () => {
 		let notified = 0;
 		const unregister = onAuthenticationRequired(() => {

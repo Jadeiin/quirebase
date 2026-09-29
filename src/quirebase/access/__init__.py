@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from quirebase.access.annotations import (
+    annotation_decisions,
+    annotation_moderation_action,
     can_edit_annotation,
     require_editable_annotation,
     visible_annotation_scope_predicate,
@@ -13,6 +15,14 @@ from quirebase.access.authorization import (
     require_system_resource_action,
     system_action_allowed,
     system_resource_action_allowed,
+)
+from quirebase.access.context import (
+    ProjectContext,
+    WorkspaceContext,
+    require_action,
+    require_workspace_action,
+    require_workspace_membership,
+    resolve_workspace_context,
 )
 from quirebase.access.documents import require_attachment, require_revision
 from quirebase.access.items import (
@@ -27,41 +37,58 @@ from quirebase.access.items import (
     visible_items_query,
     workspace_items_query,
 )
+from quirebase.access.project_scope import (
+    require_project_access,
+    require_project_context,
+    visible_project_ids_query,
+)
+from quirebase.access.projections import (
+    AuthorizationProjection,
+    copy_target_decisions,
+    discussion_message_decisions,
+    item_decisions,
+    project_decisions,
+    project_participation_change_allowed,
+    require_project_participation_change,
+    system_decisions,
+    tag_decisions,
+    workspace_decisions,
+    workspace_member_decisions,
+)
 from quirebase.access.scope import workspace_id_predicate, workspace_select
 from quirebase.access.tags import visible_tags_query
-from quirebase.access.workspaces import (
-    ProjectContext,
+from quirebase.access.workspace_policy import (
     ResourceAction,
-    WorkspaceContext,
     action_allowed,
     effective_resource_action_relations,
     effective_resource_actions,
-    require_action,
-    require_project_access,
-    require_project_context,
-    require_workspace_action,
-    require_workspace_membership,
-    resolve_workspace_context,
-    visible_project_ids_query,
     workspace_member_relation,
 )
 
 __all__ = [
+    "AuthorizationProjection",
     "ProjectContext",
     "ResourceAction",
     "SystemAction",
     "WorkspaceContext",
     "action_allowed",
+    "annotation_decisions",
+    "annotation_moderation_action",
     "can_delete_item",
     "can_edit_annotation",
     "can_edit_item",
     "can_read_item",
+    "copy_target_decisions",
+    "discussion_message_decisions",
     "effective_resource_action_relations",
     "effective_resource_actions",
     "effective_system_actions",
     "get_item",
     "get_item_for_update",
     "initialize_authorization",
+    "item_decisions",
+    "project_decisions",
+    "project_participation_change_allowed",
     "require_accessible_items",
     "require_action",
     "require_attachment",
@@ -69,6 +96,7 @@ __all__ = [
     "require_editable_item",
     "require_project_access",
     "require_project_context",
+    "require_project_participation_change",
     "require_readable_item",
     "require_revision",
     "require_system_action",
@@ -77,13 +105,17 @@ __all__ = [
     "require_workspace_membership",
     "resolve_workspace_context",
     "system_action_allowed",
+    "system_decisions",
     "system_resource_action_allowed",
+    "tag_decisions",
     "visible_annotation_scope_predicate",
     "visible_items_query",
     "visible_project_ids_query",
     "visible_tags_query",
+    "workspace_decisions",
     "workspace_id_predicate",
     "workspace_items_query",
+    "workspace_member_decisions",
     "workspace_member_relation",
     "workspace_select",
 ]

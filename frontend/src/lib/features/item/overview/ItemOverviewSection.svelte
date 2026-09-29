@@ -51,7 +51,7 @@
 		<Panel padding="none">
 			<header class="flex items-center justify-between border-b border-surface-300-700 px-5 py-4">
 				<h2 class="m-0 text-lg">{$t('Publication details')}</h2>
-				{#if can(data.authorization, 'item', 'update')}
+				{#if can(data.authorization, 'item.update')}
 					<a
 						class="text-sm font-semibold text-primary-700-300 no-underline"
 						href={resolve(workspaceHref(workspaceId, `item/${itemId}/metadata`))}
@@ -207,7 +207,7 @@
 				<div>
 					<dt class="text-surface-600-400">{$t('Permissions')}</dt>
 					<dd class="m-0">
-						{can(data.authorization, 'item', 'update') ? $t('Can edit') : $t('Read only')}
+						{can(data.authorization, 'item.update') ? $t('Can edit') : $t('Read only')}
 					</dd>
 				</div>
 				<div>

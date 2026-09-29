@@ -14,7 +14,7 @@
 	import Panel from '$lib/design/Panel.svelte';
 	import SectionHeader from '$lib/design/SectionHeader.svelte';
 	import { domainLabel } from '$lib/domain-labels';
-	import { projectListQuery, joinableProjectsQuery } from '$lib/features/projects/queries';
+	import { projectListQuery } from '$lib/features/projects/queries';
 	import { invalidateProject } from '$lib/query/invalidation';
 	import { t } from '$lib/i18n';
 	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
@@ -24,24 +24,24 @@
 	const workspaceId = workspace.workspaceId;
 	const queryClient = useQueryClient();
 	const projects = createQuery(() => projectListQuery(workspaceId));
-	const joinable = createQuery(() => joinableProjectsQuery(workspaceId));
+	const joinable = createQuery(() => projectListQuery(workspaceId, 'joinable'));
 	const myProjects = $derived((projects.data ?? []).filter((project) => project.is_member));
 	const managedProjects = $derived(
 		(projects.data ?? []).filter(
-			(project) => project.visibility === 'managed' && !project.is_member
+			(project) => project.participation === 'managed' && !project.is_member
 		)
 	);
 	const archivedOpenProjects = $derived(
 		(projects.data ?? []).filter(
 			(project) =>
-				project.visibility === 'open' && project.state === 'archived' && !project.is_member
+				project.participation === 'open' && project.state === 'archived' && !project.is_member
 		)
 	);
 
 	let createOpen = $state(false);
 	let name = $state('');
 	let description = $state('');
-	let visibility = $state<'workspace' | 'open' | 'managed'>('workspace');
+	let participation = $state<'workspace' | 'open' | 'managed'>('workspace');
 	let busy = $state(false);
 	let error = $state('');
 
@@ -54,11 +54,11 @@
 		error = '';
 		try {
 			const created = await workspace.api.request('POST', '/workspaces/{workspace_id}/projects', {
-				body: { name: name.trim(), description, visibility }
+				body: { name: name.trim(), description, participation }
 			});
 			name = '';
 			description = '';
-			visibility = 'workspace';
+			participation = 'workspace';
 			createOpen = false;
 			await refresh();
 			await goto(resolve(workspaceHref(workspaceId, `projects/${created.id}`)));
@@ -94,7 +94,7 @@
 		</p>
 	</div>
 	{#snippet actions()}
-		{#if workspace.can('project', 'create')}
+		{#if workspace.can('project.create')}
 			<Dialog open={createOpen} onOpenChange={(details) => (createOpen = details.open)}>
 				<DialogTriggerButton><Icon name="plus" /> {$t('New Project')}</DialogTriggerButton>
 				<Portal>
@@ -129,18 +129,18 @@
 										maxlength="2000"></textarea></label
 								>
 								<label class="grid grid-cols-1 gap-1"
-									>{$t('Participation')}<select class="select" bind:value={visibility}
+									>{$t('Participation')}<select class="select" bind:value={participation}
 										><option value="workspace">{$t(domainLabel('workspace'))}</option><option
 											value="open">{$t(domainLabel('open'))}</option
-										>{#if workspace.can('project', 'create', 'managed')}<option value="managed"
+										>{#if workspace.can('project.create', 'managed')}<option value="managed"
 												>{$t(domainLabel('managed'))}</option
 											>{/if}</select
 									></label
 								>
 								<p class="text-sm text-surface-600-400">
-									{#if visibility === 'workspace'}
+									{#if participation === 'workspace'}
 										{$t('All active Workspace members participate in this Project.')}
-									{:else if visibility === 'open'}
+									{:else if participation === 'open'}
 										{$t('Active Workspace members can choose to join or leave this Project.')}
 									{:else}
 										{$t(
@@ -184,7 +184,7 @@
 							>{project.description}</span
 						>{/if}
 					<span class="text-sm text-surface-600-400"
-						>{project.item_count} {$t('Items')} · {$t(domainLabel(project.visibility))}</span
+						>{project.item_count} {$t('Items')} · {$t(domainLabel(project.participation))}</span
 					>
 				</ItemRow>
 			{:else}<p class="text-surface-600-400">{$t('No Projects yet.')}</p>{/each}{/if}

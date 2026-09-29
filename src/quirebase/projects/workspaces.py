@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -23,8 +23,8 @@ from quirebase.models import (
     Project,
     ProjectItem,
     ProjectMember,
+    ProjectParticipation,
     ProjectState,
-    ProjectVisibility,
     User,
     WorkspaceMember,
     WorkspaceMemberState,
@@ -56,20 +56,20 @@ async def create_project(
     user: User,
     workspace_id: str,
     name: str,
-    visibility: ProjectVisibility | str = ProjectVisibility.workspace,
+    participation: ProjectParticipation | str = ProjectParticipation.workspace,
     description: str = "",
 ) -> Project:
     normalized = name.strip()
     if not normalized or len(normalized) > 240:
         raise ValidationFailure("Project name must contain 1 to 240 characters")
     try:
-        parsed_visibility = ProjectVisibility(visibility)
+        parsed_participation = ProjectParticipation(participation)
     except ValueError as error:
-        raise ValidationFailure("invalid Project visibility") from error
+        raise ValidationFailure("invalid Project participation") from error
     normalized_description = description.replace("\r\n", "\n").replace("\r", "\n").strip()
     if len(normalized_description) > 2000:
         raise ValidationFailure("Project description is too long")
-    if parsed_visibility is ProjectVisibility.open:
+    if parsed_participation is ProjectParticipation.open:
         await lock_project_participation_workspace(db, workspace_id)
     create_action = ResourceAction.project_create
     context = await require_workspace_action(
@@ -77,18 +77,18 @@ async def create_project(
         user,
         workspace_id,
         create_action,
-        relation=parsed_visibility.value,
+        relation=parsed_participation.value,
     )
     project = Project(
         workspace_id=workspace_id,
         name=normalized,
         created_by=user.id,
-        visibility=parsed_visibility,
+        participation=parsed_participation,
         description=normalized_description,
     )
     db.add(project)
     await db.flush()
-    if parsed_visibility is ProjectVisibility.open:
+    if parsed_participation is ProjectParticipation.open:
         db.add(
             ProjectMember(
                 workspace_id=workspace_id,
@@ -112,8 +112,15 @@ async def create_project(
 
 
 async def list_workspace_projects(
-    db: AsyncSession, user: User, workspace_id: str
+    db: AsyncSession,
+    user: User,
+    workspace_id: str,
+    *,
+    view: Literal["mine", "joinable", "all"] = "all",
 ) -> list[tuple[Project, int, bool]]:
+    """List visible Projects, optionally limited to the caller's participation view."""
+    if view not in {"mine", "joinable", "all"}:
+        raise ValidationFailure("invalid Project list view")
     context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     member_ids = (
         workspace_select(ProjectMember, context)
@@ -121,52 +128,30 @@ async def list_workspace_projects(
         .where(ProjectMember.user_id == user.id)
         .with_only_columns(ProjectMember.project_id)
     )
-    rows = (
-        await db.execute(
-            workspace_select(Project, context)
-            .with_only_columns(
-                Project,
-                func.count(ProjectItem.id),
-                (Project.visibility == ProjectVisibility.workspace) | Project.id.in_(member_ids),
-            )
-            .outerjoin(
-                ProjectItem,
-                ProjectItem.project_id == Project.id,
-            )
-            .where(
-                Project.state != ProjectState.deleted,
-                Project.id.in_(visible_project_ids_query(context)),
-            )
-            .group_by(Project.id)
-            .order_by(Project.name)
-        )
-    ).all()
-    return [(row[0], row[1], bool(row[2])) for row in rows]
-
-
-async def list_joinable_projects(
-    db: AsyncSession, user: User, workspace_id: str
-) -> list[tuple[Project, int]]:
-    """List active open Projects the current Workspace member has not joined."""
-    context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
-    member_ids = (
-        workspace_select(ProjectMember, context)
-        .where(ProjectMember.user_id == user.id)
-        .with_only_columns(ProjectMember.project_id)
+    is_member = (Project.participation == ProjectParticipation.workspace) | Project.id.in_(
+        member_ids
     )
-    rows = await db.execute(
+    query = (
         workspace_select(Project, context)
-        .with_only_columns(Project, func.count(ProjectItem.id))
+        .with_only_columns(Project, func.count(ProjectItem.id), is_member)
         .outerjoin(ProjectItem, ProjectItem.project_id == Project.id)
         .where(
-            Project.state == ProjectState.active,
-            Project.visibility == ProjectVisibility.open,
-            ~Project.id.in_(member_ids),
+            Project.state != ProjectState.deleted,
+            Project.id.in_(visible_project_ids_query(context)),
         )
         .group_by(Project.id)
         .order_by(Project.name)
     )
-    return [(row[0], row[1]) for row in rows.all()]
+    if view == "mine":
+        query = query.where(is_member)
+    elif view == "joinable":
+        query = query.where(
+            Project.state == ProjectState.active,
+            Project.participation == ProjectParticipation.open,
+            ~is_member,
+        )
+    rows = (await db.execute(query)).all()
+    return [(row[0], row[1], bool(row[2])) for row in rows]
 
 
 async def open_project_workspace(
@@ -176,8 +161,8 @@ async def open_project_workspace(
         db, user, workspace_id, project_id, ResourceAction.workspace_read
     )
     members_rows: Sequence[User] = ()
-    is_member = context.project.visibility is ProjectVisibility.workspace
-    if context.project.visibility is not ProjectVisibility.workspace:
+    is_member = context.project.participation is ProjectParticipation.workspace
+    if context.project.participation is not ProjectParticipation.workspace:
         members_rows = (
             await db.scalars(
                 select(User)

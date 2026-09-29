@@ -1,19 +1,20 @@
-export type AuthorizationDecisionSet = {
-	allowed: readonly string[];
-	relations?: Readonly<Record<string, readonly string[]>>;
-};
+import type { components } from '$lib/api/schema';
+
+export type AuthorizationAction = components['schemas']['AuthorizationView']['allowed'][number];
+export type AuthorizationDecisionSet = Pick<
+	components['schemas']['AuthorizationView'],
+	'allowed' | 'relations'
+>;
 
 /** Ask a server-authored decision set; never infer policy from roles or lifecycle in the UI. */
 export function can(
 	decisions: AuthorizationDecisionSet | null | undefined,
-	resource: string,
-	action: string,
+	action: AuthorizationAction,
 	relation?: string
 ): boolean {
-	const key = `${resource}.${action}`;
-	if (!decisions?.allowed.includes(key)) return false;
+	if (!decisions?.allowed.includes(action)) return false;
 	if (relation === undefined) return true;
-	const constrainedRelations = decisions.relations?.[key];
+	const constrainedRelations = decisions.relations?.[action];
 	return constrainedRelations === undefined || constrainedRelations.includes(relation);
 }
 

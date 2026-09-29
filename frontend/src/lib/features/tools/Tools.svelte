@@ -344,7 +344,7 @@
 									workspaceHref(workspaceId, `library?tag=${encodeURIComponent(tag.id)}`)
 								)}>{$t('View Items')}</Button
 							>
-							{#if can(tag.authorization, 'tag', 'manage')}<Button
+							{#if can(tag.authorization, 'tag.manage')}<Button
 									disabled={busy}
 									onclick={() => renameTag(tag)}>{$t('Rename')}</Button
 								><Button variant="danger" disabled={busy} onclick={() => deleteTag(tag)}
@@ -370,7 +370,7 @@
 				<label
 					>{$t('Source Tag')}<select class="select" bind:value={sourceTag}
 						><option value="">{$t('Select a Tag')}</option
-						>{#each (tags.data ?? []).filter( (tag) => can(tag.authorization, 'tag', 'manage') ) as tag (tag.id)}<option
+						>{#each (tags.data ?? []).filter( (tag) => can(tag.authorization, 'tag.manage') ) as tag (tag.id)}<option
 								value={tag.id}>{tag.name}</option
 							>{/each}</select
 					></label
@@ -414,7 +414,7 @@
 							<strong>{style.name}</strong>
 							<p class="mb-0 text-sm text-surface-600-400">{style.scope}</p>
 						</div>
-						{#if style.scope === 'custom' && workspace.can('citation_style', 'manage')}<Button
+						{#if style.scope === 'custom' && workspace.can('citation_style.manage')}<Button
 								variant="danger"
 								disabled={busy}
 								onclick={() => deleteStyle(style)}>{$t('Delete')}</Button
@@ -424,7 +424,7 @@
 						{$t('No Citation Styles match this search.')}
 					</p>{/each}
 			</Panel>
-			{#if workspace.can('citation_style', 'manage')}<Panel
+			{#if workspace.can('citation_style.manage')}<Panel
 					as="form"
 					class="grid grid-cols-1 gap-3 self-start"
 					onsubmit={(event) => {

@@ -5,12 +5,9 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Select, select
 from sqlalchemy.orm import selectinload
 
+from quirebase.access.context import WorkspaceContext, require_workspace_action
 from quirebase.access.scope import workspace_select
-from quirebase.access.workspaces import (
-    ResourceAction,
-    WorkspaceContext,
-    require_workspace_action,
-)
+from quirebase.access.workspace_policy import ResourceAction
 from quirebase.core.errors import ResourceUnavailable, ValidationFailure
 from quirebase.models import Item, ItemAuthor, User
 

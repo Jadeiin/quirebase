@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, status
 
 from quirebase.access import (
     ResourceAction,
-    WorkspaceContext,
-    action_allowed,
+    project_decisions,
     require_workspace_action,
 )
 from quirebase.core.errors import ResourceUnavailable
@@ -15,7 +16,7 @@ from quirebase.library import (
     list_project_discussion_messages,
     moderate_project_discussion_message,
 )
-from quirebase.models import Project, ProjectState, ProjectVisibility
+from quirebase.models import Project, ProjectState
 from quirebase.projects import (
     add_item_to_project,
     add_project_member,
@@ -23,19 +24,18 @@ from quirebase.projects import (
     delete_project,
     join_project,
     leave_project,
-    list_joinable_projects,
     list_workspace_projects,
     open_project_workspace,
     remove_item_from_project,
+    set_project_participation,
     set_project_state,
-    set_project_visibility,
     update_project_description,
     update_project_settings,
 )
 from quirebase.projects import (
     remove_project_member as remove_project_member_domain,
 )
-from quirebase.web.api.common import AuthorizationView, OkView, WriteResult
+from quirebase.web.api.common import OkView, WriteResult, authorization_view
 from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.library_schemas import (
     DiscussionMessageView,
@@ -50,72 +50,22 @@ from quirebase.web.api.project_schemas import (
     ProjectDetailView,
     ProjectMemberRequest,
     ProjectMemberView,
+    ProjectParticipationRequest,
     ProjectSettingsRequest,
     ProjectSummaryView,
-    ProjectVisibilityRequest,
     project_detail_view,
 )
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
 
-def _project_authorization(
-    project, workspace: WorkspaceContext, *, is_member: bool
-) -> AuthorizationView:
-    allowed_actions = workspace.allowed_actions
-    actions: list[str] = []
-    if ResourceAction.project_update in allowed_actions and project.state is ProjectState.active:
-        actions.append(ResourceAction.project_update.value)
-    if (
-        ResourceAction.project_item_manage in allowed_actions
-        and project.state is ProjectState.active
-    ):
-        actions.append(ResourceAction.project_item_manage.value)
-    if project.state is ProjectState.active and ResourceAction.project_archive in allowed_actions:
-        actions.append(ResourceAction.project_archive.value)
-    elif ResourceAction.project_restore in allowed_actions:
-        actions.append(ResourceAction.project_restore.value)
-    if (
-        action_allowed(
-            workspace,
-            ResourceAction.project_membership_manage,
-            relation="managed",
-        )
-        and project.state is ProjectState.active
-        and project.visibility is ProjectVisibility.managed
-    ):
-        actions.append(ResourceAction.project_membership_manage.value)
-    if project.state is ProjectState.active and project.visibility is ProjectVisibility.open:
-        if is_member and action_allowed(
-            workspace,
-            ResourceAction.project_membership_leave,
-            relation=project.visibility.value,
-        ):
-            actions.append(ResourceAction.project_membership_leave.value)
-        elif not is_member and action_allowed(
-            workspace,
-            ResourceAction.project_membership_join,
-            relation=project.visibility.value,
-        ):
-            actions.append(ResourceAction.project_membership_join.value)
-    if ResourceAction.project_delete in allowed_actions:
-        actions.append(ResourceAction.project_delete.value)
-    if (
-        ResourceAction.project_discussion_create in allowed_actions
-        and project.state is ProjectState.active
-    ):
-        actions.append(ResourceAction.project_discussion_create.value)
-    if project.state is ProjectState.active and action_allowed(
-        workspace,
-        ResourceAction.project_discussion_delete,
-        relation="other",
-    ):
-        actions.append(ResourceAction.project_discussion_delete.value)
-    return AuthorizationView(allowed=actions)
-
-
 @router.get("", response_model=list[ProjectSummaryView])
-async def list_projects(workspace_id: str, user: ApiUser, db: Database):
+async def list_projects(
+    workspace_id: str,
+    user: ApiUser,
+    db: Database,
+    view: Literal["mine", "joinable", "all"] = "all",
+):
     context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     return [
         ProjectSummaryView(
@@ -123,32 +73,16 @@ async def list_projects(workspace_id: str, user: ApiUser, db: Database):
             name=project.name,
             item_count=count,
             state=project.state.value,
-            visibility=project.visibility.value,
+            participation=project.participation.value,
             description=project.description,
             is_member=is_member,
-            authorization=_project_authorization(project, context, is_member=is_member),
+            authorization=authorization_view(
+                project_decisions(context, project, is_member=is_member)
+            ),
         )
-        for project, count, is_member in await list_workspace_projects(db, user, workspace_id)
-    ]
-
-
-@router.get("/joinable", response_model=list[ProjectSummaryView])
-async def list_joinable_projects_api(
-    workspace_id: str, user: ApiUser, db: Database
-) -> list[ProjectSummaryView]:
-    context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
-    return [
-        ProjectSummaryView(
-            id=project.id,
-            name=project.name,
-            item_count=count,
-            state=project.state.value,
-            visibility=project.visibility.value,
-            is_member=False,
-            description=project.description,
-            authorization=_project_authorization(project, context, is_member=False),
+        for project, count, is_member in await list_workspace_projects(
+            db, user, workspace_id, view=view
         )
-        for project, count in await list_joinable_projects(db, user, workspace_id)
     ]
 
 
@@ -157,7 +91,7 @@ async def create_user_project(
     workspace_id: str, data: ProjectCreateRequest, user: ApiUser, db: Database
 ) -> WriteResult:
     project = await create_project(
-        db, user, workspace_id, data.name, data.visibility, data.description
+        db, user, workspace_id, data.name, data.participation, data.description
     )
     return WriteResult(id=project.id)
 
@@ -170,8 +104,12 @@ async def get_project(
     context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     return project_detail_view(
         workspace,
-        authorization=_project_authorization(
-            workspace.project, context, is_member=workspace.is_member
+        authorization=authorization_view(
+            project_decisions(
+                context,
+                workspace.project,
+                is_member=workspace.is_member,
+            )
         ),
     )
 
@@ -191,7 +129,7 @@ async def update_project(
         project_id,
         name=data.name,
         description=data.description,
-        visibility=data.visibility,
+        participation=data.participation,
     )
     return WriteResult(id=project.id)
 
@@ -236,15 +174,15 @@ async def restore_project(
     return OkView()
 
 
-@router.post("/{project_id}/visibility", response_model=OkView)
-async def set_project_visibility_api(
+@router.post("/{project_id}/participation", response_model=OkView)
+async def set_project_participation_api(
     workspace_id: str,
     project_id: str,
-    data: ProjectVisibilityRequest,
+    data: ProjectParticipationRequest,
     user: ApiUser,
     db: Database,
 ) -> OkView:
-    await set_project_visibility(db, user, workspace_id, project_id, data.visibility)
+    await set_project_participation(db, user, workspace_id, project_id, data.participation)
     return OkView()
 
 

@@ -20,9 +20,9 @@
 		}>();
 
 	let tagFilter = $state('');
-	const canUseTags = $derived(can(data.authorization, 'tag', 'use'));
-	const canCreateTags = $derived(can(data.authorization, 'tag', 'create'));
-	const canManageProjects = $derived(can(data.authorization, 'project_item', 'manage'));
+	const canUseTags = $derived(can(data.authorization, 'tag.use'));
+	const canCreateTags = $derived(can(data.authorization, 'tag.create'));
+	const canManageProjects = $derived(can(data.authorization, 'project_item.manage'));
 	const groups = $derived(
 		data.tag_matrix.groups
 			.map((group: components['schemas']['TagMatrixGroupView']) => ({
@@ -137,7 +137,7 @@
 				<Button
 					size="sm"
 					class="shrink-0 border border-surface-300-700"
-					disabled={busy || !can(data.authorization, 'item', 'update')}
+					disabled={busy || !can(data.authorization, 'item.update')}
 					onclick={onRefresh}>{$t('Refresh')}</Button
 				>
 			</div>

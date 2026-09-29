@@ -4,25 +4,20 @@ import { workspaceKeys } from '$lib/workspaces/keys';
 
 export const projectKeys = {
 	all: (workspaceId: string) => workspaceKeys.projects(workspaceId),
-	lists: (workspaceId: string) => [...projectKeys.all(workspaceId), 'list'] as const,
-	joinable: (workspaceId: string) => [...projectKeys.all(workspaceId), 'joinable'] as const,
+	lists: (workspaceId: string, view: 'mine' | 'joinable' | 'all') =>
+		[...projectKeys.all(workspaceId), 'list', view] as const,
 	detail: (workspaceId: string, projectId: string) => workspaceKeys.project(workspaceId, projectId)
 };
 
-export function projectListQuery(workspaceId: string) {
+export function projectListQuery(workspaceId: string, view: 'mine' | 'joinable' | 'all' = 'all') {
 	const api = createWorkspaceApi(workspaceId);
 	return queryOptions({
-		queryKey: projectKeys.lists(workspaceId),
-		queryFn: ({ signal }) => api.request('GET', '/workspaces/{workspace_id}/projects', { signal })
-	});
-}
-
-export function joinableProjectsQuery(workspaceId: string) {
-	const api = createWorkspaceApi(workspaceId);
-	return queryOptions({
-		queryKey: projectKeys.joinable(workspaceId),
+		queryKey: projectKeys.lists(workspaceId, view),
 		queryFn: ({ signal }) =>
-			api.request('GET', '/workspaces/{workspace_id}/projects/joinable', { signal })
+			api.request('GET', '/workspaces/{workspace_id}/projects', {
+				params: { query: { view } },
+				signal
+			})
 	});
 }
 

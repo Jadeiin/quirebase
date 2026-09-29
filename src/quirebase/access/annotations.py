@@ -4,17 +4,15 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import and_, false, or_, select
 
-from quirebase.access.items import require_readable_item
-from quirebase.access.workspaces import (
+from quirebase.access.context import (
     ProjectContext,
-    ResourceAction,
     WorkspaceContext,
-    action_allowed,
-    require_project_context,
     require_workspace_action,
     resolve_workspace_context,
-    visible_project_ids_query,
 )
+from quirebase.access.items import require_readable_item
+from quirebase.access.project_scope import require_project_context, visible_project_ids_query
+from quirebase.access.workspace_policy import ResourceAction, action_allowed
 from quirebase.core.errors import (
     PermissionDenied,
     ResourceUnavailable,
@@ -35,6 +33,60 @@ from quirebase.models import (
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.sql.elements import ColumnElement
+
+
+ANNOTATION_MODERATION_ACTIONS = {
+    "hide": ResourceAction.project_annotation_hide,
+    "archive": ResourceAction.project_annotation_archive,
+    "restore": ResourceAction.project_annotation_restore,
+    "lock": ResourceAction.project_annotation_lock,
+    "unlock": ResourceAction.project_annotation_unlock,
+    "delete": ResourceAction.project_annotation_delete,
+}
+
+
+def annotation_moderation_action(action: str) -> ResourceAction:
+    return ANNOTATION_MODERATION_ACTIONS[action]
+
+
+def annotation_decisions(
+    context: WorkspaceContext,
+    annotation: PdfAnnotation,
+    *,
+    editable: bool,
+    project_active: bool,
+) -> tuple[ResourceAction, ...]:
+    actions: set[ResourceAction] = set()
+    scope_prefix = (
+        "project_annotation"
+        if annotation.scope is AnnotationScope.project
+        else "private_annotation"
+    )
+    if editable:
+        for action in ("update", "delete"):
+            resource_action = ResourceAction(f"{scope_prefix}.{action}")
+            if action_allowed(context, resource_action, relation="own"):
+                actions.add(resource_action)
+
+    if (
+        annotation.scope is AnnotationScope.project
+        and annotation.deleted_at is None
+        and annotation.author_id != context.actor_id
+        and project_active
+    ):
+        candidates = (
+            ["restore"]
+            if annotation.hidden_at is not None or annotation.archived_at is not None
+            else ["hide", "archive"]
+        )
+        candidates += ["unlock"] if annotation.locked_at is not None else ["lock"]
+        candidates.append("delete")
+        for candidate in candidates:
+            resource_action = annotation_moderation_action(candidate)
+            if action_allowed(context, resource_action, relation="other"):
+                actions.add(resource_action)
+
+    return tuple(sorted(actions, key=lambda action: action.value))
 
 
 def visible_annotation_scope_predicate(

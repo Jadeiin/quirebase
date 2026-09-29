@@ -2,7 +2,12 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from quirebase.access import effective_system_actions
+from quirebase.access import (
+    AuthorizationProjection,
+    ResourceAction,
+    SystemAction,
+    system_decisions,
+)
 
 
 class ErrorField(BaseModel):
@@ -38,14 +43,23 @@ class OkView(BaseModel):
 class AuthorizationView(BaseModel):
     """Canonical resource-action keys; clients check this set, never reconstruct policy."""
 
-    allowed: list[str]
+    allowed: list[ResourceAction | SystemAction]
     relations: dict[str, list[str]] = Field(default_factory=dict)
 
 
-def system_authorization_view(role: str) -> AuthorizationView:
+def authorization_view(projection: AuthorizationProjection) -> AuthorizationView:
     return AuthorizationView(
-        allowed=sorted(action.value for action in effective_system_actions(role)),
+        allowed=list(projection.allowed),
+        relations={
+            action.value: list(relations)
+            for action, relations in projection.relations.items()
+            if relations
+        },
     )
+
+
+def system_authorization_view(role: str) -> AuthorizationView:
+    return authorization_view(system_decisions(role))
 
 
 class WorkflowStatusView(BaseModel):

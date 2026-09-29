@@ -65,7 +65,7 @@ _DEFINITIONS = (
     ),
     McpToolDefinition(
         "projects.update_project",
-        "Update a Project's name, description, and visibility in one operation.",
+        "Update a Project's name, description, and participation in one operation.",
         ToolEffect.WRITE,
     ),
     McpToolDefinition(

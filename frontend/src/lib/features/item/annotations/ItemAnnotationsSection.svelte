@@ -4,7 +4,7 @@
 	import { ApiError } from '$lib/api/client';
 	import { apiErrorMessage } from '$lib/api/errors';
 	import type { components } from '$lib/api/schema';
-	import { can } from '$lib/authorization/can';
+	import { can, type AuthorizationAction } from '$lib/authorization/can';
 	import ConfirmDialog from '$lib/design/ConfirmDialog.svelte';
 	import Notice from '$lib/design/Notice.svelte';
 	import { domainLabel } from '$lib/domain-labels';
@@ -38,22 +38,19 @@
 	const workspaceRevisionId = $derived(revision === 'all' ? revisions[0]?.id : revision);
 	const moderationActions = ['hide', 'archive', 'restore', 'lock', 'unlock', 'delete'] as const;
 	const authorizationActions = {
-		hide: 'hide',
-		archive: 'archive',
-		restore: 'restore',
-		lock: 'lock',
-		unlock: 'unlock',
-		delete: 'delete'
-	} as const;
+		hide: 'project_annotation.hide',
+		archive: 'project_annotation.archive',
+		restore: 'project_annotation.restore',
+		lock: 'project_annotation.lock',
+		unlock: 'project_annotation.unlock',
+		delete: 'project_annotation.delete'
+	} as const satisfies Record<(typeof moderationActions)[number], AuthorizationAction>;
 
 	function annotationCanModerate(
 		annotation: components['schemas']['AnnotationReviewAnnotationView'],
 		action: (typeof moderationActions)[number]
 	): boolean {
-		return (
-			!annotation.mine &&
-			can(annotation.authorization, 'project_annotation', authorizationActions[action])
-		);
+		return !annotation.mine && can(annotation.authorization, authorizationActions[action]);
 	}
 
 	async function moderate(

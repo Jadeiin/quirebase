@@ -67,7 +67,6 @@ def upgrade() -> None:
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('name', sa.String(length=240), nullable=False),
     sa.Column('created_by', sa.String(length=36), nullable=False),
-    sa.Column('owner_id', sa.String(length=36), nullable=False),
     sa.Column('state', sa.Enum('active', 'archived', 'deleted', name='workspace_state', native_enum=False), nullable=False),
     sa.Column('governance_suspended_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('governance_suspended_by', sa.String(length=36), nullable=True),
@@ -78,10 +77,8 @@ def upgrade() -> None:
     sa.CheckConstraint("state IN ('active', 'archived', 'deleted')", name='ck_workspaces_state'),
     sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
     sa.ForeignKeyConstraint(['governance_suspended_by'], ['users.id'], ondelete='SET NULL'),
-    sa.ForeignKeyConstraint(['owner_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_index(op.f('ix_workspaces_owner_id'), 'workspaces', ['owner_id'], unique=False)
     op.create_table('api_tokens',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('name', sa.String(length=120), nullable=False),
@@ -217,9 +214,9 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('state', sa.Enum('active', 'archived', 'deleted', name='project_state', native_enum=False), nullable=False),
-    sa.Column('visibility', sa.Enum('workspace', 'open', 'managed', name='project_visibility', native_enum=False), nullable=False),
+    sa.Column('participation', sa.Enum('workspace', 'open', 'managed', name='project_participation', native_enum=False), nullable=False),
     sa.CheckConstraint("state IN ('active', 'archived', 'deleted')", name='ck_projects_state'),
-    sa.CheckConstraint("visibility IN ('workspace', 'open', 'managed')", name='ck_projects_visibility'),
+    sa.CheckConstraint("participation IN ('workspace', 'open', 'managed')", name='ck_projects_participation'),
     sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
     sa.ForeignKeyConstraint(['workspace_id'], ['workspaces.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
@@ -678,7 +675,6 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_api_tokens_token_hash'), table_name='api_tokens')
     op.drop_index(op.f('ix_api_tokens_expires_at'), table_name='api_tokens')
     op.drop_table('api_tokens')
-    op.drop_index(op.f('ix_workspaces_owner_id'), table_name='workspaces')
     op.drop_table('workspaces')
     op.drop_index(op.f('ix_users_username'), table_name='users')
     op.drop_table('users')

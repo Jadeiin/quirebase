@@ -45,6 +45,7 @@ from quirebase.models import (
     User,
     Workspace,
     WorkspaceInvitation,
+    WorkspaceInvitationRole,
     WorkspaceMember,
     WorkspaceMemberState,
     WorkspaceRole,
@@ -78,7 +79,7 @@ async def provision_initial_workspace(db: AsyncSession, user: User) -> Workspace
     if existing is not None:
         raise ValidationFailure("Workspace provisioning is only available during User creation")
 
-    workspace = Workspace(name=_workspace_name(locked), created_by=locked.id, owner_id=locked.id)
+    workspace = Workspace(name=_workspace_name(locked), created_by=locked.id)
     db.add(workspace)
     await db.flush()
     db.add(
@@ -182,7 +183,7 @@ async def create_workspace(
     owner = locked_users.get(requested_owner_id)
     if owner is None or not owner.active:
         raise ValidationFailure("Workspace owner must be an active User")
-    workspace = Workspace(name=cleaned, created_by=actor.id, owner_id=owner.id)
+    workspace = Workspace(name=cleaned, created_by=actor.id)
     db.add(workspace)
     await db.flush()
     db.add(
@@ -229,6 +230,24 @@ async def list_workspaces(db: AsyncSession, actor: User) -> list[tuple[Workspace
         .order_by(Workspace.name, Workspace.id)
     )
     return list(rows.tuples())
+
+
+async def workspace_owner_ids(db: AsyncSession, workspace_ids: set[str]) -> dict[str, str]:
+    if not workspace_ids:
+        return {}
+    rows = await db.execute(
+        select(WorkspaceMember.workspace_id, WorkspaceMember.user_id).where(
+            WorkspaceMember.workspace_id.in_(workspace_ids),
+            WorkspaceMember.role == WorkspaceRole.owner,
+            WorkspaceMember.state == WorkspaceMemberState.active,
+            WorkspaceMember.terminated_at.is_(None),
+        )
+    )
+    owners = dict(rows.tuples().all())
+    missing = workspace_ids - owners.keys()
+    if missing:
+        raise RuntimeError(f"Workspace owner membership invariant failed for: {sorted(missing)}")
+    return owners
 
 
 async def get_workspace(
@@ -317,13 +336,16 @@ async def invite_workspace_member(
     actor: User,
     workspace_id: str,
     user_id: str,
-    role: WorkspaceRole | str,
+    role: WorkspaceInvitationRole | str,
     *,
     expires_at: datetime | None = None,
 ) -> tuple[WorkspaceInvitation, str]:
-    requested = WorkspaceRole(role)
-    if requested in {WorkspaceRole.owner, WorkspaceRole.admin}:
-        raise ValidationFailure("owner/admin roles are assigned through governance operations")
+    try:
+        requested = WorkspaceInvitationRole(role)
+    except ValueError as error:
+        raise ValidationFailure(
+            "Workspace invitations require an admin, editor, reviewer or viewer role"
+        ) from error
     # Account governance locks Users before Workspaces. Hold a shared User lock
     # so deactivation either commits first and is observed here, or waits until
     # the invitation transaction has committed.
@@ -337,7 +359,11 @@ async def invite_workspace_member(
         raise ValidationFailure("Workspace invitations require an existing active User")
     await _lock_workspace(db, workspace_id)
     context = await require_workspace_action(
-        db, actor, workspace_id, ResourceAction.workspace_invitation_create
+        db,
+        actor,
+        workspace_id,
+        ResourceAction.workspace_invitation_create,
+        relation="admin" if requested is WorkspaceInvitationRole.admin else "member",
     )
     now = datetime.now(UTC)
     if expires_at is None:
@@ -357,6 +383,7 @@ async def invite_workspace_member(
     )
     if existing is not None:
         raise ValidationFailure("User is already a current Workspace member")
+    await _revoke_pending_invitations(db, workspace_id, user_id)
     raw = generate_token(32)
     invitation = WorkspaceInvitation(
         workspace_id=workspace_id,
@@ -488,7 +515,7 @@ async def accept_workspace_invitation(
         member = WorkspaceMember(
             workspace_id=invitation.workspace_id,
             user_id=current_actor.id,
-            role=invitation.role,
+            role=WorkspaceRole(invitation.role),
             state=WorkspaceMemberState.active,
             invited_by=invitation.invited_by,
         )
@@ -602,10 +629,10 @@ async def set_workspace_member_role(
     role: WorkspaceRole | str,
 ) -> WorkspaceMember:
     requested = WorkspaceRole(role)
-    workspace = await _lock_workspace(db, workspace_id)
+    await _lock_workspace(db, workspace_id)
     context = await require_workspace_membership(db, actor, workspace_id)
     member = await _current_member(db, workspace_id, membership_id)
-    if member.user_id == workspace.owner_id or requested is WorkspaceRole.owner:
+    if member.role is WorkspaceRole.owner or requested is WorkspaceRole.owner:
         raise ValidationFailure("use ownership transfer for the owner role")
     relation = workspace_member_relation(member.role)
     action = (
@@ -634,10 +661,10 @@ async def set_workspace_member_role(
 async def suspend_workspace_member(
     db: AsyncSession, actor: User, workspace_id: str, membership_id: str
 ) -> WorkspaceMember:
-    workspace = await _lock_workspace(db, workspace_id)
+    await _lock_workspace(db, workspace_id)
     context = await require_workspace_membership(db, actor, workspace_id)
     member = await _current_member(db, workspace_id, membership_id)
-    if member.user_id == workspace.owner_id:
+    if member.role is WorkspaceRole.owner:
         raise PermissionDenied("transfer Workspace ownership before suspending the owner")
     require_action(
         context,
@@ -691,10 +718,10 @@ async def reactivate_workspace_member(
 async def terminate_workspace_member(
     db: AsyncSession, actor: User, workspace_id: str, membership_id: str
 ) -> None:
-    workspace = await _lock_workspace(db, workspace_id)
+    await _lock_workspace(db, workspace_id)
     context = await require_workspace_membership(db, actor, workspace_id)
     member = await _current_member(db, workspace_id, membership_id)
-    if member.user_id == workspace.owner_id:
+    if member.role is WorkspaceRole.owner:
         raise PermissionDenied("transfer Workspace ownership before removing the owner")
     require_action(
         context,
@@ -726,7 +753,7 @@ async def transfer_workspace_ownership(
     db: AsyncSession, actor: User, workspace_id: str, target_membership_id: str
 ) -> Workspace:
     # Account deactivation locks the User before every Workspace where it has a
-    # current membership.  Take the same order here so changing owner_id cannot
+    # current membership. Take the same order here so transferring ownership cannot
     # deadlock with the foreign-key check against a concurrently deactivated User.
     target_user = await db.scalar(
         select(User)
@@ -752,11 +779,14 @@ async def transfer_workspace_ownership(
     if target_user is None or target_user.id != target.user_id or not target_user.active:
         raise ValidationFailure("new owner must be an active User")
     current = await db.scalar(
-        select(WorkspaceMember).where(
+        select(WorkspaceMember)
+        .where(
             WorkspaceMember.workspace_id == workspace_id,
-            WorkspaceMember.user_id == workspace.owner_id,
+            WorkspaceMember.role == WorkspaceRole.owner,
             WorkspaceMember.terminated_at.is_(None),
         )
+        .execution_options(populate_existing=True)
+        .with_for_update()
     )
     if current is None:
         raise ValidationFailure("Workspace owner membership is inconsistent")
@@ -765,7 +795,6 @@ async def transfer_workspace_ownership(
     current.role = WorkspaceRole.admin
     await db.flush()
     target.role = WorkspaceRole.owner
-    workspace.owner_id = target.user_id
     record_event(
         db,
         actor.id,

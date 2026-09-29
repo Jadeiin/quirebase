@@ -2825,7 +2825,7 @@ msgstr "上一页"
 msgid "Previous page"
 msgstr "上一页"
 
-#. Project visibility or annotation scope.
+#. Project participation or annotation scope.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 msgid "Private"
@@ -2907,7 +2907,7 @@ msgstr "项目是此工作区中的研究工作上下文。"
 msgid "Provider"
 msgstr "提供方"
 
-#. Project visibility or annotation scope.
+#. Project participation or annotation scope.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 msgid "Public"

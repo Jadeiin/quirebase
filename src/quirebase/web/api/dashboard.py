@@ -19,7 +19,11 @@ async def dashboard(workspace_id: str, user: ApiUser, db: Database):
             for item, last_read_at in data["recent_items"]
         ],
         "projects": [
-            {"id": project.id, "name": project.name, "visibility": enum_value(project.visibility)}
+            {
+                "id": project.id,
+                "name": project.name,
+                "participation": enum_value(project.participation),
+            }
             for project in data["projects"]
         ],
         "session_count": len(data["sessions"]),

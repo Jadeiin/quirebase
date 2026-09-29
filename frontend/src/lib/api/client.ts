@@ -222,7 +222,7 @@ function responseError(response: Response, payload: unknown): ApiError {
 	if (error.status === 409 && workspaceId) {
 		for (const handler of workspaceConflictHandlers) handler(decodeURIComponent(workspaceId));
 	}
-	if (response.status === 404 || error.code === 'workspace_membership_required') {
+	if (error.code === 'workspace_membership_required' || error.code === 'workspace_unavailable') {
 		if (workspaceId) {
 			for (const handler of workspaceUnavailableHandlers) handler(decodeURIComponent(workspaceId));
 		}

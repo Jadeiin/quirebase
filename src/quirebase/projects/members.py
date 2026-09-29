@@ -14,8 +14,8 @@ from quirebase.audit import record_event
 from quirebase.core.errors import DomainError, ResourceNotFound
 from quirebase.models import (
     ProjectMember,
+    ProjectParticipation,
     ProjectState,
-    ProjectVisibility,
     User,
     WorkspaceMember,
     WorkspaceMemberState,
@@ -84,12 +84,12 @@ async def join_project(
     await lock_project_participation_workspace(db, workspace_id)
     context = await require_workspace_membership(db, user, workspace_id)
     project = await lock_project_root(db, project_id, workspace_id, state=ProjectState.active)
-    if project.visibility is not ProjectVisibility.open:
+    if project.participation is not ProjectParticipation.open:
         raise ProjectMemberConflict("Only open Projects allow self-service participation")
     require_action(
         context,
         ResourceAction.project_membership_join,
-        relation=project.visibility.value,
+        relation=project.participation.value,
     )
     return await _add_participant(
         db,
@@ -108,12 +108,12 @@ async def leave_project(db: AsyncSession, user: User, workspace_id: str, project
     await lock_project_participation_workspace(db, workspace_id)
     context = await require_workspace_membership(db, user, workspace_id)
     project = await lock_project_root(db, project_id, workspace_id, state=ProjectState.active)
-    if project.visibility is not ProjectVisibility.open:
+    if project.participation is not ProjectParticipation.open:
         raise ProjectMemberConflict("Only open Projects allow self-service participation")
     require_action(
         context,
         ResourceAction.project_membership_leave,
-        relation=project.visibility.value,
+        relation=project.participation.value,
     )
     member = await db.scalar(
         select(ProjectMember).where(
@@ -150,12 +150,12 @@ async def add_project_member(
     await lock_project_participation_workspace(db, workspace_id)
     context = await require_workspace_membership(db, user, workspace_id)
     project = await lock_project_root(db, project_id, workspace_id, state=ProjectState.active)
-    if project.visibility is not ProjectVisibility.managed:
+    if project.participation is not ProjectParticipation.managed:
         raise ProjectMemberConflict("Only managed Projects have curated participation")
     require_action(
         context,
         ResourceAction.project_membership_manage,
-        relation=project.visibility.value,
+        relation=project.participation.value,
     )
     target = await db.scalar(
         select(User)
@@ -193,12 +193,12 @@ async def remove_project_member(
     await lock_project_participation_workspace(db, workspace_id)
     context = await require_workspace_membership(db, user, workspace_id)
     project = await lock_project_root(db, project_id, workspace_id, state=ProjectState.active)
-    if project.visibility is not ProjectVisibility.managed:
+    if project.participation is not ProjectParticipation.managed:
         raise ProjectMemberConflict("Only managed Projects have curated participation")
     require_action(
         context,
         ResourceAction.project_membership_manage,
-        relation=project.visibility.value,
+        relation=project.participation.value,
     )
     target = await db.scalar(
         select(ProjectMember).where(

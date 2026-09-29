@@ -50,7 +50,7 @@ The server exposes a fixed allowlist covering the ordinary User's core research 
 | Library | `library.search_items`, `library.get_library_item`, `library.create_library_item`, `library.update_library_item` | Search is limited to 25 Items per page; writes reuse Workspace resource-action decisions and optimistic version checks |
 | Projects | `projects.list_projects`, `projects.get_project`, `projects.create_user_project`, `projects.update_project`, lifecycle, item and membership tools | Workspace resource-action and Project participation decisions remain authoritative; Projects have no role or owner axis |
 | Documents | `documents.list_documents` | Returns revision and attachment metadata, never object keys, bytes or extracted text |
-| Annotations | `annotations.list_annotations`, `annotations.create_annotation`, `annotations.update_annotation`, `annotations.delete_annotation` | Reuses revision, Item and Project visibility plus annotation ownership/version rules |
+| Annotations | `annotations.list_annotations`, `annotations.create_annotation`, `annotations.update_annotation`, `annotations.delete_annotation` | Reuses revision, Item and Project participation and discoverability plus annotation ownership/version rules |
 | Organization | `library.list_tags`, `library.add_item_tag`, `library.remove_item_tag`, `library.set_item_tag_selection`, `library.list_discussions`, `library.create_discussion`, `library.delete_discussion` | Reuses editable-Item and message ownership rules |
 | Discovery and citation | `discovery.search_discovery`, `library.format_item_citation` | Discovery is marked open-world and never receives the inbound API Token |
 

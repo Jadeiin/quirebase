@@ -177,7 +177,7 @@ for (const [role, allowedActions, visible] of [
 		await page.route('**/api/v1/workspaces/workspace-1/tags', (route) =>
 			route.fulfill({ json: [] })
 		);
-		await page.route('**/api/v1/workspaces/workspace-1/projects', (route) =>
+		await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
 			route.fulfill({ json: [] })
 		);
 		await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) =>

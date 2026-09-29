@@ -9,6 +9,8 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access.annotations import (
+    annotation_decisions,
+    annotation_moderation_action,
     editable_annotation_ids,
     editable_annotation_reply_ids,
     require_deletable_annotation,
@@ -178,16 +180,6 @@ def annotation_json(
         "updated_at": as_utc(record.updated_at).isoformat(),
         "replies": replies or [],
     }
-
-
-_ANNOTATION_MODERATION_ACTIONS = {
-    "hide": ResourceAction.project_annotation_hide,
-    "archive": ResourceAction.project_annotation_archive,
-    "restore": ResourceAction.project_annotation_restore,
-    "lock": ResourceAction.project_annotation_lock,
-    "unlock": ResourceAction.project_annotation_unlock,
-    "delete": ResourceAction.project_annotation_delete,
-}
 
 
 def annotation_reply_json(
@@ -397,55 +389,18 @@ async def _annotation_views(
         )
     views: list[dict[str, Any]] = []
     for record in records:
-        authorization_resource_actions: list[str] = []
-        if record.id in editable_ids:
-            own_actions = [
-                ResourceAction.project_annotation_update.value
-                if record.scope is AnnotationScope.project
-                else ResourceAction.private_annotation_update.value,
-                ResourceAction.project_annotation_delete.value
-                if record.scope is AnnotationScope.project
-                else ResourceAction.private_annotation_delete.value,
-            ]
-            if record.scope is AnnotationScope.project:
-                own_actions = [
-                    action
-                    for action in own_actions
-                    if action_allowed(
-                        workspace,
-                        ResourceAction(action),
-                        relation="own",
-                    )
-                ]
-            authorization_resource_actions.extend(own_actions)
-
-        if (
-            record.deleted_at is None
-            and record.scope is AnnotationScope.project
-            and record.project_item_id is not None
-            and record.author_id != workspace.actor_id
-            and project_states_by_item.get(record.project_item_id) is ProjectState.active
-        ):
-            moderation_actions = (
-                ["restore"]
-                if record.hidden_at is not None or record.archived_at is not None
-                else ["hide", "archive"]
+        authorization_resource_actions = [
+            action.value
+            for action in annotation_decisions(
+                workspace,
+                record,
+                editable=record.id in editable_ids,
+                project_active=(
+                    record.project_item_id is not None
+                    and project_states_by_item.get(record.project_item_id) is ProjectState.active
+                ),
             )
-            moderation_actions += ["unlock"] if record.locked_at is not None else ["lock"]
-            moderation_actions.append("delete")
-            allowed_moderation_actions = [
-                action
-                for action in moderation_actions
-                if action_allowed(
-                    workspace,
-                    _ANNOTATION_MODERATION_ACTIONS[action],
-                    relation="other",
-                )
-            ]
-            authorization_resource_actions.extend(
-                _ANNOTATION_MODERATION_ACTIONS[action].value
-                for action in allowed_moderation_actions
-            )
+        ]
 
         views.append(
             annotation_json(
@@ -940,7 +895,7 @@ async def moderate_document_annotation(
     relation = "own" if record.author_id == workspace.actor_id else "other"
     if relation == "own":
         raise ValidationFailure("authors cannot moderate their own Annotation")
-    moderation_action = _ANNOTATION_MODERATION_ACTIONS[action]
+    moderation_action = annotation_moderation_action(action)
     project_item = await db.scalar(
         select(ProjectItem).where(
             ProjectItem.id == record.project_item_id,

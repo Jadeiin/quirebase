@@ -13,7 +13,7 @@ class ProjectSummaryView(BaseModel):
     name: str
     item_count: int
     state: str
-    visibility: Literal["workspace", "open", "managed"]
+    participation: Literal["workspace", "open", "managed"]
     is_member: bool
     description: str = ""
     authorization: AuthorizationView
@@ -39,7 +39,7 @@ def project_detail_view(
         name=workspace.project.name,
         item_count=len(workspace.items),
         state=workspace.project.state.value,
-        visibility=workspace.project.visibility.value,
+        participation=workspace.project.participation.value,
         is_member=workspace.is_member,
         description=workspace.project.description,
         authorization=authorization,
@@ -53,18 +53,18 @@ def project_detail_view(
 
 class ProjectCreateRequest(BaseModel):
     name: str = Field(max_length=240)
-    visibility: Literal["workspace", "open", "managed"] = "workspace"
+    participation: Literal["workspace", "open", "managed"] = "workspace"
     description: str = Field(default="", max_length=2000)
 
 
 class ProjectSettingsRequest(BaseModel):
     name: str = Field(max_length=240)
-    visibility: Literal["workspace", "open", "managed"]
+    participation: Literal["workspace", "open", "managed"]
     description: str = Field(max_length=2000)
 
 
-class ProjectVisibilityRequest(BaseModel):
-    visibility: Literal["workspace", "open", "managed"]
+class ProjectParticipationRequest(BaseModel):
+    participation: Literal["workspace", "open", "managed"]
 
 
 class ProjectDescriptionRequest(BaseModel):
