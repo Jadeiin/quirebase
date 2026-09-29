@@ -144,6 +144,8 @@ Instance registration and Workspace admission are separate operations:
   retained as an audit/history record, not as an ACL-satisfying `removed` state.
 - Workspace owner/admin manages ordinary membership. An instance administrator may perform only
   coarse tenancy/lifecycle governance such as suspension or recovery, not ordinary content access.
+- The active member directory exposes Workspace roles as collaboration metadata. The governance
+  view adds membership identifiers, state, join time and member-specific decisions for owners/admins.
 - Ownership transfer is required before an owner can leave, be suspended or be removed. Each
   active Workspace has exactly one authoritative owner and an owner membership.
 
@@ -256,6 +258,9 @@ its owned rows; a durable, reference-aware cleanup removes its stored objects. A
 the deleted Workspace ID as historical metadata. `deleted` is an internal cleanup state and is
 not exposed as an ordinary business state.
 
+Archived Workspace governance member and invitation lists remain readable to owners/admins;
+their mutations remain disabled.
+
 An archived Project is readable but rejects ProjectItem, Annotation, Discussion, Notes and
 membership mutations. Project archive/restore is controlled by separate `project.archive` and
 `project.restore` decisions and does not archive or remove its Workspace Items. Permanent Item
@@ -293,7 +298,8 @@ grant rejects finalization rather than inheriting request-time authority.
 
 Instance administrators may invoke only the explicit `resource=workspace_break_glass`,
 `action=read` decision. It is temporary, reason-required, fully audited and read-only in the
-current contract. Write/delete break-glass semantics require a later security decision; ordinary
+current contract: each request grants one read and does not create a reusable session or lease.
+Write/delete break-glass semantics require a later security decision; ordinary
 endpoints never infer this authority.
 
 ### Database invariants

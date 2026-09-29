@@ -5,14 +5,14 @@ from typing import TYPE_CHECKING
 from sqlalchemy import false, or_, select
 
 from quirebase.access.context import (
-    _NON_MUTATING_ACTIONS,
     ProjectContext,
     WorkspaceContext,
+    lock_workspace_context,
     require_action,
-    require_workspace_action,
+    require_workspace_membership,
 )
 from quirebase.access.scope import workspace_select
-from quirebase.access.workspace_policy import ResourceAction, action_allowed
+from quirebase.access.workspace_policy import ResourceAction, action_allowed, action_spec
 from quirebase.core.errors import ResourceUnavailable, WorkspaceLifecycleError
 from quirebase.models import Project, ProjectMember, ProjectParticipation, ProjectState, User
 
@@ -67,6 +67,17 @@ async def require_project_access(
         ctx,
         ResourceAction.project_update if write else ResourceAction.workspace_read,
     )
+    return await require_project_visibility(db, ctx, project, write=write)
+
+
+async def require_project_visibility(
+    db: AsyncSession,
+    ctx: WorkspaceContext,
+    project: Project,
+    *,
+    write: bool = False,
+) -> ProjectContext:
+    """Check target lineage, lifecycle and discoverability without a second action gate."""
     if project.workspace_id != ctx.workspace.id or project.state is ProjectState.deleted:
         raise ResourceUnavailable("Project not found")
     # Governance discoverability comes from the managed-discovery decision. Every other
@@ -106,12 +117,11 @@ async def require_project_context(
     *,
     relation: str = "any",
 ) -> ProjectContext:
-    workspace = await require_workspace_action(
-        db,
-        actor,
-        workspace_id,
-        operation,
-        relation=relation,
+    mutating = action_spec(operation).mutating
+    workspace = (
+        await lock_workspace_context(db, actor, workspace_id)
+        if mutating
+        else await require_workspace_membership(db, actor, workspace_id)
     )
     project_query = (
         workspace_select(Project, workspace)
@@ -121,19 +131,20 @@ async def require_project_context(
         )
         .execution_options(populate_existing=True)
     )
-    if operation not in _NON_MUTATING_ACTIONS:
+    if mutating:
         # Project lifecycle changes take an exclusive root lock. Keep a shared
         # lock until the scoped write commits, then inspect the refreshed state.
         project_query = project_query.with_for_update(read=True)
     project = await db.scalar(project_query)
     if project is None:
         raise ResourceUnavailable("Project not found")
-    project_context = await require_project_access(
+    project_context = await require_project_visibility(
         db,
         workspace,
         project,
         write=False,
     )
-    if operation not in _NON_MUTATING_ACTIONS and project.state is not ProjectState.active:
+    require_action(workspace, operation, relation=relation)
+    if mutating and project.state is not ProjectState.active:
         raise WorkspaceLifecycleError("Project is read-only")
     return project_context

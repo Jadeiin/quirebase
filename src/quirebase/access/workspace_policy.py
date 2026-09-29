@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from functools import lru_cache
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from quirebase.access.authorization import ResourceActionKey, workspace_action_allowed
 from quirebase.models import ProjectParticipation, WorkspaceRole, WorkspaceState
@@ -78,14 +79,99 @@ class ResourceAction(ResourceActionKey):
     project_annotation_reply_restore = "project_annotation_reply.restore"
 
 
-# Relation vocabularies whose alternatives are useful to generic API consumers. They describe
-# canonical request facts, not grants; Casbin remains the only source of allow/deny decisions.
-_RESOURCE_ACTION_RELATIONS = {
-    ResourceAction.project_create: tuple(
-        participation.value for participation in ProjectParticipation
-    ),
-    ResourceAction.workspace_invitation_create: ("member", "admin"),
+@dataclass(frozen=True, slots=True)
+class ActionSpec:
+    mutating: bool
+    relations: tuple[str, ...] = ()
+    relation_projection: Literal["workspace", "resource"] = "resource"
+
+
+_READ = ActionSpec(mutating=False)
+_WRITE = ActionSpec(mutating=True)
+_OWN = ("own",)
+_AUTHOR_RELATIONS = ("own", "other")
+_MEMBER_RELATIONS = ("member", "admin")
+_PARTICIPATION_RELATIONS = tuple(value.value for value in ProjectParticipation)
+
+# This registry describes command shape and lock behavior. Casbin remains the only grant source.
+ACTION_SPECS: dict[ResourceAction, ActionSpec] = {
+    ResourceAction.workspace_read: _READ,
+    ResourceAction.workspace_export: _READ,
+    ResourceAction.workspace_update: _WRITE,
+    ResourceAction.workspace_archive: _WRITE,
+    ResourceAction.workspace_restore: _WRITE,
+    ResourceAction.workspace_delete: _WRITE,
+    ResourceAction.item_copy: _WRITE,
+    ResourceAction.item_create: _WRITE,
+    ResourceAction.item_update: _WRITE,
+    ResourceAction.item_delete: _WRITE,
+    ResourceAction.file_manage: _WRITE,
+    ResourceAction.file_delete: _WRITE,
+    ResourceAction.tag_use: _WRITE,
+    ResourceAction.tag_create: _WRITE,
+    ResourceAction.tag_manage: _WRITE,
+    ResourceAction.citation_style_manage: _WRITE,
+    ResourceAction.project_create: ActionSpec(True, _PARTICIPATION_RELATIONS, "workspace"),
+    ResourceAction.project_update: ActionSpec(True, _PARTICIPATION_RELATIONS),
+    ResourceAction.project_archive: _WRITE,
+    ResourceAction.project_restore: _WRITE,
+    ResourceAction.project_delete: _WRITE,
+    ResourceAction.project_item_manage: _WRITE,
+    ResourceAction.project_discover: ActionSpec(False, (*_PARTICIPATION_RELATIONS, "participant")),
+    ResourceAction.project_membership_join: ActionSpec(True, ("open",)),
+    ResourceAction.project_membership_leave: ActionSpec(True, ("open",)),
+    ResourceAction.project_membership_manage: ActionSpec(True, ("managed",)),
+    ResourceAction.workspace_invitation_read: _READ,
+    ResourceAction.workspace_invitation_create: ActionSpec(True, _MEMBER_RELATIONS, "workspace"),
+    ResourceAction.workspace_invitation_revoke: _WRITE,
+    ResourceAction.workspace_member_read: _READ,
+    ResourceAction.workspace_member_change_role: ActionSpec(True, _MEMBER_RELATIONS),
+    ResourceAction.workspace_member_promote: ActionSpec(True, ("member",)),
+    ResourceAction.workspace_member_suspend: ActionSpec(True, _MEMBER_RELATIONS),
+    ResourceAction.workspace_member_reactivate: ActionSpec(True, _MEMBER_RELATIONS),
+    ResourceAction.workspace_member_terminate: ActionSpec(True, _MEMBER_RELATIONS),
+    ResourceAction.workspace_member_transfer_ownership: ActionSpec(True, _MEMBER_RELATIONS),
+    ResourceAction.item_discussion_create: _WRITE,
+    ResourceAction.item_discussion_delete: ActionSpec(True, _AUTHOR_RELATIONS),
+    ResourceAction.project_discussion_create: _WRITE,
+    ResourceAction.project_discussion_delete: ActionSpec(True, _AUTHOR_RELATIONS),
+    ResourceAction.private_annotation_create: ActionSpec(True, _OWN),
+    ResourceAction.private_annotation_read: ActionSpec(False, _OWN),
+    ResourceAction.private_annotation_update: ActionSpec(True, _OWN),
+    ResourceAction.private_annotation_delete: ActionSpec(True, _OWN),
+    ResourceAction.private_annotation_restore: ActionSpec(True, _OWN),
+    ResourceAction.project_annotation_create: ActionSpec(True, _OWN),
+    ResourceAction.project_annotation_read: ActionSpec(False, _AUTHOR_RELATIONS),
+    ResourceAction.project_annotation_review: _READ,
+    ResourceAction.project_annotation_update: ActionSpec(True, _OWN),
+    ResourceAction.project_annotation_delete: ActionSpec(True, _AUTHOR_RELATIONS),
+    ResourceAction.project_annotation_restore: ActionSpec(True, _AUTHOR_RELATIONS),
+    ResourceAction.project_annotation_hide: ActionSpec(True, ("other",)),
+    ResourceAction.project_annotation_archive: ActionSpec(True, ("other",)),
+    ResourceAction.project_annotation_lock: ActionSpec(True, ("other",)),
+    ResourceAction.project_annotation_unlock: ActionSpec(True, ("other",)),
+    ResourceAction.private_annotation_reply_create: ActionSpec(True, _OWN),
+    ResourceAction.private_annotation_reply_update: ActionSpec(True, _OWN),
+    ResourceAction.private_annotation_reply_delete: ActionSpec(True, _OWN),
+    ResourceAction.private_annotation_reply_restore: ActionSpec(True, _OWN),
+    ResourceAction.project_annotation_reply_create: ActionSpec(True, _AUTHOR_RELATIONS),
+    ResourceAction.project_annotation_reply_update: ActionSpec(True, _OWN),
+    ResourceAction.project_annotation_reply_delete: ActionSpec(True, _OWN),
+    ResourceAction.project_annotation_reply_restore: ActionSpec(True, _OWN),
 }
+
+
+def action_spec(resource_action: ResourceAction) -> ActionSpec:
+    return ACTION_SPECS[resource_action]
+
+
+def validate_action_specs() -> None:
+    missing = set(ResourceAction) - ACTION_SPECS.keys()
+    extra = ACTION_SPECS.keys() - set(ResourceAction)
+    if missing or extra:
+        raise RuntimeError(
+            f"incomplete Workspace action metadata: missing={missing}, extra={extra}"
+        )
 
 
 def workspace_resource_action_allowed(
@@ -149,7 +235,11 @@ def effective_resource_action_relations(
 
     return frozenset(
         relation
-        for relation in _RESOURCE_ACTION_RELATIONS.get(resource_action, ())
+        for relation in (
+            action_spec(resource_action).relations
+            if action_spec(resource_action).relation_projection == "workspace"
+            else ()
+        )
         if workspace_resource_action_allowed(
             role,
             state,

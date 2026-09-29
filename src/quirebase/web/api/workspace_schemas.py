@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from quirebase.models import WorkspaceInvitationRole
-from quirebase.web.api.common import AuthorizationView
+from quirebase.web.api.common import WorkspaceAuthorizationView
 
 
 class WorkspaceCreateRequest(BaseModel):
@@ -30,7 +30,7 @@ class WorkspaceView(BaseModel):
     state: str
     current_role: str
     governance_suspended: bool
-    authorization: AuthorizationView
+    authorization: WorkspaceAuthorizationView
 
 
 class WorkspaceMemberDirectoryView(BaseModel):
@@ -46,7 +46,7 @@ class WorkspaceGovernanceMemberView(BaseModel):
     role: str
     state: str
     joined_at: datetime
-    authorization: AuthorizationView
+    authorization: WorkspaceAuthorizationView
 
 
 class WorkspaceRoleRequest(BaseModel):

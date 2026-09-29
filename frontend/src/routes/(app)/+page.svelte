@@ -19,7 +19,7 @@
 		if (!list) return;
 		const active = list.filter((workspace) => workspace.state === 'active');
 		const preferredId = defaultWorkspacePreference();
-		const preferred = active.find((workspace) => workspace.id === preferredId);
+		const preferred = list.find((workspace) => workspace.id === preferredId);
 		const destination = preferred ?? active[0];
 		if (preferredId && !preferred) clearDefaultWorkspacePreference();
 		if (destination) {

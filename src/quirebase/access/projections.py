@@ -12,6 +12,7 @@ from quirebase.access.context import WorkspaceContext, require_action
 from quirebase.access.workspace_policy import (
     ResourceAction,
     action_allowed,
+    action_spec,
     effective_resource_action_relations,
     effective_resource_actions,
     workspace_member_relation,
@@ -176,9 +177,11 @@ def project_decisions(
     if ResourceAction.project_update in actions and project.state is ProjectState.active:
         allowed.add(ResourceAction.project_update)
         relations[ResourceAction.project_update] = tuple(
-            participation.value
-            for participation in ProjectParticipation
-            if project_participation_change_allowed(context, project.participation, participation)
+            relation
+            for relation in action_spec(ResourceAction.project_update).relations
+            if project_participation_change_allowed(
+                context, project.participation, ProjectParticipation(relation)
+            )
         )
     if ResourceAction.project_item_manage in actions and project.state is ProjectState.active:
         allowed.add(ResourceAction.project_item_manage)

@@ -4305,6 +4305,11 @@ msgid "Workspace name updated"
 msgstr "工作区名称已更新"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Workspace Projects"
+msgstr "工作区项目"
+
+#. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Workspace reindex"
 msgstr "工作区索引重建"

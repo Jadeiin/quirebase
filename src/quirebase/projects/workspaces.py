@@ -10,13 +10,16 @@ from sqlalchemy.exc import IntegrityError
 
 from quirebase.access import (
     ResourceAction,
+    lock_workspace_context,
+    require_action,
     require_project_context,
+    require_project_visibility,
     require_workspace_action,
     visible_project_ids_query,
     workspace_select,
 )
 from quirebase.audit import record_event
-from quirebase.core.errors import ResourceUnavailable, ValidationFailure
+from quirebase.core.errors import ResourceUnavailable, ValidationFailure, WorkspaceLifecycleError
 from quirebase.documents import delete_project_item_annotations
 from quirebase.models import (
     Item,
@@ -30,7 +33,7 @@ from quirebase.models import (
     WorkspaceMemberState,
 )
 
-from ._locking import guard_project, lock_project_participation_workspace
+from ._locking import guard_project
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -69,8 +72,6 @@ async def create_project(
     normalized_description = description.replace("\r\n", "\n").replace("\r", "\n").strip()
     if len(normalized_description) > 2000:
         raise ValidationFailure("Project description is too long")
-    if parsed_participation is ProjectParticipation.open:
-        await lock_project_participation_workspace(db, workspace_id)
     create_action = ResourceAction.project_create
     context = await require_workspace_action(
         db,
@@ -217,13 +218,12 @@ async def open_project_workspace(
 async def add_item_to_project(
     db: AsyncSession, user: User, workspace_id: str, project_id: str, item_id: str
 ) -> None:
-    context = await require_project_context(
-        db, user, workspace_id, project_id, ResourceAction.project_item_manage
-    )
-    await guard_project(db, project_id, state=ProjectState.active)
-    context = await require_project_context(
-        db, user, workspace_id, project_id, ResourceAction.project_item_manage
-    )
+    workspace = await lock_workspace_context(db, user, workspace_id)
+    project = await guard_project(db, project_id, workspace_id)
+    context = await require_project_visibility(db, workspace, project)
+    require_action(workspace, ResourceAction.project_item_manage)
+    if project.state is not ProjectState.active:
+        raise WorkspaceLifecycleError("Project is read-only")
     item = await db.scalar(
         select(Item).where(Item.id == item_id, Item.workspace_id == workspace_id)
     )
@@ -262,13 +262,12 @@ async def add_item_to_project(
 async def remove_item_from_project(
     db: AsyncSession, user: User, workspace_id: str, project_id: str, item_id: str
 ) -> None:
-    context = await require_project_context(
-        db, user, workspace_id, project_id, ResourceAction.project_item_manage
-    )
-    await guard_project(db, project_id, state=ProjectState.active)
-    context = await require_project_context(
-        db, user, workspace_id, project_id, ResourceAction.project_item_manage
-    )
+    workspace = await lock_workspace_context(db, user, workspace_id)
+    project = await guard_project(db, project_id, workspace_id)
+    context = await require_project_visibility(db, workspace, project)
+    require_action(workspace, ResourceAction.project_item_manage)
+    if project.state is not ProjectState.active:
+        raise WorkspaceLifecycleError("Project is read-only")
     project_item = await db.scalar(
         select(ProjectItem)
         .where(
@@ -299,13 +298,12 @@ async def remove_item_from_project(
 async def add_items_to_project(
     db: AsyncSession, user: User, workspace_id: str, project_id: str, item_ids: list[str]
 ) -> int:
-    await require_project_context(
-        db, user, workspace_id, project_id, ResourceAction.project_item_manage
-    )
-    await guard_project(db, project_id, state=ProjectState.active)
-    await require_project_context(
-        db, user, workspace_id, project_id, ResourceAction.project_item_manage
-    )
+    workspace = await lock_workspace_context(db, user, workspace_id)
+    project = await guard_project(db, project_id, workspace_id)
+    await require_project_visibility(db, workspace, project)
+    require_action(workspace, ResourceAction.project_item_manage)
+    if project.state is not ProjectState.active:
+        raise WorkspaceLifecycleError("Project is read-only")
     ids = tuple(sorted(dict.fromkeys(item_ids)))
     if not ids:
         return 0

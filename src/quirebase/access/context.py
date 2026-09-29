@@ -8,6 +8,7 @@ from sqlalchemy import inspect, select
 from quirebase.access.authorization import workspace_action_allowed
 from quirebase.access.workspace_policy import (
     ResourceAction,
+    action_spec,
     effective_resource_actions,
     workspace_resource_action_allowed,
 )
@@ -29,18 +30,6 @@ from quirebase.models import (
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
-
-
-# These sets classify database locking and Project participation behavior. They do not grant access;
-# every allow/deny result comes from Casbin.
-_NON_MUTATING_ACTIONS = frozenset({
-    ResourceAction.workspace_read,
-    ResourceAction.workspace_export,
-    ResourceAction.project_discover,
-    ResourceAction.private_annotation_read,
-    ResourceAction.project_annotation_read,
-    ResourceAction.project_annotation_review,
-})
 
 
 @dataclass(frozen=True, slots=True)
@@ -173,16 +162,23 @@ async def require_workspace_action(
 ) -> WorkspaceContext:
     context = await require_workspace_membership(db, actor, workspace_id)
     require_action(context, resource_action, relation=relation)
-    if resource_action in _NON_MUTATING_ACTIONS:
+    if not action_spec(resource_action).mutating:
         return context
     # PostgreSQL holds this shared root lock through commit. Governance takes
     # an exclusive lock on the same root, while unrelated writers may proceed
     # concurrently. SQLite follows its ordinary single-process semantics.
-    await db.scalar(
-        select(Workspace.id).where(Workspace.id == workspace_id).with_for_update(read=True)
-    )
     return require_action(
-        await require_workspace_membership(db, actor, workspace_id),
+        await lock_workspace_context(db, actor, workspace_id),
         resource_action,
         relation=relation,
     )
+
+
+async def lock_workspace_context(
+    db: AsyncSession, actor: User, workspace_id: str
+) -> WorkspaceContext:
+    """Hold the Workspace root while a command checks target facts and authority."""
+    await db.scalar(
+        select(Workspace.id).where(Workspace.id == workspace_id).with_for_update(read=True)
+    )
+    return await require_workspace_membership(db, actor, workspace_id)

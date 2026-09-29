@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from quirebase.web.api.common import AuthorizationView
+from quirebase.web.api.common import WorkspaceAuthorizationView
 from quirebase.web.api.library_schemas import ItemSearchView
 
 
@@ -57,12 +57,12 @@ class ItemThumbnailView(BaseModel):
 class ItemCopyTargetView(BaseModel):
     id: str
     name: str
-    authorization: AuthorizationView
+    authorization: WorkspaceAuthorizationView
 
 
 class ItemOverviewView(BaseModel):
     item: ItemSearchView
-    authorization: AuthorizationView
+    authorization: WorkspaceAuthorizationView
     counts: ItemOverviewCountsView
     tags: list[ItemTagView]
     identifiers: list[ItemIdentifierView]
@@ -96,7 +96,7 @@ class TagMatrixView(BaseModel):
 
 class ItemOrganizeView(BaseModel):
     item: ItemSearchView
-    authorization: AuthorizationView
+    authorization: WorkspaceAuthorizationView
     tags: list[ItemTagView]
     projects: list[ItemOrganizeProjectView]
     tag_matrix: TagMatrixView

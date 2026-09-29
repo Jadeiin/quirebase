@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from quirebase.web.api.common import AuthorizationView
+from quirebase.web.api.common import SystemAuthorizationView
 
 
 class LoginRequest(BaseModel):
@@ -24,7 +24,7 @@ class SessionUserView(BaseModel):
     id: str
     username: str
     role: Literal["administrator", "member"]
-    authorization: AuthorizationView
+    authorization: SystemAuthorizationView
 
 
 class SessionView(BaseModel):

@@ -20,7 +20,7 @@ describe('can', () => {
 	});
 
 	it('detects a surface from concrete server-authored actions', () => {
-		expect(hasAllowedAction({ allowed: ['audit.read'] })).toBe(true);
+		expect(hasAllowedAction({ allowed: ['workspace.read'] })).toBe(true);
 		expect(hasAllowedAction({ allowed: [] })).toBe(false);
 		expect(hasAllowedAction(undefined)).toBe(false);
 	});

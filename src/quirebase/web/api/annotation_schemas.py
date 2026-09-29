@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 from quirebase.core.timezones import as_utc
 from quirebase.documents import AnnotationKind, AnnotationPayload, AnnotationScope
-from quirebase.web.api.common import AuthorizationView
+from quirebase.web.api.common import WorkspaceAuthorizationView
 
 
 class FileView(BaseModel):
@@ -51,7 +51,7 @@ class AnnotationView(BaseModel):
     author_display_name: str
     mine: bool
     editable: bool
-    authorization: AuthorizationView
+    authorization: WorkspaceAuthorizationView
     hidden_at: str | None = None
     archived_at: str | None = None
     locked_at: str | None = None

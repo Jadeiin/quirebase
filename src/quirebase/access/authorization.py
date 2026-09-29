@@ -106,6 +106,9 @@ def _enforcer() -> casbin.Enforcer:
 def initialize_authorization() -> None:
     """Parse and load the immutable policy bundle before serving requests."""
 
+    from quirebase.access.workspace_policy import validate_action_specs
+
+    validate_action_specs()
     _enforcer()
     _validate_policy_bundle()
 

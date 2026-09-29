@@ -6,10 +6,10 @@ from sqlalchemy import delete
 
 from quirebase.access import (
     ResourceAction,
-    require_project_access,
-    require_project_context,
+    lock_workspace_context,
+    require_action,
     require_project_participation_change,
-    require_workspace_action,
+    require_project_visibility,
 )
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceUnavailable, ValidationFailure
@@ -23,7 +23,6 @@ from quirebase.models import (
 
 from ._locking import (
     lock_project_delete,
-    lock_project_participation_workspace,
     lock_project_root,
 )
 
@@ -62,21 +61,45 @@ async def update_project_settings(
     description: str,
     participation: ProjectParticipation | str,
 ) -> Project:
-    normalized_name = _validate_name(name)
-    normalized_description = _validate_description(description)
+    return await _update_project_settings(
+        db,
+        user,
+        workspace_id,
+        project_id,
+        name=name,
+        description=description,
+        participation=participation,
+    )
+
+
+async def _update_project_settings(
+    db: AsyncSession,
+    user: User,
+    workspace_id: str,
+    project_id: str,
+    *,
+    name: str | None = None,
+    description: str | None = None,
+    participation: ProjectParticipation | str | None = None,
+) -> Project:
+    context = await lock_workspace_context(db, user, workspace_id)
+    project = await lock_project_root(db, project_id, workspace_id, state=ProjectState.active)
+    await require_project_visibility(db, context, project)
+    require_action(context, ResourceAction.project_update)
+    normalized_name = _validate_name(project.name if name is None else name)
+    normalized_description = _validate_description(
+        project.description if description is None else description
+    )
     try:
-        normalized_participation = ProjectParticipation(participation)
+        normalized_participation = ProjectParticipation(
+            project.participation if participation is None else participation
+        )
     except ValueError as error:
         raise ValidationFailure("invalid Project participation") from error
-    await lock_project_participation_workspace(db, workspace_id)
-    project = await lock_project_root(db, project_id, workspace_id, state=ProjectState.active)
-    context = await require_project_context(
-        db, user, workspace_id, project_id, ResourceAction.project_update
-    )
     participation_changed = normalized_participation is not project.participation
     if participation_changed:
         require_project_participation_change(
-            context.workspace,
+            context,
             project.participation,
             normalized_participation,
         )
@@ -98,7 +121,7 @@ async def update_project_settings(
             ProjectMember(
                 workspace_id=workspace_id,
                 project_id=project_id,
-                user_id=user.id,
+                user_id=context.actor_id,
             )
         )
     old = {
@@ -125,7 +148,7 @@ async def update_project_settings(
         },
         workspace_id=workspace_id,
         project_id=project_id,
-        authorization_role=context.workspace.role.value,
+        authorization_role=context.role.value,
         authorization_resource_action=ResourceAction.project_update.value,
     )
     await db.commit()
@@ -135,38 +158,14 @@ async def update_project_settings(
 async def rename_project(
     db: AsyncSession, user: User, workspace_id: str, project_id: str, name: str
 ) -> Project:
-    await lock_project_participation_workspace(db, workspace_id)
-    context = await require_project_context(
-        db, user, workspace_id, project_id, ResourceAction.project_update
-    )
-    project = context.project
-    return await update_project_settings(
-        db,
-        user,
-        workspace_id,
-        project_id,
-        name=name,
-        description=project.description,
-        participation=project.participation,
-    )
+    return await _update_project_settings(db, user, workspace_id, project_id, name=name)
 
 
 async def update_project_description(
     db: AsyncSession, user: User, workspace_id: str, project_id: str, description: str
 ) -> Project:
-    await lock_project_participation_workspace(db, workspace_id)
-    context = await require_project_context(
-        db, user, workspace_id, project_id, ResourceAction.project_update
-    )
-    project = context.project
-    return await update_project_settings(
-        db,
-        user,
-        workspace_id,
-        project_id,
-        name=project.name,
-        description=description,
-        participation=project.participation,
+    return await _update_project_settings(
+        db, user, workspace_id, project_id, description=description
     )
 
 
@@ -177,19 +176,8 @@ async def set_project_participation(
     project_id: str,
     participation: ProjectParticipation | str,
 ) -> Project:
-    await lock_project_participation_workspace(db, workspace_id)
-    context = await require_project_context(
-        db, user, workspace_id, project_id, ResourceAction.project_update
-    )
-    project = context.project
-    return await update_project_settings(
-        db,
-        user,
-        workspace_id,
-        project_id,
-        name=project.name,
-        description=project.description,
-        participation=participation,
+    return await _update_project_settings(
+        db, user, workspace_id, project_id, participation=participation
     )
 
 
@@ -208,13 +196,12 @@ async def set_project_state(
         if desired is ProjectState.archived
         else ResourceAction.project_restore
     )
-    workspace = await require_workspace_action(
-        db, user, workspace_id, authorization_resource_action
-    )
+    workspace = await lock_workspace_context(db, user, workspace_id)
     project = await lock_project_root(db, project_id, workspace_id)
     if project.workspace_id != workspace_id or project.state is ProjectState.deleted:
         raise ResourceUnavailable("Project not found")
-    await require_project_access(db, workspace, project)
+    await require_project_visibility(db, workspace, project)
+    require_action(workspace, authorization_resource_action)
     project.state = desired
     record_event(
         db,
@@ -238,11 +225,12 @@ async def delete_project(
     project_id: str,
     confirmation: str,
 ) -> None:
-    context = await require_workspace_action(db, user, workspace_id, ResourceAction.project_delete)
+    context = await lock_workspace_context(db, user, workspace_id)
     project = await lock_project_delete(db, project_id, workspace_id)
     if project.workspace_id != workspace_id or project.state is ProjectState.deleted:
         raise ResourceUnavailable("Project not found")
-    await require_project_access(db, context, project)
+    await require_project_visibility(db, context, project)
+    require_action(context, ResourceAction.project_delete)
     if confirmation.strip() != project.name:
         raise ValidationFailure("Project name confirmation does not match")
     project.state = ProjectState.deleted

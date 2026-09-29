@@ -1,8 +1,9 @@
 import type { components } from '$lib/api/schema';
 
-export type AuthorizationAction = components['schemas']['AuthorizationView']['allowed'][number];
+export type AuthorizationAction =
+	components['schemas']['WorkspaceAuthorizationView']['allowed'][number];
 export type AuthorizationDecisionSet = Pick<
-	components['schemas']['AuthorizationView'],
+	components['schemas']['WorkspaceAuthorizationView'],
 	'allowed' | 'relations'
 >;
 

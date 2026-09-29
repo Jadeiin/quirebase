@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from quirebase.access import WorkspaceContext, discussion_message_decisions
 from quirebase.core.timezones import as_utc
 from quirebase.library import ItemMetadata
-from quirebase.web.api.common import AuthorizationView, authorization_view
+from quirebase.web.api.common import WorkspaceAuthorizationView, authorization_view
 
 
 class ItemSearchView(BaseModel):
@@ -58,7 +58,7 @@ class TagView(BaseModel):
     id: str
     name: str
     accessible_item_count: int
-    authorization: AuthorizationView
+    authorization: WorkspaceAuthorizationView
 
 
 class DiscussionMessageView(BaseModel):
@@ -71,7 +71,7 @@ class DiscussionMessageView(BaseModel):
     body: str
     created_at: str
     updated_at: str
-    authorization: AuthorizationView
+    authorization: WorkspaceAuthorizationView
 
 
 class CitationView(BaseModel):

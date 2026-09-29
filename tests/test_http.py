@@ -29,6 +29,7 @@ from quirebase.models import (
     Project,
     ProjectItem,
     ProjectMember,
+    ProjectParticipation,
     User,
     WorkspaceMember,
     WorkspaceRole,
@@ -89,6 +90,77 @@ async def authenticated_async_client(db, session_factory, tmp_path, monkeypatch)
     )
     client.cookies.set(get_settings().session_cookie, raw)
     return client, item, revision
+
+
+@pytest.mark.anyio
+async def test_managed_project_nonmember_cannot_discover_project_contexts(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    client, item, revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    owner = await async_db.get(User, item.created_by)
+    assert owner is not None
+    workspace_id = item.workspace_id
+    outsider = User(username="managed-http-outsider", password_hash="unused")
+    async_db.add(outsider)
+    await async_db.flush()
+    project = Project(
+        workspace_id=workspace_id,
+        name="Hidden Project",
+        created_by=owner.id,
+        participation=ProjectParticipation.managed,
+    )
+    async_db.add(project)
+    await async_db.flush()
+    async_db.add_all([
+        WorkspaceMember(
+            workspace_id=workspace_id,
+            user_id=outsider.id,
+            role=WorkspaceRole.editor,
+            invited_by=owner.id,
+        ),
+        LoginSession(
+            token_hash=token_hash("managed-outsider-session"),
+            user_id=outsider.id,
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+        ),
+        ProjectItem(
+            workspace_id=workspace_id,
+            project_id=project.id,
+            item_id=item.id,
+            added_by=owner.id,
+        ),
+    ])
+    await async_db.commit()
+    client.cookies.set(get_settings().session_cookie, "managed-outsider-session")
+    base = f"/api/v1/workspaces/{workspace_id}"
+    missing_id = str(uuid4())
+
+    try:
+        for method, path in (
+            ("GET", "/projects/{project_id}"),
+            ("GET", "/projects/{project_id}/discussions"),
+            ("PUT", f"/projects/{{project_id}}/items/{item.id}"),
+            (
+                "GET",
+                f"/items/{item.id}/annotations?revision_id={revision.id}&project_id={{project_id}}",
+            ),
+        ):
+            hidden = await client.request(method, base + path.format(project_id=project.id))
+            missing = await client.request(method, base + path.format(project_id=missing_id))
+            assert hidden.status_code == missing.status_code == 404
+            assert hidden.json() == missing.json()
+
+        listed = await client.get(base + "/projects?view=all")
+        organize = await client.get(base + f"/items/{item.id}/organize")
+        viewer = await client.get(base + f"/items/{item.id}/revisions/{revision.id}/viewer")
+        assert listed.status_code == organize.status_code == viewer.status_code == 200
+        assert project.id not in {row["id"] for row in listed.json()}
+        assert project.id not in {row["id"] for row in organize.json()["projects"]}
+        assert project.id not in {row["id"] for row in viewer.json()["projects"]}
+    finally:
+        await client.aclose()
 
 
 @pytest.mark.anyio

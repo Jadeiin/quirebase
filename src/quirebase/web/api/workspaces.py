@@ -10,7 +10,7 @@ from quirebase.access import (
     workspace_decisions,
     workspace_member_decisions,
 )
-from quirebase.core.errors import ResourceNotFound, ValidationFailure
+from quirebase.core.errors import ResourceNotFound
 from quirebase.models import User, Workspace
 from quirebase.operations import dispatch_workspace_reindex
 from quirebase.web.api.common import OkView, WriteResult, authorization_view
@@ -181,21 +181,18 @@ async def create_workspace_invitation(
     user: ApiUser,
     db: Database,
 ) -> WorkspaceInvitationCreatedView:
-    target = await db.scalar(select(User).where(User.username == data.username))
-    if target is None or not target.active:
-        raise ValidationFailure("Workspace invitations require an exact active username")
     invitation, raw = await invite_workspace_member(
         db,
         user,
         workspace_id,
-        target.id,
+        data.username,
         data.role,
         expires_at=data.expires_at,
     )
     return WorkspaceInvitationCreatedView(
         id=invitation.id,
         user_id=invitation.user_id,
-        username=target.username,
+        username=data.username.strip(),
         role=invitation.role.value,
         expires_at=invitation.expires_at,
         token=raw,

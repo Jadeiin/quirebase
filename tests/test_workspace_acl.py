@@ -165,6 +165,8 @@ def test_effective_resource_actions_follow_workspace_lifecycle():
     assert ResourceAction.project_create in active
     assert ResourceAction.file_delete in active
     assert ResourceAction.workspace_read in archived
+    assert ResourceAction.workspace_member_read in archived
+    assert ResourceAction.workspace_invitation_read in archived
     assert ResourceAction.workspace_restore in archived
     assert ResourceAction.workspace_delete in archived
     assert ResourceAction.project_create not in archived
@@ -650,7 +652,7 @@ async def test_invitation_acceptance_rechecks_user_status(async_db, async_sessio
         async_db,
         owner,
         workspace_id,
-        invitee.id,
+        invitee.username,
         WorkspaceRole.viewer,
     )
 
@@ -683,7 +685,7 @@ async def test_invitation_acceptance_records_system_authorization(async_db):
         async_db,
         owner,
         workspace_id,
-        invitee.id,
+        invitee.username,
         WorkspaceRole.viewer,
     )
 
@@ -709,7 +711,7 @@ async def test_invitation_creation_audit_references_invitation_and_invitee(async
         async_db,
         owner,
         workspace_id,
-        invitee.id,
+        invitee.username,
         WorkspaceRole.viewer,
     )
 
@@ -771,12 +773,12 @@ async def test_invitation_creation_rechecks_user_status(async_db, async_session_
         current_invitee.active = False
         await status_db.commit()
 
-    with pytest.raises(ValidationFailure, match="existing active User"):
+    with pytest.raises(ValidationFailure, match="exact active username"):
         await invite_workspace_member(
             async_db,
             owner,
             workspace_id,
-            invitee.id,
+            invitee.username,
             WorkspaceRole.viewer,
         )
     assert (
@@ -797,10 +799,10 @@ async def test_old_workspace_invitations_cannot_restore_access(async_db, members
     invitee = await _user(async_db, f"stale-invitation-{membership_action}-invitee")
     workspace_id = fixture_workspace_id(owner)
     first, first_token = await invite_workspace_member(
-        async_db, owner, workspace_id, invitee.id, WorkspaceRole.viewer
+        async_db, owner, workspace_id, invitee.username, WorkspaceRole.viewer
     )
     second, second_token = await invite_workspace_member(
-        async_db, owner, workspace_id, invitee.id, WorkspaceRole.editor
+        async_db, owner, workspace_id, invitee.username, WorkspaceRole.editor
     )
     assert (await async_db.get(WorkspaceInvitation, first.id)).revoked_at is not None
     with pytest.raises(ResourceNotFound, match="invitation"):
@@ -825,7 +827,7 @@ async def test_old_workspace_invitations_cannot_restore_access(async_db, members
 
     if membership_action == "terminate":
         _new, new_token = await invite_workspace_member(
-            async_db, owner, workspace_id, invitee.id, WorkspaceRole.viewer
+            async_db, owner, workspace_id, invitee.username, WorkspaceRole.viewer
         )
         replacement = await accept_workspace_invitation(async_db, invitee, workspace_id, new_token)
         assert replacement.id != member.id

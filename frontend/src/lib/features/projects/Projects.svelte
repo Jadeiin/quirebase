@@ -25,7 +25,14 @@
 	const queryClient = useQueryClient();
 	const projects = createQuery(() => projectListQuery(workspaceId));
 	const joinable = createQuery(() => projectListQuery(workspaceId, 'joinable'));
-	const myProjects = $derived((projects.data ?? []).filter((project) => project.is_member));
+	const workspaceProjects = $derived(
+		(projects.data ?? []).filter((project) => project.participation === 'workspace')
+	);
+	const myProjects = $derived(
+		(projects.data ?? []).filter(
+			(project) => project.is_member && project.participation !== 'workspace'
+		)
+	);
 	const managedProjects = $derived(
 		(projects.data ?? []).filter(
 			(project) => project.participation === 'managed' && !project.is_member
@@ -164,6 +171,28 @@
 </SectionHeader>
 
 {#if error}<Notice variant="error">{error}</Notice>{/if}
+
+{#if workspaceProjects.length > 0}
+	<Panel class="mb-5">
+		<h2>{$t('Workspace Projects')}</h2>
+		{#each workspaceProjects as project (project.id)}
+			<ItemRow
+				as="a"
+				class="group rounded-lg px-2 hover:bg-surface-200-800"
+				href={resolve(workspaceHref(workspaceId, `projects/${project.id}`))}
+			>
+				<div class="flex items-center justify-between gap-3">
+					<strong class="group-hover:text-primary-800-200">{project.name}</strong>
+					<Badge>{$t(domainLabel(project.state))}</Badge>
+				</div>
+				{#if project.description}<span class="text-sm text-surface-700-300"
+						>{project.description}</span
+					>{/if}
+				<span class="text-sm text-surface-600-400">{project.item_count} {$t('Items')}</span>
+			</ItemRow>
+		{/each}
+	</Panel>
+{/if}
 
 <div class="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
 	<Panel>

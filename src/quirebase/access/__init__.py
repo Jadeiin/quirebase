@@ -19,6 +19,7 @@ from quirebase.access.authorization import (
 from quirebase.access.context import (
     ProjectContext,
     WorkspaceContext,
+    lock_workspace_context,
     require_action,
     require_workspace_action,
     require_workspace_membership,
@@ -40,6 +41,7 @@ from quirebase.access.items import (
 from quirebase.access.project_scope import (
     require_project_access,
     require_project_context,
+    require_project_visibility,
     visible_project_ids_query,
 )
 from quirebase.access.projections import (
@@ -87,6 +89,7 @@ __all__ = [
     "get_item_for_update",
     "initialize_authorization",
     "item_decisions",
+    "lock_workspace_context",
     "project_decisions",
     "project_participation_change_allowed",
     "require_accessible_items",
@@ -97,6 +100,7 @@ __all__ = [
     "require_project_access",
     "require_project_context",
     "require_project_participation_change",
+    "require_project_visibility",
     "require_readable_item",
     "require_revision",
     "require_system_action",

@@ -335,7 +335,7 @@ async def invite_workspace_member(
     db: AsyncSession,
     actor: User,
     workspace_id: str,
-    user_id: str,
+    username: str,
     role: WorkspaceInvitationRole | str,
     *,
     expires_at: datetime | None = None,
@@ -346,17 +346,20 @@ async def invite_workspace_member(
         raise ValidationFailure(
             "Workspace invitations require an admin, editor, reviewer or viewer role"
         ) from error
+    normalized_username = username.strip()
+    if not normalized_username:
+        raise ValidationFailure("Workspace invitations require an exact active username")
     # Account governance locks Users before Workspaces. Hold a shared User lock
     # so deactivation either commits first and is observed here, or waits until
     # the invitation transaction has committed.
     target = await db.scalar(
         select(User)
-        .where(User.id == user_id)
+        .where(User.username == normalized_username, User.active.is_(True))
         .execution_options(populate_existing=True)
         .with_for_update(read=True)
     )
     if target is None or not target.active:
-        raise ValidationFailure("Workspace invitations require an existing active User")
+        raise ValidationFailure("Workspace invitations require an exact active username")
     await _lock_workspace(db, workspace_id)
     context = await require_workspace_action(
         db,
@@ -377,17 +380,17 @@ async def invite_workspace_member(
     existing = await db.scalar(
         select(WorkspaceMember.id).where(
             WorkspaceMember.workspace_id == workspace_id,
-            WorkspaceMember.user_id == user_id,
+            WorkspaceMember.user_id == target.id,
             WorkspaceMember.terminated_at.is_(None),
         )
     )
     if existing is not None:
         raise ValidationFailure("User is already a current Workspace member")
-    await _revoke_pending_invitations(db, workspace_id, user_id)
+    await _revoke_pending_invitations(db, workspace_id, target.id)
     raw = generate_token(32)
     invitation = WorkspaceInvitation(
         workspace_id=workspace_id,
-        user_id=user_id,
+        user_id=target.id,
         role=requested,
         token_hash=token_hash(raw),
         invited_by=actor.id,

@@ -75,6 +75,40 @@ test('Workspace admins can open and govern managed Projects without being partic
 	await expect(page.getByRole('heading', { name: 'Items', exact: true })).toBeVisible();
 });
 
+test('Workspace-wide Projects are listed separately from joined Projects', async ({ page }) => {
+	await mockSession(page);
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
+		route.fulfill({
+			json: [
+				{
+					...project,
+					id: 'workspace-project',
+					name: 'Shared library',
+					participation: 'workspace',
+					is_member: true
+				},
+				{
+					...project,
+					id: 'joined-project',
+					name: 'My reading group',
+					participation: 'open',
+					is_member: true
+				}
+			]
+		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=joinable', (route) =>
+		route.fulfill({ json: [] })
+	);
+
+	await page.goto('/workspace/workspace-1/projects');
+	const shared = page.getByRole('heading', { name: 'Workspace Projects' }).locator('..');
+	const mine = page.getByRole('heading', { name: 'Your Projects' }).locator('..');
+	await expect(shared.getByRole('link', { name: /Shared library/ })).toBeVisible();
+	await expect(mine.getByRole('link', { name: /My reading group/ })).toBeVisible();
+	await expect(mine.getByRole('link', { name: /Shared library/ })).toHaveCount(0);
+});
+
 test('Workspace viewers can read Project Discussion without mutation controls', async ({
 	page
 }) => {
@@ -168,6 +202,30 @@ test('an unjoined archived open Project stays discoverable and its Discussion lo
 	await expect(page.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
 });
 
+test('an archived Project with delete authority exposes its delete control', async ({ page }) => {
+	await mockSession(page);
+	await mockWorkspaceRole(page, 'admin', ['workspace.read']);
+	await page.route(
+		'**/api/v1/workspaces/workspace-1/projects/archived-project/discussions',
+		(route) => route.fulfill({ json: [] })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects/archived-project', (route) =>
+		route.fulfill({
+			json: {
+				...project,
+				id: 'archived-project',
+				state: 'archived',
+				authorization: { allowed: ['project.delete'] }
+			}
+		})
+	);
+
+	await page.goto('/workspace/workspace-1/projects/archived-project');
+	await expect(page.getByRole('heading', { name: 'Project settings' })).toHaveCount(0);
+	await page.getByRole('button', { name: 'Delete Project' }).click();
+	await expect(page.getByText('Permanently delete this Project?')).toBeVisible();
+});
+
 test('Workspace admin moderates managed Project Discussion with an audited reason', async ({
 	page
 }) => {
@@ -230,7 +288,7 @@ test('a Workspace editor can create an open Project but not a managed Project', 
 		{ 'project.create': ['open', 'workspace'] }
 	);
 	let creation: Record<string, unknown> | null = null;
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) => {
+	await page.route('**/api/v1/workspaces/workspace-1/projects*', (route) => {
 		if (route.request().method() === 'POST') {
 			creation = route.request().postDataJSON();
 			return route.fulfill({ status: 201, json: { id: 'project-1' } });
@@ -291,7 +349,7 @@ test('a Workspace owner can create an empty managed Project', async ({ page }) =
 		{ 'project.create': ['managed', 'open', 'workspace'] }
 	);
 	let creation: Record<string, unknown> | null = null;
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) => {
+	await page.route('**/api/v1/workspaces/workspace-1/projects*', (route) => {
 		if (route.request().method() === 'POST') {
 			creation = route.request().postDataJSON();
 			return route.fulfill({ status: 201, json: { id: 'managed-project' } });

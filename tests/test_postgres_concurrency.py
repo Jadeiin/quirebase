@@ -405,7 +405,9 @@ async def test_workspace_invitation_serializes_with_invitee_deactivation(postgre
             target = await db.get(User, invitee_id)
             assert actor is not None and target is not None
             invitation_started.set()
-            await invite_workspace_member(db, actor, workspace_id, target.id, WorkspaceRole.viewer)
+            await invite_workspace_member(
+                db, actor, workspace_id, target.username, WorkspaceRole.viewer
+            )
             return "invited"
 
     async def deactivate():
@@ -1276,6 +1278,40 @@ async def test_bulk_project_assignment_translates_item_delete_race(postgres_sess
         finally:
             await delete_db.commit()
         assert await asyncio.wait_for(assignment_task, timeout=5) == "rejected"
+
+
+async def test_project_join_uses_shared_workspace_guard(postgres_sessions):
+    async with postgres_sessions() as db:
+        owner = await _user(db, "shared-join-owner")
+        participant = await _user(db, "shared-join-participant")
+        workspace_id = fixture_workspace_id(owner)
+        db.add(
+            WorkspaceMember(
+                workspace_id=workspace_id,
+                user_id=participant.id,
+                role=WorkspaceRole.editor,
+                invited_by=owner.id,
+            )
+        )
+        await db.commit()
+        project = await create_project(
+            db, owner, workspace_id, "Shared guard join", ProjectParticipation.open
+        )
+        project_id = project.id
+        participant_id = participant.id
+
+    async with postgres_sessions() as blocker:
+        await blocker.scalar(
+            select(Workspace.id).where(Workspace.id == workspace_id).with_for_update(read=True)
+        )
+        async with postgres_sessions() as join_db:
+            actor = await join_db.get(User, participant_id)
+            assert actor is not None
+            joined = await asyncio.wait_for(
+                join_project(join_db, actor, workspace_id, project_id), timeout=2
+            )
+            assert joined.user_id == participant_id
+        await blocker.rollback()
 
 
 async def test_open_project_join_races_workspace_member_suspension(postgres_sessions):

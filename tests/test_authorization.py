@@ -12,6 +12,7 @@ from quirebase.access import (
     workspace_member_relation,
 )
 from quirebase.access.authorization import _enforce_canonical, workspace_action_allowed
+from quirebase.access.workspace_policy import ACTION_SPECS, action_spec
 from quirebase.models import SystemRole, WorkspaceRole, WorkspaceState
 
 
@@ -28,6 +29,24 @@ def _policy_rows() -> list[list[str]]:
 
 def test_immutable_casbin_bundle_initializes():
     initialize_authorization()
+
+
+def test_workspace_action_metadata_is_complete_and_classifies_reads():
+    assert set(ACTION_SPECS) == set(ResourceAction)
+    for action in (
+        ResourceAction.workspace_read,
+        ResourceAction.workspace_export,
+        ResourceAction.workspace_member_read,
+        ResourceAction.workspace_invitation_read,
+        ResourceAction.project_discover,
+    ):
+        assert not action_spec(action).mutating
+    assert action_spec(ResourceAction.project_create).relations == (
+        "workspace",
+        "open",
+        "managed",
+    )
+    assert action_spec(ResourceAction.project_update).relation_projection == "resource"
 
 
 def test_every_declared_workspace_and_system_action_has_policy_coverage():

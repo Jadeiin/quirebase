@@ -342,14 +342,15 @@
 					>
 					<div class="flex flex-wrap gap-2 md:col-span-2">
 						<Button disabled={busy || !settingsName.trim()}>{$t('Save Project settings')}</Button>
-						{#if can('project.delete')}<Button
-								type="button"
-								variant="danger"
-								disabled={busy}
-								onclick={() => (deleteDialogOpen = true)}>{$t('Delete Project')}</Button
-							>{/if}
 					</div>
 				</form>
+			</Panel>
+		{/if}
+		{#if can('project.delete')}
+			<Panel>
+				<Button variant="danger" disabled={busy} onclick={() => (deleteDialogOpen = true)}
+					>{$t('Delete Project')}</Button
+				>
 			</Panel>
 		{/if}
 

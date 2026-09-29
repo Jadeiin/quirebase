@@ -5,23 +5,10 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 
 from quirebase.core.errors import ResourceUnavailable
-from quirebase.models import Project, ProjectParticipation, ProjectState, Workspace
+from quirebase.models import Project, ProjectParticipation, ProjectState
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
-
-
-async def lock_project_participation_workspace(db: AsyncSession, workspace_id: str) -> None:
-    """Serialize explicit Project participation changes with Workspace membership changes.
-
-    Call before locking a Project root. This prevents a participant mutation from racing with a
-    transition to/from implicit Workspace participation or Workspace-member termination.
-    """
-    workspace = await db.scalar(
-        select(Workspace.id).where(Workspace.id == workspace_id).with_for_update()
-    )
-    if workspace is None:
-        raise ResourceUnavailable("Workspace not found")
 
 
 async def lock_project_root(
@@ -31,7 +18,7 @@ async def lock_project_root(
     *,
     state: ProjectState | None = None,
     participation: ProjectParticipation | None = None,
-    message: str = "project not found",
+    message: str = "Project not found",
 ) -> Project:
     """Lock the Project root at a command's linearization point.
 
@@ -59,7 +46,7 @@ async def lock_project_delete(
     project_id: str,
     workspace_id: str,
     *,
-    message: str = "project not found",
+    message: str = "Project not found",
 ) -> Project:
     """Lock a Project that is about to be deleted with a full UPDATE lock."""
     project = await db.scalar(
@@ -76,13 +63,14 @@ async def lock_project_delete(
 async def guard_project(
     db: AsyncSession,
     project_id: str,
+    workspace_id: str,
     *,
     state: ProjectState | None = None,
     participation: ProjectParticipation | None = None,
-    message: str = "project not found",
+    message: str = "Project not found",
 ) -> Project:
     """Acquire a shared root lock for short-lived association commands."""
-    predicates = [Project.id == project_id]
+    predicates = [Project.id == project_id, Project.workspace_id == workspace_id]
     if state is not None:
         predicates.append(Project.state == state)
     if participation is not None:

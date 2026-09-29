@@ -105,6 +105,51 @@ test('an explicit Workspace URL wins over the saved default, and switching chang
 	await expect.poll(() => itemRequests).toContain('/api/v1/workspaces/workspace-2/items');
 });
 
+test('an archived Workspace selected as default opens again from the root', async ({ page }) => {
+	await mockWorkspaces(page);
+	await page.route('**/api/v1/session', (route) =>
+		route.fulfill({
+			json: {
+				authenticated: true,
+				user: {
+					id: 'user-1',
+					username: 'reader',
+					role: 'member',
+					authorization: { allowed: [] }
+				}
+			}
+		})
+	);
+	const archived = {
+		id: 'workspace-2',
+		name: 'Archive',
+		owner_id: 'user-1',
+		state: 'archived',
+		current_role: 'owner',
+		governance_suspended: false,
+		authorization: { allowed: ['workspace.read', 'workspace.export', 'workspace.restore'] }
+	};
+	await page.route('**/api/v1/workspaces', (route) =>
+		route.fulfill({
+			json: [{ ...archived, id: 'workspace-1', name: 'Research', state: 'active' }, archived]
+		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-2', (route) =>
+		route.fulfill({ json: archived })
+	);
+	await page.route('**/api/v1/workspaces/workspace-2/dashboard', (route) =>
+		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 0 } })
+	);
+
+	await page.goto('/workspace');
+	await page.getByRole('link', { name: 'Open workspace Archive' }).click();
+	await page.goto('/');
+	await expect(page).toHaveURL(/\/workspace\/workspace-2$/);
+	await expect
+		.poll(() => page.evaluate(() => localStorage.getItem('quirebase:default-workspace')))
+		.toBe('workspace-2');
+});
+
 test('workspace creation submits an explicit owner and opens the Workspace when assigned to self', async ({
 	page
 }) => {

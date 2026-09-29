@@ -4,7 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from quirebase.web.api.common import AuthorizationView
+from quirebase.web.api.common import WorkspaceAuthorizationView
 from quirebase.web.api.library_schemas import ItemSearchView, item_search_view
 
 
@@ -16,7 +16,7 @@ class ProjectSummaryView(BaseModel):
     participation: Literal["workspace", "open", "managed"]
     is_member: bool
     description: str = ""
-    authorization: AuthorizationView
+    authorization: WorkspaceAuthorizationView
 
 
 class ProjectMemberView(BaseModel):
@@ -32,7 +32,7 @@ class ProjectDetailView(ProjectSummaryView):
 def project_detail_view(
     workspace: Any,
     *,
-    authorization: AuthorizationView,
+    authorization: WorkspaceAuthorizationView,
 ) -> ProjectDetailView:
     return ProjectDetailView(
         id=workspace.project.id,

@@ -40,16 +40,23 @@ class OkView(BaseModel):
     ok: bool = True
 
 
-class AuthorizationView(BaseModel):
-    """Canonical resource-action keys; clients check this set, never reconstruct policy."""
+class WorkspaceAuthorizationView(BaseModel):
+    """Workspace resource-action decisions evaluated by the server."""
 
-    allowed: list[ResourceAction | SystemAction]
+    allowed: list[ResourceAction]
     relations: dict[str, list[str]] = Field(default_factory=dict)
 
 
-def authorization_view(projection: AuthorizationProjection) -> AuthorizationView:
-    return AuthorizationView(
-        allowed=list(projection.allowed),
+class SystemAuthorizationView(BaseModel):
+    """Instance resource-action decisions evaluated by the server."""
+
+    allowed: list[SystemAction]
+    relations: dict[str, list[str]] = Field(default_factory=dict)
+
+
+def authorization_view(projection: AuthorizationProjection) -> WorkspaceAuthorizationView:
+    return WorkspaceAuthorizationView(
+        allowed=[ResourceAction(action.value) for action in projection.allowed],
         relations={
             action.value: list(relations)
             for action, relations in projection.relations.items()
@@ -58,8 +65,16 @@ def authorization_view(projection: AuthorizationProjection) -> AuthorizationView
     )
 
 
-def system_authorization_view(role: str) -> AuthorizationView:
-    return authorization_view(system_decisions(role))
+def system_authorization_view(role: str) -> SystemAuthorizationView:
+    projection = system_decisions(role)
+    return SystemAuthorizationView(
+        allowed=[SystemAction(action.value) for action in projection.allowed],
+        relations={
+            action.value: list(relations)
+            for action, relations in projection.relations.items()
+            if relations
+        },
+    )
 
 
 class WorkflowStatusView(BaseModel):

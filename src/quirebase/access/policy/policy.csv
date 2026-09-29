@@ -74,11 +74,11 @@ p, workspace:admin, workspace, archive, active, any
 p, workspace:admin, workspace, restore, archived, any
 p, workspace:admin, workspace, update, active, any
 p, workspace:admin, workspace_invitation, create, active, member
-p, workspace:admin, workspace_invitation, read, active, any
+p, workspace:admin, workspace_invitation, read, (active|archived), any
 p, workspace:admin, workspace_invitation, revoke, active, any
 p, workspace:admin, workspace_member, change_role, active, member
 p, workspace:admin, workspace_member, reactivate, active, member
-p, workspace:admin, workspace_member, read, active, any
+p, workspace:admin, workspace_member, read, (active|archived), any
 p, workspace:admin, workspace_member, suspend, active, member
 p, workspace:admin, workspace_member, terminate, active, member
 
