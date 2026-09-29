@@ -300,7 +300,10 @@ async def editable_annotation_reply_ids(
             annotation.author_id == user.id
             and private_allowed["own" if reply.author_id == user.id else "other"]
             if annotation.scope is AnnotationScope.private
-            else annotation.project_item_id in project_item_ids
+            else (
+                annotation.project_item_id in project_item_ids
+                and project_allowed["own" if reply.author_id == user.id else "other"]
+            )
         )
     }
 

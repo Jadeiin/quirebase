@@ -494,6 +494,44 @@ async def test_annotation_editability_projection_respects_managed_project_partic
 
 
 @pytest.mark.anyio
+async def test_annotation_reply_editability_projection_checks_each_reply_author(async_db):
+    (
+        author,
+        reviewer,
+        _item,
+        _project,
+        _revision,
+        annotation,
+        author_reply,
+    ) = await _shared_annotation_context(async_db, "reply-editability-authorship")
+    workspace_id = fixture_workspace_id(author)
+    membership = await async_db.scalar(
+        select(WorkspaceMember).where(
+            WorkspaceMember.workspace_id == workspace_id,
+            WorkspaceMember.user_id == reviewer.id,
+        )
+    )
+    assert membership is not None
+    membership.role = WorkspaceRole.reviewer
+    reviewer_reply = PdfAnnotationReply(
+        workspace_id=workspace_id,
+        annotation_id=annotation.id,
+        author_id=reviewer.id,
+        body="Reviewer reply",
+    )
+    async_db.add(reviewer_reply)
+    await async_db.commit()
+
+    assert await editable_annotation_reply_ids(
+        async_db,
+        reviewer,
+        workspace_id,
+        [author_reply, reviewer_reply],
+        {annotation.id: annotation},
+    ) == {reviewer_reply.id}
+
+
+@pytest.mark.anyio
 async def test_annotation_editability_helpers_hide_missing_workspace_membership(async_db):
     (
         author,
@@ -640,6 +678,32 @@ async def test_invitation_acceptance_records_system_authorization(async_db):
     assert event is not None
     assert event.authorization_role == invitee.role
     assert event.authorization_resource_action == "workspace_invitation.accept"
+
+
+@pytest.mark.anyio
+async def test_invitation_creation_audit_references_invitation_and_invitee(async_db):
+    owner = await _user(async_db, "invitation-create-audit-owner")
+    invitee = await _user(async_db, "invitation-create-audit-invitee")
+    workspace_id = fixture_workspace_id(owner)
+    invitation, _token = await invite_workspace_member(
+        async_db,
+        owner,
+        workspace_id,
+        invitee.id,
+        WorkspaceRole.viewer,
+    )
+
+    event = await async_db.scalar(
+        select(AuditEvent).where(
+            AuditEvent.action == "workspace.invitation.create",
+            AuditEvent.target_id == invitation.id,
+        )
+    )
+
+    assert event is not None
+    assert event.workspace_id == workspace_id
+    assert json.loads(event.detail) == {"user_id": invitee.id, "role": "viewer"}
+    assert event.authorization_resource_action == "workspace_invitation.create"
 
 
 @pytest.mark.anyio

@@ -367,12 +367,14 @@ async def invite_workspace_member(
         expires_at=normalized_expiry,
     )
     db.add(invitation)
+    await db.flush()
     record_event(
         db,
         actor.id,
         "workspace.invitation.create",
         "workspace_invitation",
         invitation.id,
+        detail={"user_id": target.id, "role": requested.value},
         workspace_id=workspace_id,
         authorization_role=context.role.value,
         authorization_resource_action=ResourceAction.workspace_invitation_create.value,
