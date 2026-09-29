@@ -19,7 +19,9 @@
 				>{[
 					event.workspace_id ? `Workspace ${event.workspace_id}` : '',
 					event.project_id ? `Project ${event.project_id}` : '',
-					event.authorization_capability ? `Capability ${event.authorization_capability}` : '',
+					event.authorization_resource_action
+						? `Decision ${event.authorization_resource_action}`
+						: '',
 					event.authorization_role ? `Role ${event.authorization_role}` : '',
 					event.source ? `Source ${event.source}` : '',
 					event.result ? `Result ${event.result}` : ''

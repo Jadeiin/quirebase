@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from sqlalchemy import select
 from workspace_helpers import accessible_workspace_id
 
+from quirebase.access import SystemAction
 from quirebase.accounts import (
     authenticate_user,
     change_user_role,
@@ -66,10 +69,39 @@ async def test_admin_create_user_and_authenticate(async_db):
     )
     assert event is not None
     assert event.actor_id == admin.id
+    assert event.authorization_resource_action == SystemAction.users_create.value
 
     # Test authentication with new user
     session, _token = await authenticate_user(db, "127.0.0.1", "new_member_1", "securepass123456")
     assert session.user_id == new_user.id
+
+
+@pytest.mark.anyio
+async def test_admin_creation_hashes_before_final_authorization_lock(async_db, monkeypatch):
+    admin = await create_test_admin(async_db, "admin-hash-order")
+    events: list[str] = []
+
+    async def authorize(_db, actor, _action, *, lock=None, **_kwargs):
+        await asyncio.sleep(0)
+        events.append(f"authorize:{lock}")
+        return actor
+
+    async def hash_password(_password: str) -> str:
+        await asyncio.sleep(0)
+        events.append("hash")
+        return "precomputed-password-hash"
+
+    monkeypatch.setattr("quirebase.accounts.administration.require_system_action", authorize)
+    monkeypatch.setattr("quirebase.accounts.administration.hash_password_async", hash_password)
+
+    await create_user_admin(
+        async_db,
+        admin,
+        "admin-created-after-hash",
+        "password123456",
+    )
+
+    assert events == ["authorize:None", "hash", "authorize:shared"]
 
 
 @pytest.mark.anyio
@@ -128,6 +160,14 @@ async def test_admin_toggle_user_status_and_session_revocation(async_db):
     await update_user_status(db, admin, user.id, active=False)
     assert user.active is False
 
+    event = await db.scalar(
+        select(AuditEvent).where(
+            AuditEvent.action == "admin.user.status_update", AuditEvent.target_id == user.id
+        )
+    )
+    assert event is not None
+    assert event.authorization_resource_action == SystemAction.users_status_manage.value
+
     # Sessions must be wiped
     active_sessions = list(
         (await db.scalars(select(LoginSession).where(LoginSession.user_id == user.id))).all()
@@ -150,6 +190,14 @@ async def test_admin_change_user_role(async_db):
     await change_user_role(db, admin, user.id, new_role="administrator")
     assert user.role == "administrator"
 
+    event = await db.scalar(
+        select(AuditEvent).where(
+            AuditEvent.action == "admin.user.role_change", AuditEvent.target_id == user.id
+        )
+    )
+    assert event is not None
+    assert event.authorization_resource_action == SystemAction.users_roles_manage.value
+
     # Self-demotion must be blocked
     with pytest.raises(PermissionDenied, match="cannot demote their own account"):
         await change_user_role(db, admin, admin.id, new_role="member")
@@ -164,6 +212,14 @@ async def test_admin_reset_password(async_db):
     await db.commit()
 
     await reset_user_password(db, admin, user.id, "brand_new_pass_456")
+
+    event = await db.scalar(
+        select(AuditEvent).where(
+            AuditEvent.action == "admin.user.password_reset", AuditEvent.target_id == user.id
+        )
+    )
+    assert event is not None
+    assert event.authorization_resource_action == SystemAction.users_password_reset.value
 
     # Old session is revoked
     assert (
@@ -193,6 +249,13 @@ async def test_admin_revoke_sessions(async_db):
 
     revoked = await revoke_user_sessions(db, admin, user.id)
     assert revoked == 2
+    event = await db.scalar(
+        select(AuditEvent).where(
+            AuditEvent.action == "admin.user.sessions_revoked", AuditEvent.target_id == user.id
+        )
+    )
+    assert event is not None
+    assert event.authorization_resource_action == SystemAction.users_sessions_revoke.value
     assert (
         len(
             list(

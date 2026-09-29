@@ -15,9 +15,14 @@ from typing import TYPE_CHECKING, Any
 
 import stream_zip
 from inquiro.richtext import convert_rich_text
-from sqlalchemy import and_, or_, select
+from sqlalchemy import select
 
-from quirebase.access import Capability, require_workspace_capability, visible_project_ids_query
+from quirebase.access import (
+    ResourceAction,
+    require_workspace_action,
+    visible_annotation_scope_predicate,
+    visible_project_ids_query,
+)
 from quirebase.access.documents import require_revision
 from quirebase.access.items import require_accessible_items
 from quirebase.audit import record_event
@@ -27,7 +32,6 @@ from quirebase.core.timezones import annotation_export_timezone, as_utc
 from quirebase.documents.annotations import select_visible_annotations
 from quirebase.documents.pdf import export_annotations
 from quirebase.models import (
-    AnnotationScope,
     Attachment,
     FileRevision,
     Item,
@@ -170,7 +174,7 @@ async def _own_annotations(
     db: AsyncSession, user: User, revision: FileRevision
 ) -> list[PdfAnnotation]:
     workspace_id = revision.workspace_id
-    context = await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     visible_projects = visible_project_ids_query(context)
     visible_project_items = select(ProjectItem.id).where(
         ProjectItem.workspace_id == workspace_id,
@@ -184,16 +188,13 @@ async def _own_annotations(
                 .where(
                     PdfAnnotation.workspace_id == workspace_id,
                     PdfAnnotation.file_revision_id == revision.id,
-                    PdfAnnotation.author_id == user.id,
                     PdfAnnotation.deleted_at.is_(None),
                     PdfAnnotation.hidden_at.is_(None),
                     PdfAnnotation.archived_at.is_(None),
-                    or_(
-                        PdfAnnotation.scope == AnnotationScope.private,
-                        and_(
-                            PdfAnnotation.scope == AnnotationScope.project,
-                            PdfAnnotation.project_item_id.in_(visible_project_items),
-                        ),
+                    visible_annotation_scope_predicate(
+                        context,
+                        project_item_ids=visible_project_items,
+                        relations=("own",),
                     ),
                 )
                 .order_by(PdfAnnotation.created_at)
@@ -369,7 +370,7 @@ async def create_item_document_bundle(
             "revision_ids": revision_ids or [],
         },
         workspace_id=workspace_id,
-        authorization_capability=Capability.workspace_export.value,
+        authorization_resource_action=ResourceAction.workspace_export.value,
     )
     await db.commit()
     active_reads = _ActiveReads()
@@ -465,7 +466,7 @@ async def _record_revision_pdf_export(
             "project_id": project_id,
         },
         workspace_id=workspace_id,
-        authorization_capability=Capability.workspace_export.value,
+        authorization_resource_action=ResourceAction.workspace_export.value,
     )
     await db.commit()
 

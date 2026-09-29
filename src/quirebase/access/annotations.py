@@ -1,14 +1,19 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import select
+from sqlalchemy import and_, false, or_, select
 
 from quirebase.access.items import require_readable_item
 from quirebase.access.workspaces import (
-    Capability,
+    ProjectContext,
+    ResourceAction,
+    WorkspaceContext,
+    action_allowed,
     require_project_context,
-    require_workspace_capability,
+    require_workspace_action,
+    resolve_workspace_context,
+    visible_project_ids_query,
 )
 from quirebase.core.errors import (
     PermissionDenied,
@@ -21,19 +26,57 @@ from quirebase.models import (
     FileRevision,
     PdfAnnotation,
     PdfAnnotationReply,
+    Project,
     ProjectItem,
+    ProjectState,
     User,
 )
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.sql.elements import ColumnElement
+
+
+def visible_annotation_scope_predicate(
+    context: WorkspaceContext,
+    *,
+    project_item_ids: Any | None = None,
+    include_private: bool = True,
+    include_project: bool = True,
+    relations: tuple[str, ...] = ("own", "other"),
+) -> ColumnElement[bool]:
+    """Build the SQL scope predicate from Casbin read decisions and caller-loaded facts."""
+
+    def authorship_predicate(resource: str) -> ColumnElement[bool] | None:
+        authorship: list[ColumnElement[bool]] = []
+        read_action = ResourceAction(f"{resource}.read")
+        if "own" in relations and action_allowed(context, read_action, relation="own"):
+            authorship.append(PdfAnnotation.author_id == context.actor_id)
+        if "other" in relations and action_allowed(context, read_action, relation="other"):
+            authorship.append(PdfAnnotation.author_id != context.actor_id)
+        return or_(*authorship) if authorship else None
+
+    scopes: list[ColumnElement[bool]] = []
+    private_authorship = authorship_predicate("private_annotation")
+    if include_private and private_authorship is not None:
+        scopes.append(and_(PdfAnnotation.scope == AnnotationScope.private, private_authorship))
+    project_authorship = authorship_predicate("project_annotation")
+    if include_project and project_item_ids is not None and project_authorship is not None:
+        scopes.append(
+            and_(
+                PdfAnnotation.scope == AnnotationScope.project,
+                project_authorship,
+                PdfAnnotation.project_item_id.in_(project_item_ids),
+            )
+        )
+    return or_(*scopes) if scopes else false()
 
 
 async def can_edit_annotation(
     db: AsyncSession, user: User, workspace_id: str, annotation: PdfAnnotation
 ) -> bool:
     try:
-        await _require_annotation_write(db, user, workspace_id, annotation)
+        await _require_annotation_action(db, user, workspace_id, annotation, "update")
     except (
         PermissionDenied,
         ResourceUnavailable,
@@ -44,9 +87,15 @@ async def can_edit_annotation(
     return True
 
 
-async def _require_annotation_project_write(
-    db: AsyncSession, user: User, workspace_id: str, annotation: PdfAnnotation
-) -> None:
+async def _annotation_project_context(
+    db: AsyncSession,
+    user: User,
+    workspace_id: str,
+    annotation: PdfAnnotation,
+    operation: ResourceAction,
+    *,
+    relation: str = "any",
+) -> ProjectContext:
     project_item = await db.scalar(
         select(ProjectItem).where(
             ProjectItem.id == annotation.project_item_id,
@@ -55,32 +104,57 @@ async def _require_annotation_project_write(
     )
     if project_item is None:
         raise ResourceUnavailable("Annotation Project not found")
-    await require_project_context(
+    return await require_project_context(
         db,
         user,
         workspace_id,
         project_item.project_id,
-        Capability.annotations_project_write,
+        operation,
+        relation=relation,
     )
 
 
-async def _require_annotation_write(
-    db: AsyncSession, user: User, workspace_id: str, annotation: PdfAnnotation
+async def _require_annotation_action(
+    db: AsyncSession,
+    user: User,
+    workspace_id: str,
+    annotation: PdfAnnotation,
+    action: str,
 ) -> None:
     if (
         annotation.workspace_id != workspace_id
-        or annotation.author_id != user.id
         or annotation.hidden_at is not None
         or annotation.archived_at is not None
         or annotation.locked_at is not None
     ):
         raise ResourceUnavailable("Annotation not found")
     if annotation.scope is AnnotationScope.private:
-        await require_workspace_capability(
-            db, user, workspace_id, Capability.annotations_private_write
-        )
+        resource = "private_annotation"
     else:
-        await _require_annotation_project_write(db, user, workspace_id, annotation)
+        resource = "project_annotation"
+    if annotation.author_id != user.id:
+        raise ResourceUnavailable("Annotation not found")
+    resource_action = ResourceAction(f"{resource}.{action}")
+    try:
+        if annotation.scope is AnnotationScope.private:
+            await require_workspace_action(
+                db,
+                user,
+                workspace_id,
+                resource_action,
+                relation="own",
+            )
+        else:
+            await _annotation_project_context(
+                db,
+                user,
+                workspace_id,
+                annotation,
+                resource_action,
+                relation="own",
+            )
+    except PermissionDenied as error:
+        raise ResourceUnavailable("Annotation not found") from error
 
 
 async def editable_annotation_ids(
@@ -89,11 +163,78 @@ async def editable_annotation_ids(
     workspace_id: str,
     annotations: list[PdfAnnotation],
 ) -> set[str]:
+    candidates = [
+        annotation
+        for annotation in annotations
+        if annotation.workspace_id == workspace_id
+        and annotation.author_id == user.id
+        and annotation.hidden_at is None
+        and annotation.archived_at is None
+        and annotation.locked_at is None
+    ]
+    if not candidates:
+        return set()
+    try:
+        context = await resolve_workspace_context(db, user, workspace_id)
+    except (
+        PermissionDenied,
+        ResourceUnavailable,
+        WorkspaceLifecycleError,
+        WorkspaceMembershipRequired,
+    ):
+        return set()
+    private_allowed = action_allowed(
+        context, ResourceAction.private_annotation_update, relation="own"
+    )
+    project_allowed = action_allowed(
+        context, ResourceAction.project_annotation_update, relation="own"
+    )
+    project_item_ids = (
+        await _active_visible_project_item_ids(
+            db,
+            context,
+            {
+                annotation.project_item_id
+                for annotation in candidates
+                if annotation.scope is AnnotationScope.project
+                and annotation.project_item_id is not None
+            },
+        )
+        if project_allowed
+        else set()
+    )
     return {
         annotation.id
-        for annotation in annotations
-        if await can_edit_annotation(db, user, workspace_id, annotation)
+        for annotation in candidates
+        if (
+            private_allowed
+            if annotation.scope is AnnotationScope.private
+            else annotation.project_item_id in project_item_ids
+        )
     }
+
+
+async def _active_visible_project_item_ids(
+    db: AsyncSession, context: WorkspaceContext, project_item_ids: set[str]
+) -> set[str]:
+    """Batch Project facts for read hints; mutation paths reauthorize under locks."""
+
+    if not project_item_ids:
+        return set()
+    return set(
+        (
+            await db.scalars(
+                select(ProjectItem.id)
+                .join(Project, Project.id == ProjectItem.project_id)
+                .where(
+                    ProjectItem.id.in_(project_item_ids),
+                    ProjectItem.workspace_id == context.workspace_id,
+                    Project.state == ProjectState.active,
+                    Project.id.in_(visible_project_ids_query(context)),
+                )
+            )
+        ).all()
+    )
 
 
 async def editable_annotation_reply_ids(
@@ -102,54 +243,66 @@ async def editable_annotation_reply_ids(
     workspace_id: str,
     replies: list[PdfAnnotationReply],
     annotations: dict[str, PdfAnnotation],
+    *,
+    action: str = "update",
 ) -> set[str]:
     if not replies:
         return set()
-    editable: set[str] = set()
-    writable_project_items: dict[str, bool] = {}
-    private_write: bool | None = None
+    candidates: list[tuple[PdfAnnotationReply, PdfAnnotation]] = []
     for reply in replies:
         annotation = annotations.get(reply.annotation_id)
         if (
             reply.workspace_id != workspace_id
-            or reply.author_id != user.id
             or annotation is None
+            or annotation.workspace_id != workspace_id
             or annotation.hidden_at is not None
             or annotation.archived_at is not None
             or annotation.locked_at is not None
         ):
             continue
-        if annotation.scope is AnnotationScope.private:
-            if annotation.author_id != user.id:
-                continue
-            if private_write is None:
-                try:
-                    await require_workspace_capability(
-                        db, user, workspace_id, Capability.annotations_private_write
-                    )
-                    private_write = True
-                except (PermissionDenied, WorkspaceLifecycleError, WorkspaceMembershipRequired):
-                    private_write = False
-            if private_write:
-                editable.add(reply.id)
-            continue
-        if annotation.project_item_id is None:
-            continue
-        project_item_id = annotation.project_item_id
-        if project_item_id not in writable_project_items:
-            try:
-                await _require_annotation_project_write(db, user, workspace_id, annotation)
-                writable_project_items[project_item_id] = True
-            except (
-                PermissionDenied,
-                ResourceUnavailable,
-                WorkspaceLifecycleError,
-                WorkspaceMembershipRequired,
-            ):
-                writable_project_items[project_item_id] = False
-        if writable_project_items[project_item_id]:
-            editable.add(reply.id)
-    return editable
+        candidates.append((reply, annotation))
+    if not candidates:
+        return set()
+    try:
+        context = await resolve_workspace_context(db, user, workspace_id)
+    except (
+        PermissionDenied,
+        ResourceUnavailable,
+        WorkspaceLifecycleError,
+        WorkspaceMembershipRequired,
+    ):
+        return set()
+    private_action = ResourceAction(f"private_annotation_reply.{action}")
+    project_action = ResourceAction(f"project_annotation_reply.{action}")
+    private_allowed = {
+        relation: action_allowed(context, private_action, relation=relation)
+        for relation in ("own", "other")
+    }
+    project_allowed = {
+        relation: action_allowed(context, project_action, relation=relation)
+        for relation in ("own", "other")
+    }
+    project_item_ids = await _active_visible_project_item_ids(
+        db,
+        context,
+        {
+            annotation.project_item_id
+            for reply, annotation in candidates
+            if annotation.scope is AnnotationScope.project
+            and annotation.project_item_id is not None
+            and project_allowed["own" if reply.author_id == user.id else "other"]
+        },
+    )
+    return {
+        reply.id
+        for reply, annotation in candidates
+        if (
+            annotation.author_id == user.id
+            and private_allowed["own" if reply.author_id == user.id else "other"]
+            if annotation.scope is AnnotationScope.private
+            else annotation.project_item_id in project_item_ids
+        )
+    }
 
 
 async def _visible_annotation(
@@ -188,7 +341,13 @@ async def _visible_annotation(
     ):
         raise ResourceUnavailable("Annotation not found")
     if record.scope is AnnotationScope.private:
-        if record.author_id != user.id:
+        private_context = await resolve_workspace_context(db, user, workspace_id)
+        relation = "own" if record.author_id == private_context.actor_id else "other"
+        if not action_allowed(
+            private_context,
+            ResourceAction.private_annotation_read,
+            relation=relation,
+        ):
             raise ResourceUnavailable("Annotation not found")
         return record
     project_item = await db.scalar(
@@ -200,13 +359,20 @@ async def _visible_annotation(
     )
     if project_item is None:
         raise ResourceUnavailable("Annotation not found")
-    await require_project_context(
+    project_context = await require_project_context(
         db,
         user,
         workspace_id,
         project_item.project_id,
-        Capability.workspace_read,
+        ResourceAction.workspace_read,
     )
+    relation = "own" if record.author_id == project_context.workspace.actor_id else "other"
+    if not action_allowed(
+        project_context.workspace,
+        ResourceAction.project_annotation_read,
+        relation=relation,
+    ):
+        raise ResourceUnavailable("Annotation not found")
     return record
 
 
@@ -228,7 +394,19 @@ async def require_editable_annotation(
     annotation_id: str,
 ) -> PdfAnnotation:
     record = await require_visible_annotation(db, user, workspace_id, item_id, annotation_id)
-    await _require_annotation_write(db, user, workspace_id, record)
+    await _require_annotation_action(db, user, workspace_id, record, "update")
+    return record
+
+
+async def require_deletable_annotation(
+    db: AsyncSession,
+    user: User,
+    workspace_id: str,
+    item_id: str,
+    annotation_id: str,
+) -> PdfAnnotation:
+    record = await require_visible_annotation(db, user, workspace_id, item_id, annotation_id)
+    await _require_annotation_action(db, user, workspace_id, record, "delete")
     return record
 
 
@@ -240,7 +418,7 @@ async def require_restorable_annotation(
     annotation_id: str,
 ) -> PdfAnnotation:
     record = await _visible_annotation(db, user, workspace_id, item_id, annotation_id, deleted=True)
-    await _require_annotation_write(db, user, workspace_id, record)
+    await _require_annotation_action(db, user, workspace_id, record, "restore")
     return record
 
 
@@ -256,8 +434,8 @@ async def require_visible_annotation_for_reply_mutation(
     expected_scope = candidate.scope
     expected_project_item_id = candidate.project_item_id
     if expected_scope is AnnotationScope.private:
-        context = await require_workspace_capability(
-            db, user, workspace_id, Capability.annotations_private_write
+        context = await require_workspace_action(
+            db, user, workspace_id, ResourceAction.workspace_read
         )
         locked_user = context.actor
     else:
@@ -277,7 +455,7 @@ async def require_visible_annotation_for_reply_mutation(
             user,
             workspace_id,
             project_item.project_id,
-            Capability.annotations_project_write,
+            ResourceAction.workspace_read,
         )
         locked_project_item = await db.scalar(
             select(ProjectItem)

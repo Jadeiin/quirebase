@@ -9,7 +9,15 @@ const project = {
 	state: 'active',
 	visibility: 'managed',
 	is_member: false,
-	allowed_actions: ['settings', 'archive', 'items.manage', 'members.manage', 'discussion.write'],
+	authorization: {
+		allowed: [
+			'project.update',
+			'project.archive',
+			'project_item.manage',
+			'project_membership.manage',
+			'project_discussion.create'
+		]
+	},
 	items: [],
 	members: [{ user_id: 'member-1', username: 'researcher' }]
 };
@@ -17,7 +25,8 @@ const project = {
 async function mockWorkspaceRole(
 	page: Parameters<typeof mockSession>[0],
 	role: 'owner' | 'admin' | 'editor' | 'viewer',
-	capabilities: string[]
+	allowedActions: string[],
+	relations: Record<string, string[]> = {}
 ) {
 	await page.route('**/api/v1/workspaces/workspace-1', (route) =>
 		route.fulfill({
@@ -28,7 +37,7 @@ async function mockWorkspaceRole(
 				state: 'active',
 				current_role: role,
 				governance_suspended: false,
-				effective_capabilities: capabilities
+				authorization: { allowed: allowedActions, relations }
 			}
 		})
 	);
@@ -40,15 +49,15 @@ test('Workspace admins can open and govern managed Projects without being partic
 	await mockSession(page);
 	await mockWorkspaceRole(page, 'admin', [
 		'workspace.read',
-		'projects.manage',
-		'projects.members.manage',
-		'discussion.write'
+		'project_item.manage',
+		'project_membership.manage',
+		'project_discussion.create'
 	]);
 	await page.route('**/api/v1/workspaces/workspace-1/projects/joinable', (route) =>
 		route.fulfill({ json: [] })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) =>
-		route.fulfill({ json: [{ ...project, allowed_actions: [...project.allowed_actions] }] })
+		route.fulfill({ json: [project] })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/discussions', (route) =>
 		route.fulfill({ json: [] })
@@ -79,7 +88,7 @@ test('Workspace viewers can read Project Discussion without mutation controls', 
 				name: 'Shared reading group',
 				visibility: 'workspace',
 				is_member: true,
-				allowed_actions: [],
+				authorization: { allowed: [] },
 				members: []
 			}
 		})
@@ -93,8 +102,9 @@ test('Workspace viewers can read Project Discussion without mutation controls', 
 						id: 'message-1',
 						author_id: 'editor-1',
 						author_username: 'editor',
+						mine: false,
 						body: 'Read-only project note',
-						allowed_actions: [],
+						authorization: { allowed: [] },
 						created_at: '2026-09-01T12:00:00Z'
 					}
 				]
@@ -120,7 +130,7 @@ test('an unjoined archived open Project stays discoverable and its Discussion lo
 		state: 'archived',
 		visibility: 'open',
 		is_member: false,
-		allowed_actions: [],
+		authorization: { allowed: [] },
 		members: []
 	};
 	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) =>
@@ -139,8 +149,9 @@ test('an unjoined archived open Project stays discoverable and its Discussion lo
 					id: 'archived-message',
 					author_id: 'editor-1',
 					author_username: 'editor',
+					mine: false,
 					body: 'Preserved discussion',
-					allowed_actions: [],
+					authorization: { allowed: [] },
 					created_at: '2026-09-01T12:00:00Z'
 				}
 			]
@@ -163,12 +174,17 @@ test('Workspace admin moderates managed Project Discussion with an audited reaso
 	await mockSession(page);
 	await mockWorkspaceRole(page, 'admin', [
 		'workspace.read',
-		'discussion.write',
-		'discussion.moderate'
+		'project_discussion.create',
+		'project_discussion.delete'
 	]);
 	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1', (route) =>
 		route.fulfill({
-			json: { ...project, allowed_actions: ['discussion.write', 'discussion.moderate'] }
+			json: {
+				...project,
+				authorization: {
+					allowed: ['project_discussion.create', 'project_discussion.delete']
+				}
+			}
 		})
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/discussions', (route) =>
@@ -178,9 +194,10 @@ test('Workspace admin moderates managed Project Discussion with an audited reaso
 					id: 'message-1',
 					author_id: 'member-1',
 					author_username: 'researcher',
+					mine: false,
 					body: 'Project note',
 					created_at: '2026-09-01T12:00:00Z',
-					allowed_actions: ['moderate']
+					authorization: { allowed: ['project_discussion.delete'] }
 				}
 			]
 		})
@@ -206,12 +223,12 @@ test('a Workspace editor can create an open Project but not a managed Project', 
 	page
 }) => {
 	await mockSession(page);
-	await mockWorkspaceRole(page, 'editor', [
-		'workspace.read',
-		'projects.create',
-		'projects.manage',
-		'discussion.write'
-	]);
+	await mockWorkspaceRole(
+		page,
+		'editor',
+		['workspace.read', 'project.create', 'project_item.manage', 'project_discussion.create'],
+		{ 'project.create': ['open', 'workspace'] }
+	);
 	let creation: Record<string, unknown> | null = null;
 	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) => {
 		if (route.request().method() === 'POST') {
@@ -234,7 +251,14 @@ test('a Workspace editor can create an open Project but not a managed Project', 
 				description: 'Scoped reading list',
 				is_member: true,
 				visibility: 'open',
-				allowed_actions: ['settings', 'archive', 'items.manage', 'discussion.write'],
+				authorization: {
+					allowed: [
+						'project.update',
+						'project.archive',
+						'project_item.manage',
+						'project_discussion.create'
+					]
+				},
 				members: [{ user_id: 'user-1', username: 'reader' }]
 			}
 		})
@@ -256,13 +280,12 @@ test('a Workspace editor can create an open Project but not a managed Project', 
 
 test('a Workspace owner can create an empty managed Project', async ({ page }) => {
 	await mockSession(page);
-	await mockWorkspaceRole(page, 'owner', [
-		'workspace.read',
-		'projects.create',
-		'projects.create_managed',
-		'projects.manage',
-		'projects.members.manage'
-	]);
+	await mockWorkspaceRole(
+		page,
+		'owner',
+		['workspace.read', 'project.create', 'project_item.manage', 'project_membership.manage'],
+		{ 'project.create': ['managed', 'open', 'workspace'] }
+	);
 	let creation: Record<string, unknown> | null = null;
 	await page.route('**/api/v1/workspaces/workspace-1/projects', (route) => {
 		if (route.request().method() === 'POST') {
@@ -285,7 +308,14 @@ test('a Workspace owner can create an empty managed Project', async ({ page }) =
 				id: 'managed-project',
 				name: 'ICRA 2027',
 				visibility: 'managed',
-				allowed_actions: ['settings', 'archive', 'items.manage', 'members.manage'],
+				authorization: {
+					allowed: [
+						'project.update',
+						'project.archive',
+						'project_item.manage',
+						'project_membership.manage'
+					]
+				},
 				members: []
 			}
 		})
@@ -325,18 +355,23 @@ test('a Workspace viewer cannot discover or deep-link into a managed Project the
 	await expect(page.getByText('Unable to load Project.')).toBeVisible();
 });
 
-test('Workspace capabilities govern Project settings and managed participation', async ({
+test('Workspace resource actions govern Project settings and managed participation', async ({
 	page
 }) => {
 	await mockSession(page);
-	await mockWorkspaceRole(page, 'owner', [
-		'workspace.read',
-		'projects.create_managed',
-		'projects.manage',
-		'projects.members.manage',
-		'projects.delete',
-		'discussion.write'
-	]);
+	await mockWorkspaceRole(
+		page,
+		'owner',
+		[
+			'workspace.read',
+			'project.create',
+			'project_item.manage',
+			'project_membership.manage',
+			'project.delete',
+			'project_discussion.create'
+		],
+		{ 'project.create': ['managed', 'open', 'workspace'] }
+	);
 	const mutations: Array<{ method: string; path: string; body: unknown }> = [];
 	let currentVisibility: 'workspace' | 'managed' = 'workspace';
 	let participants: Array<{ user_id: string; username: string }> = [];
@@ -353,14 +388,16 @@ test('Workspace capabilities govern Project settings and managed participation',
 					description: 'Initial',
 					visibility: currentVisibility,
 					is_member: currentVisibility === 'workspace',
-					allowed_actions: [
-						'settings',
-						'archive',
-						'items.manage',
-						...(currentVisibility === 'managed' ? ['members.manage'] : []),
-						'delete',
-						'discussion.write'
-					],
+					authorization: {
+						allowed: [
+							'project.update',
+							'project.archive',
+							'project_item.manage',
+							...(currentVisibility === 'managed' ? ['project_membership.manage'] : []),
+							'project.delete',
+							'project_discussion.create'
+						]
+					},
 					members: participants
 				}
 			});
@@ -409,8 +446,8 @@ test('a managed Project may have zero participants', async ({ page }) => {
 	await mockSession(page);
 	await mockWorkspaceRole(page, 'owner', [
 		'workspace.read',
-		'projects.manage',
-		'projects.members.manage'
+		'project_item.manage',
+		'project_membership.manage'
 	]);
 	let participants = [{ user_id: 'user-1', username: 'reader' }];
 	await page.route('**/api/v1/workspaces/workspace-1/projects/empty-project**', (route) => {
@@ -427,7 +464,7 @@ test('a managed Project may have zero participants', async ({ page }) => {
 				...project,
 				id: 'empty-project',
 				name: 'Paused direction',
-				allowed_actions: ['members.manage'],
+				authorization: { allowed: ['project_membership.manage'] },
 				members: participants
 			}
 		});

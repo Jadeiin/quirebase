@@ -42,6 +42,7 @@ from quirebase.models import (
     User,
     WorkspaceMember,
     WorkspaceRole,
+    WorkspaceState,
 )
 from quirebase.web.api import documents as documents_api
 
@@ -310,19 +311,66 @@ async def test_project_editor_can_edit_item_without_seeing_permanent_delete(
     try:
         workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
         owner_page = await owner_client.get(f"{workspace_base}/items/{item.id}/overview")
-        assert owner_page.json()["allowed_actions"] == {"edit": True, "delete": True}
+        assert {"item.update", "item.delete"} <= set(owner_page.json()["authorization"]["allowed"])
 
         editor_client = owner_client
         editor_client.cookies.set(get_settings().session_cookie, "editor-session")
         editor_page = await editor_client.get(f"{workspace_base}/items/{item.id}/overview")
         assert editor_page.status_code == 200
-        assert editor_page.json()["allowed_actions"] == {"edit": True, "delete": False}
+        assert "item.update" in editor_page.json()["authorization"]["allowed"]
+        assert "item.delete" not in editor_page.json()["authorization"]["allowed"]
 
         view = await open_item_section(db, editor, item.workspace_id, item.id, ItemSection.overview)
         assert view.can_edit is True
         assert view.can_delete is False
     finally:
         await owner_client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_item_overview_projects_copy_target_decisions_from_both_workspaces(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    actor = await db.get(User, item.created_by)
+    assert actor is not None
+    active_owner = User(username="copy-target-owner", password_hash="unused")
+    archived_owner = User(username="copy-archived-owner", password_hash="unused")
+    db.add_all([active_owner, archived_owner])
+    await db.flush()
+    active_target = await provision_initial_workspace(db, active_owner)
+    archived_target = await provision_initial_workspace(db, archived_owner)
+    archived_target.state = WorkspaceState.archived
+    db.add_all([
+        WorkspaceMember(
+            workspace_id=active_target.id,
+            user_id=actor.id,
+            role=WorkspaceRole.editor,
+            invited_by=active_owner.id,
+        ),
+        WorkspaceMember(
+            workspace_id=archived_target.id,
+            user_id=actor.id,
+            role=WorkspaceRole.editor,
+            invited_by=archived_owner.id,
+        ),
+    ])
+    await db.commit()
+
+    try:
+        response = await client.get(
+            f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/overview"
+        )
+        assert response.status_code == 200
+        targets = {target["id"]: target for target in response.json()["copy_targets"]}
+        assert targets[active_target.id]["authorization"]["allowed"] == ["item.copy"]
+        assert targets[archived_target.id]["authorization"]["allowed"] == []
+    finally:
+        await client.aclose()
         get_settings.cache_clear()
 
 

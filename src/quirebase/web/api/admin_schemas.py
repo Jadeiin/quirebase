@@ -113,7 +113,7 @@ class AdminAuditEventView(BaseModel):
     target_id: str | None = None
     target_ids: list[str] | None = None
     authorization_role: str | None = None
-    authorization_capability: str | None = None
+    authorization_resource_action: str | None = None
     result: str | None = None
     source: str | None = None
     detail: Any | None = None

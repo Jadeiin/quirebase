@@ -9,12 +9,13 @@ from typing import Any, Literal, TypedDict, cast
 from uuid import UUID
 
 from dbos import DBOS
-from sqlalchemy import and_, or_, select
+from sqlalchemy import select
 
 from quirebase.access import (
-    Capability,
+    ResourceAction,
     require_project_context,
-    require_workspace_capability,
+    require_workspace_action,
+    visible_annotation_scope_predicate,
 )
 from quirebase.audit import record_event
 from quirebase.core.config import get_settings
@@ -24,7 +25,6 @@ from quirebase.core.timezones import annotation_export_timezone
 from quirebase.core.workflows import LIBRARY_QUEUE, ads, enqueue_child_workflow
 from quirebase.documents.events import FILE_REVISION_CHANGED_WORKFLOW, OBJECT_CLEANUP_WORKFLOW
 from quirebase.models import (
-    AnnotationScope,
     Attachment,
     AttachmentRole,
     ExportArtifact,
@@ -79,7 +79,7 @@ async def _lock_upload_authority(
     if item is None:
         raise ValueError("Item is no longer writable")
     try:
-        await require_workspace_capability(db, actor, workspace_id, Capability.files_manage)
+        await require_workspace_action(db, actor, workspace_id, ResourceAction.file_manage)
     except Exception as error:
         raise ValueError("Item is no longer writable") from error
     return actor, item
@@ -292,7 +292,7 @@ async def commit_uploaded_revision(
         "file_revision",
         revision.id,
         workspace_id=workspace_id,
-        authorization_capability=Capability.files_manage.value,
+        authorization_resource_action=ResourceAction.file_manage.value,
     )
     return {"revision_id": revision.id, "item_id": item_id}
 
@@ -487,7 +487,7 @@ async def commit_uploaded_attachment(
         "attachment",
         attachment.id,
         workspace_id=workspace_id,
-        authorization_capability=Capability.files_manage.value,
+        authorization_resource_action=ResourceAction.file_manage.value,
     )
     return {"attachment_id": attachment.id, "item_id": item_id}
 
@@ -544,7 +544,9 @@ async def build_annotation_export(
         actor = await db.get(User, actor_id)
         if actor is None:
             raise PermissionError("actor no longer exists")
-        await require_workspace_capability(db, actor, workspace_id, Capability.workspace_export)
+        context = await require_workspace_action(
+            db, actor, workspace_id, ResourceAction.workspace_export
+        )
         revision = await db.scalar(
             select(FileRevision).where(
                 FileRevision.id == revision_id,
@@ -553,18 +555,10 @@ async def build_annotation_export(
         )
         if revision is None:
             raise ValueError("revision no longer exists")
-        scopes = []
         project_item_id: str | None = None
-        if include_private:
-            scopes.append(
-                and_(
-                    PdfAnnotation.scope == AnnotationScope.private,
-                    PdfAnnotation.author_id == actor_id,
-                )
-            )
         if project_id:
             await require_project_context(
-                db, actor, workspace_id, project_id, Capability.workspace_export
+                db, actor, workspace_id, project_id, ResourceAction.workspace_export
             )
             assignment = await db.scalar(
                 select(ProjectItem).where(
@@ -576,15 +570,10 @@ async def build_annotation_export(
             if assignment is None:
                 raise PermissionError("project assignment no longer exists")
             project_item_id = assignment.id
-            scopes.append(
-                and_(
-                    PdfAnnotation.scope == AnnotationScope.project,
-                    PdfAnnotation.project_item_id == assignment.id,
-                )
-            )
+        include_project = project_item_id is not None
         records = (
             []
-            if not scopes
+            if not include_private and not include_project
             else list(
                 (
                     await db.scalars(
@@ -594,7 +583,12 @@ async def build_annotation_export(
                             PdfAnnotation.deleted_at.is_(None),
                             PdfAnnotation.hidden_at.is_(None),
                             PdfAnnotation.archived_at.is_(None),
-                            or_(*scopes),
+                            visible_annotation_scope_predicate(
+                                context,
+                                project_item_ids=(project_item_id,) if include_project else None,
+                                include_private=include_private,
+                                include_project=include_project,
+                            ),
                         )
                     )
                 ).all()
@@ -694,7 +688,7 @@ async def record_annotation_export_artifact(
     actor = await db.get(User, actor_id)
     if actor is None:
         raise PermissionError("actor no longer exists")
-    await require_workspace_capability(db, actor, workspace_id, Capability.workspace_export)
+    await require_workspace_action(db, actor, workspace_id, ResourceAction.workspace_export)
     revision = await db.scalar(
         select(FileRevision)
         .where(
@@ -711,7 +705,7 @@ async def record_annotation_export_artifact(
         raise PermissionError("project assignment no longer exists")
     if project_id:
         await require_project_context(
-            db, actor, workspace_id, project_id, Capability.workspace_export
+            db, actor, workspace_id, project_id, ResourceAction.workspace_export
         )
         if result["project_item_id"] is None:
             raise PermissionError("project assignment no longer exists")

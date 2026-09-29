@@ -13,7 +13,7 @@ from quirebase.access.items import (
     visible_items_query,
 )
 from quirebase.access.tags import visible_tags_query
-from quirebase.access.workspaces import Capability, require_workspace_capability
+from quirebase.access.workspaces import ResourceAction, require_workspace_action
 from quirebase.audit import record_event
 from quirebase.core.errors import (
     DomainError,
@@ -58,7 +58,7 @@ def normalize_tag_name(name: str) -> str:
 
 
 async def get_or_create_tag(db: AsyncSession, user: User, workspace_id: str, name: str) -> Tag:
-    await require_workspace_capability(db, user, workspace_id, Capability.tags_create)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.tag_create)
     normalized = normalize_tag_name(name)
     normalized_key = normalized.casefold()
     tag = await db.scalar(
@@ -94,7 +94,7 @@ async def add_tag_to_item(
     db: AsyncSession, user: User, workspace_id: str, item_id: str, name: str
 ) -> ItemTag:
     await require_editable_item(db, user, workspace_id, item_id)
-    await require_workspace_capability(db, user, workspace_id, Capability.tags_use)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.tag_use)
     tag = await get_or_create_tag(db, user, workspace_id, name)
     return await _add_tag_id_to_item(db, user, workspace_id, item_id, tag.id)
 
@@ -143,7 +143,7 @@ async def _add_tag_id_to_item(
             "item",
             item_id,
             workspace_id=workspace_id,
-            authorization_capability=Capability.tags_use.value,
+            authorization_resource_action=ResourceAction.tag_use.value,
         )
     if commit:
         await db.commit()
@@ -154,7 +154,7 @@ async def add_existing_tag_to_item(
     db: AsyncSession, user: User, workspace_id: str, item_id: str, tag_id: str
 ) -> ItemTag:
     await require_editable_item(db, user, workspace_id, item_id)
-    await require_workspace_capability(db, user, workspace_id, Capability.tags_use)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.tag_use)
     if (
         await db.scalar(select(Tag.id).where(Tag.id == tag_id, Tag.workspace_id == workspace_id))
         is None
@@ -170,7 +170,7 @@ async def remove_tag_from_item(
     db: AsyncSession, user: User, workspace_id: str, item_id: str, tag_id: str
 ) -> None:
     await require_editable_item(db, user, workspace_id, item_id)
-    await require_workspace_capability(db, user, workspace_id, Capability.tags_use)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.tag_use)
     await _remove_tag_from_item(db, user, workspace_id, item_id, tag_id)
 
 
@@ -199,7 +199,7 @@ async def _remove_tag_from_item(
             item_id,
             detail={"tag_id": tag_id},
             workspace_id=workspace_id,
-            authorization_capability=Capability.tags_use.value,
+            authorization_resource_action=ResourceAction.tag_use.value,
         )
     if commit:
         await db.commit()
@@ -222,7 +222,7 @@ async def apply_item_tag_selection(
     existing Tag additions and new Tag additions share one transaction.
     """
     await require_editable_item(db, user, workspace_id, item_id)
-    await require_workspace_capability(db, user, workspace_id, Capability.tags_use)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.tag_use)
     try:
         remove_ids = set(remove_tag_ids or [])
         add_ids = set(tag_ids or [])
@@ -258,7 +258,7 @@ async def apply_item_tag_selection(
 async def rename_tag(
     db: AsyncSession, user: User, workspace_id: str, tag_id: str, name: str
 ) -> Tag:
-    await require_workspace_capability(db, user, workspace_id, Capability.tags_manage)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.tag_manage)
     tag = await db.scalar(
         select(Tag).where(Tag.id == tag_id, Tag.workspace_id == workspace_id).with_for_update()
     )
@@ -283,7 +283,7 @@ async def rename_tag(
         "tag",
         tag.id,
         workspace_id=workspace_id,
-        authorization_capability=Capability.tags_manage.value,
+        authorization_resource_action=ResourceAction.tag_manage.value,
     )
     try:
         await db.commit()
@@ -294,7 +294,7 @@ async def rename_tag(
 
 
 async def delete_tag(db: AsyncSession, user: User, workspace_id: str, tag_id: str) -> None:
-    await require_workspace_capability(db, user, workspace_id, Capability.tags_manage)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.tag_manage)
     # Deleting a taxonomy root must block FK association inserts until commit.
     tag = await db.scalar(
         select(Tag).where(Tag.id == tag_id, Tag.workspace_id == workspace_id).with_for_update()
@@ -310,7 +310,7 @@ async def delete_tag(db: AsyncSession, user: User, workspace_id: str, tag_id: st
         "tag",
         tag_id,
         workspace_id=workspace_id,
-        authorization_capability=Capability.tags_manage.value,
+        authorization_resource_action=ResourceAction.tag_manage.value,
     )
     await db.commit()
 
@@ -318,7 +318,7 @@ async def delete_tag(db: AsyncSession, user: User, workspace_id: str, tag_id: st
 async def list_accessible_tags_with_counts(
     db: AsyncSession, user: User, workspace_id: str
 ) -> list[tuple[Tag, int]]:
-    await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     accessible_ids = visible_items_query(workspace_id).with_only_columns(Item.id).subquery()
     rows = (
         await db.execute(
@@ -414,7 +414,7 @@ async def merge_tags(
 ) -> Tag:
     if source_tag_id == target_tag_id:
         raise TagConflict("source and target tags must be different")
-    await require_workspace_capability(db, user, workspace_id, Capability.tags_manage)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.tag_manage)
     locked_tags: dict[str, Tag | None] = {}
     for tag_id in sorted((source_tag_id, target_tag_id)):
         query = select(Tag).where(Tag.id == tag_id, Tag.workspace_id == workspace_id)
@@ -462,7 +462,7 @@ async def merge_tags(
         target_tag.id,
         detail={"merged_from": source_tag.name},
         workspace_id=workspace_id,
-        authorization_capability=Capability.tags_manage.value,
+        authorization_resource_action=ResourceAction.tag_manage.value,
     )
     await db.commit()
     return target_tag

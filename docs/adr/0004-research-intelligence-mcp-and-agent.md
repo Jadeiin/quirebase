@@ -47,8 +47,8 @@ The server exposes a fixed allowlist covering the ordinary User's core research 
 
 | Capability | Tools | Deliberate limits |
 | --- | --- | --- |
-| Library | `library.search_items`, `library.get_library_item`, `library.create_library_item`, `library.update_library_item` | Search is limited to 25 Items per page; writes reuse Item ownership and optimistic version checks |
-| Projects | `projects.list_projects`, `projects.get_project`, `projects.create_user_project`, `projects.update_project`, lifecycle, item and membership tools | Project Role checks remain authoritative, including owner-only membership changes |
+| Library | `library.search_items`, `library.get_library_item`, `library.create_library_item`, `library.update_library_item` | Search is limited to 25 Items per page; writes reuse Workspace resource-action decisions and optimistic version checks |
+| Projects | `projects.list_projects`, `projects.get_project`, `projects.create_user_project`, `projects.update_project`, lifecycle, item and membership tools | Workspace resource-action and Project participation decisions remain authoritative; Projects have no role or owner axis |
 | Documents | `documents.list_documents` | Returns revision and attachment metadata, never object keys, bytes or extracted text |
 | Annotations | `annotations.list_annotations`, `annotations.create_annotation`, `annotations.update_annotation`, `annotations.delete_annotation` | Reuses revision, Item and Project visibility plus annotation ownership/version rules |
 | Organization | `library.list_tags`, `library.add_item_tag`, `library.remove_item_tag`, `library.set_item_tag_selection`, `library.list_discussions`, `library.create_discussion`, `library.delete_discussion` | Reuses editable-Item and message ownership rules |
@@ -63,8 +63,8 @@ therefore requires its own authorization and behaviour review.
 
 Every generated tool forwards the already verified Bearer credential only to the in-process API
 client. The API verifies it again, derives the User and invokes the existing business Interface,
-which continues to apply System Role, Project Role, Item ownership, transaction and Audit Event
-rules. Tool input never selects the authorization subject.
+which continues to apply the same System/Workspace resource-action policy, canonical relation
+facts, transaction rules and Audit Events. Tool input never selects the authorization subject.
 
 Programmatic Adapters bind protocol, operation and API Token/client identity through the Audit
 Module interface. A successful data-changing operation records one business Audit Event enriched

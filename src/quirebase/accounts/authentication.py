@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from quirebase.access import require_system_resource_action
 from quirebase.accounts.invitations import InvitationConflict
 from quirebase.accounts.sessions import create_login_session
 from quirebase.accounts.throttling import (
@@ -15,7 +16,12 @@ from quirebase.accounts.throttling import (
     record_login_failure,
 )
 from quirebase.audit import record_event
-from quirebase.core.crypto import hash_password_async, token_hash, verify_password_async
+from quirebase.core.crypto import (
+    compare_digest,
+    hash_password_async,
+    token_hash,
+    verify_password_async,
+)
 from quirebase.core.errors import DomainError, ResourceNotFound, ValidationFailure
 from quirebase.core.timezones import as_utc
 from quirebase.models import Invitation, LoginSession, User
@@ -105,8 +111,9 @@ async def accept_invitation(db: AsyncSession, token: str, password: str) -> User
     from quirebase.accounts.registration import ensure_registration_allowed
 
     await ensure_registration_allowed(db, via_invitation=True)
+    invitation_token_hash = token_hash(token)
     invitation = await db.scalar(
-        select(Invitation).where(Invitation.token_hash == token_hash(token)).with_for_update()
+        select(Invitation).where(Invitation.token_hash == invitation_token_hash)
     )
     if (
         invitation is None
@@ -120,7 +127,20 @@ async def accept_invitation(db: AsyncSession, token: str, password: str) -> User
         encoded = await hash_password_async(password)
     except ValueError as error:
         raise ValidationFailure(str(error)) from error
-
+    invitation = await db.scalar(
+        select(Invitation)
+        .where(Invitation.token_hash == invitation_token_hash)
+        .execution_options(populate_existing=True)
+        .with_for_update()
+    )
+    if (
+        invitation is None
+        or invitation.accepted_at is not None
+        or as_utc(invitation.expires_at) <= datetime.now(UTC)
+    ):
+        raise ResourceNotFound("invitation not found or expired")
+    if await db.scalar(select(User).where(User.username == invitation.username)):
+        raise InvitationConflict("username already exists")
     user = User(username=invitation.username, password_hash=encoded, role=invitation.role)
     db.add(user)
     invitation.accepted_at = datetime.now(UTC)
@@ -138,11 +158,32 @@ async def accept_invitation(db: AsyncSession, token: str, password: str) -> User
 async def change_own_password(
     db: AsyncSession, user: User, current_password: str, new_password: str
 ) -> None:
-    if not await verify_password_async(user.password_hash, current_password):
+    current_user = await require_system_resource_action(
+        db, user, "account", "change_password", relation="own"
+    )
+    verified_password_hash = current_user.password_hash
+    if not await verify_password_async(verified_password_hash, current_password):
         raise InvalidCredentials("Current password incorrect")
     try:
-        user.password_hash = await hash_password_async(new_password)
+        password_hash = await hash_password_async(new_password)
     except ValueError as error:
         raise ValidationFailure(str(error)) from error
-    record_event(db, user.id, "account.password.changed", "user", user.id)
+    current_user = await require_system_resource_action(
+        db,
+        current_user,
+        "account",
+        "change_password",
+        relation="own",
+        lock="write",
+    )
+    if not compare_digest(current_user.password_hash, verified_password_hash):
+        raise InvalidCredentials("Current password incorrect")
+    current_user.password_hash = password_hash
+    record_event(
+        db,
+        current_user.id,
+        "account.password.changed",
+        "user",
+        current_user.id,
+    )
     await db.commit()

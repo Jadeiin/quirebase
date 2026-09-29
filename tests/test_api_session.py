@@ -111,13 +111,14 @@ async def test_session_bootstrap_returns_the_browser_identity(
     try:
         response = await client.get("/api/v1/session")
         assert response.status_code == 200
-        assert response.json() == {
-            "authenticated": True,
-            "user": {
-                "id": response.json()["user"]["id"],
-                "username": "reader",
-                "role": "member",
-            },
+        payload = response.json()
+        assert payload["authenticated"] is True
+        assert payload["user"]["id"]
+        assert payload["user"]["username"] == "reader"
+        assert payload["user"]["role"] == "member"
+        assert payload["user"]["authorization"] == {
+            "allowed": [],
+            "relations": {},
         }
     finally:
         await client.aclose()

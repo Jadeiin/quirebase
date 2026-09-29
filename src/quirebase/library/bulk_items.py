@@ -13,7 +13,7 @@ from quirebase.access.items import (
     require_accessible_items,
     require_editable_item,
 )
-from quirebase.access.workspaces import Capability, require_workspace_capability
+from quirebase.access.workspaces import ResourceAction, require_workspace_action
 from quirebase.audit import record_event
 from quirebase.core.errors import (
     PermissionDenied,
@@ -87,7 +87,7 @@ async def apply_bulk_item_action(
         )
         audit_action = "library.bulk.add_tag"
     elif action in ("delete_items", "delete"):
-        await require_workspace_capability(db, user, workspace_id, Capability.items_delete)
+        await require_workspace_action(db, user, workspace_id, ResourceAction.item_delete)
         if confirm_delete != "delete":
             raise ValidationFailure("confirm deletion of the selected items")
         # Lock every Item root in stable order before collecting child object keys.  Upload and
@@ -167,12 +167,12 @@ async def apply_bulk_item_action(
         None,
         detail={"item_ids": [item.id for item in items]},
         workspace_id=workspace_id,
-        authorization_capability=(
-            Capability.projects_manage.value
+        authorization_resource_action=(
+            ResourceAction.project_item_manage.value
             if action in ("add_project", "project_add")
-            else Capability.tags_use.value
+            else ResourceAction.tag_use.value
             if action in ("add_tag", "tag")
-            else Capability.items_delete.value
+            else ResourceAction.item_delete.value
         ),
     )
     if cleanup_keys:

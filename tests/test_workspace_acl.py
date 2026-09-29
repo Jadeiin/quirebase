@@ -5,21 +5,27 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import event, select
 from sqlalchemy.exc import IntegrityError
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.access import (
-    Capability,
-    effective_capabilities,
+    ResourceAction,
+    action_allowed,
+    effective_resource_action_relations,
+    effective_resource_actions,
     get_item,
-    require,
+    require_action,
     require_project_context,
-    require_workspace_capability,
+    require_workspace_action,
     resolve_workspace_context,
     workspace_select,
 )
-from quirebase.access.annotations import can_edit_annotation, editable_annotation_reply_ids
+from quirebase.access.annotations import (
+    can_edit_annotation,
+    editable_annotation_ids,
+    editable_annotation_reply_ids,
+)
 from quirebase.core.config import get_settings
 from quirebase.core.errors import (
     PermissionDenied,
@@ -49,7 +55,11 @@ from quirebase.documents.annotations import (
     update_document_annotation,
 )
 from quirebase.documents.bundles import _own_annotations
-from quirebase.documents.revisions import delete_attachment, get_pdf_viewer_data
+from quirebase.documents.revisions import (
+    delete_attachment,
+    delete_file_revision,
+    get_pdf_viewer_data,
+)
 from quirebase.documents.schemas import (
     AnnotationReplyCreate,
     AnnotationReplyUpdate,
@@ -140,41 +150,93 @@ from quirebase.workspaces import (
 from quirebase.workspaces.workflows import cleanup_deleted_workspace_objects_step
 
 
-def test_effective_capabilities_follow_workspace_lifecycle():
-    active = effective_capabilities(WorkspaceRole.owner, WorkspaceState.active)
-    archived = effective_capabilities(WorkspaceRole.owner, WorkspaceState.archived)
-    governance_suspended = effective_capabilities(
+def test_effective_resource_actions_follow_workspace_lifecycle():
+    active = effective_resource_actions(WorkspaceRole.owner, WorkspaceState.active)
+    archived = effective_resource_actions(WorkspaceRole.owner, WorkspaceState.archived)
+    governance_suspended = effective_resource_actions(
         WorkspaceRole.admin, WorkspaceState.active, governance_suspended=True
     )
 
-    assert Capability.items_create in active
-    assert Capability.workspace_delete in active
-    assert Capability.projects_create in active
-    assert Capability.projects_create_managed in active
-    assert Capability.workspace_read in archived
-    assert Capability.workspace_archive in archived
-    assert Capability.workspace_delete in archived
-    assert Capability.projects_create_managed not in archived
-    assert Capability.items_create not in archived
-    assert Capability.projects_create in effective_capabilities(
+    assert ResourceAction.item_create in active
+    assert ResourceAction.item_copy in active
+    assert ResourceAction.workspace_delete in active
+    assert ResourceAction.project_create in active
+    assert ResourceAction.file_delete in active
+    assert ResourceAction.workspace_read in archived
+    assert ResourceAction.workspace_restore in archived
+    assert ResourceAction.workspace_delete in archived
+    assert ResourceAction.project_create not in archived
+    assert ResourceAction.item_create not in archived
+    assert ResourceAction.item_copy not in archived
+    assert ResourceAction.project_create in effective_resource_actions(
         WorkspaceRole.editor, WorkspaceState.active
     )
-    assert Capability.projects_create_managed not in effective_capabilities(
+    assert ResourceAction.file_delete in effective_resource_actions(
         WorkspaceRole.editor, WorkspaceState.active
     )
-    assert Capability.projects_create_managed in effective_capabilities(
-        WorkspaceRole.admin, WorkspaceState.active
-    )
-    assert Capability.projects_create_managed not in effective_capabilities(
+    assert ResourceAction.file_delete not in effective_resource_actions(
         WorkspaceRole.reviewer, WorkspaceState.active
     )
-    assert Capability.projects_create_managed not in effective_capabilities(
-        WorkspaceRole.viewer, WorkspaceState.active
+    assert effective_resource_action_relations(
+        WorkspaceRole.editor,
+        WorkspaceState.active,
+        ResourceAction.project_create,
+    ) == frozenset({"open", "workspace"})
+    assert effective_resource_action_relations(
+        WorkspaceRole.admin,
+        WorkspaceState.active,
+        ResourceAction.project_create,
+    ) == frozenset({"managed", "open", "workspace"})
+    assert not effective_resource_action_relations(
+        WorkspaceRole.reviewer,
+        WorkspaceState.active,
+        ResourceAction.project_create,
+    )
+    assert not effective_resource_action_relations(
+        WorkspaceRole.viewer,
+        WorkspaceState.active,
+        ResourceAction.project_create,
     )
     assert governance_suspended == frozenset({
-        Capability.workspace_read,
-        Capability.workspace_export,
+        ResourceAction.workspace_read,
+        ResourceAction.workspace_export,
+        ResourceAction.project_annotation_review,
     })
+
+
+def test_effective_resource_action_projections_reuse_role_and_lifecycle_results():
+    active = effective_resource_actions(WorkspaceRole.owner, WorkspaceState.active)
+    assert effective_resource_actions(WorkspaceRole.owner, WorkspaceState.active) is active
+    assert effective_resource_actions(WorkspaceRole.owner, WorkspaceState.archived) is not active
+    assert effective_resource_actions(WorkspaceRole.editor, WorkspaceState.active) is not active
+    assert (
+        effective_resource_actions(
+            WorkspaceRole.owner, WorkspaceState.active, governance_suspended=True
+        )
+        is not active
+    )
+
+    relations = effective_resource_action_relations(
+        WorkspaceRole.owner, WorkspaceState.active, ResourceAction.project_create
+    )
+    assert (
+        effective_resource_action_relations(
+            WorkspaceRole.owner, WorkspaceState.active, ResourceAction.project_create
+        )
+        is relations
+    )
+    assert relations != effective_resource_action_relations(
+        WorkspaceRole.editor, WorkspaceState.active, ResourceAction.project_create
+    )
+    assert not effective_resource_action_relations(
+        WorkspaceRole.owner, WorkspaceState.archived, ResourceAction.project_create
+    )
+    assert not effective_resource_action_relations(
+        WorkspaceRole.owner,
+        WorkspaceState.active,
+        ResourceAction.project_create,
+        governance_suspended=True,
+    )
 
 
 @pytest.mark.anyio
@@ -274,6 +336,161 @@ async def _shared_annotation_context(db, name: str):
     db.add(reply)
     await db.commit()
     return author, viewer, item, project, revision, annotation, reply
+
+
+@pytest.mark.anyio
+async def test_annotation_editability_projection_uses_bounded_database_queries(async_db):
+    author, _viewer, item, _project, revision, annotation, reply = await _shared_annotation_context(
+        async_db, "batch-editability"
+    )
+    workspace_id = fixture_workspace_id(author)
+    projects = [
+        Project(workspace_id=workspace_id, name=f"batch-project-{index}", created_by=author.id)
+        for index in range(8)
+    ]
+    async_db.add_all(projects)
+    await async_db.flush()
+    assignments = [
+        ProjectItem(
+            workspace_id=workspace_id,
+            project_id=project.id,
+            item_id=item.id,
+            added_by=author.id,
+        )
+        for project in projects
+    ]
+    async_db.add_all(assignments)
+    await async_db.flush()
+    additional_annotations = [
+        PdfAnnotation(
+            workspace_id=workspace_id,
+            file_revision_id=revision.id,
+            item_id=item.id,
+            page_index=0,
+            author_id=author.id,
+            kind=AnnotationKind.note,
+            scope=AnnotationScope.project,
+            project_item_id=assignment.id,
+            body="Batch note",
+            payload={"type": "note", "rect": {"x": 1, "y": 1, "width": 1, "height": 1}},
+        )
+        for assignment in assignments
+    ]
+    async_db.add_all(additional_annotations)
+    await async_db.flush()
+    additional_replies = [
+        PdfAnnotationReply(
+            workspace_id=workspace_id,
+            annotation_id=record.id,
+            author_id=author.id,
+            body="Batch reply",
+        )
+        for record in additional_annotations
+    ]
+    async_db.add_all(additional_replies)
+    await async_db.commit()
+
+    records = [annotation, *additional_annotations]
+    replies = [reply, *additional_replies]
+
+    async def select_count(coroutine):
+        count = 0
+
+        def record_query(_connection, _cursor, statement, _parameters, _context, _executemany):
+            nonlocal count
+            if statement.lstrip().lower().startswith("select"):
+                count += 1
+
+        engine = async_db.get_bind()
+        event.listen(engine, "before_cursor_execute", record_query)
+        try:
+            result = await coroutine
+        finally:
+            event.remove(engine, "before_cursor_execute", record_query)
+        return result, count
+
+    single_ids, single_queries = await select_count(
+        editable_annotation_ids(async_db, author, workspace_id, [annotation])
+    )
+    all_ids, all_queries = await select_count(
+        editable_annotation_ids(async_db, author, workspace_id, records)
+    )
+    assert single_ids == {annotation.id}
+    assert all_ids == {record.id for record in records}
+    assert all_queries <= single_queries + 1
+
+    annotations_by_id = {record.id: record for record in records}
+    single_reply_ids, single_reply_queries = await select_count(
+        editable_annotation_reply_ids(async_db, author, workspace_id, [reply], annotations_by_id)
+    )
+    all_reply_ids, all_reply_queries = await select_count(
+        editable_annotation_reply_ids(async_db, author, workspace_id, replies, annotations_by_id)
+    )
+    assert single_reply_ids == {reply.id}
+    assert all_reply_ids == {row.id for row in replies}
+    assert all_reply_queries <= single_reply_queries + 1
+
+
+@pytest.mark.anyio
+async def test_annotation_editability_projection_respects_managed_project_participation(async_db):
+    (
+        owner,
+        reviewer,
+        item,
+        project,
+        revision,
+        _annotation,
+        _reply,
+    ) = await _shared_annotation_context(async_db, "managed-editability")
+    workspace_id = fixture_workspace_id(owner)
+    membership = await async_db.scalar(
+        select(WorkspaceMember).where(
+            WorkspaceMember.workspace_id == workspace_id,
+            WorkspaceMember.user_id == reviewer.id,
+        )
+    )
+    assert membership is not None
+    membership.role = WorkspaceRole.reviewer
+    project.visibility = ProjectVisibility.managed
+    project_item = await async_db.scalar(
+        select(ProjectItem).where(ProjectItem.project_id == project.id)
+    )
+    assert project_item is not None
+    record = PdfAnnotation(
+        workspace_id=workspace_id,
+        file_revision_id=revision.id,
+        item_id=item.id,
+        page_index=0,
+        author_id=reviewer.id,
+        kind=AnnotationKind.note,
+        scope=AnnotationScope.project,
+        project_item_id=project_item.id,
+        payload={"type": "note", "rect": {"x": 1, "y": 1, "width": 1, "height": 1}},
+    )
+    async_db.add(record)
+    await async_db.flush()
+    reply = PdfAnnotationReply(
+        workspace_id=workspace_id,
+        annotation_id=record.id,
+        author_id=reviewer.id,
+        body="Managed reply",
+    )
+    async_db.add(reply)
+    await async_db.commit()
+
+    assert await editable_annotation_ids(async_db, reviewer, workspace_id, [record]) == set()
+    assert (
+        await editable_annotation_reply_ids(
+            async_db, reviewer, workspace_id, [reply], {record.id: record}
+        )
+        == set()
+    )
+
+    await add_project_member(async_db, owner, workspace_id, project.id, reviewer.username)
+    assert await editable_annotation_ids(async_db, reviewer, workspace_id, [record]) == {record.id}
+    assert await editable_annotation_reply_ids(
+        async_db, reviewer, workspace_id, [reply], {record.id: record}
+    ) == {reply.id}
 
 
 @pytest.mark.anyio
@@ -400,6 +617,32 @@ async def test_invitation_acceptance_rechecks_user_status(async_db, async_sessio
 
 
 @pytest.mark.anyio
+async def test_invitation_acceptance_records_system_authorization(async_db):
+    owner = await _user(async_db, "invitation-audit-owner")
+    invitee = await _user(async_db, "invitation-audit-invitee")
+    workspace_id = fixture_workspace_id(owner)
+    _invitation, token = await invite_workspace_member(
+        async_db,
+        owner,
+        workspace_id,
+        invitee.id,
+        WorkspaceRole.viewer,
+    )
+
+    member = await accept_workspace_invitation(async_db, invitee, workspace_id, token)
+    event = await async_db.scalar(
+        select(AuditEvent).where(
+            AuditEvent.action == "workspace.invitation.accept",
+            AuditEvent.target_id == member.id,
+        )
+    )
+
+    assert event is not None
+    assert event.authorization_role == invitee.role
+    assert event.authorization_resource_action == "workspace_invitation.accept"
+
+
+@pytest.mark.anyio
 async def test_invitation_creation_rechecks_user_status(async_db, async_session_factory):
     owner = await _user(async_db, "invitation-create-status-owner")
     invitee = await _user(async_db, "invitation-create-status-invitee")
@@ -459,8 +702,8 @@ async def test_old_workspace_invitations_cannot_restore_access(async_db, members
     with pytest.raises(ResourceNotFound, match="invitation"):
         await accept_workspace_invitation(async_db, invitee, workspace_id, second_token)
     with pytest.raises(WorkspaceMembershipRequired):
-        await require_workspace_capability(
-            async_db, invitee, workspace_id, Capability.workspace_read
+        await require_workspace_action(
+            async_db, invitee, workspace_id, ResourceAction.workspace_read
         )
 
     if membership_action == "terminate":
@@ -769,8 +1012,8 @@ async def test_workspace_context_and_lineage_query_are_explicit(async_db):
 
     assert context.actor_id == owner.id
     assert context.workspace_id == workspace_id
-    assert Capability.items_edit in context.capabilities
-    require(context, Capability.items_edit)
+    assert ResourceAction.item_update in context.allowed_actions
+    require_action(context, ResourceAction.item_update)
 
     item = Item(workspace_id=workspace_id, title="Scoped", created_by=owner.id)
     foreign = Item(workspace_id=fixture_workspace_id(other), title="Foreign", created_by=other.id)
@@ -832,12 +1075,12 @@ async def test_workspace_roles_are_the_only_item_authority(async_db):
     )
     await async_db.commit()
 
-    await require_workspace_capability(
-        async_db, viewer, fixture_workspace_id(owner), Capability.workspace_read
+    await require_workspace_action(
+        async_db, viewer, fixture_workspace_id(owner), ResourceAction.workspace_read
     )
     with pytest.raises(PermissionDenied):
-        await require_workspace_capability(
-            async_db, viewer, fixture_workspace_id(owner), Capability.items_edit
+        await require_workspace_action(
+            async_db, viewer, fixture_workspace_id(owner), ResourceAction.item_update
         )
 
 
@@ -860,8 +1103,8 @@ async def test_workspace_authorization_refreshes_cached_membership(async_session
     async with async_session_factory() as stale_db:
         cached_actor = await stale_db.get(User, editor_id)
         assert cached_actor is not None
-        await require_workspace_capability(
-            stale_db, cached_actor, workspace_id, Capability.items_edit
+        await require_workspace_action(
+            stale_db, cached_actor, workspace_id, ResourceAction.item_update
         )
         await stale_db.commit()
 
@@ -873,8 +1116,8 @@ async def test_workspace_authorization_refreshes_cached_membership(async_session
             )
 
         with pytest.raises(PermissionDenied):
-            await require_workspace_capability(
-                stale_db, cached_actor, workspace_id, Capability.items_edit
+            await require_workspace_action(
+                stale_db, cached_actor, workspace_id, ResourceAction.item_update
             )
 
 
@@ -891,9 +1134,13 @@ async def test_managed_project_is_visible_only_to_members_and_workspace_governor
         )
     )
     await async_db.commit()
-    editor_capabilities = effective_capabilities(WorkspaceRole.editor, WorkspaceState.active)
-    assert Capability.projects_create in editor_capabilities
-    assert Capability.projects_create_managed not in editor_capabilities
+    editor_actions = effective_resource_actions(WorkspaceRole.editor, WorkspaceState.active)
+    assert ResourceAction.project_create in editor_actions
+    assert "managed" not in effective_resource_action_relations(
+        WorkspaceRole.editor,
+        WorkspaceState.active,
+        ResourceAction.project_create,
+    )
     with pytest.raises(PermissionDenied):
         await create_project(
             async_db,
@@ -921,10 +1168,10 @@ async def test_managed_project_is_visible_only_to_members_and_workspace_governor
             outsider,
             fixture_workspace_id(owner),
             project.id,
-            Capability.workspace_read,
+            ResourceAction.workspace_read,
         )
     owner_context = await require_project_context(
-        async_db, owner, fixture_workspace_id(owner), project.id, Capability.workspace_read
+        async_db, owner, fixture_workspace_id(owner), project.id, ResourceAction.workspace_read
     )
     assert owner_context.project.id == project.id
     await add_project_member(
@@ -935,7 +1182,7 @@ async def test_managed_project_is_visible_only_to_members_and_workspace_governor
         for row in await list_workspace_projects(async_db, outsider, fixture_workspace_id(owner))
     ] == [project.id]
     member_context = await require_project_context(
-        async_db, outsider, fixture_workspace_id(owner), project.id, Capability.workspace_read
+        async_db, outsider, fixture_workspace_id(owner), project.id, ResourceAction.workspace_read
     )
     assert member_context.project.id == project.id
     with pytest.raises(PermissionDenied):
@@ -951,7 +1198,7 @@ async def test_managed_project_is_visible_only_to_members_and_workspace_governor
 
 
 @pytest.mark.anyio
-async def test_managed_project_mutations_use_workspace_capabilities(async_db):
+async def test_managed_project_mutations_use_resource_actions(async_db):
     owner = await _user(async_db, "managed-mutation-owner")
     editor = await _user(async_db, "managed-mutation-editor")
     workspace_id = fixture_workspace_id(owner)
@@ -1102,7 +1349,7 @@ async def test_project_filtered_library_search_obeys_project_visibility(async_db
 
 
 @pytest.mark.anyio
-async def test_project_discussion_uses_visibility_and_workspace_capabilities(async_db):
+async def test_project_discussion_uses_visibility_and_resource_actions(async_db):
     owner = await _user(async_db, "discussion-owner")
     reviewer = await _user(async_db, "discussion-reviewer")
     outsider = await _user(async_db, "discussion-outsider")
@@ -1203,21 +1450,30 @@ async def test_discussion_moderation_is_workspace_governance_with_audited_reason
     message.author = author
     owner_context = await resolve_workspace_context(async_db, owner, workspace_id)
     author_context = await resolve_workspace_context(async_db, author, workspace_id)
-    assert discussion_message_view(message, owner_context).allowed_actions == ["moderate"]
-    assert discussion_message_view(message, author_context).allowed_actions == ["delete"]
-    assert discussion_message_view(message, owner_context, writable=False).allowed_actions == []
+    assert discussion_message_view(message, owner_context).authorization.allowed == [
+        "item_discussion.delete"
+    ]
+    assert discussion_message_view(message, author_context).authorization.allowed == [
+        "item_discussion.delete"
+    ]
+    assert (
+        discussion_message_view(message, owner_context, writable=False).authorization.allowed == []
+    )
 
-    assert (
-        Capability.discussion_moderate
-        in (await resolve_workspace_context(async_db, owner, workspace_id)).capabilities
+    assert action_allowed(
+        await resolve_workspace_context(async_db, owner, workspace_id),
+        ResourceAction.item_discussion_delete,
+        relation="other",
     )
-    assert (
-        Capability.discussion_moderate
-        in (await resolve_workspace_context(async_db, admin, workspace_id)).capabilities
+    assert action_allowed(
+        await resolve_workspace_context(async_db, admin, workspace_id),
+        ResourceAction.item_discussion_delete,
+        relation="other",
     )
-    assert (
-        Capability.discussion_moderate
-        not in (await resolve_workspace_context(async_db, editor, workspace_id)).capabilities
+    assert not action_allowed(
+        await resolve_workspace_context(async_db, editor, workspace_id),
+        ResourceAction.item_discussion_delete,
+        relation="other",
     )
     with pytest.raises(PermissionDenied):
         await moderate_discussion_message(
@@ -1253,7 +1509,7 @@ async def test_discussion_moderation_is_workspace_governance_with_audited_reason
         )
     )
     assert event.actor_id == admin.id
-    assert event.authorization_capability == Capability.discussion_moderate.value
+    assert event.authorization_resource_action == ResourceAction.item_discussion_delete.value
     assert json.loads(event.detail)["reason"] == "Policy violation"
 
 
@@ -1313,7 +1569,7 @@ async def test_project_discussion_moderation_respects_lifecycle_and_lineage(asyn
         )
     )
     assert event.project_id == project.id
-    assert event.authorization_capability == Capability.discussion_moderate.value
+    assert event.authorization_resource_action == ResourceAction.project_discussion_delete.value
 
 
 @pytest.mark.anyio
@@ -1514,8 +1770,8 @@ async def test_instance_admin_is_not_implicit_workspace_member(async_db):
     await async_db.commit()
 
     with pytest.raises(WorkspaceMembershipRequired):
-        await require_workspace_capability(
-            async_db, admin, fixture_workspace_id(owner), Capability.workspace_read
+        await require_workspace_action(
+            async_db, admin, fixture_workspace_id(owner), ResourceAction.workspace_read
         )
 
 
@@ -1552,8 +1808,8 @@ async def test_owner_must_transfer_before_suspension(async_db):
         async_db, successor, fixture_workspace_id(owner), owner_member.id
     )
     with pytest.raises(WorkspaceMembershipRequired):
-        await require_workspace_capability(
-            async_db, owner, fixture_workspace_id(owner), Capability.workspace_read
+        await require_workspace_action(
+            async_db, owner, fixture_workspace_id(owner), ResourceAction.workspace_read
         )
 
 
@@ -1708,7 +1964,7 @@ async def test_managed_project_participants_are_independent_of_workspace_governa
     )
     assert members == {editor.id}
     context = await require_project_context(
-        async_db, owner, workspace_id, project_id, Capability.workspace_read
+        async_db, owner, workspace_id, project_id, ResourceAction.workspace_read
     )
     assert context.project.id == project_id
     opened = await open_project_workspace(async_db, owner, workspace_id, project_id)
@@ -1718,7 +1974,7 @@ async def test_managed_project_participants_are_independent_of_workspace_governa
     await set_project_state(async_db, owner, workspace_id, project_id, ProjectState.active)
     await add_project_member(async_db, owner, workspace_id, project_id, candidate.username)
     await require_project_context(
-        async_db, owner, workspace_id, project_id, Capability.workspace_read
+        async_db, owner, workspace_id, project_id, ResourceAction.workspace_read
     )
 
 
@@ -1750,7 +2006,7 @@ async def test_managed_project_can_have_no_participants(async_db):
     )
     assert members == set()
     context = await require_project_context(
-        async_db, owner, workspace_id, project.id, Capability.workspace_read
+        async_db, owner, workspace_id, project.id, ResourceAction.workspace_read
     )
     assert context.project.id == project.id
 
@@ -1926,7 +2182,7 @@ async def test_workspace_ownership_transfer_preserves_project_participation(asyn
     await set_project_state(async_db, successor, workspace_id, project.id, ProjectState.archived)
     await set_project_state(async_db, successor, workspace_id, project.id, ProjectState.active)
     context = await require_project_context(
-        async_db, successor, workspace_id, project.id, Capability.workspace_read
+        async_db, successor, workspace_id, project.id, ResourceAction.workspace_read
     )
     assert context.project.id == project.id
     await join_project(async_db, successor, workspace_id, project.id)
@@ -2052,12 +2308,12 @@ async def test_governance_suspension_is_read_only(async_db):
     await async_db.commit()
     await suspend_workspace_governance(async_db, admin, fixture_workspace_id(owner))
 
-    await require_workspace_capability(
-        async_db, owner, fixture_workspace_id(owner), Capability.workspace_read
+    await require_workspace_action(
+        async_db, owner, fixture_workspace_id(owner), ResourceAction.workspace_read
     )
     with pytest.raises(WorkspaceLifecycleError):
-        await require_workspace_capability(
-            async_db, owner, fixture_workspace_id(owner), Capability.items_create
+        await require_workspace_action(
+            async_db, owner, fixture_workspace_id(owner), ResourceAction.item_create
         )
 
 
@@ -2138,8 +2394,8 @@ async def test_break_glass_is_one_shot_read_only_and_audited(async_db):
     )
     assert [item.title for item in items] == ["Sensitive title"]
     with pytest.raises(WorkspaceMembershipRequired):
-        await require_workspace_capability(
-            async_db, admin, fixture_workspace_id(owner), Capability.workspace_read
+        await require_workspace_action(
+            async_db, admin, fixture_workspace_id(owner), ResourceAction.workspace_read
         )
     event = await async_db.scalar(
         select(AuditEvent).where(
@@ -2254,6 +2510,36 @@ async def test_annotation_moderation_preserves_authored_content_and_hides_shared
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("moderation_field", ["hidden_at", "archived_at", "locked_at"])
+async def test_moderated_own_annotation_does_not_project_moderation_actions(
+    async_db, moderation_field
+):
+    (
+        author,
+        _viewer,
+        item,
+        _project,
+        _revision,
+        annotation,
+        _reply,
+    ) = await _shared_annotation_context(async_db, f"own-{moderation_field}")
+    setattr(annotation, moderation_field, datetime.now(UTC))
+    await async_db.commit()
+
+    review = await review_item_annotations(
+        async_db,
+        author,
+        fixture_workspace_id(author),
+        item.id,
+        page=1,
+        per_page=20,
+    )
+
+    assert review.annotations[0]["mine"] is True
+    assert review.annotations[0]["authorization"]["allowed"] == []
+
+
+@pytest.mark.anyio
 async def test_annotation_moderation_rejects_authors_and_audits_versioned_deletion(async_db):
     (
         author,
@@ -2270,7 +2556,10 @@ async def test_annotation_moderation_rejects_authors_and_audits_versioned_deleti
         async_db, author, workspace_id, item.id, page=1, per_page=20
     )
     assert author_review.annotations[0]["mine"] is True
-    assert set(author_review.annotations[0]["allowed_actions"]) == {"edit", "delete"}
+    assert set(author_review.annotations[0]["authorization"]["allowed"]) == {
+        "project_annotation.update",
+        "project_annotation.delete",
+    }
     with pytest.raises(ValidationFailure, match="cannot moderate their own"):
         await moderate_document_annotation(
             async_db, author, workspace_id, item.id, annotation.id, "hide", 1
@@ -2286,6 +2575,16 @@ async def test_annotation_moderation_rejects_authors_and_audits_versioned_deleti
     membership.role = WorkspaceRole.admin
     await async_db.commit()
 
+    with pytest.raises(ResourceUnavailable, match="Annotation not found"):
+        await delete_document_annotation(
+            async_db,
+            administrator,
+            workspace_id,
+            item.id,
+            annotation.id,
+            annotation.version,
+        )
+
     with pytest.raises(VersionConflict) as conflict:
         await moderate_document_annotation(
             async_db, administrator, workspace_id, item.id, annotation.id, "delete", 2
@@ -2296,10 +2595,20 @@ async def test_annotation_moderation_rejects_authors_and_audits_versioned_deleti
         async_db, administrator, workspace_id, item.id, annotation.id, "delete", 1
     )
     assert deleted["version"] == 2
-    assert deleted["allowed_actions"] == []
+    assert deleted["authorization"]["allowed"] == []
     stored = await async_db.get(PdfAnnotation, annotation.id, populate_existing=True)
     assert stored is not None
     assert stored.deleted_at is not None
+
+    with pytest.raises(ResourceUnavailable, match="Annotation not found"):
+        await restore_document_annotation(
+            async_db,
+            administrator,
+            workspace_id,
+            item.id,
+            annotation.id,
+            deleted["version"],
+        )
 
     event = await async_db.scalar(
         select(AuditEvent).where(
@@ -2309,8 +2618,71 @@ async def test_annotation_moderation_rejects_authors_and_audits_versioned_deleti
     )
     assert event is not None
     assert event.actor_id == administrator.id
-    assert event.authorization_capability == Capability.annotations_moderate.value
+    assert event.authorization_resource_action == ResourceAction.project_annotation_delete.value
     assert json.loads(event.detail or "{}") == {"author_id": author.id}
+
+
+@pytest.mark.anyio
+async def test_permanent_document_deletion_is_an_editor_decision(async_db, fake_durable_operations):
+    owner = await _user(async_db, "document-delete-owner")
+    editor = await _user(async_db, "document-delete-editor")
+    reviewer = await _user(async_db, "document-delete-reviewer")
+    workspace_id = fixture_workspace_id(owner)
+    async_db.add_all([
+        WorkspaceMember(
+            workspace_id=workspace_id,
+            user_id=editor.id,
+            role=WorkspaceRole.editor,
+            invited_by=owner.id,
+        ),
+        WorkspaceMember(
+            workspace_id=workspace_id,
+            user_id=reviewer.id,
+            role=WorkspaceRole.reviewer,
+            invited_by=owner.id,
+        ),
+    ])
+    item = Item(workspace_id=workspace_id, title="Governed Documents", created_by=owner.id)
+    async_db.add(item)
+    await async_db.flush()
+    revision = FileRevision(
+        workspace_id=workspace_id,
+        item_id=item.id,
+        object_key="objects/governed.pdf",
+        size=1,
+        original_name="governed.pdf",
+        created_by=owner.id,
+    )
+    attachment = Attachment(
+        workspace_id=workspace_id,
+        item_id=item.id,
+        object_key="objects/governed.bin",
+        size=1,
+        original_name="governed.bin",
+        created_by=owner.id,
+    )
+    async_db.add_all([revision, attachment])
+    await async_db.commit()
+
+    with pytest.raises(PermissionDenied):
+        await delete_file_revision(async_db, reviewer, workspace_id, item.id, revision.id)
+    with pytest.raises(PermissionDenied):
+        await delete_attachment(async_db, reviewer, workspace_id, item.id, attachment.id)
+    assert await async_db.get(FileRevision, revision.id) is not None
+    assert await async_db.get(Attachment, attachment.id) is not None
+
+    await delete_attachment(async_db, editor, workspace_id, item.id, attachment.id)
+    await delete_file_revision(async_db, editor, workspace_id, item.id, revision.id)
+
+    events = (
+        await async_db.scalars(
+            select(AuditEvent).where(
+                AuditEvent.target_id.in_((attachment.id, revision.id)),
+                AuditEvent.action.in_(("attachment.delete", "pdf.delete")),
+            )
+        )
+    ).all()
+    assert {event.authorization_resource_action for event in events} == {"file.delete"}
 
 
 @pytest.mark.anyio
@@ -2356,6 +2728,7 @@ async def test_archived_project_blocks_mutating_existing_annotations(async_db):
         async_db, author, workspace_id, item.id, revision.id, project.id
     )
     assert visible[0]["editable"] is False
+    assert visible[0]["replies"][0]["editable"] is False
     with pytest.raises(WorkspaceLifecycleError):
         await delete_document_annotation(
             async_db, author, workspace_id, item.id, annotation.id, annotation.version
@@ -2674,6 +3047,14 @@ async def test_cross_workspace_copy_creates_detached_item_and_file(async_db, mon
     assert await get_object_store().exists(source_revision.object_key)
     assert await get_object_store().exists(copied_revision.object_key)
     assert await search_index(async_db).search(async_db, "copied PDF search") == [copied.id]
+    import_event = await async_db.scalar(
+        select(AuditEvent).where(
+            AuditEvent.action == "workspace.item.copy.import",
+            AuditEvent.target_id == copied.id,
+        )
+    )
+    assert import_event is not None
+    assert import_event.authorization_resource_action == ResourceAction.item_copy.value
 
 
 @pytest.mark.anyio

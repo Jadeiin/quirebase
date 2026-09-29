@@ -7,6 +7,7 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import { ApiError, isDownloadCancelled, type ItemOverviewView } from '$lib/api/client';
 	import { apiErrorMessage } from '$lib/api/errors';
+	import { can } from '$lib/authorization/can';
 	import Button from '$lib/design/Button.svelte';
 	import DialogCloseButton from '$lib/design/DialogCloseButton.svelte';
 	import Icon from '$lib/design/Icon.svelte';
@@ -22,9 +23,7 @@
 	import { t } from '$lib/i18n';
 	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
 	import { workspaceHref } from '$lib/workspaces/href';
-	import { workspaceListQuery } from '$lib/workspaces/queries';
 	import { workspaceKeys } from '$lib/workspaces/keys';
-	import { canCopyItem } from '$lib/workspaces/actions';
 
 	type ActionSection = 'documents' | 'citation' | 'sources' | 'danger' | 'copy';
 
@@ -48,7 +47,6 @@
 	const queryClient = useQueryClient();
 	const workspaceContext = getWorkspaceContext();
 	const { workspaceId } = workspaceContext;
-	const workspaces = createQuery(() => workspaceListQuery());
 	let targetWorkspaceId = $state('');
 	let copiedItemUrl = $state('');
 	const files = createQuery(() =>
@@ -56,10 +54,8 @@
 	);
 	const revisions = $derived(files.data?.files.filter((file) => file.kind === 'revision') ?? []);
 	const copyDestinations = $derived(
-		(workspaces.data ?? []).filter(
-			(candidate) =>
-				candidate.id !== workspaceId &&
-				canCopyItem(workspaceContext.can, candidate.effective_capabilities)
+		overview.copy_targets.filter((candidate: ItemOverviewView['copy_targets'][number]) =>
+			can(candidate.authorization, 'item', 'copy')
 		)
 	);
 	const externalIdentifiers = $derived(
@@ -241,7 +237,7 @@
 
 	function confirmDeleteItem() {
 		deleteArmed = false;
-		if (!overview.allowed_actions.delete || !workspaceContext.can('items.delete')) return;
+		if (!can(overview.authorization, 'item', 'delete')) return;
 		void action(async () => {
 			await workspaceContext.api.request('DELETE', '/workspaces/{workspace_id}/items/{item_id}', {
 				params: { path: { item_id: itemId } },
@@ -255,7 +251,9 @@
 	function copyItem() {
 		if (
 			!targetWorkspaceId ||
-			!copyDestinations.some((candidate) => candidate.id === targetWorkspaceId)
+			!copyDestinations.some(
+				(candidate: ItemOverviewView['copy_targets'][number]) => candidate.id === targetWorkspaceId
+			)
 		)
 			return;
 		void action(async () => {
@@ -285,20 +283,20 @@
 			href={resolve(
 				workspaceHref(workspaceId, `item/${itemId}/pdf/${overview.latest_revision.id}`)
 			)}>{$t('Read PDF')}</Button
-		>{#if workspaceContext.can('workspace.export')}<Button
+		>{#if can(overview.authorization, 'workspace', 'export')}<Button
 				class="inline-flex items-center gap-2"
 				onclick={() => show('documents')}><Icon name="download" /> {$t('Download')}</Button
 			>{/if}{/if}
-	{#if workspaceContext.can('workspace.export')}<Button onclick={() => show('citation')}
+	{#if can(overview.authorization, 'workspace', 'export')}<Button onclick={() => show('citation')}
 			>{$t('Export')}</Button
 		>{/if}
-	{#if overview.allowed_actions.edit && workspaceContext.can('items.edit')}<Button
-			onclick={() => show('sources')}>{$t('Record tools')}</Button
+	{#if can(overview.authorization, 'item', 'update')}<Button onclick={() => show('sources')}
+			>{$t('Record tools')}</Button
 		>{/if}
 	{#if copyDestinations.length}<Button variant="tonal" onclick={() => show('copy')}
 			>{$t('Copy to Workspace')}</Button
 		>{/if}
-	{#if overview.allowed_actions.delete && workspaceContext.can('items.delete')}<Button
+	{#if can(overview.authorization, 'item', 'delete')}<Button
 			variant="danger"
 			onclick={() => show('danger')}>{$t('More')}</Button
 		>{/if}
@@ -329,17 +327,17 @@
 							data-active={section === 'copy'}
 							onclick={() => (section = 'copy')}>{$t('Copy')}</button
 						>{/if}
-					{#if overview.latest_revision && workspaceContext.can('workspace.export')}<button
+					{#if overview.latest_revision && can(overview.authorization, 'workspace', 'export')}<button
 							class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold data-[active=true]:border-primary-700-300 data-[active=true]:text-primary-700-300"
 							data-active={section === 'documents'}
 							onclick={() => (section = 'documents')}>{$t('Documents')}</button
 						>{/if}
-					{#if overview.allowed_actions.edit && workspaceContext.can('items.edit')}<button
+					{#if can(overview.authorization, 'item', 'update')}<button
 							class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold data-[active=true]:border-primary-700-300 data-[active=true]:text-primary-700-300"
 							data-active={section === 'sources'}
 							onclick={() => (section = 'sources')}>{$t('Metadata sources')}</button
 						>{/if}
-					{#if overview.allowed_actions.delete && workspaceContext.can('items.delete')}<button
+					{#if can(overview.authorization, 'item', 'delete')}<button
 							class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold text-error-700-300 data-[active=true]:border-error-700-300"
 							data-active={section === 'danger'}
 							onclick={() => (section = 'danger')}>{$t('Danger zone')}</button

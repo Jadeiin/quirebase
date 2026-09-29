@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
+	import { can } from '$lib/authorization/can';
 	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
 	import { workspaceKeys } from '$lib/workspaces/keys';
 	import { apiErrorMessage } from '$lib/api/errors';
@@ -19,19 +20,19 @@
 		queryKey: workspaceKeys.members(workspace.workspaceId),
 		queryFn: ({ signal }: { signal: AbortSignal }) =>
 			api.request('GET', '/workspaces/{workspace_id}/members', { signal }),
-		enabled: Boolean(workspace.view) && !workspace.can('workspace.members.manage')
+		enabled: Boolean(workspace.view) && !workspace.can('workspace_member', 'read')
 	}));
 	const governanceMembers = createQuery(() => ({
 		queryKey: workspaceKeys.governanceMembers(workspace.workspaceId),
 		queryFn: ({ signal }: { signal: AbortSignal }) =>
 			api.request('GET', '/workspaces/{workspace_id}/governance/members', { signal }),
-		enabled: Boolean(workspace.view) && workspace.can('workspace.members.manage')
+		enabled: Boolean(workspace.view) && workspace.can('workspace_member', 'read')
 	}));
 	const invitations = createQuery(() => ({
 		queryKey: workspaceKeys.invitations(workspace.workspaceId),
 		queryFn: ({ signal }: { signal: AbortSignal }) =>
 			api.request('GET', '/workspaces/{workspace_id}/invitations', { signal }),
-		enabled: workspace.can('workspace.members.manage')
+		enabled: workspace.can('workspace_invitation', 'read')
 	}));
 	let name = $state(workspace.view?.name ?? '');
 	let inviteUsername = $state('');
@@ -54,10 +55,10 @@
 			await action();
 			message = success;
 			await Promise.all([
-				workspace.can('workspace.members.manage')
+				workspace.can('workspace_member', 'read')
 					? governanceMembers.refetch()
 					: directoryMembers.refetch(),
-				workspace.can('workspace.members.manage') ? invitations.refetch() : Promise.resolve(),
+				workspace.can('workspace_invitation', 'read') ? invitations.refetch() : Promise.resolve(),
 				client.invalidateQueries({ queryKey: workspaceKeys.root(workspace.workspaceId) }),
 				client.invalidateQueries({ queryKey: workspaceKeys.list() })
 			]);
@@ -119,7 +120,7 @@
 				await goto(resolve('/workspace'), { replaceState: true });
 	}
 	async function reindex() {
-		if (!workspace.can('workspace.settings.manage')) return;
+		if (!workspace.can('workspace', 'update')) return;
 		await run(
 			'reindex',
 			async () => {
@@ -138,7 +139,7 @@
 	}
 	function confirmOwnershipTransfer(username: string): boolean {
 		return confirm(
-			`Transfer Workspace ownership to ${username}? You will lose owner-only governance capabilities.`
+			`Transfer Workspace ownership to ${username}? You will lose owner-only governance actions.`
 		);
 	}
 </script>
@@ -175,10 +176,10 @@
 				class="input"
 				bind:value={name}
 				maxlength="240"
-				disabled={!workspace.can('workspace.settings.manage')}
+				disabled={!workspace.can('workspace', 'update')}
 			/></label
 		>
-		{#if workspace.can('workspace.settings.manage')}<div>
+		{#if workspace.can('workspace', 'update')}<div>
 				<Button
 					variant="filled"
 					disabled={busyId !== '' || !name.trim() || name.trim() === workspace.view?.name}
@@ -186,7 +187,7 @@
 				>
 			</div>{/if}
 	</section>
-	{#if workspace.can('workspace.settings.manage')}
+	{#if workspace.can('workspace', 'update')}
 		<section
 			class="grid max-w-2xl grid-cols-1 gap-3 rounded-container border border-surface-300-700 bg-surface-50-950 p-5"
 		>
@@ -197,7 +198,7 @@
 			>
 		</section>
 	{/if}
-	{#if workspace.can('workspace.archive') || workspace.can('workspace.delete')}
+	{#if workspace.can('workspace', 'archive') || workspace.can('workspace', 'restore') || workspace.can('workspace', 'delete')}
 		<section
 			class="grid max-w-2xl grid-cols-1 gap-4 rounded-container border border-surface-300-700 bg-surface-50-950 p-5"
 			aria-labelledby="workspace-lifecycle-heading"
@@ -211,7 +212,7 @@
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
-				{#if workspace.can('workspace.archive') && workspace.view?.state === 'active'}<Button
+				{#if workspace.can('workspace', 'archive') && workspace.view?.state === 'active'}<Button
 						variant="warning"
 						disabled={busyId !== ''}
 						onclick={() => {
@@ -225,7 +226,7 @@
 								);
 						}}>{$t('Archive workspace')}</Button
 					>{/if}
-				{#if workspace.can('workspace.archive') && workspace.view?.state === 'archived'}<Button
+				{#if workspace.can('workspace', 'restore') && workspace.view?.state === 'archived'}<Button
 						variant="success"
 						disabled={busyId !== ''}
 						onclick={() =>
@@ -238,7 +239,7 @@
 			</div>
 		</section>
 	{/if}
-	{#if workspace.can('workspace.delete')}
+	{#if workspace.can('workspace', 'delete')}
 		<section
 			class="grid max-w-2xl grid-cols-1 gap-3 rounded-container border border-error-500/40 bg-error-50-950/30 p-5"
 			aria-labelledby="workspace-delete-heading"
@@ -262,11 +263,13 @@
 			</div>
 		</section>
 	{/if}
-	{#if workspace.can('workspace.members.manage')}<section class="grid grid-cols-1 gap-3">
+	{#if workspace.can('workspace_member', 'read')}<section class="grid grid-cols-1 gap-3">
 			<div>
 				<h2 class="text-xl font-semibold">{$t('Members')}</h2>
 				<p class="text-sm text-surface-600-400">
-					{$t('Effective Workspace capabilities determine which governance actions are available.')}
+					{$t(
+						'Effective Workspace resource actions determine which governance actions are available.'
+					)}
 				</p>
 			</div>
 			{#if governanceMembers.isPending}<p>
@@ -292,7 +295,7 @@
 									><td class="p-3">{$t(domainLabel(member.state))}</td><td
 										class="flex flex-wrap gap-2 p-3"
 									>
-										{#if member.role !== 'owner' && ((member.role === 'admin' && workspace.can('workspace.admins.manage')) || (member.role !== 'admin' && workspace.can('workspace.members.manage')))}
+										{#if can(member.authorization, 'workspace_member', 'change_role')}
 											<select
 												aria-label={$t('Role for {username}', { username: member.username })}
 												value={member.role}
@@ -313,62 +316,66 @@
 														$t('Member role updated')
 													);
 												}}
-												><option value="admin" disabled={!workspace.can('workspace.admins.manage')}
+												><option
+													value="admin"
+													disabled={member.role !== 'admin' &&
+														!can(member.authorization, 'workspace_member', 'promote')}
 													>{$t('admin')}</option
 												><option value="editor">{$t('editor')}</option><option value="reviewer"
 													>{$t('reviewer')}</option
 												><option value="viewer">{$t('viewer')}</option></select
 											>
-											{#if member.state === 'active'}<Button
-													size="sm"
-													variant="tonal"
-													disabled={busyId !== ''}
-													onclick={() =>
+										{/if}
+										{#if can(member.authorization, 'workspace_member', 'suspend')}<Button
+												size="sm"
+												variant="tonal"
+												disabled={busyId !== ''}
+												onclick={() =>
+													void run(
+														`suspend:${member.membership_id}`,
+														() =>
+															api.request(
+																'POST',
+																'/workspaces/{workspace_id}/members/{membership_id}/suspend',
+																{ params: { path: { membership_id: member.membership_id } } }
+															),
+														$t('Member suspended')
+													)}>{$t('Suspend')}</Button
+											>{:else if can(member.authorization, 'workspace_member', 'reactivate')}<Button
+												size="sm"
+												variant="tonal"
+												disabled={busyId !== ''}
+												onclick={() =>
+													void run(
+														`reactivate:${member.membership_id}`,
+														() =>
+															api.request(
+																'POST',
+																'/workspaces/{workspace_id}/members/{membership_id}/reactivate',
+																{ params: { path: { membership_id: member.membership_id } } }
+															),
+														$t('Member reactivated')
+													)}>{$t('Reactivate')}</Button
+											>{/if}
+										{#if can(member.authorization, 'workspace_member', 'transfer_ownership')}<Button
+												size="sm"
+												variant="tonal"
+												disabled={busyId !== ''}
+												onclick={() => {
+													if (confirmOwnershipTransfer(member.username))
 														void run(
-															`suspend:${member.membership_id}`,
+															`transfer:${member.membership_id}`,
 															() =>
 																api.request(
 																	'POST',
-																	'/workspaces/{workspace_id}/members/{membership_id}/suspend',
+																	'/workspaces/{workspace_id}/ownership/{membership_id}',
 																	{ params: { path: { membership_id: member.membership_id } } }
 																),
-															$t('Member suspended')
-														)}>{$t('Suspend')}</Button
-												>{:else}<Button
-													size="sm"
-													variant="tonal"
-													disabled={busyId !== ''}
-													onclick={() =>
-														void run(
-															`reactivate:${member.membership_id}`,
-															() =>
-																api.request(
-																	'POST',
-																	'/workspaces/{workspace_id}/members/{membership_id}/reactivate',
-																	{ params: { path: { membership_id: member.membership_id } } }
-																),
-															$t('Member reactivated')
-														)}>{$t('Reactivate')}</Button
-												>{/if}
-											{#if workspace.can('workspace.ownership.transfer') && member.state === 'active'}<Button
-													size="sm"
-													variant="tonal"
-													disabled={busyId !== ''}
-													onclick={() => {
-														if (confirmOwnershipTransfer(member.username))
-															void run(
-																`transfer:${member.membership_id}`,
-																() =>
-																	api.request(
-																		'POST',
-																		'/workspaces/{workspace_id}/ownership/{membership_id}',
-																		{ params: { path: { membership_id: member.membership_id } } }
-																	),
-																$t('Ownership transferred')
-															);
-													}}>{$t('Transfer ownership')}</Button
-												>{/if}
-											<Button
+															$t('Ownership transferred')
+														);
+												}}>{$t('Transfer ownership')}</Button
+											>{/if}
+										{#if can(member.authorization, 'workspace_member', 'terminate')}<Button
 												size="sm"
 												variant="tonal"
 												disabled={busyId !== ''}
@@ -385,8 +392,7 @@
 															$t('Member removed')
 														);
 												}}>{$t('Terminate')}</Button
-											>
-										{/if}
+											>{/if}
 									</td></tr
 								>{/each}</tbody
 						>
@@ -427,41 +433,45 @@
 			{/if}
 		</section>
 	{/if}
-	{#if workspace.can('workspace.members.manage')}
+	{#if workspace.can('workspace_invitation', 'read')}
 		<section
 			class="grid grid-cols-1 gap-4 rounded-container border border-surface-300-700 bg-surface-50-950 p-5"
 		>
 			<h2 class="text-xl font-semibold">{$t('Invitations')}</h2>
-			<form
-				class="grid grid-cols-1 gap-3 md:grid-cols-4"
-				onsubmit={(event) => {
-					event.preventDefault();
-					void createInvitation();
-				}}
-			>
-				<label class="grid grid-cols-1 gap-1 md:col-span-2"
-					>{$t('Exact username')}<input class="input" bind:value={inviteUsername} required /></label
+			{#if workspace.can('workspace_invitation', 'create')}<form
+					class="grid grid-cols-1 gap-3 md:grid-cols-4"
+					onsubmit={(event) => {
+						event.preventDefault();
+						void createInvitation();
+					}}
 				>
-				<label class="grid grid-cols-1 gap-1"
-					>{$t('Role')}<select bind:value={inviteRole}
-						><option value="viewer">{$t('viewer')}</option><option value="reviewer"
-							>{$t('reviewer')}</option
-						><option value="editor">{$t('editor')}</option></select
-					></label
-				>
-				<label class="grid grid-cols-1 gap-1"
-					>{$t('Expires in days')}<input
-						class="input"
-						type="number"
-						min="1"
-						max="365"
-						bind:value={inviteDays}
-					/></label
-				>
-				<Button type="submit" disabled={busyId !== '' || !inviteUsername.trim()}
-					>{$t('Create invitation')}</Button
-				>
-			</form>
+					<label class="grid grid-cols-1 gap-1 md:col-span-2"
+						>{$t('Exact username')}<input
+							class="input"
+							bind:value={inviteUsername}
+							required
+						/></label
+					>
+					<label class="grid grid-cols-1 gap-1"
+						>{$t('Role')}<select bind:value={inviteRole}
+							><option value="viewer">{$t('viewer')}</option><option value="reviewer"
+								>{$t('reviewer')}</option
+							><option value="editor">{$t('editor')}</option></select
+						></label
+					>
+					<label class="grid grid-cols-1 gap-1"
+						>{$t('Expires in days')}<input
+							class="input"
+							type="number"
+							min="1"
+							max="365"
+							bind:value={inviteDays}
+						/></label
+					>
+					<Button type="submit" disabled={busyId !== '' || !inviteUsername.trim()}
+						>{$t('Create invitation')}</Button
+					>
+				</form>{/if}
 			{#if oneTimeToken}<div
 					class="flex flex-wrap items-center gap-2 rounded-md bg-surface-100-900 p-3"
 				>
@@ -477,22 +487,22 @@
 							<span
 								>{invitation.username} · {$t(domainLabel(invitation.role))} · {$t('expires')}
 								{new Date(invitation.expires_at).toLocaleDateString()}</span
-							><Button
-								size="sm"
-								variant="tonal"
-								disabled={busyId !== ''}
-								onclick={() =>
-									void run(
-										`revoke:${invitation.id}`,
-										() =>
-											api.request(
-												'DELETE',
-												'/workspaces/{workspace_id}/invitations/{invitation_id}',
-												{ params: { path: { invitation_id: invitation.id } } }
-											),
-										$t('Invitation revoked')
-									)}>{$t('Revoke')}</Button
-							>
+							>{#if workspace.can('workspace_invitation', 'revoke')}<Button
+									size="sm"
+									variant="tonal"
+									disabled={busyId !== ''}
+									onclick={() =>
+										void run(
+											`revoke:${invitation.id}`,
+											() =>
+												api.request(
+													'DELETE',
+													'/workspaces/{workspace_id}/invitations/{invitation_id}',
+													{ params: { path: { invitation_id: invitation.id } } }
+												),
+											$t('Invitation revoked')
+										)}>{$t('Revoke')}</Button
+								>{/if}
 						</li>{/each}
 				</ul>{/if}
 		</section>

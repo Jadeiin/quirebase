@@ -14,7 +14,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import selectinload
 
 from quirebase.access.items import require_accessible_items, visible_items_query
-from quirebase.access.workspaces import Capability, require_workspace_capability
+from quirebase.access.workspaces import ResourceAction, require_workspace_action
 from quirebase.audit import record_event
 from quirebase.core.config import Settings, get_settings
 from quirebase.core.errors import (
@@ -117,7 +117,7 @@ def _record_to_item_payload(record: BibliographyRecord) -> dict[str, str | None]
 async def stage_import_batch(
     db: AsyncSession, user: User, workspace_id: str, file_bytes: bytes, file_format: str
 ) -> tuple[ImportBatch, list[dict], list[dict]]:
-    await require_workspace_capability(db, user, workspace_id, Capability.items_create)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.item_create)
     if file_format not in SUPPORTED_FORMATS:
         raise ValidationFailure("format must be bibtex, biblatex, ris, or endnote")
     if len(file_bytes) > 5 * 1024 * 1024:
@@ -150,7 +150,7 @@ async def stage_identifier_import_batch(
 ) -> tuple[ImportBatch, list[dict], list[dict]]:
     from quirebase.operations.settings import get_effective_settings_model
 
-    await require_workspace_capability(db, user, workspace_id, Capability.items_create)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.item_create)
     user_id = user.id
     effective_settings = settings or await get_effective_settings_model(db)
     # Settings are a short read; release its transaction before external I/O.
@@ -160,7 +160,7 @@ async def stage_identifier_import_batch(
     if reloaded_user is None or not reloaded_user.active:
         raise ResourceUnavailable("user not available")
     user = (
-        await require_workspace_capability(db, reloaded_user, workspace_id, Capability.items_create)
+        await require_workspace_action(db, reloaded_user, workspace_id, ResourceAction.item_create)
     ).actor
     rec_dict = candidate_record_values(record)
     batch = ImportBatch(
@@ -180,7 +180,7 @@ async def stage_identifier_import_batch(
         batch.id,
         detail={"provider": record.identifier.provider},
         workspace_id=workspace_id,
-        authorization_capability=Capability.items_create.value,
+        authorization_resource_action=ResourceAction.item_create.value,
     )
     await db.commit()
     return batch, [rec_dict], []
@@ -197,7 +197,7 @@ async def stage_pdf_import_batch(
 ) -> tuple[ImportBatch, list[dict], list[dict]]:
     from quirebase.operations.settings import get_effective_setting
 
-    await require_workspace_capability(db, user, workspace_id, Capability.items_create)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.item_create)
     if not uploads:
         raise ValidationFailure("at least one PDF is required")
     if len(uploads) > MAX_PDF_IMPORT_FILES:
@@ -246,8 +246,8 @@ async def stage_pdf_import_batch(
         if reloaded_user is None or not reloaded_user.active:
             raise ResourceUnavailable("user not available")
         reloaded_user = (
-            await require_workspace_capability(
-                db, reloaded_user, workspace_id, Capability.items_create
+            await require_workspace_action(
+                db, reloaded_user, workspace_id, ResourceAction.item_create
             )
         ).actor
         batch = ImportBatch(
@@ -289,7 +289,7 @@ async def stage_pdf_import_batch(
             batch.id,
             detail={"files": len(uploads), "diagnostics": len(errors)},
             workspace_id=workspace_id,
-            authorization_capability=Capability.items_create.value,
+            authorization_resource_action=ResourceAction.item_create.value,
         )
         await db.commit()
         for staged in staged_pdfs:
@@ -448,7 +448,7 @@ async def finalize_pdf_import_batch(
     try:
         if owner is None:
             raise ResourceUnavailable("user not available")
-        await require_workspace_capability(db, owner, workspace_id, Capability.items_create)
+        await require_workspace_action(db, owner, workspace_id, ResourceAction.item_create)
     except DomainError:
         batch.records = "[]"
         batch.errors = json.dumps([
@@ -472,7 +472,7 @@ async def finalize_pdf_import_batch(
         batch.id,
         detail={"candidates": len(records), "diagnostics": len(initial_errors) + len(errors)},
         workspace_id=workspace_id,
-        authorization_capability=Capability.items_create.value,
+        authorization_resource_action=ResourceAction.item_create.value,
     )
     return True
 
@@ -488,7 +488,7 @@ async def _create_item_from_record(
 async def get_import_batch_preview(
     db: AsyncSession, user: User, workspace_id: str, batch_id: str
 ) -> tuple[ImportBatch, list[dict], list[dict]]:
-    await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     observed = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id))
     if observed is None or observed.workspace_id != workspace_id:
         raise ResourceUnavailable("import batch not found")
@@ -546,7 +546,7 @@ async def retry_pdf_import_batch(
     db: AsyncSession, user: User, workspace_id: str, batch_id: str
 ) -> ImportBatch:
     """Retry a failed PDF Import Batch without relinquishing its staged objects."""
-    await require_workspace_capability(db, user, workspace_id, Capability.items_create)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.item_create)
     observed = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id))
     if observed is None or observed.workspace_id != workspace_id:
         raise ResourceUnavailable("import batch not found")
@@ -611,7 +611,7 @@ async def retry_pdf_import_batch(
         "import_batch",
         batch.id,
         workspace_id=workspace_id,
-        authorization_capability=Capability.items_create.value,
+        authorization_resource_action=ResourceAction.item_create.value,
     )
     await db.commit()
     return batch
@@ -628,7 +628,7 @@ async def commit_import_batch(
     )
     if actor is None:
         raise ResourceUnavailable("user not available")
-    await require_workspace_capability(db, actor, workspace_id, Capability.items_create)
+    await require_workspace_action(db, actor, workspace_id, ResourceAction.item_create)
     # Confirmation mutates the Import Batch root and creates child Items.  A
     # full UPDATE lock serializes concurrent confirmations before either caller
     # can observe ``ready`` and create duplicate Items.
@@ -695,7 +695,7 @@ async def commit_import_batch(
             item.id,
             detail={"format": batch.file_format, "filename": pdf["original_name"] if pdf else None},
             workspace_id=workspace_id,
-            authorization_capability=Capability.items_create.value,
+            authorization_resource_action=ResourceAction.item_create.value,
         )
         committed_item_ids.append(item.id)
     batch.committed_item_ids = json.dumps(committed_item_ids)
@@ -714,7 +714,7 @@ async def commit_import_batch(
 async def discard_import_batch(
     db: AsyncSession, user: User, workspace_id: str, batch_id: str
 ) -> None:
-    await require_workspace_capability(db, user, workspace_id, Capability.items_create)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.item_create)
     batch = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update())
     if batch is None or batch.workspace_id != workspace_id:
         raise ResourceUnavailable("import batch not found")
@@ -728,7 +728,7 @@ async def discard_import_batch(
         "import_batch",
         batch.id,
         workspace_id=workspace_id,
-        authorization_capability=Capability.items_create.value,
+        authorization_resource_action=ResourceAction.item_create.value,
     )
     await db.delete(batch)
     await enqueue_object_cleanup(
@@ -750,7 +750,7 @@ async def export_accessible_bibliography(
     style_key: str = "apa",
     options: BibliographyExportOptions | None = None,
 ) -> tuple[str, str, str]:
-    await require_workspace_capability(db, user, workspace_id, Capability.workspace_export)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_export)
     items = list(
         (
             await db.scalars(

@@ -18,6 +18,7 @@ from fastapi.openapi.docs import (
 from fastapi.responses import HTMLResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from quirebase.access import initialize_authorization
 from quirebase.core.config import get_settings
 from quirebase.core.database import AsyncSessionLocal, engine
 from quirebase.core.logging import configure_logging, log_context
@@ -142,6 +143,7 @@ def _documentation_endpoint(render: Callable[[str], str]) -> Callable[[Request],
 
 
 def create_app(*, mcp_session_factory: SessionFactory = AsyncSessionLocal) -> FastAPI:
+    initialize_authorization()
     settings = get_settings()
     frontend_directory = _frontend_directory()
     frontend_csp = _frontend_content_security_policy(frontend_directory)

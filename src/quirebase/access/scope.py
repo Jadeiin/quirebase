@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 def workspace_select(model: Any, ctx: WorkspaceContext) -> Select[Any]:
     """Select rows belonging to the context's Workspace.
 
-    This helper only adds Workspace lineage. Membership, capabilities and managed-Project
+    This helper only adds Workspace lineage. Membership, resource-action decisions and managed-Project
     discoverability are explicit Access decisions, never implicit tenant filters.
     """
 

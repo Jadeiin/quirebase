@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { apiErrorMessage } from '$lib/api/errors';
+	import { can } from '$lib/authorization/can';
 	import Notice from '$lib/design/Notice.svelte';
 	import PromptDialog from '$lib/design/PromptDialog.svelte';
 	import {
@@ -43,7 +44,7 @@
 
 	function addDiscussion(event: SubmitEvent) {
 		event.preventDefault();
-		if (!workspace.can('discussion.write')) return;
+		if (!workspace.can('item_discussion', 'create')) return;
 		const form = event.currentTarget as HTMLFormElement;
 		const body = String(new FormData(form).get('body') ?? '').trim();
 		if (body) track(discussionCreate.mutateAsync({ form, body }));
@@ -52,7 +53,10 @@
 	function deleteDiscussion(messageId: string) {
 		if (
 			!discussion.data?.some(
-				(message) => message.id === messageId && message.allowed_actions.includes('delete')
+				(message) =>
+					message.id === messageId &&
+					message.mine &&
+					can(message.authorization, 'item_discussion', 'delete')
 			)
 		)
 			return;
@@ -65,7 +69,10 @@
 			!messageId ||
 			!reason.trim() ||
 			!discussion.data?.some(
-				(message) => message.id === messageId && message.allowed_actions.includes('moderate')
+				(message) =>
+					message.id === messageId &&
+					!message.mine &&
+					can(message.authorization, 'item_discussion', 'delete')
 			)
 		)
 			return;
@@ -78,7 +85,7 @@
 <ItemSectionState loading={discussion.isPending} failed={discussion.isError}>
 	<ItemDiscussionSection
 		messages={discussion.data!}
-		canWrite={workspace.can('discussion.write')}
+		canWrite={workspace.can('item_discussion', 'create')}
 		busy={discussionCreate.isPending || discussionDelete.isPending || discussionModerate.isPending}
 		onAdd={addDiscussion}
 		onDelete={deleteDiscussion}

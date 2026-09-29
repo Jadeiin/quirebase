@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import type { ItemOverviewView } from '$lib/api/client';
+	import { can } from '$lib/authorization/can';
 	import Panel from '$lib/design/Panel.svelte';
 	import RichText from '$lib/design/RichText.svelte';
 	import { t } from '$lib/i18n';
@@ -50,7 +51,7 @@
 		<Panel padding="none">
 			<header class="flex items-center justify-between border-b border-surface-300-700 px-5 py-4">
 				<h2 class="m-0 text-lg">{$t('Publication details')}</h2>
-				{#if data.allowed_actions.edit}
+				{#if can(data.authorization, 'item', 'update')}
 					<a
 						class="text-sm font-semibold text-primary-700-300 no-underline"
 						href={resolve(workspaceHref(workspaceId, `item/${itemId}/metadata`))}
@@ -205,7 +206,9 @@
 			<dl class="grid grid-cols-1 gap-3 text-sm">
 				<div>
 					<dt class="text-surface-600-400">{$t('Permissions')}</dt>
-					<dd class="m-0">{data.allowed_actions.edit ? $t('Can edit') : $t('Read only')}</dd>
+					<dd class="m-0">
+						{can(data.authorization, 'item', 'update') ? $t('Can edit') : $t('Read only')}
+					</dd>
 				</div>
 				<div>
 					<dt class="text-surface-600-400">{$t('Citation key')}</dt>

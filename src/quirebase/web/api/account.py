@@ -27,7 +27,7 @@ from quirebase.web.api.account_schemas import (
     RegisterRequest,
 )
 from quirebase.web.api.auth import require_same_origin
-from quirebase.web.api.common import OkView
+from quirebase.web.api.common import OkView, system_authorization_view
 from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.session_schemas import LoginSessionView
 from quirebase.web.errors import ApiHTTPException
@@ -72,10 +72,15 @@ async def account_summary(request: Request, user: ApiUser, db: Database):
 
     raw_session = request.cookies.get(get_settings().session_cookie, "")
     current = await get_login_session_by_token(db, raw_session)
-    sessions = await list_user_sessions(db, user.id)
+    sessions = await list_user_sessions(db, user)
     tokens = await list_api_tokens(db, user)
     return {
-        "user": {"id": user.id, "username": user.username, "role": user.role},
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "role": user.role,
+            "authorization": system_authorization_view(user.role),
+        },
         "sessions": [
             LoginSessionView(
                 id=session.id,

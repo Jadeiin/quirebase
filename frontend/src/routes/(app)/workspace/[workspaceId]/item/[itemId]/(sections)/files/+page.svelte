@@ -2,6 +2,7 @@
 	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { createWorkspaceApi, isDownloadCancelled } from '$lib/api/client';
 	import { apiErrorMessage } from '$lib/api/errors';
+	import { can } from '$lib/authorization/can';
 	import ConfirmDialog from '$lib/design/ConfirmDialog.svelte';
 	import Notice from '$lib/design/Notice.svelte';
 	import {
@@ -70,7 +71,7 @@
 	}
 
 	function downloadFile(file: FileRow) {
-		if (!workspace.can('workspace.export')) return;
+		if (!workspace.can('workspace', 'export')) return;
 		track(
 			file.kind === 'revision'
 				? workspaceApi.downloadGet(
@@ -91,6 +92,7 @@
 	}
 
 	function deleteFile(file: FileRow) {
+		if (!workspace.can('file', 'delete')) return;
 		pendingFile = file;
 		confirmFileOpen = true;
 	}
@@ -100,6 +102,7 @@
 		pendingFile = null;
 		confirmFileOpen = false;
 		if (!file) return;
+		if (!workspace.can('file', 'delete')) return;
 		track(fileDelete.mutateAsync({ file }));
 	}
 </script>
@@ -121,7 +124,8 @@
 		itemId={params.itemId}
 		data={files.data!}
 		details={details.data}
-		canEdit={(overview.data?.allowed_actions.edit ?? false) && workspace.can('files.manage')}
+		canEdit={can(overview.data?.authorization, 'file', 'manage')}
+		canDelete={can(overview.data?.authorization, 'file', 'delete')}
 		busy={fileUpload.isPending || fileRemoteUpload.isPending || fileDelete.isPending}
 		onUpload={upload}
 		onUploadFromUrl={uploadFromUrl}

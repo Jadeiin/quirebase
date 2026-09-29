@@ -5,8 +5,9 @@ from contextlib import suppress
 from dataclasses import asdict
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Query, status
 
+from quirebase.access import SystemAction, require_system_action
 from quirebase.accounts import (
     change_user_role,
     create_invitation,
@@ -50,7 +51,6 @@ from quirebase.web.api.admin_schemas import (
 from quirebase.web.api.common import OkView, WriteResult
 from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.library_schemas import ItemSearchView, item_search_view
-from quirebase.web.errors import ApiHTTPException
 from quirebase.workspaces import (
     list_workspaces_for_governance,
     read_workspace_items_break_glass,
@@ -58,18 +58,6 @@ from quirebase.workspaces import (
     suspend_workspace_governance,
 )
 
-
-def require_api_admin(user: ApiUser) -> User:
-    if user.role != "administrator":
-        raise ApiHTTPException(
-            status.HTTP_404_NOT_FOUND,
-            "not_found",
-            "resource not found",
-        )
-    return user
-
-
-AdminUser = Annotated[User, Depends(require_api_admin)]
 router = APIRouter(
     prefix="/admin",
     tags=["Instance administration"],
@@ -115,7 +103,7 @@ def _audit_view(event) -> dict:
         "target_id": event.target_id,
         "target_ids": target_ids,
         "authorization_role": event.authorization_role,
-        "authorization_capability": event.authorization_capability,
+        "authorization_resource_action": event.authorization_resource_action,
         "result": event.result,
         "source": event.source,
         "detail": detail,
@@ -124,9 +112,10 @@ def _audit_view(event) -> dict:
 
 
 @router.get("/overview", response_model=AdminOverviewView)
-async def admin_overview(user: AdminUser, db: Database):
+async def admin_overview(user: ApiUser, db: Database):
     users = await list_users(db, user)
     invitations = await list_invitations(db, user)
+    await require_system_action(db, user, SystemAction.workflows_read)
     failed = await durable_operations().list(status="failed", limit=100)
     events, _ = await query_events(db, user, page=1, page_size=10)
     return {
@@ -142,7 +131,7 @@ async def admin_overview(user: AdminUser, db: Database):
 
 @router.get("/users", response_model=AdminUsersView)
 async def admin_users(
-    user: AdminUser,
+    user: ApiUser,
     db: Database,
     search: str = "",
     role: str = "",
@@ -172,34 +161,32 @@ async def admin_users(
 
 
 @router.post("/users", response_model=AdminUserView, status_code=status.HTTP_201_CREATED)
-async def admin_create_user(data: AdminUserCreateRequest, user: AdminUser, db: Database):
+async def admin_create_user(data: AdminUserCreateRequest, user: ApiUser, db: Database):
     return _user_view(await create_user_admin(db, user, data.username, data.password, data.role))
 
 
 @router.put("/users/{user_id}/status", response_model=AdminUserView)
 async def admin_update_user_status(
-    user_id: str, data: UserStatusRequest, user: AdminUser, db: Database
+    user_id: str, data: UserStatusRequest, user: ApiUser, db: Database
 ):
     return _user_view(await update_user_status(db, user, user_id, data.active))
 
 
 @router.put("/users/{user_id}/role", response_model=AdminUserView)
-async def admin_update_user_role(
-    user_id: str, data: UserRoleRequest, user: AdminUser, db: Database
-):
+async def admin_update_user_role(user_id: str, data: UserRoleRequest, user: ApiUser, db: Database):
     return _user_view(await change_user_role(db, user, user_id, data.role))
 
 
 @router.put("/users/{user_id}/password", response_model=OkView)
 async def admin_reset_password(
-    user_id: str, data: PasswordResetRequest, user: AdminUser, db: Database
+    user_id: str, data: PasswordResetRequest, user: ApiUser, db: Database
 ) -> OkView:
     await reset_user_password(db, user, user_id, data.password)
     return OkView()
 
 
 @router.delete("/users/{user_id}/sessions", response_model=OkView)
-async def admin_revoke_sessions(user_id: str, user: AdminUser, db: Database) -> OkView:
+async def admin_revoke_sessions(user_id: str, user: ApiUser, db: Database) -> OkView:
     await revoke_user_sessions(db, user, user_id)
     return OkView()
 
@@ -207,7 +194,7 @@ async def admin_revoke_sessions(user_id: str, user: AdminUser, db: Database) -> 
 @router.post(
     "/invitations", response_model=AdminInvitationCreatedView, status_code=status.HTTP_201_CREATED
 )
-async def admin_create_invitation(data: InvitationCreateRequest, user: AdminUser, db: Database):
+async def admin_create_invitation(data: InvitationCreateRequest, user: ApiUser, db: Database):
 
     invitation, token = await create_invitation(db, user, data.username, data.role)
     return {
@@ -222,7 +209,7 @@ async def admin_create_invitation(data: InvitationCreateRequest, user: AdminUser
 
 @router.get("/audit", response_model=AdminAuditView)
 async def admin_audit(
-    user: AdminUser,
+    user: ApiUser,
     db: Database,
     search: str = "",
     actor_id: str = "",
@@ -249,8 +236,8 @@ async def admin_audit(
 
 
 @router.get("/workflows", response_model=AdminWorkflowsView)
-async def admin_workflows(user: AdminUser, state: str = ""):
-    del user
+async def admin_workflows(user: ApiUser, db: Database, state: str = ""):
+    await require_system_action(db, user, SystemAction.workflows_read)
     normalized = state.strip().casefold()
     if normalized not in {"", "pending", "running", "succeeded", "failed", "cancelled"}:
         raise ValidationFailure(f"unknown workflow state: {state}")
@@ -263,21 +250,22 @@ async def admin_workflows(user: AdminUser, state: str = ""):
 
 
 @router.get("/settings", response_model=AdminSettingsView)
-async def admin_settings(user: AdminUser, db: Database):
-    del user
+async def admin_settings(user: ApiUser, db: Database):
+    await require_system_action(db, user, SystemAction.settings_read)
     return await get_runtime_settings(db)
 
 
 @router.put("/settings", response_model=OkView)
 async def admin_update_settings(
-    data: RuntimeSettingsRequest, user: AdminUser, db: Database
+    data: RuntimeSettingsRequest, user: ApiUser, db: Database
 ) -> OkView:
     await update_runtime_settings(db, user, data.model_dump())
     return OkView()
 
 
 @router.get("/maintenance", response_model=AdminMaintenanceView)
-async def admin_maintenance(user: AdminUser, db: Database):
+async def admin_maintenance(user: ApiUser, db: Database):
+    await require_system_action(db, user, SystemAction.workflows_read)
     workflows = await durable_operations().list(limit=100)
     return {
         "storage": await get_storage_metrics(db, user),
@@ -290,7 +278,7 @@ async def admin_maintenance(user: AdminUser, db: Database):
 
 
 @router.get("/workspaces", response_model=list[AdminWorkspaceView])
-async def admin_workspaces(user: AdminUser, db: Database) -> list[AdminWorkspaceView]:
+async def admin_workspaces(user: ApiUser, db: Database) -> list[AdminWorkspaceView]:
     return [
         AdminWorkspaceView(
             id=workspace.id,
@@ -305,13 +293,13 @@ async def admin_workspaces(user: AdminUser, db: Database) -> list[AdminWorkspace
 
 
 @router.post("/workspaces/{workspace_id}/suspend", response_model=OkView)
-async def admin_suspend_workspace(workspace_id: str, user: AdminUser, db: Database) -> OkView:
+async def admin_suspend_workspace(workspace_id: str, user: ApiUser, db: Database) -> OkView:
     await suspend_workspace_governance(db, user, workspace_id)
     return OkView()
 
 
 @router.post("/workspaces/{workspace_id}/recover", response_model=OkView)
-async def admin_recover_workspace(workspace_id: str, user: AdminUser, db: Database) -> OkView:
+async def admin_recover_workspace(workspace_id: str, user: ApiUser, db: Database) -> OkView:
     await recover_workspace_governance(db, user, workspace_id)
     return OkView()
 
@@ -323,7 +311,7 @@ async def admin_recover_workspace(workspace_id: str, user: AdminUser, db: Databa
 async def admin_break_glass_items(
     workspace_id: str,
     data: BreakGlassReadRequest,
-    user: AdminUser,
+    user: ApiUser,
     db: Database,
 ) -> list[ItemSearchView]:
     return [
@@ -335,15 +323,15 @@ async def admin_break_glass_items(
 @router.post("/maintenance/{operation}", response_model=WriteResult)
 async def run_maintenance(
     operation: Literal["check_objects"],
-    user: AdminUser,
+    user: ApiUser,
     db: Database,
 ) -> WriteResult:
     return WriteResult(id=await dispatch_maintenance_workflow(db, user, operation))
 
 
 @router.get("/workflows/{workflow_id}", response_model=WorkflowSummaryView)
-async def workflow_status(workflow_id: str, user: AdminUser):
-    del user
+async def workflow_status(workflow_id: str, user: ApiUser, db: Database):
+    await require_system_action(db, user, SystemAction.workflows_read)
     workflow = await durable_operations().get(workflow_id)
     if workflow is None:
         raise ResourceNotFound("workflow not found")

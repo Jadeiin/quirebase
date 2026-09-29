@@ -1,6 +1,19 @@
 import { expect, test } from '@playwright/test';
 import { minimalPdf, mockSession } from './helpers';
 
+const editableItemAuthorization = {
+	allowed: [
+		'item.update',
+		'item.delete',
+		'workspace.export',
+		'file.manage',
+		'file.delete',
+		'tag.use',
+		'tag.create',
+		'project_item.manage'
+	]
+};
+
 test('item detail URL selects and loads the metadata section', async ({ page }) => {
 	await mockSession(page);
 	let metadataRequests = 0;
@@ -9,7 +22,8 @@ test('item detail URL selects and loads the metadata section', async ({ page }) 
 			json: {
 				item: { id: 'item-1', title_html: '<i>Visible</i> Item', version: 1 },
 				latest_revision: null,
-				allowed_actions: { edit: true, delete: true },
+				authorization: editableItemAuthorization,
+				copy_targets: [],
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
 				tags: [],
 				owner: { id: 'user-1', username: 'reader' },
@@ -76,7 +90,8 @@ test('Item overview renders without the deprecated Item Owner projection', async
 					doi: null,
 					version: 1
 				},
-				allowed_actions: { edit: false, delete: false },
+				authorization: { allowed: [] },
+				copy_targets: [],
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
 				tags: [],
 				identifiers: [],
@@ -145,7 +160,8 @@ test('read-only Item metadata does not expose mutation controls', async ({ page 
 			json: {
 				item: { id: 'item-readonly', title_html: 'Read-only Item', version: 1 },
 				latest_revision: null,
-				allowed_actions: { edit: false, delete: false },
+				authorization: { allowed: [] },
+				copy_targets: [],
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
 				tags: [],
 				owner: { id: 'user-2', username: 'owner' },
@@ -182,7 +198,7 @@ test('read-only Item metadata does not expose mutation controls', async ({ page 
 	await expect(page.getByRole('button', { name: 'Record tools' })).toHaveCount(0);
 });
 
-test('cross-Workspace copy only offers destinations where the User can create Items', async ({
+test('cross-Workspace copy only offers destinations allowed by the copy decision', async ({
 	page
 }) => {
 	await mockSession(page);
@@ -192,17 +208,17 @@ test('cross-Workspace copy only offers destinations where the User can create It
 				{
 					id: 'workspace-1',
 					name: 'Source',
-					effective_capabilities: ['workspace.read']
+					authorization: { allowed: ['workspace.read'] }
 				},
 				{
 					id: 'workspace-2',
 					name: 'Eligible destination',
-					effective_capabilities: ['workspace.read', 'items.create']
+					authorization: { allowed: ['workspace.read', 'item.create'] }
 				},
 				{
 					id: 'workspace-3',
 					name: 'Read-only destination',
-					effective_capabilities: ['workspace.read']
+					authorization: { allowed: ['workspace.read'] }
 				}
 			]
 		})
@@ -212,7 +228,19 @@ test('cross-Workspace copy only offers destinations where the User can create It
 			json: {
 				item: { id: 'item-copy', title_html: 'Copy source', version: 1 },
 				latest_revision: null,
-				allowed_actions: { edit: false, delete: false },
+				authorization: { allowed: ['workspace.export'] },
+				copy_targets: [
+					{
+						id: 'workspace-2',
+						name: 'Eligible destination',
+						authorization: { allowed: ['item.copy'] }
+					},
+					{
+						id: 'workspace-3',
+						name: 'Read-only destination',
+						authorization: { allowed: [] }
+					}
+				],
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
 				tags: [],
 				owner: { id: 'user-1', username: 'reader' },
@@ -281,7 +309,8 @@ test('Item annotation review spans every PDF revision', async ({ page }) => {
 					page_count: 2,
 					processing_state: 'ready'
 				},
-				allowed_actions: { edit: false, delete: false },
+				authorization: { allowed: ['workspace.export'] },
+				copy_targets: [],
 				counts: { revisions: 2, attachments: 0, annotations: 2, discussion: 0 },
 				tags: [],
 				owner: { id: 'user-2', username: 'owner' },
@@ -303,7 +332,7 @@ test('Item annotation review spans every PDF revision', async ({ page }) => {
 					body: currentRevision === 'revision-new' ? 'New revision note' : 'Old revision note',
 					selected_text: null,
 					author_display_name: 'reader',
-					allowed_actions: [],
+					authorization: { allowed: [] },
 					replies: []
 				},
 				{
@@ -315,7 +344,7 @@ test('Item annotation review spans every PDF revision', async ({ page }) => {
 					body: 'Shared project note',
 					selected_text: null,
 					author_display_name: 'collaborator',
-					allowed_actions: [],
+					authorization: { allowed: [] },
 					replies: []
 				}
 			]);
@@ -364,7 +393,8 @@ test('Item annotation review surfaces aggregate lookup failures', async ({ page 
 						page_count: 2,
 						processing_state: 'ready'
 					},
-					allowed_actions: { edit: false, delete: false },
+					authorization: { allowed: ['workspace.export'] },
+					copy_targets: [],
 					counts: { revisions: 1, attachments: 0, annotations: 1, discussion: 0 },
 					tags: [],
 					owner: { id: 'user-2', username: 'owner' },
@@ -405,7 +435,8 @@ test('Annotation moderation refreshes a stale version and requires an explicit r
 					page_count: 1,
 					processing_state: 'ready'
 				},
-				allowed_actions: { edit: false, delete: false },
+				authorization: { allowed: ['workspace.export'] },
+				copy_targets: [],
 				counts: { revisions: 1, attachments: 0, annotations: 1, discussion: 0 },
 				tags: [],
 				owner: { id: 'user-2', username: 'owner' },
@@ -434,11 +465,29 @@ test('Annotation moderation refreshes a stale version and requires an explicit r
 							selected_text: null,
 							author_display_name: 'author',
 							mine: false,
-							allowed_actions: ['hide', 'delete'],
+							authorization: {
+								allowed: ['project_annotation.hide', 'project_annotation.delete']
+							},
+							replies: []
+						},
+						{
+							id: 'own-annotation',
+							revision_id: 'revision-1',
+							revision_name: 'paper.pdf',
+							page_index: 0,
+							kind: 'note',
+							version: 1,
+							body: 'My own annotation',
+							selected_text: null,
+							author_display_name: 'reader',
+							mine: true,
+							authorization: {
+								allowed: ['project_annotation.update', 'project_annotation.delete']
+							},
 							replies: []
 						}
 					],
-					total: 1,
+					total: 2,
 					page: 1,
 					per_page: 50
 				}
@@ -461,6 +510,9 @@ test('Annotation moderation refreshes a stale version and requires an explicit r
 
 	await page.goto('/workspace/workspace-1/item/item-moderation/annotations');
 	await expect(page.getByText('Original moderation target')).toBeVisible();
+	await expect(
+		page.getByText('My own annotation').locator('..').getByLabel('Moderator actions')
+	).toHaveCount(0);
 	await page.getByRole('button', { name: 'hide', exact: true }).click();
 	await expect(page.getByText('Updated by another moderator')).toBeVisible();
 	await expect(
@@ -496,7 +548,8 @@ test('Item file uploads wait for durable processing before refreshing', async ({
 			json: {
 				item: { id: 'item-1', title_html: 'Files Item' },
 				latest_revision: null,
-				allowed_actions: { edit: true, delete: true },
+				authorization: editableItemAuthorization,
+				copy_targets: [],
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
 				tags: [],
 				owner: { id: 'user-1', username: 'reader' },
@@ -564,6 +617,7 @@ test('Item file uploads wait for durable processing before refreshing', async ({
 	await page.getByRole('button', { name: 'Upload PDF' }).click();
 	await expect.poll(() => workflowReads).toBeGreaterThan(1);
 	await expect(page.getByText('paper.pdf')).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(1);
 	await expect(page.getByText('Document processing completed')).toBeVisible();
 	await expect(page.getByRole('button', { name: /Background tasks/ })).toBeVisible();
 });
@@ -575,7 +629,8 @@ test('Item file uploads settle with an error toast when status polling fails', a
 			json: {
 				item: { id: 'item-1', title_html: 'Files Item' },
 				latest_revision: null,
-				allowed_actions: { edit: true, delete: true },
+				authorization: editableItemAuthorization,
+				copy_targets: [],
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
 				tags: [],
 				owner: { id: 'user-1', username: 'reader' },
@@ -632,7 +687,8 @@ test('Item Files acquires URL imports through the same-origin API', async ({ pag
 			json: {
 				item: { id: 'item-remote', title_html: 'Remote PDF Item', version: 1 },
 				latest_revision: null,
-				allowed_actions: { edit: true, delete: true },
+				authorization: editableItemAuthorization,
+				copy_targets: [],
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
 				tags: [],
 				owner: { id: 'user-1', username: 'reader' },
@@ -746,7 +802,8 @@ test('manual Item creation submits complete structured metadata', async ({ page 
 		route.fulfill({
 			json: {
 				item: { id: 'item-created', title_html: 'Structured record', version: 1 },
-				allowed_actions: { edit: true, delete: true },
+				authorization: editableItemAuthorization,
+				copy_targets: [],
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
 				tags: [],
 				identifiers: [],
@@ -833,7 +890,8 @@ test('Item metadata editor preserves structured contributors and custom fields',
 		route.fulfill({
 			json: {
 				item: { id: 'item-1', title_html: 'Editable', version: 4 },
-				allowed_actions: { edit: true, delete: true },
+				authorization: editableItemAuthorization,
+				copy_targets: [],
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
 				tags: [],
 				owner: { id: 'user-1', username: 'reader' },
@@ -910,7 +968,8 @@ test('Metadata synchronization refreshes the editor draft and Overview details',
 		route.fulfill({
 			json: {
 				item: { id: 'item-1', title_html: metadata().title, version, doi: '10.1000/sync' },
-				allowed_actions: { edit: true, delete: true },
+				authorization: editableItemAuthorization,
+				copy_targets: [],
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
 				tags: [],
 				owner: { id: 'user-1', username: 'reader' },
@@ -967,7 +1026,8 @@ test('Item organization toggles the Tag matrix and waits for recommendations', a
 		route.fulfill({
 			json: {
 				item: { id: 'item-1', title_html: 'Organize', version: 1 },
-				allowed_actions: { edit: true, delete: true },
+				authorization: editableItemAuthorization,
+				copy_targets: [],
 				counts: { revisions: 1, attachments: 0, annotations: 0, discussion: 0 },
 				tags: [],
 				owner: { id: 'user-1', username: 'reader' },
@@ -980,7 +1040,7 @@ test('Item organization toggles the Tag matrix and waits for recommendations', a
 		route.fulfill({
 			json: {
 				item: { id: 'item-1', title_html: 'Organize', version: 1 },
-				allowed_actions: { edit: true },
+				authorization: editableItemAuthorization,
 				tags: [],
 				projects: [],
 				tag_matrix: {
@@ -1039,7 +1099,8 @@ test('Item actions export citations and synchronize upstream metadata', async ({
 			doi: '10.1000/test',
 			version: 3
 		},
-		allowed_actions: { edit: true, delete: true },
+		authorization: editableItemAuthorization,
+		copy_targets: [],
 		counts: { revisions: 1, attachments: 0, annotations: 0, discussion: 0 },
 		tags: [],
 		owner: { id: 'user-1', username: 'reader' },

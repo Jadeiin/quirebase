@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
+from functools import lru_cache
 from typing import TYPE_CHECKING
 
-from sqlalchemy import inspect, or_, select
+from sqlalchemy import false, inspect, or_, select
 
+from quirebase.access.authorization import (
+    ResourceActionKey,
+    workspace_action_allowed,
+)
 from quirebase.access.scope import workspace_select
 from quirebase.core.errors import (
     PermissionDenied,
@@ -30,79 +34,101 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
-class Capability(StrEnum):
+class ResourceAction(ResourceActionKey):
+    """One canonical Workspace-scoped authorization resource/action pair."""
+
     workspace_read = "workspace.read"
     workspace_export = "workspace.export"
-    workspace_settings_manage = "workspace.settings.manage"
-    workspace_members_manage = "workspace.members.manage"
-    workspace_admins_manage = "workspace.admins.manage"
-    workspace_transfer = "workspace.ownership.transfer"
+    workspace_update = "workspace.update"
     workspace_archive = "workspace.archive"
+    workspace_restore = "workspace.restore"
     workspace_delete = "workspace.delete"
-    items_create = "items.create"
-    items_edit = "items.edit"
-    items_delete = "items.delete"
-    files_manage = "files.manage"
-    tags_use = "tags.use"
-    tags_create = "tags.create"
-    tags_manage = "tags.manage"
-    citation_styles_manage = "citation_styles.manage"
-    projects_create = "projects.create"
-    projects_create_managed = "projects.create_managed"
-    projects_manage = "projects.manage"
-    projects_delete = "projects.delete"
-    projects_members_manage = "projects.members.manage"
-    discussion_write = "discussion.write"
-    discussion_moderate = "discussion.moderate"
-    annotations_private_write = "annotations.private.write"
-    annotations_project_write = "annotations.project.write"
-    annotations_moderate = "annotations.moderate"
+    item_copy = "item.copy"
+    item_create = "item.create"
+    item_update = "item.update"
+    item_delete = "item.delete"
+    file_manage = "file.manage"
+    file_delete = "file.delete"
+    tag_use = "tag.use"
+    tag_create = "tag.create"
+    tag_manage = "tag.manage"
+    citation_style_manage = "citation_style.manage"
+    project_create = "project.create"
+    project_update = "project.update"
+    project_archive = "project.archive"
+    project_restore = "project.restore"
+    project_delete = "project.delete"
+    project_item_manage = "project_item.manage"
+    project_discover = "project.discover"
+    project_membership_join = "project_membership.join"
+    project_membership_leave = "project_membership.leave"
+    project_membership_manage = "project_membership.manage"
+    workspace_invitation_read = "workspace_invitation.read"
+    workspace_invitation_create = "workspace_invitation.create"
+    workspace_invitation_revoke = "workspace_invitation.revoke"
+    workspace_member_read = "workspace_member.read"
+    workspace_member_change_role = "workspace_member.change_role"
+    workspace_member_promote = "workspace_member.promote"
+    workspace_member_suspend = "workspace_member.suspend"
+    workspace_member_reactivate = "workspace_member.reactivate"
+    workspace_member_terminate = "workspace_member.terminate"
+    workspace_member_transfer_ownership = "workspace_member.transfer_ownership"
+    item_discussion_create = "item_discussion.create"
+    item_discussion_delete = "item_discussion.delete"
+    project_discussion_create = "project_discussion.create"
+    project_discussion_delete = "project_discussion.delete"
+    private_annotation_create = "private_annotation.create"
+    private_annotation_read = "private_annotation.read"
+    private_annotation_update = "private_annotation.update"
+    private_annotation_delete = "private_annotation.delete"
+    private_annotation_restore = "private_annotation.restore"
+    project_annotation_create = "project_annotation.create"
+    project_annotation_read = "project_annotation.read"
+    project_annotation_review = "project_annotation.review"
+    project_annotation_update = "project_annotation.update"
+    project_annotation_delete = "project_annotation.delete"
+    project_annotation_restore = "project_annotation.restore"
+    project_annotation_hide = "project_annotation.hide"
+    project_annotation_archive = "project_annotation.archive"
+    project_annotation_lock = "project_annotation.lock"
+    project_annotation_unlock = "project_annotation.unlock"
+    private_annotation_reply_create = "private_annotation_reply.create"
+    private_annotation_reply_update = "private_annotation_reply.update"
+    private_annotation_reply_delete = "private_annotation_reply.delete"
+    private_annotation_reply_restore = "private_annotation_reply.restore"
+    project_annotation_reply_create = "project_annotation_reply.create"
+    project_annotation_reply_update = "project_annotation_reply.update"
+    project_annotation_reply_delete = "project_annotation_reply.delete"
+    project_annotation_reply_restore = "project_annotation_reply.restore"
 
 
-_READ_CAPABILITIES = frozenset({Capability.workspace_read, Capability.workspace_export})
-_PROJECT_CONTENT_WRITE_CAPABILITIES = frozenset({
-    Capability.discussion_write,
-    Capability.annotations_project_write,
+# These sets classify database locking and Project visibility behavior. They do not grant access;
+# every allow/deny result comes from Casbin.
+_NON_MUTATING_ACTIONS = frozenset({
+    ResourceAction.workspace_read,
+    ResourceAction.workspace_export,
+    ResourceAction.project_discover,
+    ResourceAction.private_annotation_read,
+    ResourceAction.project_annotation_read,
+    ResourceAction.project_annotation_review,
 })
-_VIEWER = _READ_CAPABILITIES | {Capability.annotations_private_write}
-_REVIEWER = _VIEWER | {
-    Capability.discussion_write,
-    Capability.annotations_project_write,
-}
-_EDITOR = _REVIEWER | {
-    Capability.items_create,
-    Capability.items_edit,
-    Capability.files_manage,
-    Capability.tags_use,
-    Capability.tags_create,
-    Capability.citation_styles_manage,
-    Capability.projects_create,
-    Capability.projects_manage,
-}
-_ADMIN = _EDITOR | {
-    Capability.workspace_settings_manage,
-    Capability.workspace_members_manage,
-    Capability.workspace_archive,
-    Capability.items_delete,
-    Capability.tags_manage,
-    Capability.projects_delete,
-    Capability.projects_create_managed,
-    Capability.projects_members_manage,
-    Capability.annotations_moderate,
-    Capability.discussion_moderate,
-}
-_OWNER = _ADMIN | {
-    Capability.workspace_admins_manage,
-    Capability.workspace_transfer,
-    Capability.workspace_delete,
-}
+_PROJECT_CONTENT_WRITE_ACTIONS = frozenset({
+    ResourceAction.project_discussion_create,
+    ResourceAction.project_discussion_delete,
+    ResourceAction.project_annotation_create,
+    ResourceAction.project_annotation_update,
+    ResourceAction.project_annotation_delete,
+    ResourceAction.project_annotation_restore,
+    ResourceAction.project_annotation_reply_create,
+    ResourceAction.project_annotation_reply_update,
+    ResourceAction.project_annotation_reply_delete,
+    ResourceAction.project_annotation_reply_restore,
+})
 
-ROLE_CAPABILITIES: dict[WorkspaceRole, frozenset[Capability]] = {
-    WorkspaceRole.owner: frozenset(_OWNER),
-    WorkspaceRole.admin: frozenset(_ADMIN),
-    WorkspaceRole.editor: frozenset(_EDITOR),
-    WorkspaceRole.reviewer: frozenset(_REVIEWER),
-    WorkspaceRole.viewer: frozenset(_VIEWER),
+# Relation vocabularies whose alternatives are useful to generic API consumers. They describe
+# canonical request facts, not grants; Casbin remains the only source of allow/deny decisions.
+_RESOURCE_ACTION_RELATIONS = {
+    ResourceAction.project_create: tuple(visibility.value for visibility in ProjectVisibility),
 }
 
 
@@ -122,8 +148,8 @@ class WorkspaceContext:
         return self.workspace.id
 
     @property
-    def capabilities(self) -> frozenset[Capability]:
-        return effective_capabilities(
+    def allowed_actions(self) -> frozenset[ResourceAction]:
+        return effective_resource_actions(
             self.role,
             self.workspace.state,
             governance_suspended=self.workspace.governance_suspended_at is not None,
@@ -150,40 +176,153 @@ async def resolve_workspace_context(
     return await require_workspace_membership(db, actor, workspace_id)
 
 
-def require(ctx: WorkspaceContext, capability: Capability) -> WorkspaceContext:
-    """Evaluate a capability against an already-resolved context."""
+def require_action(
+    ctx: WorkspaceContext,
+    resource_action: ResourceAction,
+    *,
+    relation: str = "any",
+    message: str | None = None,
+) -> WorkspaceContext:
+    """Require one canonical resource/action decision from loaded facts."""
 
-    if capability not in _READ_CAPABILITIES and (
-        ctx.workspace.state is not WorkspaceState.active
-        or ctx.workspace.governance_suspended_at is not None
-    ):
-        raise WorkspaceLifecycleError("Workspace is read-only")
-    if not role_has_capability(ctx.role, capability):
-        raise PermissionDenied(f"Workspace capability required: {capability.value}")
-    return ctx
+    return _require_workspace_decision(
+        ctx,
+        allowed=workspace_resource_action_allowed(
+            ctx.role,
+            ctx.workspace.state,
+            resource_action,
+            governance_suspended=ctx.workspace.governance_suspended_at is not None,
+            relation=relation,
+        ),
+        active_allowed=workspace_action_allowed(
+            ctx.role,
+            resource_action.resource,
+            resource_action.action,
+            WorkspaceState.active,
+            relation,
+        ),
+        message=message or f"Resource action required: {resource_action.value}",
+    )
 
 
-def role_has_capability(role: WorkspaceRole, capability: Capability) -> bool:
-    return capability in ROLE_CAPABILITIES[role]
+def workspace_resource_action_allowed(
+    role: WorkspaceRole,
+    state: WorkspaceState,
+    resource_action: ResourceAction,
+    *,
+    governance_suspended: bool = False,
+    relation: str = "any",
+) -> bool:
+    """Evaluate one resource/action pair through the sole Casbin policy source."""
+
+    lifecycle = "suspended" if governance_suspended else state
+    return workspace_action_allowed(
+        role,
+        resource_action.resource,
+        resource_action.action,
+        lifecycle,
+        relation,
+    )
 
 
-def effective_capabilities(
+# The packaged policy is immutable during a process, so Workspaces with the same role and
+# lifecycle facts can share these immutable authorization projections.
+@lru_cache(maxsize=128)
+def effective_resource_actions(
     role: WorkspaceRole,
     state: WorkspaceState,
     *,
     governance_suspended: bool = False,
-) -> frozenset[Capability]:
-    """Return capabilities currently available in a Workspace lifecycle state."""
+) -> frozenset[ResourceAction]:
+    """Return relation-free resource actions available in a Workspace state."""
 
-    role_capabilities = ROLE_CAPABILITIES[role]
-    if governance_suspended:
-        return _READ_CAPABILITIES & role_capabilities
-    if state is WorkspaceState.active:
-        return role_capabilities
-    lifecycle_capabilities = _READ_CAPABILITIES | {Capability.workspace_archive}
-    if Capability.workspace_delete in role_capabilities:
-        lifecycle_capabilities |= {Capability.workspace_delete}
-    return role_capabilities & lifecycle_capabilities
+    return frozenset(
+        resource_action
+        for resource_action in ResourceAction
+        if workspace_resource_action_allowed(
+            role,
+            state,
+            resource_action,
+            governance_suspended=governance_suspended,
+        )
+        or effective_resource_action_relations(
+            role,
+            state,
+            resource_action,
+            governance_suspended=governance_suspended,
+        )
+    )
+
+
+@lru_cache(maxsize=128)
+def effective_resource_action_relations(
+    role: WorkspaceRole,
+    state: WorkspaceState,
+    resource_action: ResourceAction,
+    *,
+    governance_suspended: bool = False,
+) -> frozenset[str]:
+    """Return allowed canonical relations for a relation-constrained action."""
+
+    return frozenset(
+        relation
+        for relation in _RESOURCE_ACTION_RELATIONS.get(resource_action, ())
+        if workspace_resource_action_allowed(
+            role,
+            state,
+            resource_action,
+            governance_suspended=governance_suspended,
+            relation=relation,
+        )
+    )
+
+
+def action_allowed(
+    ctx: WorkspaceContext,
+    resource_action: ResourceAction,
+    *,
+    relation: str = "any",
+) -> bool:
+    """Evaluate a resource action without moving canonical fact loading into policy."""
+
+    lifecycle = (
+        "suspended" if ctx.workspace.governance_suspended_at is not None else ctx.workspace.state
+    )
+    return workspace_action_allowed(
+        ctx.role,
+        resource_action.resource,
+        resource_action.action,
+        lifecycle,
+        relation,
+    )
+
+
+def workspace_member_relation(role: WorkspaceRole | str) -> str:
+    """Normalize persistent Workspace roles to policy relation classes."""
+
+    normalized = WorkspaceRole(role)
+    if normalized is WorkspaceRole.owner:
+        return "owner"
+    if normalized is WorkspaceRole.admin:
+        return "admin"
+    return "member"
+
+
+def _require_workspace_decision(
+    ctx: WorkspaceContext,
+    *,
+    allowed: bool,
+    active_allowed: bool,
+    message: str,
+) -> WorkspaceContext:
+    if allowed:
+        return ctx
+    if active_allowed and (
+        ctx.workspace.state is not WorkspaceState.active
+        or ctx.workspace.governance_suspended_at is not None
+    ):
+        raise WorkspaceLifecycleError("Workspace is read-only")
+    raise PermissionDenied(message)
 
 
 async def require_workspace_membership(
@@ -220,15 +359,17 @@ async def require_workspace_membership(
     return WorkspaceContext(current_actor, workspace, membership, membership.role)
 
 
-async def require_workspace_capability(
+async def require_workspace_action(
     db: AsyncSession,
     actor: User,
     workspace_id: str,
-    capability: Capability,
+    resource_action: ResourceAction,
+    *,
+    relation: str = "any",
 ) -> WorkspaceContext:
     context = await require_workspace_membership(db, actor, workspace_id)
-    require(context, capability)
-    if capability in _READ_CAPABILITIES:
+    require_action(context, resource_action, relation=relation)
+    if resource_action in _NON_MUTATING_ACTIONS:
         return context
     # PostgreSQL holds this shared root lock through commit. Governance takes
     # an exclusive lock on the same root, while unrelated writers may proceed
@@ -236,33 +377,41 @@ async def require_workspace_capability(
     await db.scalar(
         select(Workspace.id).where(Workspace.id == workspace_id).with_for_update(read=True)
     )
-    return require(await require_workspace_membership(db, actor, workspace_id), capability)
+    return require_action(
+        await require_workspace_membership(db, actor, workspace_id),
+        resource_action,
+        relation=relation,
+    )
 
 
 def visible_project_ids_query(ctx: WorkspaceContext):
     """Select Projects discoverable to this active Workspace member.
 
-    `workspace` and `open` Projects are visible to all active Workspace members. A `managed`
-    Project is visible to its explicit participants and Workspace governors. The role preset is
-    used only inside Access to preserve governor discovery in read-only Workspace lifecycle
-    states; mutations still require effective capabilities through `require`.
+    SQL applies the canonical Workspace and participation facts. Casbin decides which relation
+    classes the current Workspace role may discover in the current lifecycle state.
     """
     query = select(Project.id).where(
         Project.workspace_id == ctx.workspace_id,
         Project.state != ProjectState.deleted,
     )
-    if role_has_capability(ctx.role, Capability.projects_members_manage):
-        return query
-    member_project_ids = select(ProjectMember.project_id).where(
-        ProjectMember.workspace_id == ctx.workspace_id,
-        ProjectMember.user_id == ctx.actor_id,
-    )
-    return query.where(
-        or_(
-            Project.visibility != ProjectVisibility.managed,
-            Project.id.in_(member_project_ids),
+    relation_predicates = [
+        Project.visibility == visibility
+        for visibility in (ProjectVisibility.workspace, ProjectVisibility.open)
+        if action_allowed(
+            ctx,
+            ResourceAction.project_discover,
+            relation=visibility.value,
         )
-    )
+    ]
+    if action_allowed(ctx, ResourceAction.project_discover, relation="managed"):
+        relation_predicates.append(Project.visibility == ProjectVisibility.managed)
+    if action_allowed(ctx, ResourceAction.project_discover, relation="participant"):
+        member_project_ids = select(ProjectMember.project_id).where(
+            ProjectMember.workspace_id == ctx.workspace_id,
+            ProjectMember.user_id == ctx.actor_id,
+        )
+        relation_predicates.append(Project.id.in_(member_project_ids))
+    return query.where(or_(*relation_predicates) if relation_predicates else false())
 
 
 async def require_project_access(
@@ -276,26 +425,35 @@ async def require_project_access(
     """Apply Project lineage/lifecycle after Workspace authorization.
 
     `ProjectMember` gates discoverability only for managed Projects. It never grants Workspace
-    capabilities or access to canonical Workspace Items.
+    authority or access to canonical Workspace Items.
     """
 
-    require(ctx, Capability.projects_manage if write else Capability.workspace_read)
+    require_action(
+        ctx,
+        ResourceAction.project_update if write else ResourceAction.workspace_read,
+    )
     if project.workspace_id != ctx.workspace.id or project.state is ProjectState.deleted:
         raise ResourceUnavailable("Project not found")
-    if (
-        require_participation
-        and not write
-        and project.visibility is ProjectVisibility.managed
-        and not role_has_capability(ctx.role, Capability.projects_members_manage)
-    ):
-        member_id = await db.scalar(
-            select(ProjectMember.id).where(
-                ProjectMember.workspace_id == ctx.workspace_id,
-                ProjectMember.project_id == project.id,
-                ProjectMember.user_id == ctx.actor_id,
-            )
+    if require_participation and not write:
+        discoverable = action_allowed(
+            ctx,
+            ResourceAction.project_discover,
+            relation=project.visibility.value,
         )
-        if member_id is None:
+        if not discoverable and project.visibility is ProjectVisibility.managed:
+            member_id = await db.scalar(
+                select(ProjectMember.id).where(
+                    ProjectMember.workspace_id == ctx.workspace_id,
+                    ProjectMember.project_id == project.id,
+                    ProjectMember.user_id == ctx.actor_id,
+                )
+            )
+            discoverable = member_id is not None and action_allowed(
+                ctx,
+                ResourceAction.project_discover,
+                relation="participant",
+            )
+        if not discoverable:
             raise ResourceUnavailable("Project not found")
     if write and project.state is not ProjectState.active:
         raise WorkspaceLifecycleError("Project is read-only")
@@ -307,9 +465,17 @@ async def require_project_context(
     actor: User,
     workspace_id: str,
     project_id: str,
-    operation: Capability,
+    operation: ResourceAction,
+    *,
+    relation: str = "any",
 ) -> ProjectContext:
-    workspace = await require_workspace_capability(db, actor, workspace_id, operation)
+    workspace = await require_workspace_action(
+        db,
+        actor,
+        workspace_id,
+        operation,
+        relation=relation,
+    )
     project_query = (
         workspace_select(Project, workspace)
         .where(
@@ -318,7 +484,7 @@ async def require_project_context(
         )
         .execution_options(populate_existing=True)
     )
-    if operation not in _READ_CAPABILITIES:
+    if operation not in _NON_MUTATING_ACTIONS:
         # Project lifecycle changes take an exclusive root lock. Keep a shared
         # lock until the scoped write commits, then inspect the refreshed state.
         project_query = project_query.with_for_update(read=True)
@@ -330,12 +496,12 @@ async def require_project_context(
         workspace,
         project,
         write=False,
-        # Project lifecycle and management operations are capability-only. Project
-        # content remains subject to managed-Project participation, just like reads.
+        # Project lifecycle and management actions do not require participation.
+        # Project content remains subject to managed-Project participation, like reads.
         require_participation=(
-            operation in _READ_CAPABILITIES or operation in _PROJECT_CONTENT_WRITE_CAPABILITIES
+            operation in _NON_MUTATING_ACTIONS or operation in _PROJECT_CONTENT_WRITE_ACTIONS
         ),
     )
-    if operation not in _READ_CAPABILITIES and project.state is not ProjectState.active:
+    if operation not in _NON_MUTATING_ACTIONS and project.state is not ProjectState.active:
         raise WorkspaceLifecycleError("Project is read-only")
     return project_context

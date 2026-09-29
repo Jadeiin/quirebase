@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from dbos import DBOS
 from sqlalchemy import select
 
-from quirebase.access.workspaces import Capability, require_workspace_capability
+from quirebase.access.workspaces import ResourceAction, require_workspace_action
 from quirebase.core.database import AsyncSessionLocal
 from quirebase.core.workflows import (
     DOCUMENT_CLEANUP_QUEUE,
@@ -60,7 +60,7 @@ async def request_item_tag_recommendation(
     actor = await db.get(User, actor_id)
     if actor is None:
         raise ValueError("recommendation actor is unavailable")
-    await require_workspace_capability(db, actor, workspace_id, Capability.items_edit)
+    await require_workspace_action(db, actor, workspace_id, ResourceAction.item_update)
     if (
         await db.scalar(
             select(Item.id).where(Item.id == item_id, Item.workspace_id == workspace_id)
@@ -167,7 +167,7 @@ async def _store_item_tag_recommendation(
     actor = await db.get(User, actor_id)
     if actor is None:
         return {"unauthorized": True}
-    await require_workspace_capability(db, actor, workspace_id, Capability.items_edit)
+    await require_workspace_action(db, actor, workspace_id, ResourceAction.item_update)
     item = await db.scalar(
         select(Item).where(Item.id == item_id, Item.workspace_id == workspace_id).with_for_update()
     )
@@ -342,7 +342,7 @@ async def request_item_tag_recommendation_step(
             actor = await db.get(User, actor_id)
             if actor is None:
                 return
-            await require_workspace_capability(db, actor, workspace_id, Capability.items_edit)
+            await require_workspace_action(db, actor, workspace_id, ResourceAction.item_update)
             await request_item_tag_recommendation(
                 db,
                 item_id,

@@ -63,7 +63,7 @@ async def _async_item(db, **overrides) -> Item:
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("role", [WorkspaceRole.viewer, WorkspaceRole.reviewer])
-async def test_shared_citation_style_writes_require_capability(async_db, role):
+async def test_shared_citation_style_writes_require_resource_action(async_db, role):
     item = await _async_item(async_db)
     owner = await async_db.get(User, item.created_by)
     assert owner is not None

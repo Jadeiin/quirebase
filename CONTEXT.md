@@ -31,18 +31,22 @@ the provenance of Workspace-owned resources.
 
 **Workspace Role**:
 The only persistent resource role axis in Quirebase: `owner`, `admin`, `editor`, `reviewer` or
-`viewer`. Workspace capabilities, evaluated through the Access Module, govern Workspace data and
-governance operations. A role is never inferred from `created_by`.
+`viewer`. The Access Module evaluates resource-action decisions for Workspace data and governance
+operations. A role is never inferred from `created_by`.
 
-**Workspace Capability**:
-An Access Module decision granting or denying one operation for a User within a Workspace, such
-as reading Items, editing metadata, managing files, governing Tags or managing members. A
-capability is evaluated only after Workspace lineage and active membership are established.
+**Authorization Decision**:
+An Access Module allow/deny result over a subject, resource, action, lifecycle and relation. For
+example, the `editor` subject may perform `update` on an `item` in an active Workspace, while an
+admin may perform `delete` on another author's `item_discussion`. Workspace lineage and active
+membership are established before the decision. A dotted key such as `item.update` is only the
+canonical API/audit serialization of the `resource=item`, `action=update` pair; it is not a separate
+capability namespace. When one resource-action varies by a canonical request fact, such as Project
+visibility, API authorization projections may also expose the allowed relations for that same key.
 
 **Item Stewardship**:
 The Workspace-governed authority to maintain or permanently delete a canonical Item. It is
-derived from Workspace capability, not from the User who created the Item. `created_by` remains
-provenance only.
+derived from a Workspace resource-action decision, not from the User who created the Item.
+`created_by` remains provenance only.
 _Avoid_: Item Owner when discussing authorization
 
 **Contributor**:
@@ -55,18 +59,18 @@ _Avoid_: Creator, User
 **Project**:
 A collaboration context inside one Workspace that organizes a working set of Items and contains
 Project-scoped annotations, discussions and notes. A Project does not grant access to an Item or
-raise a User's Workspace capability. A Project has no owner; `created_by` is provenance only.
+raise a User's Workspace authority. A Project has no owner; `created_by` is provenance only.
 _Avoid_: Folder, Group
 
 **Project Member**:
 An explicit User–Project association that records a User's selected Project working context. It
-has no Project role and grants no Workspace capability. It controls discoverability of `managed`
+has no Project role and grants no Workspace authority. It controls discoverability of `managed`
 Projects only; it never grants access to canonical Workspace Items. Workspace-participation
 Projects have implicit participation and no Project Member rows.
 
 **Project Visibility**:
 The retained Project field that expresses discoverability and participation policy, not a Project
-role or Workspace capability: `workspace` means all active Workspace members can discover and
+role or Workspace authority: `workspace` means all active Workspace members can discover and
 implicitly participate, with no Project Member rows; `open` means all active Workspace members can
 discover the Project and may choose to join or leave; `managed` means only Project Members and
 Workspace owners/admins can discover the Project and its Project-scoped content, with participation
@@ -75,7 +79,7 @@ Items.
 
 **ProjectItem**:
 An association placing an Item from the same Workspace in a Project working set. ProjectItem
-does not grant Item access or any Workspace capability.
+does not grant Item access or any Workspace authority.
 
 **Document**:
 Stored file content associated with an Item, represented by a File Revision or
@@ -121,7 +125,7 @@ available until its recorded expiration time and is then eligible for physical c
 **Discussion Message**:
 A conversational message attached to an Item and visible through Workspace Item access. A
 Project Discussion/Note is a separate Project-scoped collaboration resource governed by Project
-visibility and Workspace capabilities.
+visibility and Workspace resource-action decisions.
 _Avoid_: Annotation, Comment
 
 **Tag**:
@@ -239,7 +243,7 @@ for invalidating a Login Session or API Token without deleting its audit/persist
 - An Invitation provisions or registers one new User with an assigned System Role; successful
   provisioning also creates an ordinary Workspace and owner membership for that User.
 - A Workspace has Workspace Members, a canonical Item Library, shared Tags, Item Discussions and
-  Projects. Workspace ownership and access are evaluated through Workspace capabilities.
+  Projects. Workspace ownership and access are evaluated through resource-action decisions.
 - An Item has zero or more File Revisions, Attachments, Tags, and Discussion Messages, and at most
   one Attachment designated as its current Graphical Abstract.
 - Deleting a File Revision deletes its PDF Thumbnail. Item Thumbnail resolution then falls back to
@@ -252,7 +256,7 @@ for invalidating a Login Session or API Token without deleting its audit/persist
   discoverability, but never grant access to canonical Workspace Items. A `workspace` Project has
   implicit participation and no Project Member rows. A Project has no owner or ownership-transfer
   operation; `created_by` is provenance, while Project lifecycle and participation operations use
-  Workspace capabilities.
+  Workspace resource-action decisions.
 - An Annotation belongs to exactly one File Revision.
 - An Annotation has zero or more Annotation Replies.
 - An Annotation Export Artifact is derived from one File Revision and expires independently of it.

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Panel from '$lib/design/Panel.svelte';
+	import { can } from '$lib/authorization/can';
 	import { dateTimeFormat } from '$lib/format';
 	import { t } from '$lib/i18n';
 	import type { DiscussionMessage } from '../types';
@@ -22,12 +23,12 @@
 		<ItemRow>
 			<div class="flex flex-wrap justify-between gap-2">
 				<strong>{message.author_username}</strong>
-				{#if message.allowed_actions.includes('delete')}
+				{#if message.mine && can(message.authorization, 'item_discussion', 'delete')}
 					<Button variant="danger" disabled={busy} onclick={() => onDelete(message.id)}
 						>{$t('Delete')}</Button
 					>
 				{/if}
-				{#if message.allowed_actions.includes('moderate')}
+				{#if !message.mine && can(message.authorization, 'item_discussion', 'delete')}
 					<Button variant="danger" disabled={busy} onclick={() => onModerate(message.id)}
 						>{$t('Moderate')}</Button
 					>{/if}

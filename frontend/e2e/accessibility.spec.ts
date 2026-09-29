@@ -74,7 +74,18 @@ test('Item detail has no high-impact accessibility violations', async ({ page })
 					version: 1
 				},
 				latest_revision: null,
-				allowed_actions: { edit: true, delete: true },
+				authorization: {
+					allowed: [
+						'item.update',
+						'item.delete',
+						'workspace.export',
+						'file.manage',
+						'tag.use',
+						'tag.create',
+						'project_item.manage'
+					]
+				},
+				copy_targets: [],
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
 				tags: [],
 				owner: { id: 'user-1', username: 'reader' },

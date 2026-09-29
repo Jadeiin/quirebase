@@ -4,6 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from quirebase.web.api.common import AuthorizationView
 from quirebase.web.api.library_schemas import ItemSearchView, item_search_view
 
 
@@ -15,7 +16,7 @@ class ProjectSummaryView(BaseModel):
     visibility: Literal["workspace", "open", "managed"]
     is_member: bool
     description: str = ""
-    allowed_actions: list[str]
+    authorization: AuthorizationView
 
 
 class ProjectMemberView(BaseModel):
@@ -31,7 +32,7 @@ class ProjectDetailView(ProjectSummaryView):
 def project_detail_view(
     workspace: Any,
     *,
-    allowed_actions: list[str],
+    authorization: AuthorizationView,
 ) -> ProjectDetailView:
     return ProjectDetailView(
         id=workspace.project.id,
@@ -41,7 +42,7 @@ def project_detail_view(
         visibility=workspace.project.visibility.value,
         is_member=workspace.is_member,
         description=workspace.project.description,
-        allowed_actions=allowed_actions,
+        authorization=authorization,
         members=[
             ProjectMemberView(user_id=member.user.id, username=member.user.username)
             for member in workspace.members

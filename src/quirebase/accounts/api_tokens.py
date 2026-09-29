@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Literal
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from quirebase.access import require_system_resource_action
 from quirebase.audit import record_event
 from quirebase.core.crypto import generate_token, token_hash
 from quirebase.core.errors import ResourceNotFound, ValidationFailure
@@ -58,6 +59,9 @@ async def create_api_token(
     *,
     expires_in_days: int,
 ) -> ApiTokenGrant:
+    user = await require_system_resource_action(
+        db, user, "api_token", "create", relation="own", lock="shared"
+    )
     normalized_name = name.strip()
     if not normalized_name:
         raise ValidationFailure("API Token name is required")
@@ -103,6 +107,7 @@ async def verify_api_token(db: AsyncSession, raw_token: str) -> VerifiedApiToken
 
 
 async def list_api_tokens(db: AsyncSession, user: User) -> tuple[ApiTokenSummary, ...]:
+    user = await require_system_resource_action(db, user, "api_token", "read", relation="own")
     records = (
         await db.scalars(
             select(ApiToken).where(ApiToken.user_id == user.id).order_by(ApiToken.created_at.desc())
@@ -122,7 +127,17 @@ async def list_api_tokens(db: AsyncSession, user: User) -> tuple[ApiTokenSummary
 
 async def revoke_api_token(db: AsyncSession, user: User, token_id: str) -> None:
     token = await db.get(ApiToken, token_id)
-    if token is None or token.user_id != user.id:
+    relation = "own" if token is not None and token.user_id == user.id else "other"
+    user = await require_system_resource_action(
+        db,
+        user,
+        "api_token",
+        "revoke",
+        relation=relation,
+        lock="shared",
+        message="API Token not found",
+    )
+    if token is None:
         raise ResourceNotFound("API Token not found")
     if token.revoked_at is None:
         token.revoked_at = datetime.now(UTC)

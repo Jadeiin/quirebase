@@ -155,7 +155,7 @@ async def test_tag_normalized_key_allows_full_casefold_expansion(async_db):
 
 
 @pytest.mark.anyio
-async def test_tag_merge_requires_workspace_capability_not_creator_ownership(async_db):
+async def test_tag_merge_requires_workspace_action_not_creator_ownership(async_db):
     owner = await _user(async_db, "tag-owner")
     editor = await _user(async_db, "tag-editor")
     workspace_id = fixture_workspace_id(owner)
@@ -173,7 +173,7 @@ async def test_tag_merge_requires_workspace_capability_not_creator_ownership(asy
     async_db.add_all([source, target])
     await async_db.commit()
 
-    with pytest.raises(PermissionDenied, match=r"tags\.manage"):
+    with pytest.raises(PermissionDenied, match=r"tag\.manage"):
         await merge_tags(async_db, editor, workspace_id, source.id, target.id)
     merged = await merge_tags(async_db, owner, workspace_id, source.id, target.id)
     assert merged.id == target.id

@@ -131,7 +131,7 @@
 						</p>
 						<h2 class="m-0 mt-1 text-lg">{$t('Recently added')}</h2>
 					</div>
-					{#if workspace.can('items.create')}<a
+					{#if workspace.can('item', 'create')}<a
 							class="text-sm font-semibold text-primary-700-300 no-underline"
 							href={resolve(workspaceHref(workspaceId, 'import'))}>{$t('Import more')}</a
 						>{/if}
@@ -168,7 +168,7 @@
 					<h2 class="m-0 mt-1 text-lg">{$t('Quick actions')}</h2>
 				</div>
 				<div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-					{#each [{ path: 'import', icon: 'import', title: $t('Import Items'), detail: $t('DOI, files, or PDFs'), capability: 'items.create' }, { path: 'discovery', icon: 'search', title: $t('Discover'), detail: $t('Search scholarly sources'), capability: 'workspace.read' }, { path: 'projects', icon: 'projects', title: $t('New Project'), detail: $t('Organize a collection'), capability: 'projects.create' }, { path: 'library', icon: 'library', title: $t('Search Library'), detail: $t('Find saved research'), capability: 'workspace.read' }].filter( (action) => workspace.can(action.capability) ) as action (action.path)}
+					{#each [{ path: 'import', icon: 'import', title: $t('Import Items'), detail: $t('DOI, files, or PDFs'), resource: 'item', action: 'create' }, { path: 'discovery', icon: 'search', title: $t('Discover'), detail: $t('Search scholarly sources'), resource: 'workspace', action: 'read' }, { path: 'projects', icon: 'projects', title: $t('New Project'), detail: $t('Organize a collection'), resource: 'project', action: 'create' }, { path: 'library', icon: 'library', title: $t('Search Library'), detail: $t('Find saved research'), resource: 'workspace', action: 'read' }].filter( (entry) => workspace.can(entry.resource, entry.action) ) as action (action.path)}
 						<a
 							class="group grid grid-cols-1 gap-2 rounded-lg border border-surface-300-700 p-3 no-underline hover:border-primary-700-300/40 hover:bg-primary-50-950"
 							href={resolve(workspaceHref(workspaceId, action.path))}

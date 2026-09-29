@@ -8,10 +8,10 @@ from inquiro.richtext import convert_rich_text
 from sqlalchemy import func, or_, select
 
 from quirebase.access import (
-    Capability,
+    ResourceAction,
+    action_allowed,
     require_project_context,
-    require_workspace_capability,
-    role_has_capability,
+    require_workspace_action,
     workspace_items_query,
 )
 from quirebase.access.scope import workspace_select
@@ -47,7 +47,7 @@ async def search_library(
     per_page: int = 25,
 ) -> tuple[list[Item], int, list[Tag], list[str]]:
     page = max(page, 1)
-    context = await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     item_query = workspace_items_query(context)
     matching_ids = await search_index(db).matching_item_ids(db, q) if q.strip() else None
     if matching_ids is not None:
@@ -64,7 +64,9 @@ async def search_library(
             )
         )
     if project:
-        await require_project_context(db, user, workspace_id, project, Capability.workspace_read)
+        await require_project_context(
+            db, user, workspace_id, project, ResourceAction.workspace_read
+        )
         item_query = item_query.where(
             Item.id.in_(
                 workspace_select(ProjectItem, context)
@@ -116,7 +118,7 @@ async def search_library(
 
 
 async def get_dashboard_data(db: AsyncSession, user: User, workspace_id: str) -> dict[str, Any]:
-    context = await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     new_items = list(
         (
             await db.scalars(
@@ -144,7 +146,11 @@ async def get_dashboard_data(db: AsyncSession, user: User, workspace_id: str) ->
         if is_member
         or (
             project.visibility is ProjectVisibility.managed
-            and role_has_capability(context.role, Capability.projects_members_manage)
+            and action_allowed(
+                context,
+                ResourceAction.project_discover,
+                relation="managed",
+            )
         )
     ]
     sessions = list(
@@ -172,7 +178,7 @@ async def find_duplicates(
         raise ValidationFailure(f"unknown duplicate mode: {mode}")
     if not mode:
         return []
-    context = await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     limit = 500 if mode == "similar" else 2000
     items = list(
         (await db.scalars(workspace_items_query(context).order_by(Item.title).limit(limit))).all()

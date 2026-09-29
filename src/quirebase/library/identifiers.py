@@ -12,7 +12,7 @@ from inquiro.identifiers import DOI_PATTERN, normalize_doi
 from inquiro.models import CandidateRecord
 from sqlalchemy import delete, select, update
 
-from quirebase.access import Capability
+from quirebase.access import ResourceAction
 from quirebase.access.items import require_editable_item
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceUnavailable, ValidationFailure, VersionConflict
@@ -204,7 +204,7 @@ async def rescan_pdf_doi(
                     "item",
                     item_id,
                     workspace_id=item.workspace_id,
-                    authorization_capability=Capability.items_edit.value,
+                    authorization_resource_action=ResourceAction.item_update.value,
                 )
                 await db.commit()
                 return found_doi
@@ -447,7 +447,7 @@ async def _sync_metadata_from_upstream(
             ),
         },
         workspace_id=item.workspace_id,
-        authorization_capability=Capability.items_edit.value,
+        authorization_resource_action=ResourceAction.item_update.value,
     )
     await db.commit()
     return item

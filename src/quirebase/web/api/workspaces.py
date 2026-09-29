@@ -3,11 +3,19 @@ from __future__ import annotations
 from fastapi import APIRouter, status
 from sqlalchemy import select
 
-from quirebase.access import Capability, effective_capabilities, require
+from quirebase.access import (
+    ResourceAction,
+    action_allowed,
+    effective_resource_action_relations,
+    effective_resource_actions,
+    require_action,
+    resolve_workspace_context,
+    workspace_member_relation,
+)
 from quirebase.core.errors import ResourceNotFound, ValidationFailure
-from quirebase.models import User, Workspace
+from quirebase.models import User, Workspace, WorkspaceMemberState
 from quirebase.operations import dispatch_workspace_reindex
-from quirebase.web.api.common import OkView, WriteResult
+from quirebase.web.api.common import AuthorizationView, OkView, WriteResult
 from quirebase.web.api.dependencies import ApiUser, Database, WorkspaceAccess
 from quirebase.web.api.workspace_schemas import (
     WorkspaceCreateRequest,
@@ -51,11 +59,24 @@ workspace_router = APIRouter(tags=["Workspaces"])
 
 
 def _workspace_view(workspace, member) -> WorkspaceView:
-    capabilities = effective_capabilities(
+    allowed_actions = effective_resource_actions(
         member.role,
         workspace.state,
         governance_suspended=workspace.governance_suspended_at is not None,
     )
+    relation_constraints = {
+        ResourceAction.project_create.value: sorted(
+            effective_resource_action_relations(
+                member.role,
+                workspace.state,
+                ResourceAction.project_create,
+                governance_suspended=workspace.governance_suspended_at is not None,
+            )
+        )
+    }
+    relation_constraints = {
+        action: relations for action, relations in relation_constraints.items() if relations
+    }
     return WorkspaceView(
         id=workspace.id,
         name=workspace.name,
@@ -63,7 +84,10 @@ def _workspace_view(workspace, member) -> WorkspaceView:
         state=workspace.state.value,
         current_role=member.role.value,
         governance_suspended=workspace.governance_suspended_at is not None,
-        effective_capabilities=sorted(capability.value for capability in capabilities),
+        authorization=AuthorizationView(
+            allowed=sorted(resource_action.value for resource_action in allowed_actions),
+            relations=relation_constraints,
+        ),
     )
 
 
@@ -96,7 +120,7 @@ async def get_workspace_creation_availability(
 async def get_user_workspace(workspace_id: str, context: WorkspaceAccess) -> WorkspaceView:
     if context.workspace_id != workspace_id:
         raise ResourceNotFound("Workspace not found")
-    require(context, Capability.workspace_read)
+    require_action(context, ResourceAction.workspace_read)
     return _workspace_view(context.workspace, context.membership)
 
 
@@ -137,18 +161,44 @@ async def get_workspace_governance_members(
     workspace_id: str, user: ApiUser, db: Database
 ) -> list[WorkspaceGovernanceMemberView]:
     members = await list_workspace_governance_members(db, user, workspace_id)
+    context = await resolve_workspace_context(db, user, workspace_id)
     usernames = await _usernames(db, {member.user_id for member in members})
-    return [
-        WorkspaceGovernanceMemberView(
-            membership_id=member.id,
-            user_id=member.user_id,
-            username=usernames[member.user_id],
-            role=member.role.value,
-            state=member.state.value,
-            joined_at=member.created_at,
+    views = []
+    for member in members:
+        relation = workspace_member_relation(member.role)
+        candidate_actions = [
+            ResourceAction.workspace_member_change_role,
+            ResourceAction.workspace_member_promote,
+            ResourceAction.workspace_member_terminate,
+        ]
+        if member.state is WorkspaceMemberState.active:
+            candidate_actions.extend([
+                ResourceAction.workspace_member_suspend,
+                ResourceAction.workspace_member_transfer_ownership,
+            ])
+        else:
+            candidate_actions.append(ResourceAction.workspace_member_reactivate)
+        actions = [
+            resource_action.value
+            for resource_action in candidate_actions
+            if action_allowed(
+                context,
+                resource_action,
+                relation=relation,
+            )
+        ]
+        views.append(
+            WorkspaceGovernanceMemberView(
+                membership_id=member.id,
+                user_id=member.user_id,
+                username=usernames[member.user_id],
+                role=member.role.value,
+                state=member.state.value,
+                joined_at=member.created_at,
+                authorization=AuthorizationView(allowed=actions),
+            )
         )
-        for member in members
-    ]
+    return views
 
 
 @workspace_router.post(

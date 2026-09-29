@@ -93,7 +93,7 @@
 			)}</Notice
 		>{:else if workspace.data?.state === 'archived'}<Notice
 			>{$t(
-				'Archived workspace · read-only content. Workspace governance actions remain available according to your capabilities.'
+				'Archived workspace · read-only content. Workspace governance actions remain available according to policy.'
 			)}</Notice
 		>{/if}
 	{#key workspaceId}<WorkspaceProvider {workspaceId} view={workspace.data}

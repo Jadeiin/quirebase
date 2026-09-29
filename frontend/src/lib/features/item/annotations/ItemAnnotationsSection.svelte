@@ -4,6 +4,7 @@
 	import { ApiError } from '$lib/api/client';
 	import { apiErrorMessage } from '$lib/api/errors';
 	import type { components } from '$lib/api/schema';
+	import { can } from '$lib/authorization/can';
 	import ConfirmDialog from '$lib/design/ConfirmDialog.svelte';
 	import Notice from '$lib/design/Notice.svelte';
 	import { domainLabel } from '$lib/domain-labels';
@@ -35,6 +36,25 @@
 		Math.max(1, Math.ceil((annotations.data?.total ?? 0) / (annotations.data?.per_page ?? 50)))
 	);
 	const workspaceRevisionId = $derived(revision === 'all' ? revisions[0]?.id : revision);
+	const moderationActions = ['hide', 'archive', 'restore', 'lock', 'unlock', 'delete'] as const;
+	const authorizationActions = {
+		hide: 'hide',
+		archive: 'archive',
+		restore: 'restore',
+		lock: 'lock',
+		unlock: 'unlock',
+		delete: 'delete'
+	} as const;
+
+	function annotationCanModerate(
+		annotation: components['schemas']['AnnotationReviewAnnotationView'],
+		action: (typeof moderationActions)[number]
+	): boolean {
+		return (
+			!annotation.mine &&
+			can(annotation.authorization, 'project_annotation', authorizationActions[action])
+		);
+	}
 
 	async function moderate(
 		annotation: components['schemas']['AnnotationReviewAnnotationView'],
@@ -122,11 +142,11 @@
 						count: (annotation.replies ?? []).length
 					})}</span
 				>
-				{#if annotation.allowed_actions.some((action) => ['hide', 'archive', 'restore', 'lock', 'unlock'].includes(action) || (action === 'delete' && !annotation.mine))}<div
+				{#if moderationActions.some((action) => annotationCanModerate(annotation, action))}<div
 						class="flex flex-wrap gap-2 border-t border-surface-300-700 pt-2"
 						aria-label={$t('Moderator actions')}
 					>
-						{#each (['hide', 'archive', 'restore', 'lock', 'unlock', 'delete'] as const).filter((action) => annotation.allowed_actions.includes(action) && (action !== 'delete' || !annotation.mine)) as action (action)}
+						{#each moderationActions.filter( (action) => annotationCanModerate(annotation, action) ) as action (action)}
 							{#if action === 'delete'}<Button
 									size="sm"
 									variant="danger"

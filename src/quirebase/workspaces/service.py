@@ -9,7 +9,17 @@ from uuid import uuid4
 from sqlalchemy import delete, select, text
 from sqlalchemy.exc import IntegrityError
 
-from quirebase.access import Capability, require_workspace_capability, role_has_capability
+from quirebase.access import (
+    ResourceAction,
+    SystemAction,
+    require_action,
+    require_system_action,
+    require_system_resource_action,
+    require_workspace_action,
+    require_workspace_membership,
+    system_action_allowed,
+    workspace_member_relation,
+)
 from quirebase.audit import record_event
 from quirebase.core.config import get_settings
 from quirebase.core.crypto import generate_token, token_hash
@@ -88,18 +98,21 @@ async def provision_initial_workspace(db: AsyncSession, user: User) -> Workspace
         workspace.id,
         workspace_id=workspace.id,
         authorization_role=WorkspaceRole.owner.value,
-        authorization_capability="workspace.provision",
     )
     await db.flush()
     return workspace
 
 
 def _can_create_workspace(user: User, policy: str) -> bool:
-    if not user.active:
-        return False
-    if policy == "members_allowed":
-        return True
-    return policy == "admins_only" and user.role == SystemRole.administrator.value
+    return (
+        user.active
+        and policy in {"admins_only", "members_allowed"}
+        and system_action_allowed(
+            user.role,
+            SystemAction.workspaces_create,
+            relation=policy,
+        )
+    )
 
 
 @dataclass(frozen=True)
@@ -195,7 +208,7 @@ async def create_workspace(
             if isinstance(current_actor.role, SystemRole)
             else current_actor.role
         ),
-        authorization_capability="workspace.create",
+        authorization_resource_action=SystemAction.workspaces_create.value,
     )
     await db.commit()
     return workspace
@@ -221,7 +234,7 @@ async def list_workspaces(db: AsyncSession, actor: User) -> list[tuple[Workspace
 async def get_workspace(
     db: AsyncSession, actor: User, workspace_id: str
 ) -> tuple[Workspace, WorkspaceMember]:
-    context = await require_workspace_capability(db, actor, workspace_id, Capability.workspace_read)
+    context = await require_workspace_action(db, actor, workspace_id, ResourceAction.workspace_read)
     return context.workspace, context.membership
 
 
@@ -241,8 +254,8 @@ async def update_workspace(
     db: AsyncSession, actor: User, workspace_id: str, name: str
 ) -> Workspace:
     workspace = await _lock_workspace(db, workspace_id)
-    context = await require_workspace_capability(
-        db, actor, workspace_id, Capability.workspace_settings_manage
+    context = await require_workspace_action(
+        db, actor, workspace_id, ResourceAction.workspace_update
     )
     cleaned = name.strip()
     if not cleaned or len(cleaned) > 240:
@@ -256,7 +269,7 @@ async def update_workspace(
         workspace.id,
         workspace_id=workspace.id,
         authorization_role=context.role.value,
-        authorization_capability=Capability.workspace_settings_manage.value,
+        authorization_resource_action=ResourceAction.workspace_update.value,
     )
     await db.commit()
     return workspace
@@ -265,7 +278,7 @@ async def update_workspace(
 async def list_workspace_members(
     db: AsyncSession, actor: User, workspace_id: str
 ) -> list[WorkspaceMember]:
-    await require_workspace_capability(db, actor, workspace_id, Capability.workspace_read)
+    await require_workspace_action(db, actor, workspace_id, ResourceAction.workspace_read)
     return list(
         (
             await db.scalars(
@@ -284,7 +297,7 @@ async def list_workspace_members(
 async def list_workspace_governance_members(
     db: AsyncSession, actor: User, workspace_id: str
 ) -> list[WorkspaceMember]:
-    await require_workspace_capability(db, actor, workspace_id, Capability.workspace_members_manage)
+    await require_workspace_action(db, actor, workspace_id, ResourceAction.workspace_member_read)
     return list(
         (
             await db.scalars(
@@ -323,8 +336,8 @@ async def invite_workspace_member(
     if target is None or not target.active:
         raise ValidationFailure("Workspace invitations require an existing active User")
     await _lock_workspace(db, workspace_id)
-    context = await require_workspace_capability(
-        db, actor, workspace_id, Capability.workspace_members_manage
+    context = await require_workspace_action(
+        db, actor, workspace_id, ResourceAction.workspace_invitation_create
     )
     now = datetime.now(UTC)
     if expires_at is None:
@@ -362,7 +375,7 @@ async def invite_workspace_member(
         invitation.id,
         workspace_id=workspace_id,
         authorization_role=context.role.value,
-        authorization_capability=Capability.workspace_members_manage.value,
+        authorization_resource_action=ResourceAction.workspace_invitation_create.value,
     )
     await db.commit()
     return invitation, raw
@@ -371,7 +384,9 @@ async def invite_workspace_member(
 async def list_workspace_invitations(
     db: AsyncSession, actor: User, workspace_id: str
 ) -> list[WorkspaceInvitation]:
-    await require_workspace_capability(db, actor, workspace_id, Capability.workspace_members_manage)
+    await require_workspace_action(
+        db, actor, workspace_id, ResourceAction.workspace_invitation_read
+    )
     return list(
         (
             await db.scalars(
@@ -418,14 +433,16 @@ async def get_workspace_invitation_by_token(
 async def accept_workspace_invitation(
     db: AsyncSession, actor: User, workspace_id: str, token: str
 ) -> WorkspaceMember:
-    current_actor = await db.scalar(
-        select(User)
-        .where(User.id == actor.id)
-        .execution_options(populate_existing=True)
-        .with_for_update()
+    current_actor = await require_system_resource_action(
+        db,
+        actor,
+        "workspace_invitation",
+        "accept",
+        relation="own",
+        lock="shared",
+        message="Workspace invitation not found or expired",
+        denied_error=ResourceNotFound,
     )
-    if current_actor is None or not current_actor.active:
-        raise ResourceNotFound("Workspace invitation not found or expired")
     hashed = token_hash(token)
     observed = await db.scalar(
         select(WorkspaceInvitation).where(WorkspaceInvitation.token_hash == hashed)
@@ -492,8 +509,8 @@ async def accept_workspace_invitation(
         "workspace_member",
         member.id,
         workspace_id=member.workspace_id,
-        authorization_role=member.role.value,
-        authorization_capability="workspace.invitation.accept",
+        authorization_role=current_actor.role,
+        authorization_resource_action="workspace_invitation.accept",
     )
     await db.commit()
     return member
@@ -535,8 +552,8 @@ async def revoke_workspace_invitation(
     db: AsyncSession, actor: User, workspace_id: str, invitation_id: str
 ) -> None:
     await _lock_workspace(db, workspace_id)
-    context = await require_workspace_capability(
-        db, actor, workspace_id, Capability.workspace_members_manage
+    context = await require_workspace_action(
+        db, actor, workspace_id, ResourceAction.workspace_invitation_revoke
     )
     invitation = await db.scalar(
         select(WorkspaceInvitation).where(
@@ -555,7 +572,7 @@ async def revoke_workspace_invitation(
         invitation.id,
         workspace_id=workspace_id,
         authorization_role=context.role.value,
-        authorization_capability=Capability.workspace_members_manage.value,
+        authorization_resource_action=ResourceAction.workspace_invitation_revoke.value,
     )
     await db.commit()
 
@@ -583,21 +600,19 @@ async def set_workspace_member_role(
     role: WorkspaceRole | str,
 ) -> WorkspaceMember:
     requested = WorkspaceRole(role)
-    capability = (
-        Capability.workspace_admins_manage
-        if requested is WorkspaceRole.admin
-        else Capability.workspace_members_manage
-    )
     workspace = await _lock_workspace(db, workspace_id)
-    context = await require_workspace_capability(db, actor, workspace_id, capability)
+    context = await require_workspace_membership(db, actor, workspace_id)
     member = await _current_member(db, workspace_id, membership_id)
     if member.user_id == workspace.owner_id or requested is WorkspaceRole.owner:
         raise ValidationFailure("use ownership transfer for the owner role")
-    if member.role is WorkspaceRole.admin and requested is not WorkspaceRole.admin:
-        context = await require_workspace_capability(
-            db, actor, workspace_id, Capability.workspace_admins_manage
-        )
-        capability = Capability.workspace_admins_manage
+    relation = workspace_member_relation(member.role)
+    action = (
+        "promote"
+        if requested is WorkspaceRole.admin and member.role is not WorkspaceRole.admin
+        else "change_role"
+    )
+    resource_action = ResourceAction(f"workspace_member.{action}")
+    require_action(context, resource_action, relation=relation)
     member.role = requested
     record_event(
         db,
@@ -608,7 +623,7 @@ async def set_workspace_member_role(
         detail={"role": requested.value},
         workspace_id=workspace_id,
         authorization_role=context.role.value,
-        authorization_capability=capability.value,
+        authorization_resource_action=resource_action.value,
     )
     await db.commit()
     return member
@@ -618,20 +633,14 @@ async def suspend_workspace_member(
     db: AsyncSession, actor: User, workspace_id: str, membership_id: str
 ) -> WorkspaceMember:
     workspace = await _lock_workspace(db, workspace_id)
-    context = await require_workspace_capability(
-        db, actor, workspace_id, Capability.workspace_members_manage
-    )
+    context = await require_workspace_membership(db, actor, workspace_id)
     member = await _current_member(db, workspace_id, membership_id)
     if member.user_id == workspace.owner_id:
         raise PermissionDenied("transfer Workspace ownership before suspending the owner")
-    if member.role is WorkspaceRole.admin:
-        context = await require_workspace_capability(
-            db, actor, workspace_id, Capability.workspace_admins_manage
-        )
-    effective_capability = (
-        Capability.workspace_admins_manage
-        if member.role is WorkspaceRole.admin
-        else Capability.workspace_members_manage
+    require_action(
+        context,
+        ResourceAction.workspace_member_suspend,
+        relation=workspace_member_relation(member.role),
     )
     member.state = WorkspaceMemberState.suspended
     member.suspended_at = datetime.now(UTC)
@@ -644,7 +653,7 @@ async def suspend_workspace_member(
         member.id,
         workspace_id=workspace_id,
         authorization_role=context.role.value,
-        authorization_capability=effective_capability.value,
+        authorization_resource_action=ResourceAction.workspace_member_suspend.value,
     )
     await db.commit()
     return member
@@ -654,18 +663,12 @@ async def reactivate_workspace_member(
     db: AsyncSession, actor: User, workspace_id: str, membership_id: str
 ) -> WorkspaceMember:
     await _lock_workspace(db, workspace_id)
-    context = await require_workspace_capability(
-        db, actor, workspace_id, Capability.workspace_members_manage
-    )
+    context = await require_workspace_membership(db, actor, workspace_id)
     member = await _current_member(db, workspace_id, membership_id)
-    if member.role is WorkspaceRole.admin:
-        context = await require_workspace_capability(
-            db, actor, workspace_id, Capability.workspace_admins_manage
-        )
-    effective_capability = (
-        Capability.workspace_admins_manage
-        if member.role is WorkspaceRole.admin
-        else Capability.workspace_members_manage
+    require_action(
+        context,
+        ResourceAction.workspace_member_reactivate,
+        relation=workspace_member_relation(member.role),
     )
     member.state = WorkspaceMemberState.active
     member.suspended_at = None
@@ -677,7 +680,7 @@ async def reactivate_workspace_member(
         member.id,
         workspace_id=workspace_id,
         authorization_role=context.role.value,
-        authorization_capability=effective_capability.value,
+        authorization_resource_action=ResourceAction.workspace_member_reactivate.value,
     )
     await db.commit()
     return member
@@ -687,20 +690,14 @@ async def terminate_workspace_member(
     db: AsyncSession, actor: User, workspace_id: str, membership_id: str
 ) -> None:
     workspace = await _lock_workspace(db, workspace_id)
-    context = await require_workspace_capability(
-        db, actor, workspace_id, Capability.workspace_members_manage
-    )
+    context = await require_workspace_membership(db, actor, workspace_id)
     member = await _current_member(db, workspace_id, membership_id)
     if member.user_id == workspace.owner_id:
         raise PermissionDenied("transfer Workspace ownership before removing the owner")
-    if member.role is WorkspaceRole.admin:
-        context = await require_workspace_capability(
-            db, actor, workspace_id, Capability.workspace_admins_manage
-        )
-    effective_capability = (
-        Capability.workspace_admins_manage
-        if member.role is WorkspaceRole.admin
-        else Capability.workspace_members_manage
+    require_action(
+        context,
+        ResourceAction.workspace_member_terminate,
+        relation=workspace_member_relation(member.role),
     )
     await db.execute(
         delete(ProjectMember).where(
@@ -718,7 +715,7 @@ async def terminate_workspace_member(
         member.id,
         workspace_id=workspace_id,
         authorization_role=context.role.value,
-        authorization_capability=effective_capability.value,
+        authorization_resource_action=ResourceAction.workspace_member_terminate.value,
     )
     await db.commit()
 
@@ -741,10 +738,13 @@ async def transfer_workspace_ownership(
         .with_for_update(read=True, of=User)
     )
     workspace = await _lock_workspace(db, workspace_id)
-    context = await require_workspace_capability(
-        db, actor, workspace_id, Capability.workspace_transfer
-    )
+    context = await require_workspace_membership(db, actor, workspace_id)
     target = await _current_member(db, workspace_id, target_membership_id)
+    require_action(
+        context,
+        ResourceAction.workspace_member_transfer_ownership,
+        relation=workspace_member_relation(target.role),
+    )
     if target.state is not WorkspaceMemberState.active:
         raise ValidationFailure("new owner must be an active Workspace member")
     if target_user is None or target_user.id != target.user_id or not target_user.active:
@@ -773,7 +773,7 @@ async def transfer_workspace_ownership(
         detail={"previous_owner_id": current.user_id, "owner_id": target.user_id},
         workspace_id=workspace_id,
         authorization_role=context.role.value,
-        authorization_capability=Capability.workspace_transfer.value,
+        authorization_resource_action=ResourceAction.workspace_member_transfer_ownership.value,
     )
     await db.commit()
     return workspace
@@ -781,8 +781,8 @@ async def transfer_workspace_ownership(
 
 async def archive_workspace(db: AsyncSession, actor: User, workspace_id: str) -> Workspace:
     workspace = await _lock_workspace(db, workspace_id)
-    context = await require_workspace_capability(
-        db, actor, workspace_id, Capability.workspace_archive
+    context = await require_workspace_action(
+        db, actor, workspace_id, ResourceAction.workspace_archive
     )
     workspace.state = WorkspaceState.archived
     workspace.archived_at = datetime.now(UTC)
@@ -794,7 +794,7 @@ async def archive_workspace(db: AsyncSession, actor: User, workspace_id: str) ->
         workspace.id,
         workspace_id=workspace_id,
         authorization_role=context.role.value,
-        authorization_capability=Capability.workspace_archive.value,
+        authorization_resource_action=ResourceAction.workspace_archive.value,
     )
     await db.commit()
     return workspace
@@ -805,9 +805,9 @@ async def restore_workspace(db: AsyncSession, actor: User, workspace_id: str) ->
     workspace = await _lock_workspace(db, workspace_id)
     if workspace.governance_suspended_at is not None:
         raise WorkspaceLifecycleError("Workspace governance is suspended")
-    context = await require_workspace_capability(db, actor, workspace_id, Capability.workspace_read)
-    if not role_has_capability(context.role, Capability.workspace_archive):
-        raise PermissionDenied("Workspace archive capability required")
+    context = await require_workspace_action(
+        db, actor, workspace_id, ResourceAction.workspace_restore
+    )
     workspace.state = WorkspaceState.active
     workspace.archived_at = None
     record_event(
@@ -818,7 +818,7 @@ async def restore_workspace(db: AsyncSession, actor: User, workspace_id: str) ->
         workspace.id,
         workspace_id=workspace_id,
         authorization_role=context.role.value,
-        authorization_capability=Capability.workspace_archive.value,
+        authorization_resource_action=ResourceAction.workspace_restore.value,
     )
     await db.commit()
     return workspace
@@ -831,9 +831,9 @@ async def permanently_delete_workspace(
     workspace = await _lock_workspace(db, workspace_id)
     if workspace.governance_suspended_at is not None:
         raise WorkspaceLifecycleError("Workspace governance is suspended")
-    context = await require_workspace_capability(db, actor, workspace_id, Capability.workspace_read)
-    if not role_has_capability(context.role, Capability.workspace_delete):
-        raise PermissionDenied("Workspace delete capability required")
+    context = await require_workspace_action(
+        db, actor, workspace_id, ResourceAction.workspace_delete
+    )
     if workspace.state is not WorkspaceState.archived:
         raise ValidationFailure("Workspace must be archived before permanent deletion")
     now = datetime.now(UTC)
@@ -933,7 +933,7 @@ async def permanently_delete_workspace(
         workspace.id,
         workspace_id=workspace_id,
         authorization_role=context.role.value,
-        authorization_capability=Capability.workspace_delete.value,
+        authorization_resource_action=ResourceAction.workspace_delete.value,
     )
     sorted_keys = sorted(object_keys)
     for start in range(0, len(sorted_keys), 200):
@@ -970,33 +970,28 @@ async def permanently_delete_workspace(
     return workspace
 
 
-async def _require_instance_administrator(
-    db: AsyncSession, actor: User, *, lock: bool = False
-) -> User:
-    query = select(User).where(User.id == actor.id).execution_options(populate_existing=True)
-    if lock:
-        # Account administration mutates authority under an exclusive User
-        # lock. This shared lock freezes that authority through our commit.
-        query = query.with_for_update(read=True)
-    current_actor = await db.scalar(query)
-    if (
-        current_actor is None
-        or current_actor.role != SystemRole.administrator.value
-        or not current_actor.active
-    ):
-        raise ResourceNotFound("Workspace not found")
-    return current_actor
-
-
 async def list_workspaces_for_governance(db: AsyncSession, actor: User) -> list[Workspace]:
-    await _require_instance_administrator(db, actor)
+    await require_system_action(
+        db,
+        actor,
+        SystemAction.workspaces_governance_read,
+        message="Workspace not found",
+        denied_error=ResourceNotFound,
+    )
     return list((await db.scalars(select(Workspace).order_by(Workspace.created_at.desc()))).all())
 
 
 async def suspend_workspace_governance(
     db: AsyncSession, actor: User, workspace_id: str
 ) -> Workspace:
-    current_actor = await _require_instance_administrator(db, actor, lock=True)
+    current_actor = await require_system_action(
+        db,
+        actor,
+        SystemAction.workspaces_governance_suspend,
+        lock="shared",
+        message="Workspace not found",
+        denied_error=ResourceNotFound,
+    )
     workspace = await _lock_workspace(db, workspace_id)
     if workspace.state is WorkspaceState.deleted:
         raise ResourceNotFound("Workspace not found")
@@ -1009,8 +1004,8 @@ async def suspend_workspace_governance(
         "workspace",
         workspace.id,
         workspace_id=workspace.id,
-        authorization_role=SystemRole.administrator.value,
-        authorization_capability="workspace.governance.suspend",
+        authorization_role=current_actor.role,
+        authorization_resource_action=SystemAction.workspaces_governance_suspend.value,
         source="http",
     )
     await db.commit()
@@ -1020,7 +1015,14 @@ async def suspend_workspace_governance(
 async def recover_workspace_governance(
     db: AsyncSession, actor: User, workspace_id: str
 ) -> Workspace:
-    current_actor = await _require_instance_administrator(db, actor, lock=True)
+    current_actor = await require_system_action(
+        db,
+        actor,
+        SystemAction.workspaces_governance_recover,
+        lock="shared",
+        message="Workspace not found",
+        denied_error=ResourceNotFound,
+    )
     workspace = await _lock_workspace(db, workspace_id)
     if workspace.state is WorkspaceState.deleted:
         raise ResourceNotFound("Workspace not found")
@@ -1033,8 +1035,8 @@ async def recover_workspace_governance(
         "workspace",
         workspace.id,
         workspace_id=workspace.id,
-        authorization_role=SystemRole.administrator.value,
-        authorization_capability="workspace.governance.recover",
+        authorization_role=current_actor.role,
+        authorization_resource_action=SystemAction.workspaces_governance_recover.value,
         source="http",
     )
     await db.commit()
@@ -1050,7 +1052,14 @@ async def read_workspace_items_break_glass(
     limit: int = 100,
 ) -> list[Item]:
     """Perform one reason-bound, read-only administrative content access."""
-    current_actor = await _require_instance_administrator(db, actor, lock=True)
+    current_actor = await require_system_action(
+        db,
+        actor,
+        SystemAction.workspaces_break_glass_read,
+        lock="shared",
+        message="Workspace not found",
+        denied_error=ResourceNotFound,
+    )
     reason = reason.strip()
     if len(reason) < 10:
         raise ValidationFailure("break-glass reason must contain at least 10 characters")
@@ -1075,8 +1084,8 @@ async def read_workspace_items_break_glass(
         workspace_id,
         detail={"reason": reason, "resource": "items", "result_count": len(items)},
         workspace_id=workspace_id,
-        authorization_role=SystemRole.administrator.value,
-        authorization_capability="workspace.break_glass.read",
+        authorization_role=current_actor.role,
+        authorization_resource_action=SystemAction.workspaces_break_glass_read.value,
         result="succeeded",
         source="break_glass",
     )

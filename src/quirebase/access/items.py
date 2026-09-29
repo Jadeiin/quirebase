@@ -7,9 +7,9 @@ from sqlalchemy.orm import selectinload
 
 from quirebase.access.scope import workspace_select
 from quirebase.access.workspaces import (
-    Capability,
+    ResourceAction,
     WorkspaceContext,
-    require_workspace_capability,
+    require_workspace_action,
 )
 from quirebase.core.errors import ResourceUnavailable, ValidationFailure
 from quirebase.models import Item, ItemAuthor, User
@@ -57,7 +57,7 @@ async def get_item_for_update(db: AsyncSession, ctx: WorkspaceContext, item_id: 
 
 async def can_read_item(db: AsyncSession, user: User, workspace_id: str, item_id: str) -> bool:
     try:
-        await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+        await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     except Exception:  # the boolean policy helper deliberately conceals the failure category
         return False
     return bool(
@@ -69,7 +69,7 @@ async def can_read_item(db: AsyncSession, user: User, workspace_id: str, item_id
 
 async def can_edit_item(db: AsyncSession, user: User, workspace_id: str, item_id: str) -> bool:
     try:
-        await require_workspace_capability(db, user, workspace_id, Capability.items_edit)
+        await require_workspace_action(db, user, workspace_id, ResourceAction.item_update)
     except Exception:
         return False
     return bool(
@@ -81,7 +81,7 @@ async def can_edit_item(db: AsyncSession, user: User, workspace_id: str, item_id
 
 async def can_delete_item(db: AsyncSession, user: User, workspace_id: str, item_id: str) -> bool:
     try:
-        await require_workspace_capability(db, user, workspace_id, Capability.items_delete)
+        await require_workspace_action(db, user, workspace_id, ResourceAction.item_delete)
     except Exception:
         return False
     return bool(
@@ -105,7 +105,7 @@ def _item_query(workspace_id: str, item_id: str):
 async def require_readable_item(
     db: AsyncSession, user: User, workspace_id: str, item_id: str
 ) -> Item:
-    await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     item = await db.scalar(_item_query(workspace_id, item_id))
     if item is None:
         raise ResourceUnavailable("Item not found")
@@ -115,7 +115,7 @@ async def require_readable_item(
 async def require_editable_item(
     db: AsyncSession, user: User, workspace_id: str, item_id: str
 ) -> Item:
-    await require_workspace_capability(db, user, workspace_id, Capability.items_edit)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.item_update)
     item = await db.scalar(_item_query(workspace_id, item_id))
     if item is None:
         raise ResourceUnavailable("Item not found")
@@ -125,7 +125,7 @@ async def require_editable_item(
 async def require_accessible_items(
     db: AsyncSession, user: User, workspace_id: str, item_ids: list[str]
 ) -> list[Item]:
-    await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     requested = tuple(dict.fromkeys(item_ids))
     rows = list(
         (

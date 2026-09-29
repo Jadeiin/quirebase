@@ -1,6 +1,19 @@
 from __future__ import annotations
 
-from quirebase.access.annotations import can_edit_annotation, require_editable_annotation
+from quirebase.access.annotations import (
+    can_edit_annotation,
+    require_editable_annotation,
+    visible_annotation_scope_predicate,
+)
+from quirebase.access.authorization import (
+    SystemAction,
+    effective_system_actions,
+    initialize_authorization,
+    require_system_action,
+    require_system_resource_action,
+    system_action_allowed,
+    system_resource_action_allowed,
+)
 from quirebase.access.documents import require_attachment, require_revision
 from quirebase.access.items import (
     can_delete_item,
@@ -17,35 +30,40 @@ from quirebase.access.items import (
 from quirebase.access.scope import workspace_id_predicate, workspace_select
 from quirebase.access.tags import visible_tags_query
 from quirebase.access.workspaces import (
-    ROLE_CAPABILITIES,
-    Capability,
     ProjectContext,
+    ResourceAction,
     WorkspaceContext,
-    effective_capabilities,
-    require,
+    action_allowed,
+    effective_resource_action_relations,
+    effective_resource_actions,
+    require_action,
     require_project_access,
     require_project_context,
-    require_workspace_capability,
+    require_workspace_action,
     require_workspace_membership,
     resolve_workspace_context,
-    role_has_capability,
     visible_project_ids_query,
+    workspace_member_relation,
 )
 
 __all__ = [
-    "ROLE_CAPABILITIES",
-    "Capability",
     "ProjectContext",
+    "ResourceAction",
+    "SystemAction",
     "WorkspaceContext",
+    "action_allowed",
     "can_delete_item",
     "can_edit_annotation",
     "can_edit_item",
     "can_read_item",
-    "effective_capabilities",
+    "effective_resource_action_relations",
+    "effective_resource_actions",
+    "effective_system_actions",
     "get_item",
     "get_item_for_update",
-    "require",
+    "initialize_authorization",
     "require_accessible_items",
+    "require_action",
     "require_attachment",
     "require_editable_annotation",
     "require_editable_item",
@@ -53,14 +71,19 @@ __all__ = [
     "require_project_context",
     "require_readable_item",
     "require_revision",
-    "require_workspace_capability",
+    "require_system_action",
+    "require_system_resource_action",
+    "require_workspace_action",
     "require_workspace_membership",
     "resolve_workspace_context",
-    "role_has_capability",
+    "system_action_allowed",
+    "system_resource_action_allowed",
+    "visible_annotation_scope_predicate",
     "visible_items_query",
     "visible_project_ids_query",
     "visible_tags_query",
     "workspace_id_predicate",
     "workspace_items_query",
+    "workspace_member_relation",
     "workspace_select",
 ]

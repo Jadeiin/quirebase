@@ -7,13 +7,14 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, cast
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from quirebase.access import (
-    Capability,
-    require_workspace_capability,
-    role_has_capability,
+    ResourceAction,
+    action_allowed,
+    require_workspace_action,
+    visible_annotation_scope_predicate,
     visible_project_ids_query,
 )
 from quirebase.access.items import can_delete_item, can_edit_item, require_readable_item
@@ -22,7 +23,6 @@ from quirebase.library.authors import get_item_authors
 from quirebase.library.item_metadata import ItemMetadata, metadata_from_item
 from quirebase.library.tags import get_tag_matrix_for_item
 from quirebase.models import (
-    AnnotationScope,
     Attachment,
     DiscussionMessage,
     FileRevision,
@@ -158,10 +158,10 @@ async def _record_read(db: AsyncSession, user: User, workspace_id: str, item_id:
 
 
 async def _open_overview(db: AsyncSession, user: User, item: Item) -> ItemOverviewData:
-    context = await require_workspace_capability(
-        db, user, item.workspace_id, Capability.workspace_read
+    context = await require_workspace_action(
+        db, user, item.workspace_id, ResourceAction.workspace_read
     )
-    moderator = role_has_capability(context.role, Capability.annotations_moderate)
+    moderator = action_allowed(context, ResourceAction.project_annotation_review)
     revisions = tuple(
         (
             await db.scalars(
@@ -200,15 +200,9 @@ async def _open_overview(db: AsyncSession, user: User, item: Item) -> ItemOvervi
                             PdfAnnotation.archived_at.is_(None),
                         )
                     ),
-                    or_(
-                        and_(
-                            PdfAnnotation.scope == AnnotationScope.private,
-                            PdfAnnotation.author_id == user.id,
-                        ),
-                        and_(
-                            PdfAnnotation.scope == AnnotationScope.project,
-                            PdfAnnotation.project_item_id.in_(visible_project_items),
-                        ),
+                    visible_annotation_scope_predicate(
+                        context,
+                        project_item_ids=visible_project_items,
                     ),
                 )
             )
@@ -340,8 +334,8 @@ def _typed_tag_matrix(raw: dict[str, Any]) -> TagMatrix:
 
 
 async def _open_organize(db: AsyncSession, user: User, item: Item) -> ItemOrganizationData:
-    context = await require_workspace_capability(
-        db, user, item.workspace_id, Capability.workspace_read
+    context = await require_workspace_action(
+        db, user, item.workspace_id, ResourceAction.workspace_read
     )
     tags = tuple(
         (
@@ -396,10 +390,10 @@ async def _open_organize(db: AsyncSession, user: User, item: Item) -> ItemOrgani
 
 
 async def _open_annotations(db: AsyncSession, user: User, item: Item) -> ItemAnnotationsData:
-    context = await require_workspace_capability(
-        db, user, item.workspace_id, Capability.workspace_read
+    context = await require_workspace_action(
+        db, user, item.workspace_id, ResourceAction.workspace_read
     )
-    moderator = role_has_capability(context.role, Capability.annotations_moderate)
+    moderator = action_allowed(context, ResourceAction.project_annotation_review)
     revisions = await _revisions(db, item.workspace_id, item.id, all_revisions=True)
     annotations: tuple[AnnotationView, ...] = ()
     if revisions:
@@ -429,15 +423,9 @@ async def _open_annotations(db: AsyncSession, user: User, item: Item) -> ItemAnn
                             PdfAnnotation.archived_at.is_(None),
                         )
                     ),
-                    or_(
-                        and_(
-                            PdfAnnotation.scope == AnnotationScope.private,
-                            PdfAnnotation.author_id == user.id,
-                        ),
-                        and_(
-                            PdfAnnotation.scope == AnnotationScope.project,
-                            PdfAnnotation.project_item_id.in_(visible_project_items),
-                        ),
+                    visible_annotation_scope_predicate(
+                        context,
+                        project_item_ids=visible_project_items,
                     ),
                 )
                 .order_by(PdfAnnotation.updated_at.desc())

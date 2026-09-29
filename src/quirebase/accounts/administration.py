@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, inspect, or_, select
 from sqlalchemy.exc import IntegrityError
 
+from quirebase.access import SystemAction, require_system_action
 from quirebase.audit import record_event
 from quirebase.core.crypto import hash_password_async
 from quirebase.core.errors import (
     PermissionDenied,
     ResourceNotFound,
-    ResourceUnavailable,
     ValidationFailure,
 )
 from quirebase.models import (
@@ -28,8 +28,7 @@ if TYPE_CHECKING:
 
 
 async def list_users(db: AsyncSession, admin: User) -> list[User]:
-    if admin.role != "administrator":
-        raise ResourceUnavailable("administrator required")
+    await require_system_action(db, admin, SystemAction.users_read)
     return list((await db.scalars(select(User).order_by(User.username))).all())
 
 
@@ -42,8 +41,7 @@ async def list_users_paginated(
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[User], int]:
-    if admin.role != "administrator":
-        raise ResourceUnavailable("administrator required")
+    await require_system_action(db, admin, SystemAction.users_read)
     query = select(User)
     count_query = select(func.count(User.id))
     filters = []
@@ -65,11 +63,37 @@ async def list_users_paginated(
     return users, total
 
 
+async def _lock_admin_and_target(
+    db: AsyncSession,
+    admin: User,
+    user_id: str,
+    action: SystemAction,
+) -> tuple[User, User | None]:
+    """Lock the authority source and mutated User in stable identity order."""
+
+    identity = inspect(admin).identity
+    admin_id = identity[0] if identity else admin.id
+    locked: dict[str, User] = {}
+    for current_id in sorted({admin_id, user_id}):
+        query = select(User).where(User.id == current_id).execution_options(populate_existing=True)
+        if current_id == user_id:
+            # Account mutations do not change an FK-referenced key, so NO KEY
+            # UPDATE is the narrow write lock required by the User aggregate.
+            query = query.with_for_update(key_share=True)
+        else:
+            query = query.with_for_update(read=True)
+        current = await db.scalar(query)
+        if current is not None:
+            locked[current_id] = current
+
+    current_admin = await require_system_action(db, locked.get(admin_id, admin), action)
+    return current_admin, locked.get(user_id)
+
+
 async def create_user_admin(
     db: AsyncSession, admin: User, username: str, password: str, role: str = "member"
 ) -> User:
-    if admin.role != "administrator":
-        raise ResourceUnavailable("administrator required")
+    await require_system_action(db, admin, SystemAction.users_create)
     cleaned_name = username.strip()
     if not cleaned_name or len(cleaned_name) > 120:
         raise ValidationFailure("username must contain 1 to 120 characters")
@@ -80,9 +104,14 @@ async def create_user_admin(
     existing = await db.scalar(select(User).where(User.username == cleaned_name))
     if existing is not None:
         raise ValidationFailure(f"username '{cleaned_name}' is already taken")
+    password_hash = await hash_password_async(password)
+    admin = await require_system_action(db, admin, SystemAction.users_create, lock="shared")
+    existing = await db.scalar(select(User).where(User.username == cleaned_name))
+    if existing is not None:
+        raise ValidationFailure(f"username '{cleaned_name}' is already taken")
     user = User(
         username=cleaned_name,
-        password_hash=await hash_password_async(password),
+        password_hash=password_hash,
         role=role,
         active=True,
     )
@@ -97,6 +126,7 @@ async def create_user_admin(
             "user",
             user.id,
             detail={"username": user.username, "role": user.role},
+            authorization_resource_action=SystemAction.users_create.value,
         )
         await db.commit()
     except IntegrityError as error:
@@ -106,9 +136,7 @@ async def create_user_admin(
 
 
 async def update_user_status(db: AsyncSession, admin: User, user_id: str, active: bool) -> User:
-    if admin.role != "administrator":
-        raise ResourceUnavailable("administrator required")
-    user = await db.scalar(select(User).where(User.id == user_id).with_for_update())
+    admin, user = await _lock_admin_and_target(db, admin, user_id, SystemAction.users_status_manage)
     if user is None:
         raise ResourceNotFound("user not found")
     if user.id == admin.id and not active:
@@ -151,17 +179,16 @@ async def update_user_status(db: AsyncSession, admin: User, user_id: str, active
         "user",
         user.id,
         detail={"active": active},
+        authorization_resource_action=SystemAction.users_status_manage.value,
     )
     await db.commit()
     return user
 
 
 async def change_user_role(db: AsyncSession, admin: User, user_id: str, new_role: str) -> User:
-    if admin.role != "administrator":
-        raise ResourceUnavailable("administrator required")
     if new_role not in (SystemRole.administrator.value, SystemRole.member.value):
         raise ValidationFailure("invalid user role")
-    user = await db.scalar(select(User).where(User.id == user_id).with_for_update())
+    admin, user = await _lock_admin_and_target(db, admin, user_id, SystemAction.users_roles_manage)
     if user is None:
         raise ResourceNotFound("user not found")
     if user.id == admin.id and new_role != SystemRole.administrator.value:
@@ -174,6 +201,7 @@ async def change_user_role(db: AsyncSession, admin: User, user_id: str, new_role
         "user",
         user.id,
         detail={"new_role": new_role},
+        authorization_resource_action=SystemAction.users_roles_manage.value,
     )
     await db.commit()
     return user
@@ -182,12 +210,15 @@ async def change_user_role(db: AsyncSession, admin: User, user_id: str, new_role
 async def reset_user_password(
     db: AsyncSession, admin: User, user_id: str, new_password: str
 ) -> None:
-    if admin.role != "administrator":
-        raise ResourceUnavailable("administrator required")
+    await require_system_action(db, admin, SystemAction.users_password_reset)
     if len(new_password) < 12:
         raise ValidationFailure("password must contain at least 12 characters")
+    if not await db.scalar(select(User.id).where(User.id == user_id)):
+        raise ResourceNotFound("user not found")
     password_hash = await hash_password_async(new_password)
-    user = await db.scalar(select(User).where(User.id == user_id).with_for_update())
+    admin, user = await _lock_admin_and_target(
+        db, admin, user_id, SystemAction.users_password_reset
+    )
     if user is None:
         raise ResourceNotFound("user not found")
     user.password_hash = password_hash
@@ -199,13 +230,15 @@ async def reset_user_password(
         "admin.user.password_reset",
         "user",
         user.id,
+        authorization_resource_action=SystemAction.users_password_reset.value,
     )
     await db.commit()
 
 
 async def revoke_user_sessions(db: AsyncSession, admin: User, user_id: str) -> int:
-    if admin.role != "administrator":
-        raise ResourceUnavailable("administrator required")
+    admin = await require_system_action(
+        db, admin, SystemAction.users_sessions_revoke, lock="shared"
+    )
     user = await db.get(User, user_id)
     if user is None:
         raise ResourceNotFound("user not found")
@@ -217,12 +250,12 @@ async def revoke_user_sessions(db: AsyncSession, admin: User, user_id: str) -> i
         "admin.user.sessions_revoked",
         "user",
         user.id,
+        authorization_resource_action=SystemAction.users_sessions_revoke.value,
     )
     await db.commit()
     return deleted_count
 
 
 async def list_invitations(db: AsyncSession, admin: User) -> list[Invitation]:
-    if admin.role != "administrator":
-        raise ResourceUnavailable("administrator required")
+    await require_system_action(db, admin, SystemAction.invitations_read)
     return list((await db.scalars(select(Invitation).order_by(Invitation.created_at.desc()))).all())

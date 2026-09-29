@@ -3,6 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { Menu, Portal } from '@skeletonlabs/skeleton-svelte';
 	import type { components } from '$lib/api/schema';
+	import { hasAllowedAction } from '$lib/authorization/can';
 	import Icon from '$lib/design/Icon.svelte';
 	import { domainLabel } from '$lib/domain-labels';
 	import { t } from '$lib/i18n';
@@ -69,7 +70,7 @@
 				><Icon name={icon} />{#if !collapsed}<span>{$t(label)}</span>{/if}</a
 			>
 		{/each}
-		{#if user?.role === 'administrator'}
+		{#if hasAllowedAction(user?.authorization)}
 			<a
 				class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-surface-400 no-underline transition-colors hover:bg-white/9 hover:text-white aria-[current=page]:bg-white/10 aria-[current=page]:text-white"
 				href={resolve('/admin')}

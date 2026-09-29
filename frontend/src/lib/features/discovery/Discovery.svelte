@@ -74,7 +74,7 @@
 	}
 
 	async function review(candidate: Candidate) {
-		if (!workspace.can('items.create')) return;
+		if (!workspace.can('item', 'create')) return;
 		const key = `${candidate.identifier_provider}:${candidate.identifier}`;
 		importing = key;
 		error = '';
@@ -228,7 +228,7 @@
 						>{candidate.identifier_provider}:{candidate.identifier}</code
 					>
 				</div>
-				{#if !candidate.imported && workspace.can('items.create')}
+				{#if !candidate.imported && workspace.can('item', 'create')}
 					<Button variant="filled" disabled={importing !== ''} onclick={() => review(candidate)}
 						>{importing === `${candidate.identifier_provider}:${candidate.identifier}`
 							? $t('Preparing…')

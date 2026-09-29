@@ -581,12 +581,12 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
             archived_annotation.id
         }
         assert review.json()["total"] == 3
-        assert set(reviewed[archived_annotation.id]["allowed_actions"]) == set()
-        assert set(reviewed[annotations[0].id]["allowed_actions"]) == {
-            "hide",
-            "archive",
-            "lock",
-            "delete",
+        assert set(reviewed[archived_annotation.id]["authorization"]["allowed"]) == set()
+        assert set(reviewed[annotations[0].id]["authorization"]["allowed"]) == {
+            "project_annotation.hide",
+            "project_annotation.archive",
+            "project_annotation.lock",
+            "project_annotation.delete",
         }
         assert review.json()["page"] == 1
         assert review.json()["per_page"] == 50
@@ -604,8 +604,13 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
         )
         assert all(response.json()["total"] == 3 for response in paged_reviews)
         assert all(
-            set(response.json()["annotations"][0]["allowed_actions"])
-            == {"hide", "archive", "lock", "delete"}
+            set(response.json()["annotations"][0]["authorization"]["allowed"])
+            == {
+                "project_annotation.hide",
+                "project_annotation.archive",
+                "project_annotation.lock",
+                "project_annotation.delete",
+            }
             for response in paged_reviews
             if response.json()["annotations"][0]["id"] != archived_annotation.id
         )
@@ -630,7 +635,7 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
         )
         assert deleted.status_code == 200
         assert deleted.json()["version"] == 3
-        assert deleted.json()["allowed_actions"] == []
+        assert deleted.json()["authorization"]["allowed"] == []
         remaining = await client.get(
             f"/api/v1/workspaces/{workspace_id}/items/{item.id}/annotations/review",
             headers=headers,
@@ -645,13 +650,13 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
         )
     )
     assert event is not None
-    assert event.authorization_capability == "annotations.moderate"
+    assert event.authorization_resource_action == "project_annotation.delete"
     assert json.loads(event.detail or "{}")["author_id"] == author.id
 
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("read_only_mode", ["archived", "suspended"])
-async def test_http_api_tags_use_effective_management_capability(
+async def test_http_api_tags_use_effective_management_action(
     async_db, async_session_factory, read_only_mode
 ):
     db = async_db
@@ -691,7 +696,7 @@ async def test_http_api_tags_use_effective_management_capability(
             "id": tag.id,
             "name": "Read only",
             "accessible_item_count": 0,
-            "can_manage": False,
+            "authorization": {"allowed": [], "relations": {}},
         }
     ]
 
@@ -744,26 +749,26 @@ async def test_project_participation_does_not_gate_workspace_project_access(
         projects = await client.get(base, headers=headers)
         assert projects.status_code == 200
         summaries = {project["id"]: project for project in projects.json()}
-        active_actions = set(summaries[active.id]["allowed_actions"])
-        archived_actions = set(summaries[archived.id]["allowed_actions"])
+        active_actions = set(summaries[active.id]["authorization"]["allowed"])
+        archived_actions = set(summaries[archived.id]["authorization"]["allowed"])
         assert summaries[active.id]["is_member"] is False
-        assert "members.manage" in active_actions
-        assert "settings" in active_actions
-        assert "archive" in active_actions
-        assert "restore" in archived_actions
-        assert "members.manage" not in archived_actions
-        assert "settings" not in archived_actions
+        assert "project_membership.manage" in active_actions
+        assert "project.update" in active_actions
+        assert "project.archive" in active_actions
+        assert "project.restore" in archived_actions
+        assert "project_membership.manage" not in archived_actions
+        assert "project.update" not in archived_actions
 
         active_detail = await client.get(f"{base}/{active.id}", headers=headers)
         assert active_detail.status_code == 200
         assert active_detail.json()["members"] == []
-        assert active_detail.json()["allowed_actions"] == summaries[active.id]["allowed_actions"]
+        assert active_detail.json()["authorization"] == summaries[active.id]["authorization"]
 
         workspace_summary = next(
             row for row in projects.json() if row["id"] == workspace_visible.id
         )
         assert workspace_summary["is_member"] is True
-        assert "members.manage" not in workspace_summary["allowed_actions"]
+        assert "project_membership.manage" not in workspace_summary["authorization"]["allowed"]
         workspace_detail = await client.get(f"{base}/{workspace_visible.id}", headers=headers)
         assert workspace_detail.json()["members"] == []
         add_workspace_member = await client.put(

@@ -172,7 +172,15 @@ test('adding a Library Item invalidates a previously opened Project', async ({ p
 				id: 'project-1',
 				name: 'Research',
 				description: 'Reading list',
-				allowed_actions: ['settings', 'archive', 'items.manage', 'members.manage', 'delete'],
+				authorization: {
+					allowed: [
+						'project.update',
+						'project.archive',
+						'project_item.manage',
+						'project_membership.manage',
+						'project.delete'
+					]
+				},
 				item_count: added ? 1 : 0,
 				state: 'active',
 				visibility: 'workspace',
@@ -199,7 +207,15 @@ test('adding a Library Item invalidates a previously opened Project', async ({ p
 				{
 					id: 'project-1',
 					name: 'Research',
-					allowed_actions: ['settings', 'archive', 'items.manage', 'members.manage', 'delete'],
+					authorization: {
+						allowed: [
+							'project.update',
+							'project.archive',
+							'project_item.manage',
+							'project_membership.manage',
+							'project.delete'
+						]
+					},
 					is_member: true,
 					item_count: added ? 1 : 0,
 					state: 'active',

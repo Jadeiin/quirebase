@@ -1,19 +1,15 @@
 import type { LibraryBulkAction } from '$lib/features/library/mutations';
 
-export type CanCapability = (capability: string) => boolean;
+export type CanResourceAction = (resource: string, action: string) => boolean;
 
-const bulkCapabilities: Record<LibraryBulkAction, string> = {
-	add_project: 'projects.manage',
-	add_tag: 'tags.use',
-	bibliography: 'workspace.export',
-	documents: 'workspace.export',
-	delete: 'items.delete'
+const bulkResourceActions: Record<LibraryBulkAction, readonly [string, string]> = {
+	add_project: ['project_item', 'manage'],
+	add_tag: ['tag', 'use'],
+	bibliography: ['workspace', 'export'],
+	documents: ['workspace', 'export'],
+	delete: ['item', 'delete']
 };
 
-export function canRunBulkAction(can: CanCapability, action: LibraryBulkAction): boolean {
-	return can(bulkCapabilities[action]);
-}
-
-export function canCopyItem(can: CanCapability, targetCapabilities: readonly string[]): boolean {
-	return can('workspace.export') && targetCapabilities.includes('items.create');
+export function canRunBulkAction(can: CanResourceAction, action: LibraryBulkAction): boolean {
+	return can(...bulkResourceActions[action]);
 }

@@ -20,6 +20,7 @@ from quirebase.models import (
     User,
     WorkspaceMember,
     WorkspaceMemberState,
+    WorkspaceRole,
 )
 
 
@@ -178,9 +179,18 @@ async def test_workspace_invitation_uses_username_and_global_acceptance_route(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
     invitee = User(username="workspace-invitee", password_hash="unused")
-    async_db.add(invitee)
+    governed_member = User(username="workspace-governed-member", password_hash="unused")
+    async_db.add_all([invitee, governed_member])
     await async_db.flush()
     await provision_initial_workspace(async_db, invitee)
+    async_db.add(
+        WorkspaceMember(
+            workspace_id=item.workspace_id,
+            user_id=governed_member.id,
+            role=WorkspaceRole.editor,
+            invited_by=item.created_by,
+        )
+    )
     invitation_session = "workspace-invitee-session"
     async_db.add(
         LoginSession(
@@ -209,6 +219,17 @@ async def test_workspace_invitation_uses_username_and_global_acceptance_route(
             "role",
             "state",
             "joined_at",
+            "authorization",
+        }
+        governed_view = next(
+            row for row in governance_members.json() if row["user_id"] == governed_member.id
+        )
+        assert set(governed_view["authorization"]["allowed"]) == {
+            "workspace_member.transfer_ownership",
+            "workspace_member.change_role",
+            "workspace_member.promote",
+            "workspace_member.suspend",
+            "workspace_member.terminate",
         }
 
         expected_expiry = datetime.now(UTC) + timedelta(days=4)
@@ -268,7 +289,7 @@ async def test_account_and_admin_workspace_apis(
         current_workspace = workspaces.json()[0]
         assert current_workspace["current_role"] == "owner"
         assert "role" not in current_workspace
-        assert "workspace.read" in current_workspace["effective_capabilities"]
+        assert "workspace.read" in current_workspace["authorization"]["allowed"]
 
         user = await db.get(User, item.created_by)
         assert user is not None

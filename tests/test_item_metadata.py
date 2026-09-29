@@ -335,7 +335,7 @@ async def test_revise_item_metadata_enforces_item_owner_permissions(async_db):
     item_id = item.id
     item_version = item.version
 
-    with pytest.raises(PermissionDenied, match=r"items\.edit"):
+    with pytest.raises(PermissionDenied, match=r"item\.update"):
         await revise_item_metadata(
             db,
             outsider,

@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { domainLabel } from '$lib/domain-labels';
+	import { can } from '$lib/authorization/can';
 	import Badge from '$lib/design/Badge.svelte';
 	import Panel from '$lib/design/Panel.svelte';
 	import { t } from '$lib/i18n';
 	import type { components } from '$lib/api/schema';
 	import type { OrganizeView } from '../types';
 	import Button from '$lib/design/Button.svelte';
-	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
 
 	let { data, busy, onToggleProject, onAddTag, onToggleTag, onAddSuggestedTag, onRefresh } =
 		$props<{
@@ -20,11 +20,9 @@
 		}>();
 
 	let tagFilter = $state('');
-	const canEdit = $derived(data.allowed_actions.edit);
-	const workspace = getWorkspaceContext();
-	const canUseTags = $derived(canEdit && workspace.can('tags.use'));
-	const canCreateTags = $derived(canUseTags && workspace.can('tags.create'));
-	const canManageProjects = $derived(canEdit && workspace.can('projects.manage'));
+	const canUseTags = $derived(can(data.authorization, 'tag', 'use'));
+	const canCreateTags = $derived(can(data.authorization, 'tag', 'create'));
+	const canManageProjects = $derived(can(data.authorization, 'project_item', 'manage'));
 	const groups = $derived(
 		data.tag_matrix.groups
 			.map((group: components['schemas']['TagMatrixGroupView']) => ({
@@ -139,7 +137,7 @@
 				<Button
 					size="sm"
 					class="shrink-0 border border-surface-300-700"
-					disabled={busy || !canEdit || !workspace.can('items.edit')}
+					disabled={busy || !can(data.authorization, 'item', 'update')}
 					onclick={onRefresh}>{$t('Refresh')}</Button
 				>
 			</div>

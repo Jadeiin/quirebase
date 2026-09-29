@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from fastapi import APIRouter, status
 
-from quirebase.access import Capability, WorkspaceContext, require_workspace_capability
+from quirebase.access import (
+    ResourceAction,
+    WorkspaceContext,
+    action_allowed,
+    require_workspace_action,
+)
 from quirebase.core.errors import ResourceUnavailable
 from quirebase.library import (
     add_project_discussion_message,
@@ -30,7 +35,7 @@ from quirebase.projects import (
 from quirebase.projects import (
     remove_project_member as remove_project_member_domain,
 )
-from quirebase.web.api.common import OkView, WriteResult
+from quirebase.web.api.common import AuthorizationView, OkView, WriteResult
 from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.library_schemas import (
     DiscussionMessageView,
@@ -54,38 +59,64 @@ from quirebase.web.api.project_schemas import (
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
 
-def _project_allowed_actions(project, workspace: WorkspaceContext, *, is_member: bool) -> list[str]:
-    capabilities = workspace.capabilities
+def _project_authorization(
+    project, workspace: WorkspaceContext, *, is_member: bool
+) -> AuthorizationView:
+    allowed_actions = workspace.allowed_actions
     actions: list[str] = []
-    if Capability.projects_manage in capabilities:
-        if project.state is ProjectState.active:
-            actions.extend(["settings", "items.manage"])
-            actions.append("archive")
-        else:
-            actions.append("restore")
+    if ResourceAction.project_update in allowed_actions and project.state is ProjectState.active:
+        actions.append(ResourceAction.project_update.value)
     if (
-        Capability.projects_members_manage in capabilities
+        ResourceAction.project_item_manage in allowed_actions
+        and project.state is ProjectState.active
+    ):
+        actions.append(ResourceAction.project_item_manage.value)
+    if project.state is ProjectState.active and ResourceAction.project_archive in allowed_actions:
+        actions.append(ResourceAction.project_archive.value)
+    elif ResourceAction.project_restore in allowed_actions:
+        actions.append(ResourceAction.project_restore.value)
+    if (
+        action_allowed(
+            workspace,
+            ResourceAction.project_membership_manage,
+            relation="managed",
+        )
         and project.state is ProjectState.active
         and project.visibility is ProjectVisibility.managed
     ):
-        actions.append("members.manage")
+        actions.append(ResourceAction.project_membership_manage.value)
     if project.state is ProjectState.active and project.visibility is ProjectVisibility.open:
-        if is_member:
-            actions.append("participation.leave")
-        else:
-            actions.append("participation.join")
-    if Capability.projects_delete in capabilities:
-        actions.append("delete")
-    if Capability.discussion_write in capabilities and project.state is ProjectState.active:
-        actions.append("discussion.write")
-    if Capability.discussion_moderate in capabilities and project.state is ProjectState.active:
-        actions.append("discussion.moderate")
-    return actions
+        if is_member and action_allowed(
+            workspace,
+            ResourceAction.project_membership_leave,
+            relation=project.visibility.value,
+        ):
+            actions.append(ResourceAction.project_membership_leave.value)
+        elif not is_member and action_allowed(
+            workspace,
+            ResourceAction.project_membership_join,
+            relation=project.visibility.value,
+        ):
+            actions.append(ResourceAction.project_membership_join.value)
+    if ResourceAction.project_delete in allowed_actions:
+        actions.append(ResourceAction.project_delete.value)
+    if (
+        ResourceAction.project_discussion_create in allowed_actions
+        and project.state is ProjectState.active
+    ):
+        actions.append(ResourceAction.project_discussion_create.value)
+    if project.state is ProjectState.active and action_allowed(
+        workspace,
+        ResourceAction.project_discussion_delete,
+        relation="other",
+    ):
+        actions.append(ResourceAction.project_discussion_delete.value)
+    return AuthorizationView(allowed=actions)
 
 
 @router.get("", response_model=list[ProjectSummaryView])
 async def list_projects(workspace_id: str, user: ApiUser, db: Database):
-    context = await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     return [
         ProjectSummaryView(
             id=project.id,
@@ -95,7 +126,7 @@ async def list_projects(workspace_id: str, user: ApiUser, db: Database):
             visibility=project.visibility.value,
             description=project.description,
             is_member=is_member,
-            allowed_actions=_project_allowed_actions(project, context, is_member=is_member),
+            authorization=_project_authorization(project, context, is_member=is_member),
         )
         for project, count, is_member in await list_workspace_projects(db, user, workspace_id)
     ]
@@ -105,7 +136,7 @@ async def list_projects(workspace_id: str, user: ApiUser, db: Database):
 async def list_joinable_projects_api(
     workspace_id: str, user: ApiUser, db: Database
 ) -> list[ProjectSummaryView]:
-    context = await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     return [
         ProjectSummaryView(
             id=project.id,
@@ -115,7 +146,7 @@ async def list_joinable_projects_api(
             visibility=project.visibility.value,
             is_member=False,
             description=project.description,
-            allowed_actions=_project_allowed_actions(project, context, is_member=False),
+            authorization=_project_authorization(project, context, is_member=False),
         )
         for project, count in await list_joinable_projects(db, user, workspace_id)
     ]
@@ -136,10 +167,10 @@ async def get_project(
     workspace_id: str, project_id: str, user: ApiUser, db: Database
 ) -> ProjectDetailView:
     workspace = await open_project_workspace(db, user, workspace_id, project_id)
-    context = await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     return project_detail_view(
         workspace,
-        allowed_actions=_project_allowed_actions(
+        authorization=_project_authorization(
             workspace.project, context, is_member=workspace.is_member
         ),
     )
@@ -276,7 +307,7 @@ async def list_project_discussions(
     workspace_id: str, project_id: str, user: ApiUser, db: Database
 ) -> list[DiscussionMessageView]:
     messages = await list_project_discussion_messages(db, user, workspace_id, project_id)
-    context = await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     project = await db.get(Project, project_id)
     if project is None:
         raise ResourceUnavailable("Project not found")
@@ -299,7 +330,7 @@ async def create_project_discussion(
     db: Database,
 ) -> DiscussionMessageView:
     message = await add_project_discussion_message(db, user, workspace_id, project_id, data.body)
-    context = await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     return discussion_message_view(message, context)
 
 

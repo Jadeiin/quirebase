@@ -4,6 +4,7 @@ from contextlib import suppress
 
 from fastapi import APIRouter
 
+from quirebase.access import ResourceAction, effective_resource_actions, resolve_workspace_context
 from quirebase.core.errors import ResourceNotFound, ValidationFailure
 from quirebase.documents import (
     resolve_item_thumbnail,
@@ -21,7 +22,7 @@ from quirebase.library import (
     sync_metadata_from_upstream,
 )
 from quirebase.operations.settings import get_effective_settings_model
-from quirebase.web.api.common import OkView, WriteResult
+from quirebase.web.api.common import AuthorizationView, OkView, WriteResult
 from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.item_schemas import (
     DeleteConfirmationRequest,
@@ -31,8 +32,35 @@ from quirebase.web.api.item_schemas import (
 )
 from quirebase.web.api.library_schemas import AuthorSuggestionView, item_search_view
 from quirebase.web.api.serialization import enum_value
+from quirebase.workspaces import list_workspaces
 
 router = APIRouter(tags=["Items"])
+
+
+def _item_authorization(
+    view: ItemOverviewData | ItemOrganizationData,
+    allowed_actions: frozenset[ResourceAction],
+) -> AuthorizationView:
+    actions = []
+    if view.can_edit:
+        actions.append(ResourceAction.item_update.value)
+        actions.extend(
+            resource_action.value
+            for resource_action in (
+                ResourceAction.file_manage,
+                ResourceAction.tag_use,
+                ResourceAction.tag_create,
+                ResourceAction.project_item_manage,
+            )
+            if resource_action in allowed_actions
+        )
+    if ResourceAction.file_delete in allowed_actions:
+        actions.append(ResourceAction.file_delete.value)
+    if view.can_delete:
+        actions.append(ResourceAction.item_delete.value)
+    if ResourceAction.workspace_export in allowed_actions:
+        actions.append(ResourceAction.workspace_export.value)
+    return AuthorizationView(allowed=actions)
 
 
 @router.get("/items/{item_id}/overview", response_model=ItemOverviewView)
@@ -48,9 +76,35 @@ async def item_overview(workspace_id: str, item_id: str, user: ApiUser, db: Data
             "source_kind": resolved.source_kind,
             "source_id": resolved.source_id,
         }
+    workspace_rows = await list_workspaces(db, user)
+    actions_by_workspace = {
+        workspace.id: effective_resource_actions(
+            member.role,
+            workspace.state,
+            governance_suspended=workspace.governance_suspended_at is not None,
+        )
+        for workspace, member in workspace_rows
+    }
+    source_actions = actions_by_workspace.get(workspace_id, frozenset())
+    copy_targets = []
+    for workspace, _member in workspace_rows:
+        if workspace.id == workspace_id:
+            continue
+        target_actions = actions_by_workspace[workspace.id]
+        can_copy_into = (
+            ResourceAction.workspace_export in source_actions
+            and ResourceAction.item_copy in target_actions
+        )
+        copy_targets.append({
+            "id": workspace.id,
+            "name": workspace.name,
+            "authorization": AuthorizationView(
+                allowed=[ResourceAction.item_copy.value] if can_copy_into else []
+            ),
+        })
     return {
         "item": item_search_view(view.item),
-        "allowed_actions": {"edit": view.can_edit, "delete": view.can_delete},
+        "authorization": _item_authorization(view, source_actions),
         "counts": {
             "revisions": view.revision_count,
             "attachments": view.attachment_count,
@@ -74,6 +128,7 @@ async def item_overview(workspace_id: str, item_id: str, user: ApiUser, db: Data
             else None
         ),
         "thumbnail": thumbnail,
+        "copy_targets": copy_targets,
     }
 
 
@@ -84,9 +139,10 @@ async def item_organize(workspace_id: str, item_id: str, user: ApiUser, db: Data
     if not isinstance(view, ItemOrganizationData):  # pragma: no cover
         raise TypeError("item organize section mismatch")
     matrix = view.tag_matrix
+    allowed_actions = (await resolve_workspace_context(db, user, workspace_id)).allowed_actions
     return {
         "item": item_search_view(view.item),
-        "allowed_actions": {"edit": view.can_edit, "delete": view.can_delete},
+        "authorization": _item_authorization(view, allowed_actions),
         "tags": [{"id": tag.id, "name": tag.name} for tag in view.tags],
         "projects": [
             {

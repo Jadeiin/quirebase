@@ -1,10 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 import { mockSession } from './helpers';
 
-async function projectCapabilities(
+async function projectActions(
 	page: Page,
 	role: string,
-	capabilities: string[],
+	allowedActions: string[],
 	suspended = false
 ) {
 	const workspace = {
@@ -14,7 +14,7 @@ async function projectCapabilities(
 		state: 'active',
 		current_role: role,
 		governance_suspended: suspended,
-		effective_capabilities: capabilities
+		authorization: { allowed: allowedActions }
 	};
 	await page.route('**/api/v1/workspaces/workspace-1', (route) =>
 		route.fulfill({ json: workspace })
@@ -25,17 +25,18 @@ async function projectCapabilities(
 const overview = {
 	item: { id: 'item-1', title_html: 'Item', version: 1 },
 	latest_revision: null,
-	allowed_actions: { edit: false, delete: false },
+	authorization: { allowed: [] },
 	counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 2 },
 	tags: [],
-	identifiers: []
+	identifiers: [],
+	copy_targets: []
 };
 
-test('instance administrator gets no Item Discussion privilege without Workspace capability', async ({
+test('instance administrator gets no Item Discussion privilege without a Workspace decision', async ({
 	page
 }) => {
 	await mockSession(page, 'administrator');
-	await projectCapabilities(page, 'viewer', ['workspace.read', 'workspace.export']);
+	await projectActions(page, 'viewer', ['workspace.read', 'workspace.export']);
 	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
 		route.fulfill({ json: overview })
 	);
@@ -46,16 +47,18 @@ test('instance administrator gets no Item Discussion privilege without Workspace
 					id: 'own',
 					author_id: 'user-1',
 					author_username: 'reader',
+					mine: true,
 					body: 'Own message',
-					allowed_actions: [],
+					authorization: { allowed: [] },
 					created_at: '2026-09-01T00:00:00Z'
 				},
 				{
 					id: 'other',
 					author_id: 'user-2',
 					author_username: 'other',
+					mine: false,
 					body: 'Other message',
-					allowed_actions: [],
+					authorization: { allowed: [] },
 					created_at: '2026-09-01T00:00:00Z'
 				}
 			]
@@ -69,7 +72,7 @@ test('instance administrator gets no Item Discussion privilege without Workspace
 
 test('Discussion writer can delete only their own message', async ({ page }) => {
 	await mockSession(page);
-	await projectCapabilities(page, 'reviewer', ['workspace.read', 'discussion.write']);
+	await projectActions(page, 'reviewer', ['workspace.read', 'item_discussion.create']);
 	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
 		route.fulfill({ json: overview })
 	);
@@ -80,16 +83,18 @@ test('Discussion writer can delete only their own message', async ({ page }) => 
 					id: 'own',
 					author_id: 'user-1',
 					author_username: 'reader',
+					mine: true,
 					body: 'Own message',
-					allowed_actions: ['delete'],
+					authorization: { allowed: ['item_discussion.delete'] },
 					created_at: '2026-09-01T00:00:00Z'
 				},
 				{
 					id: 'other',
 					author_id: 'user-2',
 					author_username: 'other',
+					mine: false,
 					body: 'Other message',
-					allowed_actions: [],
+					authorization: { allowed: [] },
 					created_at: '2026-09-01T00:00:00Z'
 				}
 			]
@@ -104,10 +109,10 @@ test('Workspace admin moderates Discussion with a reason and separate endpoint',
 	page
 }) => {
 	await mockSession(page);
-	await projectCapabilities(page, 'admin', [
+	await projectActions(page, 'admin', [
 		'workspace.read',
-		'discussion.write',
-		'discussion.moderate'
+		'item_discussion.create',
+		'item_discussion.delete'
 	]);
 	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
 		route.fulfill({ json: overview })
@@ -119,9 +124,10 @@ test('Workspace admin moderates Discussion with a reason and separate endpoint',
 					id: 'other',
 					author_id: 'user-2',
 					author_username: 'other',
+					mine: false,
 					body: 'Other message',
 					created_at: '2026-09-01T00:00:00Z',
-					allowed_actions: ['moderate']
+					authorization: { allowed: ['item_discussion.delete'] }
 				}
 			]
 		})
@@ -142,32 +148,32 @@ test('Workspace admin moderates Discussion with a reason and separate endpoint',
 	await expect.poll(() => moderationReason).toBe('Policy violation');
 });
 
-for (const [role, capabilities, visible] of [
+for (const [role, allowedActions, visible] of [
 	['viewer', ['workspace.read', 'workspace.export'], ['bibliography', 'documents']],
 	[
 		'reviewer',
-		['workspace.read', 'workspace.export', 'discussion.write'],
+		['workspace.read', 'workspace.export', 'item_discussion.create'],
 		['bibliography', 'documents']
 	],
 	[
 		'editor',
-		['workspace.read', 'workspace.export', 'projects.manage', 'tags.use'],
+		['workspace.read', 'workspace.export', 'project_item.manage', 'tag.use'],
 		['add_project', 'add_tag', 'bibliography', 'documents']
 	],
 	[
 		'admin',
-		['workspace.read', 'workspace.export', 'projects.manage', 'tags.use', 'items.delete'],
+		['workspace.read', 'workspace.export', 'project_item.manage', 'tag.use', 'item.delete'],
 		['add_project', 'add_tag', 'bibliography', 'documents', 'delete']
 	],
 	[
 		'owner',
-		['workspace.read', 'workspace.export', 'projects.manage', 'tags.use', 'items.delete'],
+		['workspace.read', 'workspace.export', 'project_item.manage', 'tag.use', 'item.delete'],
 		['add_project', 'add_tag', 'bibliography', 'documents', 'delete']
 	]
 ] as const) {
 	test(`${role} sees only permitted Library bulk actions`, async ({ page }) => {
 		await mockSession(page);
-		await projectCapabilities(page, role, [...capabilities]);
+		await projectActions(page, role, [...allowedActions]);
 		await page.route('**/api/v1/workspaces/workspace-1/tags', (route) =>
 			route.fulfill({ json: [] })
 		);
@@ -210,7 +216,7 @@ test('viewer can search Discovery but cannot stage Import or use write shortcuts
 	page
 }) => {
 	await mockSession(page);
-	await projectCapabilities(page, 'viewer', ['workspace.read', 'workspace.export']);
+	await projectActions(page, 'viewer', ['workspace.read', 'workspace.export']);
 	await page.route('**/api/v1/workspaces/workspace-1/dashboard', (route) =>
 		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 0 } })
 	);
@@ -250,7 +256,7 @@ test('viewer can search Discovery but cannot stage Import or use write shortcuts
 
 test('governance suspension is visible and hides Workspace mutations', async ({ page }) => {
 	await mockSession(page);
-	await projectCapabilities(page, 'owner', ['workspace.read', 'workspace.export'], true);
+	await projectActions(page, 'owner', ['workspace.read', 'workspace.export'], true);
 	await page.route('**/api/v1/workspaces/workspace-1/dashboard', (route) =>
 		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 0 } })
 	);
@@ -262,17 +268,9 @@ test('governance suspension is visible and hides Workspace mutations', async ({ 
 	await expect(page.getByRole('button', { name: 'Reindex Workspace' })).toHaveCount(0);
 });
 
-test('Item actions require source export and file management capabilities', async ({ page }) => {
+test('Item actions require source export and file management decisions', async ({ page }) => {
 	await mockSession(page);
-	await projectCapabilities(page, 'viewer', ['workspace.read']);
-	await page.route('**/api/v1/workspaces', (route) =>
-		route.fulfill({
-			json: [
-				{ id: 'workspace-1', name: 'Research', effective_capabilities: ['workspace.read'] },
-				{ id: 'workspace-2', name: 'Target', effective_capabilities: ['items.create'] }
-			]
-		})
-	);
+	await projectActions(page, 'viewer', ['workspace.read']);
 	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
 		route.fulfill({
 			json: {
@@ -283,7 +281,14 @@ test('Item actions require source export and file management capabilities', asyn
 					size: 100,
 					processing_state: 'ready'
 				},
-				allowed_actions: { edit: true, delete: false }
+				authorization: { allowed: ['item.update'] },
+				copy_targets: [
+					{
+						id: 'workspace-2',
+						name: 'Target',
+						authorization: { allowed: [] }
+					}
+				]
 			}
 		})
 	);
@@ -341,7 +346,7 @@ test('Workspace rename refreshes the chooser cache and reindex tracks a scoped w
 		state: 'active',
 		current_role: 'admin',
 		governance_suspended: false,
-		effective_capabilities: ['workspace.read', 'workspace.settings.manage']
+		authorization: { allowed: ['workspace.read', 'workspace.update'] }
 	});
 	await page.route('**/api/v1/workspaces', (route) => route.fulfill({ json: [projection()] }));
 	await page.route('**/api/v1/workspaces/workspace-1', (route) => {
@@ -377,7 +382,7 @@ test('Workspace rename refreshes the chooser cache and reindex tracks a scoped w
 	await expect.poll(() => reindexRequests).toBe(1);
 });
 
-test('a lifecycle conflict refreshes the Workspace capability projection', async ({ page }) => {
+test('a lifecycle conflict refreshes the Workspace action projection', async ({ page }) => {
 	await mockSession(page);
 	let archived = false;
 	const projection = () => ({
@@ -387,9 +392,11 @@ test('a lifecycle conflict refreshes the Workspace capability projection', async
 		state: archived ? 'archived' : 'active',
 		current_role: 'owner',
 		governance_suspended: false,
-		effective_capabilities: archived
-			? ['workspace.read', 'workspace.archive']
-			: ['workspace.read', 'workspace.settings.manage', 'workspace.archive']
+		authorization: {
+			allowed: archived
+				? ['workspace.read', 'workspace.restore']
+				: ['workspace.read', 'workspace.update', 'workspace.archive']
+		}
 	});
 	await page.route('**/api/v1/workspaces', (route) => route.fulfill({ json: [projection()] }));
 	await page.route('**/api/v1/workspaces/workspace-1', (route) => {
@@ -418,7 +425,7 @@ test('a lifecycle conflict refreshes the Workspace capability projection', async
 
 test('missing Workspace context opens recovery and emits a diagnostic', async ({ page }) => {
 	await mockSession(page);
-	await projectCapabilities(page, 'owner', ['workspace.read', 'workspace.settings.manage']);
+	await projectActions(page, 'owner', ['workspace.read', 'workspace.update']);
 	await page.route('**/api/v1/workspaces/workspace-1/governance/members', (route) =>
 		route.fulfill({ json: [] })
 	);
@@ -447,7 +454,7 @@ test('missing Workspace context opens recovery and emits a diagnostic', async ({
 				state: 'active',
 				current_role: 'owner',
 				governance_suspended: false,
-				effective_capabilities: ['workspace.read', 'workspace.settings.manage']
+				authorization: { allowed: ['workspace.read', 'workspace.update'] }
 			}
 		});
 	});
@@ -464,7 +471,7 @@ test('missing Workspace context opens recovery and emits a diagnostic', async ({
 
 test('metadata version conflict loads the latest Item before explicit retry', async ({ page }) => {
 	await mockSession(page);
-	await projectCapabilities(page, 'editor', ['workspace.read', 'items.edit']);
+	await projectActions(page, 'editor', ['workspace.read', 'item.update']);
 	let version = 1;
 	const submittedVersions: number[] = [];
 	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
@@ -476,7 +483,7 @@ test('metadata version conflict loads the latest Item before explicit retry', as
 					title_html: version === 1 ? 'Initial' : 'Updated elsewhere',
 					version
 				},
-				allowed_actions: { edit: true, delete: false }
+				authorization: { allowed: ['item.update'] }
 			}
 		})
 	);

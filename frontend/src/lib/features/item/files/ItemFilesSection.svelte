@@ -10,18 +10,29 @@
 	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
 	import { workspaceHref } from '$lib/workspaces/href';
 
-	let { itemId, data, details, canEdit, busy, onUpload, onUploadFromUrl, onDownload, onDelete } =
-		$props<{
-			itemId: string;
-			data: FilesView;
-			details?: ItemDetail;
-			canEdit: boolean;
-			busy: boolean;
-			onUpload: (event: SubmitEvent, kind: 'revision' | 'attachment') => void;
-			onUploadFromUrl: (event: SubmitEvent, kind: 'revision' | 'attachment') => void;
-			onDownload: (file: FileRow) => void;
-			onDelete: (file: FileRow) => void;
-		}>();
+	let {
+		itemId,
+		data,
+		details,
+		canEdit,
+		canDelete,
+		busy,
+		onUpload,
+		onUploadFromUrl,
+		onDownload,
+		onDelete
+	} = $props<{
+		itemId: string;
+		data: FilesView;
+		details?: ItemDetail;
+		canEdit: boolean;
+		canDelete: boolean;
+		busy: boolean;
+		onUpload: (event: SubmitEvent, kind: 'revision' | 'attachment') => void;
+		onUploadFromUrl: (event: SubmitEvent, kind: 'revision' | 'attachment') => void;
+		onDownload: (file: FileRow) => void;
+		onDelete: (file: FileRow) => void;
+	}>();
 	const workspace = getWorkspaceContext();
 	const { workspaceId } = workspace;
 </script>
@@ -47,10 +58,10 @@
 							>{$t('Read')}</Button
 						>
 					{/if}
-					{#if workspace.can('workspace.export')}<Button onclick={() => onDownload(file)}
+					{#if workspace.can('workspace', 'export')}<Button onclick={() => onDownload(file)}
 							>{$t('Download')}</Button
 						>{/if}
-					{#if canEdit}
+					{#if canDelete}
 						<Button variant="danger" disabled={busy} onclick={() => onDelete(file)}
 							>{$t('Delete')}</Button
 						>

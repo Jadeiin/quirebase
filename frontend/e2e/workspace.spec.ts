@@ -114,7 +114,9 @@ test('workspace creation submits an explicit owner and opens the Workspace when 
 		state: 'active',
 		current_role: 'owner',
 		governance_suspended: false,
-		effective_capabilities: ['workspace.read', 'workspace.settings.manage', 'items.create']
+		authorization: {
+			allowed: ['workspace.read', 'workspace.update', 'item.create']
+		}
 	};
 	let createBody: unknown;
 	let workspaceCreated = false;
@@ -163,7 +165,7 @@ test('an instance administrator who assigns another owner is not added to Worksp
 					state: 'active',
 					current_role: 'owner',
 					governance_suspended: false,
-					effective_capabilities: ['workspace.read']
+					authorization: { allowed: ['workspace.read'] }
 				}
 			]
 		});
@@ -224,7 +226,7 @@ test('the root route surfaces Workspace list failures and retries', async ({ pag
 					state: 'active',
 					current_role: 'owner',
 					governance_suspended: false,
-					effective_capabilities: ['workspace.read']
+					authorization: { allowed: ['workspace.read'] }
 				}
 			]
 		});
@@ -282,7 +284,7 @@ test('availability recovery releases its guard for a later membership revocation
 		state: 'active',
 		current_role: 'owner',
 		governance_suspended: false,
-		effective_capabilities: ['workspace.read']
+		authorization: { allowed: ['workspace.read'] }
 	};
 	let detailRequests = 0;
 	let membershipRevoked = false;
@@ -343,7 +345,7 @@ test('membership revoked while a page is open returns the user to the Workspace 
 							state: 'active',
 							current_role: 'owner',
 							governance_suspended: false,
-							effective_capabilities: ['workspace.read']
+							authorization: { allowed: ['workspace.read'] }
 						}
 					]
 		})
@@ -492,7 +494,7 @@ test('Workspace admins do not get governance controls for other admin members', 
 		state: 'active',
 		current_role: 'admin',
 		governance_suspended: false,
-		effective_capabilities: ['workspace.read', 'workspace.members.manage']
+		authorization: { allowed: ['workspace.read', 'workspace_member.read'] }
 	};
 	await page.route('**/api/v1/workspaces', (route) => route.fulfill({ json: [workspace] }));
 	await page.route('**/api/v1/workspaces/workspace-1', (route) =>
@@ -507,7 +509,8 @@ test('Workspace admins do not get governance controls for other admin members', 
 					username: 'other-admin',
 					role: 'admin',
 					state: 'active',
-					joined_at: '2026-01-01T00:00:00Z'
+					joined_at: '2026-01-01T00:00:00Z',
+					authorization: { allowed: [] }
 				},
 				{
 					membership_id: 'editor-membership',
@@ -515,7 +518,14 @@ test('Workspace admins do not get governance controls for other admin members', 
 					username: 'editor',
 					role: 'editor',
 					state: 'active',
-					joined_at: '2026-01-02T00:00:00Z'
+					joined_at: '2026-01-02T00:00:00Z',
+					authorization: {
+						allowed: [
+							'workspace_member.change_role',
+							'workspace_member.suspend',
+							'workspace_member.terminate'
+						]
+					}
 				}
 			]
 		})
@@ -543,7 +553,7 @@ test('Workspace members see the active directory without governance data', async
 		state: 'active',
 		current_role: 'editor',
 		governance_suspended: false,
-		effective_capabilities: ['workspace.read', 'workspace.export', 'items.edit']
+		authorization: { allowed: ['workspace.read', 'workspace.export', 'item.update'] }
 	};
 	await page.route('**/api/v1/workspaces', (route) => route.fulfill({ json: [workspace] }));
 	await page.route('**/api/v1/workspaces/workspace-1', (route) =>
@@ -649,7 +659,7 @@ test('an inaccessible default Workspace is cleared before root navigation recove
 						state: 'active',
 						current_role: 'owner',
 						governance_suspended: false,
-						effective_capabilities: ['workspace.read', 'items.create']
+						authorization: { allowed: ['workspace.read', 'item.create'] }
 					}
 				}
 			]

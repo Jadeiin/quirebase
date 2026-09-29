@@ -4,10 +4,11 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import delete, func, select
 
+from quirebase.access import SystemAction, require_system_action
 from quirebase.access.items import require_editable_item
-from quirebase.access.workspaces import Capability, require_workspace_capability
+from quirebase.access.workspaces import ResourceAction, require_workspace_action
 from quirebase.audit import record_event
-from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
+from quirebase.core.errors import ResourceNotFound
 from quirebase.documents import enqueue_object_cleanup
 from quirebase.models import Attachment, FileRevision, Item, ObjectIntegrityScan, User
 from quirebase.search import search_index
@@ -17,8 +18,7 @@ if TYPE_CHECKING:
 
 
 async def get_storage_metrics(db: AsyncSession, admin: User) -> dict[str, Any]:
-    if admin.role != "administrator":
-        raise ResourceUnavailable("administrator required")
+    await require_system_action(db, admin, SystemAction.storage_metrics_read)
     total_items = await db.scalar(select(func.count(Item.id))) or 0
     revisions_count, revisions_bytes = (
         await db.execute(
@@ -60,7 +60,7 @@ async def get_storage_metrics(db: AsyncSession, admin: User) -> dict[str, Any]:
 
 
 async def _delete_item(db: AsyncSession, actor: User, workspace_id: str, item_id: str) -> None:
-    await require_workspace_capability(db, actor, workspace_id, Capability.items_delete)
+    await require_workspace_action(db, actor, workspace_id, ResourceAction.item_delete)
     await require_editable_item(db, actor, workspace_id, item_id)
     item = await db.scalar(
         select(Item).where(Item.id == item_id, Item.workspace_id == workspace_id).with_for_update()
@@ -134,7 +134,7 @@ async def _delete_item(db: AsyncSession, actor: User, workspace_id: str, item_id
         item.id,
         detail={"title": title},
         workspace_id=workspace_id,
-        authorization_capability=Capability.items_delete.value,
+        authorization_resource_action=ResourceAction.item_delete.value,
     )
     await enqueue_object_cleanup(
         db,
@@ -148,5 +148,5 @@ async def _delete_item(db: AsyncSession, actor: User, workspace_id: str, item_id
 
 
 async def delete_item(db: AsyncSession, actor: User, workspace_id: str, item_id: str) -> None:
-    """Permanently delete one Workspace Item with the destructive capability."""
+    """Permanently delete one Workspace Item after the destructive resource action."""
     await _delete_item(db, actor, workspace_id, item_id)

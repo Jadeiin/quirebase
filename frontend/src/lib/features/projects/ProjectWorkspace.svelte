@@ -3,6 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { apiErrorMessage } from '$lib/api/errors';
+	import { can as isAllowed } from '$lib/authorization/can';
 	import Button from '$lib/design/Button.svelte';
 	import ItemRow from '$lib/design/ItemRow.svelte';
 	import Notice from '$lib/design/Notice.svelte';
@@ -84,8 +85,8 @@
 		}
 	}
 
-	function can(action: string) {
-		return project?.allowed_actions.includes(action) ?? false;
+	function can(resource: string, action: string) {
+		return isAllowed(project?.authorization, resource, action);
 	}
 
 	async function saveSettings(event: SubmitEvent) {
@@ -196,7 +197,10 @@
 	async function deleteDiscussion(messageId: string) {
 		if (
 			!discussions.data?.some(
-				(message) => message.id === messageId && message.allowed_actions.includes('delete')
+				(message) =>
+					message.id === messageId &&
+					message.mine &&
+					isAllowed(message.authorization, 'project_discussion', 'delete')
 			)
 		)
 			return;
@@ -217,7 +221,10 @@
 			!messageId ||
 			!reason.trim() ||
 			!discussions.data?.some(
-				(message) => message.id === messageId && message.allowed_actions.includes('moderate')
+				(message) =>
+					message.id === messageId &&
+					!message.mine &&
+					isAllowed(message.authorization, 'project_discussion', 'delete')
 			)
 		)
 			return;
@@ -260,10 +267,11 @@
 			</div>
 			{#snippet actions()}
 				<div class="flex flex-wrap gap-2">
-					{#if can('participation.join')}<Button disabled={busy} onclick={() => void joinProject()}
-							>{$t('Join Project')}</Button
+					{#if can('project_membership', 'join')}<Button
+							disabled={busy}
+							onclick={() => void joinProject()}>{$t('Join Project')}</Button
 						>{/if}
-					{#if can('participation.leave')}<Button
+					{#if can('project_membership', 'leave')}<Button
 							variant="tonal"
 							disabled={busy}
 							onclick={() => void leaveProject()}>{$t('Leave Project')}</Button
@@ -274,11 +282,11 @@
 							workspaceHref(workspaceId, `library?project=${encodeURIComponent(projectId)}`)
 						)}>{$t('Open in Library')}</Button
 					>
-					{#if can('archive')}<Button
+					{#if can('project', 'archive')}<Button
 							variant="tonal"
 							disabled={busy}
 							onclick={() => void changeState('archive')}>{$t('Archive')}</Button
-						>{:else if can('restore')}<Button
+						>{:else if can('project', 'restore')}<Button
 							disabled={busy}
 							onclick={() => void changeState('restore')}>{$t('Restore')}</Button
 						>{/if}
@@ -286,7 +294,7 @@
 			{/snippet}
 		</SectionHeader>
 
-		{#if can('settings')}
+		{#if can('project', 'update')}
 			<Panel>
 				<form class="grid grid-cols-1 gap-3 md:grid-cols-2" onsubmit={saveSettings}>
 					<h2 class="text-xl font-semibold md:col-span-2">{$t('Project settings')}</h2>
@@ -300,12 +308,12 @@
 					>
 					<label class="grid grid-cols-1 gap-1"
 						>{$t('Participation')}<select class="select" bind:value={settingsVisibility}
-							>{#if project.visibility === 'managed' && !workspace.can('projects.create_managed')}
+							>{#if project.visibility === 'managed' && !workspace.can('project', 'create', 'managed')}
 								<option value="managed" disabled>{$t(domainLabel('managed'))}</option>
 							{:else}
 								<option value="workspace">{$t(domainLabel('workspace'))}</option><option
 									value="open">{$t(domainLabel('open'))}</option
-								>{#if workspace.can('projects.create_managed')}<option value="managed"
+								>{#if workspace.can('project', 'create', 'managed')}<option value="managed"
 										>{$t(domainLabel('managed'))}</option
 									>{/if}
 							{/if}</select
@@ -336,7 +344,7 @@
 					>
 					<div class="flex flex-wrap gap-2 md:col-span-2">
 						<Button disabled={busy || !settingsName.trim()}>{$t('Save Project settings')}</Button>
-						{#if can('delete')}<Button
+						{#if can('project', 'delete')}<Button
 								type="button"
 								variant="danger"
 								disabled={busy}
@@ -371,7 +379,7 @@
 								class="flex items-center justify-between gap-2 border-t border-surface-300-700 py-2"
 							>
 								<span>{member.username}</span>
-								{#if can('members.manage')}<Button
+								{#if can('project_membership', 'manage')}<Button
 										size="sm"
 										variant="tonal"
 										disabled={busy}
@@ -382,7 +390,10 @@
 				{:else}<p class="mt-3 text-sm text-surface-600-400">
 						{$t('No Project participants yet.')}
 					</p>{/if}
-				{#if can('members.manage')}<form class="mt-4 flex flex-wrap gap-2" onsubmit={addMember}>
+				{#if can('project_membership', 'manage')}<form
+						class="mt-4 flex flex-wrap gap-2"
+						onsubmit={addMember}
+					>
 						<input
 							class="input min-w-64 flex-1"
 							bind:value={username}
@@ -404,7 +415,7 @@
 						><strong><RichText html={item.title_html} /></strong><span class="text-surface-600-400"
 							>{item.authors ?? ''}</span
 						></a
-					>{#if can('items.manage')}<Button
+					>{#if can('project_item', 'manage')}<Button
 							disabled={busy || project.state !== 'active'}
 							onclick={() =>
 								void mutate(
@@ -432,13 +443,13 @@
 					<article class="grid grid-cols-1 gap-1 border-t border-surface-300-700 py-3">
 						<div class="flex items-center justify-between gap-2">
 							<strong>{message.author_username}</strong>
-							{#if message.allowed_actions.includes('delete')}<Button
+							{#if message.mine && isAllowed(message.authorization, 'project_discussion', 'delete')}<Button
 									size="sm"
 									variant="tonal"
 									disabled={busy}
 									onclick={() => void deleteDiscussion(message.id)}>{$t('Delete')}</Button
 								>{/if}
-							{#if message.allowed_actions.includes('moderate')}<Button
+							{#if !message.mine && isAllowed(message.authorization, 'project_discussion', 'delete')}<Button
 									size="sm"
 									variant="tonal"
 									disabled={busy}
@@ -454,7 +465,7 @@
 						>
 					</article>
 				{:else}<p class="text-surface-600-400">{$t('No discussion messages yet.')}</p>{/each}{/if}
-			{#if can('discussion.write')}
+			{#if can('project_discussion', 'create')}
 				<form class="mt-3 grid grid-cols-1 gap-2" onsubmit={addDiscussion}>
 					<textarea
 						class="textarea min-h-24"

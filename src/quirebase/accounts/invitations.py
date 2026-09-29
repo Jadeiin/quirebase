@@ -6,8 +6,9 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from quirebase.access import SystemAction, require_system_action
 from quirebase.core.crypto import generate_token, token_hash
-from quirebase.core.errors import DomainError, ResourceUnavailable, ValidationFailure
+from quirebase.core.errors import DomainError, ResourceNotFound, ValidationFailure
 from quirebase.core.timezones import as_utc
 from quirebase.models import Invitation, User
 
@@ -39,8 +40,14 @@ async def create_invitation(
     role: str = "member",
     expires_days: int = 7,
 ) -> tuple[Invitation, str]:
-    if creator.role != "administrator":
-        raise ResourceUnavailable("administration resource unavailable")
+    creator = await require_system_action(
+        db,
+        creator,
+        SystemAction.invitations_create,
+        lock="shared",
+        message="resource not found",
+        denied_error=ResourceNotFound,
+    )
     normalized = username.strip()
     if not normalized or len(normalized) > 120 or role not in ("member", "administrator"):
         raise ValidationFailure("invalid username or role")

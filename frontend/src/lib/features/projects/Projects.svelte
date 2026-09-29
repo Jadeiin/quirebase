@@ -94,7 +94,7 @@
 		</p>
 	</div>
 	{#snippet actions()}
-		{#if workspace.can('projects.create')}
+		{#if workspace.can('project', 'create')}
 			<Dialog open={createOpen} onOpenChange={(details) => (createOpen = details.open)}>
 				<DialogTriggerButton><Icon name="plus" /> {$t('New Project')}</DialogTriggerButton>
 				<Portal>
@@ -132,7 +132,7 @@
 									>{$t('Participation')}<select class="select" bind:value={visibility}
 										><option value="workspace">{$t(domainLabel('workspace'))}</option><option
 											value="open">{$t(domainLabel('open'))}</option
-										>{#if workspace.can('projects.create_managed')}<option value="managed"
+										>{#if workspace.can('project', 'create', 'managed')}<option value="managed"
 												>{$t(domainLabel('managed'))}</option
 											>{/if}</select
 									></label

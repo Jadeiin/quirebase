@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from quirebase.web.api.common import AuthorizationView
 from quirebase.web.api.library_schemas import ItemSearchView
 
 
@@ -21,11 +22,6 @@ class RemoteRevisionRequest(BaseModel):
 
 class RemoteAttachmentRequest(RemoteRevisionRequest):
     graphical_abstract: bool = False
-
-
-class ItemAllowedActionsView(BaseModel):
-    edit: bool
-    delete: bool
 
 
 class ItemOverviewCountsView(BaseModel):
@@ -58,14 +54,21 @@ class ItemThumbnailView(BaseModel):
     source_id: str
 
 
+class ItemCopyTargetView(BaseModel):
+    id: str
+    name: str
+    authorization: AuthorizationView
+
+
 class ItemOverviewView(BaseModel):
     item: ItemSearchView
-    allowed_actions: ItemAllowedActionsView
+    authorization: AuthorizationView
     counts: ItemOverviewCountsView
     tags: list[ItemTagView]
     identifiers: list[ItemIdentifierView]
     latest_revision: ItemLatestRevisionView | None = None
     thumbnail: ItemThumbnailView | None = None
+    copy_targets: list[ItemCopyTargetView]
 
 
 class ItemOrganizeProjectView(BaseModel):
@@ -93,7 +96,7 @@ class TagMatrixView(BaseModel):
 
 class ItemOrganizeView(BaseModel):
     item: ItemSearchView
-    allowed_actions: ItemAllowedActionsView
+    authorization: AuthorizationView
     tags: list[ItemTagView]
     projects: list[ItemOrganizeProjectView]
     tag_matrix: TagMatrixView

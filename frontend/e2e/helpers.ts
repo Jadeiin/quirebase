@@ -11,33 +11,39 @@ function workspaceView(id: string, name: string) {
 		state: 'active',
 		current_role: 'owner',
 		governance_suspended: false,
-		effective_capabilities: [
-			'workspace.read',
-			'workspace.export',
-			'workspace.settings.manage',
-			'workspace.members.manage',
-			'workspace.admins.manage',
-			'workspace.ownership.transfer',
-			'workspace.archive',
-			'workspace.delete',
-			'items.create',
-			'items.edit',
-			'items.delete',
-			'files.manage',
-			'tags.use',
-			'tags.create',
-			'tags.manage',
-			'citation_styles.manage',
-			'projects.create',
-			'projects.create_managed',
-			'projects.manage',
-			'projects.delete',
-			'projects.members.manage',
-			'discussion.write',
-			'annotations.private.write',
-			'annotations.project.write',
-			'annotations.moderate'
-		]
+		authorization: {
+			allowed: [
+				'workspace.read',
+				'workspace.export',
+				'workspace.update',
+				'workspace.archive',
+				'workspace.delete',
+				'item.create',
+				'item.update',
+				'item.delete',
+				'file.manage',
+				'file.delete',
+				'tag.use',
+				'tag.create',
+				'tag.manage',
+				'citation_style.manage',
+				'project.create',
+				'project.update',
+				'project.archive',
+				'project.delete',
+				'project_item.manage',
+				'workspace_invitation.read',
+				'workspace_invitation.create',
+				'workspace_invitation.revoke',
+				'workspace_member.read',
+				'item_discussion.create',
+				'project_discussion.create',
+				'private_annotation.create',
+				'project_annotation.create',
+				'project_annotation.review'
+			],
+			relations: { 'project.create': ['managed', 'open', 'workspace'] }
+		}
 	};
 }
 
@@ -81,7 +87,14 @@ export async function mockSession(page: Page, role: 'member' | 'administrator' =
 		route.fulfill({
 			json: {
 				authenticated: true,
-				user: { id: 'user-1', username: 'reader', role }
+				user: {
+					id: 'user-1',
+					username: 'reader',
+					role,
+					authorization: {
+						allowed: role === 'administrator' ? ['audit.read'] : []
+					}
+				}
 			}
 		})
 	);

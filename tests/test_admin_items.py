@@ -60,12 +60,12 @@ async def test_storage_metrics_remain_instance_metadata(async_db):
 
 @pytest.mark.anyio
 async def test_admin_has_no_ordinary_workspace_content_authority(async_db):
-    from quirebase.access import Capability, require_workspace_capability
+    from quirebase.access import ResourceAction, require_workspace_action
 
     owner = await _user(async_db, "content-owner")
     admin = await _user(async_db, "content-admin", administrator=True)
 
     with pytest.raises(WorkspaceMembershipRequired):
-        await require_workspace_capability(
-            async_db, admin, fixture_workspace_id(owner), Capability.workspace_read
+        await require_workspace_action(
+            async_db, admin, fixture_workspace_id(owner), ResourceAction.workspace_read
         )

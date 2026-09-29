@@ -2202,8 +2202,8 @@ export interface components {
 			target_ids?: string[] | null;
 			/** Authorization Role */
 			authorization_role?: string | null;
-			/** Authorization Capability */
-			authorization_capability?: string | null;
+			/** Authorization Resource Action */
+			authorization_resource_action?: string | null;
 			/** Result */
 			result?: string | null;
 			/** Source */
@@ -2513,8 +2513,7 @@ export interface components {
 			mine: boolean;
 			/** Editable */
 			editable: boolean;
-			/** Allowed Actions */
-			allowed_actions: ('edit' | 'delete' | 'hide' | 'archive' | 'restore' | 'lock' | 'unlock')[];
+			authorization: components['schemas']['AuthorizationView'];
 			/** Hidden At */
 			hidden_at?: string | null;
 			/** Archived At */
@@ -2637,8 +2636,7 @@ export interface components {
 			mine: boolean;
 			/** Editable */
 			editable: boolean;
-			/** Allowed Actions */
-			allowed_actions: ('edit' | 'delete' | 'hide' | 'archive' | 'restore' | 'lock' | 'unlock')[];
+			authorization: components['schemas']['AuthorizationView'];
 			/** Hidden At */
 			hidden_at?: string | null;
 			/** Archived At */
@@ -2765,6 +2763,18 @@ export interface components {
 			first_name?: string | null;
 			/** Full Name */
 			full_name: string;
+		};
+		/**
+		 * AuthorizationView
+		 * @description Canonical resource-action keys; clients check this set, never reconstruct policy.
+		 */
+		AuthorizationView: {
+			/** Allowed */
+			allowed: string[];
+			/** Relations */
+			relations?: {
+				[key: string]: string[];
+			};
 		};
 		/** BibliographyExportRequest */
 		BibliographyExportRequest: {
@@ -3077,14 +3087,15 @@ export interface components {
 			author_id: string;
 			/** Author Username */
 			author_username: string;
+			/** Mine */
+			mine: boolean;
 			/** Body */
 			body: string;
 			/** Created At */
 			created_at: string;
 			/** Updated At */
 			updated_at: string;
-			/** Allowed Actions */
-			allowed_actions: string[];
+			authorization: components['schemas']['AuthorizationView'];
 		};
 		/** DiscussionModerationRequest */
 		DiscussionModerationRequest: {
@@ -3310,12 +3321,13 @@ export interface components {
 			 */
 			expires_at: string;
 		};
-		/** ItemAllowedActionsView */
-		ItemAllowedActionsView: {
-			/** Edit */
-			edit: boolean;
-			/** Delete */
-			delete: boolean;
+		/** ItemCopyTargetView */
+		ItemCopyTargetView: {
+			/** Id */
+			id: string;
+			/** Name */
+			name: string;
+			authorization: components['schemas']['AuthorizationView'];
 		};
 		/** ItemDetailView */
 		ItemDetailView: {
@@ -3511,7 +3523,7 @@ export interface components {
 		/** ItemOrganizeView */
 		ItemOrganizeView: {
 			item: components['schemas']['ItemSearchView'];
-			allowed_actions: components['schemas']['ItemAllowedActionsView'];
+			authorization: components['schemas']['AuthorizationView'];
 			/** Tags */
 			tags: components['schemas']['ItemTagView'][];
 			/** Projects */
@@ -3532,7 +3544,7 @@ export interface components {
 		/** ItemOverviewView */
 		ItemOverviewView: {
 			item: components['schemas']['ItemSearchView'];
-			allowed_actions: components['schemas']['ItemAllowedActionsView'];
+			authorization: components['schemas']['AuthorizationView'];
 			counts: components['schemas']['ItemOverviewCountsView'];
 			/** Tags */
 			tags: components['schemas']['ItemTagView'][];
@@ -3540,6 +3552,8 @@ export interface components {
 			identifiers: components['schemas']['ItemIdentifierView'][];
 			latest_revision?: components['schemas']['ItemLatestRevisionView'] | null;
 			thumbnail?: components['schemas']['ItemThumbnailView'] | null;
+			/** Copy Targets */
+			copy_targets: components['schemas']['ItemCopyTargetView'][];
 		};
 		/** ItemSearchView */
 		ItemSearchView: {
@@ -3810,8 +3824,7 @@ export interface components {
 			 * @default
 			 */
 			description: string;
-			/** Allowed Actions */
-			allowed_actions: string[];
+			authorization: components['schemas']['AuthorizationView'];
 			/** Members */
 			members: components['schemas']['ProjectMemberView'][];
 			/** Items */
@@ -3863,8 +3876,7 @@ export interface components {
 			 * @default
 			 */
 			description: string;
-			/** Allowed Actions */
-			allowed_actions: string[];
+			authorization: components['schemas']['AuthorizationView'];
 		};
 		/** ProjectVisibilityRequest */
 		ProjectVisibilityRequest: {
@@ -3988,6 +4000,7 @@ export interface components {
 			 * @enum {string}
 			 */
 			role: 'administrator' | 'member';
+			authorization: components['schemas']['AuthorizationView'];
 		};
 		/** SessionView */
 		SessionView: {
@@ -4072,8 +4085,7 @@ export interface components {
 			name: string;
 			/** Accessible Item Count */
 			accessible_item_count: number;
-			/** Can Manage */
-			can_manage: boolean;
+			authorization: components['schemas']['AuthorizationView'];
 		};
 		/** TextMarkupPayload */
 		TextMarkupPayload: {
@@ -4169,6 +4181,7 @@ export interface components {
 			 * Format: date-time
 			 */
 			joined_at: string;
+			authorization: components['schemas']['AuthorizationView'];
 		};
 		/** WorkspaceInvitationAcceptanceView */
 		WorkspaceInvitationAcceptanceView: {
@@ -4282,8 +4295,7 @@ export interface components {
 			current_role: string;
 			/** Governance Suspended */
 			governance_suspended: boolean;
-			/** Effective Capabilities */
-			effective_capabilities: string[];
+			authorization: components['schemas']['AuthorizationView'];
 		};
 		/** WriteResult */
 		WriteResult: {

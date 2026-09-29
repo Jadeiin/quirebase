@@ -11,7 +11,14 @@ test('Tools exposes Tag maintenance and Citation Style installation', async ({ p
 	});
 	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) =>
 		route.fulfill({
-			json: [{ id: 'tag-1', name: 'Methods', accessible_item_count: 3, can_manage: true }]
+			json: [
+				{
+					id: 'tag-1',
+					name: 'Methods',
+					accessible_item_count: 3,
+					authorization: { allowed: ['tag.manage'] }
+				}
+			]
 		})
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/citation-styles*', (route) => {
@@ -52,7 +59,7 @@ test('Tag page clamps after deleting the last page of Tags', async ({ page }) =>
 		id: `tag-${index + 1}`,
 		name: `Tag ${String(index + 1).padStart(2, '0')}`,
 		accessible_item_count: 1,
-		can_manage: true
+		authorization: { allowed: ['tag.manage'] }
 	}));
 	await page.route('**/api/v1/workspaces/workspace-1/tags**', (route) => {
 		const request = route.request();

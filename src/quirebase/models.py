@@ -826,7 +826,7 @@ class AuditEvent(Base):
     detail: Mapped[str | None] = mapped_column(Text)
     target_ids: Mapped[str | None] = mapped_column(Text)
     authorization_role: Mapped[str | None] = mapped_column(String(32))
-    authorization_capability: Mapped[str | None] = mapped_column(String(80))
+    authorization_resource_action: Mapped[str | None] = mapped_column(String(80))
     result: Mapped[str | None] = mapped_column(String(32))
     source: Mapped[str | None] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import selectinload
 
+from quirebase.access import require_system_resource_action
 from quirebase.audit import record_event
 from quirebase.core.crypto import generate_token, token_hash
 from quirebase.core.errors import ResourceNotFound
@@ -43,12 +44,13 @@ async def get_login_session_by_token(db: AsyncSession, raw_token: str) -> LoginS
     return login
 
 
-async def list_user_sessions(db: AsyncSession, user_id: str) -> list[LoginSession]:
+async def list_user_sessions(db: AsyncSession, user: User) -> list[LoginSession]:
+    user = await require_system_resource_action(db, user, "login_session", "read", relation="own")
     return list(
         (
             await db.scalars(
                 select(LoginSession)
-                .where(LoginSession.user_id == user_id)
+                .where(LoginSession.user_id == user.id)
                 .order_by(LoginSession.created_at.desc())
             )
         ).all()
@@ -57,7 +59,17 @@ async def list_user_sessions(db: AsyncSession, user_id: str) -> list[LoginSessio
 
 async def revoke_session(db: AsyncSession, user: User, session_id: str) -> None:
     target = await db.get(LoginSession, session_id)
-    if target is None or target.user_id != user.id:
+    relation = "own" if target is not None and target.user_id == user.id else "other"
+    user = await require_system_resource_action(
+        db,
+        user,
+        "login_session",
+        "revoke",
+        relation=relation,
+        lock="shared",
+        message="session not found",
+    )
+    if target is None:
         raise ResourceNotFound("session not found")
     record_event(db, user.id, "auth.session.revoke", "login_session", target.id)
     await db.delete(target)
@@ -65,6 +77,9 @@ async def revoke_session(db: AsyncSession, user: User, session_id: str) -> None:
 
 
 async def revoke_all_sessions(db: AsyncSession, user: User) -> int:
+    user = await require_system_resource_action(
+        db, user, "login_session", "revoke", relation="own", lock="shared"
+    )
     count = (
         await db.scalar(
             select(func.count()).select_from(LoginSession).where(LoginSession.user_id == user.id)

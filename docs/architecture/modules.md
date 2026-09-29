@@ -102,10 +102,32 @@ Workspace authorization is resolved once at an inbound request or workflow bound
 `access.WorkspaceContext`. Business operations may use the thin `access.workspace_select()`
 lineage primitive and Module-owned aggregate loaders (`get_item`, `get_project`,
 `get_project_item`, and document loaders). The primitive only adds the Workspace lineage
-predicate; capability checks remain explicit Access gates while Project visibility is a
-participation projection, and mutation statements retain their Workspace and CAS predicates at
-the linearization point. No generic
+predicate; one concrete resource-action decision remains an explicit Access gate while Project
+visibility contributes a canonical relation fact, and mutation statements retain their Workspace
+and CAS predicates at the linearization point. No generic
 Repository or implicit ORM tenant filter is part of this seam.
+
+The Access Module owns one immutable Casbin model and policy bundle packaged with the application.
+Casbin is the sole allow/deny policy evaluator. System and Workspace requests both use
+`subject + resource + action + lifecycle + relation`; there is no separate capability namespace
+or preliminary coarse-grained gate. Relations such as author/other, Workspace-member class,
+Project participation and managed-Project discovery are inputs to that same decision.
+Business Modules still load canonical User, membership, lifecycle, lineage, authorship and
+participation facts, retain their transaction locks and database constraints, and re-evaluate after
+the relevant lock when authority can change. The frontend receives only server-authored allowed
+resource-action sets, calls `can(resource, action)` and never reconstructs policy from roles.
+Dotted keys in the wire contract and Audit Events serialize a resource/action pair; they do not
+define a second policy vocabulary. MCP continues through the generated HTTP API and the same
+business enforcement points; durable workflows re-read facts and authorize each attempt rather
+than persisting an earlier decision.
+
+The policy bundle is organized as inherited role deltas and then by resource/action. CRUD-like
+operations use `create`, `read`, `update` and `delete`; relation facts distinguish own-author and
+moderation decisions instead of introducing action aliases. Domain transitions keep their
+specific verbs, and `manage` is used only when the policy deliberately grants a whole subordinate
+mutation family. Relation-constrained variants keep the same resource-action key; API projections
+may include the effective relation set so adapters can gate a concrete variant without reconstructing
+role policy.
 
 Citation Style lookup and access control cross the Library Interface. Library delegates CSL
 formatting to `inquiro`, but translates its declared engine-unavailable error into a typed domain
@@ -172,8 +194,8 @@ Tag selection is presented by the Item Organize section and committed through ad
 (`add_tag_to_item` and `remove_tag_from_item`). Existing Tags may be matched case-insensitively
 against an Item Tag Recommendation, while candidates absent from the taxonomy are returned as
 suggested names. Tag reads expose the selected Workspace's taxonomy to its active members.
-The creator of a Tag has no separate visibility or management authority; Workspace capabilities
-govern taxonomy edits.
+The creator of a Tag has no separate visibility or management authority; Workspace
+resource-action decisions govern taxonomy edits.
 Taxonomy maintenance crosses the Library interface through rename, delete and
 `merge_tags`; these operations mutate only Tag and association rows and never invalidate Search.
 
@@ -189,9 +211,9 @@ Adapter, and the Library-owned workflow invokes the Library operation.
 
 Opening a Project crosses the Projects interface through `open_project_workspace`, which returns
 a typed read model containing the Project, explicit participants for `open` and `managed` modes,
-the caller's participation state, and assigned Items. Workspace membership and required Workspace
-capabilities are authorized behind that operation. ProjectMember gates discoverability only for
-`managed` Projects; it never grants Workspace capability or canonical Item access. Projects have
+the caller's participation state, and assigned Items. Workspace membership and concrete
+resource-action decisions are authorized behind that operation. ProjectMember gates
+discoverability only for `managed` Projects; it never grants Workspace authority or canonical Item access. Projects have
 no owner or ownership-transfer operation; `created_by` is provenance only. Only the Web adapter
 maps the typed view to an API projection.
 
@@ -202,7 +224,7 @@ partial Project updates.
 
 Project-scoped mutations lock the Project root only when changing Project state, participation
 policy or explicit participant associations. Project mutation authority comes from Workspace
-capabilities; ProjectMember has no role and never grants capabilities. `workspace` participation
+resource-action policy; ProjectMember has no role and never grants authority. `workspace` participation
 is implicit with no ProjectMember rows; `open` Projects are discoverable to all active Workspace
 members and permit self-join/leave; `managed` Projects are discoverable only to participants and
 Workspace governors, who curate participation. Only Workspace governors may create managed
@@ -308,8 +330,8 @@ directions are:
 | Source | May depend on | Ownership reason |
 | --- | --- | --- |
 | `access` | `core`, `models` | Evaluate policies using persisted identities and domain errors |
-| `accounts` | `audit`, `core`, `models`, `operations`, `workspaces` | Authentication persistence, Audit Event recording, runtime registration policy and Workspace provisioning for new Users |
-| `audit` | `core`, `models` | Authorization errors and Audit Event persistence |
+| `accounts` | `access`, `audit`, `core`, `models`, `operations`, `workspaces` | Authentication persistence, account-level authorization, Audit Event recording, runtime registration policy and Workspace provisioning for new Users |
+| `audit` | `access`, `core`, `models` | Administrative authorization, authorization errors and Audit Event persistence |
 | `library` | `access`, `audit`, `core`, `documents`, `models`, `operations`, `projects`, `search` | Authorization, persistence and auditing; selected-Item document assembly; Project-gated bulk assignment; runtime Provider/import settings; Library-owned workflows and search-index synchronization |
 | `projects` | `access`, `audit`, `core`, `documents`, `models` | Authorization, Project persistence and audit recording; Documents-owned Annotation cleanup when detaching a ProjectItem |
 | `documents` | `access`, `audit`, `core`, `models`, `operations`, `search` | Authorization, owned-object persistence, auditing, runtime settings, Documents workflows and revision-owned Search projection |

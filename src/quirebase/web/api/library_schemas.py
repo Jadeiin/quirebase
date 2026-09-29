@@ -4,9 +4,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from quirebase.access import Capability, WorkspaceContext
+from quirebase.access import ResourceAction, WorkspaceContext, action_allowed
 from quirebase.core.timezones import as_utc
 from quirebase.library import ItemMetadata
+from quirebase.web.api.common import AuthorizationView
 
 
 class ItemSearchView(BaseModel):
@@ -57,7 +58,7 @@ class TagView(BaseModel):
     id: str
     name: str
     accessible_item_count: int
-    can_manage: bool
+    authorization: AuthorizationView
 
 
 class DiscussionMessageView(BaseModel):
@@ -66,10 +67,11 @@ class DiscussionMessageView(BaseModel):
     project_id: str | None = None
     author_id: str
     author_username: str
+    mine: bool
     body: str
     created_at: str
     updated_at: str
-    allowed_actions: list[str]
+    authorization: AuthorizationView
 
 
 class CitationView(BaseModel):
@@ -140,28 +142,27 @@ def item_detail_view(view: Any) -> ItemDetailView:
 def discussion_message_view(
     row: Any, context: WorkspaceContext, *, writable: bool = True
 ) -> DiscussionMessageView:
+    relation = "own" if row.author_id == context.actor_id else "other"
     actions = []
     if writable:
-        if (
-            row.author_id == context.actor_id
-            and Capability.discussion_write in context.capabilities
+        resource = "project_discussion" if row.project_id is not None else "item_discussion"
+        if action_allowed(
+            context,
+            ResourceAction(f"{resource}.delete"),
+            relation=relation,
         ):
-            actions.append("delete")
-        if (
-            row.author_id != context.actor_id
-            and Capability.discussion_moderate in context.capabilities
-        ):
-            actions.append("moderate")
+            actions.append(f"{resource}.delete")
     return DiscussionMessageView(
         id=row.id,
         item_id=row.item_id,
         project_id=row.project_id,
         author_id=row.author_id,
         author_username=row.author.username,
+        mine=relation == "own",
         body=row.body,
         created_at=as_utc(row.created_at).isoformat(),
         updated_at=as_utc(row.updated_at).isoformat(),
-        allowed_actions=actions,
+        authorization=AuthorizationView(allowed=actions),
     )
 
 

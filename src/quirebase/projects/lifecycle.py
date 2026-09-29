@@ -5,10 +5,10 @@ from typing import TYPE_CHECKING
 from sqlalchemy import delete
 
 from quirebase.access import (
-    Capability,
-    require,
+    ResourceAction,
+    require_action,
     require_project_context,
-    require_workspace_capability,
+    require_workspace_action,
 )
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceUnavailable, ValidationFailure
@@ -70,14 +70,18 @@ async def update_project_settings(
     await lock_project_participation_workspace(db, workspace_id)
     project = await lock_project_root(db, project_id, workspace_id, state=ProjectState.active)
     context = await require_project_context(
-        db, user, workspace_id, project_id, Capability.projects_manage
+        db, user, workspace_id, project_id, ResourceAction.project_update
     )
     visibility_changed = normalized_visibility is not project.visibility
     if visibility_changed and (
         project.visibility is ProjectVisibility.managed
         or normalized_visibility is ProjectVisibility.managed
     ):
-        require(context.workspace, Capability.projects_members_manage)
+        require_action(
+            context.workspace,
+            ResourceAction.project_membership_manage,
+            relation="managed",
+        )
     if normalized_visibility is ProjectVisibility.workspace or (
         visibility_changed and project.visibility is ProjectVisibility.workspace
     ):
@@ -124,7 +128,7 @@ async def update_project_settings(
         workspace_id=workspace_id,
         project_id=project_id,
         authorization_role=context.workspace.role.value,
-        authorization_capability=Capability.projects_manage.value,
+        authorization_resource_action=ResourceAction.project_update.value,
     )
     await db.commit()
     return project
@@ -135,7 +139,7 @@ async def rename_project(
 ) -> Project:
     await lock_project_participation_workspace(db, workspace_id)
     context = await require_project_context(
-        db, user, workspace_id, project_id, Capability.projects_manage
+        db, user, workspace_id, project_id, ResourceAction.project_update
     )
     project = context.project
     return await update_project_settings(
@@ -154,7 +158,7 @@ async def update_project_description(
 ) -> Project:
     await lock_project_participation_workspace(db, workspace_id)
     context = await require_project_context(
-        db, user, workspace_id, project_id, Capability.projects_manage
+        db, user, workspace_id, project_id, ResourceAction.project_update
     )
     project = context.project
     return await update_project_settings(
@@ -177,7 +181,7 @@ async def set_project_visibility(
 ) -> Project:
     await lock_project_participation_workspace(db, workspace_id)
     context = await require_project_context(
-        db, user, workspace_id, project_id, Capability.projects_manage
+        db, user, workspace_id, project_id, ResourceAction.project_update
     )
     project = context.project
     return await update_project_settings(
@@ -201,14 +205,19 @@ async def set_project_state(
     desired = validate_project_state(state)
     if desired is ProjectState.deleted:
         raise ValidationFailure("use Project delete for permanent deletion")
-    workspace = await require_workspace_capability(
-        db, user, workspace_id, Capability.projects_manage
+    authorization_resource_action = (
+        ResourceAction.project_archive
+        if desired is ProjectState.archived
+        else ResourceAction.project_restore
+    )
+    workspace = await require_workspace_action(
+        db, user, workspace_id, authorization_resource_action
     )
     project = await lock_project_root(db, project_id, workspace_id)
     if project.workspace_id != workspace_id or project.state is ProjectState.deleted:
         raise ResourceUnavailable("Project not found")
-    workspace = await require_workspace_capability(
-        db, user, workspace_id, Capability.projects_manage
+    workspace = await require_workspace_action(
+        db, user, workspace_id, authorization_resource_action
     )
     project.state = desired
     record_event(
@@ -220,7 +229,7 @@ async def set_project_state(
         workspace_id=workspace_id,
         project_id=project_id,
         authorization_role=workspace.role.value,
-        authorization_capability=Capability.projects_manage.value,
+        authorization_resource_action=authorization_resource_action.value,
     )
     await db.commit()
     return project
@@ -233,7 +242,7 @@ async def delete_project(
     project_id: str,
     confirmation: str,
 ) -> None:
-    context = await require_workspace_capability(db, user, workspace_id, Capability.projects_delete)
+    context = await require_workspace_action(db, user, workspace_id, ResourceAction.project_delete)
     project = await lock_project_delete(db, project_id, workspace_id)
     if project.workspace_id != workspace_id or project.state is ProjectState.deleted:
         raise ResourceUnavailable("Project not found")
@@ -250,6 +259,6 @@ async def delete_project(
         workspace_id=workspace_id,
         project_id=project_id,
         authorization_role=context.role.value,
-        authorization_capability=Capability.projects_delete.value,
+        authorization_resource_action=ResourceAction.project_delete.value,
     )
     await db.commit()

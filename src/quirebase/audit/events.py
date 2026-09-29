@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import func, or_, select
 
+from quirebase.access.authorization import SystemAction, require_system_action
 from quirebase.audit.invocations import current_programmatic_invocation
-from quirebase.core.errors import ResourceUnavailable
 from quirebase.models import AuditEvent
 
 if TYPE_CHECKING:
@@ -27,7 +27,7 @@ def record_event(
     project_id: str | None = None,
     target_ids: list[str] | tuple[str, ...] | None = None,
     authorization_role: str | None = None,
-    authorization_capability: str | None = None,
+    authorization_resource_action: str | None = None,
     result: str = "succeeded",
     source: str | None = None,
 ) -> AuditEvent:
@@ -54,7 +54,7 @@ def record_event(
         detail=detail_text,
         target_ids=json.dumps(list(target_ids)) if target_ids is not None else None,
         authorization_role=authorization_role,
-        authorization_capability=authorization_capability,
+        authorization_resource_action=authorization_resource_action,
         result=result,
         source=source or (invocation.protocol if invocation is not None else "internal"),
     )
@@ -72,8 +72,7 @@ async def query_events(
     page: int = 1,
     page_size: int = 50,
 ) -> tuple[list[AuditEvent], int]:
-    if admin.role != "administrator":
-        raise ResourceUnavailable("administrator required")
+    await require_system_action(db, admin, SystemAction.audit_read)
     query = select(AuditEvent)
     count_query = select(func.count(AuditEvent.id))
     filters = []

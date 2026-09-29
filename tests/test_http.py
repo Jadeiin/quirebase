@@ -92,7 +92,7 @@ async def authenticated_async_client(db, session_factory, tmp_path, monkeypatch)
 
 
 @pytest.mark.anyio
-async def test_cross_workspace_copy_api_checks_target_membership_and_capability(
+async def test_cross_workspace_copy_api_checks_target_membership_and_resource_action(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
     client, source, source_revision = await authenticated_async_client(
@@ -916,7 +916,7 @@ async def test_regular_attachment_accepts_non_image_content(
 
 
 @pytest.mark.anyio
-async def test_item_edit_detects_conflicts_and_updates_search(
+async def test_item_update_detects_conflicts_and_updates_search(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
     db = async_db
@@ -954,7 +954,7 @@ async def test_item_edit_detects_conflicts_and_updates_search(
 
 
 @pytest.mark.anyio
-async def test_item_edit_uses_atomic_optimistic_lock(async_db, async_session_factory):
+async def test_item_update_uses_atomic_optimistic_lock(async_db, async_session_factory):
     db = async_db
     owner = User(username="concurrent_owner", password_hash="unused")
     db.add(owner)

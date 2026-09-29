@@ -25,8 +25,8 @@ PACKAGE_ROLES = {
 
 ALLOWED_PACKAGE_DEPENDENCIES = {
     "access": {"core", "models"},
-    "accounts": {"audit", "core", "models", "operations", "workspaces"},
-    "audit": {"core", "models"},
+    "accounts": {"access", "audit", "core", "models", "operations", "workspaces"},
+    "audit": {"access", "core", "models"},
     "core": set(),
     "documents": {"access", "audit", "core", "models", "operations", "search"},
     "library": {
@@ -304,6 +304,47 @@ def test_package_dependencies_match_the_documented_policy():
             "remove the dependency or document its ownership reason in "
             "docs/architecture/modules.md and ALLOWED_PACKAGE_DEPENDENCIES"
         )
+
+
+def test_casbin_is_the_only_application_authorization_policy_source():
+    metadata = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert "casbin>=1.43,<2" in metadata["project"]["dependencies"]
+    assert (SRC_ROOT / "access" / "policy" / "model.conf").is_file()
+    assert (SRC_ROOT / "access" / "policy" / "policy.csv").is_file()
+
+    forbidden_names = {"ROLE_CAPABILITIES", "role_has_capability"}
+    system_role_bypasses: list[str] = []
+    for py_file in get_python_files(SRC_ROOT):
+        source = py_file.read_text(encoding="utf-8")
+        assert not any(name in source for name in forbidden_names), (
+            f"{py_file} reintroduces a native authorization table or helper"
+        )
+        tree = ast.parse(source, filename=str(py_file))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Compare):
+                continue
+            operands = (node.left, *node.comparators)
+            compares_role = any(
+                isinstance(operand, ast.Attribute) and operand.attr == "role"
+                for operand in operands
+            )
+            compares_administrator = any(
+                (isinstance(operand, ast.Constant) and operand.value == "administrator")
+                or (
+                    isinstance(operand, ast.Attribute)
+                    and operand.attr == "administrator"
+                    and isinstance(operand.value, ast.Name)
+                    and operand.value.id == "SystemRole"
+                )
+                for operand in operands
+            )
+            if compares_role and compares_administrator:
+                system_role_bypasses.append(f"{py_file}:{node.lineno}")
+
+    assert not system_role_bypasses, (
+        "System Role authorization must cross the Casbin-backed Access seam: "
+        f"{system_role_bypasses}"
+    )
 
 
 def test_standalone_dependency_policy_covers_every_application_edge():

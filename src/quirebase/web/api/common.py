@@ -1,6 +1,8 @@
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from quirebase.access import effective_system_actions
 
 
 class ErrorField(BaseModel):
@@ -31,6 +33,19 @@ class WriteResult(BaseModel):
 
 class OkView(BaseModel):
     ok: bool = True
+
+
+class AuthorizationView(BaseModel):
+    """Canonical resource-action keys; clients check this set, never reconstruct policy."""
+
+    allowed: list[str]
+    relations: dict[str, list[str]] = Field(default_factory=dict)
+
+
+def system_authorization_view(role: str) -> AuthorizationView:
+    return AuthorizationView(
+        allowed=sorted(action.value for action in effective_system_actions(role)),
+    )
 
 
 class WorkflowStatusView(BaseModel):

@@ -12,6 +12,7 @@ license = "AGPL-3.0-only"
 dependencies = [
   "alembic>=1.16,<2",
   "argon2-cffi>=25,<26",
+  "casbin>=1.43,<2",
   "fastapi>=0.141.1,<1",
   "httpx2>=2.12,<3",
   "inquiro==0.1.4",
@@ -153,6 +154,7 @@ exclude = ["migrations/"]
 
 [[tool.mypy.overrides]]
 module = [
+  "casbin",
   "citeproc",
   "citeproc.*",
   "citeproc_styles",

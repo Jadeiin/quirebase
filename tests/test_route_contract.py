@@ -282,7 +282,7 @@ async def test_workspace_owner_moderates_foreign_item_discussion_with_reason(
     try:
         listing = await client.get(base)
         assert listing.status_code == 200
-        assert listing.json()[0]["allowed_actions"] == ["moderate"]
+        assert listing.json()[0]["authorization"]["allowed"] == ["item_discussion.delete"]
         invalid = await client.post(f"{base}/{message.id}/moderation", json={"reason": "  "})
         assert invalid.status_code == 422
         response = await client.post(

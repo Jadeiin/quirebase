@@ -9,9 +9,9 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access import (
-    Capability,
+    ResourceAction,
     require_project_context,
-    require_workspace_capability,
+    require_workspace_action,
     visible_project_ids_query,
     workspace_select,
 )
@@ -71,12 +71,14 @@ async def create_project(
         raise ValidationFailure("Project description is too long")
     if parsed_visibility is ProjectVisibility.open:
         await lock_project_participation_workspace(db, workspace_id)
-    create_capability = (
-        Capability.projects_create_managed
-        if parsed_visibility is ProjectVisibility.managed
-        else Capability.projects_create
+    create_action = ResourceAction.project_create
+    context = await require_workspace_action(
+        db,
+        user,
+        workspace_id,
+        create_action,
+        relation=parsed_visibility.value,
     )
-    context = await require_workspace_capability(db, user, workspace_id, create_capability)
     project = Project(
         workspace_id=workspace_id,
         name=normalized,
@@ -103,7 +105,7 @@ async def create_project(
         workspace_id=workspace_id,
         project_id=project.id,
         authorization_role=context.role.value,
-        authorization_capability=create_capability.value,
+        authorization_resource_action=create_action.value,
     )
     await db.commit()
     return project
@@ -112,7 +114,7 @@ async def create_project(
 async def list_workspace_projects(
     db: AsyncSession, user: User, workspace_id: str
 ) -> list[tuple[Project, int, bool]]:
-    context = await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     member_ids = (
         workspace_select(ProjectMember, context)
         .join(Project, Project.id == ProjectMember.project_id)
@@ -146,7 +148,7 @@ async def list_joinable_projects(
     db: AsyncSession, user: User, workspace_id: str
 ) -> list[tuple[Project, int]]:
     """List active open Projects the current Workspace member has not joined."""
-    context = await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     member_ids = (
         workspace_select(ProjectMember, context)
         .where(ProjectMember.user_id == user.id)
@@ -171,7 +173,7 @@ async def open_project_workspace(
     db: AsyncSession, user: User, workspace_id: str, project_id: str
 ) -> ProjectWorkspace:
     context = await require_project_context(
-        db, user, workspace_id, project_id, Capability.workspace_read
+        db, user, workspace_id, project_id, ResourceAction.workspace_read
     )
     members_rows: Sequence[User] = ()
     is_member = context.project.visibility is ProjectVisibility.workspace
@@ -231,11 +233,11 @@ async def add_item_to_project(
     db: AsyncSession, user: User, workspace_id: str, project_id: str, item_id: str
 ) -> None:
     context = await require_project_context(
-        db, user, workspace_id, project_id, Capability.projects_manage
+        db, user, workspace_id, project_id, ResourceAction.project_item_manage
     )
     await guard_project(db, project_id, state=ProjectState.active)
     context = await require_project_context(
-        db, user, workspace_id, project_id, Capability.projects_manage
+        db, user, workspace_id, project_id, ResourceAction.project_item_manage
     )
     item = await db.scalar(
         select(Item).where(Item.id == item_id, Item.workspace_id == workspace_id)
@@ -267,7 +269,7 @@ async def add_item_to_project(
             workspace_id=workspace_id,
             project_id=project_id,
             authorization_role=context.workspace.role.value,
-            authorization_capability=Capability.projects_manage.value,
+            authorization_resource_action=ResourceAction.project_item_manage.value,
         )
     await db.commit()
 
@@ -276,11 +278,11 @@ async def remove_item_from_project(
     db: AsyncSession, user: User, workspace_id: str, project_id: str, item_id: str
 ) -> None:
     context = await require_project_context(
-        db, user, workspace_id, project_id, Capability.projects_manage
+        db, user, workspace_id, project_id, ResourceAction.project_item_manage
     )
     await guard_project(db, project_id, state=ProjectState.active)
     context = await require_project_context(
-        db, user, workspace_id, project_id, Capability.projects_manage
+        db, user, workspace_id, project_id, ResourceAction.project_item_manage
     )
     project_item = await db.scalar(
         select(ProjectItem)
@@ -304,7 +306,7 @@ async def remove_item_from_project(
             workspace_id=workspace_id,
             project_id=project_id,
             authorization_role=context.workspace.role.value,
-            authorization_capability=Capability.projects_manage.value,
+            authorization_resource_action=ResourceAction.project_item_manage.value,
         )
     await db.commit()
 
@@ -312,9 +314,13 @@ async def remove_item_from_project(
 async def add_items_to_project(
     db: AsyncSession, user: User, workspace_id: str, project_id: str, item_ids: list[str]
 ) -> int:
-    await require_project_context(db, user, workspace_id, project_id, Capability.projects_manage)
+    await require_project_context(
+        db, user, workspace_id, project_id, ResourceAction.project_item_manage
+    )
     await guard_project(db, project_id, state=ProjectState.active)
-    await require_project_context(db, user, workspace_id, project_id, Capability.projects_manage)
+    await require_project_context(
+        db, user, workspace_id, project_id, ResourceAction.project_item_manage
+    )
     ids = tuple(sorted(dict.fromkeys(item_ids)))
     if not ids:
         return 0

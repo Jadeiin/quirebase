@@ -5,9 +5,10 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
 
+from quirebase.access import SystemAction, require_system_action
 from quirebase.audit import record_event
 from quirebase.core.config import get_settings
-from quirebase.core.errors import ResourceUnavailable, ValidationFailure
+from quirebase.core.errors import ValidationFailure
 from quirebase.models import SystemSetting, User
 
 if TYPE_CHECKING:
@@ -85,8 +86,7 @@ async def get_effective_settings_model(db: AsyncSession) -> Any:
 
 
 async def update_runtime_settings(db: AsyncSession, admin: User, updates: dict[str, Any]) -> None:
-    if admin.role != "administrator":
-        raise ResourceUnavailable("administrator required")
+    admin = await require_system_action(db, admin, SystemAction.settings_manage, lock="shared")
     sanitized: dict[str, str] = {}
     for key, value in updates.items():
         if key not in ALLOWED_RUNTIME_KEYS:

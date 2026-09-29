@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import select
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
+from quirebase.access import SystemAction
 from quirebase.core.config import get_settings
 from quirebase.core.crypto import token_hash
 from quirebase.core.database import get_db
@@ -139,6 +140,24 @@ async def test_admin_pages_forbidden_for_member(async_db, tmp_path, monkeypatch)
         res = await client.get(path)
         assert res.status_code in (403, 404, 500)
     await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_admin_endpoint_relies_only_on_its_concrete_action(async_db, tmp_path, monkeypatch):
+    client, _user, _login = await member_client(async_db, tmp_path, monkeypatch)
+
+    def allow_audit_only(_role, action, *, relation="any"):
+        return action is SystemAction.audit_read and relation == "any"
+
+    monkeypatch.setattr(
+        "quirebase.access.authorization.system_action_allowed",
+        allow_audit_only,
+    )
+    try:
+        response = await client.get("/api/v1/admin/audit")
+        assert response.status_code == 200
+    finally:
+        await client.aclose()
 
 
 @pytest.mark.anyio

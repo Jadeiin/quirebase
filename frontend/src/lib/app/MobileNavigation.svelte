@@ -3,6 +3,8 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { Menu, Portal } from '@skeletonlabs/skeleton-svelte';
+	import type { components } from '$lib/api/schema';
+	import { hasAllowedAction } from '$lib/authorization/can';
 	import Icon from '$lib/design/Icon.svelte';
 	import { t } from '$lib/i18n';
 	import type { ThemePreference } from '$lib/theme';
@@ -11,7 +13,7 @@
 
 	let { routeIsActive, user, readerRoute, themePreference, onThemeChange, workspaceId } = $props<{
 		routeIsActive: (route: string) => boolean;
-		user?: { role: string } | null;
+		user?: components['schemas']['SessionUserView'] | null;
 		readerRoute: boolean;
 		workspaceId?: string;
 		themePreference: ThemePreference;
@@ -97,7 +99,7 @@
 								>{/if}</Menu.Item
 						>
 					{/each}
-					{#if user?.role === 'administrator'}
+					{#if hasAllowedAction(user?.authorization)}
 						<Menu.Item
 							value="/admin"
 							class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"

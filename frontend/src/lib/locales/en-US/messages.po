@@ -470,8 +470,8 @@ msgstr "Archived Projects"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
-msgid "Archived workspace · read-only content. Workspace governance actions remain available according to your capabilities."
-msgstr "Archived workspace · read-only content. Workspace governance actions remain available according to your capabilities."
+msgid "Archived workspace · read-only content. Workspace governance actions remain available according to policy."
+msgstr "Archived workspace · read-only content. Workspace governance actions remain available according to policy."
 
 #. PDF shape annotation kind.
 #. js-lingui-explicit-id
@@ -1349,8 +1349,8 @@ msgstr "Editors"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
-msgid "Effective Workspace capabilities determine which governance actions are available."
-msgstr "Effective Workspace capabilities determine which governance actions are available."
+msgid "Effective Workspace resource actions determine which governance actions are available."
+msgstr "Effective Workspace resource actions determine which governance actions are available."
 
 #. PDF shape annotation kind.
 #. js-lingui-explicit-id

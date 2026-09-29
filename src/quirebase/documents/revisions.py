@@ -10,7 +10,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import select
 
-from quirebase.access import Capability, require_workspace_capability, visible_project_ids_query
+from quirebase.access import ResourceAction, require_workspace_action, visible_project_ids_query
 from quirebase.access.documents import require_attachment, require_revision
 from quirebase.access.items import (
     can_edit_item,
@@ -249,7 +249,7 @@ async def attach_staged_pdf(
         "file_revision",
         revision.id,
         workspace_id=item.workspace_id,
-        authorization_capability=Capability.files_manage.value,
+        authorization_resource_action=ResourceAction.file_manage.value,
     )
     return revision
 
@@ -701,7 +701,7 @@ async def head_item_thumbnail(source: ItemThumbnailSource) -> ObjectMetadata:
 async def delete_file_revision(
     db: AsyncSession, user: User, workspace_id: str, item_id: str, revision_id: str
 ) -> None:
-    await require_editable_item(db, user, workspace_id, item_id)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.file_delete)
     if (
         await db.scalar(
             select(Item.id)
@@ -755,7 +755,7 @@ async def delete_file_revision(
         "file_revision",
         revision.id,
         workspace_id=workspace_id,
-        authorization_capability=Capability.files_manage.value,
+        authorization_resource_action=ResourceAction.file_delete.value,
     )
     await db.commit()
 
@@ -767,7 +767,7 @@ async def delete_attachment(
     item_id: str,
     attachment_id: str,
 ) -> None:
-    await require_editable_item(db, user, workspace_id, item_id)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.file_delete)
     if (
         await db.scalar(
             select(Item.id)
@@ -801,7 +801,7 @@ async def delete_attachment(
         "attachment",
         attachment.id,
         workspace_id=workspace_id,
-        authorization_capability=Capability.files_manage.value,
+        authorization_resource_action=ResourceAction.file_delete.value,
     )
     await db.commit()
 
@@ -812,7 +812,7 @@ async def get_pdf_viewer_data(
     revision = await require_revision(db, user, workspace_id, revision_id)
     if revision.item_id != item_id:
         raise ResourceNotFound("revision not found for item")
-    context = await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     projects = list(
         (
             await db.scalars(

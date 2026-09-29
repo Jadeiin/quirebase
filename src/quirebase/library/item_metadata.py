@@ -12,7 +12,7 @@ from inquiro.canonical import normalize_reference_type
 from sqlalchemy import select, update
 
 from quirebase.access.items import require_editable_item
-from quirebase.access.workspaces import Capability, require_workspace_capability
+from quirebase.access.workspaces import ResourceAction, require_workspace_action
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceUnavailable, ValidationFailure, VersionConflict
 from quirebase.library.authors import set_item_authors
@@ -247,7 +247,7 @@ async def _create_item(
     workspace_id: str,
     metadata: ItemMetadata,
 ) -> ItemWriteResult:
-    context = await require_workspace_capability(db, actor, workspace_id, Capability.items_create)
+    context = await require_workspace_action(db, actor, workspace_id, ResourceAction.item_create)
     values = _bibliographic_values(metadata)
     values.update(
         custom_fields=_serialize_custom_fields(metadata.custom_fields),
@@ -284,7 +284,7 @@ async def _create_item(
         item.id,
         workspace_id=workspace_id,
         authorization_role=context.role.value,
-        authorization_capability=Capability.items_create.value,
+        authorization_resource_action=ResourceAction.item_create.value,
     )
     await db.commit()
     return ItemWriteResult(item_id=item.id, version=item.version)
@@ -372,7 +372,7 @@ async def _revise_item_metadata(
         item_id,
         detail={"version": version},
         workspace_id=workspace_id,
-        authorization_capability=Capability.items_edit.value,
+        authorization_resource_action=ResourceAction.item_update.value,
     )
     await db.commit()
     return ItemWriteResult(item_id=item_id, version=version)
@@ -427,7 +427,7 @@ async def _regenerate_bibtex_key(
         item_id,
         detail={"version": version},
         workspace_id=workspace_id,
-        authorization_capability=Capability.items_edit.value,
+        authorization_resource_action=ResourceAction.item_update.value,
     )
     await db.commit()
     return ItemWriteResult(item_id=item_id, version=version)

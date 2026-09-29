@@ -1,0 +1,127 @@
+# Role inheritance is ordered from the most privileged subject to its immediate base role.
+g, workspace:owner, workspace:admin
+g, workspace:admin, workspace:editor
+g, workspace:editor, workspace:reviewer
+g, workspace:reviewer, workspace:viewer
+g, system:administrator, system:member
+
+# Workspace policies are role deltas. Within each role, resources and actions are grouped
+# lexicographically so one subject's effective additions can be reviewed as a stable block.
+
+# Viewer: baseline read access, private authorship, and open Project participation.
+p, workspace:viewer, private_annotation, create, active, own
+p, workspace:viewer, private_annotation, delete, active, own
+p, workspace:viewer, private_annotation, read, (active|archived|suspended), own
+p, workspace:viewer, private_annotation, restore, active, own
+p, workspace:viewer, private_annotation, update, active, own
+p, workspace:viewer, private_annotation_reply, create, active, own
+p, workspace:viewer, private_annotation_reply, delete, active, own
+p, workspace:viewer, private_annotation_reply, restore, active, own
+p, workspace:viewer, private_annotation_reply, update, active, own
+p, workspace:viewer, project, discover, (active|archived|suspended), (open|participant|workspace)
+p, workspace:viewer, project_annotation, read, (active|archived|suspended), (other|own)
+p, workspace:viewer, project_membership, join, active, open
+p, workspace:viewer, project_membership, leave, active, open
+p, workspace:viewer, workspace, export, (active|archived|suspended), any
+p, workspace:viewer, workspace, read, (active|archived|suspended), any
+
+# Reviewer: shared authorship and Discussion participation.
+p, workspace:reviewer, item_discussion, create, active, any
+p, workspace:reviewer, item_discussion, delete, active, own
+p, workspace:reviewer, project_annotation, create, active, own
+p, workspace:reviewer, project_annotation, delete, active, own
+p, workspace:reviewer, project_annotation, restore, active, own
+p, workspace:reviewer, project_annotation, update, active, own
+p, workspace:reviewer, project_annotation_reply, create, active, (other|own)
+p, workspace:reviewer, project_annotation_reply, delete, active, own
+p, workspace:reviewer, project_annotation_reply, restore, active, own
+p, workspace:reviewer, project_annotation_reply, update, active, own
+p, workspace:reviewer, project_discussion, create, active, any
+p, workspace:reviewer, project_discussion, delete, active, own
+
+# Editor: canonical content and Project working-set mutations.
+p, workspace:editor, citation_style, manage, active, any
+p, workspace:editor, file, delete, active, any
+p, workspace:editor, file, manage, active, any
+p, workspace:editor, item, copy, active, any
+p, workspace:editor, item, create, active, any
+p, workspace:editor, item, update, active, any
+p, workspace:editor, project, archive, active, any
+p, workspace:editor, project, create, active, (open|workspace)
+p, workspace:editor, project, restore, active, any
+p, workspace:editor, project, update, active, any
+p, workspace:editor, project_item, manage, active, any
+p, workspace:editor, tag, create, active, any
+p, workspace:editor, tag, use, active, any
+
+# Admin: governance, taxonomy management, and moderation of another author's content.
+p, workspace:admin, item, delete, active, any
+p, workspace:admin, item_discussion, delete, active, other
+p, workspace:admin, project, create, active, managed
+p, workspace:admin, project, delete, active, any
+p, workspace:admin, project, discover, (active|archived|suspended), managed
+p, workspace:admin, project_annotation, archive, active, other
+p, workspace:admin, project_annotation, delete, active, other
+p, workspace:admin, project_annotation, hide, active, other
+p, workspace:admin, project_annotation, lock, active, other
+p, workspace:admin, project_annotation, restore, active, other
+p, workspace:admin, project_annotation, review, (active|archived|suspended), any
+p, workspace:admin, project_annotation, unlock, active, other
+p, workspace:admin, project_discussion, delete, active, other
+p, workspace:admin, project_membership, manage, active, managed
+p, workspace:admin, tag, manage, active, any
+p, workspace:admin, workspace, archive, active, any
+p, workspace:admin, workspace, restore, archived, any
+p, workspace:admin, workspace, update, active, any
+p, workspace:admin, workspace_invitation, create, active, any
+p, workspace:admin, workspace_invitation, read, active, any
+p, workspace:admin, workspace_invitation, revoke, active, any
+p, workspace:admin, workspace_member, change_role, active, member
+p, workspace:admin, workspace_member, reactivate, active, member
+p, workspace:admin, workspace_member, read, active, any
+p, workspace:admin, workspace_member, suspend, active, member
+p, workspace:admin, workspace_member, terminate, active, member
+
+# Owner: destructive Workspace governance and authority over admin members.
+p, workspace:owner, workspace, delete, (active|archived), any
+p, workspace:owner, workspace_member, change_role, active, admin
+p, workspace:owner, workspace_member, promote, active, member
+p, workspace:owner, workspace_member, reactivate, active, admin
+p, workspace:owner, workspace_member, suspend, active, admin
+p, workspace:owner, workspace_member, terminate, active, admin
+p, workspace:owner, workspace_member, transfer_ownership, active, (admin|member)
+
+# System policies are likewise role deltas; administrators inherit authenticated self-service.
+
+# Member: identity-bound self-service.
+p, system:member, account, change_password, active, own
+p, system:member, api_token, create, active, own
+p, system:member, api_token, read, active, own
+p, system:member, api_token, revoke, active, own
+p, system:member, login_session, read, active, own
+p, system:member, login_session, revoke, active, own
+p, system:member, workspace, create, active, members_allowed
+p, system:member, workspace_invitation, accept, active, own
+
+# Administrator: instance operation and tenancy governance.
+p, system:administrator, audit, read, active, any
+p, system:administrator, backup, read, active, any
+p, system:administrator, invitation, create, active, any
+p, system:administrator, invitation, read, active, any
+p, system:administrator, maintenance, run, active, any
+p, system:administrator, setting, manage, active, any
+p, system:administrator, setting, read, active, any
+p, system:administrator, storage_metrics, read, active, any
+p, system:administrator, system_metrics, read, active, any
+p, system:administrator, user, create, active, any
+p, system:administrator, user, manage_role, active, any
+p, system:administrator, user, manage_status, active, any
+p, system:administrator, user, read, active, any
+p, system:administrator, user, reset_password, active, any
+p, system:administrator, user, revoke_sessions, active, any
+p, system:administrator, workflow, read, active, any
+p, system:administrator, workspace, create, active, admins_only
+p, system:administrator, workspace_break_glass, read, active, any
+p, system:administrator, workspace_governance, read, active, any
+p, system:administrator, workspace_governance, recover, active, any
+p, system:administrator, workspace_governance, suspend, active, any

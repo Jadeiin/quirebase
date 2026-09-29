@@ -470,8 +470,8 @@ msgstr "已归档项目"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
-msgid "Archived workspace · read-only content. Workspace governance actions remain available according to your capabilities."
-msgstr "工作区已归档 · 内容只读。仍可依据你的权限执行工作区治理操作。"
+msgid "Archived workspace · read-only content. Workspace governance actions remain available according to policy."
+msgstr "已归档工作区 · 内容只读。工作区治理操作仍按授权策略可用。"
 
 #. PDF shape annotation kind.
 #. js-lingui-explicit-id
@@ -1349,8 +1349,8 @@ msgstr "编者"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
-msgid "Effective Workspace capabilities determine which governance actions are available."
-msgstr "可用的治理操作由后端返回的工作区有效能力决定。"
+msgid "Effective Workspace resource actions determine which governance actions are available."
+msgstr "工作区资源操作的有效授权决定可用的治理操作。"
 
 #. PDF shape annotation kind.
 #. js-lingui-explicit-id

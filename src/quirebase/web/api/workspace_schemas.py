@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from quirebase.web.api.common import AuthorizationView
+
 
 class WorkspaceCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=240)
@@ -27,7 +29,7 @@ class WorkspaceView(BaseModel):
     state: str
     current_role: str
     governance_suspended: bool
-    effective_capabilities: list[str]
+    authorization: AuthorizationView
 
 
 class WorkspaceMemberDirectoryView(BaseModel):
@@ -43,6 +45,7 @@ class WorkspaceGovernanceMemberView(BaseModel):
     role: str
     state: str
     joined_at: datetime
+    authorization: AuthorizationView
 
 
 class WorkspaceRoleRequest(BaseModel):

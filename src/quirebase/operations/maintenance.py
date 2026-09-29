@@ -453,11 +453,10 @@ async def delete_orphan_candidates(
 
 
 async def get_backup_artifact(db: AsyncSession, admin: User, workflow_id: str) -> tuple[Path, str]:
-    from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
+    from quirebase.access import SystemAction, require_system_action
+    from quirebase.core.errors import ResourceNotFound
 
-    if admin.role != "administrator":
-        raise ResourceUnavailable("administrator required")
-    del db
+    await require_system_action(db, admin, SystemAction.backup_read)
     workflow = await durable_operations().get(workflow_id)
     if (
         workflow is None

@@ -7,9 +7,9 @@ from sqlalchemy import select
 
 from quirebase.access.documents import require_revision
 from quirebase.access.workspaces import (
-    Capability,
+    ResourceAction,
     require_project_context,
-    require_workspace_capability,
+    require_workspace_action,
 )
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
 from quirebase.core.storage import ObjectResponse, ObjectSuffix, get_object_store, object_key
@@ -32,7 +32,7 @@ async def create_export_job(
         raise ResourceNotFound("revision not found for item")
     if data.project_id:
         await require_project_context(
-            db, user, workspace_id, data.project_id, Capability.workspace_export
+            db, user, workspace_id, data.project_id, ResourceAction.workspace_export
         )
         project_item = await db.scalar(
             select(ProjectItem).where(
@@ -88,7 +88,7 @@ async def _workspace_export(user: User, workspace_id: str, workflow_id: str):
 async def get_export_status(
     db: AsyncSession, user: User, workspace_id: str, workflow_id: str
 ) -> dict[str, Any]:
-    await require_workspace_capability(db, user, workspace_id, Capability.workspace_export)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_export)
     workflow = await _workspace_export(user, workspace_id, workflow_id)
     return {"id": workflow.id, "state": workflow.state, "error": workflow.error}
 
@@ -96,7 +96,7 @@ async def get_export_status(
 async def get_export_file(
     db: AsyncSession, user: User, workspace_id: str, workflow_id: str
 ) -> ObjectResponse:
-    await require_workspace_capability(db, user, workspace_id, Capability.workspace_export)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_export)
     workflow = await _workspace_export(user, workspace_id, workflow_id)
     if workflow.state != "succeeded" or not isinstance(workflow.output, dict):
         raise ResourceNotFound("export workflow not found or not ready")
@@ -106,7 +106,7 @@ async def get_export_file(
     project_id = workflow.output.get("project_id")
     if project_id:
         await require_project_context(
-            db, user, workspace_id, str(project_id), Capability.workspace_export
+            db, user, workspace_id, str(project_id), ResourceAction.workspace_export
         )
         project_item_id = workflow.output.get("project_item_id")
         if (

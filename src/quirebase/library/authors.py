@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from quirebase.access.items import require_editable_item
-from quirebase.access.workspaces import Capability, require_workspace_capability
+from quirebase.access.workspaces import ResourceAction, require_workspace_action
 from quirebase.core.errors import ValidationFailure
 from quirebase.models import Author, Item, ItemAuthor, User, normalize_author_identity
 
@@ -173,7 +173,7 @@ async def get_item_authors(
 async def search_authors_typeahead(
     db: AsyncSession, user: User, workspace_id: str, query: str, limit: int = 10
 ) -> list[dict]:
-    await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     term = query.strip()
     if not term:
         return []

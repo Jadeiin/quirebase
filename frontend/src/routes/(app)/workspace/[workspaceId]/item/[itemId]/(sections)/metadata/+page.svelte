@@ -3,6 +3,7 @@
 	import type { components } from '$lib/api/schema';
 	import { ApiError } from '$lib/api/client';
 	import { apiErrorMessage } from '$lib/api/errors';
+	import { can } from '$lib/authorization/can';
 	import Notice from '$lib/design/Notice.svelte';
 	import ItemSectionState from '$lib/features/item/ItemSectionState.svelte';
 	import ItemMetadataSection from '$lib/features/item/metadata/ItemMetadataSection.svelte';
@@ -24,7 +25,7 @@
 	);
 
 	function updateMetadata(item: ItemDetail, metadata: components['schemas']['ItemMetadata-Input']) {
-		if (!workspace.can('items.edit')) return;
+		if (!workspace.can('item', 'update')) return;
 		mutationError = '';
 		void metadataMutation.mutateAsync({ item, metadata }).catch(async (error) => {
 			if (error instanceof ApiError && error.status === 409) {
@@ -43,7 +44,7 @@
 <ItemSectionState loading={details.isPending} failed={details.isError}>
 	<ItemMetadataSection
 		item={details.data!}
-		canEdit={(overview.data?.allowed_actions.edit ?? false) && workspace.can('items.edit')}
+		canEdit={can(overview.data?.authorization, 'item', 'update')}
 		busy={metadataMutation.isPending}
 		onSubmit={updateMetadata}
 	/>

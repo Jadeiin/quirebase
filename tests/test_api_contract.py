@@ -13,7 +13,7 @@ OPENAPI = create_web_test_app().openapi()
 
 
 def test_api_version_prefix_is_owned_by_composition_root() -> None:
-    """Capability routers stay relative; only the composition root owns /api/v1."""
+    """ResourceAction routers stay relative; only the composition root owns /api/v1."""
     assert api_router.prefix == "/api/v1"
     assert {router.prefix for router in CAPABILITY_ROUTERS} <= {
         "",

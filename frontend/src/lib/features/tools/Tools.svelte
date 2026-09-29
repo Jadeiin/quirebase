@@ -3,6 +3,7 @@
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { Tabs } from '@skeletonlabs/skeleton-svelte';
 	import { apiErrorMessage } from '$lib/api/errors';
+	import { can, type AuthorizationDecisionSet } from '$lib/authorization/can';
 	import ConfirmDialog from '$lib/design/ConfirmDialog.svelte';
 	import Notice from '$lib/design/Notice.svelte';
 	import Panel from '$lib/design/Panel.svelte';
@@ -23,7 +24,7 @@
 		id: string;
 		name: string;
 		accessible_item_count: number;
-		can_manage: boolean;
+		authorization: AuthorizationDecisionSet;
 	};
 	type CitationStyle = { key: string; name: string; scope: 'builtin' | 'custom' };
 
@@ -343,8 +344,9 @@
 									workspaceHref(workspaceId, `library?tag=${encodeURIComponent(tag.id)}`)
 								)}>{$t('View Items')}</Button
 							>
-							{#if tag.can_manage}<Button disabled={busy} onclick={() => renameTag(tag)}
-									>{$t('Rename')}</Button
+							{#if can(tag.authorization, 'tag', 'manage')}<Button
+									disabled={busy}
+									onclick={() => renameTag(tag)}>{$t('Rename')}</Button
 								><Button variant="danger" disabled={busy} onclick={() => deleteTag(tag)}
 									>{$t('Delete')}</Button
 								>{/if}
@@ -368,7 +370,7 @@
 				<label
 					>{$t('Source Tag')}<select class="select" bind:value={sourceTag}
 						><option value="">{$t('Select a Tag')}</option
-						>{#each (tags.data ?? []).filter((tag) => tag.can_manage) as tag (tag.id)}<option
+						>{#each (tags.data ?? []).filter( (tag) => can(tag.authorization, 'tag', 'manage') ) as tag (tag.id)}<option
 								value={tag.id}>{tag.name}</option
 							>{/each}</select
 					></label
@@ -412,7 +414,7 @@
 							<strong>{style.name}</strong>
 							<p class="mb-0 text-sm text-surface-600-400">{style.scope}</p>
 						</div>
-						{#if style.scope === 'custom' && workspace.can('citation_styles.manage')}<Button
+						{#if style.scope === 'custom' && workspace.can('citation_style', 'manage')}<Button
 								variant="danger"
 								disabled={busy}
 								onclick={() => deleteStyle(style)}>{$t('Delete')}</Button
@@ -422,7 +424,7 @@
 						{$t('No Citation Styles match this search.')}
 					</p>{/each}
 			</Panel>
-			{#if workspace.can('citation_styles.manage')}<Panel
+			{#if workspace.can('citation_style', 'manage')}<Panel
 					as="form"
 					class="grid grid-cols-1 gap-3 self-start"
 					onsubmit={(event) => {

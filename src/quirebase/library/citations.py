@@ -35,7 +35,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access.items import require_readable_item
-from quirebase.access.workspaces import Capability, require_workspace_capability
+from quirebase.access.workspaces import ResourceAction, require_workspace_action
 from quirebase.core.errors import ResourceNotFound, ValidationFailure
 from quirebase.models import CitationStyle
 
@@ -62,7 +62,7 @@ async def resolve_style_xml(
         return builtin
     if user is None:
         return None
-    await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     style = await db.get(CitationStyle, style_key)
     if style is None or style.workspace_id != workspace_id:
         return None
@@ -72,7 +72,7 @@ async def resolve_style_xml(
 async def list_custom_citation_styles(
     db: AsyncSession, user: User, workspace_id: str
 ) -> list[CitationStyle]:
-    await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     return list(
         (
             await db.scalars(
@@ -87,7 +87,7 @@ async def list_custom_citation_styles(
 async def create_custom_citation_style(
     db: AsyncSession, user: User, workspace_id: str, name: str, csl: str
 ) -> CitationStyle:
-    await require_workspace_capability(db, user, workspace_id, Capability.citation_styles_manage)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.citation_style_manage)
     name = name.strip()
     if not name:
         raise ValidationFailure("style name is required")
@@ -123,7 +123,7 @@ async def create_custom_citation_style(
 async def delete_custom_citation_style(
     db: AsyncSession, user: User, workspace_id: str, style_id: str
 ) -> None:
-    await require_workspace_capability(db, user, workspace_id, Capability.citation_styles_manage)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.citation_style_manage)
     style = await db.get(CitationStyle, style_id)
     if style is None or style.workspace_id != workspace_id:
         raise ResourceNotFound("citation style not found")

@@ -12,8 +12,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
-from quirebase.access import Capability, require_workspace_capability
-from quirebase.accounts import change_user_role, update_user_status
+from quirebase.access import ResourceAction, require_workspace_action
+from quirebase.accounts import (
+    change_own_password,
+    change_user_role,
+    reset_user_password,
+    update_user_status,
+)
 from quirebase.core.database import Base, make_async_engine
 from quirebase.core.errors import (
     PermissionDenied,
@@ -35,10 +40,12 @@ from quirebase.library import (
     add_project_discussion_message,
     apply_bulk_item_action,
     commit_import_batch,
+    delete_discussion_message,
 )
 from quirebase.models import (
     AnnotationKind,
     AnnotationScope,
+    DiscussionMessage,
     FileRevision,
     ImportBatch,
     Item,
@@ -150,6 +157,58 @@ async def _project_annotation_context(
     return workspace_id, owner_id, item.id, project.id, assignment.id, annotation.id
 
 
+async def test_cross_workspace_discussion_id_does_not_lock_foreign_row(postgres_sessions):
+    async with postgres_sessions() as setup_db:
+        first_owner = await _user(setup_db, "discussion-lock-first")
+        second_owner = await _user(setup_db, "discussion-lock-second")
+        first_workspace_id = fixture_workspace_id(first_owner)
+        second_workspace_id = fixture_workspace_id(second_owner)
+        first_item = Item(
+            workspace_id=first_workspace_id,
+            title="Requested Workspace Item",
+            created_by=first_owner.id,
+        )
+        second_item = Item(
+            workspace_id=second_workspace_id,
+            title="Foreign Workspace Item",
+            created_by=second_owner.id,
+        )
+        setup_db.add_all([first_item, second_item])
+        await setup_db.commit()
+        foreign_message = await add_discussion_message(
+            setup_db,
+            second_owner,
+            second_workspace_id,
+            second_item.id,
+            "Foreign row",
+        )
+        first_owner_id = first_owner.id
+        first_item_id = first_item.id
+        foreign_message_id = foreign_message.id
+
+    async with postgres_sessions() as requester_db:
+        requester = await requester_db.get(User, first_owner_id)
+        assert requester is not None
+        with pytest.raises(ResourceUnavailable):
+            await delete_discussion_message(
+                requester_db,
+                requester,
+                first_workspace_id,
+                first_item_id,
+                foreign_message_id,
+            )
+
+        async with postgres_sessions() as foreign_db:
+            locked = await foreign_db.scalar(
+                select(DiscussionMessage)
+                .where(DiscussionMessage.id == foreign_message_id)
+                .with_for_update(nowait=True)
+            )
+            assert locked is not None
+            await foreign_db.rollback()
+        await requester_db.rollback()
+
+
 async def test_write_authorization_serializes_with_workspace_archive(postgres_sessions):
     async with postgres_sessions() as db:
         owner = await _user(db, "write-race-owner")
@@ -176,7 +235,9 @@ async def test_write_authorization_serializes_with_workspace_archive(postgres_se
         async with postgres_sessions() as db:
             actor = await db.get(User, writer_id)
             assert actor is not None
-            await require_workspace_capability(db, actor, workspace_id, Capability.discussion_write)
+            await require_workspace_action(
+                db, actor, workspace_id, ResourceAction.item_discussion_create
+            )
             authorized.set()
             await release_write.wait()
             return await add_discussion_message(db, actor, workspace_id, item_id, "Before archive")
@@ -268,8 +329,8 @@ async def test_waiting_writer_reloads_workspace_after_archive_commits(postgres_s
                 assert actor is not None
                 started.set()
                 with pytest.raises(WorkspaceLifecycleError):
-                    await require_workspace_capability(
-                        db, actor, workspace_id, Capability.discussion_write
+                    await require_workspace_action(
+                        db, actor, workspace_id, ResourceAction.item_discussion_create
                     )
 
         writer_task = asyncio.create_task(authorize_write())
@@ -433,6 +494,153 @@ async def test_workspace_governance_serializes_with_admin_demotion(postgres_sess
         outcomes = await asyncio.wait_for(asyncio.gather(governance_task, demotion_task), timeout=5)
 
     assert outcomes == ["suspended", "demoted"]
+
+
+async def test_cross_admin_demotion_locks_users_in_stable_order(postgres_sessions):
+    async with postgres_sessions() as db:
+        first = await _user(db, "cross-demotion-first")
+        second = await _user(db, "cross-demotion-second")
+        first.role = "administrator"
+        second.role = "administrator"
+        await db.commit()
+        first_id, second_id = first.id, second.id
+
+    gate = asyncio.Event()
+    ready = 0
+    ready_lock = asyncio.Lock()
+
+    async def demote(actor_id: str, target_id: str) -> str:
+        nonlocal ready
+        async with postgres_sessions() as db:
+            actor = await db.get(User, actor_id)
+            assert actor is not None
+            async with ready_lock:
+                ready += 1
+                if ready == 2:
+                    gate.set()
+            await gate.wait()
+            try:
+                await change_user_role(db, actor, target_id, "member")
+            except ResourceUnavailable:
+                await db.rollback()
+                return "denied"
+            return "demoted"
+
+    outcomes = await asyncio.wait_for(
+        asyncio.gather(
+            demote(first_id, second_id),
+            demote(second_id, first_id),
+        ),
+        timeout=5,
+    )
+    assert sorted(outcomes) == ["demoted", "denied"]
+
+
+async def test_password_hashing_does_not_hold_the_user_authorization_lock(
+    postgres_sessions,
+    monkeypatch,
+):
+    async with postgres_sessions() as db:
+        administrator = await _user(db, "password-change-admin")
+        administrator.role = "administrator"
+        user = User(
+            username=f"password-change-target-{uuid4()}",
+            password_hash="verified-hash",
+        )
+        db.add(user)
+        await db.commit()
+        administrator_id, user_id = administrator.id, user.id
+
+    hashing_started = asyncio.Event()
+    release_hashing = asyncio.Event()
+
+    async def verify_password(_encoded: str, _password: str) -> bool:
+        await asyncio.sleep(0)
+        return True
+
+    async def hash_password(_password: str) -> str:
+        hashing_started.set()
+        await release_hashing.wait()
+        return "replacement-hash"
+
+    monkeypatch.setattr("quirebase.accounts.authentication.verify_password_async", verify_password)
+    monkeypatch.setattr("quirebase.accounts.authentication.hash_password_async", hash_password)
+
+    async with postgres_sessions() as password_db:
+        actor = await password_db.get(User, user_id)
+        assert actor is not None
+        password_task = asyncio.create_task(
+            change_own_password(password_db, actor, "current-password", "replacement-password")
+        )
+        await hashing_started.wait()
+        try:
+            async with postgres_sessions() as admin_db:
+                administrator = await admin_db.get(User, administrator_id)
+                assert administrator is not None
+                await asyncio.wait_for(
+                    update_user_status(admin_db, administrator, user_id, active=False),
+                    timeout=2,
+                )
+        finally:
+            release_hashing.set()
+
+        outcome = await asyncio.wait_for(
+            asyncio.gather(password_task, return_exceptions=True), timeout=5
+        )
+    assert len(outcome) == 1
+    assert isinstance(outcome[0], ResourceUnavailable)
+
+
+async def test_admin_password_hashing_precedes_final_locked_reauthorization(
+    postgres_sessions,
+    monkeypatch,
+):
+    async with postgres_sessions() as db:
+        controller = await _user(db, "password-reset-controller")
+        resetter = await _user(db, "password-reset-actor")
+        controller.role = "administrator"
+        resetter.role = "administrator"
+        target = User(
+            username=f"password-reset-target-{uuid4()}",
+            password_hash="old-hash",
+        )
+        db.add(target)
+        await db.commit()
+        controller_id, resetter_id, target_id = controller.id, resetter.id, target.id
+
+    hashing_started = asyncio.Event()
+    release_hashing = asyncio.Event()
+
+    async def hash_password(_password: str) -> str:
+        hashing_started.set()
+        await release_hashing.wait()
+        return "replacement-hash"
+
+    monkeypatch.setattr("quirebase.accounts.administration.hash_password_async", hash_password)
+
+    async with postgres_sessions() as reset_db:
+        resetter = await reset_db.get(User, resetter_id)
+        assert resetter is not None
+        reset_task = asyncio.create_task(
+            reset_user_password(reset_db, resetter, target_id, "replacement-password")
+        )
+        await hashing_started.wait()
+        try:
+            async with postgres_sessions() as controller_db:
+                controller = await controller_db.get(User, controller_id)
+                assert controller is not None
+                await asyncio.wait_for(
+                    change_user_role(controller_db, controller, resetter_id, "member"),
+                    timeout=2,
+                )
+        finally:
+            release_hashing.set()
+
+        outcome = await asyncio.wait_for(
+            asyncio.gather(reset_task, return_exceptions=True), timeout=5
+        )
+    assert len(outcome) == 1
+    assert isinstance(outcome[0], ResourceUnavailable)
 
 
 async def test_concurrent_ownership_transfer_reauthorizes_after_root_lock(postgres_sessions):

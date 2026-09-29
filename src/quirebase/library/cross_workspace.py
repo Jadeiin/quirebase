@@ -10,7 +10,7 @@ from uuid import uuid4
 from sqlalchemy import select
 
 from quirebase.access.items import require_readable_item
-from quirebase.access.workspaces import Capability, require_workspace_capability
+from quirebase.access.workspaces import ResourceAction, require_workspace_action
 from quirebase.audit import record_event
 from quirebase.core.errors import ValidationFailure
 from quirebase.core.storage import ObjectSuffix, get_object_store
@@ -130,7 +130,7 @@ async def copy_item_to_workspace(
     if source_workspace_id == target_workspace_id:
         raise ValidationFailure("source and target Workspaces must be different")
     actor_id = actor.id
-    await require_workspace_capability(db, actor, source_workspace_id, Capability.workspace_export)
+    await require_workspace_action(db, actor, source_workspace_id, ResourceAction.workspace_export)
     source = await require_readable_item(db, actor, source_workspace_id, item_id)
     source_version = source.version
     item_fields: dict[str, Any] = {field: getattr(source, field) for field in _ITEM_FIELDS}
@@ -182,9 +182,7 @@ async def copy_item_to_workspace(
             ).all()
         )
     )
-    await require_workspace_capability(db, actor, target_workspace_id, Capability.items_create)
-    if revisions or attachments:
-        await require_workspace_capability(db, actor, target_workspace_id, Capability.files_manage)
+    await require_workspace_action(db, actor, target_workspace_id, ResourceAction.item_copy)
 
     # Release every authorization/read lock before object-store GET/PUT. The
     # copied snapshot is revalidated under short-lived locks immediately before
@@ -241,16 +239,12 @@ async def copy_item_to_workspace(
         )
         if set(locked_workspace_ids) != {source_workspace_id, target_workspace_id}:
             raise ValidationFailure("source or target Workspace is no longer available")
-        source_context = await require_workspace_capability(
-            db, current_actor, source_workspace_id, Capability.workspace_export
+        source_context = await require_workspace_action(
+            db, current_actor, source_workspace_id, ResourceAction.workspace_export
         )
-        target_context = await require_workspace_capability(
-            db, current_actor, target_workspace_id, Capability.items_create
+        target_context = await require_workspace_action(
+            db, current_actor, target_workspace_id, ResourceAction.item_copy
         )
-        if revisions or attachments:
-            await require_workspace_capability(
-                db, current_actor, target_workspace_id, Capability.files_manage
-            )
 
         current_source = await db.scalar(
             select(Item)
@@ -401,7 +395,7 @@ async def copy_item_to_workspace(
             workspace_id=source_workspace_id,
             target_ids=[target.id],
             authorization_role=source_context.role.value,
-            authorization_capability=Capability.workspace_export.value,
+            authorization_resource_action=ResourceAction.workspace_export.value,
         )
         record_event(
             db,
@@ -413,7 +407,7 @@ async def copy_item_to_workspace(
             workspace_id=target_workspace_id,
             target_ids=[item_id],
             authorization_role=target_context.role.value,
-            authorization_capability=Capability.items_create.value,
+            authorization_resource_action=ResourceAction.item_copy.value,
         )
         await db.commit()
         return target

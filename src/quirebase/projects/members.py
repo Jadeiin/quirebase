@@ -5,9 +5,13 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from quirebase.access import Capability, require_workspace_capability
+from quirebase.access import (
+    ResourceAction,
+    require_action,
+    require_workspace_membership,
+)
 from quirebase.audit import record_event
-from quirebase.core.errors import DomainError, ResourceNotFound, WorkspaceLifecycleError
+from quirebase.core.errors import DomainError, ResourceNotFound
 from quirebase.models import (
     ProjectMember,
     ProjectState,
@@ -15,7 +19,6 @@ from quirebase.models import (
     User,
     WorkspaceMember,
     WorkspaceMemberState,
-    WorkspaceState,
 )
 
 from ._locking import lock_project_participation_workspace, lock_project_root
@@ -28,20 +31,6 @@ class ProjectMemberConflict(DomainError):
     pass
 
 
-async def _active_workspace_user(db: AsyncSession, workspace_id: str, user_id: str) -> User | None:
-    return await db.scalar(
-        select(User)
-        .join(WorkspaceMember, WorkspaceMember.user_id == User.id)
-        .where(
-            User.id == user_id,
-            User.active.is_(True),
-            WorkspaceMember.workspace_id == workspace_id,
-            WorkspaceMember.state == WorkspaceMemberState.active,
-            WorkspaceMember.terminated_at.is_(None),
-        )
-    )
-
-
 async def _add_participant(
     db: AsyncSession,
     actor: User,
@@ -50,7 +39,7 @@ async def _add_participant(
     target: User,
     *,
     action: str,
-    capability: Capability,
+    resource_action: ResourceAction,
     authorization_role: str,
 ) -> ProjectMember:
     existing = await db.scalar(
@@ -82,7 +71,7 @@ async def _add_participant(
         workspace_id=workspace_id,
         project_id=project_id,
         authorization_role=authorization_role,
-        authorization_capability=capability.value,
+        authorization_resource_action=resource_action.value,
     )
     await db.commit()
     return member
@@ -93,15 +82,15 @@ async def join_project(
 ) -> ProjectMember:
     """Record an active Workspace member's opt-in to an open Project."""
     await lock_project_participation_workspace(db, workspace_id)
-    context = await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
-    if (
-        context.workspace.state is not WorkspaceState.active
-        or context.workspace.governance_suspended_at is not None
-    ):
-        raise WorkspaceLifecycleError("Workspace is read-only")
+    context = await require_workspace_membership(db, user, workspace_id)
     project = await lock_project_root(db, project_id, workspace_id, state=ProjectState.active)
     if project.visibility is not ProjectVisibility.open:
         raise ProjectMemberConflict("Only open Projects allow self-service participation")
+    require_action(
+        context,
+        ResourceAction.project_membership_join,
+        relation=project.visibility.value,
+    )
     return await _add_participant(
         db,
         context.actor,
@@ -109,7 +98,7 @@ async def join_project(
         project_id,
         context.actor,
         action="project.member.join",
-        capability=Capability.workspace_read,
+        resource_action=ResourceAction.project_membership_join,
         authorization_role=context.role.value,
     )
 
@@ -117,15 +106,15 @@ async def join_project(
 async def leave_project(db: AsyncSession, user: User, workspace_id: str, project_id: str) -> None:
     """Remove the current User's opt-in from an open Project."""
     await lock_project_participation_workspace(db, workspace_id)
-    context = await require_workspace_capability(db, user, workspace_id, Capability.workspace_read)
-    if (
-        context.workspace.state is not WorkspaceState.active
-        or context.workspace.governance_suspended_at is not None
-    ):
-        raise WorkspaceLifecycleError("Workspace is read-only")
+    context = await require_workspace_membership(db, user, workspace_id)
     project = await lock_project_root(db, project_id, workspace_id, state=ProjectState.active)
     if project.visibility is not ProjectVisibility.open:
         raise ProjectMemberConflict("Only open Projects allow self-service participation")
+    require_action(
+        context,
+        ResourceAction.project_membership_leave,
+        relation=project.visibility.value,
+    )
     member = await db.scalar(
         select(ProjectMember).where(
             ProjectMember.workspace_id == workspace_id,
@@ -145,7 +134,7 @@ async def leave_project(db: AsyncSession, user: User, workspace_id: str, project
         workspace_id=workspace_id,
         project_id=project_id,
         authorization_role=context.role.value,
-        authorization_capability=Capability.workspace_read.value,
+        authorization_resource_action=ResourceAction.project_membership_leave.value,
     )
     await db.commit()
 
@@ -159,12 +148,15 @@ async def add_project_member(
 ) -> ProjectMember:
     """Add an active Workspace member to a managed Project's working context."""
     await lock_project_participation_workspace(db, workspace_id)
-    context = await require_workspace_capability(
-        db, user, workspace_id, Capability.projects_members_manage
-    )
+    context = await require_workspace_membership(db, user, workspace_id)
     project = await lock_project_root(db, project_id, workspace_id, state=ProjectState.active)
     if project.visibility is not ProjectVisibility.managed:
         raise ProjectMemberConflict("Only managed Projects have curated participation")
+    require_action(
+        context,
+        ResourceAction.project_membership_manage,
+        relation=project.visibility.value,
+    )
     target = await db.scalar(
         select(User)
         .join(WorkspaceMember, WorkspaceMember.user_id == User.id)
@@ -185,7 +177,7 @@ async def add_project_member(
         project_id,
         target,
         action="project.member.add",
-        capability=Capability.projects_members_manage,
+        resource_action=ResourceAction.project_membership_manage,
         authorization_role=context.role.value,
     )
 
@@ -199,12 +191,15 @@ async def remove_project_member(
 ) -> None:
     """Remove a participant from a managed Project without a minimum-count invariant."""
     await lock_project_participation_workspace(db, workspace_id)
-    context = await require_workspace_capability(
-        db, user, workspace_id, Capability.projects_members_manage
-    )
+    context = await require_workspace_membership(db, user, workspace_id)
     project = await lock_project_root(db, project_id, workspace_id, state=ProjectState.active)
     if project.visibility is not ProjectVisibility.managed:
         raise ProjectMemberConflict("Only managed Projects have curated participation")
+    require_action(
+        context,
+        ResourceAction.project_membership_manage,
+        relation=project.visibility.value,
+    )
     target = await db.scalar(
         select(ProjectMember).where(
             ProjectMember.workspace_id == workspace_id,
@@ -225,6 +220,6 @@ async def remove_project_member(
         workspace_id=workspace_id,
         project_id=project_id,
         authorization_role=context.role.value,
-        authorization_capability=Capability.projects_members_manage.value,
+        authorization_resource_action=ResourceAction.project_membership_manage.value,
     )
     await db.commit()
