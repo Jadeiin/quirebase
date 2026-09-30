@@ -26,11 +26,15 @@ export function exportCitationStylesQuery(workspaceId: string, query: string, in
 	return queryOptions({
 		queryKey: exportPreferenceKeys.citationStyles(workspaceId, query, include),
 		enabled: Boolean(workspaceId),
-		queryFn: ({ signal }) =>
-			api.request('GET', '/workspaces/{workspace_id}/citation-styles', {
+		queryFn: async ({ signal }) => ({
+			...(await api.request('GET', '/workspaces/{workspace_id}/citation-styles', {
 				params: { query: { query, limit: 30, include } },
 				signal
-			})
+			})),
+			workspaceId,
+			query,
+			include
+		})
 	});
 }
 

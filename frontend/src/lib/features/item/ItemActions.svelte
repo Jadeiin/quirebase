@@ -65,7 +65,7 @@
 	);
 
 	onMount(() => {
-		preferences = readExportPreferences(userId);
+		preferences = readExportPreferences(userId, workspaceId);
 		format = preferences.citation.format;
 	});
 

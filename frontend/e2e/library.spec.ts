@@ -264,81 +264,127 @@ test('adding a Library Item invalidates a previously opened Project', async ({ p
 	await expect(page.getByText('Newly added Item')).toBeVisible();
 });
 
-test('saved export preferences flow into Library bibliography requests', async ({ page }) => {
-	await mockSession(page);
-	await page.route('**/api/v1/account', (route) =>
-		route.fulfill({
-			json: {
-				user: { id: 'user-1', username: 'reader', role: 'member' },
-				sessions: [],
-				api_tokens: []
-			}
-		})
-	);
-	await page.route('**/api/v1/workspaces/workspace-1/citation-styles*', (route) =>
-		route.fulfill({ json: { styles: [{ key: 'apa', name: 'APA' }] } })
-	);
-	await page.route('**/api/v1/citation-key-preview*', (route) =>
-		route.fulfill({ json: { key: 'Reader2026' } })
-	);
+for (const workspaceId of ['workspace-1', 'workspace-2']) {
+	test(`saved export preferences flow into Library and Item bibliography requests in ${workspaceId}`, async ({
+		page
+	}) => {
+		await mockSession(page);
+		await page.route('**/api/v1/account', (route) =>
+			route.fulfill({
+				json: {
+					user: { id: 'user-1', username: 'reader', role: 'member' },
+					sessions: [],
+					api_tokens: []
+				}
+			})
+		);
+		await page.route('**/api/v1/workspaces/workspace-1/citation-styles*', (route) =>
+			route.fulfill({
+				json: {
+					styles: [
+						{ key: 'apa', name: 'APA' },
+						{ key: 'custom-style-1', name: 'Custom style' }
+					]
+				}
+			})
+		);
+		await page.route('**/api/v1/workspaces/workspace-1/citation-key-preview*', (route) =>
+			route.fulfill({ json: { key: 'Reader2026' } })
+		);
 
-	await page.goto('/account');
-	await page.getByLabel('Default citation format').selectOption('bibtex');
-	await page.getByLabel('Include additional identifiers').check();
-	await expect
-		.poll(() =>
-			page.evaluate(
-				() =>
-					JSON.parse(localStorage.getItem('quirebase:export-preferences:v1:account:user-1')!)
-						.citation
+		await page.goto('/account');
+		await page
+			.getByLabel('Workspace for citation style and key preview')
+			.selectOption('workspace-1');
+		await page.getByLabel('Default CSL style').selectOption('custom-style-1');
+		await page.getByLabel('Default citation format').selectOption('bibtex');
+		await page.getByLabel('Include additional identifiers').check();
+		await expect
+			.poll(() =>
+				page.evaluate(
+					() =>
+						JSON.parse(localStorage.getItem('quirebase:export-preferences:v1:account:user-1')!)
+							.citation
+				)
 			)
-		)
-		.toMatchObject({ format: 'bibtex', includeIdentifiers: true });
+			.toMatchObject({ format: 'bibtex', includeIdentifiers: true });
 
-	let exportBody: Record<string, unknown> | null = null;
-	await page.route('**/api/v1/workspaces/workspace-1/items*', (route) =>
-		route.fulfill({
-			json: {
-				items: [
-					{
-						id: 'item-1',
-						title_html: 'Exportable',
-						authors: 'A. Author',
-						publication_date: '2026',
-						publication_title: null,
-						doi: null,
-						version: 1
-					}
-				],
-				total: 1,
-				page: 1,
-				per_page: 25
-			}
-		})
-	);
-	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
-		route.fulfill({ json: [] })
-	);
-	await page.route('**/api/v1/workspaces/workspace-1/items/bibliography', (route) => {
-		exportBody = route.request().postDataJSON();
-		return route.fulfill({
-			body: '@article{Reader2026}',
-			headers: { 'Content-Disposition': 'attachment; filename="items.bib"' }
+		let exportBody: Record<string, unknown> | null = null;
+		await page.route(`**/api/v1/workspaces/${workspaceId}/items*`, (route) =>
+			route.fulfill({
+				json: {
+					items: [
+						{
+							id: 'item-1',
+							title_html: 'Exportable',
+							authors: 'A. Author',
+							publication_date: '2026',
+							publication_title: null,
+							doi: null,
+							version: 1
+						}
+					],
+					total: 1,
+					page: 1,
+					per_page: 25
+				}
+			})
+		);
+		await page.route(`**/api/v1/workspaces/${workspaceId}/tags`, (route) =>
+			route.fulfill({ json: [] })
+		);
+		await page.route(`**/api/v1/workspaces/${workspaceId}/projects?view=all`, (route) =>
+			route.fulfill({ json: [] })
+		);
+		await page.route(`**/api/v1/workspaces/${workspaceId}/items/bibliography`, (route) => {
+			exportBody = route.request().postDataJSON();
+			return route.fulfill({
+				body: '@article{Reader2026}',
+				headers: { 'Content-Disposition': 'attachment; filename="items.bib"' }
+			});
 		});
+
+		await page.goto(`/workspace/${workspaceId}/library`);
+		await page.getByLabel('Select A. Author').check();
+		await page.getByLabel('Bulk action').selectOption('bibliography');
+		await page.getByRole('button', { name: 'Apply' }).click();
+		await expect
+			.poll(() => exportBody)
+			.toMatchObject({
+				file_format: 'bibtex',
+				style: workspaceId === 'workspace-1' ? 'custom-style-1' : 'apa',
+				include_identifiers: true
+			});
+
+		await page.route(`**/api/v1/workspaces/${workspaceId}/items/item-1/overview`, (route) =>
+			route.fulfill({
+				json: {
+					item: { id: 'item-1', title_html: 'Exportable', version: 1 },
+					latest_revision: null,
+					authorization: { allowed: ['workspace.export'] },
+					counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
+					tags: [],
+					identifiers: [],
+					copy_targets: []
+				}
+			})
+		);
+		let itemStyle: string | null = null;
+		await page.route(`**/api/v1/workspaces/${workspaceId}/items/item-1/bibliography?*`, (route) => {
+			itemStyle = new URL(route.request().url()).searchParams.get('style');
+			return route.fulfill({
+				body: '@article{Reader2026}',
+				headers: { 'Content-Disposition': 'attachment; filename="item.bib"' }
+			});
+		});
+		await page.goto(`/workspace/${workspaceId}/item/item-1`);
+		await page.getByRole('button', { name: 'Export', exact: true }).click();
+		await page.getByRole('button', { name: 'Download file' }).click();
+		await expect
+			.poll(() => itemStyle)
+			.toBe(workspaceId === 'workspace-1' ? 'custom-style-1' : 'apa');
 	});
-
-	await page.goto('/workspace/workspace-1/library');
-	await page.getByLabel('Select A. Author').check();
-	await page.getByLabel('Bulk action').selectOption('bibliography');
-	await page.getByRole('button', { name: 'Apply' }).click();
-	await expect
-		.poll(() => exportBody)
-		.toMatchObject({
-			file_format: 'bibtex',
-			include_identifiers: true
-		});
-});
+}
 
 test('library filters do not overflow narrow viewports', async ({ page }) => {
 	await page.setViewportSize({ width: 320, height: 720 });

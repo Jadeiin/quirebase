@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import Panel from '$lib/design/Panel.svelte';
 	import SectionHeader from '$lib/design/SectionHeader.svelte';
 	import {
@@ -23,6 +23,7 @@
 	let citationKeyForceAscii = $state(defaultExportPreferences.citation.citationKeyForceAscii);
 	let styleQuery = $state('');
 	let workspaceId = $state('');
+	let loadedWorkspaceId = $state<string | null>(null);
 	let ready = $state(false);
 	let saved = $state(false);
 	let savedTimer: number | undefined;
@@ -43,15 +44,37 @@
 
 	$effect(() => {
 		if (!ready) return;
-		if (!writeExportPreferences(userId, $state.snapshot(preferences))) return;
+		const selectedWorkspaceId = workspaceId;
+		const selectedUserId = userId;
+		untrack(() => {
+			preferences.citation.style = readExportPreferences(
+				selectedUserId,
+				selectedWorkspaceId
+			).citation.style;
+		});
+		loadedWorkspaceId = selectedWorkspaceId;
+	});
+
+	$effect(() => {
+		if (!ready || loadedWorkspaceId !== workspaceId) return;
+		if (!writeExportPreferences(userId, $state.snapshot(preferences), workspaceId)) return;
 		saved = true;
 		if (savedTimer) window.clearTimeout(savedTimer);
 		savedTimer = window.setTimeout(() => (saved = false), 1200);
 	});
 
 	$effect(() => {
-		if (!ready || !styles.data) return;
-		const available = styles.data.styles;
+		const catalog = styles.data;
+		if (
+			!ready ||
+			loadedWorkspaceId !== workspaceId ||
+			!catalog ||
+			catalog.workspaceId !== workspaceId ||
+			catalog.query !== styleQuery ||
+			catalog.include !== preferences.citation.style
+		)
+			return;
+		const available = catalog.styles;
 		if (available.some((style) => style.key === preferences.citation.style)) return;
 		// `apa` is a built-in style and the include parameter will make it
 		// available in the next catalog response even when the search filter

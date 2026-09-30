@@ -10,7 +10,12 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import select
 
-from quirebase.access import ResourceAction, require_workspace_action, visible_project_ids_query
+from quirebase.access import (
+    ResourceAction,
+    action_allowed,
+    require_workspace_action,
+    visible_project_ids_query,
+)
 from quirebase.access.documents import require_attachment, require_revision
 from quirebase.access.items import (
     can_edit_item,
@@ -833,4 +838,7 @@ async def get_pdf_viewer_data(
         "item": revision.item,
         "revision": revision,
         "projects": projects,
+        "editable": action_allowed(
+            context, ResourceAction.private_annotation_create, relation="own"
+        ),
     }

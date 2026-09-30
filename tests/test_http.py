@@ -31,8 +31,10 @@ from quirebase.models import (
     ProjectMember,
     ProjectParticipation,
     User,
+    Workspace,
     WorkspaceMember,
     WorkspaceRole,
+    WorkspaceState,
 )
 from quirebase.search import search_index
 
@@ -237,6 +239,50 @@ async def test_cross_workspace_copy_api_checks_target_membership_and_resource_ac
         }
     finally:
         await client.aclose()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("lifecycle", ["archived", "governance-suspended"])
+async def test_read_only_workspace_pdf_viewer_disables_annotation_edits(
+    async_db, async_session_factory, tmp_path, monkeypatch, lifecycle
+):
+    client, item, revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    workspace = await async_db.get(Workspace, item.workspace_id)
+    assert workspace is not None
+    if lifecycle == "archived":
+        workspace.state = WorkspaceState.archived
+    else:
+        workspace.governance_suspended_at = datetime.now(UTC)
+    await async_db.commit()
+    base = f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}"
+    try:
+        viewer = await client.get(f"{base}/revisions/{revision.id}/viewer")
+        assert viewer.status_code == 200
+        assert viewer.json()["editable"] is False
+        content = await client.get(f"{base}/revisions/{revision.id}/content")
+        assert content.status_code == 200
+        created = await client.post(
+            f"{base}/annotations",
+            json={
+                "id": str(uuid4()),
+                "revision_id": revision.id,
+                "page_index": 0,
+                "kind": "note",
+                "scope": "private",
+                "body": "Cannot save",
+                "payload": {
+                    "type": "note",
+                    "rect": {"x": 10, "y": 10, "width": 20, "height": 20},
+                },
+            },
+        )
+        assert created.status_code == 409
+        assert created.json()["code"] == "workspace_lifecycle_error"
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
 
 
 @pytest.mark.anyio

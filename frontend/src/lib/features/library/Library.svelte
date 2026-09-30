@@ -89,7 +89,7 @@
 
 	$effect(() => {
 		if (session.data?.user) {
-			const loadedPreferences = readExportPreferences(session.data.user.id);
+			const loadedPreferences = readExportPreferences(session.data.user.id, workspaceId);
 			exportPreferences = loadedPreferences;
 			exportFormat = loadedPreferences.citation.format;
 		}

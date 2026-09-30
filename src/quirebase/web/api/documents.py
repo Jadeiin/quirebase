@@ -401,9 +401,7 @@ async def pdf_viewer_configuration(
     revision = data["revision"]
     return {
         "item": item_search_view(data["item"]),
-        # Reaching the viewer proves readable revision access. Annotation writes have
-        # their own ownership/scope checks and intentionally do not require Item edits.
-        "editable": True,
+        "editable": data["editable"],
         "annotation_author": user.username,
         "revision": {
             "id": revision.id,

@@ -14,6 +14,32 @@ describe('export preference storage', () => {
 		localStorage.clear();
 	});
 
+	it('isolates citation styles by Workspace while sharing other export defaults', () => {
+		const preferences = structuredClone(defaultExportPreferences);
+		preferences.citation.style = 'workspace-a-custom-style';
+		preferences.citation.includeAbstract = false;
+		preferences.document.includeAnnotations = true;
+		writeExportPreferences('reader', preferences, 'workspace-a');
+
+		expect(readExportPreferences('reader', 'workspace-a')).toEqual(preferences);
+		expect(readExportPreferences('reader', 'workspace-b')).toEqual({
+			...preferences,
+			citation: { ...preferences.citation, style: 'apa' }
+		});
+		expect(readExportPreferences('reader').citation.style).toBe('apa');
+		expect(readExportPreferences('other-reader', 'workspace-a')).toEqual(defaultExportPreferences);
+
+		const otherPreferences = readExportPreferences('reader', 'workspace-b');
+		otherPreferences.citation.style = 'workspace-b-custom-style';
+		writeExportPreferences('reader', otherPreferences, 'workspace-b');
+		expect(readExportPreferences('reader', 'workspace-a').citation.style).toBe(
+			'workspace-a-custom-style'
+		);
+		expect(readExportPreferences('reader', 'workspace-b').citation.style).toBe(
+			'workspace-b-custom-style'
+		);
+	});
+
 	it('falls back to defaults when stored JSON is malformed', () => {
 		localStorage.setItem(exportPreferencesKey('reader'), '{stale');
 

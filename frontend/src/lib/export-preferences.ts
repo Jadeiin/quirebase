@@ -42,6 +42,10 @@ export function exportPreferencesKey(userId: string): string {
 	return `quirebase:export-preferences:v1:account:${userId}`;
 }
 
+function citationStyleKey(userId: string, workspaceId: string): string {
+	return `${exportPreferencesKey(userId)}:workspace:${workspaceId}:citation-style`;
+}
+
 function cloneDefaults(): ExportPreferences {
 	return structuredClone(defaultExportPreferences);
 }
@@ -62,9 +66,15 @@ function booleanValue(value: unknown): boolean | undefined {
 	return typeof value === 'boolean' ? value : undefined;
 }
 
-export function readExportPreferences(userId: string): ExportPreferences {
+export function readExportPreferences(userId: string, workspaceId = ''): ExportPreferences {
 	const preferences = cloneDefaults();
 	try {
+		// Citation Styles belong to a Workspace; the other browser defaults belong to the User.
+		if (workspaceId) {
+			preferences.citation.style =
+				stringValue(localStorage.getItem(citationStyleKey(userId, workspaceId)), 240) ??
+				preferences.citation.style;
+		}
 		const stored = localStorage.getItem(exportPreferencesKey(userId));
 		if (!stored) return preferences;
 		const parsed: unknown = JSON.parse(stored);
@@ -75,7 +85,6 @@ export function readExportPreferences(userId: string): ExportPreferences {
 		preferences.citation.format =
 			enumValue(citation.format, ['csl', 'bibtex', 'biblatex', 'ris', 'endnote']) ??
 			preferences.citation.format;
-		preferences.citation.style = stringValue(citation.style, 240) ?? preferences.citation.style;
 		preferences.citation.includeAbstract =
 			booleanValue(citation.includeAbstract) ?? preferences.citation.includeAbstract;
 		preferences.citation.preserveCase =
@@ -115,11 +124,19 @@ export function readExportPreferences(userId: string): ExportPreferences {
 	}
 }
 
-export function writeExportPreferences(userId: string, preferences: ExportPreferences): boolean {
+export function writeExportPreferences(
+	userId: string,
+	preferences: ExportPreferences,
+	workspaceId = ''
+): boolean {
 	try {
+		const { style, ...citation } = preferences.citation;
+		if (workspaceId) {
+			localStorage.setItem(citationStyleKey(userId, workspaceId), style);
+		}
 		localStorage.setItem(
 			exportPreferencesKey(userId),
-			JSON.stringify({ schemaVersion: 1, ...preferences })
+			JSON.stringify({ schemaVersion: 1, ...preferences, citation })
 		);
 		return true;
 	} catch {
