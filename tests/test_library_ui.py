@@ -46,8 +46,10 @@ from quirebase.models import (
     ProjectItem,
     Tag,
     User,
+    Workspace,
     WorkspaceMember,
     WorkspaceRole,
+    WorkspaceState,
 )
 from quirebase.web.api.imports import import_batch as import_batch_api
 
@@ -186,7 +188,93 @@ async def test_pdf_import_revalidates_user_after_provider_io(
         )
         == 0
     )
-    assert set(get_settings().object_dir.rglob("*.pdf")) == objects_before
+    retained = json.loads(failed_batch.records)
+    assert len(retained) == 1
+    assert local_object_path(retained[0]["_pdf"]["object_key"]).exists()
+    assert len(set(get_settings().object_dir.rglob("*.pdf")) - objects_before) == 1
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("revocation", ["archive", "governance_suspend", "downgrade"])
+async def test_pdf_import_authorization_failure_preserves_objects_for_another_editor_retry(
+    async_db, async_session_factory, monkeypatch, revocation
+):
+    owner = User(username="import-owner", password_hash="unused")
+    importer = User(username="import-editor", password_hash="unused")
+    retrying_editor = User(username="retry-editor", password_hash="unused")
+    async_db.add_all([owner, importer, retrying_editor])
+    await async_db.flush()
+    await provision_initial_workspace(async_db, owner)
+    workspace_id = fixture_workspace_id(owner)
+    membership = WorkspaceMember(
+        workspace_id=workspace_id,
+        user_id=importer.id,
+        role=WorkspaceRole.editor,
+        invited_by=owner.id,
+    )
+    async_db.add_all([
+        membership,
+        WorkspaceMember(
+            workspace_id=workspace_id,
+            user_id=retrying_editor.id,
+            role=WorkspaceRole.editor,
+            invited_by=owner.id,
+        ),
+    ])
+    await async_db.commit()
+    membership_id = membership.id
+
+    async def revoke_during_lookup(identifier, _provider, _settings):
+        async with async_session_factory() as governance_db:
+            workspace = await governance_db.get(Workspace, workspace_id)
+            assert workspace is not None
+            if revocation == "archive":
+                workspace.state = WorkspaceState.archived
+            elif revocation == "governance_suspend":
+                workspace.governance_suspended_at = datetime.now(UTC)
+            else:
+                revoked_membership = await governance_db.get(WorkspaceMember, membership_id)
+                assert revoked_membership is not None
+                revoked_membership.role = WorkspaceRole.viewer
+            await governance_db.commit()
+        return provider_candidate(identifier, "Retryable PDF")
+
+    monkeypatch.setattr("quirebase.library.imports.lookup_candidate", revoke_during_lookup)
+    batch, _records, _errors = await stage_pdf_import_batch(
+        async_db,
+        importer,
+        workspace_id,
+        [
+            (published_pdf_bytes("10.1000/retry-authorized"), "candidate.pdf"),
+            (pdf_bytes(), "missing-doi.pdf"),
+        ],
+        max_bytes=100_000,
+    )
+    pending = json.loads(batch.records)
+    keys = [record["_pdf"]["object_key"] for record in pending]
+    await finish_pdf_import_preview(async_db, async_session_factory, batch, monkeypatch)
+    assert batch.status == "failed"
+    assert json.loads(batch.records) == pending
+    assert json.loads(batch.errors)[0]["code"] == "authorization_revoked"
+    for key in keys:
+        assert await get_object_store().exists(key)
+
+    workspace = await async_db.get(Workspace, workspace_id)
+    assert workspace is not None
+    workspace.state = WorkspaceState.active
+    workspace.governance_suspended_at = None
+    await async_db.commit()
+    monkeypatch.setattr(
+        "quirebase.library.imports.lookup_candidate",
+        AsyncMock(return_value=provider_candidate("10.1000/retry-authorized", "Retryable PDF")),
+    )
+    await retry_pdf_import_batch(async_db, retrying_editor, workspace_id, batch.id)
+    await finish_pdf_import_preview(async_db, async_session_factory, batch, monkeypatch)
+    assert batch.actor_id == retrying_editor.id
+    assert batch.status == "ready"
+    assert json.loads(batch.records)[0]["_pdf"]["object_key"] == keys[0]
+    assert await get_object_store().exists(keys[0])
+    assert not await get_object_store().exists(keys[1])
 
 
 @pytest.mark.anyio

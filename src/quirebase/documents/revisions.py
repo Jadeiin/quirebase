@@ -841,4 +841,10 @@ async def get_pdf_viewer_data(
         "editable": action_allowed(
             context, ResourceAction.private_annotation_create, relation="own"
         ),
+        "editable_project_ids": {
+            project.id
+            for project in projects
+            if project.state is ProjectState.active
+            and action_allowed(context, ResourceAction.project_annotation_create, relation="own")
+        },
     }

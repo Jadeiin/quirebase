@@ -450,13 +450,15 @@ async def finalize_pdf_import_batch(
             raise ResourceUnavailable("user not available")
         await require_workspace_action(db, owner, workspace_id, ResourceAction.item_create)
     except DomainError:
-        batch.records = "[]"
+        # The failed batch still owns its staged PDFs. Reference-aware cleanup
+        # must leave these retry inputs intact until retry or explicit discard.
         batch.errors = json.dumps([
+            *json.loads(batch.errors),
             {
                 "row": 0,
                 "code": "authorization_revoked",
                 "message": "Workspace authorization is no longer available",
-            }
+            },
         ])
         batch.status = "failed"
         return False
@@ -585,6 +587,9 @@ async def retry_pdf_import_batch(
     batch.actor_id = user.id
     batch.status = "pending"
     batch.workflow_id = workflow_id
+    batch.errors = json.dumps([
+        error for error in json.loads(batch.errors) if error.get("code") != "authorization_revoked"
+    ])
     await durable_operations().enqueue_in_transaction(
         db,
         "library.prepare_pdf_import",

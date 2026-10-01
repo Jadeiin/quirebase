@@ -114,11 +114,12 @@ class PdfViewerRevisionView(BaseModel):
 class PdfViewerProjectView(BaseModel):
     id: str
     name: str
+    editable: bool = Field(description="Whether the User may create Annotations in this Project.")
 
 
 class PdfViewerView(BaseModel):
     item: ItemSearchView
-    editable: bool
+    editable: bool = Field(description="Whether the User may create private Annotations.")
     annotation_author: str
     revision: PdfViewerRevisionView
     projects: list[PdfViewerProjectView]

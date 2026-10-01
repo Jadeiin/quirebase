@@ -3713,6 +3713,11 @@ export interface components {
 			id: string;
 			/** Name */
 			name: string;
+			/**
+			 * Editable
+			 * @description Whether the User may create Annotations in this Project.
+			 */
+			editable: boolean;
 		};
 		/** PdfViewerRevisionView */
 		PdfViewerRevisionView: {
@@ -3732,7 +3737,10 @@ export interface components {
 		/** PdfViewerView */
 		PdfViewerView: {
 			item: components['schemas']['ItemSearchView'];
-			/** Editable */
+			/**
+			 * Editable
+			 * @description Whether the User may create private Annotations.
+			 */
 			editable: boolean;
 			/** Annotation Author */
 			annotation_author: string;

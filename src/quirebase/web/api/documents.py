@@ -413,7 +413,14 @@ async def pdf_viewer_configuration(
                 f"/api/v1/workspaces/{workspace_id}/items/{item_id}/revisions/{revision_id}/content"
             ),
         },
-        "projects": [{"id": project.id, "name": project.name} for project in data["projects"]],
+        "projects": [
+            {
+                "id": project.id,
+                "name": project.name,
+                "editable": project.id in data["editable_project_ids"],
+            }
+            for project in data["projects"]
+        ],
     }
 
 

@@ -100,12 +100,18 @@ export async function mockSession(page: Page, role: 'member' | 'administrator' =
 	);
 }
 
-export function minimalPdf(): Buffer {
+export function minimalPdf(nativeComments = false): Buffer {
 	const objects = [
 		'1 0 obj\n<</Type/Catalog/Pages 2 0 R>>\nendobj\n',
 		'2 0 obj\n<</Type/Pages/Kids[3 0 R]/Count 1>>\nendobj\n',
-		'3 0 obj\n<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 400]>>\nendobj\n'
+		`3 0 obj\n<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 400]${nativeComments ? '/Annots[4 0 R 5 0 R]' : ''}>>\nendobj\n`
 	];
+	if (nativeComments) {
+		objects.push(
+			'4 0 obj\n<</Type/Annot/Subtype/Text/P 3 0 R/Rect[20 300 44 324]/T(PDF author)/Contents(Native PDF comment)/NM(native-comment)/Name/Comment/F 4>>\nendobj\n',
+			'5 0 obj\n<</Type/Annot/Subtype/Text/P 3 0 R/Rect[20 300 44 324]/T(PDF author)/Contents(Native PDF reply)/NM(native-reply)/IRT 4 0 R/RT/R/F 4>>\nendobj\n'
+		);
+	}
 	let body = '%PDF-1.4\n';
 	const offsets = objects.map((object) => {
 		const offset = Buffer.byteLength(body);
@@ -113,7 +119,7 @@ export function minimalPdf(): Buffer {
 		return offset;
 	});
 	const xref = Buffer.byteLength(body);
-	body += `xref\n0 4\n0000000000 65535 f \n${offsets.map((offset) => `${String(offset).padStart(10, '0')} 00000 n `).join('\n')}\n`;
-	body += `trailer\n<</Size 4/Root 1 0 R>>\nstartxref\n${xref}\n%%EOF\n`;
+	body += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.map((offset) => `${String(offset).padStart(10, '0')} 00000 n `).join('\n')}\n`;
+	body += `trailer\n<</Size ${objects.length + 1}/Root 1 0 R>>\nstartxref\n${xref}\n%%EOF\n`;
 	return Buffer.from(body);
 }

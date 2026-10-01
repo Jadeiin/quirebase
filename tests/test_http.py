@@ -30,6 +30,7 @@ from quirebase.models import (
     ProjectItem,
     ProjectMember,
     ProjectParticipation,
+    ProjectState,
     User,
     Workspace,
     WorkspaceMember,
@@ -557,8 +558,10 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
 
 
 @pytest.mark.anyio
-async def test_project_viewer_can_create_annotations(
-    async_db, async_session_factory, tmp_path, monkeypatch
+@pytest.mark.parametrize("role", [WorkspaceRole.viewer, WorkspaceRole.reviewer])
+@pytest.mark.parametrize("project_state", [ProjectState.active, ProjectState.archived])
+async def test_pdf_viewer_creation_permissions_match_annotation_scope(
+    async_db, async_session_factory, tmp_path, monkeypatch, role, project_state
 ):
     db = async_db
     owner_client, item, revision = await authenticated_async_client(
@@ -571,6 +574,7 @@ async def test_project_viewer_can_create_annotations(
         name="Readable annotations",
         created_by=item.created_by,
         participation="managed",
+        state=project_state,
     )
     db.add_all([viewer, project])
     await db.flush()
@@ -578,7 +582,7 @@ async def test_project_viewer_can_create_annotations(
         WorkspaceMember(
             workspace_id=item.workspace_id,
             user_id=viewer.id,
-            role=WorkspaceRole.viewer,
+            role=role,
             invited_by=item.created_by,
         )
     )
@@ -628,7 +632,30 @@ async def test_project_viewer_can_create_annotations(
 
         assert viewer.status_code == 200
         assert viewer.json()["editable"] is True
+        project_editable = role is WorkspaceRole.reviewer and project_state is ProjectState.active
+        assert viewer.json()["projects"] == [
+            {"id": project.id, "name": project.name, "editable": project_editable}
+        ]
         assert created.status_code == 201
+        project_created = await owner_client.post(
+            f"{workspace_base}/items/{item.id}/annotations",
+            json={
+                "id": str(uuid4()),
+                "revision_id": revision.id,
+                "page_index": 0,
+                "kind": "note",
+                "scope": "project",
+                "project_id": project.id,
+                "body": "Project note",
+                "payload": {
+                    "type": "note",
+                    "rect": {"x": 10, "y": 10, "width": 20, "height": 20},
+                },
+            },
+        )
+        assert project_created.status_code == (
+            201 if project_editable else 403 if role is WorkspaceRole.viewer else 409
+        )
     finally:
         await owner_client.aclose()
         get_settings.cache_clear()

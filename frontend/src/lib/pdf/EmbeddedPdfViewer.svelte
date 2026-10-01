@@ -5,10 +5,10 @@
 		AnnotationPlugin,
 		CommandsPlugin,
 		DocumentManagerPlugin,
-		LockModeType,
 		PDFViewer,
 		UIPlugin,
 		type AnnotationCapability,
+		type CommandsCapability,
 		type PDFViewerConfig,
 		type PluginRegistry,
 		type UICapability
@@ -26,6 +26,7 @@
 		name,
 		url,
 		editable,
+		canModifyAnnotations,
 		annotationAuthor,
 		pageGeometry,
 		selectedProject = $bindable(''),
@@ -37,6 +38,7 @@
 		name: string;
 		url: string;
 		editable: boolean;
+		canModifyAnnotations: boolean;
 		annotationAuthor: string;
 		pageGeometry: number[][];
 		selectedProject?: string;
@@ -65,6 +67,18 @@
 		'annotation-widget-edit',
 		'annotation-group'
 	];
+	// Scope permissions gate creation. Existing annotations retain their own
+	// server-authored readOnly flags, including private annotations in Project views.
+	const annotationCreationCategories = [
+		'mode-annotate',
+		'mode-shapes',
+		'annotation-markup',
+		'annotation-ink',
+		'annotation-text',
+		'annotation-comment-tool',
+		'annotation-shape',
+		'annotation-overflow'
+	];
 
 	// svelte-ignore state_referenced_locally
 	const config: PDFViewerConfig = {
@@ -72,7 +86,9 @@
 		fontFallback: null,
 		fonts: { ui: null, signature: null },
 		tabBar: 'never',
-		disabledCategories,
+		disabledCategories: editable
+			? disabledCategories
+			: [...disabledCategories, ...annotationCreationCategories],
 		i18n: { defaultLocale: i18n.locale.startsWith('zh') ? 'zh-CN' : 'en' },
 		documentManager: {
 			initialDocuments: [{ url, documentId, name, requestOptions: { credentials: 'same-origin' } }]
@@ -84,13 +100,17 @@
 			editAfterCreate: true
 		},
 		permissions: {
-			overrides: { print: false, copyContents: true, modifyAnnotations: editable }
+			// The comment sidebar uses this document gate instead of per-annotation flags.
+			// Keep it independent of the selected scope's creation permission.
+			overrides: { print: false, copyContents: true, modifyAnnotations: canModifyAnnotations }
 		}
 	};
 
 	let registry: PluginRegistry | null = null;
 	let annotationApi: AnnotationCapability | null = null;
+	let commandsApi: CommandsCapability | null = null;
 	let uiApi: UICapability | null = null;
+	let documentReady = $state(false);
 	let unsubscribeEvents: (() => void) | null = null;
 	let destroyed = false;
 	let cancelDocumentWait = () => {};
@@ -181,7 +201,7 @@
 			registry = ready;
 			annotationApi = ready.getPlugin<AnnotationPlugin>(AnnotationPlugin.id)?.provides() ?? null;
 			uiApi = ready.getPlugin<UIPlugin>(UIPlugin.id)?.provides() ?? null;
-			const commandsApi = ready.getPlugin<CommandsPlugin>(CommandsPlugin.id)?.provides() ?? null;
+			commandsApi = ready.getPlugin<CommandsPlugin>(CommandsPlugin.id)?.provides() ?? null;
 			commandsApi?.registerCommand({
 				id: 'annotation:add-callout',
 				action: () => {},
@@ -215,7 +235,7 @@
 			await ready.pluginsReady();
 			await waitForDocument();
 			if (destroyed) return;
-			if (!editable) annotationApi.setLocked({ type: LockModeType.All }, documentId);
+			documentReady = true;
 			sync.lockNative();
 			await sync.load(selectedProject).catch(() => {
 				if (!destroyed) reportStatus({ state: 'load-failed' });
@@ -225,6 +245,23 @@
 			onstatus?.(apiErrorMessage(error, $t('Unable to open this PDF.')), true);
 		}
 	}
+
+	$effect(() => {
+		if (!documentReady) return;
+		if (!editable) {
+			commandsApi?.execute('mode:view', documentId);
+			annotationApi?.setActiveTool(null, documentId);
+		}
+		for (const category of annotationCreationCategories) {
+			if (editable) {
+				commandsApi?.enableCategory(category);
+				uiApi?.enableCategory(category);
+			} else {
+				commandsApi?.disableCategory(category);
+				uiApi?.disableCategory(category);
+			}
+		}
+	});
 
 	$effect(() => {
 		const guardPendingWrites = (event: BeforeUnloadEvent) => {

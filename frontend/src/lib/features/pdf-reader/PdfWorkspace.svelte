@@ -21,6 +21,11 @@
 	let annotationSyncFailed = $state(false);
 	let downloadError = $state('');
 	const viewer = createQuery(() => pdfViewerQuery(workspaceId, itemId, revisionId));
+	const editable = $derived(
+		selectedProject
+			? (viewer.data?.projects.find((project) => project.id === selectedProject)?.editable ?? false)
+			: (viewer.data?.editable ?? false)
+	);
 
 	async function download(operation: Promise<void>) {
 		downloadError = '';
@@ -198,13 +203,16 @@
 			>
 				{$t('Unable to open this PDF.')}
 			</div>
-		{:else if viewer.data}{#key revisionId}<EmbeddedPdfViewer
+		{:else if viewer.data}
+			<!-- EmbedPDF document permissions are fixed at initialization. -->
+			{#key `${revisionId}:${viewer.data.editable}`}<EmbeddedPdfViewer
 					{itemId}
 					{workspaceId}
 					documentId={revisionId}
 					name={viewer.data.revision.original_name}
 					url={viewer.data.revision.content_url}
-					editable={viewer.data.editable}
+					{editable}
+					canModifyAnnotations={viewer.data.editable}
 					annotationAuthor={viewer.data.annotation_author}
 					pageGeometry={viewer.data.revision.page_geometry}
 					bind:selectedProject
