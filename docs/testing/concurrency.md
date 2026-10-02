@@ -92,6 +92,12 @@ workflow runs five rounds on five isolated databases and retains each round's ar
 The nightly schedule becomes active when that workflow reaches the default branch. These are repeat
 runs of controlled schedules, not generated random interleavings.
 
+Browser E2E also covers a PDF source refresh completing during a private draft's Save click.
+The ordinary post-switch edit scenario waits for the selected source response and verifies the
+actual PATCH body. CI retains failed browser traces/screenshots and repeats these two PDF scenarios
+five times (30 on manual runs). Inspect the trace's DOM, input events and request body before attributing
+an intermittent missing-text failure to a persistence race.
+
 Expand coverage in this order:
 
 1. Move remaining legacy synchronization to the harness and add inverse commit orders where the

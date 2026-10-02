@@ -202,8 +202,10 @@ async function mockScopeReader(page: Page, withAnnotations = false) {
 		writable: true,
 		nativeComments: false,
 		contentRequests: 0,
+		annotationReadGate: null as Promise<void> | null,
 		deletedIds: [] as string[],
-		mutationRequests: [] as string[]
+		mutationRequests: [] as string[],
+		mutationBodies: [] as Record<string, unknown>[]
 	};
 	const annotations = ['private', 'project'].map((scope) => ({
 		id: `annotation-${scope}`,
@@ -252,7 +254,7 @@ async function mockScopeReader(page: Page, withAnnotations = false) {
 						}
 					})
 	);
-	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/annotations**', (route) => {
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/annotations**', async (route) => {
 		if (route.request().method() !== 'GET') state.mutationRequests.push(route.request().method());
 		if (route.request().method() === 'DELETE') {
 			state.deletedIds.push(new URL(route.request().url()).pathname.split('/').at(-1)!);
@@ -261,7 +263,9 @@ async function mockScopeReader(page: Page, withAnnotations = false) {
 		if (route.request().method() === 'PATCH') {
 			const id = new URL(route.request().url()).pathname.split('/').at(-1);
 			const annotation = annotations.find((annotation) => annotation.id === id)!;
-			Object.assign(annotation, route.request().postDataJSON(), {
+			const patch = route.request().postDataJSON();
+			state.mutationBodies.push(patch);
+			Object.assign(annotation, patch, {
 				version: annotation.version + 1
 			});
 			return route.fulfill({ json: annotation });
@@ -278,6 +282,7 @@ async function mockScopeReader(page: Page, withAnnotations = false) {
 					)
 					.map((annotation) => ({ ...annotation, editable: state.writable && annotation.editable }))
 			: [];
+		await state.annotationReadGate;
 		return route.fulfill({ json: annotationList(rows) });
 	});
 	await page.route(
@@ -336,7 +341,17 @@ test('PDF comment sidebar preserves private edits in a read-only Project', async
 	const state = await mockScopeReader(page, true);
 	await page.goto('/workspace/workspace-1/item/item-1/pdf/revision-1');
 	await expect(page.getByText('1 annotation loaded')).toBeVisible();
+	const sourceRead = page.waitForResponse((response) => {
+		const url = new URL(response.url());
+		return (
+			response.request().method() === 'GET' &&
+			url.pathname.endsWith('/annotations') &&
+			url.searchParams.getAll('project_id').includes('project-archived')
+		);
+	});
 	await setAnnotationSource(page, 'Archived');
+	await (await sourceRead).finished();
+	await expect(page.getByText('1 annotation loaded')).toBeVisible();
 	await page.getByRole('button', { name: 'Comment', exact: true }).click();
 	const card = commentCard(page, 'private annotation');
 	await card.getByRole('button').first().click();
@@ -344,9 +359,48 @@ test('PDF comment sidebar preserves private edits in a read-only Project', async
 	await expect(page.locator('textarea')).toHaveValue('private annotation');
 	await page.locator('textarea').fill('Edited private annotation');
 	await page.getByRole('button', { name: 'Save', exact: true }).click();
+	await expect
+		.poll(() => state.mutationBodies.map((patch) => patch.body))
+		.toEqual(['Edited private annotation']);
 	await expect(page.getByText('Edited private annotation', { exact: true })).toBeVisible();
 	await expect.poll(() => state.mutationRequests).toEqual(['PATCH']);
 	await expect(page.getByText('Saved', { exact: true })).toBeVisible();
+});
+
+test('PDF source refresh preserves a private draft and its Save click', async ({ page }) => {
+	await page.setViewportSize({ width: 1280, height: 800 });
+	const state = await mockScopeReader(page, true);
+	await page.goto('/workspace/workspace-1/item/item-1/pdf/revision-1');
+	await expect(page.getByText('1 annotation loaded')).toBeVisible();
+	let releaseRead!: () => void;
+	state.annotationReadGate = new Promise<void>((resolve) => {
+		releaseRead = resolve;
+	});
+	try {
+		await setAnnotationSource(page, 'Archived');
+		await expect(page.getByText('Loading annotations…', { exact: true })).toBeVisible();
+		await page.getByRole('button', { name: 'Comment', exact: true }).click();
+		await commentCard(page, 'private annotation').getByRole('button').first().click();
+		await page.getByRole('button', { name: 'Edit', exact: true }).click();
+		await expect(page.locator('textarea')).toHaveValue('private annotation');
+		await page.locator('textarea').fill('Draft survives source refresh');
+		const save = page.getByRole('button', { name: 'Save', exact: true });
+		const box = (await save.boundingBox())!;
+		await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+		await page.mouse.down();
+		releaseRead();
+		await expect(page.getByText('1 annotation loaded')).toBeVisible();
+		await expect(page.locator('textarea')).toHaveValue('Draft survives source refresh');
+		await page.mouse.up();
+		await expect(page.getByText('Draft survives source refresh', { exact: true })).toBeVisible();
+		await expect
+			.poll(() => state.mutationBodies.map((patch) => patch.body))
+			.toEqual(['Draft survives source refresh']);
+		await expect.poll(() => state.mutationRequests).toEqual(['PATCH']);
+		await expect(page.getByText('Saved', { exact: true })).toBeVisible();
+	} finally {
+		releaseRead();
+	}
 });
 
 test('PDF comment sidebar refreshes the Workspace write gate after permissions change', async ({
