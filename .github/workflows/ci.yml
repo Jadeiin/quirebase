@@ -64,6 +64,7 @@ jobs:
       - run: uv build --all-packages --no-sources
   postgres:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:18
@@ -85,7 +86,18 @@ jobs:
           version: "0.12.14"
           python-version: "3.12"
       - run: uv sync --extra postgres
-      - run: uv run pytest -q tests/test_postgres_contract.py tests/test_postgres_concurrency.py tests/test_schema_parity.py
+      - name: PostgreSQL contracts and controlled concurrency
+        run: >-
+          uv run pytest -q tests/test_postgres_contract.py tests/test_postgres_concurrency.py
+          tests/test_concurrency_harness.py tests/test_concurrency_reporting.py tests/test_schema_parity.py
+          --concurrency-report-dir=concurrency-results --junitxml=concurrency-results/junit.xml
+      - name: Preserve concurrency coverage and failure evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: postgres-concurrency
+          path: concurrency-results/
+          retention-days: 14
       - name: Verify migrations and durable workflows against PostgreSQL
         env:
           QUIREBASE_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/quirebase_migrations

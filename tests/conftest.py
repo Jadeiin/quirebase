@@ -5,12 +5,15 @@ from datetime import UTC, datetime
 
 import pytest
 from dbos import AsyncSQLAlchemyDatasource
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from quirebase.core.config import get_settings
 from quirebase.core.database import Base, async_database_url, make_async_engine
 from quirebase.core.storage import get_object_store
 from quirebase.core.workflows import DBOSAdapter, WorkflowSummary, ads, durable_operations
+
+pytest_plugins = ["concurrency_plugin"]
 
 
 class InMemoryDurableOperations:
@@ -136,6 +139,49 @@ def fake_durable_operations(monkeypatch):
 @pytest.fixture
 def anyio_backend() -> str:
     return "asyncio"
+
+
+@pytest.fixture
+async def postgres_sessions():
+    database_url = os.getenv("QUIREBASE_TEST_POSTGRES_URL")
+    if not database_url:
+        pytest.skip("PostgreSQL is not configured")
+    engine = make_async_engine(database_url)
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    try:
+        yield factory
+    finally:
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.drop_all)
+        await engine.dispose()
+
+
+@pytest.fixture
+async def postgres_search_tables(postgres_sessions):
+    engine = postgres_sessions.kw["bind"]
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                "CREATE TABLE item_search ("
+                "item_id varchar(36) PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,"
+                "document tsvector NOT NULL)"
+            )
+        )
+        await connection.execute(
+            text(
+                "CREATE TABLE revision_search ("
+                "revision_id varchar(36) PRIMARY KEY REFERENCES file_revisions(id) ON DELETE CASCADE,"
+                "item_id varchar(36) NOT NULL, document tsvector NOT NULL)"
+            )
+        )
+    try:
+        yield
+    finally:
+        async with engine.begin() as connection:
+            await connection.execute(text("DROP TABLE revision_search"))
+            await connection.execute(text("DROP TABLE item_search"))
 
 
 @pytest.fixture

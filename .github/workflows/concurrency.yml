@@ -1,0 +1,47 @@
+name: PostgreSQL concurrency replay
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "41 18 * * *"
+permissions:
+  contents: read
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        round: [1, 2, 3, 4, 5]
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: quirebase_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      QUIREBASE_TEST_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/quirebase_test
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          version: "0.12.14"
+          python-version: "3.12"
+      - run: uv sync --extra postgres --frozen
+      - name: Replay the invariant matrix on an isolated database
+        run: >-
+          uv run pytest -q tests/test_postgres_concurrency.py tests/test_concurrency_harness.py
+          --concurrency-report-dir=concurrency-results --junitxml=concurrency-results/junit.xml
+      - name: Preserve each round, including failures
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: postgres-concurrency-round-${{ matrix.round }}
+          path: concurrency-results/
+          retention-days: 14

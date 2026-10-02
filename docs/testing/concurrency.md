@@ -1,0 +1,108 @@
+# Business concurrency testing
+
+The contracts come from [ADR 0011](../adr/0011-unified-business-concurrency.md) and the
+current Workspace model in [ADR 0013](../adr/0013-workspaces-as-data-governance-and-acl-boundaries.md).
+Workspace membership owns authority; Projects have no owner. Short synchronous commands use
+their admission boundary; durable finalizers reauthorize before publishing canonical state.
+An explicit conflict is an allowed result. Tests must not assume that every competing request succeeds.
+
+## Conflict matrix
+
+The machine-readable invariant registry is [concurrency_cases.json](../../tests/concurrency_cases.json).
+Tests identify their contract with `@pytest.mark.concurrency_case("id")`. The report lists actual
+parameterized node IDs, so a passed selected schedule does not imply all possible orders are covered.
+
+| Invariant IDs | Competing operations | Current schedules and observations |
+| --- | --- | --- |
+| `discussion-root-delete`, `reply-root-delete` | Root deletion / discussion moderation or annotation reply | Workspace or Project root held first; public mutation waits; full cascade finishes; mutation rejects the vanished root |
+| `workspace-read-delete`, `foreign-lock-isolation` | Workspace read or foreign discussion ID / deletion or row lock | List, detail and governance read before deletion commits, then owner lookup; foreign IDs do not lock another Workspace's rows; admin response handling also has a regression in `test_http.py` |
+| `workspace-archive-write`, `project-archive-write` | Archive / discussion write | Admitted Workspace write finishes before archive; Workspace or Project archive commits before a waiting writer rechecks lifecycle |
+| `actor-revocation`, `governance-demotion` | User deactivation or admin demotion / authorized mutations | Invitation, import confirmation, ownership transfer, governance and password boundaries; import explicitly observes the User → Workspace wait chain |
+| `ownership-transfer`, `membership-identity` | Two ownership transfers or rejoins | One authoritative Workspace owner; one current membership; losing authority is rechecked |
+| `participation-recheck`, `relation-idempotency` | Project join, mode switch, member suspension or duplicate association additions | Participation follows current mode/membership; independent guards remain shared; duplicate additions create one relation |
+| `annotation-recheck`, `assignment-item-delete` | Reply/scope change or assignment / moderation, detachment or Item deletion | Waiting mutation rechecks lineage and authority; integrity failures become domain errors |
+| `metadata-version` | Two metadata replacements with version 1 | Both winner orders; exactly one version 2 result; loser receives `VersionConflict`; public Item view, full-text search and audit agree |
+| `import-replay` | Two confirmations / retry after losing a committed response | Both caller startup orders queued at one Batch; same Item IDs on confirmation and fresh-Session replay; one import audit per Item; real full-text search |
+
+The root-deletion tests directly hold/delete parent rows to control the database cascade, then invoke
+public business mutations. The metadata and import tests inspect final state through public Library,
+Search and Audit interfaces. They use native PostgreSQL search tables rather than mocking Search.
+
+The report's `evidence_enabled` flag distinguishes scenarios using the shared harness from legacy
+tests with local synchronization. Legacy results are included in the matrix but do not gain SQL/lock
+evidence automatically. In particular, the existing upload-finalizer test exercises a private
+authorization helper, not a real DBOS restart; neither it nor the in-memory durable client proves
+crash recovery.
+
+## Run and reproduce
+
+Use a **dedicated disposable PostgreSQL database**. These fixtures create and drop application tables.
+Do not point them at an application database. PostgreSQL is the supported multi-worker database;
+SQLite tests cannot establish row-lock correctness.
+
+```sh
+export QUIREBASE_TEST_POSTGRES_URL=postgresql://postgres:postgres@localhost:5432/quirebase_test
+uv sync --extra postgres --frozen
+uv run pytest -q tests/test_postgres_concurrency.py tests/test_concurrency_harness.py \
+  tests/test_concurrency_reporting.py \
+  --concurrency-report-dir=concurrency-results --junitxml=concurrency-results/junit.xml
+
+# Replay the exact parameterized schedule from coverage.json or a failure artifact.
+uv run pytest -q \
+  'tests/test_postgres_concurrency.py::test_concurrent_metadata_replacements_reject_stale_version[alpha-first]' \
+  --concurrency-report-dir=concurrency-results
+```
+
+Without the PostgreSQL URL, database cases skip. A skipped case is never counted as passing coverage.
+`shared_postgres` serializes destructive schema fixtures across pytest workers with an advisory lock;
+the competing transactions inside a test remain independent and concurrent.
+
+## Shared interleaving harness
+
+`postgres_race.session("actor")` owns a separate Session and pins its connection across commits.
+`start()` owns the competing task; `join()` observes its outcome with a bounded wait.
+`wait_blocked("waiter", "holder")` waits for that **direct** edge in `pg_blocking_pids`, rather than
+assuming SQL has started after a fixed sleep. PostgreSQL can queue a second contender behind the first
+contender's tuple lock, giving `second → first → holder`; assert the actual edges explicitly.
+Use bounded Events for an application-level checkpoint, and `note()` to label its release.
+
+Place business assertions inside a named verification Session when a live failure snapshot matters.
+Unexpected Session errors, pytest failures and harness timeouts capture evidence before Session
+cleanup or task cancellation. A failure detected only after all actors have closed still retains
+their SQL/wait trace, but its activity snapshot may contain no live actors.
+
+On failure the harness writes `failures/<node-hash>-<worker>.json` containing the node ID, named
+backend PIDs, elapsed SQL/transaction/wait trace, original exception type and SQLSTATE, server version/isolation,
+`pg_stat_activity` and `pg_locks`. The first failure and first snapshot survive subsequent cleanup
+errors. Collection is bounded and diagnostic errors do not replace the business failure. The trace
+omits bound parameters, connection URLs and exception-message parameter dumps; PostgreSQL's current
+query text can still contain SQL literals. Use synthetic inputs for these artifacts.
+
+Every owned task is cancelled and awaited before schema teardown. Forgetting to join an operation
+fails the test. Actor connections also have lock/statement/idle-transaction limits. Harness tests
+verify actual blocking, PID stability after commit, timeout cleanup, pytest failure capture,
+parameter omission and a real deadlock's SQLSTATE `40P01`.
+
+## CI and follow-up coverage
+
+The mandatory PostgreSQL CI job runs the contracts, invariant scenarios and harness/report tests on
+PostgreSQL 18, alongside fresh migrations and doctor checks. It uploads coverage JSON/Markdown,
+JUnit and any failure snapshots, including when tests fail. The separate nightly/manual replay
+workflow runs five rounds on five isolated databases and retains each round's artifacts for 14 days.
+The nightly schedule becomes active when that workflow reaches the default branch. These are repeat
+runs of controlled schedules, not generated random interleavings.
+
+Expand coverage in this order:
+
+1. Move remaining legacy synchronization to the harness and add inverse commit orders where the
+   invariant differs. Keep the operation pair, order and expected outcome visible in each node ID.
+2. Exercise actual DBOS workers across process death, checkpoint replay and response loss at the
+   canonical commit/outbox/object-cleanup boundaries. Observe through business interfaces and storage.
+3. Add Hypothesis state machines for generated lifecycle/role/version histories, retaining a seed
+   and minimized sequence. Sequential state machines need an explicit scheduler to explore races.
+4. Model a narrowly scoped difficult protocol in TLA+/TLC when its possible states outgrow executable
+   scenarios. Keep its invariants aligned with this registry and the ADRs.
+
+For a new failure, first identify the violated contract, operation pair and observed wait/commit
+order. Minimize it into a deterministic regression. Repair the owning aggregate's lock order, CAS
+predicate or database constraint; do not add blanket retries or a universal lock graph.

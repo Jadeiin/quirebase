@@ -1,0 +1,18 @@
+[
+  {"id": "foreign-lock-isolation", "invariant": "A foreign Workspace discussion ID is rejected without locking the foreign row.", "operations": ["discussion deletion", "foreign discussion row lock"]},
+  {"id": "discussion-root-delete", "invariant": "Parent deletion and discussion moderation cannot form a lock cycle; a vanished root rejects moderation.", "operations": ["root deletion", "discussion moderation"]},
+  {"id": "reply-root-delete", "invariant": "Workspace deletion can cascade while a new annotation reply waits at the root.", "operations": ["Workspace deletion", "annotation reply"]},
+  {"id": "workspace-read-delete", "invariant": "A read projection tolerates Workspace roots deleted between READ COMMITTED queries.", "operations": ["Workspace read", "Workspace deletion"]},
+  {"id": "workspace-archive-write", "invariant": "An admitted short write can finish before archive; a writer waiting behind archive rechecks lifecycle.", "operations": ["Workspace archive", "discussion write", "write authorization"]},
+  {"id": "project-archive-write", "invariant": "A discussion waiting behind Project archive rechecks lifecycle.", "operations": ["Project archive", "Project discussion write"]},
+  {"id": "actor-revocation", "invariant": "User status and authorization-sensitive mutations serialize without a User/Workspace lock cycle.", "operations": ["User deactivation", "invitation", "ownership transfer", "upload finalization", "import confirmation", "password change"]},
+  {"id": "governance-demotion", "invariant": "Administrative authority is rechecked after locking; cross-admin operations use stable User order.", "operations": ["admin demotion", "Workspace governance", "password reset"]},
+  {"id": "ownership-transfer", "invariant": "Concurrent ownership transfers leave one authoritative Workspace owner and reauthorize the losing actor.", "operations": ["ownership transfer", "ownership transfer"]},
+  {"id": "membership-identity", "invariant": "Only one current Workspace membership exists after concurrent rejoin attempts.", "operations": ["membership rejoin", "membership rejoin"]},
+  {"id": "participation-recheck", "invariant": "Project participation stays consistent with its mode and current Workspace membership; independent root guards remain shared.", "operations": ["Project join", "participation switch", "membership suspension", "Project rename"]},
+  {"id": "relation-idempotency", "invariant": "Concurrent identical relation additions produce one association.", "operations": ["Project Item add", "Item Tag add", "duplicate add"]},
+  {"id": "annotation-recheck", "invariant": "Annotation mutations recheck moderation and Project Item lineage after waiting.", "operations": ["annotation reply", "annotation scope update", "moderation", "Project Item detachment"]},
+  {"id": "assignment-item-delete", "invariant": "An Item deletion racing bulk Project assignment produces a domain conflict rather than an integrity leak.", "operations": ["Item deletion", "bulk Project assignment"]},
+  {"id": "metadata-version", "invariant": "Two Item replacements using one expected version cannot both commit; the winner and search projection agree.", "operations": ["Item metadata replacement", "Item metadata replacement"]},
+  {"id": "import-replay", "invariant": "Concurrent confirmation and replay of one ImportBatch return the same Item IDs with one import audit effect.", "operations": ["ImportBatch confirmation", "duplicate confirmation", "response-loss replay"]}
+]
