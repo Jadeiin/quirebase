@@ -22,7 +22,6 @@ from quirebase.accounts import (
 from quirebase.core.database import Base, make_async_engine
 from quirebase.core.errors import (
     PermissionDenied,
-    ResourceNotFound,
     ResourceUnavailable,
     ValidationFailure,
     WorkspaceLifecycleError,
@@ -74,13 +73,14 @@ from quirebase.projects import (
     rename_project,
     set_project_participation,
 )
-from quirebase.web.api import workspaces as workspace_api
 from quirebase.workspaces import (
     archive_workspace,
     invite_workspace_member,
+    list_workspaces,
     suspend_workspace_governance,
     suspend_workspace_member,
     transfer_workspace_ownership,
+    workspace_owner_ids,
 )
 
 pytestmark = [
@@ -116,32 +116,28 @@ async def _user(db: AsyncSession, prefix: str) -> User:
 
 
 @pytest.mark.parametrize("detail", [False, True], ids=["list", "detail"])
-async def test_workspace_read_tolerates_committed_root_deletion(
-    postgres_sessions, monkeypatch, detail
-):
+async def test_workspace_read_tolerates_committed_root_deletion(postgres_sessions, detail):
     async with postgres_sessions() as setup_db:
         owner = await _user(setup_db, "workspace-read-delete")
         workspace_id, owner_id = fixture_workspace_id(owner), owner.id
 
-    owner_lookup = workspace_api.workspace_owner_ids
-
-    async def delete_before_owner_lookup(db, workspace_ids):
-        assert workspace_id in workspace_ids
-        async with postgres_sessions() as delete_db:
-            workspace = await delete_db.get(Workspace, workspace_id)
-            await delete_db.delete(workspace)
-            await delete_db.commit()
-        return await owner_lookup(db, workspace_ids)
-
-    monkeypatch.setattr(workspace_api, "workspace_owner_ids", delete_before_owner_lookup)
     async with postgres_sessions() as read_db:
         owner = await read_db.get(User, owner_id)
         if detail:
             context = await resolve_workspace_context(read_db, owner, workspace_id)
-            with pytest.raises(ResourceNotFound, match="Workspace not found"):
-                await workspace_api.get_user_workspace(workspace_id, context, read_db)
+            workspace_ids = {context.workspace_id}
         else:
-            assert await workspace_api.get_workspaces(owner, read_db) == []
+            rows = await list_workspaces(read_db, owner)
+            workspace_ids = {workspace.id for workspace, _member in rows}
+        assert workspace_ids == {workspace_id}
+
+        # Commit the root cascade after the initial read. Owner projection must
+        # tolerate deletion without requiring the Web application's static build.
+        async with postgres_sessions() as delete_db:
+            workspace = await delete_db.get(Workspace, workspace_id)
+            await delete_db.delete(workspace)
+            await delete_db.commit()
+        assert await workspace_owner_ids(read_db, workspace_ids) == {}
 
 
 async def _project_annotation_context(

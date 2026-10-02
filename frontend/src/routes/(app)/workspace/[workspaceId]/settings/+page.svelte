@@ -454,13 +454,12 @@
 					>
 					<label class="grid grid-cols-1 gap-1"
 						>{$t('Role')}<select bind:value={inviteRole}
-						>{#if workspace.can('workspace_invitation.create', 'admin')}<option value="admin"
-								>{$t('admin')}</option>
-							{/if}<option value="viewer"
-								>{$t('viewer')}</option
-							><option value="reviewer">{$t('reviewer')}</option><option value="editor"
-								>{$t('editor')}</option
-							></select
+							>{#if workspace.can('workspace_invitation.create', 'admin')}<option value="admin"
+									>{$t('admin')}</option
+								>
+							{/if}<option value="viewer">{$t('viewer')}</option><option value="reviewer"
+								>{$t('reviewer')}</option
+							><option value="editor">{$t('editor')}</option></select
 						></label
 					>
 					<label class="grid grid-cols-1 gap-1"
