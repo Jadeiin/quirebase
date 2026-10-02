@@ -1,14 +1,14 @@
 <script lang="ts">
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { can } from '$lib/authorization/can';
-	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
-	import { workspaceKeys } from '$lib/workspaces/keys';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import Notice from '$lib/design/Notice.svelte';
-	import Button from '$lib/design/Button.svelte';
-	import { msg, t } from '$lib/i18n';
-	import { domainLabel } from '$lib/domain-labels';
-	import { getWorkflowCenter } from '$lib/features/workflows/center.svelte';
+	import { can } from '#lib/authorization/can.js';
+	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
+	import { workspaceKeys } from '#lib/workspaces/keys.js';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import Notice from '#lib/design/Notice.svelte';
+	import Button from '#lib/design/Button.svelte';
+	import { msg, t } from '#lib/i18n.js';
+	import { domainLabel } from '#lib/domain-labels.js';
+	import { getWorkflowCenter } from '#lib/features/workflows/center.svelte.js';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
 
@@ -117,7 +117,7 @@
 					$t('Workspace deleted')
 				)
 			)
-				await goto(resolve('/workspace'), { replaceState: true });
+				await goto(resolve('workspace'), { replace: true });
 	}
 	async function reindex() {
 		if (!workspace.can('workspace.update')) return;
@@ -316,15 +316,18 @@
 														$t('Member role updated')
 													);
 												}}
-												><option
+											>
+												<option
 													value="admin"
 													disabled={member.role !== 'admin' &&
 														!can(member.authorization, 'workspace_member.promote')}
 													>{$t('admin')}</option
-												><option value="editor">{$t('editor')}</option><option value="reviewer"
-													>{$t('reviewer')}</option
-												><option value="viewer">{$t('viewer')}</option></select
-											>
+												>
+
+												<option value="editor">{$t('editor')}</option>
+												<option value="reviewer">{$t('reviewer')}</option>
+												<option value="viewer">{$t('viewer')}</option>
+											</select>
 										{/if}
 										{#if can(member.authorization, 'workspace_member.suspend')}<Button
 												size="sm"
@@ -445,31 +448,29 @@
 						void createInvitation();
 					}}
 				>
-					<label class="grid grid-cols-1 gap-1 md:col-span-2"
-						>{$t('Exact username')}<input
-							class="input"
-							bind:value={inviteUsername}
-							required
-						/></label
-					>
-					<label class="grid grid-cols-1 gap-1"
-						>{$t('Role')}<select bind:value={inviteRole}
-							>{#if workspace.can('workspace_invitation.create', 'admin')}<option value="admin"
-									>{$t('admin')}</option
-								>
-							{/if}<option value="viewer">{$t('viewer')}</option><option value="reviewer"
-								>{$t('reviewer')}</option
-							><option value="editor">{$t('editor')}</option></select
-						></label
-					>
-					<label class="grid grid-cols-1 gap-1"
-						>{$t('Expires in days')}<input
-							class="input"
-							type="number"
-							min="1"
-							max="365"
-							bind:value={inviteDays}
-						/></label
+					<label class="grid grid-cols-1 gap-1 md:col-span-2">
+						{$t('Exact username')}
+						<input class="input" bind:value={inviteUsername} required />
+					</label>
+
+					<label class="grid grid-cols-1 gap-1">
+						{$t('Role')}
+
+						<select bind:value={inviteRole}>
+							{#if workspace.can('workspace_invitation.create', 'admin')}
+								<option value="admin">{$t('admin')}</option>
+							{/if}
+
+							<option value="viewer">{$t('viewer')}</option>
+							<option value="reviewer">{$t('reviewer')}</option>
+							<option value="editor">{$t('editor')}</option>
+						</select>
+					</label>
+
+					<label class="grid grid-cols-1 gap-1">
+						{$t('Expires in days')}
+
+						<input class="input" type="number" min="1" max="365" bind:value={inviteDays} /></label
 					>
 					<Button type="submit" disabled={busyId !== '' || !inviteUsername.trim()}
 						>{$t('Create invitation')}</Button

@@ -1,6 +1,6 @@
 import type { AnnotationEvent } from '@embedpdf/svelte-pdf-viewer';
-import { createWorkspaceApi } from '$lib/api/client';
-import type { CanonicalAnnotation, CanonicalReply } from '$lib/pdf/annotation-adapter';
+import { createWorkspaceApi } from '#lib/api/client.js';
+import type { CanonicalAnnotation, CanonicalReply } from '#lib/pdf/annotation-adapter.js';
 
 type WritableAnnotationEvent = Exclude<AnnotationEvent, { type: 'loaded' }>;
 type ReplyIdentity = { itemId: string; annotationId: string; replyId: string };

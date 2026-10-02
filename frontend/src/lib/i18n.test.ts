@@ -2,8 +2,8 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
-import { activateLocale, msg, setLocale, t } from '$lib/i18n';
-import { LOCALE_STORAGE_KEY } from '$lib/locale';
+import { activateLocale, msg, setLocale, t } from '#lib/i18n.js';
+import { LOCALE_STORAGE_KEY } from '#lib/locale.js';
 
 describe('frontend localization', () => {
 	afterEach(() => {

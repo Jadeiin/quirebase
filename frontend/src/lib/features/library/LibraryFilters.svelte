@@ -1,9 +1,9 @@
 <script lang="ts">
-	import Icon from '$lib/design/Icon.svelte';
-	import Panel from '$lib/design/Panel.svelte';
-	import type { LibraryProject, LibraryTag } from '$lib/features/library/queries';
-	import { t } from '$lib/i18n';
-	import Button from '$lib/design/Button.svelte';
+	import Icon from '#lib/design/Icon.svelte';
+	import Panel from '#lib/design/Panel.svelte';
+	import type { LibraryProject, LibraryTag } from '#lib/features/library/queries.js';
+	import { t } from '#lib/i18n.js';
+	import Button from '#lib/design/Button.svelte';
 
 	let {
 		query = $bindable(''),

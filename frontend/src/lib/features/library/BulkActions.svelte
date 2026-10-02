@@ -1,9 +1,9 @@
 <script lang="ts">
-	import type { LibraryProject } from '$lib/features/library/queries';
-	import { t } from '$lib/i18n';
-	import Button from '$lib/design/Button.svelte';
-	import { canRunBulkAction } from '$lib/workspaces/actions';
-	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
+	import type { LibraryProject } from '#lib/features/library/queries.js';
+	import { t } from '#lib/i18n.js';
+	import Button from '#lib/design/Button.svelte';
+	import { canRunBulkAction } from '#lib/workspaces/actions.js';
+	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 
 	let {
 		selectedCount,
@@ -78,7 +78,7 @@
 				!bulkAction ||
 				!canRunBulkAction(
 					workspace.can,
-					bulkAction as import('$lib/features/library/mutations').LibraryBulkAction
+					bulkAction as import('#lib/features/library/mutations.js').LibraryBulkAction
 				) ||
 				(bulkAction === 'add_project' && !bulkProject) ||
 				(bulkAction === 'add_tag' && !bulkTag.trim())}

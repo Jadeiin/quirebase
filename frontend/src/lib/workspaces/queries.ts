@@ -1,6 +1,6 @@
 import { queryOptions } from '@tanstack/svelte-query';
-import { apiRequest, createWorkspaceApi } from '$lib/api/client';
-import { workspaceKeys } from '$lib/workspaces/keys';
+import { apiRequest, createWorkspaceApi } from '#lib/api/client.js';
+import { workspaceKeys } from '#lib/workspaces/keys.js';
 
 export function workspaceListQuery() {
 	return queryOptions({

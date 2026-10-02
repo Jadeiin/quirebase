@@ -3,13 +3,13 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { Menu, Portal } from '@skeletonlabs/skeleton-svelte';
-	import type { components } from '$lib/api/schema';
-	import { hasAllowedAction } from '$lib/authorization/can';
-	import Icon from '$lib/design/Icon.svelte';
-	import { t } from '$lib/i18n';
-	import type { ThemePreference } from '$lib/theme';
+	import type { components } from '#lib/api/schema.js';
+	import { hasAllowedAction } from '#lib/authorization/can.js';
+	import Icon from '#lib/design/Icon.svelte';
+	import { t } from '#lib/i18n.js';
+	import type { ThemePreference } from '#lib/theme.js';
 	import { mobileMoreNavigation, mobileNavigation, themeOptions } from './navigation';
-	import { workspaceHref } from '$lib/workspaces/href';
+	import { workspaceHref } from '#lib/workspaces/href.js';
 
 	let { routeIsActive, user, readerRoute, themePreference, onThemeChange, workspaceId } = $props<{
 		routeIsActive: (route: string) => boolean;
@@ -22,7 +22,11 @@
 	const mobileItems = $derived(
 		mobileNavigation.map(
 			([section, label, icon]) =>
-				[workspaceId ? workspaceHref(workspaceId, section) : '/workspace', label, icon] as const
+				[
+					workspaceId ? resolve(workspaceHref(workspaceId, section)) : resolve('workspace'),
+					label,
+					icon
+				] as const
 		)
 	);
 	const moreItems = $derived(
@@ -30,10 +34,10 @@
 			([section, label, icon]) =>
 				[
 					section === '/account'
-						? section
+						? resolve('account')
 						: workspaceId
-							? workspaceHref(workspaceId, section)
-							: '/workspace',
+							? resolve(workspaceHref(workspaceId, section))
+							: resolve('workspace'),
 					label,
 					icon
 				] as const
@@ -53,7 +57,7 @@
 	{#each mobileItems as [route, label, icon] (label)}
 		<a
 			class="flex min-w-18 flex-1 flex-col items-center gap-1 px-1.5 py-2 text-xs no-underline aria-[current=page]:bg-white/10 aria-[current=page]:text-white"
-			href={resolve(route)}
+			href={route}
 			aria-current={workspaceId &&
 				(route.endsWith('/library')
 					? routeIsActive(route) || page.url.pathname.includes('/item/')
@@ -61,8 +65,11 @@
 						: undefined
 					: routeIsActive(route)
 						? 'page'
-						: undefined)}><Icon name={icon} size={19} /><span>{$t(label)}</span></a
+						: undefined)}
 		>
+			<Icon name={icon} size={19} />
+			<span>{$t(label)}</span>
+		</a>
 	{/each}
 	<Menu positioning={{ placement: 'top-end', gutter: 8 }}>
 		<Menu.Trigger
@@ -80,7 +87,7 @@
 						<Menu.Item
 							value={route}
 							class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
-							onclick={() => goto(resolve(route))}><Icon name={icon} /> {$t(label)}</Menu.Item
+							onclick={() => goto(route)}><Icon name={icon} /> {$t(label)}</Menu.Item
 						>
 					{/each}
 					<Menu.Separator class="m-1 h-px bg-surface-300-700" />
@@ -93,18 +100,21 @@
 							class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none data-[active=true]:bg-primary-50-950 data-[active=true]:text-primary-800-200 data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
 							data-active={themePreference === preference}
 							onclick={() => onThemeChange(preference)}
-							><Icon name={icon} /><span>{$t(label)}</span>{#if themePreference === preference}<span
-									class="ml-auto"
-									aria-hidden="true">✓</span
-								>{/if}</Menu.Item
 						>
+							<Icon name={icon} />
+							<span>{$t(label)}</span>
+
+							{#if themePreference === preference}
+								<span class="ml-auto" aria-hidden="true">✓</span>
+							{/if}
+						</Menu.Item>
 					{/each}
 					{#if hasAllowedAction(user?.authorization)}
 						<Menu.Item
 							value="/admin"
 							class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
-							onclick={() => goto(resolve('/admin'))}
-							><Icon name="admin" /> {$t('Administration')}</Menu.Item
+							onclick={() => goto(resolve('admin'))}
+							><Icon name="admin" />{$t('Administration')}</Menu.Item
 						>
 					{/if}
 				</Menu.Content>

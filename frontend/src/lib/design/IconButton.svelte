@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Portal, Tooltip } from '@skeletonlabs/skeleton-svelte';
-	import Icon from '$lib/design/Icon.svelte';
+	import Icon from '#lib/design/Icon.svelte';
 
 	let {
 		label,

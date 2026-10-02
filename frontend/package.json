@@ -29,11 +29,9 @@
 		"@lingui/detect-locale": "^6.7.0",
 		"@skeletonlabs/skeleton": "5.0.1",
 		"@skeletonlabs/skeleton-svelte": "5.0.1",
-		"@sveltejs/adapter-static": "^3.0.10",
-		"@sveltejs/kit": "^2.70.3",
 		"@tanstack/svelte-query": "^6.1.48",
 		"openapi-fetch": "^0.17.0",
-		"svelte": "^5.57.0",
+		"svelte": "^5.57.1",
 		"temml": "0.13.5"
 	},
 	"devDependencies": {
@@ -42,6 +40,9 @@
 		"@lingui/cli": "^6.7.0",
 		"@lingui/format-po": "^6.7.0",
 		"@playwright/test": "^1.63.0",
+		"@sveltejs/adapter-static": "^4.0.0",
+		"@sveltejs/kit": "^3.0.0",
+		"@sveltejs/load-config": "^0.2.2",
 		"@sveltejs/vite-plugin-svelte": "^7.3.0",
 		"@tailwindcss/vite": "^4.3.3",
 		"@types/node": "^26.6.0",
@@ -57,9 +58,15 @@
 		"prettier-plugin-tailwindcss": "^0.8.0",
 		"svelte-check": "^4.7.6",
 		"tailwindcss": "^4.3.3",
-		"typescript": "5.9.3",
+		"typescript": "^6.0.0",
 		"typescript-eslint": "^8.60.1",
 		"vite": "^8.3.0",
 		"vitest": "^5.0.1"
+	},
+	"imports": {
+		"#lib/*": "./src/lib/*"
+	},
+	"engines": {
+		"node": ">=22.17"
 	}
 }

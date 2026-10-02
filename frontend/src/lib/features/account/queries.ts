@@ -1,5 +1,5 @@
 import { queryOptions } from '@tanstack/svelte-query';
-import { apiRequest, createWorkspaceApi } from '$lib/api/client';
+import { apiRequest, createWorkspaceApi } from '#lib/api/client.js';
 
 export const accountKeys = {
 	all: ['account'] as const,

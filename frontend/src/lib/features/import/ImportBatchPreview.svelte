@@ -1,14 +1,14 @@
 <script lang="ts">
-	import type { components } from '$lib/api/schema';
-	import RichText from '$lib/design/RichText.svelte';
-	import Panel from '$lib/design/Panel.svelte';
-	import Pagination from '$lib/design/Pagination.svelte';
-	import Notice from '$lib/design/Notice.svelte';
-	import SectionHeader from '$lib/design/SectionHeader.svelte';
-	import { domainLabel } from '$lib/domain-labels';
-	import { t } from '$lib/i18n';
-	import Button from '$lib/design/Button.svelte';
-	import ItemRow from '$lib/design/ItemRow.svelte';
+	import type { components } from '#lib/api/schema.js';
+	import RichText from '#lib/design/RichText.svelte';
+	import Panel from '#lib/design/Panel.svelte';
+	import Pagination from '#lib/design/Pagination.svelte';
+	import Notice from '#lib/design/Notice.svelte';
+	import SectionHeader from '#lib/design/SectionHeader.svelte';
+	import { domainLabel } from '#lib/domain-labels.js';
+	import { t } from '#lib/i18n.js';
+	import Button from '#lib/design/Button.svelte';
+	import ItemRow from '#lib/design/ItemRow.svelte';
 
 	type ImportBatch = components['schemas']['ImportBatchView'];
 

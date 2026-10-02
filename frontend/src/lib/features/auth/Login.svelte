@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { apiRequest } from '$lib/api/client';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import AuthPage from '$lib/design/AuthPage.svelte';
-	import Notice from '$lib/design/Notice.svelte';
-	import Panel from '$lib/design/Panel.svelte';
-	import { t } from '$lib/i18n';
-	import Button from '$lib/design/Button.svelte';
+	import { apiRequest } from '#lib/api/client.js';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import AuthPage from '#lib/design/AuthPage.svelte';
+	import Notice from '#lib/design/Notice.svelte';
+	import Panel from '#lib/design/Panel.svelte';
+	import { t } from '#lib/i18n.js';
+	import Button from '#lib/design/Button.svelte';
 
 	let username = $state('');
 	let password = $state('');

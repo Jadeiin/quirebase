@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import type { ItemOverviewView } from '$lib/api/client';
-	import { can } from '$lib/authorization/can';
-	import Panel from '$lib/design/Panel.svelte';
-	import RichText from '$lib/design/RichText.svelte';
-	import { t } from '$lib/i18n';
+	import type { ItemOverviewView } from '#lib/api/client.js';
+	import { can } from '#lib/authorization/can.js';
+	import Panel from '#lib/design/Panel.svelte';
+	import RichText from '#lib/design/RichText.svelte';
+	import { t } from '#lib/i18n.js';
 	import type { ItemDetail } from '../types';
-	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
-	import { workspaceHref } from '$lib/workspaces/href';
+	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
+	import { workspaceHref } from '#lib/workspaces/href.js';
 
 	let { itemId, data, details } = $props<{
 		itemId: string;

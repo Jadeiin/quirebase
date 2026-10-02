@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AuthorizationAction } from '$lib/authorization/can';
+import type { AuthorizationAction } from '#lib/authorization/can.js';
 import { canRunBulkAction } from './actions';
 
 describe('Workspace action projection', () => {

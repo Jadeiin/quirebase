@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
-	import AdminOverview from '$lib/features/admin/AdminOverview.svelte';
-	import AdminSectionState from '$lib/features/admin/AdminSectionState.svelte';
-	import { getAdminFilters } from '$lib/features/admin/filters';
-	import { adminOverviewQuery } from '$lib/features/admin/queries';
-	import { msg } from '$lib/i18n';
+	import AdminOverview from '#lib/features/admin/AdminOverview.svelte';
+	import AdminSectionState from '#lib/features/admin/AdminSectionState.svelte';
+	import { getAdminFilters } from '#lib/features/admin/filters.js';
+	import { adminOverviewQuery } from '#lib/features/admin/queries.js';
+	import { msg } from '#lib/i18n.js';
 
 	const { filters } = getAdminFilters();
 	const overview = createQuery(() => adminOverviewQuery(filters(), true));

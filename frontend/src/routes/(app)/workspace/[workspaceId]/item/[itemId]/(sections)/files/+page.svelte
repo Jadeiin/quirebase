@@ -1,23 +1,27 @@
 <script lang="ts">
 	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { createWorkspaceApi, isDownloadCancelled } from '$lib/api/client';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import { can } from '$lib/authorization/can';
-	import ConfirmDialog from '$lib/design/ConfirmDialog.svelte';
-	import Notice from '$lib/design/Notice.svelte';
+	import { createWorkspaceApi, isDownloadCancelled } from '#lib/api/client.js';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import { can } from '#lib/authorization/can.js';
+	import ConfirmDialog from '#lib/design/ConfirmDialog.svelte';
+	import Notice from '#lib/design/Notice.svelte';
 	import {
 		fileDeleteMutationOptions,
 		fileRemoteUploadMutationOptions,
 		fileUploadMutationOptions
-	} from '$lib/features/item/files/mutations';
-	import ItemFilesSection from '$lib/features/item/files/ItemFilesSection.svelte';
-	import ItemSectionState from '$lib/features/item/ItemSectionState.svelte';
-	import { itemDetailsQuery, itemFilesQuery, itemOverviewQuery } from '$lib/features/item/queries';
-	import type { FileRow } from '$lib/features/item/types';
-	import { getWorkflowCenter } from '$lib/features/workflows/center.svelte';
-	import { msg, t } from '$lib/i18n';
+	} from '#lib/features/item/files/mutations.js';
+	import ItemFilesSection from '#lib/features/item/files/ItemFilesSection.svelte';
+	import ItemSectionState from '#lib/features/item/ItemSectionState.svelte';
+	import {
+		itemDetailsQuery,
+		itemFilesQuery,
+		itemOverviewQuery
+	} from '#lib/features/item/queries.js';
+	import type { FileRow } from '#lib/features/item/types.js';
+	import { getWorkflowCenter } from '#lib/features/workflows/center.svelte.js';
+	import { msg, t } from '#lib/i18n.js';
 	import type { PageProps } from './$types';
-	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
+	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 
 	let { params }: PageProps = $props();
 	let mutationError = $state('');

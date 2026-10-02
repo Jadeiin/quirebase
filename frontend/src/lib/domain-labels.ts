@@ -1,4 +1,4 @@
-import { msg, type MessageKey } from '$lib/i18n';
+import { msg, type MessageKey } from '#lib/i18n.js';
 
 const labels = {
 	administrator: msg({ message: 'Administrator', comment: 'User role.' }),

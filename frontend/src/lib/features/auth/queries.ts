@@ -1,5 +1,5 @@
 import { queryOptions } from '@tanstack/svelte-query';
-import { ApiError, apiRequest } from '$lib/api/client';
+import { ApiError, apiRequest } from '#lib/api/client.js';
 
 export const invitationKeys = {
 	all: ['invitation'] as const,

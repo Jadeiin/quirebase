@@ -2,12 +2,12 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { msg } from '$lib/i18n';
-import { toaster } from '$lib/toaster';
+import { msg } from '#lib/i18n.js';
+import { toaster } from '#lib/toaster.js';
 import { WorkflowCenter, type TrackedWorkflow, type WorkflowLedger } from './center.svelte';
 import type { WorkflowStatus } from './queries';
 
-vi.mock('$lib/toaster', () => ({
+vi.mock('#lib/toaster.js', () => ({
 	toaster: { create: vi.fn(), dismiss: vi.fn() }
 }));
 

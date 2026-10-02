@@ -1,6 +1,6 @@
 import { PdfAnnotationSubtype } from '@embedpdf/models';
 import { describe, expect, it } from 'vitest';
-import { createAnnotationAdapter, type CanonicalAnnotation } from '$lib/pdf/annotation-adapter';
+import { createAnnotationAdapter, type CanonicalAnnotation } from '#lib/pdf/annotation-adapter.js';
 
 const annotation: CanonicalAnnotation = {
 	id: '6ca651e8-b815-45e8-8e73-20db3e24d531',

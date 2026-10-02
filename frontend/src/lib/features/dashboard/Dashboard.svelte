@@ -1,16 +1,16 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { createQuery } from '@tanstack/svelte-query';
-	import type { AuthorizationAction } from '$lib/authorization/can';
-	import Icon from '$lib/design/Icon.svelte';
-	import Panel from '$lib/design/Panel.svelte';
-	import RichText from '$lib/design/RichText.svelte';
-	import { domainLabel } from '$lib/domain-labels';
-	import { dashboardQuery } from '$lib/features/dashboard/queries';
-	import { dateFormat } from '$lib/format';
-	import { msg, t } from '$lib/i18n';
-	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
-	import { workspaceHref } from '$lib/workspaces/href';
+	import type { AuthorizationAction } from '#lib/authorization/can.js';
+	import Icon from '#lib/design/Icon.svelte';
+	import Panel from '#lib/design/Panel.svelte';
+	import RichText from '#lib/design/RichText.svelte';
+	import { domainLabel } from '#lib/domain-labels.js';
+	import { dashboardQuery } from '#lib/features/dashboard/queries.js';
+	import { dateFormat } from '#lib/format.js';
+	import { msg, t } from '#lib/i18n.js';
+	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
+	import { workspaceHref } from '#lib/workspaces/href.js';
 
 	const workspace = getWorkspaceContext();
 	const { workspaceId } = workspace;

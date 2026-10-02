@@ -1,6 +1,6 @@
 <script lang="ts">
-	import Button from '$lib/design/Button.svelte';
-	import { t } from '$lib/i18n';
+	import Button from '#lib/design/Button.svelte';
+	import { t } from '#lib/i18n.js';
 
 	let {
 		page,

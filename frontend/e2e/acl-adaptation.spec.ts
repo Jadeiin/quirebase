@@ -435,7 +435,7 @@ test('missing Workspace context opens recovery and emits a diagnostic', async ({
 	await page.addInitScript(() => {
 		(window as Window & { diagnostics?: unknown[] }).diagnostics = [];
 		window.addEventListener('quirebase:api-diagnostic', (event) =>
-			(window as Window & { diagnostics: unknown[] }).diagnostics.push(
+			(window as unknown as Window & { diagnostics: unknown[] }).diagnostics.push(
 				(event as CustomEvent).detail
 			)
 		);

@@ -1,15 +1,15 @@
 <script lang="ts">
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { apiRequest } from '$lib/api/client';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import Button from '$lib/design/Button.svelte';
-	import Notice from '$lib/design/Notice.svelte';
-	import RichText from '$lib/design/RichText.svelte';
-	import { adminWorkspacesQuery } from '$lib/features/admin/queries';
-	import { getAdminFilters } from '$lib/features/admin/filters';
-	import { t } from '$lib/i18n';
-	import { domainLabel } from '$lib/domain-labels';
-	import type { components } from '$lib/api/schema';
+	import { apiRequest } from '#lib/api/client.js';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import Button from '#lib/design/Button.svelte';
+	import Notice from '#lib/design/Notice.svelte';
+	import RichText from '#lib/design/RichText.svelte';
+	import { adminWorkspacesQuery } from '#lib/features/admin/queries.js';
+	import { getAdminFilters } from '#lib/features/admin/filters.js';
+	import { t } from '#lib/i18n.js';
+	import { domainLabel } from '#lib/domain-labels.js';
+	import type { components } from '#lib/api/schema.js';
 
 	const { filters } = getAdminFilters();
 	const queryClient = useQueryClient();

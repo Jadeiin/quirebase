@@ -1,7 +1,7 @@
 import { mutationOptions, type QueryClient } from '@tanstack/svelte-query';
-import { createWorkspaceApi } from '$lib/api/client';
-import { invalidateItemDiscussion } from '$lib/query/invalidation';
-import { workspaceKeys } from '$lib/workspaces/keys';
+import { createWorkspaceApi } from '#lib/api/client.js';
+import { invalidateItemDiscussion } from '#lib/query/invalidation.js';
+import { workspaceKeys } from '#lib/workspaces/keys.js';
 
 export type DiscussionCreateMutation = {
 	form: HTMLFormElement;

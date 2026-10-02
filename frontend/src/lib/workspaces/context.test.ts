@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { WorkspaceView } from '$lib/api/client';
-import type { AuthorizationAction } from '$lib/authorization/can';
-import { workspaceCan, workspaceRole } from '$lib/workspaces/context.svelte';
+import type { WorkspaceView } from '#lib/api/client.js';
+import type { AuthorizationAction } from '#lib/authorization/can.js';
+import { workspaceCan, workspaceRole } from '#lib/workspaces/context.svelte.js';
 
 const view = (role: string, allowed: AuthorizationAction[]): WorkspaceView => ({
 	id: 'workspace-1',

@@ -1,21 +1,21 @@
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
 	import { onMount, untrack } from 'svelte';
-	import Panel from '$lib/design/Panel.svelte';
-	import SectionHeader from '$lib/design/SectionHeader.svelte';
+	import Panel from '#lib/design/Panel.svelte';
+	import SectionHeader from '#lib/design/SectionHeader.svelte';
 	import {
 		citationKeyPreviewQuery,
 		exportCitationStylesQuery
-	} from '$lib/features/account/queries';
+	} from '#lib/features/account/queries.js';
 	import {
 		defaultExportPreferences,
 		readExportPreferences,
 		writeExportPreferences,
 		type ExportPreferences
-	} from '$lib/export-preferences';
-	import { t } from '$lib/i18n';
-	import Button from '$lib/design/Button.svelte';
-	import { workspaceListQuery } from '$lib/workspaces/queries';
+	} from '#lib/export-preferences.js';
+	import { t } from '#lib/i18n.js';
+	import Button from '#lib/design/Button.svelte';
+	import { workspaceListQuery } from '#lib/workspaces/queries.js';
 
 	let { userId } = $props<{ userId: string }>();
 	let preferences = $state<ExportPreferences>(structuredClone(defaultExportPreferences));

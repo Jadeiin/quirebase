@@ -15,13 +15,13 @@
 	} from '@embedpdf/svelte-pdf-viewer';
 	import pdfiumWasmUrl from '@embedpdf/pdfium/pdfium.wasm?url';
 	import { i18n } from '@lingui/core';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import { t } from '$lib/i18n';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import { t } from '#lib/i18n.js';
 	import {
 		createAnnotationSync,
 		type AnnotationSources,
 		type AnnotationSyncStatus
-	} from '$lib/pdf/annotation-sync.svelte';
+	} from '#lib/pdf/annotation-sync.svelte.js';
 
 	let {
 		itemId,
@@ -285,7 +285,8 @@
 
 	// Client-side navigation does not fire beforeunload. Keep the viewer mounted
 	// until every queued annotation write has settled before SvelteKit tears it down.
-	onNavigate(({ willUnload }) => {
+	onNavigate(({ willUnload, shallow }) => {
+		if (shallow) return;
 		if (willUnload || !sync.hasPending()) return;
 		return sync.flush().catch((reason) => {
 			onstatus?.(apiErrorMessage(reason, $t('Annotation sync failed')), true);

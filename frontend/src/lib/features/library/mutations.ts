@@ -1,8 +1,8 @@
 import { mutationOptions, type QueryClient } from '@tanstack/svelte-query';
-import { createWorkspaceApi } from '$lib/api/client';
-import { invalidateLibrary, invalidateProject } from '$lib/query/invalidation';
-import type { ExportPreferences } from '$lib/export-preferences';
-import { workspaceKeys } from '$lib/workspaces/keys';
+import { createWorkspaceApi } from '#lib/api/client.js';
+import { invalidateLibrary, invalidateProject } from '#lib/query/invalidation.js';
+import type { ExportPreferences } from '#lib/export-preferences.js';
+import { workspaceKeys } from '#lib/workspaces/keys.js';
 
 export type LibraryBulkAction = 'add_project' | 'add_tag' | 'bibliography' | 'documents' | 'delete';
 

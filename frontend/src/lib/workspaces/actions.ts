@@ -1,5 +1,5 @@
-import type { LibraryBulkAction } from '$lib/features/library/mutations';
-import type { AuthorizationAction } from '$lib/authorization/can';
+import type { LibraryBulkAction } from '#lib/features/library/mutations.js';
+import type { AuthorizationAction } from '#lib/authorization/can.js';
 
 export type CanResourceAction = (action: AuthorizationAction) => boolean;
 

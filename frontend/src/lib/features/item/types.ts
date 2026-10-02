@@ -1,4 +1,4 @@
-import type { components } from '$lib/api/schema';
+import type { components } from '#lib/api/schema.js';
 
 export type ItemDetail = components['schemas']['ItemDetailView'];
 export type FileRow = components['schemas']['FileView'];

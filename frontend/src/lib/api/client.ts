@@ -3,7 +3,7 @@ import createClient, {
 	mergeHeaders,
 	type FetchOptions
 } from 'openapi-fetch';
-import type { components, paths } from '$lib/api/schema';
+import type { components, paths } from '#lib/api/schema.js';
 
 type ApiErrorView = components['schemas']['ApiErrorView'];
 

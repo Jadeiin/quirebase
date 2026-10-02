@@ -1,9 +1,9 @@
 <script lang="ts">
-	import Panel from '$lib/design/Panel.svelte';
-	import { dateTimeFormat } from '$lib/format';
-	import { t } from '$lib/i18n';
-	import type { components } from '$lib/api/schema';
-	import ItemRow from '$lib/design/ItemRow.svelte';
+	import Panel from '#lib/design/Panel.svelte';
+	import { dateTimeFormat } from '#lib/format.js';
+	import { t } from '#lib/i18n.js';
+	import type { components } from '#lib/api/schema.js';
+	import ItemRow from '#lib/design/ItemRow.svelte';
 
 	let { events } = $props<{ events: components['schemas']['AdminAuditEventView'][] }>();
 </script>

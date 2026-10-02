@@ -7,7 +7,7 @@ import {
 	detectInitialLocale,
 	normalizeLocale,
 	storeLocale
-} from '$lib/locale';
+} from '#lib/locale.js';
 
 function setBrowserLanguage(language: string) {
 	Object.defineProperty(navigator, 'language', { value: language, configurable: true });

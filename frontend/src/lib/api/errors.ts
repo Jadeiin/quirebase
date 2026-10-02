@@ -1,5 +1,5 @@
-import { ApiError } from '$lib/api/client';
-import { msg, translate, type MessageKey } from '$lib/i18n';
+import { ApiError } from '#lib/api/client.js';
+import { msg, translate, type MessageKey } from '#lib/i18n.js';
 
 const messages: Record<string, MessageKey> = {
 	invalid_credentials: msg('Invalid username or password.'),

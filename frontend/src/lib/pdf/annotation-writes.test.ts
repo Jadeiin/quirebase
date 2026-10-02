@@ -5,12 +5,12 @@ import {
 	type PdfAnnotationObject
 } from '@embedpdf/models';
 import { describe, expect, it, vi } from 'vitest';
-import type { CanonicalAnnotation, CanonicalReply } from '$lib/pdf/annotation-adapter';
+import type { CanonicalAnnotation, CanonicalReply } from '#lib/pdf/annotation-adapter.js';
 import {
 	createWriteQueue,
 	persistReplyEvent,
 	selectNativeAnnotationIds
-} from '$lib/pdf/annotation-writes';
+} from '#lib/pdf/annotation-writes.js';
 
 const parent = (): CanonicalAnnotation => ({
 	id: 'annotation-1',

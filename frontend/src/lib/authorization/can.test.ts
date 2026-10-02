@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { can, hasAllowedAction, type AuthorizationDecisionSet } from '$lib/authorization/can';
+import { can, hasAllowedAction, type AuthorizationDecisionSet } from '#lib/authorization/can.js';
 
 describe('can', () => {
 	it('only trusts the server-authored allowed set', () => {

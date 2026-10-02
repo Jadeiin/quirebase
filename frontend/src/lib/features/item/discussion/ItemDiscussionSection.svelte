@@ -1,11 +1,11 @@
 <script lang="ts">
-	import Panel from '$lib/design/Panel.svelte';
-	import { can } from '$lib/authorization/can';
-	import { dateTimeFormat } from '$lib/format';
-	import { t } from '$lib/i18n';
+	import Panel from '#lib/design/Panel.svelte';
+	import { can } from '#lib/authorization/can.js';
+	import { dateTimeFormat } from '#lib/format.js';
+	import { t } from '#lib/i18n.js';
 	import type { DiscussionMessage } from '../types';
-	import Button from '$lib/design/Button.svelte';
-	import ItemRow from '$lib/design/ItemRow.svelte';
+	import Button from '#lib/design/Button.svelte';
+	import ItemRow from '#lib/design/ItemRow.svelte';
 
 	let { messages, canWrite, busy, onAdd, onDelete, onModerate } = $props<{
 		messages: DiscussionMessage[];

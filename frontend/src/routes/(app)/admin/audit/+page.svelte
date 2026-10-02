@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
-	import Pagination from '$lib/design/Pagination.svelte';
-	import AdminAudit from '$lib/features/admin/AdminAudit.svelte';
-	import AdminSectionState from '$lib/features/admin/AdminSectionState.svelte';
-	import { getAdminFilters } from '$lib/features/admin/filters';
-	import { adminAuditQuery } from '$lib/features/admin/queries';
-	import { msg, t } from '$lib/i18n';
+	import Pagination from '#lib/design/Pagination.svelte';
+	import AdminAudit from '#lib/features/admin/AdminAudit.svelte';
+	import AdminSectionState from '#lib/features/admin/AdminSectionState.svelte';
+	import { getAdminFilters } from '#lib/features/admin/filters.js';
+	import { adminAuditQuery } from '#lib/features/admin/queries.js';
+	import { msg, t } from '#lib/i18n.js';
 
 	const { filters, setPage } = getAdminFilters();
 	const audit = createQuery(() => adminAuditQuery(filters(), true));

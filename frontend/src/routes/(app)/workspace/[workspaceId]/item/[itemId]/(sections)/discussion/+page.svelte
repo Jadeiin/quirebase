@@ -1,19 +1,19 @@
 <script lang="ts">
 	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import { can } from '$lib/authorization/can';
-	import Notice from '$lib/design/Notice.svelte';
-	import PromptDialog from '$lib/design/PromptDialog.svelte';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import { can } from '#lib/authorization/can.js';
+	import Notice from '#lib/design/Notice.svelte';
+	import PromptDialog from '#lib/design/PromptDialog.svelte';
 	import {
 		discussionCreateMutationOptions,
 		discussionDeleteMutationOptions,
 		discussionModerationMutationOptions
-	} from '$lib/features/item/discussion/mutations';
-	import ItemDiscussionSection from '$lib/features/item/discussion/ItemDiscussionSection.svelte';
-	import ItemSectionState from '$lib/features/item/ItemSectionState.svelte';
-	import { itemDiscussionQuery } from '$lib/features/item/queries';
-	import { t } from '$lib/i18n';
-	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
+	} from '#lib/features/item/discussion/mutations.js';
+	import ItemDiscussionSection from '#lib/features/item/discussion/ItemDiscussionSection.svelte';
+	import ItemSectionState from '#lib/features/item/ItemSectionState.svelte';
+	import { itemDiscussionQuery } from '#lib/features/item/queries.js';
+	import { t } from '#lib/i18n.js';
+	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import type { PageProps } from './$types';
 
 	let { params }: PageProps = $props();

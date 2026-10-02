@@ -3,12 +3,12 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import type { Snippet } from 'svelte';
-	import Button from '$lib/design/Button.svelte';
-	import Panel from '$lib/design/Panel.svelte';
-	import SectionHeader from '$lib/design/SectionHeader.svelte';
-	import SectionTab from '$lib/design/SectionTab.svelte';
-	import SectionTabs from '$lib/design/SectionTabs.svelte';
-	import { msg, t, type MessageKey } from '$lib/i18n';
+	import Button from '#lib/design/Button.svelte';
+	import Panel from '#lib/design/Panel.svelte';
+	import SectionHeader from '#lib/design/SectionHeader.svelte';
+	import SectionTab from '#lib/design/SectionTab.svelte';
+	import SectionTabs from '#lib/design/SectionTabs.svelte';
+	import { msg, t, type MessageKey } from '#lib/i18n.js';
 	import { setAdminFilters } from './filters';
 	import type { AdminFilters, AdminSection } from './queries';
 
@@ -67,10 +67,15 @@
 		appliedFilterB = '';
 		adminPage = 1;
 	}
-	beforeNavigate(() => clearFilters());
+
+	beforeNavigate(({ shallow }) => {
+		if (shallow) return;
+
+		return clearFilters();
+	});
 
 	function sectionPath(key: AdminSection) {
-		return key === 'overview' ? ('/admin' as const) : (`/admin/${key}` as const);
+		return key === 'overview' ? ('admin' as const) : (`admin/${key}` as const);
 	}
 </script>
 

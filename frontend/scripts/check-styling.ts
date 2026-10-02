@@ -70,7 +70,7 @@ const allowedSelectors = new Set([...baseSelectors, ...legacySelectors]);
 for (const selector of selectors) {
 	if (!allowedSelectors.has(selector)) {
 		findings.push(
-			`${appStylesheet}: global selector "${selector}" is not allowed; use a design token, a Tailwind utility, or a $lib/design component`
+			`${appStylesheet}: global selector "${selector}" is not allowed; use a design token, a Tailwind utility, or a #lib/design component`
 		);
 	}
 }
@@ -95,7 +95,7 @@ for (const file of svelteFiles(sourceDirectory)) {
 	if (file.startsWith(designDirectory)) continue;
 	for (const match of contents.matchAll(primitivePattern)) {
 		findings.push(
-			`${file}: Skeleton primitive "${match[0]}" must live inside a $lib/design component`
+			`${file}: Skeleton primitive "${match[0]}" must live inside a #lib/design component`
 		);
 	}
 	for (const match of contents.matchAll(/class="([^"]*)"/g)) {

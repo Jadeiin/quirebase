@@ -1,7 +1,7 @@
 import { mutationOptions, type QueryClient } from '@tanstack/svelte-query';
-import { createWorkspaceApi } from '$lib/api/client';
-import { invalidateItemFiles } from '$lib/query/invalidation';
-import { workspaceKeys } from '$lib/workspaces/keys';
+import { createWorkspaceApi } from '#lib/api/client.js';
+import { invalidateItemFiles } from '#lib/query/invalidation.js';
+import { workspaceKeys } from '#lib/workspaces/keys.js';
 import type { FileRow } from '../types';
 
 export type FileUploadMutation = {

@@ -3,21 +3,24 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { apiRequest } from '$lib/api/client';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import Button from '$lib/design/Button.svelte';
-	import Notice from '$lib/design/Notice.svelte';
-	import { t } from '$lib/i18n';
-	import { getSession } from '$lib/session';
-	import { workspaceKeys } from '$lib/workspaces/keys';
-	import { workspaceHref } from '$lib/workspaces/href';
+	import { apiRequest } from '#lib/api/client.js';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import Button from '#lib/design/Button.svelte';
+	import Notice from '#lib/design/Notice.svelte';
+	import { t } from '#lib/i18n.js';
+	import { getSession } from '#lib/session.js';
+	import { workspaceKeys } from '#lib/workspaces/keys.js';
+	import { workspaceHref } from '#lib/workspaces/href.js';
 	import {
 		clearDefaultWorkspacePreference,
 		defaultWorkspacePreference,
 		setDefaultWorkspacePreference
-	} from '$lib/workspaces/preference';
-	import { workspaceCreationAvailabilityQuery, workspaceListQuery } from '$lib/workspaces/queries';
-	import { domainLabel } from '$lib/domain-labels';
+	} from '#lib/workspaces/preference.js';
+	import {
+		workspaceCreationAvailabilityQuery,
+		workspaceListQuery
+	} from '#lib/workspaces/queries.js';
+	import { domainLabel } from '#lib/domain-labels.js';
 
 	const workspaces = createQuery(() => workspaceListQuery());
 	const creation = createQuery(() => workspaceCreationAvailabilityQuery());
@@ -76,7 +79,7 @@
 				!needsOwnerUsername || requestedOwner === session.data?.user?.username;
 			if (createdForCurrentUser) {
 				setDefaultWorkspacePreference(created.id);
-				await goto(resolve(workspaceHref(created.id)), { replaceState: true });
+				await goto(resolve(workspaceHref(created.id)), { replace: true });
 			} else {
 				name = '';
 				ownerUsername = '';

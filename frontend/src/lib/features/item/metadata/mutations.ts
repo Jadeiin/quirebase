@@ -1,8 +1,8 @@
 import { mutationOptions, type QueryClient } from '@tanstack/svelte-query';
-import { createWorkspaceApi } from '$lib/api/client';
-import type { components } from '$lib/api/schema';
-import { invalidateItem } from '$lib/query/invalidation';
-import { workspaceKeys } from '$lib/workspaces/keys';
+import { createWorkspaceApi } from '#lib/api/client.js';
+import type { components } from '#lib/api/schema.js';
+import { invalidateItem } from '#lib/query/invalidation.js';
+import { workspaceKeys } from '#lib/workspaces/keys.js';
 import type { ItemDetail } from '../types';
 
 export type MetadataMutation = {

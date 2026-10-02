@@ -3,15 +3,15 @@
 	import { resolve } from '$app/paths';
 	import { Menu, Portal } from '@skeletonlabs/skeleton-svelte';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { isDownloadCancelled } from '$lib/api/client';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import Icon from '$lib/design/Icon.svelte';
-	import RichText from '$lib/design/RichText.svelte';
-	import { pdfViewerQuery } from '$lib/features/pdf-reader/queries';
-	import { t } from '$lib/i18n';
-	import EmbeddedPdfViewer from '$lib/pdf/EmbeddedPdfViewer.svelte';
-	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
-	import { workspaceHref } from '$lib/workspaces/href';
+	import { isDownloadCancelled } from '#lib/api/client.js';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import Icon from '#lib/design/Icon.svelte';
+	import RichText from '#lib/design/RichText.svelte';
+	import { pdfViewerQuery } from '#lib/features/pdf-reader/queries.js';
+	import { t } from '#lib/i18n.js';
+	import EmbeddedPdfViewer from '#lib/pdf/EmbeddedPdfViewer.svelte';
+	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
+	import { workspaceHref } from '#lib/workspaces/href.js';
 
 	let { itemId, revisionId } = $props<{ itemId: string; revisionId: string }>();
 	const workspace = getWorkspaceContext();

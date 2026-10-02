@@ -1,10 +1,10 @@
 <script lang="ts">
-	import ItemRow from '$lib/design/ItemRow.svelte';
-	import Panel from '$lib/design/Panel.svelte';
-	import Stat from '$lib/design/Stat.svelte';
-	import { dateTimeFormat } from '$lib/format';
-	import { t } from '$lib/i18n';
-	import type { components } from '$lib/api/schema';
+	import ItemRow from '#lib/design/ItemRow.svelte';
+	import Panel from '#lib/design/Panel.svelte';
+	import Stat from '#lib/design/Stat.svelte';
+	import { dateTimeFormat } from '#lib/format.js';
+	import { t } from '#lib/i18n.js';
+	import type { components } from '#lib/api/schema.js';
 
 	let { overview } = $props<{ overview: components['schemas']['AdminOverviewView'] }>();
 </script>

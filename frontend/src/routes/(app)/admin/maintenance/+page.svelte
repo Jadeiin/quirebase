@@ -1,15 +1,15 @@
 <script lang="ts">
 	import { createMutation, createQuery } from '@tanstack/svelte-query';
-	import { apiRequest } from '$lib/api/client';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import AdminMaintenance from '$lib/features/admin/AdminMaintenance.svelte';
-	import AdminNotices from '$lib/features/admin/AdminNotices.svelte';
-	import AdminSectionState from '$lib/features/admin/AdminSectionState.svelte';
-	import { getAdminFilters } from '$lib/features/admin/filters';
-	import { adminMutationOptions } from '$lib/features/admin/mutations';
-	import { adminMaintenanceQuery } from '$lib/features/admin/queries';
-	import { getWorkflowCenter } from '$lib/features/workflows/center.svelte';
-	import { msg, t, type MessageKey } from '$lib/i18n';
+	import { apiRequest } from '#lib/api/client.js';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import AdminMaintenance from '#lib/features/admin/AdminMaintenance.svelte';
+	import AdminNotices from '#lib/features/admin/AdminNotices.svelte';
+	import AdminSectionState from '#lib/features/admin/AdminSectionState.svelte';
+	import { getAdminFilters } from '#lib/features/admin/filters.js';
+	import { adminMutationOptions } from '#lib/features/admin/mutations.js';
+	import { adminMaintenanceQuery } from '#lib/features/admin/queries.js';
+	import { getWorkflowCenter } from '#lib/features/workflows/center.svelte.js';
+	import { msg, t, type MessageKey } from '#lib/i18n.js';
 
 	let error = $state('');
 	let notice = $state<MessageKey | null>(null);

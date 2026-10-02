@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { provideWorkspaceContext } from '$lib/workspaces/context.svelte';
-	import type { WorkspaceView } from '$lib/api/client';
+	import { provideWorkspaceContext } from '#lib/workspaces/context.svelte.js';
+	import type { WorkspaceView } from '#lib/api/client.js';
 
 	let { workspaceId, view, children } = $props<{
 		workspaceId: string;

@@ -3,12 +3,12 @@
 	import { resolve } from '$app/paths';
 	import { Menu, Portal } from '@skeletonlabs/skeleton-svelte';
 	import { createQuery } from '@tanstack/svelte-query';
-	import Icon from '$lib/design/Icon.svelte';
-	import { domainLabel } from '$lib/domain-labels';
-	import { t } from '$lib/i18n';
-	import { workspaceHref } from '$lib/workspaces/href';
-	import { workspaceListQuery } from '$lib/workspaces/queries';
-	import { setDefaultWorkspacePreference } from '$lib/workspaces/preference';
+	import Icon from '#lib/design/Icon.svelte';
+	import { domainLabel } from '#lib/domain-labels.js';
+	import { t } from '#lib/i18n.js';
+	import { workspaceHref } from '#lib/workspaces/href.js';
+	import { workspaceListQuery } from '#lib/workspaces/queries.js';
+	import { setDefaultWorkspacePreference } from '#lib/workspaces/preference.js';
 
 	let {
 		workspaceId,
@@ -95,9 +95,10 @@
 				<Menu.Item
 					value="manage-workspaces"
 					class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
-					onclick={() => goto(resolve('/workspace'))}
-					><Icon name="panel" /> {$t('Manage workspaces')}</Menu.Item
+					onclick={() => goto(resolve('workspace'))}
+					><Icon name="panel" />{$t('Manage workspaces')}</Menu.Item
 				>
+
 				{#if workspaceId}
 					<Menu.Item
 						value="workspace-settings"

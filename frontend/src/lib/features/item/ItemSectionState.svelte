@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { t } from '$lib/i18n';
+	import { t } from '#lib/i18n.js';
 
 	let { loading, failed, children } = $props<{
 		loading: boolean;

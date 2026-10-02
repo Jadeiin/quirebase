@@ -1,18 +1,18 @@
 <script lang="ts">
 	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import type { components } from '$lib/api/schema';
-	import { ApiError } from '$lib/api/client';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import { can } from '$lib/authorization/can';
-	import Notice from '$lib/design/Notice.svelte';
-	import ItemSectionState from '$lib/features/item/ItemSectionState.svelte';
-	import ItemMetadataSection from '$lib/features/item/metadata/ItemMetadataSection.svelte';
-	import { metadataMutationOptions } from '$lib/features/item/metadata/mutations';
-	import { itemDetailsQuery, itemOverviewQuery } from '$lib/features/item/queries';
-	import type { ItemDetail } from '$lib/features/item/types';
-	import { t } from '$lib/i18n';
+	import type { components } from '#lib/api/schema.js';
+	import { ApiError } from '#lib/api/client.js';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import { can } from '#lib/authorization/can.js';
+	import Notice from '#lib/design/Notice.svelte';
+	import ItemSectionState from '#lib/features/item/ItemSectionState.svelte';
+	import ItemMetadataSection from '#lib/features/item/metadata/ItemMetadataSection.svelte';
+	import { metadataMutationOptions } from '#lib/features/item/metadata/mutations.js';
+	import { itemDetailsQuery, itemOverviewQuery } from '#lib/features/item/queries.js';
+	import type { ItemDetail } from '#lib/features/item/types.js';
+	import { t } from '#lib/i18n.js';
 	import type { PageProps } from './$types';
-	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
+	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 
 	let { params }: PageProps = $props();
 	let mutationError = $state('');

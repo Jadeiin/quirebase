@@ -1,11 +1,11 @@
 <script lang="ts">
-	import Panel from '$lib/design/Panel.svelte';
-	import { domainLabel } from '$lib/domain-labels';
-	import { megabytes, numberFormat } from '$lib/format';
-	import { t, type MessageKey } from '$lib/i18n';
-	import type { components } from '$lib/api/schema';
-	import Button from '$lib/design/Button.svelte';
-	import ItemRow from '$lib/design/ItemRow.svelte';
+	import Panel from '#lib/design/Panel.svelte';
+	import { domainLabel } from '#lib/domain-labels.js';
+	import { megabytes, numberFormat } from '#lib/format.js';
+	import { t, type MessageKey } from '#lib/i18n.js';
+	import type { components } from '#lib/api/schema.js';
+	import Button from '#lib/design/Button.svelte';
+	import ItemRow from '#lib/design/ItemRow.svelte';
 
 	type Workflow = components['schemas']['WorkflowSummaryView'];
 	type Operation = 'check_objects';

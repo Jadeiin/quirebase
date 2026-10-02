@@ -5,19 +5,19 @@
 	import { useQueryClient } from '@tanstack/svelte-query';
 	import { onDestroy, onMount } from 'svelte';
 	import { SvelteMap } from 'svelte/reactivity';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import type { components } from '$lib/api/schema';
-	import Panel from '$lib/design/Panel.svelte';
-	import Notice from '$lib/design/Notice.svelte';
-	import ImportBatchPreview from '$lib/features/import/ImportBatchPreview.svelte';
-	import ImportSourceForm from '$lib/features/import/ImportSourceForm.svelte';
-	import ItemMetadataForm from '$lib/features/item/ItemMetadataForm.svelte';
-	import { getWorkflowCenter } from '$lib/features/workflows/center.svelte';
-	import { invalidateLibrary } from '$lib/query/invalidation';
-	import { msg, t } from '$lib/i18n';
-	import Button from '$lib/design/Button.svelte';
-	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
-	import { workspaceHref } from '$lib/workspaces/href';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import type { components } from '#lib/api/schema.js';
+	import Panel from '#lib/design/Panel.svelte';
+	import Notice from '#lib/design/Notice.svelte';
+	import ImportBatchPreview from '#lib/features/import/ImportBatchPreview.svelte';
+	import ImportSourceForm from '#lib/features/import/ImportSourceForm.svelte';
+	import ItemMetadataForm from '#lib/features/item/ItemMetadataForm.svelte';
+	import { getWorkflowCenter } from '#lib/features/workflows/center.svelte.js';
+	import { invalidateLibrary } from '#lib/query/invalidation.js';
+	import { msg, t } from '#lib/i18n.js';
+	import Button from '#lib/design/Button.svelte';
+	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
+	import { workspaceHref } from '#lib/workspaces/href.js';
 
 	type ImportBatch = components['schemas']['ImportBatchView'];
 

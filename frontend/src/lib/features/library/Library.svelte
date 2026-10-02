@@ -4,30 +4,30 @@
 	import { page } from '$app/state';
 	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
-	import { isDownloadCancelled } from '$lib/api/client';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import ConfirmDialog from '$lib/design/ConfirmDialog.svelte';
-	import StatusNotice from '$lib/design/StatusNotice.svelte';
-	import BulkActions from '$lib/features/library/BulkActions.svelte';
-	import LibraryFilters from '$lib/features/library/LibraryFilters.svelte';
-	import LibraryResults from '$lib/features/library/LibraryResults.svelte';
+	import { isDownloadCancelled } from '#lib/api/client.js';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import ConfirmDialog from '#lib/design/ConfirmDialog.svelte';
+	import StatusNotice from '#lib/design/StatusNotice.svelte';
+	import BulkActions from '#lib/features/library/BulkActions.svelte';
+	import LibraryFilters from '#lib/features/library/LibraryFilters.svelte';
+	import LibraryResults from '#lib/features/library/LibraryResults.svelte';
 	import {
 		libraryBulkMutationOptions,
 		type LibraryBulkAction
-	} from '$lib/features/library/mutations';
-	import { libraryListQuery } from '$lib/features/library/queries';
-	import { projectListQuery } from '$lib/features/projects/queries';
-	import { tagsQuery } from '$lib/features/tags/queries';
-	import { getSession } from '$lib/session';
+	} from '#lib/features/library/mutations.js';
+	import { libraryListQuery } from '#lib/features/library/queries.js';
+	import { projectListQuery } from '#lib/features/projects/queries.js';
+	import { tagsQuery } from '#lib/features/tags/queries.js';
+	import { getSession } from '#lib/session.js';
 	import {
 		defaultExportPreferences,
 		readExportPreferences,
 		type ExportPreferences
-	} from '$lib/export-preferences';
-	import { t } from '$lib/i18n';
-	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
-	import { canRunBulkAction } from '$lib/workspaces/actions';
-	import { workspaceHref } from '$lib/workspaces/href';
+	} from '#lib/export-preferences.js';
+	import { t } from '#lib/i18n.js';
+	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
+	import { canRunBulkAction } from '#lib/workspaces/actions.js';
+	import { workspaceHref } from '#lib/workspaces/href.js';
 
 	const submitted = $derived({
 		query: page.url.searchParams.get('q')?.trim() ?? '',
@@ -115,8 +115,7 @@
 		const values = parameters(nextPage).toString();
 		selected.clear();
 		void goto(resolve(workspaceHref(workspaceId, values ? `library?${values}` : 'library')), {
-			keepFocus: true,
-			noScroll: true
+			reset: false
 		});
 	}
 

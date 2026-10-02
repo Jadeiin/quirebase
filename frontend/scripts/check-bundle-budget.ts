@@ -17,7 +17,7 @@ const outputDirectory = '.svelte-kit/output/client';
 const manifest = JSON.parse(
 	readFileSync(join(outputDirectory, '.vite/manifest.json'), 'utf8')
 ) as Record<string, ManifestEntry>;
-const generatedApp = readFileSync('.svelte-kit/generated/client/app.js', 'utf8');
+const generatedApp = readFileSync('.svelte-kit/generated/build/client/app.js', 'utf8');
 
 function manifestKeyByName(name: string): string {
 	const match = Object.entries(manifest).find(([, entry]) => entry.name === name);
@@ -33,9 +33,7 @@ function routeNodes(route: string): string[] {
 		.split(',')
 		.map((value) => value.trim())
 		.filter(Boolean);
-	return [0, ...layouts, match[1]].map(
-		(index) => `.svelte-kit/generated/client-optimized/nodes/${index}.js`
-	);
+	return [0, ...layouts, match[1]].map((index) => manifestKeyByName(`nodes/${index}`));
 }
 
 function dependencyGraph(roots: string[], includeDynamicImports: boolean): Set<string> {
@@ -118,93 +116,95 @@ if (dashboardPdfDependencies.length) {
 	);
 }
 
+// SvelteKit 3 adds about 12.3 KiB raw / 4.6 KiB gzip to the shared client runtime.
+// Route budgets retain their previous headroom plus 13,000 raw / 5,000 gzip bytes.
 enforce('Application shell', bundleSize(graphFiles(dashboard)), {
-	raw: 520000,
-	gzip: 163000
+	raw: 533000,
+	gzip: 168000
 });
 enforce('Library route', routeBundle('/(app)/workspace/[workspaceId]/library'), {
-	raw: 570000,
-	gzip: 182000
+	raw: 583000,
+	gzip: 187000
 });
 enforce('Import route', routeBundle('/(app)/workspace/[workspaceId]/import'), {
-	raw: 560000,
-	gzip: 178000
+	raw: 573000,
+	gzip: 183000
 });
 enforce(
 	'Item overview route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)'),
 	{
-		raw: 575000,
-		gzip: 182000
+		raw: 588000,
+		gzip: 187000
 	}
 );
 enforce(
 	'Item metadata route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/metadata'),
 	{
-		raw: 585000,
-		gzip: 185000
+		raw: 598000,
+		gzip: 190000
 	}
 );
 enforce(
 	'Item files route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/files'),
 	{
-		raw: 580000,
-		gzip: 185000
+		raw: 593000,
+		gzip: 190000
 	}
 );
 enforce(
 	'Item organize route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/organize'),
 	{
-		raw: 580000,
-		gzip: 183000
+		raw: 593000,
+		gzip: 188000
 	}
 );
 enforce(
 	'Item annotations route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/annotations'),
 	{
-		raw: 570000,
-		gzip: 181000
+		raw: 583000,
+		gzip: 186000
 	}
 );
 enforce(
 	'Item discussion route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion'),
 	{
-		raw: 575000,
-		gzip: 182000
+		raw: 588000,
+		gzip: 187000
 	}
 );
 enforce('Admin overview route', routeBundle('/(app)/admin'), {
-	raw: 535000,
-	gzip: 170000
+	raw: 548000,
+	gzip: 175000
 });
 enforce('Admin users route', routeBundle('/(app)/admin/users'), {
-	raw: 545000,
-	gzip: 174000
-});
-enforce('Admin workspaces route', routeBundle('/(app)/admin/workspaces'), {
-	raw: 555000,
+	raw: 558000,
 	gzip: 179000
 });
+enforce('Admin workspaces route', routeBundle('/(app)/admin/workspaces'), {
+	raw: 568000,
+	gzip: 184000
+});
 enforce('Admin audit route', routeBundle('/(app)/admin/audit'), {
-	raw: 536000,
-	gzip: 171000
+	raw: 549000,
+	gzip: 176000
 });
 enforce('Admin workflows route', routeBundle('/(app)/admin/workflows'), {
-	raw: 533000,
-	gzip: 170000
+	raw: 546000,
+	gzip: 175000
 });
 enforce('Admin settings route', routeBundle('/(app)/admin/settings'), {
-	raw: 537000,
-	gzip: 172000
+	raw: 550000,
+	gzip: 177000
 });
 enforce('Admin maintenance route', routeBundle('/(app)/admin/maintenance'), {
-	raw: 539000,
-	gzip: 173000
+	raw: 552000,
+	gzip: 178000
 });
 enforce('PDF reader route', bundleSize(graphFiles(pdfReader)), {
 	raw: 8_000_000,

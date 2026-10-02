@@ -1,15 +1,15 @@
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
-	import { apiRequest } from '$lib/api/client';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import AuthPage from '$lib/design/AuthPage.svelte';
-	import Panel from '$lib/design/Panel.svelte';
-	import { invitationQuery } from '$lib/features/auth/queries';
-	import { t } from '$lib/i18n';
-	import { domainLabel } from '$lib/domain-labels';
-	import Button from '$lib/design/Button.svelte';
-	import { sessionQuery } from '$lib/session';
-	import { setDefaultWorkspacePreference } from '$lib/workspaces/preference';
+	import { apiRequest } from '#lib/api/client.js';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import AuthPage from '#lib/design/AuthPage.svelte';
+	import Panel from '#lib/design/Panel.svelte';
+	import { invitationQuery } from '#lib/features/auth/queries.js';
+	import { t } from '#lib/i18n.js';
+	import { domainLabel } from '#lib/domain-labels.js';
+	import Button from '#lib/design/Button.svelte';
+	import { sessionQuery } from '#lib/session.js';
+	import { setDefaultWorkspacePreference } from '#lib/workspaces/preference.js';
 	let { token } = $props<{ token: string }>();
 	let username = $state('');
 	let password = $state('');

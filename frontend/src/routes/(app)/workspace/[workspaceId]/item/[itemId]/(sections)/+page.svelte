@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
-	import ItemSectionState from '$lib/features/item/ItemSectionState.svelte';
-	import { itemDetailsQuery, itemOverviewQuery } from '$lib/features/item/queries';
-	import ItemOverviewSection from '$lib/features/item/overview/ItemOverviewSection.svelte';
+	import ItemSectionState from '#lib/features/item/ItemSectionState.svelte';
+	import { itemDetailsQuery, itemOverviewQuery } from '#lib/features/item/queries.js';
+	import ItemOverviewSection from '#lib/features/item/overview/ItemOverviewSection.svelte';
 	import type { PageProps } from './$types';
 
 	let { params }: PageProps = $props();

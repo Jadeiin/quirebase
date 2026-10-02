@@ -1,8 +1,8 @@
 <script lang="ts">
-	import Panel from '$lib/design/Panel.svelte';
-	import { t, type MessageKey } from '$lib/i18n';
-	import type { components } from '$lib/api/schema';
-	import Button from '$lib/design/Button.svelte';
+	import Panel from '#lib/design/Panel.svelte';
+	import { t, type MessageKey } from '#lib/i18n.js';
+	import type { components } from '#lib/api/schema.js';
+	import Button from '#lib/design/Button.svelte';
 
 	type Settings = components['schemas']['AdminSettingsView'];
 

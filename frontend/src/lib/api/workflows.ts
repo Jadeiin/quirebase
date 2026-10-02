@@ -1,7 +1,7 @@
-import { apiRequest } from '$lib/api/client';
-import { createWorkspaceApi } from '$lib/api/client';
-import { translate } from '$lib/i18n';
-import type { components } from '$lib/api/schema';
+import { apiRequest } from '#lib/api/client.js';
+import { createWorkspaceApi } from '#lib/api/client.js';
+import { translate } from '#lib/i18n.js';
+import type { components } from '#lib/api/schema.js';
 
 type WorkflowStatus = components['schemas']['WorkflowStatusView'];
 

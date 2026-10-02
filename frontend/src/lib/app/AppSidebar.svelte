@@ -2,14 +2,14 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { Menu, Portal } from '@skeletonlabs/skeleton-svelte';
-	import type { components } from '$lib/api/schema';
-	import { hasAllowedAction } from '$lib/authorization/can';
-	import Icon from '$lib/design/Icon.svelte';
-	import { domainLabel } from '$lib/domain-labels';
-	import { t } from '$lib/i18n';
+	import type { components } from '#lib/api/schema.js';
+	import { hasAllowedAction } from '#lib/authorization/can.js';
+	import Icon from '#lib/design/Icon.svelte';
+	import { domainLabel } from '#lib/domain-labels.js';
+	import { t } from '#lib/i18n.js';
 	import { navigation, themeOptions } from './navigation';
-	import { workspaceHref } from '$lib/workspaces/href';
-	import type { ThemePreference } from '$lib/theme';
+	import { workspaceHref } from '#lib/workspaces/href.js';
+	import type { ThemePreference } from '#lib/theme.js';
 	import WorkspaceMenu from './WorkspaceMenu.svelte';
 
 	let {
@@ -36,7 +36,11 @@
 	const navItems = $derived(
 		navigation.map(
 			([section, label, icon]) =>
-				[workspaceId ? workspaceHref(workspaceId, section) : '/workspace', label, icon] as const
+				[
+					workspaceId ? resolve(workspaceHref(workspaceId, section)) : resolve('workspace'),
+					label,
+					icon
+				] as const
 		)
 	);
 </script>
@@ -46,7 +50,9 @@
 >
 	<div class="flex items-center gap-1 pb-3">
 		<WorkspaceMenu {workspaceId} compact={collapsed} />
-		{#if !collapsed}<button
+
+		{#if !collapsed}
+			<button
 				type="button"
 				class="grid size-8 shrink-0 cursor-pointer grid-cols-1 place-items-center rounded-md border-0 bg-transparent text-surface-400 hover:bg-white/10 hover:text-white"
 				aria-label={$t('Collapse sidebar')}
@@ -64,20 +70,30 @@
 		{#each navItems as [route, label, icon] (label)}
 			<a
 				class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-surface-400 no-underline transition-colors hover:bg-white/9 hover:text-white aria-[current=page]:bg-white/10 aria-[current=page]:text-white"
-				href={resolve(route)}
+				href={route}
 				title={collapsed ? $t(label) : undefined}
 				aria-current={workspaceId && routeIsActive(route) ? 'page' : undefined}
-				><Icon name={icon} />{#if !collapsed}<span>{$t(label)}</span>{/if}</a
 			>
+				<Icon name={icon} />
+
+				{#if !collapsed}
+					<span>{$t(label)}</span>
+				{/if}
+			</a>
 		{/each}
 		{#if hasAllowedAction(user?.authorization)}
 			<a
 				class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-surface-400 no-underline transition-colors hover:bg-white/9 hover:text-white aria-[current=page]:bg-white/10 aria-[current=page]:text-white"
-				href={resolve('/admin')}
+				href={resolve('admin')}
 				title={collapsed ? $t('Administration') : undefined}
 				aria-current={routeIsActive('/admin') ? 'page' : undefined}
-				><Icon name="admin" />{#if !collapsed}<span>{$t('Administration')}</span>{/if}</a
 			>
+				<Icon name="admin" />
+
+				{#if !collapsed}
+					<span>{$t('Administration')}</span>
+				{/if}
+			</a>
 		{/if}
 	</nav>
 	<div class="mt-auto border-t border-white/12 pt-3.5">
@@ -105,9 +121,10 @@
 						<Menu.Item
 							value="account-settings"
 							class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
-							onclick={() => goto(resolve('/account'))}
-							><Icon name="user" /> {$t('Account settings')}</Menu.Item
+							onclick={() => goto(resolve('account'))}
+							><Icon name="user" />{$t('Account settings')}</Menu.Item
 						>
+
 						<Menu.Separator class="m-1 h-px bg-surface-300-700" />
 						<div
 							class="px-2.5 py-1.5 text-xs font-bold tracking-wide text-surface-600-400 uppercase"
@@ -120,11 +137,14 @@
 								class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none data-[active=true]:bg-primary-50-950 data-[active=true]:text-primary-800-200 data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
 								data-active={themePreference === preference}
 								onclick={() => onThemeChange(preference)}
-								><Icon name={icon} /><span>{$t(label)}</span
-								>{#if themePreference === preference}<span class="ml-auto" aria-hidden="true"
-										>✓</span
-									>{/if}</Menu.Item
 							>
+								<Icon name={icon} />
+								<span>{$t(label)}</span>
+
+								{#if themePreference === preference}
+									<span class="ml-auto" aria-hidden="true">✓</span>
+								{/if}
+							</Menu.Item>
 						{/each}
 						<Menu.Separator class="m-1 h-px bg-surface-300-700" />
 						<Menu.Item

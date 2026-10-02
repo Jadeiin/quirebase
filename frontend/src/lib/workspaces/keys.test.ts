@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { workspaceKeys } from '$lib/workspaces/keys';
+import { workspaceKeys } from '#lib/workspaces/keys.js';
 
 describe('workspaceKeys', () => {
 	it('isolates every resource and mutation by Workspace', () => {

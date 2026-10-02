@@ -4,16 +4,19 @@ import type {
 	AnnotationEvent,
 	PdfAnnotationObject
 } from '@embedpdf/svelte-pdf-viewer';
-import type { components } from '$lib/api/schema';
-import { canonicalAnnotationFromView, createAnnotationAdapter } from '$lib/pdf/annotation-adapter';
+import type { components } from '#lib/api/schema.js';
+import {
+	canonicalAnnotationFromView,
+	createAnnotationAdapter
+} from '#lib/pdf/annotation-adapter.js';
 import {
 	createAnnotationSync,
 	type AnnotationSources,
 	type AnnotationSyncStatus
-} from '$lib/pdf/annotation-sync.svelte';
+} from '#lib/pdf/annotation-sync.svelte.js';
 
 const { request } = vi.hoisted(() => ({ request: vi.fn() }));
-vi.mock('$lib/api/client', () => ({ createWorkspaceApi: () => ({ request }) }));
+vi.mock('#lib/api/client.js', () => ({ createWorkspaceApi: () => ({ request }) }));
 
 type AnnotationView = components['schemas']['AnnotationView'];
 const privateSource: AnnotationSources = { includePrivate: true, projectIds: [] };

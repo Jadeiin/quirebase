@@ -1,6 +1,6 @@
 import { queryOptions } from '@tanstack/svelte-query';
-import { createWorkspaceApi, type ItemOverviewView } from '$lib/api/client';
-import { workspaceKeys } from '$lib/workspaces/keys';
+import { createWorkspaceApi, type ItemOverviewView } from '#lib/api/client.js';
+import { workspaceKeys } from '#lib/workspaces/keys.js';
 
 export type ItemSection =
 	'overview' | 'metadata' | 'files' | 'organize' | 'annotations' | 'discussion';

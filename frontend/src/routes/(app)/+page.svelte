@@ -2,15 +2,15 @@
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { workspaceListQuery } from '$lib/workspaces/queries';
+	import { workspaceListQuery } from '#lib/workspaces/queries.js';
 	import {
 		clearDefaultWorkspacePreference,
 		defaultWorkspacePreference
-	} from '$lib/workspaces/preference';
-	import { workspaceHref } from '$lib/workspaces/href';
-	import Button from '$lib/design/Button.svelte';
-	import Notice from '$lib/design/Notice.svelte';
-	import { t } from '$lib/i18n';
+	} from '#lib/workspaces/preference.js';
+	import { workspaceHref } from '#lib/workspaces/href.js';
+	import Button from '#lib/design/Button.svelte';
+	import Notice from '#lib/design/Notice.svelte';
+	import { t } from '#lib/i18n.js';
 
 	const workspaces = createQuery(() => workspaceListQuery());
 
@@ -23,10 +23,10 @@
 		const destination = preferred ?? active[0];
 		if (preferredId && !preferred) clearDefaultWorkspacePreference();
 		if (destination) {
-			void goto(resolve(workspaceHref(destination.id)), { replaceState: true });
+			void goto(resolve(workspaceHref(destination.id)), { replace: true });
 			return;
 		}
-		void goto(resolve('/workspace'), { replaceState: true });
+		void goto(resolve('workspace'), { replace: true });
 	});
 </script>
 

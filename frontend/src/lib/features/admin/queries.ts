@@ -1,6 +1,6 @@
 import { queryOptions } from '@tanstack/svelte-query';
-import { apiRequest } from '$lib/api/client';
-import type { components } from '$lib/api/schema';
+import { apiRequest } from '#lib/api/client.js';
+import type { components } from '#lib/api/schema.js';
 
 export type AdminSection =
 	'overview' | 'users' | 'workspaces' | 'audit' | 'workflows' | 'settings' | 'maintenance';

@@ -1,20 +1,20 @@
 <script lang="ts">
 	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import Notice from '$lib/design/Notice.svelte';
-	import ItemSectionState from '$lib/features/item/ItemSectionState.svelte';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import Notice from '#lib/design/Notice.svelte';
+	import ItemSectionState from '#lib/features/item/ItemSectionState.svelte';
 	import {
 		addTagMutationOptions,
 		projectAssignmentMutationOptions,
 		suggestedTagMutationOptions,
 		tagRecommendationsMutationOptions,
 		toggleTagMutationOptions
-	} from '$lib/features/item/organize/mutations';
-	import ItemOrganizeSection from '$lib/features/item/organize/ItemOrganizeSection.svelte';
-	import { itemOrganizeQuery } from '$lib/features/item/queries';
-	import type { OrganizeView } from '$lib/features/item/types';
-	import { getWorkflowCenter } from '$lib/features/workflows/center.svelte';
-	import { msg, t } from '$lib/i18n';
+	} from '#lib/features/item/organize/mutations.js';
+	import ItemOrganizeSection from '#lib/features/item/organize/ItemOrganizeSection.svelte';
+	import { itemOrganizeQuery } from '#lib/features/item/queries.js';
+	import type { OrganizeView } from '#lib/features/item/types.js';
+	import { getWorkflowCenter } from '#lib/features/workflows/center.svelte.js';
+	import { msg, t } from '#lib/i18n.js';
 	import type { PageProps } from './$types';
 
 	let { params }: PageProps = $props();

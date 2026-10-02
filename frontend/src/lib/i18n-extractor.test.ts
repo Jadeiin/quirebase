@@ -3,7 +3,7 @@ import {
 	svelteExtractor,
 	typescriptExtractor,
 	type SvelteExtractedMessage
-} from '$lib/i18n-extractor';
+} from '#lib/i18n-extractor.js';
 
 function extract(source: string): SvelteExtractedMessage[] {
 	const messages: SvelteExtractedMessage[] = [];

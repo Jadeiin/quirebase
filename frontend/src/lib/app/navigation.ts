@@ -1,4 +1,4 @@
-import { msg, type MessageKey } from '$lib/i18n';
+import { msg, type MessageKey } from '#lib/i18n.js';
 
 export type NavigationPath =
 	'' | 'library' | 'import' | 'discovery' | 'projects' | 'tools' | '/workspace';

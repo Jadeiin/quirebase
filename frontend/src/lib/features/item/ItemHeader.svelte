@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import type { components } from '$lib/api/schema';
-	import RichText from '$lib/design/RichText.svelte';
-	import ItemActions from '$lib/features/item/ItemActions.svelte';
-	import { msg, t, type MessageKey } from '$lib/i18n';
+	import type { components } from '#lib/api/schema.js';
+	import RichText from '#lib/design/RichText.svelte';
+	import ItemActions from '#lib/features/item/ItemActions.svelte';
+	import { msg, t, type MessageKey } from '#lib/i18n.js';
 	import type { ItemOverview, ItemSection } from './queries';
-	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
-	import { workspaceHref } from '$lib/workspaces/href';
+	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
+	import { workspaceHref } from '#lib/workspaces/href.js';
 
 	let { itemId, overview, user, onChanged } = $props<{
 		itemId: string;

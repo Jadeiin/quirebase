@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { domainLabel } from '$lib/domain-labels';
-	import { can } from '$lib/authorization/can';
-	import Badge from '$lib/design/Badge.svelte';
-	import Panel from '$lib/design/Panel.svelte';
-	import { t } from '$lib/i18n';
-	import type { components } from '$lib/api/schema';
+	import { domainLabel } from '#lib/domain-labels.js';
+	import { can } from '#lib/authorization/can.js';
+	import Badge from '#lib/design/Badge.svelte';
+	import Panel from '#lib/design/Panel.svelte';
+	import { t } from '#lib/i18n.js';
+	import type { components } from '#lib/api/schema.js';
 	import type { OrganizeView } from '../types';
-	import Button from '$lib/design/Button.svelte';
+	import Button from '#lib/design/Button.svelte';
 
 	let { data, busy, onToggleProject, onAddTag, onToggleTag, onAddSuggestedTag, onRefresh } =
 		$props<{

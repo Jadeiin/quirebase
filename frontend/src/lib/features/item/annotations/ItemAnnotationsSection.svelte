@@ -1,22 +1,22 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { ApiError } from '$lib/api/client';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import type { components } from '$lib/api/schema';
-	import { can, type AuthorizationAction } from '$lib/authorization/can';
-	import ConfirmDialog from '$lib/design/ConfirmDialog.svelte';
-	import Notice from '$lib/design/Notice.svelte';
-	import { domainLabel } from '$lib/domain-labels';
-	import Panel from '$lib/design/Panel.svelte';
-	import Pagination from '$lib/design/Pagination.svelte';
-	import SectionHeader from '$lib/design/SectionHeader.svelte';
-	import { t } from '$lib/i18n';
-	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
-	import { workspaceHref } from '$lib/workspaces/href';
+	import { ApiError } from '#lib/api/client.js';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import type { components } from '#lib/api/schema.js';
+	import { can, type AuthorizationAction } from '#lib/authorization/can.js';
+	import ConfirmDialog from '#lib/design/ConfirmDialog.svelte';
+	import Notice from '#lib/design/Notice.svelte';
+	import { domainLabel } from '#lib/domain-labels.js';
+	import Panel from '#lib/design/Panel.svelte';
+	import Pagination from '#lib/design/Pagination.svelte';
+	import SectionHeader from '#lib/design/SectionHeader.svelte';
+	import { t } from '#lib/i18n.js';
+	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
+	import { workspaceHref } from '#lib/workspaces/href.js';
 	import { itemAnnotationsQuery } from '../queries';
-	import Button from '$lib/design/Button.svelte';
-	import ItemRow from '$lib/design/ItemRow.svelte';
+	import Button from '#lib/design/Button.svelte';
+	import ItemRow from '#lib/design/ItemRow.svelte';
 
 	let { itemId } = $props<{ itemId: string }>();
 	const { workspaceId } = getWorkspaceContext();

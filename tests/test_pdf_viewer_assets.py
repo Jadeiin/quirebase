@@ -69,7 +69,7 @@ def test_pdf_workspace_has_distinct_phone_information_architecture():
 
 
 def test_sveltekit_csp_allows_embedpdf_worker_without_remote_scripts():
-    config = read("frontend/svelte.config.js")
+    config = read("frontend/vite.config.ts")
     assert re.search(
         r"(['\"])worker-src\1\s*:\s*\[\s*(['\"])self\2\s*,\s*(['\"])blob:\3\s*\]",
         config,

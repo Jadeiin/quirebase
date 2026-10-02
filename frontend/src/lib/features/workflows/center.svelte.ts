@@ -1,8 +1,8 @@
 import { createContext } from 'svelte';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-import { waitForWorkflow } from '$lib/api/workflows';
-import { translate, type MessageKey } from '$lib/i18n';
-import { toaster } from '$lib/toaster';
+import { waitForWorkflow } from '#lib/api/workflows.js';
+import { translate, type MessageKey } from '#lib/i18n.js';
+import { toaster } from '#lib/toaster.js';
 import type { WorkflowStatus } from './queries';
 
 export type TrackedJob = {

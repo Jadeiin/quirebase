@@ -1,16 +1,16 @@
 <script lang="ts">
 	import { createMutation, createQuery } from '@tanstack/svelte-query';
-	import type { components } from '$lib/api/schema';
-	import { apiRequest } from '$lib/api/client';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import Pagination from '$lib/design/Pagination.svelte';
-	import AdminNotices from '$lib/features/admin/AdminNotices.svelte';
-	import AdminSectionState from '$lib/features/admin/AdminSectionState.svelte';
-	import AdminUsers from '$lib/features/admin/AdminUsers.svelte';
-	import { getAdminFilters } from '$lib/features/admin/filters';
-	import { adminMutationOptions } from '$lib/features/admin/mutations';
-	import { adminUsersQuery } from '$lib/features/admin/queries';
-	import { msg, t, type MessageKey } from '$lib/i18n';
+	import type { components } from '#lib/api/schema.js';
+	import { apiRequest } from '#lib/api/client.js';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import Pagination from '#lib/design/Pagination.svelte';
+	import AdminNotices from '#lib/features/admin/AdminNotices.svelte';
+	import AdminSectionState from '#lib/features/admin/AdminSectionState.svelte';
+	import AdminUsers from '#lib/features/admin/AdminUsers.svelte';
+	import { getAdminFilters } from '#lib/features/admin/filters.js';
+	import { adminMutationOptions } from '#lib/features/admin/mutations.js';
+	import { adminUsersQuery } from '#lib/features/admin/queries.js';
+	import { msg, t, type MessageKey } from '#lib/i18n.js';
 
 	type User = components['schemas']['AdminUserView'];
 	type InvitationCreated = components['schemas']['AdminInvitationCreatedView'];

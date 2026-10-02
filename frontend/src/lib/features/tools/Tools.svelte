@@ -2,22 +2,26 @@
 	import { resolve } from '$app/paths';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { Tabs } from '@skeletonlabs/skeleton-svelte';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import { can, type AuthorizationDecisionSet } from '$lib/authorization/can';
-	import ConfirmDialog from '$lib/design/ConfirmDialog.svelte';
-	import Notice from '$lib/design/Notice.svelte';
-	import Panel from '$lib/design/Panel.svelte';
-	import Pagination from '$lib/design/Pagination.svelte';
-	import PromptDialog from '$lib/design/PromptDialog.svelte';
-	import RichText from '$lib/design/RichText.svelte';
-	import SectionHeader from '$lib/design/SectionHeader.svelte';
-	import { tagKeys, tagsQuery } from '$lib/features/tags/queries';
-	import { citationStylesQuery, duplicateScanQuery, toolKeys } from '$lib/features/tools/queries';
-	import { t } from '$lib/i18n';
-	import Button from '$lib/design/Button.svelte';
-	import ItemRow from '$lib/design/ItemRow.svelte';
-	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
-	import { workspaceHref } from '$lib/workspaces/href';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import { can, type AuthorizationDecisionSet } from '#lib/authorization/can.js';
+	import ConfirmDialog from '#lib/design/ConfirmDialog.svelte';
+	import Notice from '#lib/design/Notice.svelte';
+	import Panel from '#lib/design/Panel.svelte';
+	import Pagination from '#lib/design/Pagination.svelte';
+	import PromptDialog from '#lib/design/PromptDialog.svelte';
+	import RichText from '#lib/design/RichText.svelte';
+	import SectionHeader from '#lib/design/SectionHeader.svelte';
+	import { tagKeys, tagsQuery } from '#lib/features/tags/queries.js';
+	import {
+		citationStylesQuery,
+		duplicateScanQuery,
+		toolKeys
+	} from '#lib/features/tools/queries.js';
+	import { t } from '#lib/i18n.js';
+	import Button from '#lib/design/Button.svelte';
+	import ItemRow from '#lib/design/ItemRow.svelte';
+	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
+	import { workspaceHref } from '#lib/workspaces/href.js';
 
 	type Tool = 'duplicates' | 'tags' | 'citation-styles';
 	type Tag = {

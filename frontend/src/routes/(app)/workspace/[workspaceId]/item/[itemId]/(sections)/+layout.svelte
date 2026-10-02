@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import ItemHeader from '$lib/features/item/ItemHeader.svelte';
-	import { itemOverviewQuery } from '$lib/features/item/queries';
-	import { invalidateItem } from '$lib/query/invalidation';
-	import { getSession } from '$lib/session';
+	import ItemHeader from '#lib/features/item/ItemHeader.svelte';
+	import { itemOverviewQuery } from '#lib/features/item/queries.js';
+	import { invalidateItem } from '#lib/query/invalidation.js';
+	import { getSession } from '#lib/session.js';
 	import type { LayoutProps } from './$types';
 
 	let { params, children }: LayoutProps = $props();

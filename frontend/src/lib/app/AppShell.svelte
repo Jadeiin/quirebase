@@ -7,23 +7,23 @@
 		apiRequest,
 		onAuthenticationRequired,
 		onWorkspaceContextRequired
-	} from '$lib/api/client';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import Notice from '$lib/design/Notice.svelte';
-	import Button from '$lib/design/Button.svelte';
-	import Toast from '$lib/design/Toast.svelte';
-	import { t } from '$lib/i18n';
-	import Login from '$lib/features/auth/Login.svelte';
-	import { sessionQuery, setSession } from '$lib/session';
-	import { WorkflowCenter, setWorkflowCenter } from '$lib/features/workflows/center.svelte';
-	import { localStorageWorkflowLedger } from '$lib/features/workflows/ledger';
-	import WorkflowTray from '$lib/features/workflows/WorkflowTray.svelte';
+	} from '#lib/api/client.js';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import Notice from '#lib/design/Notice.svelte';
+	import Button from '#lib/design/Button.svelte';
+	import Toast from '#lib/design/Toast.svelte';
+	import { t } from '#lib/i18n.js';
+	import Login from '#lib/features/auth/Login.svelte';
+	import { sessionQuery, setSession } from '#lib/session.js';
+	import { WorkflowCenter, setWorkflowCenter } from '#lib/features/workflows/center.svelte.js';
+	import { localStorageWorkflowLedger } from '#lib/features/workflows/ledger.js';
+	import WorkflowTray from '#lib/features/workflows/WorkflowTray.svelte';
 	import {
 		applyTheme,
 		readThemePreference,
 		saveThemePreference,
 		type ThemePreference
-	} from '$lib/theme';
+	} from '#lib/theme.js';
 	import AppSidebar from './AppSidebar.svelte';
 	import MobileNavigation from './MobileNavigation.svelte';
 	import WorkspaceMenu from './WorkspaceMenu.svelte';
@@ -41,6 +41,7 @@
 		ledgerUserId = userId;
 		workflowCenter.bindLedger(localStorageWorkflowLedger(userId));
 	});
+
 	const routeIsActive = (route: string) =>
 		isRouteActive(
 			page.url.pathname,
@@ -118,7 +119,7 @@
 		<WorkspaceMenu workspaceId={page.params.workspaceId} mobile />
 		<a
 			class="grid size-8 grid-cols-1 place-items-center rounded-full bg-primary-100 font-extrabold text-primary-800 no-underline"
-			href={resolve('/account')}>{session.data.user?.username.slice(0, 1).toUpperCase()}</a
+			href={resolve('account')}>{session.data.user?.username.slice(0, 1).toUpperCase()}</a
 		>
 	</div>
 	<div

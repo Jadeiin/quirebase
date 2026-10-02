@@ -1,7 +1,7 @@
 import { queryOptions } from '@tanstack/svelte-query';
-import { createWorkspaceApi } from '$lib/api/client';
-import type { components } from '$lib/api/schema';
-import { workspaceKeys } from '$lib/workspaces/keys';
+import { createWorkspaceApi } from '#lib/api/client.js';
+import type { components } from '#lib/api/schema.js';
+import { workspaceKeys } from '#lib/workspaces/keys.js';
 
 export type LibraryFilters = {
 	query: string;

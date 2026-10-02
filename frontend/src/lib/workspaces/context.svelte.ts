@@ -1,6 +1,6 @@
 import { createContext } from 'svelte';
-import { createWorkspaceApi, type WorkspaceView } from '$lib/api/client';
-import { can, type AuthorizationAction } from '$lib/authorization/can';
+import { createWorkspaceApi, type WorkspaceView } from '#lib/api/client.js';
+import { can, type AuthorizationAction } from '#lib/authorization/can.js';
 
 export type WorkspaceContext = {
 	workspaceId: string;

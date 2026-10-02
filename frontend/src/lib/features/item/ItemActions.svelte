@@ -5,25 +5,25 @@
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { onMount } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { ApiError, isDownloadCancelled, type ItemOverviewView } from '$lib/api/client';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import { can } from '$lib/authorization/can';
-	import Button from '$lib/design/Button.svelte';
-	import DialogCloseButton from '$lib/design/DialogCloseButton.svelte';
-	import Icon from '$lib/design/Icon.svelte';
-	import Notice from '$lib/design/Notice.svelte';
-	import { domainLabel } from '$lib/domain-labels';
+	import { ApiError, isDownloadCancelled, type ItemOverviewView } from '#lib/api/client.js';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import { can } from '#lib/authorization/can.js';
+	import Button from '#lib/design/Button.svelte';
+	import DialogCloseButton from '#lib/design/DialogCloseButton.svelte';
+	import Icon from '#lib/design/Icon.svelte';
+	import Notice from '#lib/design/Notice.svelte';
+	import { domainLabel } from '#lib/domain-labels.js';
 	import {
 		defaultExportPreferences,
 		readExportPreferences,
 		type ExportPreferences
-	} from '$lib/export-preferences';
-	import { itemFilesQuery } from '$lib/features/item/queries';
-	import { invalidateLibrary } from '$lib/query/invalidation';
-	import { t } from '$lib/i18n';
-	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
-	import { workspaceHref } from '$lib/workspaces/href';
-	import { workspaceKeys } from '$lib/workspaces/keys';
+	} from '#lib/export-preferences.js';
+	import { itemFilesQuery } from '#lib/features/item/queries.js';
+	import { invalidateLibrary } from '#lib/query/invalidation.js';
+	import { t } from '#lib/i18n.js';
+	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
+	import { workspaceHref } from '#lib/workspaces/href.js';
+	import { workspaceKeys } from '#lib/workspaces/keys.js';
 
 	type ActionSection = 'documents' | 'citation' | 'sources' | 'danger' | 'copy';
 
@@ -322,26 +322,38 @@
 						data-active={section === 'citation'}
 						onclick={() => (section = 'citation')}>{$t('Citation')}</button
 					>
-					{#if copyDestinations.length}<button
+
+					{#if copyDestinations.length}
+						<button
 							class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold data-[active=true]:border-primary-700-300 data-[active=true]:text-primary-700-300"
 							data-active={section === 'copy'}
 							onclick={() => (section = 'copy')}>{$t('Copy')}</button
-						>{/if}
-					{#if overview.latest_revision && can(overview.authorization, 'workspace.export')}<button
+						>
+					{/if}
+
+					{#if overview.latest_revision && can(overview.authorization, 'workspace.export')}
+						<button
 							class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold data-[active=true]:border-primary-700-300 data-[active=true]:text-primary-700-300"
 							data-active={section === 'documents'}
 							onclick={() => (section = 'documents')}>{$t('Documents')}</button
-						>{/if}
-					{#if can(overview.authorization, 'item.update')}<button
+						>
+					{/if}
+
+					{#if can(overview.authorization, 'item.update')}
+						<button
 							class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold data-[active=true]:border-primary-700-300 data-[active=true]:text-primary-700-300"
 							data-active={section === 'sources'}
 							onclick={() => (section = 'sources')}>{$t('Metadata sources')}</button
-						>{/if}
-					{#if can(overview.authorization, 'item.delete')}<button
+						>
+					{/if}
+
+					{#if can(overview.authorization, 'item.delete')}
+						<button
 							class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold text-error-700-300 data-[active=true]:border-error-700-300"
 							data-active={section === 'danger'}
 							onclick={() => (section = 'danger')}>{$t('Danger zone')}</button
-						>{/if}
+						>
+					{/if}
 				</nav>
 				<div class="overflow-auto p-5">
 					{#if error}<Notice variant="error">{error}</Notice>{/if}
@@ -365,9 +377,11 @@
 							<div class="flex flex-wrap gap-2">
 								<Button variant="filled" disabled={busy} onclick={downloadBibliography}
 									>{$t('Download file')}</Button
-								><Button disabled={busy} onclick={copyBibliography}
-									>{$t('Copy to clipboard')}</Button
-								><Button onclick={() => goto(resolve('/account'))}>{$t('Export settings')}</Button>
+								>
+
+								<Button disabled={busy} onclick={copyBibliography}>{$t('Copy to clipboard')}</Button
+								>
+								<Button onclick={() => goto(resolve('account'))}>{$t('Export settings')}</Button>
 							</div>
 						</div>
 					{:else if section === 'copy'}
@@ -431,7 +445,7 @@
 									disabled={busy || selectedRevisions.size === 0}
 									onclick={downloadDocuments}>{$t('Download bundle')}</Button
 								>
-								<Button onclick={() => goto(resolve('/account'))}>{$t('Export settings')}</Button>
+								<Button onclick={() => goto(resolve('account'))}>{$t('Export settings')}</Button>
 							</div>
 						</div>
 					{:else if section === 'sources'}
@@ -508,6 +522,7 @@
 									<Button disabled={busy} onclick={() => (deleteArmed = false)}
 										>{$t('Cancel')}</Button
 									>
+
 									<Button variant="danger-filled" disabled={busy} onclick={confirmDeleteItem}
 										>{$t('Delete Item permanently')}</Button
 									>

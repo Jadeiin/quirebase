@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import EmptyState from '$lib/design/EmptyState.svelte';
-	import Icon from '$lib/design/Icon.svelte';
-	import Panel from '$lib/design/Panel.svelte';
-	import RichText from '$lib/design/RichText.svelte';
-	import type { LibrarySearch } from '$lib/features/library/queries';
-	import { t } from '$lib/i18n';
-	import { workspaceHref } from '$lib/workspaces/href';
+	import EmptyState from '#lib/design/EmptyState.svelte';
+	import Icon from '#lib/design/Icon.svelte';
+	import Panel from '#lib/design/Panel.svelte';
+	import RichText from '#lib/design/RichText.svelte';
+	import type { LibrarySearch } from '#lib/features/library/queries.js';
+	import { t } from '#lib/i18n.js';
+	import { workspaceHref } from '#lib/workspaces/href.js';
 
 	let {
 		data,

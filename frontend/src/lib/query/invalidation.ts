@@ -1,8 +1,8 @@
 import type { QueryClient, QueryKey } from '@tanstack/svelte-query';
-import { dashboardKeys } from '$lib/features/dashboard/queries';
-import { itemKeys } from '$lib/features/item/queries';
-import { libraryKeys } from '$lib/features/library/queries';
-import { projectKeys } from '$lib/features/projects/queries';
+import { dashboardKeys } from '#lib/features/dashboard/queries.js';
+import { itemKeys } from '#lib/features/item/queries.js';
+import { libraryKeys } from '#lib/features/library/queries.js';
+import { projectKeys } from '#lib/features/projects/queries.js';
 
 async function invalidate(queryClient: QueryClient, keys: QueryKey[]) {
 	await Promise.all(keys.map((queryKey) => queryClient.invalidateQueries({ queryKey })));

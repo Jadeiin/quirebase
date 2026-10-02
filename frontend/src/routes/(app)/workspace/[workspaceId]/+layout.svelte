@@ -4,14 +4,14 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { onWorkspaceConflict, onWorkspaceUnavailable } from '$lib/api/client';
-	import { workspaceKeys } from '$lib/workspaces/keys';
-	import WorkspaceProvider from '$lib/workspaces/WorkspaceProvider.svelte';
-	import { workspaceListQuery, workspaceQuery } from '$lib/workspaces/queries';
-	import { clearDefaultWorkspacePreference } from '$lib/workspaces/preference';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import Notice from '$lib/design/Notice.svelte';
-	import { t } from '$lib/i18n';
+	import { onWorkspaceConflict, onWorkspaceUnavailable } from '#lib/api/client.js';
+	import { workspaceKeys } from '#lib/workspaces/keys.js';
+	import WorkspaceProvider from '#lib/workspaces/WorkspaceProvider.svelte';
+	import { workspaceListQuery, workspaceQuery } from '#lib/workspaces/queries.js';
+	import { clearDefaultWorkspacePreference } from '#lib/workspaces/preference.js';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import Notice from '#lib/design/Notice.svelte';
+	import { t } from '#lib/i18n.js';
 
 	let { children } = $props();
 	const workspaceId = $derived(page.params.workspaceId ?? '');
@@ -35,7 +35,7 @@
 				if (!stillAvailable) {
 					clearDefaultWorkspacePreference();
 					unavailable = true;
-					void goto(resolve('/workspace'), { replaceState: true });
+					void goto(resolve('workspace'), { replace: true });
 				} else {
 					recoveryStarted = false;
 				}
@@ -72,7 +72,7 @@
 			if (!stillAvailable) clearDefaultWorkspacePreference();
 			unavailable = !stillAvailable;
 			if (!stillAvailable) {
-				void goto(resolve('/workspace'), { replaceState: true });
+				void goto(resolve('workspace'), { replace: true });
 			} else {
 				recoveryStarted = false;
 			}
@@ -87,16 +87,21 @@
 			: apiErrorMessage(workspace.error, $t('Unable to load workspace.'))}</Notice
 	>
 {:else}
-	{#if workspace.data?.governance_suspended}<Notice variant="warning"
+	{#if workspace.data?.governance_suspended}
+		<Notice variant="warning"
 			>{$t(
 				'Workspace governance is suspended. Content is read only until an instance administrator recovers this Workspace.'
 			)}</Notice
-		>{:else if workspace.data?.state === 'archived'}<Notice
+		>
+	{:else if workspace.data?.state === 'archived'}
+		<Notice
 			>{$t(
 				'Archived workspace · read-only content. Workspace governance actions remain available according to policy.'
 			)}</Notice
-		>{/if}
-	{#key workspaceId}<WorkspaceProvider {workspaceId} view={workspace.data}
-			>{@render children()}</WorkspaceProvider
-		>{/key}
+		>
+	{/if}
+
+	{#key workspaceId}
+		<WorkspaceProvider {workspaceId} view={workspace.data}>{@render children()}</WorkspaceProvider>
+	{/key}
 {/if}

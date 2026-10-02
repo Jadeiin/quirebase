@@ -1,6 +1,6 @@
 import { queryOptions } from '@tanstack/svelte-query';
-import { createWorkspaceApi } from '$lib/api/client';
-import { workspaceKeys } from '$lib/workspaces/keys';
+import { createWorkspaceApi } from '#lib/api/client.js';
+import { workspaceKeys } from '#lib/workspaces/keys.js';
 
 export const pdfReaderKeys = {
 	all: (workspaceId: string) => [...workspaceKeys.root(workspaceId), 'pdf-reader'] as const,

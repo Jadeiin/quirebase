@@ -1,4 +1,4 @@
-import type { components } from '$lib/api/schema';
+import type { components } from '#lib/api/schema.js';
 
 export type AuthorizationAction =
 	components['schemas']['WorkspaceAuthorizationView']['allowed'][number];

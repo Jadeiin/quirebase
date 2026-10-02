@@ -83,6 +83,8 @@ test('PDF reader uses the built-in EmbedPDF viewer with Quirebase annotations', 
 });
 
 async function expectAnnotationMode(page: Page, editable: boolean) {
+	// Annotation data can settle before EmbedPDF mounts its responsive toolbar.
+	await expect(page.getByRole('button', { name: 'Document Menu' })).toBeVisible();
 	const modeSelector = page.locator('[data-epdf-i="mode-select-button"] button');
 	if (!(await modeSelector.isVisible())) {
 		const annotate = page.getByRole('button', { name: 'Annotate', exact: true });

@@ -5,19 +5,19 @@ import type {
 	PdfAnnotationObject
 } from '@embedpdf/svelte-pdf-viewer';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-import { createWorkspaceApi } from '$lib/api/client';
+import { createWorkspaceApi } from '#lib/api/client.js';
 import {
 	canonicalAnnotationFromView,
 	createAnnotationAdapter,
 	type CanonicalAnnotation,
 	type CanonicalReply
-} from '$lib/pdf/annotation-adapter';
+} from '#lib/pdf/annotation-adapter.js';
 import {
 	createWriteQueue,
 	createAnnotationReplyApi,
 	persistReplyEvent,
 	selectNativeAnnotationIds
-} from '$lib/pdf/annotation-writes';
+} from '#lib/pdf/annotation-writes.js';
 
 export type AnnotationSyncStatus =
 	| { state: 'loading' }

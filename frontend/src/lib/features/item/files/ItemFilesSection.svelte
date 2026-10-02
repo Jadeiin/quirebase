@@ -1,14 +1,14 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { domainLabel } from '$lib/domain-labels';
-	import { kilobytes, numberFormat } from '$lib/format';
-	import Panel from '$lib/design/Panel.svelte';
-	import { t } from '$lib/i18n';
+	import { domainLabel } from '#lib/domain-labels.js';
+	import { kilobytes, numberFormat } from '#lib/format.js';
+	import Panel from '#lib/design/Panel.svelte';
+	import { t } from '#lib/i18n.js';
 	import type { FileRow, FilesView, ItemDetail } from '../types';
-	import Button from '$lib/design/Button.svelte';
-	import ItemRow from '$lib/design/ItemRow.svelte';
-	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
-	import { workspaceHref } from '$lib/workspaces/href';
+	import Button from '#lib/design/Button.svelte';
+	import ItemRow from '#lib/design/ItemRow.svelte';
+	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
+	import { workspaceHref } from '#lib/workspaces/href.js';
 
 	let {
 		itemId,
