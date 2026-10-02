@@ -485,17 +485,15 @@ async def require_visible_annotation_for_reply_mutation(
     workspace_id: str,
     item_id: str,
     annotation_id: str,
+    *,
+    action: str,
 ) -> tuple[User, PdfAnnotation]:
     """Authorize a reply write and fence every row that can revoke it until commit."""
     candidate = await require_visible_annotation(db, user, workspace_id, item_id, annotation_id)
     expected_scope = candidate.scope
     expected_project_item_id = candidate.project_item_id
-    if expected_scope is AnnotationScope.private:
-        context = await require_workspace_action(
-            db, user, workspace_id, ResourceAction.workspace_read
-        )
-        locked_user = context.actor
-    else:
+    project_item = None
+    if expected_scope is AnnotationScope.project:
         if expected_project_item_id is None:
             raise ResourceUnavailable("Annotation not found")
         project_item = await db.scalar(
@@ -507,13 +505,34 @@ async def require_visible_annotation_for_reply_mutation(
         )
         if project_item is None:
             raise ResourceUnavailable("Annotation not found")
-        project_context = await require_project_context(
-            db,
-            user,
-            workspace_id,
-            project_item.project_id,
-            ResourceAction.workspace_read,
-        )
+
+    resource_action = ResourceAction(f"{expected_scope.value}_annotation_reply.{action}")
+    relation = "other" if action == "create" and candidate.author_id != user.id else "own"
+    # Match governance's root-to-child lock order. A read gate would leave the
+    # roots unlocked until after child locks, deadlocking with root deletion.
+    try:
+        if project_item is None:
+            context = await require_workspace_action(
+                db, user, workspace_id, resource_action, relation=relation
+            )
+            locked_user = context.actor
+        else:
+            project_context = await require_project_context(
+                db,
+                user,
+                workspace_id,
+                project_item.project_id,
+                resource_action,
+                relation=relation,
+            )
+            locked_user = project_context.workspace.actor
+    except PermissionDenied as error:
+        if action == "create":
+            raise
+        operation = "restored" if action == "restore" else "edited"
+        raise ResourceUnavailable(f"annotation reply not found or cannot be {operation}") from error
+
+    if project_item is not None:
         locked_project_item = await db.scalar(
             select(ProjectItem)
             .where(
@@ -527,8 +546,6 @@ async def require_visible_annotation_for_reply_mutation(
         )
         if locked_project_item is None:
             raise ResourceUnavailable("Annotation not found")
-        locked_user = project_context.workspace.actor
-
     record = await db.scalar(
         select(PdfAnnotation)
         .where(

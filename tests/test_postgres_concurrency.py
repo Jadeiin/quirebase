@@ -27,6 +27,7 @@ from quirebase.core.errors import (
     ValidationFailure,
     WorkspaceLifecycleError,
     WorkspaceMembershipRequired,
+    WorkspaceUnavailable,
 )
 from quirebase.documents import (
     AnnotationReplyCreate,
@@ -1137,6 +1138,66 @@ async def test_reply_create_waits_for_annotation_moderation_and_rechecks(postgre
         finally:
             await moderator_db.commit()
         assert await asyncio.wait_for(reply_task, timeout=5) == "rejected"
+
+
+async def test_reply_create_races_archived_workspace_root_deletion(postgres_sessions, monkeypatch):
+    async with postgres_sessions() as db:
+        (
+            workspace_id,
+            owner_id,
+            item_id,
+            _project_id,
+            _assignment_id,
+            annotation_id,
+        ) = await _project_annotation_context(db, "reply-workspace-delete")
+        await archive_workspace(db, await db.get(User, owner_id), workspace_id)
+
+    async with postgres_sessions() as delete_db, postgres_sessions() as reply_db:
+        workspace = await delete_db.scalar(
+            select(Workspace).where(Workspace.id == workspace_id).with_for_update()
+        )
+        actor = await reply_db.get(User, owner_id)
+        root_requested = asyncio.Event()
+        scalar = reply_db.scalar
+
+        async def observe_root_lock(statement, *args, **kwargs):
+            sql = str(statement.compile(dialect=reply_db.bind.dialect))
+            if "FOR SHARE" in sql and any(
+                table.name == "workspaces" for table in statement.get_final_froms()
+            ):
+                root_requested.set()
+            return await scalar(statement, *args, **kwargs)
+
+        monkeypatch.setattr(reply_db, "scalar", observe_root_lock)
+
+        async def reply():
+            try:
+                await create_annotation_reply(
+                    reply_db,
+                    actor,
+                    workspace_id,
+                    item_id,
+                    annotation_id,
+                    AnnotationReplyCreate(id=uuid4(), body="Concurrent reply"),
+                )
+            except WorkspaceUnavailable:
+                await reply_db.rollback()
+                return "rejected"
+            return "committed"
+
+        reply_task = asyncio.create_task(reply())
+        try:
+            await asyncio.wait_for(root_requested.wait(), timeout=5)
+            # The reply must wait at the root without holding cascading child
+            # rows, allowing deletion to finish without a deadlock.
+            await delete_db.delete(workspace)
+            await asyncio.wait_for(delete_db.flush(), timeout=5)
+            await delete_db.commit()
+            assert await asyncio.wait_for(reply_task, timeout=5) == "rejected"
+        finally:
+            if not reply_task.done():
+                reply_task.cancel()
+            await asyncio.gather(reply_task, return_exceptions=True)
 
 
 async def test_reply_create_waits_for_project_item_detachment_and_rechecks(postgres_sessions):

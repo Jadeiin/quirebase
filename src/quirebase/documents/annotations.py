@@ -288,11 +288,13 @@ async def select_visible_annotations(
     item_id: str,
     project_id: str | None = None,
 ) -> list[PdfAnnotation]:
-    """Load the annotations visible to one user: own private ones, plus a project's."""
+    """Load exportable annotations: own private ones, plus a project's.
+
+    Exports exclude hidden and archived annotations even for moderators.
+    """
     workspace = await require_workspace_action(
         db, user, workspace_id, ResourceAction.workspace_read
     )
-    moderator = action_allowed(workspace, ResourceAction.project_annotation_review)
     project_item_ids = None
     if project_id:
         await require_project_context(
@@ -316,14 +318,8 @@ async def select_visible_annotations(
                     PdfAnnotation.file_revision_id == revision_id,
                     PdfAnnotation.workspace_id == workspace_id,
                     PdfAnnotation.deleted_at.is_(None),
-                    *(
-                        ()
-                        if moderator
-                        else (
-                            PdfAnnotation.hidden_at.is_(None),
-                            PdfAnnotation.archived_at.is_(None),
-                        )
-                    ),
+                    PdfAnnotation.hidden_at.is_(None),
+                    PdfAnnotation.archived_at.is_(None),
                     visible_annotation_scope_predicate(
                         workspace,
                         project_item_ids=project_item_ids,
@@ -461,7 +457,7 @@ async def _editable_reply(
     action: str,
 ) -> tuple[PdfAnnotation, PdfAnnotationReply]:
     _locked_user, annotation = await require_visible_annotation_for_reply_mutation(
-        db, user, workspace_id, item_id, annotation_id
+        db, user, workspace_id, item_id, annotation_id, action=action
     )
     reply = await db.scalar(
         select(PdfAnnotationReply)
@@ -1055,7 +1051,7 @@ async def create_annotation_reply(
     data: AnnotationReplyCreate,
 ) -> dict[str, Any]:
     locked_user, annotation = await require_visible_annotation_for_reply_mutation(
-        db, user, workspace_id, item_id, annotation_id
+        db, user, workspace_id, item_id, annotation_id, action="create"
     )
     context = await resolve_workspace_context(db, locked_user, workspace_id)
     resource = (
@@ -1240,7 +1236,7 @@ async def restore_annotation_reply(
     version: int,
 ) -> dict[str, Any]:
     locked_user, annotation = await require_visible_annotation_for_reply_mutation(
-        db, user, workspace_id, item_id, annotation_id
+        db, user, workspace_id, item_id, annotation_id, action="restore"
     )
     resource_action = ResourceAction(
         "private_annotation_reply.restore"

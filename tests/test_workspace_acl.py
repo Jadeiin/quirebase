@@ -4,9 +4,12 @@ import json
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+import pymupdf
 import pytest
 from sqlalchemy import event, select, text
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
+from storage_helpers import collect_body, put_pdf_object
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.access import (
@@ -40,6 +43,7 @@ from quirebase.core.errors import (
 from quirebase.core.storage import ObjectSuffix, get_object_store
 from quirebase.core.workflows import WorkflowSummary
 from quirebase.documents import (
+    export_revision_pdf,
     get_export_file,
     get_export_status,
     list_document_annotations,
@@ -64,6 +68,7 @@ from quirebase.documents.schemas import (
     AnnotationReplyCreate,
     AnnotationReplyUpdate,
     AnnotationUpdate,
+    NotePayload,
 )
 from quirebase.documents.workflows import (
     ANNOTATION_EXPORT_WORKFLOW,
@@ -1794,6 +1799,79 @@ async def test_project_discussion_moderation_respects_lifecycle_and_lineage(asyn
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("action", ["create", "update", "delete", "restore"])
+@pytest.mark.parametrize(
+    ("scope", "read_only_root"),
+    [
+        (AnnotationScope.private, None),
+        (AnnotationScope.project, None),
+        (AnnotationScope.private, "workspace"),
+        (AnnotationScope.project, "workspace"),
+        (AnnotationScope.project, "project"),
+    ],
+)
+async def test_reply_mutations_authorize_roots_before_locking_children(
+    async_db, action, scope, read_only_root
+):
+    owner, _viewer, item, project, _revision, annotation, reply = await _shared_annotation_context(
+        async_db, f"reply-lock-order-{action}-{scope.value}-{read_only_root}"
+    )
+    annotation.scope = scope
+    if scope is AnnotationScope.private:
+        annotation.project_item_id = None
+    if action == "restore":
+        reply.deleted_at = datetime.now(UTC)
+    if read_only_root == "workspace":
+        workspace = await async_db.get(Workspace, item.workspace_id)
+        workspace.state = WorkspaceState.archived
+    elif read_only_root == "project":
+        project.state = ProjectState.archived
+    await async_db.commit()
+
+    locked_tables = []
+
+    def record_locks(execution):
+        statement = execution.statement
+        if execution.is_select:
+            sql = str(statement.compile(dialect=postgresql.dialect()))
+            if "FOR SHARE" in sql or "FOR UPDATE" in sql:
+                locked_tables.extend(table.name for table in statement.get_final_froms())
+
+    async def mutate():
+        args = (async_db, owner, item.workspace_id, item.id, annotation.id)
+        if action == "create":
+            await create_annotation_reply(*args, AnnotationReplyCreate(id=uuid4(), body="Reply"))
+        elif action == "update":
+            await update_annotation_reply(
+                *args, reply.id, AnnotationReplyUpdate(version=reply.version, body="Changed")
+            )
+        elif action == "delete":
+            await delete_annotation_reply(*args, reply.id, reply.version)
+        else:
+            await restore_annotation_reply(*args, reply.id, reply.version)
+
+    event.listen(async_db.sync_session, "do_orm_execute", record_locks)
+    try:
+        if read_only_root:
+            with pytest.raises(WorkspaceLifecycleError):
+                await mutate()
+            assert not {"project_items", "pdf_annotations", "pdf_annotation_replies"}.intersection(
+                locked_tables
+            )
+        else:
+            await mutate()
+            expected = ["workspaces"]
+            if scope is AnnotationScope.project:
+                expected.extend(["projects", "project_items"])
+            expected.append("pdf_annotations")
+            # Repeated root checks are harmless once the root locks are held.
+            first_locks = list(dict.fromkeys(locked_tables))
+            assert first_locks[: len(expected)] == expected
+    finally:
+        event.remove(async_db.sync_session, "do_orm_execute", record_locks)
+
+
+@pytest.mark.anyio
 async def test_private_annotation_author_can_manage_own_replies(async_db):
     author, viewer, item, _project, _revision, annotation, reply = await _shared_annotation_context(
         async_db, "private-annotation-replies"
@@ -2501,6 +2579,74 @@ async def test_project_annotation_bundle_hides_managed_content_from_nonmembers(a
     assert [row.id for row in await _own_annotations(async_db, former_member, revision)] == [
         private.id
     ]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("role", [WorkspaceRole.owner, WorkspaceRole.admin, WorkspaceRole.viewer])
+@pytest.mark.parametrize("include_visible", [True, False], ids=["annotated", "original"])
+async def test_revision_pdf_export_excludes_moderated_annotations(async_db, role, include_visible):
+    owner, viewer, item, project, revision, shared, _reply = await _shared_annotation_context(
+        async_db, f"pdf-export-moderation-{role.value}-{include_visible}"
+    )
+    actor = owner if role is WorkspaceRole.owner else viewer
+    if actor is viewer:
+        membership = await async_db.scalar(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == item.workspace_id,
+                WorkspaceMember.user_id == viewer.id,
+            )
+        )
+        membership.role = role
+    with pymupdf.open() as document:
+        document.new_page(width=300, height=400)
+        original_pdf = document.tobytes()
+    revision.object_key, revision.size = await put_pdf_object(original_pdf)
+    payload = NotePayload.model_validate(shared.payload).model_dump(mode="json")
+    shared.payload = payload
+    now = datetime.now(UTC)
+    records = {"visible": shared}
+    for state in ("hidden", "archived", "deleted", "locked", "private", "other-private"):
+        private = state in {"private", "other-private"}
+        record = PdfAnnotation(
+            workspace_id=item.workspace_id,
+            file_revision_id=revision.id,
+            item_id=item.id,
+            page_index=0,
+            author_id=actor.id if state == "private" else (viewer if actor is owner else owner).id,
+            kind=AnnotationKind.note,
+            scope=AnnotationScope.private if private else AnnotationScope.project,
+            project_item_id=None if private else shared.project_item_id,
+            body=state,
+            payload=payload,
+        )
+        if state in {"hidden", "archived", "deleted", "locked"}:
+            setattr(record, f"{state}_at", now)
+        async_db.add(record)
+        records[state] = record
+    if not include_visible:
+        for state in ("visible", "locked", "private"):
+            records[state].hidden_at = now
+    await async_db.commit()
+
+    review = await list_document_annotations(
+        async_db, actor, item.workspace_id, item.id, revision.id, project_ids=(project.id,)
+    )
+    if role in {WorkspaceRole.owner, WorkspaceRole.admin}:
+        assert {entry["id"] for entry in review.annotations} == {
+            record.id
+            for state, record in records.items()
+            if state not in {"deleted", "other-private"}
+        }
+
+    exported = await export_revision_pdf(
+        async_db, actor, item.workspace_id, item.id, revision.id, project_id=project.id
+    )
+    exported_pdf = (await collect_body(exported.body)).getvalue()
+    with pymupdf.open(stream=exported_pdf, filetype="pdf") as document:
+        contents = {annotation.info["content"] for annotation in document[0].annots() or ()}
+    assert contents == ({"Shared note", "locked", "private"} if include_visible else set())
+    if not include_visible:
+        assert exported_pdf == original_pdf
 
 
 @pytest.mark.anyio
