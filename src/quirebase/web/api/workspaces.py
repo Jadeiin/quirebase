@@ -88,6 +88,7 @@ async def get_workspaces(user: ApiUser, db: Database) -> list[WorkspaceView]:
     return [
         _workspace_view(workspace, member, owner_id=owner_ids[workspace.id])
         for workspace, member in rows
+        if workspace.id in owner_ids
     ]
 
 
@@ -110,10 +111,13 @@ async def get_user_workspace(
         raise ResourceNotFound("Workspace not found")
     require_action(context, ResourceAction.workspace_read)
     owner_ids = await workspace_owner_ids(db, {workspace_id})
+    owner_id = owner_ids.get(workspace_id)
+    if owner_id is None:
+        raise ResourceNotFound("Workspace not found")
     return _workspace_view(
         context.workspace,
         context.membership,
-        owner_id=owner_ids[workspace_id],
+        owner_id=owner_id,
     )
 
 

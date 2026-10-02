@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
-from quirebase.access import ResourceAction, require_workspace_action
+from quirebase.access import ResourceAction, require_workspace_action, resolve_workspace_context
 from quirebase.accounts import (
     change_own_password,
     change_user_role,
@@ -22,6 +22,7 @@ from quirebase.accounts import (
 from quirebase.core.database import Base, make_async_engine
 from quirebase.core.errors import (
     PermissionDenied,
+    ResourceNotFound,
     ResourceUnavailable,
     ValidationFailure,
     WorkspaceLifecycleError,
@@ -72,6 +73,7 @@ from quirebase.projects import (
     rename_project,
     set_project_participation,
 )
+from quirebase.web.api import workspaces as workspace_api
 from quirebase.workspaces import (
     archive_workspace,
     invite_workspace_member,
@@ -110,6 +112,35 @@ async def _user(db: AsyncSession, prefix: str) -> User:
     await provision_initial_workspace(db, user)
     await db.commit()
     return user
+
+
+@pytest.mark.parametrize("detail", [False, True], ids=["list", "detail"])
+async def test_workspace_read_tolerates_committed_root_deletion(
+    postgres_sessions, monkeypatch, detail
+):
+    async with postgres_sessions() as setup_db:
+        owner = await _user(setup_db, "workspace-read-delete")
+        workspace_id, owner_id = fixture_workspace_id(owner), owner.id
+
+    owner_lookup = workspace_api.workspace_owner_ids
+
+    async def delete_before_owner_lookup(db, workspace_ids):
+        assert workspace_id in workspace_ids
+        async with postgres_sessions() as delete_db:
+            workspace = await delete_db.get(Workspace, workspace_id)
+            await delete_db.delete(workspace)
+            await delete_db.commit()
+        return await owner_lookup(db, workspace_ids)
+
+    monkeypatch.setattr(workspace_api, "workspace_owner_ids", delete_before_owner_lookup)
+    async with postgres_sessions() as read_db:
+        owner = await read_db.get(User, owner_id)
+        if detail:
+            context = await resolve_workspace_context(read_db, owner, workspace_id)
+            with pytest.raises(ResourceNotFound, match="Workspace not found"):
+                await workspace_api.get_user_workspace(workspace_id, context, read_db)
+        else:
+            assert await workspace_api.get_workspaces(owner, read_db) == []
 
 
 async def _project_annotation_context(

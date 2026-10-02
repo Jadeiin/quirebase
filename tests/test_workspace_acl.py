@@ -149,6 +149,7 @@ from quirebase.workspaces import (
     suspend_workspace_member,
     terminate_workspace_member,
     transfer_workspace_ownership,
+    workspace_owner_ids,
 )
 from quirebase.workspaces.workflows import cleanup_deleted_workspace_objects_step
 
@@ -283,6 +284,30 @@ async def _user(db, username: str) -> User:
     await provision_initial_workspace(db, user)
     await db.commit()
     return user
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("owner_change", ["role", "suspend", "terminate", "remove"])
+async def test_workspace_owner_lookup_rejects_missing_owner_for_existing_workspace(
+    async_db, owner_change
+):
+    owner = await _user(async_db, f"missing-owner-{owner_change}")
+    workspace_id = fixture_workspace_id(owner)
+    membership = await async_db.scalar(
+        select(WorkspaceMember).where(WorkspaceMember.workspace_id == workspace_id)
+    )
+    if owner_change == "role":
+        membership.role = WorkspaceRole.editor
+    elif owner_change == "suspend":
+        membership.state = WorkspaceMemberState.suspended
+    elif owner_change == "terminate":
+        membership.terminated_at = datetime.now(UTC)
+    else:
+        await async_db.delete(membership)
+    await async_db.commit()
+
+    with pytest.raises(RuntimeError, match="Workspace owner membership invariant failed"):
+        await workspace_owner_ids(async_db, {workspace_id})
 
 
 async def _shared_annotation_context(db, name: str):

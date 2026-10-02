@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from sqlalchemy import delete, select, text
+from sqlalchemy import and_, delete, select, text
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access import (
@@ -233,21 +233,29 @@ async def list_workspaces(db: AsyncSession, actor: User) -> list[tuple[Workspace
 
 
 async def workspace_owner_ids(db: AsyncSession, workspace_ids: set[str]) -> dict[str, str]:
+    """Return owners of surviving Workspaces, validating their owner membership."""
     if not workspace_ids:
         return {}
     rows = await db.execute(
-        select(WorkspaceMember.workspace_id, WorkspaceMember.user_id).where(
-            WorkspaceMember.workspace_id.in_(workspace_ids),
-            WorkspaceMember.role == WorkspaceRole.owner,
-            WorkspaceMember.state == WorkspaceMemberState.active,
-            WorkspaceMember.terminated_at.is_(None),
+        select(Workspace.id, WorkspaceMember.user_id)
+        .outerjoin(
+            WorkspaceMember,
+            and_(
+                WorkspaceMember.workspace_id == Workspace.id,
+                WorkspaceMember.role == WorkspaceRole.owner,
+                WorkspaceMember.state == WorkspaceMemberState.active,
+                WorkspaceMember.terminated_at.is_(None),
+            ),
         )
+        .where(Workspace.id.in_(workspace_ids), Workspace.state != WorkspaceState.deleted)
     )
-    owners = dict(rows.tuples().all())
-    missing = workspace_ids - owners.keys()
+    # Read root existence and membership in one snapshot: a concurrent root
+    # deletion also removes its owner and is not an invariant violation.
+    owner_rows = rows.tuples().all()
+    missing = {workspace_id for workspace_id, owner_id in owner_rows if owner_id is None}
     if missing:
         raise RuntimeError(f"Workspace owner membership invariant failed for: {sorted(missing)}")
-    return owners
+    return {workspace_id: owner_id for workspace_id, owner_id in owner_rows if owner_id is not None}
 
 
 async def get_workspace(

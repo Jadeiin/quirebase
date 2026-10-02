@@ -38,6 +38,8 @@ from quirebase.models import (
     WorkspaceState,
 )
 from quirebase.search import search_index
+from quirebase.web.api import workspaces as workspace_api
+from quirebase.workspaces import permanently_delete_workspace
 
 
 async def authenticated_async_client(db, session_factory, tmp_path, monkeypatch):
@@ -93,6 +95,60 @@ async def authenticated_async_client(db, session_factory, tmp_path, monkeypatch)
     )
     client.cookies.set(get_settings().session_cookie, raw)
     return client, item, revision
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("detail", [False, True], ids=["list", "detail"])
+async def test_workspace_read_tolerates_deletion_before_owner_lookup(
+    async_db, async_session_factory, tmp_path, monkeypatch, detail
+):
+    client, item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    workspace_id, owner_id = item.workspace_id, item.created_by
+    workspace = await async_db.get(Workspace, workspace_id)
+    workspace.state = WorkspaceState.archived
+    workspace.archived_at = datetime.now(UTC) - timedelta(
+        days=get_settings().workspace_delete_retention_days + 1
+    )
+    retained = Workspace(name="Retained Workspace", created_by=owner_id)
+    async_db.add(retained)
+    await async_db.flush()
+    async_db.add(
+        WorkspaceMember(workspace_id=retained.id, user_id=owner_id, role=WorkspaceRole.owner)
+    )
+    await async_db.commit()
+
+    url = f"/api/v1/workspaces/{workspace_id}" if detail else "/api/v1/workspaces"
+    owner_lookup = workspace_api.workspace_owner_ids
+
+    async def delete_before_owner_lookup(db, workspace_ids):
+        # The handler has already read the Workspace or resolved its access context.
+        assert workspace_id in workspace_ids
+        async with async_session_factory() as delete_db:
+            owner = await delete_db.get(User, owner_id)
+            await permanently_delete_workspace(delete_db, owner, workspace_id)
+        return await owner_lookup(db, workspace_ids)
+
+    try:
+        before = await client.get(url)
+        assert before.status_code == 200
+        if detail:
+            assert before.json()["owner_id"] == owner_id
+        else:
+            assert {view["id"] for view in before.json()} == {workspace_id, retained.id}
+
+        monkeypatch.setattr(workspace_api, "workspace_owner_ids", delete_before_owner_lookup)
+        response = await client.get(url)
+        if detail:
+            assert response.status_code == 404
+        else:
+            assert response.status_code == 200
+            assert [(view["id"], view["owner_id"]) for view in response.json()] == [
+                (retained.id, owner_id)
+            ]
+    finally:
+        await client.aclose()
 
 
 @pytest.mark.anyio
