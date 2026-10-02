@@ -350,6 +350,11 @@ msgid "All roles"
 msgstr "所有角色"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "All sources"
+msgstr "全部来源"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "All Tags"
 msgstr "全部标签"
@@ -370,14 +375,14 @@ msgid "Annotation pages"
 msgstr "批注页码"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "Annotation source"
+msgstr "批注来源"
+
+#. js-lingui-explicit-id
 #: src/lib/pdf/EmbeddedPdfViewer.svelte
 msgid "Annotation sync failed"
 msgstr "批注同步失败"
-
-#. js-lingui-explicit-id
-#: src/lib/features/pdf-reader/PdfWorkspace.svelte
-msgid "Annotation visibility"
-msgstr "批注可见范围"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
@@ -1211,6 +1216,11 @@ msgstr "讨论已发布"
 #: src/lib/features/workflows/WorkflowJobRow.svelte
 msgid "Dismiss"
 msgstr "忽略"
+
+#. js-lingui-explicit-id
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
+msgid "Displayed annotation sources"
+msgstr "显示的批注来源"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -2239,6 +2249,11 @@ msgid "NCBI API key"
 msgstr "NCBI API 密钥"
 
 #. js-lingui-explicit-id
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
+msgid "New annotation source"
+msgstr "新批注来源"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "New Item metadata"
 msgstr "新条目元数据"
@@ -2832,6 +2847,7 @@ msgid "Private"
 msgstr "私有"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 #: src/lib/features/pdf-reader/PdfWorkspace.svelte
 msgid "Private annotations"
 msgstr "私人批注"

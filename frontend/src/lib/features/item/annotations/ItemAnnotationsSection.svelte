@@ -14,7 +14,7 @@
 	import { t } from '$lib/i18n';
 	import { getWorkspaceContext } from '$lib/workspaces/context.svelte';
 	import { workspaceHref } from '$lib/workspaces/href';
-	import { itemAnnotationsReviewQuery } from '../queries';
+	import { itemAnnotationsQuery } from '../queries';
 	import Button from '$lib/design/Button.svelte';
 	import ItemRow from '$lib/design/ItemRow.svelte';
 
@@ -22,14 +22,16 @@
 	const { workspaceId } = getWorkspaceContext();
 	const workspace = getWorkspaceContext();
 	let revision = $state('all');
+	let source = $state('all');
 	let page = $state(1);
 	let moderationError = $state('');
 	let moderating = $state('');
 	let confirmDeleteOpen = $state(false);
-	let pendingDelete = $state<components['schemas']['AnnotationReviewAnnotationView']>();
+	let pendingDelete = $state<components['schemas']['AnnotationView']>();
 	const annotations = createQuery(() =>
-		itemAnnotationsReviewQuery(workspaceId, itemId, revision, page, true)
+		itemAnnotationsQuery(workspaceId, itemId, revision, source, page, true)
 	);
+	const projects = $derived(annotations.data?.projects ?? []);
 	const revisions = $derived(annotations.data?.revisions ?? []);
 	const displayed = $derived(annotations.data?.annotations ?? []);
 	const pageCount = $derived(
@@ -47,14 +49,14 @@
 	} as const satisfies Record<(typeof moderationActions)[number], AuthorizationAction>;
 
 	function annotationCanModerate(
-		annotation: components['schemas']['AnnotationReviewAnnotationView'],
+		annotation: components['schemas']['AnnotationView'],
 		action: (typeof moderationActions)[number]
 	): boolean {
 		return !annotation.mine && can(annotation.authorization, authorizationActions[action]);
 	}
 
 	async function moderate(
-		annotation: components['schemas']['AnnotationReviewAnnotationView'],
+		annotation: components['schemas']['AnnotationView'],
 		action: 'hide' | 'archive' | 'restore' | 'lock' | 'unlock' | 'delete'
 	) {
 		moderating = annotation.id;
@@ -80,7 +82,7 @@
 		}
 	}
 
-	function requestDelete(annotation: components['schemas']['AnnotationReviewAnnotationView']) {
+	function requestDelete(annotation: components['schemas']['AnnotationView']) {
 		pendingDelete = annotation;
 		confirmDeleteOpen = true;
 	}
@@ -97,6 +99,15 @@
 	<SectionHeader>
 		<h2>{$t('Annotations')}</h2>
 		{#snippet actions()}
+			<label class="flex items-center gap-2 text-sm text-surface-700-300"
+				>{$t('Annotation source')}
+				<select class="input w-auto min-w-36" bind:value={source} onchange={() => (page = 1)}>
+					<option value="all">{$t('All sources')}</option>
+					<option value="private">{$t('Private annotations')}</option>
+					{#each projects as project (project.id)}<option value={project.id}>{project.name}</option
+						>{/each}
+				</select>
+			</label>
 			{#if revisions.length > 1}
 				<label class="flex items-center gap-2 text-sm text-surface-700-300"
 					>{$t('PDF revision')}<select
@@ -128,13 +139,17 @@
 					><a
 						class="text-sm font-semibold text-primary-700-300 no-underline"
 						href={resolve(
-							workspaceHref(workspaceId, `item/${itemId}/pdf/${annotation.revision_id}`)
+							workspaceHref(
+								workspaceId,
+								`item/${itemId}/pdf/${annotation.revision_id}${annotation.project_id ? `?${new URLSearchParams({ project_id: annotation.project_id })}` : ''}`
+							)
 						)}>{$t('Open PDF')}</a
 					>
 				</div>
 				<span>{annotation.body ?? annotation.selected_text ?? $t('No note text')}</span><span
 					class="text-surface-600-400"
-					>{annotation.author_display_name} · {annotation.revision_name} ·
+					>{annotation.scope === 'private' ? $t('Private annotations') : annotation.project_name} · {annotation.author_display_name}
+					· {annotation.revision_name} ·
 					{$t('{count, plural, one {# reply} other {# replies}}', {
 						count: (annotation.replies ?? []).length
 					})}</span
@@ -164,8 +179,12 @@
 		<Button
 			as="a"
 			variant="filled"
-			href={resolve(workspaceHref(workspaceId, `item/${itemId}/pdf/${workspaceRevisionId}`))}
-			>{$t('Open annotation workspace')}</Button
+			href={resolve(
+				workspaceHref(
+					workspaceId,
+					`item/${itemId}/pdf/${workspaceRevisionId}${source !== 'all' && source !== 'private' ? `?${new URLSearchParams({ project_id: source })}` : ''}`
+				)
+			)}>{$t('Open annotation workspace')}</Button
 		>
 	{/if}
 	{#if pageCount > 1}

@@ -123,3 +123,28 @@ export function minimalPdf(nativeComments = false): Buffer {
 	body += `trailer\n<</Size ${objects.length + 1}/Root 1 0 R>>\nstartxref\n${xref}\n%%EOF\n`;
 	return Buffer.from(body);
 }
+
+export function annotationList(
+	annotations: unknown[],
+	page = 1,
+	perPage = 100,
+	total = annotations.length,
+	nextCursor: string | null = null
+) {
+	return {
+		revisions: [],
+		projects: [],
+		annotations,
+		page,
+		per_page: perPage,
+		total,
+		next_cursor: nextCursor
+	};
+}
+
+export async function setAnnotationSource(page: Page, name: string, checked = true) {
+	const sources = page.locator('details').filter({ hasText: 'Displayed annotation sources' });
+	await sources.locator('summary').click();
+	await sources.getByLabel(name, { exact: true }).setChecked(checked);
+	await sources.locator('summary').click();
+}

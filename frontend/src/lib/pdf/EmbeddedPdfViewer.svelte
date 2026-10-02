@@ -17,7 +17,11 @@
 	import { i18n } from '@lingui/core';
 	import { apiErrorMessage } from '$lib/api/errors';
 	import { t } from '$lib/i18n';
-	import { createAnnotationSync, type AnnotationSyncStatus } from '$lib/pdf/annotation-sync.svelte';
+	import {
+		createAnnotationSync,
+		type AnnotationSources,
+		type AnnotationSyncStatus
+	} from '$lib/pdf/annotation-sync.svelte';
 
 	let {
 		itemId,
@@ -29,7 +33,8 @@
 		canModifyAnnotations,
 		annotationAuthor,
 		pageGeometry,
-		selectedProject = $bindable(''),
+		sources,
+		writeProject,
 		onstatus
 	} = $props<{
 		itemId: string;
@@ -41,7 +46,8 @@
 		canModifyAnnotations: boolean;
 		annotationAuthor: string;
 		pageGeometry: number[][];
-		selectedProject?: string;
+		sources: AnnotationSources;
+		writeProject: string;
 		onstatus?: (status: string, failed: boolean) => void;
 	}>();
 
@@ -100,8 +106,9 @@
 			editAfterCreate: true
 		},
 		permissions: {
-			// The comment sidebar uses this document gate instead of per-annotation flags.
-			// Keep it independent of the selected scope's creation permission.
+			// EmbedPDF's built-in comment sidebar only supports this document gate.
+			// The backend authorizes each target mutation; keep private edits available
+			// even when the selected Project does not allow annotation creation.
 			overrides: { print: false, copyContents: true, modifyAnnotations: canModifyAnnotations }
 		}
 	};
@@ -120,7 +127,8 @@
 		itemId,
 		documentId,
 		pageGeometry,
-		initialProject: selectedProject,
+		initialSources: sources,
+		initialWriteProject: writeProject,
 		onStatus: reportStatus,
 		onCommentPanel: () =>
 			uiApi?.forDocument(documentId).setActiveSidebar('right', 'main', 'comment-panel')
@@ -237,7 +245,7 @@
 			if (destroyed) return;
 			documentReady = true;
 			sync.lockNative();
-			await sync.load(selectedProject).catch(() => {
+			await sync.load(sources).catch(() => {
 				if (!destroyed) reportStatus({ state: 'load-failed' });
 			});
 		} catch (error) {
@@ -285,11 +293,17 @@
 		});
 	});
 
-	let previousProject = selectedProject;
 	$effect(() => {
-		if (selectedProject === previousProject) return;
-		previousProject = selectedProject;
-		sync.switchProject(selectedProject);
+		sync.setWriteProject(writeProject);
+	});
+
+	// svelte-ignore state_referenced_locally
+	let previousSources = JSON.stringify(sources);
+	$effect(() => {
+		const key = JSON.stringify(sources);
+		if (key === previousSources) return;
+		previousSources = key;
+		sync.switchSources(sources);
 	});
 
 	onDestroy(() => {

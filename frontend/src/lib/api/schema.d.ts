@@ -1400,23 +1400,6 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/workspaces/{workspace_id}/items/{item_id}/annotations/review': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Review Annotations */
-		get: operations['annotations.review_annotations'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
 	'/api/v1/workspaces/{workspace_id}/items/{item_id}/annotations': {
 		parameters: {
 			query?: never;
@@ -1424,7 +1407,16 @@ export interface paths {
 			path?: never;
 			cookie?: never;
 		};
-		/** List Annotations */
+		/**
+		 * List Annotations
+		 * @description List authorized Annotations across revisions and sources.
+		 *
+		 *     With no filters, return all visible sources. Project selection also includes the caller's
+		 *     private Annotations unless scope=project; scope=private excludes Project Annotations.
+		 *     Revision and Project choices are independent of the applied filters.
+		 *     Use pagination=cursor to traverse by immutable ID, then pass next_cursor as cursor.
+		 *     Page mode orders by latest update; cursor mode avoids skips when content is edited or deleted.
+		 */
 		get: operations['annotations.list_annotations'];
 		put?: never;
 		/** Create Annotation */
@@ -2414,6 +2406,23 @@ export interface components {
 			| 'ellipse'
 			| 'line'
 			| 'arrow';
+		/** AnnotationListView */
+		AnnotationListView: {
+			/** Revisions */
+			revisions: components['schemas']['AnnotationRevisionView'][];
+			/** Projects */
+			projects: components['schemas']['AnnotationProjectView'][];
+			/** Annotations */
+			annotations: components['schemas']['AnnotationView'][];
+			/** Total */
+			total: number;
+			/** Page */
+			page: number;
+			/** Per Page */
+			per_page: number;
+			/** Next Cursor */
+			next_cursor?: string | null;
+		};
 		/** AnnotationModerationRequest */
 		AnnotationModerationRequest: {
 			/**
@@ -2423,6 +2432,13 @@ export interface components {
 			action: 'hide' | 'archive' | 'restore' | 'lock' | 'unlock' | 'delete';
 			/** Version */
 			version: number;
+		};
+		/** AnnotationProjectView */
+		AnnotationProjectView: {
+			/** Id */
+			id: string;
+			/** Name */
+			name: string;
 		};
 		/** AnnotationReplyCreate */
 		AnnotationReplyCreate: {
@@ -2462,77 +2478,12 @@ export interface components {
 			/** Updated At */
 			updated_at: string;
 		};
-		/** AnnotationReviewAnnotationView */
-		AnnotationReviewAnnotationView: {
-			/** Id */
-			id: string;
-			/** Revision Id */
-			revision_id: string;
-			/** Page Index */
-			page_index: number;
-			kind: components['schemas']['AnnotationKind'];
-			scope: components['schemas']['AnnotationScope'];
-			/** Project Id */
-			project_id: string | null;
-			/** Body */
-			body: string | null;
-			/** Selected Text */
-			selected_text: string | null;
-			/** Payload */
-			payload:
-				| components['schemas']['TextMarkupPayload']
-				| components['schemas']['NotePayload']
-				| components['schemas']['FreeTextPayload']
-				| components['schemas']['InkPayload']
-				| components['schemas']['RectanglePayload']
-				| components['schemas']['EllipsePayload']
-				| components['schemas']['LinePayload']
-				| components['schemas']['ArrowPayload'];
-			/** Version */
-			version: number;
-			/** Author Display Name */
-			author_display_name: string;
-			/** Mine */
-			mine: boolean;
-			/** Editable */
-			editable: boolean;
-			authorization: components['schemas']['WorkspaceAuthorizationView'];
-			/** Hidden At */
-			hidden_at?: string | null;
-			/** Archived At */
-			archived_at?: string | null;
-			/** Locked At */
-			locked_at?: string | null;
-			/** Moderated By */
-			moderated_by?: string | null;
-			/** Created At */
-			created_at: string;
-			/** Updated At */
-			updated_at: string;
-			/** Replies */
-			replies: components['schemas']['AnnotationReplyView'][];
-			/** Revision Name */
-			revision_name: string;
-		};
-		/** AnnotationReviewRevisionView */
-		AnnotationReviewRevisionView: {
+		/** AnnotationRevisionView */
+		AnnotationRevisionView: {
 			/** Id */
 			id: string;
 			/** Original Name */
 			original_name: string;
-		};
-		/** AnnotationReviewView */
-		AnnotationReviewView: {
-			/** Revisions */
-			revisions: components['schemas']['AnnotationReviewRevisionView'][];
-			/** Annotations */
-			annotations: components['schemas']['AnnotationReviewAnnotationView'][];
-			/** Total */
-			total: number;
-			/** Page */
-			page: number;
-			/** Per Page */
-			per_page: number;
 		};
 		/**
 		 * AnnotationScope
@@ -2591,12 +2542,16 @@ export interface components {
 			id: string;
 			/** Revision Id */
 			revision_id: string;
+			/** Revision Name */
+			revision_name: string;
 			/** Page Index */
 			page_index: number;
 			kind: components['schemas']['AnnotationKind'];
 			scope: components['schemas']['AnnotationScope'];
 			/** Project Id */
 			project_id: string | null;
+			/** Project Name */
+			project_name: string | null;
 			/** Body */
 			body: string | null;
 			/** Selected Text */
@@ -8593,12 +8548,17 @@ export interface operations {
 			};
 		};
 	};
-	'annotations.review_annotations': {
+	'annotations.list_annotations': {
 		parameters: {
 			query?: {
 				page?: number;
 				per_page?: number;
 				revision_id?: string | null;
+				scope?: components['schemas']['AnnotationScope'] | null;
+				/** @description Repeat to select multiple readable Projects linked to this Item. */
+				project_id?: string[] | null;
+				pagination?: 'page' | 'cursor';
+				cursor?: string | null;
 			};
 			header?: never;
 			path: {
@@ -8615,51 +8575,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['AnnotationReviewView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'annotations.list_annotations': {
-		parameters: {
-			query: {
-				revision_id: string;
-				project_id?: string | null;
-			};
-			header?: never;
-			path: {
-				workspace_id: string;
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['AnnotationView'][];
+					'application/json': components['schemas']['AnnotationListView'];
 				};
 			};
 			/** @description Unprocessable Content */

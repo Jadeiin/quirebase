@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
@@ -141,10 +141,12 @@ async def delete_project_item_annotations(
 
 
 @dataclass(frozen=True)
-class AnnotationReview:
+class AnnotationPage:
     revisions: tuple[FileRevision, ...]
+    projects: tuple[Project, ...]
     annotations: tuple[dict[str, Any], ...]
     total: int
+    next_cursor: str | None = None
 
 
 def annotation_json(
@@ -154,16 +156,20 @@ def annotation_json(
     author_display_name: str,
     editable: bool,
     authorization_resource_actions: list[str],
+    revision_name: str,
     project_id: str | None = None,
+    project_name: str | None = None,
     replies: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     return {
         "id": record.id,
         "revision_id": record.file_revision_id,
+        "revision_name": revision_name,
         "page_index": record.page_index,
         "kind": record.kind,
         "scope": record.scope,
         "project_id": project_id,
+        "project_name": project_name,
         "body": record.body,
         "selected_text": record.selected_text,
         "payload": record.payload,
@@ -331,7 +337,12 @@ async def select_visible_annotations(
 
 
 async def _annotation_views(
-    db: AsyncSession, user: User, workspace_id: str, records: list[PdfAnnotation]
+    db: AsyncSession,
+    user: User,
+    workspace_id: str,
+    records: list[PdfAnnotation],
+    *,
+    revision_names: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     if not records:
         return []
@@ -359,7 +370,7 @@ async def _annotation_views(
     }
     project_rows = (
         await db.execute(
-            select(ProjectItem.id, ProjectItem.project_id, Project.state)
+            select(ProjectItem.id, ProjectItem.project_id, Project.state, Project.name)
             .join(Project, Project.id == ProjectItem.project_id)
             .where(
                 ProjectItem.workspace_id == workspace_id,
@@ -369,6 +380,20 @@ async def _annotation_views(
     ).all()
     project_ids_by_item: dict[str, str] = {row[0]: row[1] for row in project_rows}
     project_states_by_item: dict[str, ProjectState] = {row[0]: row[2] for row in project_rows}
+    project_names_by_item: dict[str, str] = {row[0]: row[3] for row in project_rows}
+    if revision_names is None:
+        revision_names = dict(
+            (
+                await db.execute(
+                    select(FileRevision.id, FileRevision.original_name).where(
+                        FileRevision.id.in_({record.file_revision_id for record in records}),
+                        FileRevision.workspace_id == workspace_id,
+                    )
+                )
+            )
+            .tuples()
+            .all()
+        )
     editable_ids = await editable_annotation_ids(db, user, workspace_id, records)
     workspace = await resolve_workspace_context(db, user, workspace_id)
     records_by_id = {record.id: record for record in records}
@@ -389,6 +414,9 @@ async def _annotation_views(
         )
     views: list[dict[str, Any]] = []
     for record in records:
+        revision_name = revision_names.get(record.file_revision_id)
+        if revision_name is None:
+            raise ResourceNotFound("revision not found")
         authorization_resource_actions = [
             action.value
             for action in annotation_decisions(
@@ -409,11 +437,13 @@ async def _annotation_views(
                 author_display_name=authors.get(record.author_id, ""),
                 editable=record.id in editable_ids,
                 authorization_resource_actions=authorization_resource_actions,
+                revision_name=revision_name,
                 project_id=(
                     project_ids_by_item.get(record.project_item_id)
                     if record.project_item_id is not None
                     else None
                 ),
+                project_name=project_names_by_item.get(record.project_item_id or ""),
                 replies=replies_by_annotation[record.id],
             )
         )
@@ -505,34 +535,28 @@ async def list_document_annotations(
     user: User,
     workspace_id: str,
     item_id: str,
-    revision_id: str,
-    project_id: str | None = None,
-) -> list[dict[str, Any]]:
-    revision = await require_revision(db, user, workspace_id, revision_id)
-    if revision.item_id != item_id:
-        raise ResourceNotFound("revision not found for item")
-    records = await select_visible_annotations(
-        db, user, workspace_id, revision_id, item_id, project_id
-    )
-    return await _annotation_views(db, user, workspace_id, records)
-
-
-async def review_item_annotations(
-    db: AsyncSession,
-    user: User,
-    workspace_id: str,
-    item_id: str,
-    *,
-    page: int,
-    per_page: int,
     revision_id: str | None = None,
-) -> AnnotationReview:
-    """Load every Annotation scope visible to the caller for one Item in fixed queries."""
+    *,
+    page: int = 1,
+    per_page: int = 50,
+    scope: AnnotationScope | None = None,
+    project_ids: tuple[str, ...] | None = None,
+    pagination: Literal["page", "cursor"] = "page",
+    cursor: str | None = None,
+) -> AnnotationPage:
+    """List visible Item annotations, with independent revision and source filters."""
+    if page < 1 or not 1 <= per_page <= 100:
+        raise ValidationFailure("Invalid annotation pagination")
+    if (
+        pagination not in ("page", "cursor")
+        or (pagination == "page" and cursor is not None)
+        or (pagination == "cursor" and page != 1)
+    ):
+        raise ValidationFailure("Invalid annotation pagination mode")
     await require_readable_item(db, user, workspace_id, item_id)
     workspace = await require_workspace_action(
         db, user, workspace_id, ResourceAction.workspace_read
     )
-    moderator = action_allowed(workspace, ResourceAction.project_annotation_review)
     revisions = tuple(
         (
             await db.scalars(
@@ -545,17 +569,36 @@ async def review_item_annotations(
             )
         ).all()
     )
-    if not revisions:
-        return AnnotationReview(revisions=(), annotations=(), total=0)
-
-    visible_project_ids = visible_project_ids_query(workspace)
-    visible_project_item_ids = select(ProjectItem.id).where(
+    if revision_id is not None and revision_id not in {revision.id for revision in revisions}:
+        raise ResourceNotFound("revision not found for item")
+    projects = tuple(
+        (
+            await db.scalars(
+                select(Project)
+                .join(ProjectItem, ProjectItem.project_id == Project.id)
+                .where(
+                    ProjectItem.workspace_id == workspace_id,
+                    ProjectItem.item_id == item_id,
+                    Project.id.in_(visible_project_ids_query(workspace)),
+                )
+                .order_by(Project.name, Project.id)
+            )
+        ).all()
+    )
+    visible_project_ids = {project.id for project in projects}
+    if project_ids is not None and not set(project_ids) <= visible_project_ids:
+        raise ResourceUnavailable("ProjectItem not found")
+    # Source choices can outlive a concurrent participation change. Count and
+    # data queries must re-evaluate Project visibility in their own SQL statement.
+    project_item_ids = select(ProjectItem.id).where(
         ProjectItem.workspace_id == workspace_id,
         ProjectItem.item_id == item_id,
-        ProjectItem.project_id.in_(visible_project_ids),
+        ProjectItem.project_id.in_(visible_project_ids_query(workspace)),
+        ProjectItem.project_id.in_(project_ids if project_ids is not None else visible_project_ids),
     )
+    moderator = action_allowed(workspace, ResourceAction.project_annotation_review)
     filters = [
-        PdfAnnotation.file_revision_id.in_([revision.id for revision in revisions]),
+        PdfAnnotation.item_id == item_id,
         PdfAnnotation.workspace_id == workspace_id,
         PdfAnnotation.deleted_at.is_(None),
         *(
@@ -568,7 +611,9 @@ async def review_item_annotations(
         ),
         visible_annotation_scope_predicate(
             workspace,
-            project_item_ids=visible_project_item_ids,
+            project_item_ids=project_item_ids,
+            include_private=scope is not AnnotationScope.project,
+            include_project=scope is not AnnotationScope.private,
         ),
     ]
     if revision_id is not None:
@@ -576,21 +621,37 @@ async def review_item_annotations(
     total = int(
         await db.scalar(select(func.count()).select_from(PdfAnnotation).where(*filters)) or 0
     )
-    records = list(
-        (
-            await db.scalars(
-                select(PdfAnnotation)
-                .where(*filters)
-                .order_by(PdfAnnotation.updated_at.desc(), PdfAnnotation.id)
-                .offset((page - 1) * per_page)
-                .limit(per_page)
-            )
-        ).all()
+    # Read names with their annotations: a later statement under READ COMMITTED
+    # could see the revision's cascade deletion after these ORM objects are loaded.
+    query = select(PdfAnnotation, FileRevision.original_name).join(FileRevision).where(*filters)
+    if pagination == "cursor":
+        # IDs never move when content is edited, and a deleted cursor row need
+        # not exist for the next page to remain reachable.
+        if cursor is not None:
+            query = query.where(PdfAnnotation.id > cursor)
+        query = query.order_by(PdfAnnotation.id).limit(per_page + 1)
+    else:
+        query = (
+            query
+            .order_by(PdfAnnotation.updated_at.desc(), PdfAnnotation.id)
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        )
+    rows = (await db.execute(query)).tuples().all()
+    records = [record for record, _name in rows]
+    revision_names = {record.file_revision_id: name for record, name in rows}
+    next_cursor = (
+        records[per_page - 1].id if pagination == "cursor" and len(records) > per_page else None
     )
-    return AnnotationReview(
+    records = records[:per_page]
+    return AnnotationPage(
         revisions=revisions,
-        annotations=tuple(await _annotation_views(db, user, workspace_id, records)),
+        projects=projects,
+        annotations=tuple(
+            await _annotation_views(db, user, workspace_id, records, revision_names=revision_names)
+        ),
         total=total,
+        next_cursor=next_cursor,
     )
 
 
@@ -775,6 +836,7 @@ async def delete_document_annotation(
         )
         .values(
             deleted_at=deleted_at,
+            deleted_by_moderation=False,
             updated_at=deleted_at,
             version=PdfAnnotation.version + 1,
         )
@@ -821,6 +883,7 @@ async def restore_document_annotation(
             PdfAnnotation.workspace_id == workspace_id,
             PdfAnnotation.version == version,
             PdfAnnotation.deleted_at.is_not(None),
+            PdfAnnotation.deleted_by_moderation.is_(False),
         )
         .values(
             deleted_at=None,
@@ -943,6 +1006,7 @@ async def moderate_document_annotation(
         values["locked_at"] = None
     elif action == "delete":
         values["deleted_at"] = changed_at
+        values["deleted_by_moderation"] = True
     else:  # Pydantic and the guard above keep this branch unreachable.
         raise ValidationFailure("invalid Annotation moderation action")
 

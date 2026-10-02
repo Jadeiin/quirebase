@@ -350,6 +350,11 @@ msgid "All roles"
 msgstr "All roles"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "All sources"
+msgstr "All sources"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "All Tags"
 msgstr "All Tags"
@@ -370,14 +375,14 @@ msgid "Annotation pages"
 msgstr "Annotation pages"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "Annotation source"
+msgstr "Annotation source"
+
+#. js-lingui-explicit-id
 #: src/lib/pdf/EmbeddedPdfViewer.svelte
 msgid "Annotation sync failed"
 msgstr "Annotation sync failed"
-
-#. js-lingui-explicit-id
-#: src/lib/features/pdf-reader/PdfWorkspace.svelte
-msgid "Annotation visibility"
-msgstr "Annotation visibility"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
@@ -1211,6 +1216,11 @@ msgstr "Discussion posted"
 #: src/lib/features/workflows/WorkflowJobRow.svelte
 msgid "Dismiss"
 msgstr "Dismiss"
+
+#. js-lingui-explicit-id
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
+msgid "Displayed annotation sources"
+msgstr "Displayed annotation sources"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -2239,6 +2249,11 @@ msgid "NCBI API key"
 msgstr "NCBI API key"
 
 #. js-lingui-explicit-id
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
+msgid "New annotation source"
+msgstr "New annotation source"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "New Item metadata"
 msgstr "New Item metadata"
@@ -2832,6 +2847,7 @@ msgid "Private"
 msgstr "Private"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 #: src/lib/features/pdf-reader/PdfWorkspace.svelte
 msgid "Private annotations"
 msgstr "Private annotations"

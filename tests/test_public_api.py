@@ -367,10 +367,10 @@ async def test_http_api_document_and_annotation_views_match_api_contracts(
             params={"revision_id": revision.id, "project_id": project.id},
         )
         assert listed.status_code == 200
-        assert listed.json()[0]["id"] == annotation_id
-        assert listed.json()[0]["replies"][0]["id"] == reply_id
+        assert listed.json()["annotations"][0]["id"] == annotation_id
+        assert listed.json()["annotations"][0]["replies"][0]["id"] == reply_id
         review = await client.get(
-            f"{workspace_base}/items/{item_id}/annotations/review",
+            f"{workspace_base}/items/{item_id}/annotations",
             headers=headers,
         )
         assert review.status_code == 200
@@ -447,7 +447,7 @@ async def test_http_api_document_and_annotation_views_match_api_contracts(
                 headers=headers,
                 params={"revision_id": revision.id},
             )
-        ).json() == []
+        ).json()["annotations"] == []
 
 
 @pytest.mark.anyio
@@ -572,7 +572,7 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
 
     async with api_client(async_session_factory) as (client, _app):
         review = await client.get(
-            f"/api/v1/workspaces/{workspace_id}/items/{item.id}/annotations/review",
+            f"/api/v1/workspaces/{workspace_id}/items/{item.id}/annotations",
             headers=headers,
         )
         assert review.status_code == 200
@@ -590,9 +590,67 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
         }
         assert review.json()["page"] == 1
         assert review.json()["per_page"] == 50
+
+        sources = await client.get(
+            f"/api/v1/workspaces/{workspace_id}/items/{item.id}/annotations",
+            headers=headers,
+            params=[
+                ("revision_id", revision.id),
+                ("scope", "project"),
+                ("project_id", project.id),
+                ("project_id", archived_project.id),
+            ],
+        )
+        assert sources.status_code == 200
+        assert sources.json()["total"] == 3
+        assert {entry["project_name"] for entry in sources.json()["annotations"]} == {
+            project.name,
+            archived_project.name,
+        }
+        assert {entry["id"] for entry in sources.json()["projects"]} == {
+            project.id,
+            archived_project.id,
+        }
+        cursor_ids = []
+        cursor = None
+        for _ in range(3):
+            query = {"pagination": "cursor", "per_page": 1}
+            if cursor is not None:
+                query["cursor"] = cursor
+            response = await client.get(
+                f"/api/v1/workspaces/{workspace_id}/items/{item.id}/annotations",
+                headers=headers,
+                params=query,
+            )
+            assert response.status_code == 200
+            cursor_ids.append(response.json()["annotations"][0]["id"])
+            cursor = response.json()["next_cursor"]
+        assert cursor_ids == sorted(reviewed)
+        assert cursor is None
+        for query, expected in (
+            ({"pagination": "unknown"}, 422),
+            ({"pagination": "cursor", "page": 2}, 422),
+            ({"cursor": annotations[0].id}, 422),
+            ({"project_id": "unavailable"}, 404),
+            ({"revision_id": "unavailable"}, 404),
+            ({"page": 0}, 422),
+            ({"per_page": 101}, 422),
+            ({"scope": "unknown"}, 422),
+        ):
+            response = await client.get(
+                f"/api/v1/workspaces/{workspace_id}/items/{item.id}/annotations",
+                headers=headers,
+                params=query,
+            )
+            assert response.status_code == expected
+        removed = await client.get(
+            f"/api/v1/workspaces/{workspace_id}/items/{item.id}/annotations/review",
+            headers=headers,
+        )
+        assert removed.status_code == 404
         paged_reviews = [
             await client.get(
-                f"/api/v1/workspaces/{workspace_id}/items/{item.id}/annotations/review",
+                f"/api/v1/workspaces/{workspace_id}/items/{item.id}/annotations",
                 headers=headers,
                 params={"page": page, "per_page": 1},
             )
@@ -637,7 +695,7 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
         assert deleted.json()["version"] == 3
         assert deleted.json()["authorization"]["allowed"] == []
         remaining = await client.get(
-            f"/api/v1/workspaces/{workspace_id}/items/{item.id}/annotations/review",
+            f"/api/v1/workspaces/{workspace_id}/items/{item.id}/annotations",
             headers=headers,
         )
         assert remaining.status_code == 200

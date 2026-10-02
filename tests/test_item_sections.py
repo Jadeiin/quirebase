@@ -199,8 +199,8 @@ async def test_item_sections_separate_page_responsibilities(
             f"{workspace_base}/items/{item.id}/annotations", params={"revision_id": revision.id}
         )
         assert annotations.status_code == 200
-        assert annotations.json()[0]["selected_text"] == "A useful result"
-        assert annotations.json()[0]["page_index"] == 0
+        assert annotations.json()["annotations"][0]["selected_text"] == "A useful result"
+        assert annotations.json()["annotations"][0]["page_index"] == 0
 
         discussion = await client.get(f"{workspace_base}/items/{item.id}/discussions")
         assert discussion.status_code == 200

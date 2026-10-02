@@ -319,12 +319,16 @@ test('Item annotation review spans every PDF revision', async ({ page }) => {
 		})
 	);
 	await page.route(
-		'**/api/v1/workspaces/workspace-1/items/item-annotations/annotations/review*',
+		'**/api/v1/workspaces/workspace-1/items/item-annotations/annotations*',
 		(route) => {
-			const revisionId = new URL(route.request().url()).searchParams.get('revision_id');
+			const query = new URL(route.request().url()).searchParams;
+			const revisionId = query.get('revision_id');
 			const annotations = ['revision-new', 'revision-old'].flatMap((currentRevision) => [
 				{
 					id: `annotation-${currentRevision}`,
+					scope: 'private',
+					project_id: null,
+					project_name: null,
 					revision_id: currentRevision,
 					revision_name: currentRevision === 'revision-new' ? 'new.pdf' : 'old.pdf',
 					page_index: 0,
@@ -337,6 +341,9 @@ test('Item annotation review spans every PDF revision', async ({ page }) => {
 				},
 				{
 					id: `shared-${currentRevision}`,
+					scope: 'project',
+					project_id: 'project-1',
+					project_name: 'Shared',
 					revision_id: currentRevision,
 					revision_name: currentRevision === 'revision-new' ? 'new.pdf' : 'old.pdf',
 					page_index: 0,
@@ -348,15 +355,16 @@ test('Item annotation review spans every PDF revision', async ({ page }) => {
 					replies: []
 				}
 			]);
-			const visible = revisionId
-				? annotations.filter((annotation) => annotation.revision_id === revisionId)
-				: annotations;
+			const visible = annotations
+				.filter((annotation) => !revisionId || annotation.revision_id === revisionId)
+				.filter((annotation) => !query.get('scope') || annotation.scope === query.get('scope'));
 			return route.fulfill({
 				json: {
 					revisions: [
 						{ id: 'revision-new', original_name: 'new.pdf' },
 						{ id: 'revision-old', original_name: 'old.pdf' }
 					],
+					projects: [{ id: 'project-1', name: 'Shared' }],
 					annotations: visible,
 					total: visible.length,
 					page: 1,
@@ -376,6 +384,24 @@ test('Item annotation review spans every PDF revision', async ({ page }) => {
 	await expect(page.getByText('New revision note')).toHaveCount(0);
 	await expect(page.getByText('Old revision note')).toBeVisible();
 	await expect(page.getByText('Shared project note')).toHaveCount(1);
+	await expect(page.getByRole('link', { name: 'Open PDF' }).last()).toHaveAttribute(
+		'href',
+		'/workspace/workspace-1/item/item-annotations/pdf/revision-old?project_id=project-1'
+	);
+	await page
+		.getByRole('combobox', { name: 'Annotation source', exact: true })
+		.selectOption('private');
+	await expect(page.getByText('Shared project note')).toHaveCount(0);
+	await expect(page.getByText('Old revision note')).toBeVisible();
+	await page
+		.getByRole('combobox', { name: 'Annotation source', exact: true })
+		.selectOption('project-1');
+	await expect(page.getByText('Old revision note')).toHaveCount(0);
+	await expect(page.getByText('Shared project note')).toHaveCount(1);
+	await expect(page.getByRole('link', { name: 'Open annotation workspace' })).toHaveAttribute(
+		'href',
+		'/workspace/workspace-1/item/item-annotations/pdf/revision-old?project_id=project-1'
+	);
 });
 
 test('Item annotation review surfaces aggregate lookup failures', async ({ page }) => {
@@ -403,7 +429,7 @@ test('Item annotation review surfaces aggregate lookup failures', async ({ page 
 			})
 	);
 	await page.route(
-		'**/api/v1/workspaces/workspace-1/items/item-annotations-error/annotations/review*',
+		'**/api/v1/workspaces/workspace-1/items/item-annotations-error/annotations*',
 		(route) =>
 			route.fulfill({
 				status: 502,
@@ -446,7 +472,7 @@ test('Annotation moderation refreshes a stale version and requires an explicit r
 	);
 	let reviewReads = 0;
 	await page.route(
-		'**/api/v1/workspaces/workspace-1/items/item-moderation/annotations/review*',
+		'**/api/v1/workspaces/workspace-1/items/item-moderation/annotations*',
 		(route) => {
 			reviewReads += 1;
 			const latest = reviewReads > 1;

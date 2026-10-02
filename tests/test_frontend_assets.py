@@ -120,8 +120,8 @@ def test_docker_builds_the_svelte_workspace_before_the_python_wheel():
 def test_item_sections_use_the_fixed_query_annotation_review_projection():
     annotations = read("frontend/src/lib/features/item/annotations/ItemAnnotationsSection.svelte")
     queries = read("frontend/src/lib/features/item/queries.ts")
-    assert "itemAnnotationsReviewQuery" in annotations
-    assert "'/workspaces/{workspace_id}/items/{item_id}/annotations/review'" in queries
+    assert "itemAnnotationsQuery" in annotations
+    assert "'/workspaces/{workspace_id}/items/{item_id}/annotations'" in queries
     assert "annotations.isError" in annotations
 
     item_api = read("src/quirebase/web/api/items.py")

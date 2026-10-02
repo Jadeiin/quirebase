@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { Menu, Portal } from '@skeletonlabs/skeleton-svelte';
 	import { createQuery } from '@tanstack/svelte-query';
@@ -16,16 +17,41 @@
 	const workspace = getWorkspaceContext();
 	const { workspaceId } = workspace;
 	let exportProjectId = $state('');
-	let selectedProject = $state('');
+	let includePrivate = $state(true);
+	let visibleProjects = $state(page.url.searchParams.getAll('project_id'));
+	let writeProject = $state('');
 	let annotationStatus = $state('');
 	let annotationSyncFailed = $state(false);
 	let downloadError = $state('');
 	const viewer = createQuery(() => pdfViewerQuery(workspaceId, itemId, revisionId));
+	const readableProjects = $derived(new Set(viewer.data?.projects.map((project) => project.id)));
+	const sources = $derived({
+		includePrivate,
+		projectIds: visibleProjects.filter((id) => readableProjects.has(id))
+	});
+	$effect(() => {
+		if (!viewer.data) return;
+		const available = visibleProjects.filter((id) => readableProjects.has(id));
+		if (available.length !== visibleProjects.length) visibleProjects = available;
+		if (writeProject && !readableProjects.has(writeProject)) writeProject = '';
+		if (exportProjectId && !readableProjects.has(exportProjectId)) exportProjectId = '';
+	});
 	const editable = $derived(
-		selectedProject
-			? (viewer.data?.projects.find((project) => project.id === selectedProject)?.editable ?? false)
+		writeProject
+			? (viewer.data?.projects.find((project) => project.id === writeProject)?.editable ?? false)
 			: (viewer.data?.editable ?? false)
 	);
+
+	function showProject(projectId: string, checked: boolean) {
+		visibleProjects = checked
+			? [...new Set([...visibleProjects, projectId])]
+			: visibleProjects.filter((id) => id !== projectId);
+	}
+
+	function selectWriteProject(projectId: string) {
+		if (projectId) showProject(projectId, true);
+		else includePrivate = true;
+	}
 
 	async function download(operation: Promise<void>) {
 		downloadError = '';
@@ -92,18 +118,7 @@
 				>{viewer.data?.revision.original_name ?? $t('Loading')}</span
 			>
 		</div>
-		{#if viewer.data}<label class="flex shrink-0 items-center">
-				<span class="sr-only">{$t('Annotation visibility')}</span>
-				<select
-					class="min-h-9 max-w-32 rounded-md border border-surface-300-700 bg-surface-100-900 px-2 py-1 text-xs text-surface-900-100 sm:max-w-48"
-					bind:value={selectedProject}
-				>
-					<option value="">{$t('Private annotations')}</option>
-					{#each viewer.data.projects as project (project.id)}<option value={project.id}
-							>{project.name}</option
-						>{/each}
-				</select>
-			</label>{/if}
+
 		<span
 			class={`max-w-44 truncate text-xs ${annotationSyncFailed ? 'inline font-semibold text-error-700-300' : 'hidden text-surface-600-400 lg:inline'}`}
 			>{annotationStatus}</span
@@ -170,6 +185,50 @@
 		</Menu>
 	</header>
 	<div class="flex h-full min-h-0 flex-col overflow-hidden bg-surface-300-700">
+		{#if viewer.data}
+			<div
+				class="flex shrink-0 flex-wrap items-center gap-3 border-b border-surface-300-700 bg-surface-50-950 px-3 py-2 text-xs"
+			>
+				<details class="relative">
+					<summary
+						class="cursor-pointer rounded-md border border-surface-300-700 px-2.5 py-2 font-semibold"
+						>{$t('Displayed annotation sources')}</summary
+					>
+					<div
+						class="absolute top-full left-0 z-50 mt-1 grid max-h-72 w-64 grid-cols-1 gap-2 overflow-y-auto rounded-md border border-surface-300-700 bg-surface-50-950 p-3 shadow-xl"
+					>
+						<label class="flex items-center gap-2"
+							><input type="checkbox" bind:checked={includePrivate} />{$t(
+								'Private annotations'
+							)}</label
+						>
+						{#each viewer.data.projects as project (project.id)}
+							<label class="flex items-center gap-2"
+								><input
+									type="checkbox"
+									checked={visibleProjects.includes(project.id)}
+									onchange={(event) => showProject(project.id, event.currentTarget.checked)}
+								/>{project.name}</label
+							>
+						{/each}
+					</div>
+				</details>
+				<label class="flex min-w-0 items-center gap-2"
+					>{$t('New annotation source')}
+					<select
+						class="min-h-9 max-w-40 rounded-md border border-surface-300-700 bg-surface-100-900 px-2 py-1 text-xs text-surface-900-100"
+						bind:value={writeProject}
+						onchange={(event) => selectWriteProject(event.currentTarget.value)}
+					>
+						<option value="" disabled={!viewer.data.editable}>{$t('Private annotations')}</option>
+						{#each viewer.data.projects as project (project.id)}<option
+								value={project.id}
+								disabled={!project.editable}>{project.name}</option
+							>{/each}
+					</select>
+				</label>
+			</div>
+		{/if}
 		{#if downloadError}
 			<aside
 				class="flex shrink-0 border-b border-error-300-700 bg-error-50-950 px-3 py-1.5 text-xs font-medium text-error-800-200"
@@ -215,7 +274,8 @@
 					canModifyAnnotations={viewer.data.editable}
 					annotationAuthor={viewer.data.annotation_author}
 					pageGeometry={viewer.data.revision.page_geometry}
-					bind:selectedProject
+					{sources}
+					{writeProject}
 					onstatus={(text, failed) => {
 						annotationStatus = text;
 						annotationSyncFailed = failed;

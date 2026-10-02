@@ -473,6 +473,8 @@ async def require_restorable_annotation(
     annotation_id: str,
 ) -> PdfAnnotation:
     record = await _visible_annotation(db, user, workspace_id, item_id, annotation_id, deleted=True)
+    if record.deleted_by_moderation:
+        raise ResourceUnavailable("Annotation not found")
     await _require_annotation_action(db, user, workspace_id, record, "restore")
     return record
 

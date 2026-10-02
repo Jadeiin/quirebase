@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { AnnotationPlugin, PluginRegistry } from '@embedpdf/svelte-pdf-viewer';
-import { minimalPdf, mockSession } from './helpers';
+import { minimalPdf, mockSession, annotationList, setAnnotationSource } from './helpers';
 
 test('PDF reader uses the built-in EmbedPDF viewer with Quirebase annotations', async ({
 	page
@@ -32,7 +32,7 @@ test('PDF reader uses the built-in EmbedPDF viewer with Quirebase annotations', 
 		annotationRequests.push(new URL(route.request().url()).search);
 		if (route.request().method() === 'GET') {
 			return route.fulfill({
-				json: [
+				json: annotationList([
 					{
 						id: 'annotation-1',
 						revision_id: 'revision-1',
@@ -62,7 +62,7 @@ test('PDF reader uses the built-in EmbedPDF viewer with Quirebase annotations', 
 						updated_at: '2026-09-16T00:00:00Z',
 						replies: []
 					}
-				]
+				])
 			});
 		}
 		return route.fulfill({ json: { ok: true } });
@@ -78,14 +78,19 @@ test('PDF reader uses the built-in EmbedPDF viewer with Quirebase annotations', 
 	await expect(page.getByText('1 annotation loaded')).toBeVisible();
 	expect(annotationRequests.at(-1)).toContain('revision_id=revision-1');
 
-	await page.getByLabel('Annotation visibility').selectOption('project-1');
+	await setAnnotationSource(page, 'Shared');
 	await expect.poll(() => annotationRequests.at(-1)).toContain('project_id=project-1');
 });
 
 async function expectAnnotationMode(page: Page, editable: boolean) {
 	const modeSelector = page.locator('[data-epdf-i="mode-select-button"] button');
-	if (!editable && !(await modeSelector.isVisible())) {
-		await expect(modeSelector).toBeHidden();
+	if (!(await modeSelector.isVisible())) {
+		const annotate = page.getByRole('button', { name: 'Annotate', exact: true });
+		if (editable) {
+			await expect(annotate).toBeVisible();
+			await expect(annotate).toBeEnabled();
+			await annotate.click();
+		} else await expect(annotate).toBeHidden();
 		return;
 	}
 	await modeSelector.click();
@@ -134,7 +139,7 @@ for (const projectEditable of [false, true]) {
 		const annotationRequests: string[] = [];
 		await page.route('**/api/v1/workspaces/workspace-1/items/item-1/annotations**', (route) => {
 			annotationRequests.push(route.request().url());
-			return route.fulfill({ json: [] });
+			return route.fulfill({ json: annotationList([]) });
 		});
 		let contentRequests = 0;
 		await page.route(
@@ -146,16 +151,33 @@ for (const projectEditable of [false, true]) {
 		);
 		await page.goto('/workspace/workspace-1/item/item-1/pdf/revision-1');
 		await expect(page.getByText('0 annotations loaded')).toBeAttached();
-		const visibility = page.getByLabel('Annotation visibility');
+		const destination = page.getByLabel('New annotation source');
 		await expectAnnotationMode(page, true);
 		const loadedContentRequests = contentRequests;
-		await visibility.selectOption('project-1');
+		await setAnnotationSource(page, 'Shared');
 		await expect.poll(() => annotationRequests.at(-1)).toContain('project_id=project-1');
-		await expectAnnotationMode(page, projectEditable);
-		await visibility.selectOption('project-archived');
+		await expectAnnotationMode(page, true);
+		if (projectEditable)
+			await expect(destination.locator('option[value="project-1"]')).toHaveJSProperty(
+				'disabled',
+				false
+			);
+		else
+			await expect(destination.locator('option[value="project-1"]')).toHaveJSProperty(
+				'disabled',
+				true
+			);
+		await expect(destination.locator('option[value="project-archived"]')).toHaveJSProperty(
+			'disabled',
+			true
+		);
+		if (projectEditable) {
+			await destination.selectOption('project-1');
+			await expectAnnotationMode(page, true);
+			await destination.selectOption('');
+		}
+		await setAnnotationSource(page, 'Archived');
 		await expect.poll(() => annotationRequests.at(-1)).toContain('project_id=project-archived');
-		await expectAnnotationMode(page, false);
-		await visibility.selectOption('');
 		await expectAnnotationMode(page, true);
 		expect(contentRequests).toBe(loadedContentRequests);
 
@@ -242,16 +264,19 @@ async function mockScopeReader(page: Page, withAnnotations = false) {
 			});
 			return route.fulfill({ json: annotation });
 		}
-		return route.fulfill({
-			json: withAnnotations
-				? annotations
-						.filter((annotation) => !state.deletedIds.includes(annotation.id))
-						.map((annotation) => ({
-							...annotation,
-							editable: state.writable && annotation.editable
-						}))
-				: []
-		});
+		const query = new URL(route.request().url()).searchParams;
+		const rows = withAnnotations
+			? annotations
+					.filter((annotation) => !state.deletedIds.includes(annotation.id))
+					.filter((annotation) =>
+						annotation.scope === 'private'
+							? query.get('scope') !== 'project'
+							: query.get('scope') !== 'private' &&
+								query.getAll('project_id').includes(annotation.project_id!)
+					)
+					.map((annotation) => ({ ...annotation, editable: state.writable && annotation.editable }))
+			: [];
+		return route.fulfill({ json: annotationList(rows) });
 	});
 	await page.route(
 		'**/api/v1/workspaces/workspace-1/items/item-1/revisions/revision-1/content',
@@ -291,7 +316,7 @@ test('PDF comment sidebar is read-only for canonical and native comments in a re
 	const state = await mockScopeReader(page, true);
 	state.writable = false;
 	state.nativeComments = true;
-	await page.goto('/workspace/workspace-1/item/item-1/pdf/revision-1');
+	await page.goto('/workspace/workspace-1/item/item-1/pdf/revision-1?project_id=project-1');
 	await expect(page.getByText('2 annotations loaded')).toBeVisible();
 	await page.getByRole('button', { name: 'Comment', exact: true }).click();
 	for (const body of ['private annotation', 'project annotation', 'Native PDF comment']) {
@@ -308,8 +333,8 @@ test('PDF comment sidebar preserves private edits in a read-only Project', async
 	await page.setViewportSize({ width: 1280, height: 800 });
 	const state = await mockScopeReader(page, true);
 	await page.goto('/workspace/workspace-1/item/item-1/pdf/revision-1');
-	await expect(page.getByText('2 annotations loaded')).toBeVisible();
-	await page.getByLabel('Annotation visibility').selectOption('project-archived');
+	await expect(page.getByText('1 annotation loaded')).toBeVisible();
+	await setAnnotationSource(page, 'Archived');
 	await page.getByRole('button', { name: 'Comment', exact: true }).click();
 	const card = commentCard(page, 'private annotation');
 	await card.getByRole('button').first().click();
@@ -327,7 +352,7 @@ test('PDF comment sidebar refreshes the Workspace write gate after permissions c
 	await page.setViewportSize({ width: 1280, height: 800 });
 	const state = await mockScopeReader(page, true);
 	await page.goto('/workspace/workspace-1/item/item-1/pdf/revision-1');
-	await expect(page.getByText('2 annotations loaded')).toBeVisible();
+	await expect(page.getByText('1 annotation loaded')).toBeVisible();
 	await page.clock.install();
 	for (const writable of [false, true]) {
 		state.writable = writable;
@@ -366,8 +391,8 @@ for (const projectId of ['project-1', 'project-archived']) {
 		await page.setViewportSize({ width: 1280, height: 800 });
 		const state = await mockScopeReader(page, true);
 		await page.goto('/workspace/workspace-1/item/item-1/pdf/revision-1');
-		await expect(page.getByText('2 annotations loaded')).toBeVisible();
-		await page.getByLabel('Annotation visibility').selectOption(projectId);
+		await expect(page.getByText('1 annotation loaded')).toBeVisible();
+		await setAnnotationSource(page, projectId === 'project-1' ? 'Shared' : 'Archived');
 		await expect
 			.poll(() => selectReaderAnnotation(page, 'annotation-private'))
 			.toBe('annotation-private');
@@ -377,7 +402,7 @@ for (const projectId of ['project-1', 'project-archived']) {
 		await deleteButton.click();
 		await expect.poll(() => state.deletedIds).toEqual(['annotation-private']);
 		await expect.poll(() => selectReaderAnnotation(page, 'annotation-project')).toBeNull();
-		await expectAnnotationMode(page, false);
+		await expectAnnotationMode(page, true);
 	});
 }
 
@@ -386,7 +411,7 @@ test('PDF restores creation tools after remounting in a read-only Project', asyn
 	const state = await mockScopeReader(page);
 	await page.goto('/workspace/workspace-1/item/item-1/pdf/revision-1');
 	await expect(page.getByText('0 annotations loaded')).toBeAttached();
-	await page.getByLabel('Annotation visibility').selectOption('project-archived');
+	await setAnnotationSource(page, 'Archived');
 	const loadedContentRequests = state.contentRequests;
 	await page.clock.install();
 	await page.clock.fastForward(31_000);
@@ -402,8 +427,10 @@ test('PDF restores creation tools after remounting in a read-only Project', asyn
 	await refocusReader(page);
 	await expect.poll(() => state.contentRequests).toBeGreaterThan(loadedContentRequests);
 	await expect(page.getByRole('button', { name: 'Document Menu' })).toBeVisible();
-	await expect(page.getByLabel('Annotation visibility')).toHaveValue('project-archived');
-	await page.getByLabel('Annotation visibility').selectOption('');
+	await page.getByText('Displayed annotation sources', { exact: true }).click();
+	await expect(page.locator('details').getByLabel('Archived', { exact: true })).toBeChecked();
+	await page.getByText('Displayed annotation sources', { exact: true }).click();
+	await expect(page.getByLabel('New annotation source')).toHaveValue('');
 	await expectAnnotationMode(page, true);
 });
 
@@ -440,7 +467,7 @@ test.describe('touch-first PDF reader', () => {
 		);
 		await page.route('**/api/v1/workspaces/workspace-1/items/item-1/annotations**', (route) =>
 			route.request().method() === 'GET'
-				? route.fulfill({ json: [] })
+				? route.fulfill({ json: annotationList([]) })
 				: route.fulfill({ json: { ok: true } })
 		);
 		await page.route(

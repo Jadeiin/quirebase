@@ -59,7 +59,7 @@ describe('apiRequest', () => {
 			{
 				params: {
 					path: { item_id: 'item/with slash' },
-					query: { revision_id: 'revision-1', project_id: 'project-1' }
+					query: { revision_id: 'revision-1', project_id: ['project-1', 'project-2'] }
 				}
 			},
 			fetcher
@@ -70,7 +70,7 @@ describe('apiRequest', () => {
 			'/api/v1/workspaces/workspace-1/items/item%2Fwith%20slash/annotations'
 		);
 		expect(url.searchParams.get('revision_id')).toBe('revision-1');
-		expect(url.searchParams.get('project_id')).toBe('project-1');
+		expect(url.searchParams.getAll('project_id')).toEqual(['project-1', 'project-2']);
 	});
 
 	it('omits empty query values', async () => {

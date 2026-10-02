@@ -379,7 +379,7 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
             f"{workspace_base}/items/{item.id}/annotations",
             params={"revision_id": revision.id, "project_id": project.id},
         )
-        listed_reply = listed_with_reply.json()[0]["replies"][0]
+        listed_reply = listed_with_reply.json()["annotations"][0]["replies"][0]
         assert listed_reply["id"] == reply["id"]
         assert listed_reply["body"] == reply["body"]
         updated_reply = await client.patch(

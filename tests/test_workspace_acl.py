@@ -44,7 +44,6 @@ from quirebase.documents import (
     get_export_status,
     list_document_annotations,
     moderate_document_annotation,
-    review_item_annotations,
 )
 from quirebase.documents.annotations import (
     create_annotation_reply,
@@ -89,6 +88,7 @@ from quirebase.models import (
     AuditEvent,
     ExportArtifact,
     FileRevision,
+    FileRevisionProcessingState,
     ImportBatch,
     Item,
     ItemTag,
@@ -127,6 +127,7 @@ from quirebase.projects import (
     remove_item_from_project,
     remove_project_member,
     require_project,
+    set_project_participation,
     set_project_state,
     update_project_settings,
 )
@@ -2671,25 +2672,33 @@ async def test_annotation_moderation_preserves_authored_content_and_hides_shared
     assert moderated["moderated_by"] == owner.id
     assert moderated["hidden_at"] is not None
     assert (
-        await list_document_annotations(
-            async_db,
-            author,
-            fixture_workspace_id(owner),
-            item.id,
-            revision.id,
-            project.id,
+        list(
+            (
+                await list_document_annotations(
+                    async_db,
+                    author,
+                    fixture_workspace_id(owner),
+                    item.id,
+                    revision.id,
+                    project_ids=(project.id,),
+                )
+            ).annotations
         )
         == []
     )
     assert (
         len(
-            await list_document_annotations(
-                async_db,
-                owner,
-                fixture_workspace_id(owner),
-                item.id,
-                revision.id,
-                project.id,
+            list(
+                (
+                    await list_document_annotations(
+                        async_db,
+                        owner,
+                        fixture_workspace_id(owner),
+                        item.id,
+                        revision.id,
+                        project_ids=(project.id,),
+                    )
+                ).annotations
             )
         )
         == 1
@@ -2721,7 +2730,7 @@ async def test_moderated_own_annotation_does_not_project_moderation_actions(
     setattr(annotation, moderation_field, datetime.now(UTC))
     await async_db.commit()
 
-    review = await review_item_annotations(
+    review = await list_document_annotations(
         async_db,
         author,
         fixture_workspace_id(author),
@@ -2735,19 +2744,36 @@ async def test_moderated_own_annotation_does_not_project_moderation_actions(
 
 
 @pytest.mark.anyio
-async def test_annotation_moderation_rejects_authors_and_audits_versioned_deletion(async_db):
+@pytest.mark.parametrize("author_role", [WorkspaceRole.owner, WorkspaceRole.reviewer])
+async def test_annotation_moderation_rejects_authors_and_audits_versioned_deletion(
+    async_db, author_role
+):
     (
         author,
         administrator,
         item,
-        _project,
-        _revision,
+        project,
+        revision,
         annotation,
-        _reply,
+        reply,
     ) = await _shared_annotation_context(async_db, "moderation-delete")
     workspace_id = fixture_workspace_id(author)
+    if author_role is WorkspaceRole.reviewer:
+        reviewer = await _user(async_db, "moderation-delete-reviewer")
+        async_db.add(
+            WorkspaceMember(
+                workspace_id=workspace_id,
+                user_id=reviewer.id,
+                role=author_role,
+                invited_by=author.id,
+            )
+        )
+        annotation.author_id = reviewer.id
+        reply.author_id = reviewer.id
+        author = reviewer
+        await async_db.commit()
 
-    author_review = await review_item_annotations(
+    author_review = await list_document_annotations(
         async_db, author, workspace_id, item.id, page=1, per_page=20
     )
     assert author_review.annotations[0]["mine"] is True
@@ -2794,6 +2820,7 @@ async def test_annotation_moderation_rejects_authors_and_audits_versioned_deleti
     stored = await async_db.get(PdfAnnotation, annotation.id, populate_existing=True)
     assert stored is not None
     assert stored.deleted_at is not None
+    assert stored.deleted_by_moderation is True
 
     with pytest.raises(ResourceUnavailable, match="Annotation not found"):
         await restore_document_annotation(
@@ -2805,6 +2832,32 @@ async def test_annotation_moderation_rejects_authors_and_audits_versioned_deleti
             deleted["version"],
         )
 
+    with pytest.raises(ResourceUnavailable, match="Annotation not found"):
+        await restore_document_annotation(
+            async_db, author, workspace_id, item.id, annotation.id, deleted["version"]
+        )
+    await async_db.refresh(stored)
+    assert stored.deleted_at is not None
+    assert stored.version == deleted["version"]
+    assert (
+        list(
+            (
+                await list_document_annotations(
+                    async_db, author, workspace_id, item.id, revision.id, project_ids=(project.id,)
+                )
+            ).annotations
+        )
+        == []
+    )
+    assert (
+        await async_db.scalar(
+            select(AuditEvent.id).where(
+                AuditEvent.action == "annotation.restore", AuditEvent.target_id == annotation.id
+            )
+        )
+        is None
+    )
+
     event = await async_db.scalar(
         select(AuditEvent).where(
             AuditEvent.action == "annotation.moderate.delete",
@@ -2815,6 +2868,85 @@ async def test_annotation_moderation_rejects_authors_and_audits_versioned_deleti
     assert event.actor_id == administrator.id
     assert event.authorization_resource_action == ResourceAction.project_annotation_delete.value
     assert json.loads(event.detail or "{}") == {"author_id": author.id}
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("scope", "prior_moderation"),
+    [
+        (AnnotationScope.private, False),
+        (AnnotationScope.project, False),
+        (AnnotationScope.project, True),
+    ],
+)
+async def test_author_can_restore_self_deleted_annotation_and_replies(
+    async_db, scope, prior_moderation
+):
+    (
+        author,
+        moderator,
+        item,
+        project,
+        revision,
+        annotation,
+        reply,
+    ) = await _shared_annotation_context(async_db, "author-delete-restore")
+    workspace_id = fixture_workspace_id(author)
+    if scope is AnnotationScope.private:
+        annotation.scope = scope
+        annotation.project_item_id = None
+    if prior_moderation:
+        membership = await async_db.scalar(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == workspace_id,
+                WorkspaceMember.user_id == moderator.id,
+            )
+        )
+        membership.role = WorkspaceRole.admin
+    await async_db.commit()
+    if prior_moderation:
+        for action in ("hide", "restore"):
+            await moderate_document_annotation(
+                async_db,
+                moderator,
+                workspace_id,
+                item.id,
+                annotation.id,
+                action,
+                annotation.version,
+            )
+        assert annotation.moderated_by == moderator.id
+
+    original_version = annotation.version
+    await delete_document_annotation(
+        async_db, author, workspace_id, item.id, annotation.id, original_version
+    )
+    await async_db.refresh(annotation)
+    assert annotation.deleted_at is not None
+    assert annotation.deleted_by_moderation is False
+    assert (
+        list(
+            (
+                await list_document_annotations(
+                    async_db, author, workspace_id, item.id, revision.id, project_ids=(project.id,)
+                )
+            ).annotations
+        )
+        == []
+    )
+    with pytest.raises(VersionConflict):
+        await restore_document_annotation(
+            async_db, author, workspace_id, item.id, annotation.id, original_version
+        )
+    restored = await restore_document_annotation(
+        async_db, author, workspace_id, item.id, annotation.id, original_version + 1
+    )
+    assert restored["version"] == original_version + 2
+    assert restored["body"] == annotation.body
+    assert [entry["id"] for entry in restored["replies"]] == [reply.id]
+    assert annotation.deleted_at is None
+    assert annotation.deleted_by_moderation is False
+    assert annotation.moderated_by == (moderator.id if prior_moderation else None)
 
 
 @pytest.mark.anyio
@@ -2889,22 +3021,83 @@ async def test_annotation_reads_return_non_editable_flags_for_viewers_and_archiv
     )
     workspace_id = fixture_workspace_id(author)
 
-    visible = await list_document_annotations(
-        async_db, viewer, workspace_id, item.id, revision.id, project.id
+    visible = list(
+        (
+            await list_document_annotations(
+                async_db, viewer, workspace_id, item.id, revision.id, project_ids=(project.id,)
+            )
+        ).annotations
     )
     assert [entry["id"] for entry in visible] == [annotation.id]
     assert visible[0]["editable"] is False
     assert visible[0]["replies"][0]["id"] == reply.id
     assert visible[0]["replies"][0]["editable"] is False
 
+    with pytest.raises(ResourceUnavailable):
+        await update_document_annotation(
+            async_db,
+            viewer,
+            workspace_id,
+            item.id,
+            annotation.id,
+            AnnotationUpdate.model_validate({
+                "version": annotation.version,
+                "page_index": annotation.page_index,
+                "kind": annotation.kind,
+                "scope": annotation.scope,
+                "project_id": project.id,
+                "body": "Rejected sidebar edit",
+                "payload": annotation.payload,
+            }),
+        )
+    with pytest.raises(ResourceUnavailable):
+        await delete_document_annotation(
+            async_db, viewer, workspace_id, item.id, annotation.id, annotation.version
+        )
+    with pytest.raises(PermissionDenied):
+        await create_annotation_reply(
+            async_db,
+            viewer,
+            workspace_id,
+            item.id,
+            annotation.id,
+            AnnotationReplyCreate(id=uuid4(), body="Rejected sidebar reply"),
+        )
+    with pytest.raises(ResourceUnavailable):
+        await update_annotation_reply(
+            async_db,
+            viewer,
+            workspace_id,
+            item.id,
+            annotation.id,
+            reply.id,
+            AnnotationReplyUpdate(version=reply.version, body="Rejected reply edit"),
+        )
+    with pytest.raises(ResourceUnavailable):
+        await delete_annotation_reply(
+            async_db, viewer, workspace_id, item.id, annotation.id, reply.id, reply.version
+        )
+    await async_db.refresh(annotation)
+    await async_db.refresh(reply)
+    assert annotation.body == "Shared note"
+    assert annotation.version == 1
+    assert annotation.deleted_at is None
+    assert reply.body == "Shared reply"
+    assert reply.version == 1
+    assert reply.deleted_at is None
+
     await archive_workspace(async_db, author, workspace_id)
-    archived = await list_document_annotations(
-        async_db, author, workspace_id, item.id, revision.id, project.id
+    archived = list(
+        (
+            await list_document_annotations(
+                async_db, author, workspace_id, item.id, revision.id, project_ids=(project.id,)
+            )
+        ).annotations
     )
     assert [entry["id"] for entry in archived] == [annotation.id]
     assert archived[0]["editable"] is False
     assert archived[0]["replies"][0]["editable"] is False
-    review = await review_item_annotations(
+    review = await list_document_annotations(
         async_db, author, workspace_id, item.id, page=1, per_page=20
     )
     assert review.total == 1
@@ -2919,8 +3112,12 @@ async def test_archived_project_blocks_mutating_existing_annotations(async_db):
     workspace_id = fixture_workspace_id(author)
     await set_project_state(async_db, author, workspace_id, project.id, ProjectState.archived)
 
-    visible = await list_document_annotations(
-        async_db, author, workspace_id, item.id, revision.id, project.id
+    visible = list(
+        (
+            await list_document_annotations(
+                async_db, author, workspace_id, item.id, revision.id, project_ids=(project.id,)
+            )
+        ).annotations
     )
     assert visible[0]["editable"] is False
     assert visible[0]["replies"][0]["editable"] is False
@@ -3004,14 +3201,14 @@ async def test_deleted_project_annotations_are_excluded_from_item_review(async_d
         async_db, "deleted-project-review"
     )
     workspace_id = fixture_workspace_id(author)
-    before = await review_item_annotations(
+    before = await list_document_annotations(
         async_db, author, workspace_id, item.id, page=1, per_page=20
     )
     assert [entry["id"] for entry in before.annotations] == [annotation.id]
 
     project.state = ProjectState.deleted
     await async_db.commit()
-    after = await review_item_annotations(
+    after = await list_document_annotations(
         async_db, author, workspace_id, item.id, page=1, per_page=20
     )
     assert after.total == 0
@@ -3364,3 +3561,405 @@ async def test_cross_workspace_copy_rejects_pending_file_revision(async_db):
         )
         is None
     )
+
+
+@pytest.mark.anyio
+async def test_annotation_list_filters_multiple_sources_and_revisions_without_widening_access(
+    async_db,
+):
+    owner, viewer, item, project, revision, shared, _reply = await _shared_annotation_context(
+        async_db, "annotation-sources"
+    )
+    workspace_id = fixture_workspace_id(owner)
+    second_project = Project(workspace_id=workspace_id, name="Second", created_by=owner.id)
+    restricted_project = Project(
+        workspace_id=workspace_id,
+        name="Restricted",
+        participation=ProjectParticipation.managed,
+        created_by=owner.id,
+    )
+    old_revision = FileRevision(
+        workspace_id=workspace_id,
+        item_id=item.id,
+        object_key="objects/old-sources.pdf",
+        size=1,
+        original_name="old-sources.pdf",
+        created_by=owner.id,
+    )
+    async_db.add_all([second_project, restricted_project, old_revision])
+    await async_db.flush()
+    assignments = [
+        ProjectItem(
+            workspace_id=workspace_id,
+            project_id=source.id,
+            item_id=item.id,
+            added_by=owner.id,
+        )
+        for source in (second_project, restricted_project)
+    ]
+    async_db.add_all(assignments)
+    await async_db.flush()
+
+    def annotation(author, file_revision, assignment=None):
+        return PdfAnnotation(
+            workspace_id=workspace_id,
+            item_id=item.id,
+            file_revision_id=file_revision.id,
+            author_id=author.id,
+            page_index=0,
+            kind=AnnotationKind.note,
+            scope=AnnotationScope.project if assignment else AnnotationScope.private,
+            project_item_id=assignment.id if assignment else None,
+            payload=shared.payload,
+        )
+
+    private = annotation(viewer, revision)
+    other_private = annotation(owner, revision)
+    second = annotation(owner, revision, assignments[0])
+    restricted = annotation(owner, revision, assignments[1])
+    old_private = annotation(viewer, old_revision)
+    hidden = annotation(owner, revision, assignments[0])
+    hidden.hidden_at = datetime.now(UTC)
+    async_db.add_all([private, other_private, second, restricted, old_private, hidden])
+    await async_db.commit()
+
+    all_sources = await list_document_annotations(async_db, viewer, workspace_id, item.id)
+    assert {entry["id"] for entry in all_sources.annotations} == {
+        shared.id,
+        private.id,
+        second.id,
+        old_private.id,
+    }
+    assert {source.id for source in all_sources.projects} == {project.id, second_project.id}
+    assert {file.id for file in all_sources.revisions} == {revision.id, old_revision.id}
+    both = await list_document_annotations(
+        async_db,
+        viewer,
+        workspace_id,
+        item.id,
+        revision.id,
+        project_ids=(project.id, second_project.id),
+    )
+    assert both.total == 3
+    by_id = {entry["id"]: entry for entry in both.annotations}
+    assert by_id[shared.id]["project_name"] == project.name
+    assert by_id[second.id]["project_name"] == second_project.name
+    assert by_id[private.id]["project_name"] is None
+    assert all(entry["revision_name"] == revision.original_name for entry in both.annotations)
+    project_only = await list_document_annotations(
+        async_db,
+        viewer,
+        workspace_id,
+        item.id,
+        revision.id,
+        scope=AnnotationScope.project,
+        project_ids=(second_project.id,),
+    )
+    assert [entry["id"] for entry in project_only.annotations] == [second.id]
+    private_only = await list_document_annotations(
+        async_db,
+        viewer,
+        workspace_id,
+        item.id,
+        scope=AnnotationScope.private,
+    )
+    assert {entry["id"] for entry in private_only.annotations} == {private.id, old_private.id}
+    pages = [
+        await list_document_annotations(
+            async_db,
+            viewer,
+            workspace_id,
+            item.id,
+            revision.id,
+            page=page,
+            per_page=1,
+        )
+        for page in (1, 2, 3)
+    ]
+    assert {result.annotations[0]["id"] for result in pages} == set(by_id)
+    assert all(result.total == 3 for result in pages)
+    for project_ids in ((restricted_project.id,), (project.id, restricted_project.id)):
+        with pytest.raises(ResourceUnavailable):
+            await list_document_annotations(
+                async_db,
+                viewer,
+                workspace_id,
+                item.id,
+                project_ids=project_ids,
+            )
+    with pytest.raises(ResourceNotFound):
+        await list_document_annotations(async_db, viewer, workspace_id, item.id, "unknown")
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("change", ["remove_member", "restrict_participation"])
+@pytest.mark.parametrize("pagination", ["page", "cursor"])
+@pytest.mark.parametrize("explicit_source", [False, True])
+async def test_annotation_list_rechecks_project_visibility_after_loading_source_choices(
+    async_db, async_session_factory, monkeypatch, change, pagination, explicit_source
+):
+    owner, viewer, item, project, revision, shared, shared_reply = await _shared_annotation_context(
+        async_db, f"annotation-visibility-race-{change}-{pagination}-{explicit_source}"
+    )
+    workspace_id = fixture_workspace_id(owner)
+    if change == "remove_member":
+        await set_project_participation(
+            async_db, owner, workspace_id, project.id, ProjectParticipation.managed
+        )
+        await add_project_member(async_db, owner, workspace_id, project.id, viewer.username)
+    else:
+        await set_project_participation(
+            async_db, owner, workspace_id, project.id, ProjectParticipation.open
+        )
+    private = PdfAnnotation(
+        workspace_id=workspace_id,
+        item_id=item.id,
+        file_revision_id=revision.id,
+        author_id=viewer.id,
+        page_index=0,
+        kind=AnnotationKind.note,
+        scope=AnnotationScope.private,
+        payload=shared.payload,
+    )
+    async_db.add(private)
+    await async_db.flush()
+    private_reply = PdfAnnotationReply(
+        workspace_id=workspace_id,
+        annotation_id=private.id,
+        author_id=viewer.id,
+        body="Private reply",
+    )
+    async_db.add(private_reply)
+    await async_db.commit()
+    async with async_session_factory() as reader:
+        reading_user = await reader.get(User, viewer.id)
+        assert reading_user is not None
+        execute = reader.execute
+        changed = False
+
+        async def execute_then_revoke_project_access(statement, *args, **kwargs):
+            nonlocal changed
+            result = await execute(statement, *args, **kwargs)
+            columns = getattr(statement, "column_descriptions", ())
+            if not changed and columns and columns[0]["expr"] is Project:
+                # Source choices have been read, but count and annotation queries
+                # must observe the other Session's committed visibility change.
+                async with async_session_factory() as writer:
+                    admin = await writer.get(User, owner.id)
+                    assert admin is not None
+                    if change == "remove_member":
+                        await remove_project_member(
+                            writer, admin, workspace_id, project.id, viewer.id
+                        )
+                    else:
+                        await set_project_participation(
+                            writer, admin, workspace_id, project.id, ProjectParticipation.managed
+                        )
+                changed = True
+            return result
+
+        monkeypatch.setattr(reader, "execute", execute_then_revoke_project_access)
+        result = await list_document_annotations(
+            reader,
+            reading_user,
+            workspace_id,
+            item.id,
+            revision.id,
+            project_ids=(project.id,) if explicit_source else None,
+            pagination=pagination,
+        )
+        assert changed
+        assert [record["id"] for record in result.annotations] == [private.id]
+        assert [reply["id"] for reply in result.annotations[0]["replies"]] == [private_reply.id]
+        assert result.total == 1
+        assert result.next_cursor is None
+    # Revocation removes visibility, while the authored records remain stored.
+    async with async_session_factory() as observer:
+        assert await observer.get(PdfAnnotation, shared.id) is not None
+        assert await observer.get(PdfAnnotationReply, shared_reply.id) is not None
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pagination", ["page", "cursor"])
+async def test_annotation_list_survives_revision_deletion_during_response_assembly(
+    async_db, async_session_factory, monkeypatch, pagination
+):
+    owner, viewer, item, _project, revision, shared, _reply = await _shared_annotation_context(
+        async_db, f"annotation-revision-race-{pagination}"
+    )
+    workspace_id = fixture_workspace_id(owner)
+    revision_id = revision.id
+    revision_name = revision.original_name
+    async with async_session_factory() as reader:
+        reading_user = await reader.get(User, viewer.id)
+        assert reading_user is not None
+        execute = reader.execute
+        deleted = False
+
+        async def execute_then_delete_revision(statement, *args, **kwargs):
+            nonlocal deleted
+            result = await execute(statement, *args, **kwargs)
+            columns = getattr(statement, "column_descriptions", ())
+            if not deleted and columns and columns[0]["expr"] is PdfAnnotation:
+                # The reader already owns ORM objects; cascade deletion in another
+                # Session must not invalidate the metadata needed for its response.
+                async with async_session_factory() as writer:
+                    deleting_user = await writer.get(User, owner.id)
+                    assert deleting_user is not None
+                    await delete_file_revision(
+                        writer, deleting_user, workspace_id, item.id, revision_id
+                    )
+                deleted = True
+            return result
+
+        monkeypatch.setattr(reader, "execute", execute_then_delete_revision)
+        result = await list_document_annotations(
+            reader,
+            reading_user,
+            workspace_id,
+            item.id,
+            revision_id,
+            pagination=pagination,
+            per_page=1,
+        )
+        assert deleted
+        assert [record["id"] for record in result.annotations] == [shared.id]
+        assert result.annotations[0]["revision_name"] == revision_name
+        assert result.next_cursor is None
+        # A later read observes the committed cascade instead of the earlier page.
+        after = await list_document_annotations(reader, reading_user, workspace_id, item.id)
+        assert after.annotations == ()
+        assert after.revisions == ()
+        assert after.total == 0
+    async with async_session_factory() as observer:
+        assert await observer.get(FileRevision, revision_id) is None
+        assert await observer.get(PdfAnnotation, shared.id) is None
+
+
+@pytest.mark.anyio
+async def test_annotation_update_reports_revision_deleted_after_commit(
+    async_db, async_session_factory, monkeypatch
+):
+    owner, _viewer, item, project, revision, shared, _reply = await _shared_annotation_context(
+        async_db, "annotation-update-revision-race"
+    )
+    workspace_id = fixture_workspace_id(owner)
+    revision.page_count = 1
+    revision.page_geometry = "[[0, 0, 300, 400]]"
+    revision.processing_state = FileRevisionProcessingState.ready
+    await async_db.commit()
+    async with async_session_factory() as writer:
+        writing_user = await writer.get(User, owner.id)
+        assert writing_user is not None
+        commit = writer.commit
+
+        async def commit_then_delete_revision():
+            await commit()
+            async with async_session_factory() as deleter:
+                deleting_user = await deleter.get(User, owner.id)
+                assert deleting_user is not None
+                await delete_file_revision(
+                    deleter, deleting_user, workspace_id, item.id, revision.id
+                )
+
+        monkeypatch.setattr(writer, "commit", commit_then_delete_revision)
+        with pytest.raises(ResourceNotFound, match="revision not found"):
+            await update_document_annotation(
+                writer,
+                writing_user,
+                workspace_id,
+                item.id,
+                shared.id,
+                AnnotationUpdate.model_validate({
+                    "version": shared.version,
+                    "page_index": 0,
+                    "kind": "note",
+                    "scope": "project",
+                    "project_id": project.id,
+                    "body": "Updated before the revision was deleted",
+                    "payload": shared.payload,
+                }),
+            )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("change", ["update", "delete_cursor"])
+async def test_annotation_cursor_traversal_survives_changes_between_pages(async_db, change):
+    owner, _viewer, item, _project, revision, shared, _reply = await _shared_annotation_context(
+        async_db, f"annotation-cursor-{change}"
+    )
+    workspace_id = fixture_workspace_id(owner)
+    revision.page_count = 1
+    revision.page_geometry = "[[0, 0, 300, 400]]"
+    revision.processing_state = FileRevisionProcessingState.ready
+    additional = [
+        PdfAnnotation(
+            workspace_id=workspace_id,
+            item_id=item.id,
+            file_revision_id=revision.id,
+            author_id=owner.id,
+            page_index=0,
+            kind=AnnotationKind.note,
+            scope=AnnotationScope.private,
+            payload=shared.payload,
+        )
+        for _ in range(101)
+    ]
+    async_db.add_all(additional)
+    await async_db.commit()
+    ordered = sorted(additional, key=lambda record: record.id)
+    first = await list_document_annotations(
+        async_db,
+        owner,
+        workspace_id,
+        item.id,
+        revision.id,
+        scope=AnnotationScope.private,
+        pagination="cursor",
+        per_page=100,
+    )
+    assert first.next_cursor == ordered[99].id
+    assert len(first.annotations) == 100
+    if change == "update":
+        updated = ordered[-1]
+        await update_document_annotation(
+            async_db,
+            owner,
+            workspace_id,
+            item.id,
+            updated.id,
+            AnnotationUpdate.model_validate({
+                "version": updated.version,
+                "page_index": 0,
+                "kind": "note",
+                "scope": "private",
+                "project_id": None,
+                "body": "Updated between reader pages",
+                "payload": updated.payload,
+            }),
+        )
+    else:
+        await delete_document_annotation(
+            async_db,
+            owner,
+            workspace_id,
+            item.id,
+            ordered[99].id,
+            ordered[99].version,
+        )
+    second = await list_document_annotations(
+        async_db,
+        owner,
+        workspace_id,
+        item.id,
+        revision.id,
+        scope=AnnotationScope.private,
+        pagination="cursor",
+        per_page=100,
+        cursor=first.next_cursor,
+    )
+    assert second.next_cursor is None
+    assert [entry["id"] for entry in second.annotations] == [ordered[-1].id]
+    assert len({entry["id"] for entry in (*first.annotations, *second.annotations)}) == 101
+    if change == "update":
+        assert second.annotations[0]["body"] == "Updated between reader pages"

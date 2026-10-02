@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Query, status
 
@@ -8,6 +8,7 @@ from quirebase.documents import (
     AnnotationCreate,
     AnnotationReplyCreate,
     AnnotationReplyUpdate,
+    AnnotationScope,
     AnnotationUpdate,
     create_annotation_reply,
     create_document_annotation,
@@ -17,16 +18,15 @@ from quirebase.documents import (
     moderate_document_annotation,
     restore_annotation_reply,
     restore_document_annotation,
-    review_item_annotations,
     update_annotation_reply,
     update_document_annotation,
 )
 from quirebase.web.api.annotation_schemas import (
+    AnnotationListView,
     AnnotationModerationRequest,
+    AnnotationProjectView,
     AnnotationReplyView,
-    AnnotationReviewAnnotationView,
-    AnnotationReviewRevisionView,
-    AnnotationReviewView,
+    AnnotationRevisionView,
     AnnotationView,
 )
 from quirebase.web.api.common import OkView
@@ -35,8 +35,8 @@ from quirebase.web.api.dependencies import ApiUser, Database
 router = APIRouter(tags=["Annotations"])
 
 
-@router.get("/items/{item_id}/annotations/review", response_model=AnnotationReviewView)
-async def review_annotations(
+@router.get("/items/{item_id}/annotations", response_model=AnnotationListView)
+async def list_annotations(
     workspace_id: str,
     item_id: str,
     user: ApiUser,
@@ -44,53 +44,49 @@ async def review_annotations(
     page: Annotated[int, Query(ge=1)] = 1,
     per_page: Annotated[int, Query(ge=1, le=100)] = 50,
     revision_id: str | None = None,
-) -> AnnotationReviewView:
-    review = await review_item_annotations(
+    scope: AnnotationScope | None = None,
+    project_id: Annotated[
+        list[str] | None,
+        Query(description="Repeat to select multiple readable Projects linked to this Item."),
+    ] = None,
+    pagination: Literal["page", "cursor"] = "page",
+    cursor: Annotated[str | None, Query(min_length=1, max_length=36)] = None,
+) -> AnnotationListView:
+    """List authorized Annotations across revisions and sources.
+
+    With no filters, return all visible sources. Project selection also includes the caller's
+    private Annotations unless scope=project; scope=private excludes Project Annotations.
+    Revision and Project choices are independent of the applied filters.
+    Use pagination=cursor to traverse by immutable ID, then pass next_cursor as cursor.
+    Page mode orders by latest update; cursor mode avoids skips when content is edited or deleted.
+    """
+    result = await list_document_annotations(
         db,
         user,
         workspace_id,
         item_id,
+        revision_id,
         page=page,
         per_page=per_page,
-        revision_id=revision_id,
+        scope=scope,
+        project_ids=tuple(project_id) if project_id is not None else None,
+        pagination=pagination,
+        cursor=cursor,
     )
-    revision_names = {revision.id: revision.original_name for revision in review.revisions}
-    return AnnotationReviewView(
+    return AnnotationListView(
         revisions=[
-            AnnotationReviewRevisionView(id=revision.id, original_name=revision.original_name)
-            for revision in review.revisions
+            AnnotationRevisionView(id=revision.id, original_name=revision.original_name)
+            for revision in result.revisions
         ],
-        annotations=[
-            AnnotationReviewAnnotationView.model_validate({
-                **annotation,
-                "revision_name": revision_names[annotation["revision_id"]],
-            })
-            for annotation in review.annotations
+        projects=[
+            AnnotationProjectView(id=project.id, name=project.name) for project in result.projects
         ],
-        total=review.total,
+        annotations=[AnnotationView.model_validate(row) for row in result.annotations],
+        total=result.total,
         page=page,
         per_page=per_page,
+        next_cursor=result.next_cursor,
     )
-
-
-@router.get(
-    "/items/{item_id}/annotations",
-    response_model=list[AnnotationView],
-)
-async def list_annotations(
-    workspace_id: str,
-    item_id: str,
-    revision_id: str,
-    user: ApiUser,
-    db: Database,
-    project_id: str | None = None,
-) -> list[AnnotationView]:
-    return [
-        AnnotationView.model_validate(row)
-        for row in await list_document_annotations(
-            db, user, workspace_id, item_id, revision_id, project_id
-        )
-    ]
 
 
 @router.post(

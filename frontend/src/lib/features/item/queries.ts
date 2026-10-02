@@ -18,8 +18,13 @@ export const itemKeys = {
 		[...itemKeys.detail(workspaceId, itemId), 'discussion'] as const,
 	annotations: (workspaceId: string, itemId: string) =>
 		[...itemKeys.detail(workspaceId, itemId), 'annotations'] as const,
-	annotationsReview: (workspaceId: string, itemId: string, revisionId: string, page: number) =>
-		[...itemKeys.annotations(workspaceId, itemId), 'review', revisionId, page] as const
+	annotationList: (
+		workspaceId: string,
+		itemId: string,
+		revisionId: string,
+		source: string,
+		page: number
+	) => [...itemKeys.annotations(workspaceId, itemId), revisionId, source, page] as const
 };
 
 export function itemOverviewQuery(workspaceId: string, itemId: string) {
@@ -86,24 +91,27 @@ export function itemDiscussionQuery(workspaceId: string, itemId: string, enabled
 	});
 }
 
-export function itemAnnotationsReviewQuery(
+export function itemAnnotationsQuery(
 	workspaceId: string,
 	itemId: string,
 	revisionId: string,
+	source: string,
 	page: number,
 	enabled: boolean
 ) {
 	const api = createWorkspaceApi(workspaceId);
 	return queryOptions({
-		queryKey: itemKeys.annotationsReview(workspaceId, itemId, revisionId, page),
+		queryKey: itemKeys.annotationList(workspaceId, itemId, revisionId, source, page),
 		enabled,
 		queryFn: ({ signal }) =>
-			api.request('GET', '/workspaces/{workspace_id}/items/{item_id}/annotations/review', {
+			api.request('GET', '/workspaces/{workspace_id}/items/{item_id}/annotations', {
 				params: {
 					path: { item_id: itemId },
 					query: {
 						page,
-						revision_id: revisionId === 'all' ? undefined : revisionId
+						revision_id: revisionId === 'all' ? undefined : revisionId,
+						scope: source === 'private' ? 'private' : source === 'all' ? undefined : 'project',
+						project_id: source !== 'all' && source !== 'private' ? [source] : undefined
 					}
 				},
 				signal

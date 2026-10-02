@@ -40,10 +40,12 @@ class AnnotationReplyView(BaseModel):
 class AnnotationView(BaseModel):
     id: str
     revision_id: str
+    revision_name: str
     page_index: int
     kind: AnnotationKind
     scope: AnnotationScope
     project_id: str | None
+    project_name: str | None
     body: str | None
     selected_text: str | None
     payload: AnnotationPayload
@@ -94,18 +96,21 @@ def document_list_view(item_id: str, item_files: Any) -> DocumentListView:
     return DocumentListView(item_id=item_id, files=[*revisions, *attachments])
 
 
-class AnnotationReviewRevisionView(BaseModel):
+class AnnotationRevisionView(BaseModel):
     id: str
     original_name: str
 
 
-class AnnotationReviewAnnotationView(AnnotationView):
-    revision_name: str
+class AnnotationProjectView(BaseModel):
+    id: str
+    name: str
 
 
-class AnnotationReviewView(BaseModel):
-    revisions: list[AnnotationReviewRevisionView]
-    annotations: list[AnnotationReviewAnnotationView]
+class AnnotationListView(BaseModel):
+    revisions: list[AnnotationRevisionView]
+    projects: list[AnnotationProjectView]
+    annotations: list[AnnotationView]
     total: int
     page: int
     per_page: int
+    next_cursor: str | None = None
