@@ -292,6 +292,7 @@ async def admin_workspaces(user: ApiUser, db: Database) -> list[AdminWorkspaceVi
             governance_suspended_by=workspace.governance_suspended_by,
         )
         for workspace in workspaces
+        if workspace.id in owner_ids
     ]
 
 

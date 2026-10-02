@@ -38,6 +38,7 @@ from quirebase.models import (
     WorkspaceState,
 )
 from quirebase.search import search_index
+from quirebase.web.api import admin as admin_api
 from quirebase.web.api import workspaces as workspace_api
 from quirebase.workspaces import permanently_delete_workspace
 
@@ -98,9 +99,9 @@ async def authenticated_async_client(db, session_factory, tmp_path, monkeypatch)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("detail", [False, True], ids=["list", "detail"])
+@pytest.mark.parametrize("surface", ["list", "detail", "admin"])
 async def test_workspace_read_tolerates_deletion_before_owner_lookup(
-    async_db, async_session_factory, tmp_path, monkeypatch, detail
+    async_db, async_session_factory, tmp_path, monkeypatch, surface
 ):
     client, item, _revision = await authenticated_async_client(
         async_db, async_session_factory, tmp_path, monkeypatch
@@ -117,10 +118,18 @@ async def test_workspace_read_tolerates_deletion_before_owner_lookup(
     async_db.add(
         WorkspaceMember(workspace_id=retained.id, user_id=owner_id, role=WorkspaceRole.owner)
     )
+    if surface == "admin":
+        owner = await async_db.get(User, owner_id)
+        owner.role = "administrator"
     await async_db.commit()
 
-    url = f"/api/v1/workspaces/{workspace_id}" if detail else "/api/v1/workspaces"
-    owner_lookup = workspace_api.workspace_owner_ids
+    detail = surface == "detail"
+    if surface == "admin":
+        url, api = "/api/v1/admin/workspaces", admin_api
+    else:
+        url = f"/api/v1/workspaces/{workspace_id}" if detail else "/api/v1/workspaces"
+        api = workspace_api
+    owner_lookup = api.workspace_owner_ids
 
     async def delete_before_owner_lookup(db, workspace_ids):
         # The handler has already read the Workspace or resolved its access context.
@@ -138,7 +147,7 @@ async def test_workspace_read_tolerates_deletion_before_owner_lookup(
         else:
             assert {view["id"] for view in before.json()} == {workspace_id, retained.id}
 
-        monkeypatch.setattr(workspace_api, "workspace_owner_ids", delete_before_owner_lookup)
+        monkeypatch.setattr(api, "workspace_owner_ids", delete_before_owner_lookup)
         response = await client.get(url)
         if detail:
             assert response.status_code == 404

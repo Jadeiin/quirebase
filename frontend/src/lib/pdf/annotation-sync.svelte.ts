@@ -308,8 +308,9 @@ export function createAnnotationSync(options: AnnotationSyncOptions) {
 	function handleEvent(event: AnnotationEvent) {
 		if (!annotationApi || event.documentId !== options.documentId) return;
 		if (event.type === 'loaded') {
+			// EmbedPDF drains queued imports before this event. Viewer setup loads
+			// server annotations; the native load only needs to lock PDF annotations.
 			lockNative();
-			void load(currentSources).catch(() => options.onStatus({ state: 'load-failed' }));
 			return;
 		}
 		if (nativeIds.has(event.annotation.id)) return;

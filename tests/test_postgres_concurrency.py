@@ -42,6 +42,7 @@ from quirebase.library import (
     apply_bulk_item_action,
     commit_import_batch,
     delete_discussion_message,
+    moderate_project_discussion_message,
 )
 from quirebase.models import (
     AnnotationKind,
@@ -138,6 +139,71 @@ async def test_workspace_read_tolerates_committed_root_deletion(postgres_session
             await delete_db.delete(workspace)
             await delete_db.commit()
         assert await workspace_owner_ids(read_db, workspace_ids) == {}
+
+
+@pytest.mark.parametrize("root", ["workspace", "project"])
+async def test_project_discussion_moderation_waits_for_root_deletion(
+    postgres_sessions, monkeypatch, root
+):
+    async with postgres_sessions() as db:
+        owner = await _user(db, "discussion-moderator")
+        author = await _user(db, "discussion-author")
+        workspace_id, owner_id = fixture_workspace_id(owner), owner.id
+        db.add(
+            WorkspaceMember(workspace_id=workspace_id, user_id=author.id, role=WorkspaceRole.editor)
+        )
+        project = Project(workspace_id=workspace_id, name="Discussion", created_by=owner_id)
+        db.add(project)
+        await db.commit()
+        message = await add_project_discussion_message(
+            db, author, workspace_id, project.id, "Moderate this message"
+        )
+        project_id, message_id = project.id, message.id
+        if root == "workspace":
+            await archive_workspace(db, owner, workspace_id)
+
+    model, root_id = (Workspace, workspace_id) if root == "workspace" else (Project, project_id)
+    async with postgres_sessions() as delete_db, postgres_sessions() as moderation_db:
+        resource = await delete_db.scalar(
+            select(model).where(model.id == root_id).with_for_update()
+        )
+        actor = await moderation_db.get(User, owner_id)
+        root_requested = asyncio.Event()
+        scalar = moderation_db.scalar
+
+        async def observe_root_lock(statement, *args, **kwargs):
+            sql = str(statement.compile(dialect=moderation_db.bind.dialect))
+            if "FOR SHARE" in sql and any(
+                table.name == model.__tablename__ for table in statement.get_final_froms()
+            ):
+                root_requested.set()
+            return await scalar(statement, *args, **kwargs)
+
+        monkeypatch.setattr(moderation_db, "scalar", observe_root_lock)
+
+        async def moderate():
+            try:
+                await moderate_project_discussion_message(
+                    moderation_db, actor, workspace_id, project_id, message_id, "Spam"
+                )
+            except (WorkspaceUnavailable, ResourceUnavailable):
+                await moderation_db.rollback()
+                return "rejected"
+            return "committed"
+
+        moderation_task = asyncio.create_task(moderate())
+        try:
+            await asyncio.wait_for(root_requested.wait(), timeout=5)
+            # Moderation must wait at the parent without locking the message,
+            # so the parent's cascade can finish without a deadlock.
+            await delete_db.delete(resource)
+            await asyncio.wait_for(delete_db.flush(), timeout=5)
+            await delete_db.commit()
+            assert await asyncio.wait_for(moderation_task, timeout=5) == "rejected"
+        finally:
+            if not moderation_task.done():
+                moderation_task.cancel()
+            await asyncio.gather(moderation_task, return_exceptions=True)
 
 
 async def _project_annotation_context(

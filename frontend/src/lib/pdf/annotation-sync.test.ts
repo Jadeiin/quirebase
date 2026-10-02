@@ -73,6 +73,7 @@ function harness() {
 	const objects = new Map<string, PdfAnnotationObject>();
 	const statuses: AnnotationSyncStatus[] = [];
 	const scope = {
+		getAnnotations: vi.fn(() => [...objects.values()].map((object) => ({ object }))),
 		getAnnotationById: vi.fn((id: string) => {
 			const object = objects.get(id);
 			return object ? { object } : null;
@@ -119,6 +120,27 @@ function harness() {
 }
 
 describe('reader annotation reconciliation', () => {
+	it.each(['before', 'after'])(
+		'loads server annotations once when native annotations finish %s the server load',
+		async (order) => {
+			const { sync, objects, statuses } = harness();
+			const record = annotation('server-note');
+			const native = adapter.vendorFromCanonical(
+				canonicalAnnotationFromView(annotation('native-note'))
+			);
+			objects.set(native.id, native);
+			request.mockResolvedValue(list([record]));
+			const loaded: AnnotationEvent = { type: 'loaded', documentId: 'revision-1', total: 1 };
+			if (order === 'before') sync.handleEvent(loaded);
+			await sync.load(privateSource);
+			if (order === 'after') sync.handleEvent(loaded);
+			expect(request.mock.calls.filter(([method]) => method === 'GET')).toHaveLength(1);
+			expect(objects.get(native.id)?.flags).toContain('readOnly');
+			expect(objects.get(record.id)?.flags).not.toContain('readOnly');
+			expect(statuses.at(-1)).toEqual({ state: 'loaded', count: 1 });
+		}
+	);
+
 	it('displays the restored root and replies when Undo precedes the DELETE response', async () => {
 		const { sync, objects, statuses, event } = harness();
 		const record = annotation('deleted-root');

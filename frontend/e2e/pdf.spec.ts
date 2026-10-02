@@ -341,6 +341,7 @@ test('PDF comment sidebar preserves private edits in a read-only Project', async
 	const card = commentCard(page, 'private annotation');
 	await card.getByRole('button').first().click();
 	await page.getByRole('button', { name: 'Edit', exact: true }).click();
+	await expect(page.locator('textarea')).toHaveValue('private annotation');
 	await page.locator('textarea').fill('Edited private annotation');
 	await page.getByRole('button', { name: 'Save', exact: true }).click();
 	await expect(page.getByText('Edited private annotation', { exact: true })).toBeVisible();

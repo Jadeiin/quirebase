@@ -112,15 +112,12 @@ async def moderate_discussion_message(
     context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     if not await can_read_item(db, user, workspace_id, item_id):
         raise ResourceUnavailable("discussion message not found")
-    message = await db.scalar(
-        select(DiscussionMessage)
-        .where(
-            DiscussionMessage.id == message_id,
-            DiscussionMessage.workspace_id == workspace_id,
-            DiscussionMessage.item_id == item_id,
-        )
-        .with_for_update()
+    message_query = select(DiscussionMessage).where(
+        DiscussionMessage.id == message_id,
+        DiscussionMessage.workspace_id == workspace_id,
+        DiscussionMessage.item_id == item_id,
     )
+    message = await db.scalar(message_query)
     if message is None:
         raise ResourceUnavailable("discussion message not found")
     relation = "own" if message.author_id == context.actor_id else "other"
@@ -133,6 +130,10 @@ async def moderate_discussion_message(
         ResourceAction.item_discussion_delete,
         relation=relation,
     )
+    # Hold the Workspace root before locking a cascading child row.
+    message = await db.scalar(message_query.with_for_update())
+    if message is None:
+        raise ResourceUnavailable("discussion message not found")
     explanation = reason.strip()
     if not explanation or len(explanation) > 2000:
         raise ValidationFailure("moderation reason must contain 1 to 2000 characters")
@@ -269,15 +270,12 @@ async def moderate_project_discussion_message(
     context = await require_project_context(
         db, user, workspace_id, project_id, ResourceAction.workspace_read
     )
-    message = await db.scalar(
-        select(DiscussionMessage)
-        .where(
-            DiscussionMessage.id == message_id,
-            DiscussionMessage.workspace_id == workspace_id,
-            DiscussionMessage.project_id == project_id,
-        )
-        .with_for_update()
+    message_query = select(DiscussionMessage).where(
+        DiscussionMessage.id == message_id,
+        DiscussionMessage.workspace_id == workspace_id,
+        DiscussionMessage.project_id == project_id,
     )
+    message = await db.scalar(message_query)
     if message is None:
         raise ResourceUnavailable("discussion message not found")
     relation = "own" if message.author_id == context.workspace.actor_id else "other"
@@ -291,6 +289,10 @@ async def moderate_project_discussion_message(
         ResourceAction.project_discussion_delete,
         relation=relation,
     )
+    # Hold the Workspace and Project roots before locking a cascading child row.
+    message = await db.scalar(message_query.with_for_update())
+    if message is None:
+        raise ResourceUnavailable("discussion message not found")
     explanation = reason.strip()
     if not explanation or len(explanation) > 2000:
         raise ValidationFailure("moderation reason must contain 1 to 2000 characters")

@@ -60,6 +60,7 @@ test('theme preference persists and system mode follows the browser', async ({ p
 
 	await page.goto('/');
 	await expect(page.locator('html')).toHaveAttribute('data-mode', 'dark');
+	await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
 
 	await page.getByRole('button', { name: /reader/i }).click();
 	await page.getByRole('menuitem', { name: 'Light theme' }).click();
@@ -70,6 +71,7 @@ test('theme preference persists and system mode follows the browser', async ({ p
 
 	await page.reload();
 	await expect(page.locator('html')).toHaveAttribute('data-mode', 'light');
+	await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
 	await page.getByRole('button', { name: /reader/i }).click();
 	await page.getByRole('menuitem', { name: 'Dark theme' }).click();
 	await expect(page.locator('html')).toHaveAttribute('data-mode', 'dark');
