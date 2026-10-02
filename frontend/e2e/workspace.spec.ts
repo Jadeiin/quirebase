@@ -470,7 +470,7 @@ test('a user who is not yet a Workspace member can sign in and accept the global
 	);
 
 	await page.goto('/invite/workspace-token');
-	await expect(page.getByText('Join', { exact: false })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Join Quirebase', exact: true })).toBeVisible();
 	await page.getByLabel('Username').fill('reader');
 	await page.getByLabel('Password').fill('correct horse battery staple');
 	await page.getByRole('button', { name: 'Accept invitation' }).click();
