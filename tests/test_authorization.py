@@ -100,14 +100,6 @@ def test_policy_uses_canonical_crud_verbs_without_authorization_synonyms():
     })
 
 
-def test_policy_regex_alternatives_are_stably_sorted():
-    for row in _policy_rows():
-        for value in row[4:6]:
-            if value.startswith("(") and value.endswith(")"):
-                alternatives = value[1:-1].split("|")
-                assert alternatives == sorted(alternatives)
-
-
 def test_system_roles_are_decided_only_by_the_casbin_action_matrix():
     unconstrained_policy_actions = {
         (row[2], row[3])

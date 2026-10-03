@@ -510,7 +510,7 @@
 								<h2 class="text-error-700-300">{$t('Delete Item')}</h2>
 								<p class="text-surface-600-400">
 									{$t(
-										'Associated files, annotations, and Project memberships will also be removed.'
+										'Associated files, annotations, and assignments of this Item to Projects will also be removed.'
 									)}
 								</p>
 							</div>

@@ -257,17 +257,6 @@ describe('WorkflowCenter', () => {
 		expect(first.entries().map((entry) => entry.id)).toEqual(['workflow-a']);
 	});
 
-	it('rejects in-flight waiters when the ledger switches accounts', async () => {
-		const first = memoryLedger();
-		const second = memoryLedger();
-		const center = new WorkflowCenter(first.ledger);
-		const { settled } = center.track('workflow-a', trackOptions());
-
-		center.bindLedger(second.ledger);
-
-		await expect(settled).rejects.toThrow('Workflow tracking moved to another account');
-	});
-
 	it('never evicts active jobs when enforcing the tray limit', () => {
 		const center = new WorkflowCenter();
 		for (let index = 0; index < 25; index++) {

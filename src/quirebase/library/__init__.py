@@ -88,13 +88,13 @@ from quirebase.library.item_sections import (
     ItemSectionData,
     ItemSectionResult,
     ProjectAssignmentOption,
-    TagGroup,
-    TagMatrix,
     open_item_section,
 )
 from quirebase.library.providers import acquire_remote_pdf
 from quirebase.library.tags import (
     TagConflict,
+    TagGroup,
+    TagMatrix,
     add_existing_tag_to_item,
     add_tag_to_item,
     apply_item_tag_selection,

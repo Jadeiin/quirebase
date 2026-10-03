@@ -122,15 +122,14 @@ async def _item_text(db: AsyncSession, item: Item, settings: Settings) -> str:
 
 
 def _engine(settings: Settings):
-    validate_engine_configuration(settings)
-    name = settings.recommendation_engine.strip().casefold()
-    if name == "yake":
+    descriptor = validate_engine_configuration(settings)
+    if descriptor.name == "yake":
         return YakeRecommendationEngine()
-    if name == "keybert":
+    if descriptor.name == "keybert":
         if settings.keybert_model_path is None:
             raise RuntimeError("QUIREBASE_KEYBERT_MODEL_PATH is required for the keybert engine")
         return load_local_keybert(str(settings.keybert_model_path))
-    raise RuntimeError(f"unsupported recommendation engine: {settings.recommendation_engine}")
+    raise RuntimeError(f"unsupported recommendation engine: {descriptor.name}")
 
 
 async def recommend_item_tags(

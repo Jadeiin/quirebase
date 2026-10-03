@@ -37,6 +37,7 @@ from quirebase.documents.revisions import (
 )
 from quirebase.library.activity import get_accessible_item_identifiers
 from quirebase.library.citations import format_csl_export, format_standard_export
+from quirebase.library.identifiers import create_item_from_metadata_record
 from quirebase.library.providers import candidate_record_values, lookup_candidate
 from quirebase.models import ImportBatch, Item, ItemAuthor, User
 from quirebase.search import search_index
@@ -217,8 +218,6 @@ async def stage_pdf_import_batch(
 
     async def cleanup_staged_pdfs() -> None:
         await db.rollback()
-        for staged_pdf in staged_pdfs:
-            await staged_pdf.release()
         await delete_unreferenced_objects(db, {staged_pdf.object_key for staged_pdf in staged_pdfs})
 
     try:
@@ -292,8 +291,6 @@ async def stage_pdf_import_batch(
             authorization_resource_action=ResourceAction.item_create.value,
         )
         await db.commit()
-        for staged in staged_pdfs:
-            await staged.release()
         return batch, [], errors
     except asyncio.CancelledError:
         _consume_current_cancellation()
@@ -477,14 +474,6 @@ async def finalize_pdf_import_batch(
         authorization_resource_action=ResourceAction.item_create.value,
     )
     return True
-
-
-async def _create_item_from_record(
-    db: AsyncSession, user: User, workspace_id: str, record: dict
-) -> Item:
-    from quirebase.library import create_item_from_metadata_record
-
-    return await create_item_from_metadata_record(db, user, workspace_id, record)
 
 
 async def get_import_batch_preview(
@@ -679,7 +668,7 @@ async def commit_import_batch(
     for record in records:
         candidate = dict(record)
         pdf = candidate.pop("_pdf", None)
-        item = await _create_item_from_record(db, actor, workspace_id, candidate)
+        item = await create_item_from_metadata_record(db, actor, workspace_id, candidate)
         if pdf is not None:
             await attach_staged_pdf(
                 db,

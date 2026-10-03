@@ -217,18 +217,15 @@ async def test_http_api_tag_matrix_and_selection(
     )
     assert response.status_code == 200
 
-    db.expire_all()
-    item_tags = list(
-        await db.scalars(
-            select(Tag).join(ItemTag, ItemTag.tag_id == Tag.id).where(ItemTag.item_id == item_id)
-        )
-    )
-    item_tags = [tag.name for tag in item_tags]
-    assert "Machine Learning" in item_tags
-    assert "Natural Language Processing" in item_tags
-    assert "New Research Direction" in item_tags
-    assert "Deep Learning" in item_tags
-    assert "Transformers" not in item_tags
+    organized = await client.get(f"{workspace_base}/items/{item_id}/organize")
+    assert organized.status_code == 200
+    selected_tags = {tag["name"] for tag in organized.json()["tags"]}
+    assert selected_tags == {
+        "Machine Learning",
+        "Natural Language Processing",
+        "New Research Direction",
+        "Deep Learning",
+    }
     await client.aclose()
 
 

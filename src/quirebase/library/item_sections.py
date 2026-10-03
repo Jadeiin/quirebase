@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
@@ -21,7 +21,7 @@ from quirebase.access.items import can_delete_item, can_edit_item, require_reada
 from quirebase.core.errors import ResourceNotFound
 from quirebase.library.authors import get_item_authors
 from quirebase.library.item_metadata import ItemMetadata, metadata_from_item
-from quirebase.library.tags import get_tag_matrix_for_item
+from quirebase.library.tags import TagMatrix, get_tag_matrix_for_item
 from quirebase.models import (
     Attachment,
     DiscussionMessage,
@@ -96,25 +96,6 @@ class ProjectAssignmentOption:
 
 
 @dataclass(frozen=True)
-class TagGroup:
-    letter: str
-    tags: tuple[Tag, ...]
-    names: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class TagMatrix:
-    groups: tuple[TagGroup, ...]
-    assigned_ids: frozenset[str]
-    recommended_ids: frozenset[str]
-    suggested_names: tuple[str, ...]
-    suggested_single_words: tuple[str, ...]
-    suggested_phrases: tuple[str, ...]
-    recommendation_state: str
-    recommendation_error: str | None
-
-
-@dataclass(frozen=True)
 class ItemOrganizationData(ItemSectionData):
     tags: tuple[Tag, ...]
     projects: tuple[ProjectAssignmentOption, ...]
@@ -157,23 +138,29 @@ async def _record_read(db: AsyncSession, user: User, workspace_id: str, item_id:
         read.last_read_at = datetime.now(UTC)
 
 
+async def _assigned_tags(db: AsyncSession, item: Item) -> tuple[Tag, ...]:
+    return tuple(
+        (
+            await db.scalars(
+                select(Tag)
+                .join(ItemTag, ItemTag.tag_id == Tag.id)
+                .where(
+                    ItemTag.workspace_id == item.workspace_id,
+                    ItemTag.item_id == item.id,
+                    Tag.workspace_id == item.workspace_id,
+                )
+                .order_by(Tag.name)
+            )
+        ).all()
+    )
+
+
 async def _open_overview(db: AsyncSession, user: User, item: Item) -> ItemOverviewData:
     context = await require_workspace_action(
         db, user, item.workspace_id, ResourceAction.workspace_read
     )
     moderator = action_allowed(context, ResourceAction.project_annotation_review)
-    revisions = tuple(
-        (
-            await db.scalars(
-                select(FileRevision)
-                .where(
-                    FileRevision.workspace_id == item.workspace_id,
-                    FileRevision.item_id == item.id,
-                )
-                .order_by(FileRevision.created_at.desc())
-            )
-        ).all()
-    )
+    revisions = await _revisions(db, item.workspace_id, item.id, all_revisions=True)
     visible_project_items = (
         select(ProjectItem.id)
         .join(Project, Project.id == ProjectItem.project_id)
@@ -229,20 +216,7 @@ async def _open_overview(db: AsyncSession, user: User, item: Item) -> ItemOvervi
     identifiers = tuple(
         (await db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item.id))).all()
     )
-    tags = tuple(
-        (
-            await db.scalars(
-                select(Tag)
-                .join(ItemTag, ItemTag.tag_id == Tag.id)
-                .where(
-                    ItemTag.workspace_id == item.workspace_id,
-                    ItemTag.item_id == item.id,
-                    Tag.workspace_id == item.workspace_id,
-                )
-                .order_by(Tag.name)
-            )
-        ).all()
-    )
+    tags = await _assigned_tags(db, item)
     return ItemOverviewData(
         item=item,
         can_edit=await can_edit_item(db, user, item.workspace_id, item.id),
@@ -310,47 +284,11 @@ async def _open_files(db: AsyncSession, user: User, item: Item) -> ItemFilesData
     )
 
 
-def _typed_tag_matrix(raw: dict[str, Any]) -> TagMatrix:
-    raw_groups = cast("list[dict[str, Any]]", raw["groups"])
-    return TagMatrix(
-        groups=tuple(
-            TagGroup(
-                letter=str(group["letter"]),
-                tags=tuple(cast("list[Tag]", group["tags"])),
-                names=tuple(cast("list[str]", group["names"])),
-            )
-            for group in raw_groups
-        ),
-        assigned_ids=frozenset(cast("set[str]", raw["assigned_ids"])),
-        recommended_ids=frozenset(cast("set[str]", raw["recommended_ids"])),
-        suggested_names=tuple(cast("tuple[str, ...]", raw["suggested_names"])),
-        suggested_single_words=tuple(cast("tuple[str, ...]", raw["suggested_single_words"])),
-        suggested_phrases=tuple(cast("tuple[str, ...]", raw["suggested_phrases"])),
-        recommendation_state=str(raw["recommendation_state"]),
-        recommendation_error=(
-            str(raw["recommendation_error"]) if raw["recommendation_error"] else None
-        ),
-    )
-
-
 async def _open_organize(db: AsyncSession, user: User, item: Item) -> ItemOrganizationData:
     context = await require_workspace_action(
         db, user, item.workspace_id, ResourceAction.workspace_read
     )
-    tags = tuple(
-        (
-            await db.scalars(
-                select(Tag)
-                .join(ItemTag, ItemTag.tag_id == Tag.id)
-                .where(
-                    ItemTag.workspace_id == item.workspace_id,
-                    ItemTag.item_id == item.id,
-                    Tag.workspace_id == item.workspace_id,
-                )
-                .order_by(Tag.name)
-            )
-        ).all()
-    )
+    tags = await _assigned_tags(db, item)
     project_rows = (
         await db.scalars(
             select(Project)
@@ -383,9 +321,7 @@ async def _open_organize(db: AsyncSession, user: User, item: Item) -> ItemOrgani
         tags=tags,
         projects=project_options,
         assigned_project_ids=assigned_project_ids,
-        tag_matrix=_typed_tag_matrix(
-            await get_tag_matrix_for_item(db, user, item.workspace_id, item.id)
-        ),
+        tag_matrix=await get_tag_matrix_for_item(db, user, item.workspace_id, item.id),
     )
 
 

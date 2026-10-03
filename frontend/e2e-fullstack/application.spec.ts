@@ -1,4 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
+import { minimalPdf } from '../e2e/helpers';
 
 async function signIn(page: Page) {
 	await page.goto('/');
@@ -8,24 +9,6 @@ async function signIn(page: Page) {
 	await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
 	await expect(page).toHaveURL(/\/workspace\/[^/]+$/);
 	return new URL(page.url()).pathname.split('/').at(-1)!;
-}
-
-function minimalPdf(): Buffer {
-	const objects = [
-		'1 0 obj\n<</Type/Catalog/Pages 2 0 R>>\nendobj\n',
-		'2 0 obj\n<</Type/Pages/Kids[3 0 R]/Count 1>>\nendobj\n',
-		'3 0 obj\n<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 400]>>\nendobj\n'
-	];
-	let body = '%PDF-1.4\n';
-	const offsets = objects.map((object) => {
-		const offset = Buffer.byteLength(body);
-		body += object;
-		return offset;
-	});
-	const xref = Buffer.byteLength(body);
-	body += `xref\n0 4\n0000000000 65535 f \n${offsets.map((offset) => `${String(offset).padStart(10, '0')} 00000 n `).join('\n')}\n`;
-	body += `trailer\n<</Size 4/Root 1 0 R>>\nstartxref\n${xref}\n%%EOF\n`;
-	return Buffer.from(body);
 }
 
 test('applies the stored theme under production CSP before hydration', async ({ page }) => {

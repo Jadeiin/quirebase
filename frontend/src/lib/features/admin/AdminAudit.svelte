@@ -29,7 +29,7 @@
 					.filter(Boolean)
 					.join(' · ')}</span
 			>
-			><span class="text-surface-600-400"
+			<span class="text-surface-600-400"
 				>{event.actor_id
 					? `${$t('Actor: {actor}', { actor: event.actor_id })} · `
 					: ''}{$dateTimeFormat.format(new Date(event.created_at))}</span

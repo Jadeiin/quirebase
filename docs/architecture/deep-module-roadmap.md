@@ -91,11 +91,6 @@ tests. This criterion is now satisfied.
 
 Issue: [#9 Reassess ORM mapping ownership and package facades](https://github.com/Jadeiin/quirebase/issues/9)
 
-This step is blocked by #5, #6, #7 and #8. Prototype both capability-local mappings with a metadata
-aggregator and a centralized persistence package with enforced ownership imports. Select or
-reject decomposition based on cycles, migration ergonomics, relationship locality and caller
-knowledge.
-
 Prune package exports only after callers use the deeper interfaces. Internal Python paths are not
 a compatibility commitment, so do not add long-lived re-export shims.
 

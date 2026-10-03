@@ -1,12 +1,13 @@
 import asyncio
 import json
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from uuid import uuid4
 
 import httpx2
 import pytest
 from app_helpers import create_web_test_app
-from sqlalchemy import func, select
+from sqlalchemy import select
 from storage_helpers import local_object_path, put_pdf_object
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
@@ -14,8 +15,7 @@ from quirebase.core.config import get_settings
 from quirebase.core.crypto import token_hash
 from quirebase.core.database import get_db
 from quirebase.core.errors import VersionConflict
-from quirebase.core.storage import ObjectMetadata, ObjectResponse, ObjectSuffix, get_object_store
-from quirebase.documents import create_attachment
+from quirebase.core.storage import ObjectMetadata, ObjectSuffix, get_object_store
 from quirebase.documents import workflows as document_workflows
 from quirebase.library import ItemMetadata, request_item_tag_recommendation, revise_item_metadata
 from quirebase.models import (
@@ -734,7 +734,6 @@ async def test_item_overview_uses_the_ready_revision_thumbnail(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
     workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
-    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     thumbnail = await get_object_store().put_object(
         uuid4(), ObjectSuffix.PNG, b"\x89PNG\r\n\x1a\nthumbnail", max_bytes=100
     )
@@ -937,28 +936,46 @@ async def test_deleting_latest_pdf_revision_removes_its_files_and_falls_back_thu
 
 
 @pytest.mark.anyio
-async def test_graphical_abstract_attachment_overrides_the_pdf_thumbnail(
-    async_db, async_session_factory, tmp_path, monkeypatch
+@pytest.mark.parametrize(
+    "content",
+    [
+        pytest.param(b"\x89PNG\r\n\x1a\ngraphical", id="valid-image"),
+        pytest.param(b"not really a png", id="invalid-image-bytes"),
+        pytest.param(b"", id="empty-image"),
+    ],
+)
+async def test_graphical_abstract_upload_admits_worker_without_creating_attachment(
+    async_db, async_session_factory, tmp_path, monkeypatch, fake_durable_operations, content
 ):
     db = async_db
-    client, item, revision = await authenticated_async_client(
+    client, item, _revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
-    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     item_id = item.id
-    pdf_thumbnail = get_settings().object_dir / "thumbnails" / f"{revision.id}.png"
-    pdf_thumbnail.parent.mkdir(parents=True, exist_ok=True)
-    pdf_thumbnail.write_bytes(b"pdf-thumbnail")
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
 
     try:
         uploaded = await client.post(
             f"{workspace_base}/items/{item_id}/attachments",
             data={"graphical_abstract": "true"},
-            files={"attachment": ("abstract.png", b"\x89PNG\r\n\x1a\ngraphical", "image/png")},
+            files={"attachment": ("abstract.png", content, "image/png")},
             follow_redirects=False,
         )
+
         assert uploaded.status_code == 202
-        assert uploaded.json()["id"].startswith("upload-attachment:")
+        workflow_id = uploaded.json()["id"]
+        assert workflow_id.startswith("upload-attachment:")
+        enqueue = fake_durable_operations.enqueues[-1]
+        assert enqueue["workflow_id"] == workflow_id
+        assert enqueue["workflow_name"] == document_workflows.ATTACHMENT_UPLOAD_WORKFLOW
+        assert enqueue["queue_name"] == "documents.upload"
+        assert enqueue["attributes"]["operation"] == "upload_attachment"
+        message_workflow_id, receipt, topic, _idempotency_key = fake_durable_operations.messages[-1]
+        assert message_workflow_id == workflow_id
+        assert topic == "upload-complete"
+        assert receipt["status"] == "complete"
+        assert receipt["size"] == len(content)
+        assert enqueue["attributes"]["object_key"] == receipt["key"]
         assert await db.scalar(select(Attachment).where(Attachment.item_id == item_id)) is None
     finally:
         await client.aclose()
@@ -966,138 +983,68 @@ async def test_graphical_abstract_attachment_overrides_the_pdf_thumbnail(
 
 
 @pytest.mark.anyio
-async def test_graphical_abstract_rejects_content_that_is_not_an_image(
-    async_db, async_session_factory, tmp_path, monkeypatch
+async def test_uploaded_graphical_abstract_is_served_as_item_thumbnail(
+    async_db, async_session_factory, tmp_path, monkeypatch, fake_durable_operations
 ):
     db = async_db
     client, item, _revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
-    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
-    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     item_id = item.id
+    workspace_id = item.workspace_id
+    actor_id = item.created_by
+    workspace_base = f"/api/v1/workspaces/{workspace_id}"
+    image = b"\x89PNG\r\n\x1a\ngraphical"
 
     try:
         uploaded = await client.post(
             f"{workspace_base}/items/{item_id}/attachments",
             data={"graphical_abstract": "true"},
-            files={"attachment": ("abstract.png", b"not really a png", "image/png")},
+            files={"attachment": ("abstract.png", image, "image/png")},
             follow_redirects=False,
         )
 
         assert uploaded.status_code == 202
-        assert (
-            await db.scalar(
-                select(func.count()).select_from(Attachment).where(Attachment.item_id == item_id)
-            )
-            == 0
-        )
-    finally:
-        await client.aclose()
-        get_settings.cache_clear()
+        workflow_id = uploaded.json()["id"]
+        assert await db.scalar(select(Attachment.id).where(Attachment.item_id == item_id)) is None
+        message_workflow_id, receipt, topic, _idempotency_key = fake_durable_operations.messages[-1]
+        assert message_workflow_id == workflow_id
+        assert topic == "upload-complete"
 
+        async def receive(received_topic, *, timeout_seconds):
+            await asyncio.sleep(0)
+            assert received_topic == "upload-complete"
+            assert timeout_seconds > 0
+            return receipt
 
-@pytest.mark.anyio
-async def test_graphical_abstract_rejects_empty_content_without_leaking_staged_object(
-    async_db, async_session_factory, tmp_path, monkeypatch
-):
-    db = async_db
-    client, item, _revision = await authenticated_async_client(
-        db, async_session_factory, tmp_path, monkeypatch
-    )
-    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
-    item_id = item.id
-    objects_before = set(get_settings().object_dir.rglob("*.bin"))
-
-    try:
-        uploaded = await client.post(
-            f"{workspace_base}/items/{item_id}/attachments",
-            data={"graphical_abstract": "true"},
-            files={"attachment": ("abstract.png", b"", "image/png")},
-            follow_redirects=False,
-        )
-
-        assert uploaded.status_code == 202
-        assert (
-            await db.scalar(
-                select(func.count()).select_from(Attachment).where(Attachment.item_id == item_id)
-            )
-            == 0
-        )
-        assert set(get_settings().object_dir.rglob("*.bin")) != objects_before
-    finally:
-        await client.aclose()
-        get_settings.cache_clear()
-
-
-@pytest.mark.anyio
-@pytest.mark.skip(reason="covered by durable upload crash/recovery integration tests")
-async def test_cancelled_graphical_abstract_header_read_reclaims_staged_object(
-    async_db, async_session_factory, tmp_path, monkeypatch
-):
-    db = async_db
-    client, item, _revision = await authenticated_async_client(
-        db, async_session_factory, tmp_path, monkeypatch
-    )
-    owner = await db.get(User, item.created_by)
-    assert owner is not None
-    read_started = asyncio.Event()
-    stream_released = asyncio.Event()
-    staged_released = asyncio.Event()
-    object_deleted = asyncio.Event()
-
-    class FakeStagedObject:
-        key = "graphical/cancelled.bin"
-        size = 12
-
-        async def release(self):
-            staged_released.set()
-
-    async def blocking_body():
-        try:
-            read_started.set()
-            await asyncio.Event().wait()
-            yield b""
-        finally:
-            stream_released.set()
-
-    class BlockingStore:
-        async def put_cas(self, source, **options):
-            return FakeStagedObject()
-
-        async def get_range(self, key, start, end):
-            return ObjectResponse(
-                metadata=ObjectMetadata(key, 12, None, datetime.now(UTC)),
-                byte_range=(start, end),
-                body=blocking_body(),
-            )
-
-        async def delete(self, key):
-            object_deleted.set()
-            return True
-
-    monkeypatch.setattr("quirebase.documents.revisions.get_object_store", BlockingStore)
-    creating = asyncio.create_task(
-        create_attachment(
-            db,
-            owner,
-            item.id,
-            b"ignored",
+        monkeypatch.setattr(document_workflows, "DBOS", SimpleNamespace(recv_async=receive))
+        worker_body = document_workflows.upload_attachment_workflow.__wrapped__.__wrapped__
+        attachment_id = workflow_id.removeprefix("upload-attachment:")
+        result = await worker_body(
+            actor_id,
+            workspace_id,
+            item_id,
+            attachment_id,
+            attachment_id,
             "abstract.png",
             "image/png",
-            role=AttachmentRole.graphical_abstract,
+            "graphical_abstract",
         )
-    )
-    await read_started.wait()
-    creating.cancel()
-    with pytest.raises(asyncio.CancelledError):
-        await creating
 
-    assert stream_released.is_set()
-    assert staged_released.is_set()
-    assert object_deleted.is_set()
-    assert await db.scalar(select(func.count()).select_from(Attachment)) == 0
-    await client.aclose()
+        assert result == {"attachment_id": attachment_id, "item_id": item_id}
+        saved = await db.get(Attachment, attachment_id)
+        assert saved is not None
+        assert saved.role is AttachmentRole.graphical_abstract
+        assert saved.mime_type == "image/png"
+
+        thumbnail = await client.get(f"{workspace_base}/items/{item_id}/thumbnail")
+
+        assert thumbnail.status_code == 200
+        assert thumbnail.headers["content-type"] == "image/png"
+        assert thumbnail.content == image
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
 
 
 @pytest.mark.anyio

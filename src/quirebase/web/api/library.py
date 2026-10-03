@@ -83,7 +83,7 @@ async def search_items(
     page: Annotated[int, Query(ge=1)] = 1,
 ) -> LibrarySearchView:
     per_page = 25
-    items, total, _tags, _years = await search_library(
+    items, total = await search_library(
         db,
         user,
         workspace_id,

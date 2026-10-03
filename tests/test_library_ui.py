@@ -806,9 +806,9 @@ async def test_library_pagination_filters_and_bulk_actions(
             },
         )
         assert tagged.status_code == 200
-        priority = await db.scalar(select(Tag).where(Tag.name == "Priority"))
-        assert priority is not None
-        assert await db.get(ItemTag, (selected[0].id, priority.id)) is not None
+        organized = await client.get(f"{workspace_base}/items/{selected[0].id}/organize")
+        assert organized.status_code == 200
+        assert "Priority" in {tag["name"] for tag in organized.json()["tags"]}
 
         assigned = await client.post(
             f"{workspace_base}/items/bulk",
@@ -819,26 +819,12 @@ async def test_library_pagination_filters_and_bulk_actions(
             },
         )
         assert assigned.status_code == 200
-        assert (
-            await db.scalar(
-                select(ProjectItem).where(
-                    ProjectItem.workspace_id == original.workspace_id,
-                    ProjectItem.project_id == second_project.id,
-                    ProjectItem.item_id == selected[0].id,
-                )
-            )
-            is not None
-        )
-        assert (
-            await db.scalar(
-                select(ProjectItem).where(
-                    ProjectItem.workspace_id == original.workspace_id,
-                    ProjectItem.project_id == second_project.id,
-                    ProjectItem.item_id == selected[1].id,
-                )
-            )
-            is not None
-        )
+        project_view = await client.get(f"{workspace_base}/projects/{second_project.id}")
+        assert project_view.status_code == 200
+        assert {row["id"] for row in project_view.json()["items"]} == {
+            selected[0].id,
+            selected[1].id,
+        }
 
         exported = await client.post(
             f"{workspace_base}/items/bibliography",
@@ -910,7 +896,7 @@ async def test_library_pagination_filters_and_bulk_actions(
             },
         )
         assert deleted.status_code == 200
-        assert await db.get(Item, selected[1].id) is None
+        assert (await client.get(f"{workspace_base}/items/{selected[1].id}")).status_code == 404
     finally:
         await client.aclose()
         get_settings.cache_clear()
@@ -1260,7 +1246,6 @@ async def test_cleanup_preserves_object_referenced_by_an_uncommitted_pdf_import_
     await db.flush()
 
     try:
-        await discarded.release()
         async with async_session_factory() as cleanup_db:
             assert await delete_unreferenced_objects(cleanup_db, (discarded.object_key,)) == (
                 discarded.object_key,
@@ -1269,13 +1254,10 @@ async def test_cleanup_preserves_object_referenced_by_an_uncommitted_pdf_import_
         assert object_path.is_file()
 
         await db.commit()
-        await in_flight.release()
         async with async_session_factory() as cleanup_db:
             assert await delete_unreferenced_objects(cleanup_db, (in_flight.object_key,)) == ()
         assert object_path.is_file()
     finally:
-        await discarded.release()
-        await in_flight.release()
         await client.aclose()
         get_settings.cache_clear()
 

@@ -97,9 +97,6 @@ class StagedPdf:
     def revision_data(self) -> tuple[str, int, str]:
         return self.object_key, self.size, self.original_name
 
-    async def release(self) -> None:
-        """Compatibility no-op: owned UUID objects do not require leases."""
-
 
 @dataclass(frozen=True)
 class UploadWorkflow:
@@ -158,14 +155,14 @@ async def stage_pdf(
         _consume_current_cancellation()
         with suppress(Exception):
             await _finish_task_despite_cancellation(validation)
-        cleanup = asyncio.create_task(_release_staged_pdf(db, staged_pdf))
+        cleanup = asyncio.create_task(_discard_staged_pdf(db, staged_pdf))
         await _finish_task_despite_cancellation(cleanup)
         raise
     except ValueError as error:
-        await _release_staged_pdf(db, staged_pdf)
+        await _discard_staged_pdf(db, staged_pdf)
         raise ValidationFailure(str(error)) from error
     except Exception:
-        await _release_staged_pdf(db, staged_pdf)
+        await _discard_staged_pdf(db, staged_pdf)
         raise
     return staged_pdf
 
@@ -187,8 +184,7 @@ async def _finish_task_despite_cancellation[StagedResult](
             _consume_current_cancellation()
 
 
-async def _release_staged_pdf(db: AsyncSession, staged: StagedPdf) -> None:
-    await staged.release()
+async def _discard_staged_pdf(db: AsyncSession, staged: StagedPdf) -> None:
     await discard_staged_object(db, staged.object_key)
 
 
@@ -198,7 +194,7 @@ async def _release_staged_attachment(db: AsyncSession, staged: StoredObject) -> 
 
 async def _rollback_and_release_pdf(db: AsyncSession, staged: StagedPdf) -> None:
     await db.rollback()
-    await _release_staged_pdf(db, staged)
+    await _discard_staged_pdf(db, staged)
 
 
 async def _rollback_and_release_attachment(db: AsyncSession, staged: StoredObject) -> None:

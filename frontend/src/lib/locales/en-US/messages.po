@@ -491,8 +491,8 @@ msgstr "as"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
-msgid "Associated files, annotations, and Project memberships will also be removed."
-msgstr "Associated files, annotations, and Project memberships will also be removed."
+msgid "Associated files, annotations, and assignments of this Item to Projects will also be removed."
+msgstr "Associated files, annotations, and assignments of this Item to Projects will also be removed."
 
 #. File kind for a supplementary file.
 #. js-lingui-explicit-id

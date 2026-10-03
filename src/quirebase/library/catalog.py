@@ -45,7 +45,7 @@ async def search_library(
     author: str = "",
     page: int = 1,
     per_page: int = 25,
-) -> tuple[list[Item], int, list[Tag], list[str]]:
+) -> tuple[list[Item], int]:
     page = max(page, 1)
     context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     item_query = workspace_items_query(context)
@@ -91,30 +91,15 @@ async def search_library(
             )
         ).all()
     )
-    accessible_ids = workspace_items_query(context).with_only_columns(Item.id).subquery()
-    tags = list(
-        (
-            await db.scalars(
-                workspace_select(Tag, context)
-                .join(ItemTag, ItemTag.tag_id == Tag.id)
-                .where(
-                    ItemTag.item_id.in_(select(accessible_ids.c.id)),
-                )
-                .distinct()
-                .order_by(Tag.name)
-            )
-        ).all()
-    )
-    dates = (
-        await db.scalars(
-            workspace_items_query(context)
-            .with_only_columns(Item.publication_date)
-            .where(Item.publication_date.is_not(None))
-            .distinct()
-        )
-    ).all()
-    years = sorted({value[:4] for value in dates if value and value[:4].isdigit()}, reverse=True)
-    return items, total, tags, years
+    return items, total
+
+
+def _normalized_title(title: str) -> str:
+    return re.sub(
+        r"[^\w]+",
+        " ",
+        convert_rich_text(title, source="html", target="text").casefold(),
+    ).strip()
 
 
 async def get_dashboard_data(db: AsyncSession, user: User, workspace_id: str) -> dict[str, Any]:
@@ -191,26 +176,16 @@ async def find_duplicates(
             if key:
                 buckets.setdefault(key, []).append(item)
     elif mode == "title":
-        normalize = lambda title: re.sub(
-            r"[^\w]+",
-            " ",
-            convert_rich_text(title, source="html", target="text").casefold(),
-        ).strip()
         for item in items:
-            buckets.setdefault(normalize(item.title), []).append(item)
+            buckets.setdefault(_normalized_title(item.title), []).append(item)
     elif mode == "similar":
-        normalize = lambda title: re.sub(
-            r"[^\w]+",
-            " ",
-            convert_rich_text(title, source="html", target="text").casefold(),
-        ).strip()
         remaining = items.copy()
         while remaining:
             anchor = remaining.pop(0)
-            key = normalize(anchor.title)
+            key = _normalized_title(anchor.title)
             matches = [anchor]
             for candidate in remaining.copy():
-                if SequenceMatcher(None, key, normalize(candidate.title)).ratio() >= 0.9:
+                if SequenceMatcher(None, key, _normalized_title(candidate.title)).ratio() >= 0.9:
                     matches.append(candidate)
                     remaining.remove(candidate)
             if len(matches) > 1:

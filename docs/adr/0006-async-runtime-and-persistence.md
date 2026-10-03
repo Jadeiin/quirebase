@@ -19,7 +19,7 @@ module owns `create_async_engine`, `async_sessionmaker` and the `AsyncSession` d
 uses `sqlite+aiosqlite`; PostgreSQL keeps the supported `postgresql+psycopg` URL and uses
 psycopg's async implementation. SQLAlchemy optional dependency groups provide the runtime pieces:
 the application depends on `sqlalchemy[asyncio,aiosqlite]`, while the `postgres` extra depends on
-`sqlalchemy[postgresql-asyncpg,postgresql-psycopgbinary]`. Drivers are not imported or installed
+`sqlalchemy[postgresql-psycopgbinary]`. Drivers are not imported or installed
 through an independent persistence abstraction, and no synchronous Session/engine compatibility
 seam remains.
 

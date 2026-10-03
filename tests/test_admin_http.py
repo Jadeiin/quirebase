@@ -131,14 +131,13 @@ async def test_admin_pages_forbidden_for_member(async_db, tmp_path, monkeypatch)
     for path in [
         "/api/v1/admin/overview",
         "/api/v1/admin/users",
-        "/api/v1/admin/items",
         "/api/v1/admin/audit",
         "/api/v1/admin/workflows",
         "/api/v1/admin/settings",
         "/api/v1/admin/maintenance",
     ]:
         res = await client.get(path)
-        assert res.status_code in (403, 404, 500)
+        assert res.status_code in {403, 404}, path
     await client.aclose()
 
 

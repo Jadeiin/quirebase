@@ -144,7 +144,6 @@ async def test_admin_toggle_user_status_and_session_revocation(async_db):
     # Create active sessions
     _session1, _ = await create_login_session(db, user)
     _session2, _ = await create_login_session(db, user)
-    await db.commit()
     assert (
         len(
             list(
@@ -209,7 +208,6 @@ async def test_admin_reset_password(async_db):
     admin = await create_test_admin(db, "admin5")
     user = await create_user_admin(db, admin, "pw_target", "oldpass123456")
     await create_login_session(db, user)
-    await db.commit()
 
     await reset_user_password(db, admin, user.id, "brand_new_pass_456")
 

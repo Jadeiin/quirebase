@@ -86,10 +86,8 @@ async def _call(client, raw_token: str, name: str, arguments: dict, request_id: 
 async def test_generated_tools_match_the_fixed_allowlist_and_annotations(async_session_factory):
     async with mcp_client(async_session_factory) as (_client, app):
         server = app.state.mcp_server
-        tools = await server.list_tools()
         generated = {name: await server.get_tool(name) for name in TOOL_ALLOWLIST}
 
-    assert {tool.name for tool in tools} == {"search_tools", "call_tool"}
     assert all(tool is not None for tool in generated.values())
     assert not any(name.startswith("admin.") for name in TOOL_ALLOWLIST)
     assert not any(

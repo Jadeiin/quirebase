@@ -10,6 +10,7 @@ from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 from quirebase.core.errors import PermissionDenied, ResourceUnavailable
 from quirebase.library.tags import (
     TagConflict,
+    TagMatrix,
     add_tag_to_item,
     apply_item_tag_selection,
     get_or_create_tag,
@@ -111,7 +112,7 @@ async def test_tag_matrix_and_normalized_names_are_workspace_scoped(async_db):
     assert workspace_id is not None and foreign_workspace_id is not None
     tags = [
         Tag(workspace_id=workspace_id, name=name, created_by=user.id)
-        for name in ("Algorithms", "Bioinformatics", "Compiler")
+        for name in ("Algorithms", "Bioinformatics", "Compiler", "3D Imaging")
     ]
     tags.append(Tag(workspace_id=foreign_workspace_id, name="Foreign", created_by=foreign.id))
     item = Item(
@@ -135,10 +136,15 @@ async def test_tag_matrix_and_normalized_names_are_workspace_scoped(async_db):
     )
     await add_tag_to_item(async_db, user, workspace_id, item.id, "Algorithms")
     matrix = await get_tag_matrix_for_item(async_db, user, workspace_id, item.id)
-    names = {tag.name for group in matrix["groups"] for tag in group["tags"]}
-    assert names == {"Algorithms", "Bioinformatics", "Compiler"}
-    assert tags[0].id in matrix["assigned_ids"]
-    assert tags[2].id in matrix["recommended_ids"]
+    assert isinstance(matrix, TagMatrix)
+    assert isinstance(matrix.groups, tuple)
+    assert isinstance(matrix.assigned_ids, frozenset)
+    assert isinstance(matrix.recommended_ids, frozenset)
+    assert [group.letter for group in matrix.groups] == ["A", "B", "C", "#"]
+    names = {name for group in matrix.groups for name in group.names}
+    assert names == {"Algorithms", "Bioinformatics", "Compiler", "3D Imaging"}
+    assert tags[0].id in matrix.assigned_ids
+    assert tags[2].id in matrix.recommended_ids
 
 
 @pytest.mark.anyio

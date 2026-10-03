@@ -141,9 +141,10 @@ Web 只负责表单解析和响应格式；样式解析、BibTeX 选项和媒体
 - `下载 PDF（高级）`：选项 `保留 Annotation`、`包含 Attachment/supplements`。
   选择后生成一个临时 ZIP（主 PDF + 可选 sidecar/Attachment），沿用现有 Job、
   TTL 和清理机制；不改变原始 File Revision；
-- `删除 Item`：只对 Item Owner/管理员显示，弹出确认模态框，明确“Item、File Revision、Attachment、
-  Annotation、Project membership 将永久删除”，要求输入确认，并记录
-  Audit Event。单条删除调用 Library 的单 Item 删除用例，不复用 bulk 表单。
+- `删除 Item`：仅当服务端 Workspace resource-action 决策允许 `item.delete` 时显示并可执行；
+  不根据 Item 创建者或系统管理员角色推断权限。弹出确认模态框，明确“Item、File Revision、Attachment、
+  Annotation、Item 的 Project 关联将永久删除”，要求输入确认，并记录 Audit Event。单条删除调用
+  Library 的单 Item 删除用例，不复用 bulk 表单。
 
 Files 分区仍提供逐文件下载；顶部动作只做高频快捷入口。Annotation 保留应明确
 导出的格式（建议 PDF 注释层 + JSON sidecar），无法嵌入的 Annotation 必须给出

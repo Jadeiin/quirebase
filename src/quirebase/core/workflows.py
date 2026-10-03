@@ -438,7 +438,7 @@ async def list_active_workflows(*, name: str | None = None) -> tuple[WorkflowSum
 
 
 @lru_cache
-def durable_operations() -> DBOSAdapter:
+def durable_operations() -> DurableOperations:
     return DBOSAdapter.from_settings()
 
 

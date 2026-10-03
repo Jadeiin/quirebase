@@ -7,6 +7,7 @@ from test_http import authenticated_async_client
 from quirebase.accounts.throttling import check_login_throttle, record_login_failure
 from quirebase.core.config import get_settings
 from quirebase.models import DiscussionMessage, ItemTag, LoginThrottle, Tag
+from quirebase.web.app import PACKAGED_FRONTEND_DIRECTORY, SOURCE_FRONTEND_DIRECTORY
 
 
 @pytest.mark.anyio
@@ -56,20 +57,23 @@ async def test_tags_discussion_and_search(async_db, async_session_factory, tmp_p
 async def test_csp_allows_browser_pdf_downloads_from_external_http_sources(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
+    if not any(
+        (directory / "index.html").is_file()
+        for directory in (SOURCE_FRONTEND_DIRECTORY, PACKAGED_FRONTEND_DIRECTORY)
+    ):
+        pytest.skip("frontend index build is absent in this test environment")
+
     client, item, _revision = await authenticated_async_client(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
     try:
         response = await client.get(
-            f"/workspaces/{item.workspace_id}/items/{item.id}/files",
+            f"/workspace/{item.workspace_id}/item/{item.id}/files",
             headers={"Accept": "text/html"},
         )
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/html")
         csp = response.headers.get("content-security-policy", "")
-        if "connect-src 'self' https: http:" not in csp:
-            pytest.skip(
-                "frontend build with browser PDF CSP is unavailable in this test environment"
-            )
-
         assert "connect-src 'self' https: http:" in csp
     finally:
         await client.aclose()

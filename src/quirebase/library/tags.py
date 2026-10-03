@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, cast
 
 from sqlalchemy import and_, delete, func, literal, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -33,6 +34,25 @@ if TYPE_CHECKING:
 
 class TagConflict(DomainError):
     pass
+
+
+@dataclass(frozen=True)
+class TagGroup:
+    letter: str
+    tags: tuple[Tag, ...]
+    names: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class TagMatrix:
+    groups: tuple[TagGroup, ...]
+    assigned_ids: frozenset[str]
+    recommended_ids: frozenset[str]
+    suggested_names: tuple[str, ...]
+    suggested_single_words: tuple[str, ...]
+    suggested_phrases: tuple[str, ...]
+    recommendation_state: str
+    recommendation_error: str | None
 
 
 async def regenerate_item_tag_recommendation(
@@ -344,7 +364,7 @@ async def list_accessible_tags_with_counts(
 
 async def get_tag_matrix_for_item(
     db: AsyncSession, user: User, workspace_id: str, item_id: str
-) -> dict[str, Any]:
+) -> TagMatrix:
     if not await can_read_item(db, user, workspace_id, item_id):
         raise ResourceUnavailable("item not found")
     all_tags = list((await db.scalars(visible_tags_query(workspace_id).order_by(Tag.name))).all())
@@ -384,25 +404,25 @@ async def get_tag_matrix_for_item(
         groups_dict.setdefault(first_char, []).append(tag)
 
     sorted_letters = sorted(groups_dict.keys(), key=lambda k: (k == "#", k))
-    groups = [
-        {
-            "letter": letter,
-            "tags": groups_dict[letter],
-            "names": [t.name for t in groups_dict[letter]],
-        }
+    groups = tuple(
+        TagGroup(
+            letter=str(letter),
+            tags=tuple(groups_dict[letter]),
+            names=tuple(tag.name for tag in groups_dict[letter]),
+        )
         for letter in sorted_letters
-    ]
+    )
 
-    return {
-        "groups": groups,
-        "assigned_ids": assigned_ids,
-        "recommended_ids": recommended_ids,
-        "suggested_names": (*suggested_single_words, *suggested_phrases),
-        "suggested_single_words": suggested_single_words,
-        "suggested_phrases": suggested_phrases,
-        "recommendation_state": state,
-        "recommendation_error": recommendation_error,
-    }
+    return TagMatrix(
+        groups=groups,
+        assigned_ids=frozenset(assigned_ids),
+        recommended_ids=frozenset(recommended_ids),
+        suggested_names=(*suggested_single_words, *suggested_phrases),
+        suggested_single_words=suggested_single_words,
+        suggested_phrases=suggested_phrases,
+        recommendation_state=str(state),
+        recommendation_error=(str(recommendation_error) if recommendation_error else None),
+    )
 
 
 async def merge_tags(

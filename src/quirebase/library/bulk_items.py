@@ -49,7 +49,7 @@ async def apply_bulk_item_action(
     project_id: str = "",
     tag_name: str = "",
     confirm_delete: str = "",
-) -> list[str]:
+) -> None:
     items = await require_accessible_items(db, user, workspace_id, item_ids)
 
     # Fail-closed: All selected items must be editable for mutating bulk actions
@@ -67,9 +67,8 @@ async def apply_bulk_item_action(
             raise ValidationFailure("choose an editable project") from error
         audit_action = "library.bulk.add_project"
     elif action in ("add_tag", "tag"):
-        # Hold each active Project grant while adding associations so an
-        # archive cannot race the authorization check.  Stable Item ordering
-        # keeps concurrent bulk requests from acquiring grant locks differently.
+        # Revalidate each Item's edit authority and existence before adding
+        # associations. Stable Item ordering keeps these checks deterministic.
         for item in sorted(items, key=lambda candidate: candidate.id):
             await require_editable_item(db, user, workspace_id, item.id)
         tag_record = await get_or_create_tag(db, user, workspace_id, tag_name)
@@ -184,8 +183,6 @@ async def apply_bulk_item_action(
             operation="bulk_item_delete",
         )
     await db.commit()
-
-    return cleanup_keys
 
 
 async def download_selected_item_documents(

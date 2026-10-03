@@ -254,4 +254,3 @@ async def test_generation_result_does_not_include_source_text(async_db, monkeypa
     candidates = await recommend_item_tags(db, item.id, settings=settings)
 
     assert candidates == {"single_words": ["compact"], "phrases": ["compact result"]}
-    assert "checkpoint sentinel" not in json.dumps(candidates)

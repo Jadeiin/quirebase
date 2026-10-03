@@ -9,12 +9,7 @@ from quirebase.models import DiscussionMessage, Item, Tag, User
 from quirebase.web.app import app
 
 
-def get_app():
-    return app
-
-
 def test_operational_routes_contract():
-    test_app = get_app()
     excluded_paths = {"/docs", "/docs/oauth2-redirect", "/openapi.json", "/redoc"}
 
     # OpenAPI contains the effective paths after FastAPI composes the versioned
@@ -23,11 +18,11 @@ def test_operational_routes_contract():
     # relative paths by design.
     operational_routes: set[tuple[str, str]] = {
         (method.upper(), path)
-        for path, methods in test_app.openapi()["paths"].items()
+        for path, methods in app.openapi()["paths"].items()
         for method in methods
         if method in {"get", "post", "put", "patch", "delete"}
     }
-    for route in test_app.routes:
+    for route in app.routes:
         if not hasattr(route, "methods") or not hasattr(route, "path"):
             continue
         if route.path in excluded_paths:

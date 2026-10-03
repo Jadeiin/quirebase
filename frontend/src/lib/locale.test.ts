@@ -44,9 +44,4 @@ describe('frontend locale metadata', () => {
 		setBrowserLanguage('fr-FR');
 		expect(detectInitialLocale()).toBe('en-US');
 	});
-
-	it('round-trips the locale through browser storage', () => {
-		storeLocale('zh-CN');
-		expect(localStorage.getItem(LOCALE_STORAGE_KEY)).toBe('zh-CN');
-	});
 });

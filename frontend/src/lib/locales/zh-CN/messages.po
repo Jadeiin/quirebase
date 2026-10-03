@@ -491,8 +491,8 @@ msgstr "作为"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
-msgid "Associated files, annotations, and Project memberships will also be removed."
-msgstr "关联的文件、标注和项目成员关系也会一并删除。"
+msgid "Associated files, annotations, and assignments of this Item to Projects will also be removed."
+msgstr "关联的文件、标注以及此条目与项目的关联也会一并删除。"
 
 #. File kind for a supplementary file.
 #. js-lingui-explicit-id

@@ -7,14 +7,16 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import select
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core import workflows
-from quirebase.core.storage import ObjectSuffix, get_object_store
+from quirebase.core.storage import ObjectResponse, ObjectSuffix, get_object_store
 from quirebase.documents import enqueue_object_cleanup
 from quirebase.documents import workflows as document_workflows
 from quirebase.library import workflows as library_workflows
 from quirebase.models import (
+    Attachment,
     ExportArtifact,
     FileRevision,
     ImportBatch,
@@ -87,10 +89,22 @@ def test_dbos_unknown_status_is_exposed_as_failed_instead_of_raising():
 
 
 @pytest.mark.anyio
-async def test_transactional_enqueue_records_queue_partition_and_attributes(
-    async_db, fake_durable_operations
-):
-    workflow_id = await fake_durable_operations.enqueue_in_transaction(
+async def test_dbos_adapter_enqueues_in_the_session_transaction_with_queue_metadata(async_db):
+    from sqlalchemy.engine import Connection
+
+    from quirebase.core.workflows import DBOSAdapter
+
+    session_connection = (await async_db.connection()).sync_connection
+    captured = {}
+
+    class Client:
+        def enqueue_in_transaction(self, connection, options, *args):
+            query_value = connection.exec_driver_sql("SELECT 1").scalar_one()
+            captured.update(connection=connection, options=options, args=args)
+            captured["query_value"] = query_value
+            return SimpleNamespace(get_workflow_id=lambda: "workflow-id")
+
+    workflow_id = await DBOSAdapter(Client()).enqueue_in_transaction(
         async_db,
         "documents.inspect_revision",
         "revision-id",
@@ -99,10 +113,21 @@ async def test_transactional_enqueue_records_queue_partition_and_attributes(
         partition_key="revision-id",
         attributes={"capability": "documents"},
     )
-    summary = await fake_durable_operations.get(workflow_id)
-    assert summary is not None
-    assert summary.queue_name == workflows.DOCUMENTS_QUEUE
-    assert summary.attributes == {"capability": "documents"}
+
+    assert workflow_id == "workflow-id"
+    assert isinstance(captured["connection"], Connection)
+    assert captured["connection"] is session_connection
+    assert captured["connection"].in_transaction()
+    assert captured["query_value"] == 1
+    assert captured["options"] == {
+        "workflow_name": "documents.inspect_revision",
+        "queue_name": workflows.DOCUMENTS_QUEUE,
+        "workflow_id": "workflow-id",
+        "application_name": "quirebase",
+        "queue_partition_key": "revision-id",
+        "attributes": {"capability": "documents"},
+    }
+    assert captured["args"] == ("revision-id",)
 
 
 @pytest.mark.anyio
@@ -820,8 +845,6 @@ async def test_commit_uploaded_revision_uses_datasource_transaction(async_db):
 
 @pytest.mark.anyio
 async def test_commit_uploaded_attachment_uses_datasource_transaction(async_db):
-    from quirebase.models import Attachment
-
     user = await _provisioned_user(async_db, "att-tx-user")
     item = Item(
         workspace_id=fixture_workspace_id(user),
@@ -849,6 +872,122 @@ async def test_commit_uploaded_attachment_uses_datasource_transaction(async_db):
     assert saved is not None
     assert saved.object_key == "aa/bb/data.bin"
     assert saved.size == 256
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("content", [b"not really an image", b""])
+async def test_invalid_graphical_abstract_worker_deletes_owned_object_and_writes_no_attachment(
+    async_db, monkeypatch, content
+):
+    user = await _provisioned_user(async_db, "invalid-graphical-upload")
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        title="Invalid graphical upload",
+        created_by=user.id,
+    )
+    async_db.add(item)
+    await async_db.commit()
+
+    store = get_object_store()
+    object_id = uuid4()
+    stored = await store.put_object(object_id, ObjectSuffix.BINARY, content, max_bytes=100)
+    receipt = {"status": "complete", "key": stored.key, "size": stored.size}
+
+    async def receive(topic, *, timeout_seconds):
+        await asyncio.sleep(0)
+        assert topic == workflows.UPLOAD_COMPLETE_TOPIC
+        assert timeout_seconds > 0
+        return receipt
+
+    monkeypatch.setattr(document_workflows, "DBOS", SimpleNamespace(recv_async=receive))
+    worker_body = document_workflows.upload_attachment_workflow.__wrapped__.__wrapped__
+
+    with pytest.raises(ValueError, match="graphical abstract content does not match"):
+        await worker_body(
+            user.id,
+            item.workspace_id,
+            item.id,
+            str(object_id),
+            str(object_id),
+            "abstract.png",
+            "image/png",
+            "graphical_abstract",
+        )
+
+    assert await store.exists(stored.key) is False
+    assert await async_db.scalar(select(Attachment.id).where(Attachment.item_id == item.id)) is None
+
+
+@pytest.mark.anyio
+async def test_cancelled_graphical_abstract_validation_deletes_owned_object(async_db, monkeypatch):
+    user = await _provisioned_user(async_db, "cancelled-graphical-upload")
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        title="Cancelled graphical upload",
+        created_by=user.id,
+    )
+    async_db.add(item)
+    await async_db.commit()
+
+    store = get_object_store()
+    object_id = uuid4()
+    stored = await store.put_object(
+        object_id, ObjectSuffix.BINARY, b"\x89PNG\r\n\x1a\nimage", max_bytes=100
+    )
+    receipt = {"status": "complete", "key": stored.key, "size": stored.size}
+    receipt_delivered = asyncio.Event()
+    read_started = asyncio.Event()
+
+    async def receive(topic, *, timeout_seconds):
+        await asyncio.sleep(0)
+        assert topic == workflows.UPLOAD_COMPLETE_TOPIC
+        assert timeout_seconds > 0
+        receipt_delivered.set()
+        return receipt
+
+    async def blocking_body():
+        read_started.set()
+        await asyncio.Event().wait()
+        yield b""
+
+    class BlockingRangeStore:
+        async def head(self, key):
+            return await store.head(key)
+
+        async def get_range(self, key, start, end):
+            return ObjectResponse(
+                metadata=await store.head(key),
+                byte_range=(start, end),
+                body=blocking_body(),
+            )
+
+        async def delete(self, key):
+            return await store.delete(key)
+
+    monkeypatch.setattr(document_workflows, "DBOS", SimpleNamespace(recv_async=receive))
+    monkeypatch.setattr(document_workflows, "get_object_store", BlockingRangeStore)
+    worker_body = document_workflows.upload_attachment_workflow.__wrapped__.__wrapped__
+    task = asyncio.create_task(
+        worker_body(
+            user.id,
+            item.workspace_id,
+            item.id,
+            str(object_id),
+            str(object_id),
+            "abstract.png",
+            "image/png",
+            "graphical_abstract",
+        )
+    )
+
+    await asyncio.wait_for(read_started.wait(), timeout=5)
+    assert receipt_delivered.is_set()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(task, timeout=5)
+
+    assert await store.exists(stored.key) is False
+    assert await async_db.scalar(select(Attachment.id).where(Attachment.item_id == item.id)) is None
 
 
 @pytest.mark.anyio

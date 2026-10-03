@@ -43,7 +43,6 @@ async def web_client(db, session_factory, *, authenticated: bool = False):
         db.add(user)
         await db.flush()
         _login, raw = await create_login_session(db, user, session_days=1)
-        await db.commit()
         client.cookies.set(get_settings().session_cookie, raw)
     return client, user
 

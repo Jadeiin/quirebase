@@ -69,11 +69,7 @@
 			if (successToast) toaster.success({ title: success });
 			else notice = success;
 			if (reload) {
-				await Promise.all([
-					detail.refetch(),
-					discussions.refetch(),
-					invalidateProject(queryClient, workspaceId)
-				]);
+				await invalidateProject(queryClient, workspaceId);
 			}
 			return true;
 		} catch (reason) {

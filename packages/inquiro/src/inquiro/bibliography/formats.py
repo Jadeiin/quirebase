@@ -615,14 +615,8 @@ def _entry_for_record(
     type_map = REFERENCE_TYPE_TO_BIBLATEX if file_format == "biblatex" else REFERENCE_TYPE_TO_BIBTEX
     entry_type = record.bibtex_type or type_map.get(normalized_type, "misc")
     entry_type = entry_type.lower()
-    journal = record.publication_title
-    if options.journal_mode == "abbreviated":
-        journal = record.journal_abbreviation
-    elif options.journal_mode == "prefer_abbreviated":
-        journal = record.journal_abbreviation or record.publication_title
-    include_url = options.url_policy == "include" or (
-        options.url_policy == "omit_when_doi" and not record.doi
-    )
+    journal = _export_journal(record, options)
+    include_url = _include_url(record, options)
     title = convert_rich_text(
         record.title,
         source="html",

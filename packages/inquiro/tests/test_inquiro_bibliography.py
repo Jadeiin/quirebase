@@ -158,6 +158,63 @@ def test_biblatex_uses_native_types_and_fields():
     assert "eprint = {2608.00001}" in output
 
 
+@pytest.mark.parametrize("file_format", ["bibtex", "biblatex"])
+@pytest.mark.parametrize(
+    ("journal_mode", "abbreviation", "expected", "omitted"),
+    [
+        ("abbreviated", "Alt J", "Alt J", "Full Journal"),
+        ("prefer_abbreviated", "Alt J", "Alt J", "Full Journal"),
+        ("prefer_abbreviated", None, "Full Journal", "Alt J"),
+    ],
+)
+def test_bib_export_honors_journal_mode_and_fallback(
+    file_format, journal_mode, abbreviation, expected, omitted
+):
+    record = BibliographyRecord(
+        "journal",
+        "article",
+        "Journal options",
+        publication_title="Full Journal",
+        journal_abbreviation=abbreviation,
+    )
+
+    output = export_bibliography_records(
+        [record],
+        file_format,
+        options=BibliographyExportOptions(journal_mode=journal_mode),
+    )
+
+    field = "journaltitle" if file_format == "biblatex" else "journal"
+    assert f"{field} = {{{expected}}}" in output
+    assert f"{field} = {{{omitted}}}" not in output
+
+
+@pytest.mark.parametrize("file_format", ["bibtex", "biblatex"])
+@pytest.mark.parametrize("has_doi", [False, True])
+def test_bib_export_applies_url_policy_with_and_without_doi(file_format, has_doi):
+    url = "https://example.test/article"
+    record = BibliographyRecord(
+        "url-policy",
+        "article",
+        "URL policy",
+        doi="10.1234/example" if has_doi else None,
+        urls=(url,),
+    )
+
+    for url_policy, expected in (
+        ("include", True),
+        ("omit", False),
+        ("omit_when_doi", not has_doi),
+    ):
+        output = export_bibliography_records(
+            [record],
+            file_format,
+            options=BibliographyExportOptions(url_policy=url_policy),
+        )
+
+        assert (f"url = {{{url}}}" in output) == expected
+
+
 def test_biblatex_import_preserves_standard_item_metadata():
     source = """@article{complete,
       title = {Complete metadata},

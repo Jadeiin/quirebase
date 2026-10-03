@@ -211,7 +211,7 @@ async def test_revise_item_metadata_replaces_contributors_in_order(async_db):
     ]
     assert [link.position for link in item_view.authors] == [1, 2]
     assert item_view.authors[0].is_corresponding
-    matches, total, _, _ = await search_library(
+    matches, total = await search_library(
         db, owner, fixture_workspace_id(owner), q="Contributor replacement"
     )
     assert total == 1

@@ -59,7 +59,8 @@ async def get_storage_metrics(db: AsyncSession, admin: User) -> dict[str, Any]:
     }
 
 
-async def _delete_item(db: AsyncSession, actor: User, workspace_id: str, item_id: str) -> None:
+async def delete_item(db: AsyncSession, actor: User, workspace_id: str, item_id: str) -> None:
+    """Permanently delete one Workspace Item after the destructive resource action."""
     await require_workspace_action(db, actor, workspace_id, ResourceAction.item_delete)
     await require_editable_item(db, actor, workspace_id, item_id)
     item = await db.scalar(
@@ -145,8 +146,3 @@ async def _delete_item(db: AsyncSession, actor: User, workspace_id: str, item_id
         target_id=item.id,
     )
     await db.commit()
-
-
-async def delete_item(db: AsyncSession, actor: User, workspace_id: str, item_id: str) -> None:
-    """Permanently delete one Workspace Item after the destructive resource action."""
-    await _delete_item(db, actor, workspace_id, item_id)
