@@ -8,7 +8,14 @@ from sqlalchemy.orm import selectinload
 from quirebase.access.context import WorkspaceContext, require_workspace_action
 from quirebase.access.scope import workspace_select
 from quirebase.access.workspace_policy import ResourceAction
-from quirebase.core.errors import ResourceUnavailable, ValidationFailure
+from quirebase.core.errors import (
+    PermissionDenied,
+    ResourceUnavailable,
+    ValidationFailure,
+    WorkspaceLifecycleError,
+    WorkspaceMembershipRequired,
+    WorkspaceUnavailable,
+)
 from quirebase.models import Item, ItemAuthor, User
 
 if TYPE_CHECKING:
@@ -55,7 +62,7 @@ async def get_item_for_update(db: AsyncSession, ctx: WorkspaceContext, item_id: 
 async def can_read_item(db: AsyncSession, user: User, workspace_id: str, item_id: str) -> bool:
     try:
         await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
-    except Exception:  # the boolean policy helper deliberately conceals the failure category
+    except (PermissionDenied, WorkspaceMembershipRequired, WorkspaceUnavailable):
         return False
     return bool(
         await db.scalar(
@@ -67,7 +74,12 @@ async def can_read_item(db: AsyncSession, user: User, workspace_id: str, item_id
 async def can_edit_item(db: AsyncSession, user: User, workspace_id: str, item_id: str) -> bool:
     try:
         await require_workspace_action(db, user, workspace_id, ResourceAction.item_update)
-    except Exception:
+    except (
+        PermissionDenied,
+        WorkspaceMembershipRequired,
+        WorkspaceUnavailable,
+        WorkspaceLifecycleError,
+    ):
         return False
     return bool(
         await db.scalar(
@@ -79,7 +91,12 @@ async def can_edit_item(db: AsyncSession, user: User, workspace_id: str, item_id
 async def can_delete_item(db: AsyncSession, user: User, workspace_id: str, item_id: str) -> bool:
     try:
         await require_workspace_action(db, user, workspace_id, ResourceAction.item_delete)
-    except Exception:
+    except (
+        PermissionDenied,
+        WorkspaceMembershipRequired,
+        WorkspaceUnavailable,
+        WorkspaceLifecycleError,
+    ):
         return False
     return bool(
         await db.scalar(

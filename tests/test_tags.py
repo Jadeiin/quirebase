@@ -135,7 +135,7 @@ async def test_tag_matrix_and_normalized_names_are_workspace_scoped(async_db):
         )
     )
     await add_tag_to_item(async_db, user, workspace_id, item.id, "Algorithms")
-    matrix = await get_tag_matrix_for_item(async_db, user, workspace_id, item.id)
+    matrix = await get_tag_matrix_for_item(async_db, item)
     assert isinstance(matrix, TagMatrix)
     assert isinstance(matrix.groups, tuple)
     assert isinstance(matrix.assigned_ids, frozenset)

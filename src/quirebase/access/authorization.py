@@ -86,6 +86,21 @@ class SystemAction(ResourceActionKey):
     workspaces_break_glass_read = "workspace_break_glass.read"
 
 
+# Accepted request facts, not grants. The immutable policy bundle owns allow/deny.
+SYSTEM_POLICY_RELATIONS: dict[SystemAction, tuple[str, ...]] = dict.fromkeys(SystemAction, ("any",))
+for _own_action in (
+    SystemAction.account_change_password,
+    SystemAction.api_tokens_create,
+    SystemAction.api_tokens_read,
+    SystemAction.api_tokens_revoke,
+    SystemAction.login_sessions_read,
+    SystemAction.login_sessions_revoke,
+    SystemAction.workspace_invitations_accept,
+):
+    SYSTEM_POLICY_RELATIONS[_own_action] = ("own",)
+SYSTEM_POLICY_RELATIONS[SystemAction.workspaces_create] = ("members_allowed", "admins_only")
+
+
 def _value(value: str | Enum) -> str:
     return str(value.value if isinstance(value, Enum) else value)
 
@@ -115,7 +130,7 @@ def initialize_authorization() -> None:
 
 @lru_cache(maxsize=1)
 def _validate_policy_bundle() -> None:
-    from quirebase.access.workspace_policy import ResourceAction
+    from quirebase.access.workspace_policy import ResourceAction, action_spec
 
     workspace_actions = {action.value for action in ResourceAction}
     system_actions = {action.value for action in SystemAction}
@@ -164,6 +179,7 @@ def _validate_policy_bundle() -> None:
                 raise RuntimeError(
                     f"unknown Workspace relation {relation!r} on policy.csv:{line_number}"
                 )
+            accepted_relations = action_spec(ResourceAction(key)).policy_relations
         else:
             if key not in system_actions:
                 raise RuntimeError(f"Workspace action {key!r} used by {subject!r}")
@@ -175,6 +191,12 @@ def _validate_policy_bundle() -> None:
                 raise RuntimeError(
                     f"unknown System relation {relation!r} on policy.csv:{line_number}"
                 )
+
+            accepted_relations = SYSTEM_POLICY_RELATIONS[SystemAction(key)]
+        if not alternatives(relation) <= set(accepted_relations):
+            raise RuntimeError(
+                f"invalid relation {relation!r} for {key!r} on policy.csv:{line_number}"
+            )
 
     if role_edges != _EXPECTED_ROLE_EDGES:
         raise RuntimeError("Casbin role inheritance does not match the canonical role hierarchy")

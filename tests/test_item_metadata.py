@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
+from quirebase.access import resolve_workspace_context
 from quirebase.audit import query_events
 from quirebase.core.errors import PermissionDenied, ValidationFailure
 from quirebase.library import (
@@ -59,7 +60,10 @@ async def test_regenerate_bibtex_key_is_a_narrow_atomic_item_mutation(async_db):
     result = await regenerate_bibtex_key(db, owner, fixture_workspace_id(owner), item_id)
 
     item_view = await open_item_section(
-        db, owner, fixture_workspace_id(owner), item_id, ItemSection.metadata
+        db,
+        await resolve_workspace_context(db, owner, fixture_workspace_id(owner)),
+        item_id,
+        ItemSection.metadata,
     )
     assert isinstance(item_view, ItemMetadataData)
     updated = item_view.item
@@ -152,7 +156,10 @@ async def test_revise_item_metadata_makes_the_dedicated_doi_authoritative(async_
     )
 
     item_view = await open_item_section(
-        db, owner, fixture_workspace_id(owner), item_id, ItemSection.overview
+        db,
+        await resolve_workspace_context(db, owner, fixture_workspace_id(owner)),
+        item_id,
+        ItemSection.overview,
     )
     assert isinstance(item_view, ItemOverviewData)
     updated = item_view.item
@@ -200,7 +207,10 @@ async def test_revise_item_metadata_replaces_contributors_in_order(async_db):
     )
 
     item_view = await open_item_section(
-        db, owner, fixture_workspace_id(owner), item_id, ItemSection.metadata
+        db,
+        await resolve_workspace_context(db, owner, fixture_workspace_id(owner)),
+        item_id,
+        ItemSection.metadata,
     )
     assert isinstance(item_view, ItemMetadataData)
     assert item_view.item.authors == "Shannon, Claude; Weaver, Warren"
@@ -263,7 +273,10 @@ async def test_create_item_accepts_typed_metadata_and_returns_a_mutation_result(
     )
 
     item_view = await open_item_section(
-        db, owner, fixture_workspace_id(owner), result.item_id, ItemSection.overview
+        db,
+        await resolve_workspace_context(db, owner, fixture_workspace_id(owner)),
+        result.item_id,
+        ItemSection.overview,
     )
     assert isinstance(item_view, ItemOverviewData)
     created = item_view.item

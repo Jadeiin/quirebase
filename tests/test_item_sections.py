@@ -7,10 +7,11 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import event, select
 from test_http import authenticated_async_client
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
+from quirebase.access import resolve_workspace_context
 from quirebase.core.config import get_settings
 from quirebase.core.crypto import token_hash
 from quirebase.core.errors import ResourceNotFound, WorkspaceMembershipRequired
@@ -61,7 +62,10 @@ async def test_open_item_overview_returns_a_typed_view_and_records_reading(async
     await db.commit()
 
     view = await open_item_section(
-        db, user, fixture_workspace_id(user), item.id, ItemSection.overview
+        db,
+        await resolve_workspace_context(db, user, fixture_workspace_id(user)),
+        item.id,
+        ItemSection.overview,
     )
 
     assert isinstance(view, ItemOverviewData)
@@ -97,11 +101,30 @@ async def test_open_item_sections_return_section_specific_views(async_db):
         ItemSection.annotations: ItemAnnotationsData,
         ItemSection.discussion: ItemDiscussionData,
     }
+    locks = []
+    authority_reads = []
+
+    def record_queries(execution):
+        if not execution.is_select:
+            return
+        statement = execution.statement
+        if statement._for_update_arg is not None:
+            locks.append(statement)
+        if any(column.get("entity") is WorkspaceMember for column in statement.column_descriptions):
+            authority_reads.append(statement)
+
     for section, expected_type in expected_types.items():
-        assert isinstance(
-            await open_item_section(db, user, fixture_workspace_id(user), item.id, section),
-            expected_type,
-        )
+        context = await resolve_workspace_context(db, user, fixture_workspace_id(user))
+        event.listen(db.sync_session, "do_orm_execute", record_queries)
+        try:
+            result = await open_item_section(db, context, item.id, section)
+        finally:
+            event.remove(db.sync_session, "do_orm_execute", record_queries)
+        assert isinstance(result, expected_type)
+        assert result.can_edit and result.can_delete
+        assert not locks
+        assert not authority_reads
+        assert await db.get(ItemRead, (user.id, item.id)) is not None
 
 
 @pytest.mark.anyio
@@ -122,7 +145,10 @@ async def test_inaccessible_item_never_records_reading(async_db):
 
     with pytest.raises(WorkspaceMembershipRequired):
         await open_item_section(
-            db, outsider, fixture_workspace_id(owner), item_id, ItemSection.overview
+            db,
+            await resolve_workspace_context(db, outsider, fixture_workspace_id(owner)),
+            item_id,
+            ItemSection.overview,
         )
 
     assert await db.get(ItemRead, (outsider_id, item_id)) is None
@@ -320,7 +346,12 @@ async def test_project_editor_can_edit_item_without_seeing_permanent_delete(
         assert "item.update" in editor_page.json()["authorization"]["allowed"]
         assert "item.delete" not in editor_page.json()["authorization"]["allowed"]
 
-        view = await open_item_section(db, editor, item.workspace_id, item.id, ItemSection.overview)
+        view = await open_item_section(
+            db,
+            await resolve_workspace_context(db, editor, item.workspace_id),
+            item.id,
+            ItemSection.overview,
+        )
         assert view.can_edit is True
         assert view.can_delete is False
     finally:
@@ -511,7 +542,12 @@ async def test_item_summary_reports_exact_activity_counts(
         ])
         await db.commit()
 
-        data = await open_item_section(db, user, item.workspace_id, item.id, ItemSection.overview)
+        data = await open_item_section(
+            db,
+            await resolve_workspace_context(db, user, item.workspace_id),
+            item.id,
+            ItemSection.overview,
+        )
 
         assert data.revision_count == 1
         assert data.attachment_count == 1

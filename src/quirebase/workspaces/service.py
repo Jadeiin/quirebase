@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from quirebase.access import (
     ResourceAction,
     SystemAction,
+    WorkspaceContext,
     require_action,
     require_system_action,
     require_system_resource_action,
@@ -303,9 +304,10 @@ async def update_workspace(
 
 
 async def list_workspace_members(
-    db: AsyncSession, actor: User, workspace_id: str
+    db: AsyncSession, context: WorkspaceContext
 ) -> list[WorkspaceMember]:
-    await require_workspace_action(db, actor, workspace_id, ResourceAction.workspace_read)
+    require_action(context, ResourceAction.workspace_read)
+    workspace_id = context.workspace_id
     return list(
         (
             await db.scalars(
@@ -322,9 +324,10 @@ async def list_workspace_members(
 
 
 async def list_workspace_governance_members(
-    db: AsyncSession, actor: User, workspace_id: str
+    db: AsyncSession, context: WorkspaceContext
 ) -> list[WorkspaceMember]:
-    await require_workspace_action(db, actor, workspace_id, ResourceAction.workspace_member_read)
+    require_action(context, ResourceAction.workspace_member_read)
+    workspace_id = context.workspace_id
     return list(
         (
             await db.scalars(
@@ -422,11 +425,10 @@ async def invite_workspace_member(
 
 
 async def list_workspace_invitations(
-    db: AsyncSession, actor: User, workspace_id: str
+    db: AsyncSession, context: WorkspaceContext
 ) -> list[WorkspaceInvitation]:
-    await require_workspace_action(
-        db, actor, workspace_id, ResourceAction.workspace_invitation_read
-    )
+    require_action(context, ResourceAction.workspace_invitation_read)
+    workspace_id = context.workspace_id
     return list(
         (
             await db.scalars(

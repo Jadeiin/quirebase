@@ -38,7 +38,7 @@ from quirebase.models import AttachmentRole
 from quirebase.operations.settings import get_effective_setting, get_effective_settings_model
 from quirebase.web.api.annotation_schemas import DocumentListView, document_list_view
 from quirebase.web.api.common import OkView, WriteResult
-from quirebase.web.api.dependencies import ApiUser, Database
+from quirebase.web.api.dependencies import ApiUser, Database, WorkspaceAccess
 from quirebase.web.api.item_schemas import (
     PdfViewerView,
     RemoteAttachmentRequest,
@@ -182,9 +182,9 @@ async def ranged_object(request: Request, metadata, filename: str, object_get):
 
 @router.get("/items/{item_id}/documents", response_model=DocumentListView)
 async def list_documents(
-    workspace_id: str, item_id: str, user: ApiUser, db: Database
+    workspace_id: str, item_id: str, context: WorkspaceAccess, db: Database
 ) -> DocumentListView:
-    item_files = await open_item_section(db, user, workspace_id, item_id, ItemSection.files)
+    item_files = await open_item_section(db, context, item_id, ItemSection.files)
     if not isinstance(item_files, ItemFilesData):  # pragma: no cover
         raise TypeError("item files section mismatch")
     return document_list_view(item_id, item_files)

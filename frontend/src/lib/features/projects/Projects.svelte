@@ -49,6 +49,16 @@
 	let name = $state('');
 	let description = $state('');
 	let participation = $state<'workspace' | 'open' | 'managed'>('workspace');
+	const allowedParticipation = $derived(
+		(['workspace', 'open', 'managed'] as const).filter((value) =>
+			workspace.canVariant('project.create', value)
+		)
+	);
+	$effect(() => {
+		if (!allowedParticipation.includes(participation) && allowedParticipation[0]) {
+			participation = allowedParticipation[0];
+		}
+	});
 	let busy = $state(false);
 	let error = $state('');
 
@@ -57,6 +67,7 @@
 	}
 
 	async function createProject() {
+		if (!workspace.canVariant('project.create', participation)) return;
 		busy = true;
 		error = '';
 		try {
@@ -65,7 +76,7 @@
 			});
 			name = '';
 			description = '';
-			participation = 'workspace';
+			participation = allowedParticipation[0] ?? 'workspace';
 			createOpen = false;
 			await refresh();
 			await goto(resolve(workspaceHref(workspaceId, `projects/${created.id}`)));
@@ -101,7 +112,7 @@
 		</p>
 	</div>
 	{#snippet actions()}
-		{#if workspace.can('project.create')}
+		{#if allowedParticipation.length > 0}
 			<Dialog open={createOpen} onOpenChange={(details) => (createOpen = details.open)}>
 				<DialogTriggerButton><Icon name="plus" /> {$t('New Project')}</DialogTriggerButton>
 				<Portal>
@@ -136,13 +147,11 @@
 										maxlength="2000"></textarea></label
 								>
 								<label class="grid grid-cols-1 gap-1"
-									>{$t('Participation')}<select class="select" bind:value={participation}
-										><option value="workspace">{$t(domainLabel('workspace'))}</option><option
-											value="open">{$t(domainLabel('open'))}</option
-										>{#if workspace.can('project.create', 'managed')}<option value="managed"
-												>{$t(domainLabel('managed'))}</option
-											>{/if}</select
-									></label
+									>{$t('Participation')}<select class="select" bind:value={participation}>
+										{#each allowedParticipation as value (value)}
+											<option {value}>{$t(domainLabel(value))}</option>
+										{/each}
+									</select></label
 								>
 								<p class="text-sm text-surface-600-400">
 									{#if participation === 'workspace'}

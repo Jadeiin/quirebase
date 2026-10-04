@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { can, hasAllowedAction, type AuthorizationDecisionSet } from '#lib/authorization/can.js';
+import {
+	can,
+	canVariant,
+	hasAllowedAction,
+	type AuthorizationDecisionSet
+} from '#lib/authorization/can.js';
 
 describe('can', () => {
 	it('only trusts the server-authored allowed set', () => {
@@ -15,8 +20,23 @@ describe('can', () => {
 		} satisfies AuthorizationDecisionSet;
 
 		expect(can(decisions, 'project.create')).toBe(true);
-		expect(can(decisions, 'project.create', 'open')).toBe(true);
-		expect(can(decisions, 'project.create', 'managed')).toBe(false);
+		expect(canVariant(decisions, 'project.create', 'open')).toBe(true);
+		expect(canVariant(decisions, 'project.create', 'managed')).toBe(false);
+	});
+
+	it('rejects variants without an explicit grant and relation projection', () => {
+		expect(canVariant({ allowed: ['project.create'] }, 'project.create', 'open')).toBe(false);
+		expect(
+			canVariant({ allowed: ['project.create'], relations: {} }, 'project.create', 'open')
+		).toBe(false);
+		expect(
+			canVariant(
+				{ allowed: [], relations: { 'project.create': ['open'] } },
+				'project.create',
+				'open'
+			)
+		).toBe(false);
+		expect(canVariant(undefined, 'project.create', 'open')).toBe(false);
 	});
 
 	it('detects a surface from concrete server-authored actions', () => {

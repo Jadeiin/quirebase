@@ -82,7 +82,8 @@ class ResourceAction(ResourceActionKey):
 @dataclass(frozen=True, slots=True)
 class ActionSpec:
     mutating: bool
-    relations: tuple[str, ...] = ()
+    policy_relations: tuple[str, ...] = ("any",)
+    projected_relations: tuple[str, ...] = ()
     relation_projection: Literal["workspace", "resource"] = "resource"
 
 
@@ -111,8 +112,13 @@ ACTION_SPECS: dict[ResourceAction, ActionSpec] = {
     ResourceAction.tag_create: _WRITE,
     ResourceAction.tag_manage: _WRITE,
     ResourceAction.citation_style_manage: _WRITE,
-    ResourceAction.project_create: ActionSpec(True, _PARTICIPATION_RELATIONS, "workspace"),
-    ResourceAction.project_update: ActionSpec(True, _PARTICIPATION_RELATIONS),
+    ResourceAction.project_create: ActionSpec(
+        mutating=True,
+        policy_relations=_PARTICIPATION_RELATIONS,
+        projected_relations=_PARTICIPATION_RELATIONS,
+        relation_projection="workspace",
+    ),
+    ResourceAction.project_update: ActionSpec(True, projected_relations=_PARTICIPATION_RELATIONS),
     ResourceAction.project_archive: _WRITE,
     ResourceAction.project_restore: _WRITE,
     ResourceAction.project_delete: _WRITE,
@@ -122,7 +128,12 @@ ACTION_SPECS: dict[ResourceAction, ActionSpec] = {
     ResourceAction.project_membership_leave: ActionSpec(True, ("open",)),
     ResourceAction.project_membership_manage: ActionSpec(True, ("managed",)),
     ResourceAction.workspace_invitation_read: _READ,
-    ResourceAction.workspace_invitation_create: ActionSpec(True, _MEMBER_RELATIONS, "workspace"),
+    ResourceAction.workspace_invitation_create: ActionSpec(
+        mutating=True,
+        policy_relations=_MEMBER_RELATIONS,
+        projected_relations=_MEMBER_RELATIONS,
+        relation_projection="workspace",
+    ),
     ResourceAction.workspace_invitation_revoke: _WRITE,
     ResourceAction.workspace_member_read: _READ,
     ResourceAction.workspace_member_change_role: ActionSpec(True, _MEMBER_RELATIONS),
@@ -236,7 +247,7 @@ def effective_resource_action_relations(
     return frozenset(
         relation
         for relation in (
-            action_spec(resource_action).relations
+            action_spec(resource_action).projected_relations
             if action_spec(resource_action).relation_projection == "workspace"
             else ()
         )
@@ -270,7 +281,10 @@ def action_allowed(
     )
 
 
-def workspace_member_relation(role: WorkspaceRole | str) -> str:
+type WorkspaceMemberRelation = Literal["owner", "admin", "member"]
+
+
+def workspace_member_relation(role: WorkspaceRole | str) -> WorkspaceMemberRelation:
     """Normalize persistent Workspace roles to policy relation classes."""
 
     normalized = WorkspaceRole(role)

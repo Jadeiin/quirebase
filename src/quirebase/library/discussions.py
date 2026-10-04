@@ -7,8 +7,10 @@ from sqlalchemy.orm import selectinload
 
 from quirebase.access.items import can_read_item
 from quirebase.access.workspaces import (
+    ProjectContext,
     ResourceAction,
     action_allowed,
+    require_action,
     require_project_context,
     require_workspace_action,
 )
@@ -153,17 +155,17 @@ async def moderate_discussion_message(
 
 
 async def list_project_discussion_messages(
-    db: AsyncSession, user: User, workspace_id: str, project_id: str
+    db: AsyncSession, context: ProjectContext
 ) -> list[DiscussionMessage]:
-    await require_project_context(db, user, workspace_id, project_id, ResourceAction.workspace_read)
+    require_action(context.workspace, ResourceAction.workspace_read)
     return list(
         (
             await db.scalars(
                 select(DiscussionMessage)
                 .options(selectinload(DiscussionMessage.author))
                 .where(
-                    DiscussionMessage.workspace_id == workspace_id,
-                    DiscussionMessage.project_id == project_id,
+                    DiscussionMessage.workspace_id == context.workspace.workspace_id,
+                    DiscussionMessage.project_id == context.project.id,
                 )
                 .order_by(DiscussionMessage.created_at, DiscussionMessage.id)
             )

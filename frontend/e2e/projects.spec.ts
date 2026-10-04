@@ -16,7 +16,8 @@ const project = {
 			'project_item.manage',
 			'project_membership.manage',
 			'project_discussion.create'
-		]
+		],
+		relations: { 'project.update': ['workspace', 'open', 'managed'] }
 	},
 	items: [],
 	members: [{ user_id: 'member-1', username: 'researcher' }]
@@ -393,6 +394,67 @@ test('a Workspace owner can create an empty managed Project', async ({ page }) =
 	await expect(page.getByText('No Project participants yet.')).toBeVisible();
 });
 
+test('Project creation defaults and submits only the projected participation variant', async ({
+	page
+}) => {
+	await mockSession(page);
+	await mockWorkspaceRole(page, 'owner', ['workspace.read', 'project.create'], {
+		'project.create': ['open']
+	});
+	let participation = '';
+	await page.route('**/api/v1/workspaces/workspace-1/projects*', (route) => {
+		if (route.request().method() === 'POST') {
+			participation = route.request().postDataJSON().participation;
+			return route.fulfill({ status: 201, json: { id: 'project-1' } });
+		}
+		return route.fulfill({ json: [] });
+	});
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1', (route) =>
+		route.fulfill({ json: { ...project, participation: 'open', authorization: { allowed: [] } } })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/discussions', (route) =>
+		route.fulfill({ json: [] })
+	);
+	await page.goto('/workspace/workspace-1/projects');
+	await page.getByRole('button', { name: 'New Project' }).click();
+	const selection = page.getByLabel('Participation');
+	await expect(selection.locator('option')).toHaveCount(1);
+	await expect(selection).toHaveValue('open');
+	await page.getByLabel('Name').fill('Projected Project');
+	await page.getByRole('button', { name: 'Create Project' }).click();
+	await expect.poll(() => participation).toBe('open');
+	await expect(page).toHaveURL(/\/projects\/project-1$/);
+});
+
+test('an action without relation projection exposes no Project creation variants', async ({
+	page
+}) => {
+	await mockSession(page);
+	await mockWorkspaceRole(page, 'owner', ['workspace.read', 'project.create']);
+	await page.route('**/api/v1/workspaces/workspace-1/projects*', (route) =>
+		route.fulfill({ json: [] })
+	);
+	await page.goto('/workspace/workspace-1/projects');
+	await expect(page.getByRole('heading', { name: 'Projects', exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'New Project' })).toHaveCount(0);
+});
+
+test('Project settings cannot submit a participation without relation projection', async ({
+	page
+}) => {
+	await mockSession(page);
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1', (route) =>
+		route.fulfill({ json: { ...project, authorization: { allowed: ['project.update'] } } })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/discussions', (route) =>
+		route.fulfill({ json: [] })
+	);
+	await page.goto('/workspace/workspace-1/projects/project-1');
+	await expect(page.getByRole('heading', { name: 'Project settings' })).toBeVisible();
+	await expect(page.getByLabel('Participation').locator('option')).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Save Project settings' })).toBeDisabled();
+});
+
 test('a Workspace viewer cannot discover or deep-link into a managed Project they do not join', async ({
 	page
 }) => {
@@ -458,7 +520,8 @@ test('Workspace resource actions govern Project settings and managed participati
 							...(currentParticipation === 'managed' ? ['project_membership.manage'] : []),
 							'project.delete',
 							'project_discussion.create'
-						]
+						],
+						relations: { 'project.update': ['workspace', 'open', 'managed'] }
 					},
 					members: participants
 				}

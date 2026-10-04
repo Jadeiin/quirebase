@@ -8,15 +8,15 @@ from quirebase.access import (
     ResourceAction,
     project_decisions,
     require_workspace_action,
+    resolve_workspace_context,
 )
-from quirebase.core.errors import ResourceUnavailable
 from quirebase.library import (
     add_project_discussion_message,
     delete_project_discussion_message,
     list_project_discussion_messages,
     moderate_project_discussion_message,
 )
-from quirebase.models import Project, ProjectState
+from quirebase.models import ProjectState
 from quirebase.projects import (
     add_item_to_project,
     add_project_member,
@@ -27,6 +27,7 @@ from quirebase.projects import (
     list_workspace_projects,
     open_project_workspace,
     remove_item_from_project,
+    require_project,
     set_project_participation,
     set_project_state,
     update_project_description,
@@ -36,7 +37,7 @@ from quirebase.projects import (
     remove_project_member as remove_project_member_domain,
 )
 from quirebase.web.api.common import OkView, WriteResult, authorization_view
-from quirebase.web.api.dependencies import ApiUser, Database
+from quirebase.web.api.dependencies import ApiUser, Database, WorkspaceAccess
 from quirebase.web.api.library_schemas import (
     DiscussionMessageView,
     DiscussionModerationRequest,
@@ -62,11 +63,10 @@ router = APIRouter(prefix="/projects", tags=["Projects"])
 @router.get("", response_model=list[ProjectSummaryView])
 async def list_projects(
     workspace_id: str,
-    user: ApiUser,
+    context: WorkspaceAccess,
     db: Database,
     view: Literal["mine", "joinable", "all"] = "all",
 ):
-    context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     return [
         ProjectSummaryView(
             id=project.id,
@@ -80,9 +80,7 @@ async def list_projects(
                 project_decisions(context, project, is_member=is_member)
             ),
         )
-        for project, count, is_member in await list_workspace_projects(
-            db, user, workspace_id, view=view
-        )
+        for project, count, is_member in await list_workspace_projects(db, context, view=view)
     ]
 
 
@@ -98,10 +96,9 @@ async def create_user_project(
 
 @router.get("/{project_id}", response_model=ProjectDetailView)
 async def get_project(
-    workspace_id: str, project_id: str, user: ApiUser, db: Database
+    workspace_id: str, project_id: str, context: WorkspaceAccess, db: Database
 ) -> ProjectDetailView:
-    workspace = await open_project_workspace(db, user, workspace_id, project_id)
-    context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
+    workspace = await open_project_workspace(db, context, project_id)
     return project_detail_view(
         workspace,
         authorization=authorization_view(
@@ -227,7 +224,8 @@ async def set_project_member(
     db: Database,
 ) -> ProjectMemberView:
     member = await add_project_member(db, user, workspace_id, project_id, data.username)
-    workspace = await open_project_workspace(db, user, workspace_id, project_id)
+    context = await resolve_workspace_context(db, user, workspace_id)
+    workspace = await open_project_workspace(db, context, project_id)
     matched = next(row for row in workspace.members if row.user.id == member.user_id)
     return ProjectMemberView(user_id=matched.user.id, username=matched.user.username)
 
@@ -242,13 +240,11 @@ async def remove_project_member(
 
 @router.get("/{project_id}/discussions", response_model=list[DiscussionMessageView])
 async def list_project_discussions(
-    workspace_id: str, project_id: str, user: ApiUser, db: Database
+    workspace_id: str, project_id: str, context: WorkspaceAccess, db: Database
 ) -> list[DiscussionMessageView]:
-    messages = await list_project_discussion_messages(db, user, workspace_id, project_id)
-    context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
-    project = await db.get(Project, project_id)
-    if project is None:
-        raise ResourceUnavailable("Project not found")
+    project_context = await require_project(db, context, project_id)
+    messages = await list_project_discussion_messages(db, project_context)
+    project = project_context.project
     return [
         discussion_message_view(message, context, writable=project.state is ProjectState.active)
         for message in messages

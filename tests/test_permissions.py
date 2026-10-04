@@ -1,7 +1,9 @@
+from unittest.mock import AsyncMock
+
 import pytest
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
-from quirebase.access.items import can_read_item
+from quirebase.access.items import can_delete_item, can_edit_item, can_read_item
 from quirebase.models import Item, User, WorkspaceMember, WorkspaceRole
 
 
@@ -37,3 +39,15 @@ async def test_item_access_is_workspace_membership_not_creator_or_project_member
     assert await can_read_item(db, owner, workspace_id, item.id)
     assert await can_read_item(db, member, workspace_id, item.id)
     assert not await can_read_item(db, outsider, workspace_id, item.id)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("helper", [can_read_item, can_edit_item, can_delete_item])
+async def test_item_permission_helpers_propagate_unexpected_failures(async_db, monkeypatch, helper):
+    owner = await _provisioned_user(async_db, "permission-error-owner")
+    monkeypatch.setattr(
+        "quirebase.access.items.require_workspace_action",
+        AsyncMock(side_effect=ConnectionError("database unavailable")),
+    )
+    with pytest.raises(ConnectionError, match="database unavailable"):
+        await helper(async_db, owner, fixture_workspace_id(owner), "item-id")

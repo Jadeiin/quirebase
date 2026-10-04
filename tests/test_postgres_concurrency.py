@@ -1675,7 +1675,8 @@ async def test_concurrent_metadata_replacements_reject_stale_version(
 
     async with postgres_race.session("verify") as db:
         actor = await db.get(User, owner_id)
-        view = await open_item_section(db, actor, workspace_id, item_id, ItemSection.metadata)
+        context = await resolve_workspace_context(db, actor, workspace_id)
+        view = await open_item_section(db, context, item_id, ItemSection.metadata)
         assert isinstance(view, ItemMetadataData)
         assert view.metadata.title == winner and view.item.version == 2
         items, total, *_ = await search_library(db, actor, workspace_id, q=winner)

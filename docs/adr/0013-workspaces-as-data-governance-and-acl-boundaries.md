@@ -83,7 +83,8 @@ database, retain the locks and constraints required for concurrent correctness, 
 single Access decision. They must not add a coarse Workspace-wide gate before a more specific
 resource decision. The canonical dotted form such as `item.update` is used only to serialize a
 `resource=item`, `action=update` pair in API projections and Audit Events. Frontend code receives
-server-authored decision sets and asks `can(resource, action)`; it never maps roles to actions.
+server-authored decision sets and asks `can(action)` or `canVariant(action, relation)`; a variant
+requires an explicit allowed relation in the projection. It never maps roles to actions.
 
 Actions use one controlled vocabulary. Ordinary persistence operations use `create`, `read`,
 `update` and `delete`; `read` covers both collection and individual retrieval at the policy layer.
@@ -147,7 +148,8 @@ Instance registration and Workspace admission are separate operations:
 - The active member directory exposes Workspace roles as collaboration metadata. The governance
   view adds membership identifiers, state, join time and member-specific decisions for owners/admins.
 - Ownership transfer is required before an owner can leave, be suspended or be removed. Each
-  active Workspace has exactly one authoritative owner and an owner membership.
+  surviving Workspace has exactly one active authoritative owner membership. Transfer promotes
+  the new owner to `owner` and changes the previous owner to `admin` in the same transaction.
 
 Additional Workspace creation is controlled by instance-level `workspace_creation_policy`:
 
@@ -309,10 +311,15 @@ constraints enforce lineage for ProjectItem, ItemTag, Project Annotation and oth
 associations. Service-layer checks provide typed errors and authorization decisions, but the database
 is the final boundary against cross-Workspace references.
 
-The schema must also enforce one owner membership per Workspace, unique active membership identity
-and Workspace-local Tag uniqueness such as `UNIQUE(workspace_id, normalized_name)`. Projects have no
-owner invariant. The schema must not materialize implicit Workspace-wide participation or require
-a minimum ProjectMember count.
+Partial unique indexes enforce at most one current owner membership per Workspace and at most
+one current membership per Workspace/User pair. Current means `terminated_at IS NULL`, including
+suspended memberships. The database does not enforce the existence or active state of an owner.
+Service transactions preserve exactly one active owner for every surviving Workspace through
+provisioning, atomic ownership transfer and prohibitions on owner suspension, termination and account
+deactivation; `workspace_owner_ids()` validates this invariant on reads. Workspace-local Tag
+uniqueness is enforced by `UNIQUE(workspace_id, normalized_name)`. Projects have no owner invariant.
+The schema must not materialize implicit Workspace-wide participation or require a minimum
+ProjectMember count.
 
 ## Consequences
 

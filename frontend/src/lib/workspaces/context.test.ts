@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { WorkspaceView } from '#lib/api/client.js';
 import type { AuthorizationAction } from '#lib/authorization/can.js';
-import { workspaceCan, workspaceRole } from '#lib/workspaces/context.svelte.js';
+import {
+	workspaceCan,
+	workspaceCanVariant,
+	workspaceRole
+} from '#lib/workspaces/context.svelte.js';
 
 const view = (role: string, allowed: AuthorizationAction[]): WorkspaceView => ({
 	id: 'workspace-1',
@@ -28,6 +32,13 @@ describe('workspaceCan', () => {
 		expect(workspaceCan(archived, 'workspace.archive')).toBe(true);
 		expect(workspaceCan(archived, 'item.update')).toBe(false);
 		expect(workspaceCan(suspended, 'workspace.archive')).toBe(false);
+	});
+	it('requires server-authored variants even for an owner', () => {
+		const owner = view('owner', ['project.create']);
+		expect(workspaceCanVariant(owner, 'project.create', 'managed')).toBe(false);
+		owner.authorization.relations = { 'project.create': ['open'] };
+		expect(workspaceCanVariant(owner, 'project.create', 'open')).toBe(true);
+		expect(workspaceCanVariant(owner, 'project.create', 'workspace')).toBe(false);
 	});
 	it('exposes the projected role for display without granting authority through it', () => {
 		expect(workspaceRole(view('owner', ['workspace.read']))).toBe('owner');

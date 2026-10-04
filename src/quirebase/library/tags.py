@@ -9,12 +9,16 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access.items import (
-    can_read_item,
     require_editable_item,
     visible_items_query,
 )
 from quirebase.access.tags import visible_tags_query
-from quirebase.access.workspaces import ResourceAction, require_workspace_action
+from quirebase.access.workspaces import (
+    ResourceAction,
+    WorkspaceContext,
+    require_action,
+    require_workspace_action,
+)
 from quirebase.audit import record_event
 from quirebase.core.errors import (
     DomainError,
@@ -336,9 +340,10 @@ async def delete_tag(db: AsyncSession, user: User, workspace_id: str, tag_id: st
 
 
 async def list_accessible_tags_with_counts(
-    db: AsyncSession, user: User, workspace_id: str
+    db: AsyncSession, context: WorkspaceContext
 ) -> list[tuple[Tag, int]]:
-    await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
+    require_action(context, ResourceAction.workspace_read)
+    workspace_id = context.workspace_id
     accessible_ids = visible_items_query(workspace_id).with_only_columns(Item.id).subquery()
     rows = (
         await db.execute(
@@ -362,11 +367,9 @@ async def list_accessible_tags_with_counts(
     return [(row[0], row[1]) for row in rows]
 
 
-async def get_tag_matrix_for_item(
-    db: AsyncSession, user: User, workspace_id: str, item_id: str
-) -> TagMatrix:
-    if not await can_read_item(db, user, workspace_id, item_id):
-        raise ResourceUnavailable("item not found")
+async def get_tag_matrix_for_item(db: AsyncSession, item: Item) -> TagMatrix:
+    """Build the Tag matrix for an Item already loaded through its authorized section."""
+    workspace_id, item_id = item.workspace_id, item.id
     all_tags = list((await db.scalars(visible_tags_query(workspace_id).order_by(Tag.name))).all())
     assigned_ids = set(
         (

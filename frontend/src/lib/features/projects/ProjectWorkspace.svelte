@@ -3,7 +3,11 @@
 	import { resolve } from '$app/paths';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { apiErrorMessage } from '#lib/api/errors.js';
-	import { can as isAllowed, type AuthorizationAction } from '#lib/authorization/can.js';
+	import {
+		can as isAllowed,
+		canVariant as isVariantAllowed,
+		type AuthorizationAction
+	} from '#lib/authorization/can.js';
 	import Button from '#lib/design/Button.svelte';
 	import ItemRow from '#lib/design/ItemRow.svelte';
 	import Notice from '#lib/design/Notice.svelte';
@@ -81,12 +85,17 @@
 		}
 	}
 
-	function can(action: AuthorizationAction, relation?: string) {
-		return isAllowed(project?.authorization, action, relation);
+	function can(action: AuthorizationAction) {
+		return isAllowed(project?.authorization, action);
+	}
+
+	function canVariant(action: AuthorizationAction, relation: string) {
+		return isVariantAllowed(project?.authorization, action, relation);
 	}
 
 	async function saveSettings(event: SubmitEvent) {
 		event.preventDefault();
+		if (!canVariant('project.update', settingsParticipation)) return;
 		await mutate(
 			() =>
 				workspace.api.request('PATCH', '/workspaces/{workspace_id}/projects/{project_id}', {
@@ -304,11 +313,11 @@
 					>
 					<label class="grid grid-cols-1 gap-1"
 						>{$t('Participation')}<select class="select" bind:value={settingsParticipation}
-							>{#if can('project.update', 'workspace')}<option value="workspace"
+							>{#if canVariant('project.update', 'workspace')}<option value="workspace"
 									>{$t(domainLabel('workspace'))}</option
-								>{/if}{#if can('project.update', 'open')}<option value="open"
+								>{/if}{#if canVariant('project.update', 'open')}<option value="open"
 									>{$t(domainLabel('open'))}</option
-								>{/if}{#if can('project.update', 'managed')}<option value="managed"
+								>{/if}{#if canVariant('project.update', 'managed')}<option value="managed"
 									>{$t(domainLabel('managed'))}</option
 								>{/if}</select
 						></label
@@ -337,7 +346,12 @@
 						></textarea></label
 					>
 					<div class="flex flex-wrap gap-2 md:col-span-2">
-						<Button disabled={busy || !settingsName.trim()}>{$t('Save Project settings')}</Button>
+						<Button
+							disabled={busy ||
+								!settingsName.trim() ||
+								!canVariant('project.update', settingsParticipation)}
+							>{$t('Save Project settings')}</Button
+						>
 					</div>
 				</form>
 			</Panel>

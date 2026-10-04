@@ -10,13 +10,18 @@ export type AuthorizationDecisionSet = Pick<
 /** Ask a server-authored decision set; never infer policy from roles or lifecycle in the UI. */
 export function can(
 	decisions: AuthorizationDecisionSet | null | undefined,
-	action: AuthorizationAction,
-	relation?: string
+	action: AuthorizationAction
 ): boolean {
-	if (!decisions?.allowed.includes(action)) return false;
-	if (relation === undefined) return true;
-	const constrainedRelations = decisions.relations?.[action];
-	return constrainedRelations === undefined || constrainedRelations.includes(relation);
+	return decisions?.allowed.includes(action) === true;
+}
+
+/** A concrete variant requires an explicit relation projection from the server. */
+export function canVariant(
+	decisions: AuthorizationDecisionSet | null | undefined,
+	action: AuthorizationAction,
+	relation: string
+): boolean {
+	return can(decisions, action) && decisions?.relations?.[action]?.includes(relation) === true;
 }
 
 /** Whether the server projected at least one concrete action for this surface. */

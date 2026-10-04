@@ -8,7 +8,6 @@ from quirebase.access import (
     ResourceAction,
     copy_target_decisions,
     item_decisions,
-    resolve_workspace_context,
     workspace_decisions,
 )
 from quirebase.core.errors import ResourceNotFound, ValidationFailure
@@ -29,7 +28,7 @@ from quirebase.library import (
 )
 from quirebase.operations.settings import get_effective_settings_model
 from quirebase.web.api.common import OkView, WriteResult, authorization_view
-from quirebase.web.api.dependencies import ApiUser, Database
+from quirebase.web.api.dependencies import ApiUser, Database, WorkspaceAccess
 from quirebase.web.api.item_schemas import (
     DeleteConfirmationRequest,
     ItemOrganizeView,
@@ -44,8 +43,10 @@ router = APIRouter(tags=["Items"])
 
 
 @router.get("/items/{item_id}/overview", response_model=ItemOverviewView)
-async def item_overview(workspace_id: str, item_id: str, user: ApiUser, db: Database):
-    view = await open_item_section(db, user, workspace_id, item_id, ItemSection.overview)
+async def item_overview(workspace_id: str, item_id: str, context: WorkspaceAccess, db: Database):
+    source_actions = context.allowed_actions
+    view = await open_item_section(db, context, item_id, ItemSection.overview)
+    user = context.actor
     if not isinstance(view, ItemOverviewData):  # pragma: no cover
         raise TypeError("item overview section mismatch")
     latest = view.revisions[0] if view.revisions else None
@@ -65,7 +66,6 @@ async def item_overview(workspace_id: str, item_id: str, user: ApiUser, db: Data
         ).allowed
         for workspace, member in workspace_rows
     }
-    source_actions = actions_by_workspace.get(workspace_id, ())
     copy_targets = []
     for workspace, _member in workspace_rows:
         if workspace.id == workspace_id:
@@ -111,25 +111,15 @@ async def item_overview(workspace_id: str, item_id: str, user: ApiUser, db: Data
 
 
 @router.get("/items/{item_id}/organize", response_model=ItemOrganizeView)
-async def item_organize(workspace_id: str, item_id: str, user: ApiUser, db: Database):
-
-    view = await open_item_section(db, user, workspace_id, item_id, ItemSection.organize)
+async def item_organize(workspace_id: str, item_id: str, context: WorkspaceAccess, db: Database):
+    allowed_actions = context.allowed_actions
+    view = await open_item_section(db, context, item_id, ItemSection.organize)
     if not isinstance(view, ItemOrganizationData):  # pragma: no cover
         raise TypeError("item organize section mismatch")
     matrix = view.tag_matrix
-    context = await resolve_workspace_context(db, user, workspace_id)
     return {
         "item": item_search_view(view.item),
-        "authorization": authorization_view(
-            item_decisions(
-                view,
-                workspace_decisions(
-                    context.role,
-                    context.workspace.state,
-                    governance_suspended=context.workspace.governance_suspended_at is not None,
-                ).allowed,
-            )
-        ),
+        "authorization": authorization_view(item_decisions(view, allowed_actions)),
         "tags": [{"id": tag.id, "name": tag.name} for tag in view.tags],
         "projects": [
             {

@@ -12,13 +12,14 @@ from sqlalchemy.orm import selectinload
 
 from quirebase.access import (
     ResourceAction,
+    WorkspaceContext,
     action_allowed,
-    require_workspace_action,
+    get_item,
+    require_action,
     visible_annotation_scope_predicate,
     visible_project_ids_query,
 )
-from quirebase.access.items import can_delete_item, can_edit_item, require_readable_item
-from quirebase.core.errors import ResourceNotFound
+from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
 from quirebase.library.authors import get_item_authors
 from quirebase.library.item_metadata import ItemMetadata, metadata_from_item
 from quirebase.library.tags import TagMatrix, get_tag_matrix_for_item
@@ -155,10 +156,9 @@ async def _assigned_tags(db: AsyncSession, item: Item) -> tuple[Tag, ...]:
     )
 
 
-async def _open_overview(db: AsyncSession, user: User, item: Item) -> ItemOverviewData:
-    context = await require_workspace_action(
-        db, user, item.workspace_id, ResourceAction.workspace_read
-    )
+async def _open_overview(
+    db: AsyncSession, context: WorkspaceContext, item: Item
+) -> ItemOverviewData:
     moderator = action_allowed(context, ResourceAction.project_annotation_review)
     revisions = await _revisions(db, item.workspace_id, item.id, all_revisions=True)
     visible_project_items = (
@@ -219,8 +219,8 @@ async def _open_overview(db: AsyncSession, user: User, item: Item) -> ItemOvervi
     tags = await _assigned_tags(db, item)
     return ItemOverviewData(
         item=item,
-        can_edit=await can_edit_item(db, user, item.workspace_id, item.id),
-        can_delete=await can_delete_item(db, user, item.workspace_id, item.id),
+        can_edit=action_allowed(context, ResourceAction.item_update),
+        can_delete=action_allowed(context, ResourceAction.item_delete),
         revisions=revisions[:1],
         revision_count=len(revisions),
         attachment_count=attachment_count,
@@ -245,7 +245,9 @@ async def _revisions(
     return tuple((await db.scalars(query)).all())
 
 
-async def _open_metadata(db: AsyncSession, user: User, item: Item) -> ItemMetadataData:
+async def _open_metadata(
+    db: AsyncSession, context: WorkspaceContext, item: Item
+) -> ItemMetadataData:
     authors = tuple(await get_item_authors(db, item.id, role="author"))
     editors = tuple(await get_item_authors(db, item.id, role="editor"))
     identifiers = tuple(
@@ -253,8 +255,8 @@ async def _open_metadata(db: AsyncSession, user: User, item: Item) -> ItemMetada
     )
     return ItemMetadataData(
         item=item,
-        can_edit=await can_edit_item(db, user, item.workspace_id, item.id),
-        can_delete=await can_delete_item(db, user, item.workspace_id, item.id),
+        can_edit=action_allowed(context, ResourceAction.item_update),
+        can_delete=action_allowed(context, ResourceAction.item_delete),
         revisions=await _revisions(db, item.workspace_id, item.id),
         authors=authors,
         editors=editors,
@@ -262,7 +264,7 @@ async def _open_metadata(db: AsyncSession, user: User, item: Item) -> ItemMetada
     )
 
 
-async def _open_files(db: AsyncSession, user: User, item: Item) -> ItemFilesData:
+async def _open_files(db: AsyncSession, context: WorkspaceContext, item: Item) -> ItemFilesData:
     attachments = tuple(
         (
             await db.scalars(
@@ -277,17 +279,16 @@ async def _open_files(db: AsyncSession, user: User, item: Item) -> ItemFilesData
     )
     return ItemFilesData(
         item=item,
-        can_edit=await can_edit_item(db, user, item.workspace_id, item.id),
-        can_delete=await can_delete_item(db, user, item.workspace_id, item.id),
+        can_edit=action_allowed(context, ResourceAction.item_update),
+        can_delete=action_allowed(context, ResourceAction.item_delete),
         revisions=await _revisions(db, item.workspace_id, item.id, all_revisions=True),
         attachments=attachments,
     )
 
 
-async def _open_organize(db: AsyncSession, user: User, item: Item) -> ItemOrganizationData:
-    context = await require_workspace_action(
-        db, user, item.workspace_id, ResourceAction.workspace_read
-    )
+async def _open_organize(
+    db: AsyncSession, context: WorkspaceContext, item: Item
+) -> ItemOrganizationData:
     tags = await _assigned_tags(db, item)
     project_rows = (
         await db.scalars(
@@ -315,20 +316,19 @@ async def _open_organize(db: AsyncSession, user: User, item: Item) -> ItemOrgani
     )
     return ItemOrganizationData(
         item=item,
-        can_edit=await can_edit_item(db, user, item.workspace_id, item.id),
-        can_delete=await can_delete_item(db, user, item.workspace_id, item.id),
+        can_edit=action_allowed(context, ResourceAction.item_update),
+        can_delete=action_allowed(context, ResourceAction.item_delete),
         revisions=await _revisions(db, item.workspace_id, item.id),
         tags=tags,
         projects=project_options,
         assigned_project_ids=assigned_project_ids,
-        tag_matrix=await get_tag_matrix_for_item(db, user, item.workspace_id, item.id),
+        tag_matrix=await get_tag_matrix_for_item(db, item),
     )
 
 
-async def _open_annotations(db: AsyncSession, user: User, item: Item) -> ItemAnnotationsData:
-    context = await require_workspace_action(
-        db, user, item.workspace_id, ResourceAction.workspace_read
-    )
+async def _open_annotations(
+    db: AsyncSession, context: WorkspaceContext, item: Item
+) -> ItemAnnotationsData:
     moderator = action_allowed(context, ResourceAction.project_annotation_review)
     revisions = await _revisions(db, item.workspace_id, item.id, all_revisions=True)
     annotations: tuple[AnnotationView, ...] = ()
@@ -372,14 +372,16 @@ async def _open_annotations(db: AsyncSession, user: User, item: Item) -> ItemAnn
         )
     return ItemAnnotationsData(
         item=item,
-        can_edit=await can_edit_item(db, user, item.workspace_id, item.id),
-        can_delete=await can_delete_item(db, user, item.workspace_id, item.id),
+        can_edit=action_allowed(context, ResourceAction.item_update),
+        can_delete=action_allowed(context, ResourceAction.item_delete),
         revisions=revisions,
         annotations=annotations,
     )
 
 
-async def _open_discussion(db: AsyncSession, user: User, item: Item) -> ItemDiscussionData:
+async def _open_discussion(
+    db: AsyncSession, context: WorkspaceContext, item: Item
+) -> ItemDiscussionData:
     messages = tuple(
         (
             await db.scalars(
@@ -395,8 +397,8 @@ async def _open_discussion(db: AsyncSession, user: User, item: Item) -> ItemDisc
     )
     return ItemDiscussionData(
         item=item,
-        can_edit=await can_edit_item(db, user, item.workspace_id, item.id),
-        can_delete=await can_delete_item(db, user, item.workspace_id, item.id),
+        can_edit=action_allowed(context, ResourceAction.item_update),
+        can_delete=action_allowed(context, ResourceAction.item_delete),
         revisions=await _revisions(db, item.workspace_id, item.id),
         messages=messages,
     )
@@ -404,28 +406,30 @@ async def _open_discussion(db: AsyncSession, user: User, item: Item) -> ItemDisc
 
 async def open_item_section(
     db: AsyncSession,
-    user: User,
-    workspace_id: str,
+    context: WorkspaceContext,
     item_id: str,
     section: ItemSection,
 ) -> ItemSectionResult:
     try:
-        item = await require_readable_item(db, user, workspace_id, item_id)
+        require_action(context, ResourceAction.workspace_read)
+        item = await get_item(db, context, item_id)
+        if item is None:
+            raise ResourceUnavailable("Item not found")
         view: ItemSectionResult
         match section:
             case ItemSection.overview:
-                view = await _open_overview(db, user, item)
+                view = await _open_overview(db, context, item)
             case ItemSection.metadata:
-                view = await _open_metadata(db, user, item)
+                view = await _open_metadata(db, context, item)
             case ItemSection.files:
-                view = await _open_files(db, user, item)
+                view = await _open_files(db, context, item)
             case ItemSection.organize:
-                view = await _open_organize(db, user, item)
+                view = await _open_organize(db, context, item)
             case ItemSection.annotations:
-                view = await _open_annotations(db, user, item)
+                view = await _open_annotations(db, context, item)
             case ItemSection.discussion:
-                view = await _open_discussion(db, user, item)
-        await _record_read(db, user, workspace_id, item.id)
+                view = await _open_discussion(db, context, item)
+        await _record_read(db, context.actor, context.workspace_id, item.id)
         await db.commit()
         return view
     except Exception:

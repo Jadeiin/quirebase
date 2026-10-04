@@ -10,9 +10,9 @@ from sqlalchemy.exc import IntegrityError
 
 from quirebase.access import (
     ResourceAction,
+    WorkspaceContext,
     lock_workspace_context,
     require_action,
-    require_project_context,
     require_project_visibility,
     require_workspace_action,
     visible_project_ids_query,
@@ -34,6 +34,7 @@ from quirebase.models import (
 )
 
 from ._locking import guard_project
+from .loaders import require_project
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -114,19 +115,18 @@ async def create_project(
 
 async def list_workspace_projects(
     db: AsyncSession,
-    user: User,
-    workspace_id: str,
+    context: WorkspaceContext,
     *,
     view: Literal["mine", "joinable", "all"] = "all",
 ) -> list[tuple[Project, int, bool]]:
     """List visible Projects, optionally limited to the caller's participation view."""
     if view not in {"mine", "joinable", "all"}:
         raise ValidationFailure("invalid Project list view")
-    context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
+    require_action(context, ResourceAction.workspace_read)
     member_ids = (
         workspace_select(ProjectMember, context)
         .join(Project, Project.id == ProjectMember.project_id)
-        .where(ProjectMember.user_id == user.id)
+        .where(ProjectMember.user_id == context.actor_id)
         .with_only_columns(ProjectMember.project_id)
     )
     is_member = (Project.participation == ProjectParticipation.workspace) | Project.id.in_(
@@ -156,11 +156,10 @@ async def list_workspace_projects(
 
 
 async def open_project_workspace(
-    db: AsyncSession, user: User, workspace_id: str, project_id: str
+    db: AsyncSession, workspace: WorkspaceContext, project_id: str
 ) -> ProjectWorkspace:
-    context = await require_project_context(
-        db, user, workspace_id, project_id, ResourceAction.workspace_read
-    )
+    context = await require_project(db, workspace, project_id)
+    workspace_id = workspace.workspace_id
     members_rows: Sequence[User] = ()
     is_member = context.project.participation is ProjectParticipation.workspace
     if context.project.participation is not ProjectParticipation.workspace:
@@ -190,7 +189,7 @@ async def open_project_workspace(
                 select(ProjectMember.id).where(
                     ProjectMember.workspace_id == workspace_id,
                     ProjectMember.project_id == project_id,
-                    ProjectMember.user_id == user.id,
+                    ProjectMember.user_id == workspace.actor_id,
                 )
             )
             is not None

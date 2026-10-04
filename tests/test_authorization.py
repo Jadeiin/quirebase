@@ -3,9 +3,12 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
+import pytest
+
 from quirebase.access import (
     ResourceAction,
     SystemAction,
+    authorization,
     effective_system_actions,
     initialize_authorization,
     system_action_allowed,
@@ -41,7 +44,7 @@ def test_workspace_action_metadata_is_complete_and_classifies_reads():
         ResourceAction.project_discover,
     ):
         assert not action_spec(action).mutating
-    assert action_spec(ResourceAction.project_create).relations == (
+    assert action_spec(ResourceAction.project_create).projected_relations == (
         "workspace",
         "open",
         "managed",
@@ -246,3 +249,21 @@ def test_mutating_relation_actions_fail_closed_outside_active_lifecycle():
             lifecycle,
             "admin",
         )
+
+
+@pytest.mark.parametrize(
+    "rule",
+    [
+        "p, workspace:viewer, project_membership, join, active, member",
+        "p, workspace:editor, project, update, active, open",
+        "p, workspace:viewer, project_membership, join, active, (open|member)",
+        "p, system:member, workspace, create, active, own",
+    ],
+)
+def test_policy_validator_rejects_relations_from_another_action(tmp_path, monkeypatch, rule):
+    policy = tmp_path / "policy.csv"
+    policy.write_text(authorization._POLICY_PATH.read_text() + "\n" + rule + "\n")
+    monkeypatch.setattr(authorization, "_POLICY_PATH", policy)
+    # Validate this bundle directly, independent of the already-initialized process cache.
+    with pytest.raises(RuntimeError, match=r"invalid relation.*on policy\.csv"):
+        authorization._validate_policy_bundle.__wrapped__()

@@ -178,7 +178,7 @@ def project_decisions(
         allowed.add(ResourceAction.project_update)
         relations[ResourceAction.project_update] = tuple(
             relation
-            for relation in action_spec(ResourceAction.project_update).relations
+            for relation in action_spec(ResourceAction.project_update).projected_relations
             if project_participation_change_allowed(
                 context, project.participation, ProjectParticipation(relation)
             )

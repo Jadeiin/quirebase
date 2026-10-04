@@ -37,6 +37,14 @@
 	let name = $state(workspace.view?.name ?? '');
 	let inviteUsername = $state('');
 	let inviteRole = $state<'admin' | 'editor' | 'reviewer' | 'viewer'>('viewer');
+	const inviteRoles = $derived(
+		(['viewer', 'reviewer', 'editor', 'admin'] as const).filter((role) =>
+			workspace.canVariant('workspace_invitation.create', role === 'admin' ? 'admin' : 'member')
+		)
+	);
+	$effect(() => {
+		if (!inviteRoles.includes(inviteRole) && inviteRoles[0]) inviteRole = inviteRoles[0];
+	});
 	let inviteDays = $state(7);
 	let oneTimeToken = $state('');
 	let message = $state('');
@@ -79,6 +87,7 @@
 		);
 	}
 	async function createInvitation() {
+		if (!inviteRoles.includes(inviteRole)) return;
 		busyId = 'invite';
 		error = '';
 		message = '';
@@ -139,7 +148,7 @@
 	}
 	function confirmOwnershipTransfer(username: string): boolean {
 		return confirm(
-			`Transfer Workspace ownership to ${username}? You will lose owner-only governance actions.`
+			`Transfer Workspace ownership to ${username}? You will become an admin and lose owner-only governance actions.`
 		);
 	}
 </script>
@@ -441,7 +450,7 @@
 			class="grid grid-cols-1 gap-4 rounded-container border border-surface-300-700 bg-surface-50-950 p-5"
 		>
 			<h2 class="text-xl font-semibold">{$t('Invitations')}</h2>
-			{#if workspace.can('workspace_invitation.create')}<form
+			{#if inviteRoles.length > 0}<form
 					class="grid grid-cols-1 gap-3 md:grid-cols-4"
 					onsubmit={(event) => {
 						event.preventDefault();
@@ -457,13 +466,9 @@
 						{$t('Role')}
 
 						<select bind:value={inviteRole}>
-							{#if workspace.can('workspace_invitation.create', 'admin')}
-								<option value="admin">{$t('admin')}</option>
-							{/if}
-
-							<option value="viewer">{$t('viewer')}</option>
-							<option value="reviewer">{$t('reviewer')}</option>
-							<option value="editor">{$t('editor')}</option>
+							{#each inviteRoles as role (role)}
+								<option value={role}>{$t(domainLabel(role))}</option>
+							{/each}
 						</select>
 					</label>
 

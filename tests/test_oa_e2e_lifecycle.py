@@ -18,6 +18,7 @@ from sqlalchemy.orm import selectinload
 from test_http import authenticated_async_client
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
+from quirebase.access import resolve_workspace_context
 from quirebase.core.config import get_settings
 from quirebase.library import (
     ItemMetadataData,
@@ -416,13 +417,23 @@ async def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(
         db.expire_all()
         user = await db.get(User, user_id)
         assert user is not None
-        overview = await open_item_section(db, user, workspace_id, item_id, ItemSection.overview)
+        overview = await open_item_section(
+            db,
+            await resolve_workspace_context(db, user, workspace_id),
+            item_id,
+            ItemSection.overview,
+        )
         assert isinstance(overview, ItemOverviewData)
         assert (
             overview.item.title
             == "Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives"
         )
-        metadata = await open_item_section(db, user, workspace_id, item_id, ItemSection.metadata)
+        metadata = await open_item_section(
+            db,
+            await resolve_workspace_context(db, user, workspace_id),
+            item_id,
+            ItemSection.metadata,
+        )
         assert isinstance(metadata, ItemMetadataData)
         author_links = metadata.authors
         assert len(author_links) == 2

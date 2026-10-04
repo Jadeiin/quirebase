@@ -134,7 +134,6 @@ def test_item_sections_use_the_fixed_query_annotation_review_projection():
 
 def test_project_membership_copy_matches_managed_discovery_semantics():
     project = read("frontend/src/lib/features/projects/ProjectWorkspace.svelte")
-    assert "isAllowed(project?.authorization, action, relation)" in project
     assert "can('project_membership.manage')" in project
     assert "can('project_membership.join')" in project
     assert "can('project_membership.leave')" in project

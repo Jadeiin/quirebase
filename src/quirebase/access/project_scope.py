@@ -46,7 +46,10 @@ def visible_project_ids_query(ctx: WorkspaceContext):
             ProjectMember.workspace_id == ctx.workspace_id,
             ProjectMember.user_id == ctx.actor_id,
         )
-        relation_predicates.append(Project.id.in_(member_project_ids))
+        relation_predicates.append(
+            (Project.participation == ProjectParticipation.managed)
+            & Project.id.in_(member_project_ids)
+        )
     return query.where(or_(*relation_predicates) if relation_predicates else false())
 
 

@@ -6,7 +6,6 @@ from sqlalchemy import select
 from quirebase.access import (
     ResourceAction,
     require_action,
-    resolve_workspace_context,
     workspace_decisions,
     workspace_member_decisions,
 )
@@ -139,9 +138,9 @@ async def update_user_workspace(
 
 @workspace_router.get("/members", response_model=list[WorkspaceMemberDirectoryView])
 async def get_workspace_members(
-    workspace_id: str, user: ApiUser, db: Database
+    workspace_id: str, context: WorkspaceAccess, db: Database
 ) -> list[WorkspaceMemberDirectoryView]:
-    members = await list_workspace_members(db, user, workspace_id)
+    members = await list_workspace_members(db, context)
     usernames = await _usernames(db, {member.user_id for member in members})
     return [
         WorkspaceMemberDirectoryView(
@@ -155,10 +154,9 @@ async def get_workspace_members(
 
 @workspace_router.get("/governance/members", response_model=list[WorkspaceGovernanceMemberView])
 async def get_workspace_governance_members(
-    workspace_id: str, user: ApiUser, db: Database
+    workspace_id: str, context: WorkspaceAccess, db: Database
 ) -> list[WorkspaceGovernanceMemberView]:
-    members = await list_workspace_governance_members(db, user, workspace_id)
-    context = await resolve_workspace_context(db, user, workspace_id)
+    members = await list_workspace_governance_members(db, context)
     usernames = await _usernames(db, {member.user_id for member in members})
     return [
         WorkspaceGovernanceMemberView(
@@ -208,9 +206,9 @@ async def create_workspace_invitation(
     response_model=list[WorkspaceInvitationView],
 )
 async def get_workspace_invitations(
-    workspace_id: str, user: ApiUser, db: Database
+    workspace_id: str, context: WorkspaceAccess, db: Database
 ) -> list[WorkspaceInvitationView]:
-    invitations = await list_workspace_invitations(db, user, workspace_id)
+    invitations = await list_workspace_invitations(db, context)
     usernames = await _usernames(db, {invitation.user_id for invitation in invitations})
     return [
         WorkspaceInvitationView(

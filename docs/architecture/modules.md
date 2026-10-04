@@ -99,7 +99,10 @@ low-level document staging, ORM synchronization helpers and operational file uti
 stay in their owning implementation modules rather than package facades.
 
 Workspace authorization is resolved once at an inbound request or workflow boundary into an
-`access.WorkspaceContext`. Business operations may use the thin `access.workspace_select()`
+`access.WorkspaceContext`. Read models reuse that context and project decisions from loaded facts.
+Mutation commands retain actor/Workspace identifiers, acquire their transaction locks and reload
+authority; a request-time context must not replace those checks or cross durable checkpoints.
+Business operations may use the thin `access.workspace_select()`
 lineage primitive and Module-owned aggregate loaders (`get_item`, `get_project`,
 `get_project_item`, and document loaders). The primitive only adds the Workspace lineage
 predicate; one concrete resource-action decision remains an explicit Access gate while Project
@@ -115,7 +118,8 @@ Project participation and managed-Project discovery are inputs to that same deci
 Business Modules still load canonical User, membership, lifecycle, lineage, authorship and
 participation facts, retain their transaction locks and database constraints, and re-evaluate after
 the relevant lock when authority can change. The frontend receives only server-authored allowed
-resource-action sets, calls `can(resource, action)` and never reconstructs policy from roles.
+resource-action sets, calls `can(action)` or strict `canVariant(action, relation)` and never
+reconstructs policy from roles.
 Dotted keys in the wire contract and Audit Events serialize a resource/action pair; they do not
 define a second policy vocabulary. MCP continues through the generated HTTP API and the same
 business enforcement points; durable workflows re-read facts and authorize each attempt rather
@@ -212,9 +216,10 @@ Adapter, and the Library-owned workflow invokes the Library operation.
 Opening a Project crosses the Projects interface through `open_project_workspace`, which returns
 a typed read model containing the Project, explicit participants for `open` and `managed` modes,
 the caller's participation state, and assigned Items. Workspace membership and concrete
-resource-action decisions are authorized behind that operation. ProjectMember gates
-discoverability only for `managed` Projects; it never grants Workspace authority or canonical Item access. Projects have
-no owner or ownership-transfer operation; `created_by` is provenance only. Only the Web adapter
+resource-action decisions are checked against the boundary-resolved WorkspaceContext behind that
+operation. ProjectMember gates discoverability only for `managed` Projects; it never grants
+Workspace authority or canonical Item access. Projects have no owner or ownership-transfer
+operation; `created_by` is provenance only. Only the Web adapter
 maps the typed view to an API projection.
 
 The Project settings form crosses the Projects interface through `update_project_settings`.

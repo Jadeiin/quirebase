@@ -42,7 +42,10 @@ function workspaceView(id: string, name: string) {
 				'project_annotation.create',
 				'project_annotation.review'
 			],
-			relations: { 'project.create': ['managed', 'open', 'workspace'] }
+			relations: {
+				'project.create': ['managed', 'open', 'workspace'],
+				'workspace_invitation.create': ['admin', 'member']
+			}
 		}
 	};
 }
@@ -75,6 +78,22 @@ export async function mockWorkspaces(page: Page, creationAllowed = false) {
 }
 
 export async function mockSession(page: Page, role: 'member' | 'administrator' = 'member') {
+	// EmbedPDF waits for its default stamp pack during initialization. Keep the
+	// mocked browser suite independent of CDN latency with a valid local pack.
+	await page.route('https://cdn.jsdelivr.net/npm/@embedpdf/default-stamps/**', (route) => {
+		if (new URL(route.request().url()).pathname.endsWith('/manifest.json')) {
+			return route.fulfill({
+				json: {
+					id: 'standard',
+					name: 'Standard Stamps',
+					categories: ['sidebar'],
+					pdf: 'stamps.pdf',
+					stamps: [{ id: 'approved', pageIndex: 0, name: 'Approved', subject: 'Approved' }]
+				}
+			});
+		}
+		return route.fulfill({ contentType: 'application/pdf', body: minimalPdf() });
+	});
 	// Download E2E tests assert the request payload. Disable the native picker,
 	// which is unavailable in headless CI and would otherwise block the fetch
 	// while waiting for a user to choose a path.
