@@ -76,20 +76,20 @@ The subject is a persistent role projected as `workspace:<role>` or `system:<rol
 domain names such as `item`, `project`, `workspace_member` or `project_annotation`; actions are
 verbs such as `update`, `manage`, `suspend` or `hide`. An action never repeats its resource name.
 Lifecycle represents Workspace governance state, and relation carries canonical request facts such
-as `own`, `other`, `member`, `admin`, `managed` or `participant`; `any` means the decision does not
-depend on a target relation.
+as `own`, `other`, `member`, `admin` or `managed`; `any` means the decision does not depend on a
+target relation.
 
 Business Modules load lineage, membership, lifecycle, authorship and participation from the
 database, retain the locks and constraints required for concurrent correctness, then invoke that
 single Access decision. They must not add a coarse Workspace-wide gate before a more specific
 resource decision. The canonical dotted form such as `item.update` is used only to serialize a
 `resource=item`, `action=update` pair in API projections and Audit Events. Frontend code receives
-server-authored decision sets and asks `can(action)` or `canVariant(action, relation)`; a variant
-requires an explicit allowed relation in the projection. `allowed` contains resolved base-action
-grants, while `relations` independently grants concrete request variants. A variant-only action
+server-authored decision sets and asks `can(action)` or `canVariant(action, variant)`; a variant
+requires an explicit concrete variant in the projection. `allowed` contains resolved base-action
+grants, while `variants` independently grants concrete request variants. A variant-only action
 such as `project.create` is absent from `allowed`; it cannot be treated as an unconditional grant.
 A resource may expose both a base grant and constrained variants: `project.update` permits metadata
-updates while its relation set limits participation changes. Frontend code never maps roles to actions.
+updates while its variant set limits participation changes. Frontend code never maps roles to actions.
 
 Actions use one controlled vocabulary. Ordinary persistence operations use `create`, `read`,
 `update` and `delete`; `read` covers both collection and individual retrieval at the policy layer.
@@ -99,11 +99,16 @@ family of subordinate mutations. Authorship or moderation does not create action
 `delete` or `restore` action is evaluated with `relation=own` or `relation=other`.
 Command variants also remain relations rather than action suffixes: Project participation constrains
 `project.create`, and the configured creation mode constrains `workspace.create`. When a client
-must choose among such variants, `AuthorizationView.relations` carries the server-evaluated
-relation set for the same resource-action key; it is not a second policy namespace.
+must choose among such variants, `AuthorizationView.variants` carries the server-evaluated
+concrete variant set for the same resource-action key; it is not a second policy namespace.
 When a domain value requires internal relation classification, the server projects the concrete
 choices instead. `WorkspaceView.allowed_invitation_roles` lists the roles the caller may invite;
 the frontend does not translate invitation roles into Casbin's `admin` or `member` classes.
+`WorkspaceGovernanceMemberView.allowed_roles` similarly lists concrete role transitions for that
+target, including promotion, while its decision set contains lifecycle and ownership actions.
+Item metadata, files, Tags and ProjectItem capabilities are projected independently; metadata-edit
+authority is not a prerequisite for those subordinate operations. Reindex uses the separate
+`workspace_maintenance.run` decision at dispatch and at every durable batch.
 
 The initial role presets are:
 
@@ -126,6 +131,7 @@ The initial role presets are:
 | Permanently delete shared Items | yes | yes | no | no | no |
 | Permanently delete Documents | yes | yes | yes | no | no |
 | Manage Workspace members, roles and settings | yes | yes | no | no | no |
+| Rebuild Workspace search projections | yes | yes | no | no | no |
 | Transfer Workspace ownership or manage admins | yes | no | no | no | no |
 | Archive/restore Workspace | yes | yes | no | no | no |
 | Permanently delete Workspace | yes | no | no | no | no |
@@ -149,12 +155,17 @@ Instance registration and Workspace admission are separate operations:
   is unique; existing Users are never provisioned implicitly.
 - Admission to another Workspace uses a separate `WorkspaceInvitation` or an owner/admin
   membership mutation for an existing User.
+- Both invitation types resolve through the public `/invitations/{token}` API with an explicit
+  `kind` discriminator. Workspace admission still accepts only the invited existing User; the UI
+  keeps the invitation open while switching away from a different signed-in account.
 - A valid membership has state `active` or `suspended`. Removal terminates the membership and is
   retained as an audit/history record, not as an ACL-satisfying `removed` state.
 - Workspace owner/admin manages ordinary membership. An instance administrator may perform only
   coarse tenancy/lifecycle governance such as suspension or recovery, not ordinary content access.
-- The active member directory exposes Workspace roles as collaboration metadata. The governance
-  view adds membership identifiers, state, join time and member-specific decisions for owners/admins.
+- The active member directory exposes Workspace roles as collaboration metadata, requiring both
+  an active User account and an active current Workspace membership. The governance view retains
+  current memberships for inactive accounts and adds membership identifiers, state, join time,
+  concrete allowed role choices and member-specific lifecycle decisions for owners/admins.
 - Ownership transfer is required before an owner can leave, be suspended or be removed. Each
   surviving Workspace has exactly one active authoritative owner membership. Transfer promotes
   the new owner to `owner` and changes the previous owner to `admin` in the same transaction.
@@ -204,11 +215,18 @@ access to canonical Workspace Items:
   participation with `project_membership.manage`. Only users allowed `project.create` with
   `relation=managed` may create one, and a new managed Project starts with zero participants.
 
+Ordinary discovery is fixed domain behavior: active Workspace members discover `workspace` and
+`open` Projects, and explicit participants discover `managed` Projects. Casbin cannot redefine
+those modes. The narrow `project_governance.read` decision adds discovery of managed Projects
+for governance; the initial policy grants it to owners/admins, including read-only lifecycle states.
+The SQL collection filter and direct-link checker implement the same domain scope.
+
 Switching to `workspace` removes ProjectMember associations in the same transaction. Switching
 between `open` and `managed` preserves selected participants; transitioning from `workspace` to
-`open` enrolls the actor, while transitioning to `managed` does not. An empty participant list is
-valid for `open` and `managed`. No Project has an owner, ownership transfer, or minimum-member
-invariant. Workspace membership and resource-action policy remain the authorization boundary for
+`open` enrolls the actor, while transitioning to `managed` does not. Managed-Project participant
+selection uses the active Workspace member directory and omits existing participants. An empty
+participant list is valid for `open` and `managed`. No Project has an owner, ownership transfer, or
+minimum-member invariant. Workspace membership and resource-action policy remain the authorization boundary for
 canonical Workspace data and Project mutations; ProjectMember affects only managed Project
 discoverability.
 
@@ -324,7 +342,9 @@ independently.
 Durable workflows persist actor, Workspace ID, Project ID where relevant and target resource IDs.
 After external work, the finalizer re-reads canonical resources and re-evaluates Workspace
 membership and the concrete resource-action decision before committing. A stale or terminated
-grant rejects finalization rather than inheriting request-time authority.
+grant rejects finalization rather than inheriting request-time authority. Project-scoped mutation
+callers explicitly choose a shared or exclusive Project root lock; action metadata never silently
+chooses a Project lock or upgrades it. Root locks precede cascading child-row locks.
 
 Instance administrators may invoke only the explicit `resource=workspace_break_glass`,
 `action=read` decision. It is temporary, reason-required, fully audited and read-only in the
@@ -361,9 +381,9 @@ ProjectMember count.
   canonical Item grants or Workspace authority.
 - Project creators are recorded only as provenance. Workspace governance—not Project ownership—
   maintains managed participation and Project lifecycle.
-- The Access Module and its immutable Casbin bundle become the sole policy evaluator; Web, MCP,
-  jobs and business Modules must call the same resource-action interface rather than branch on
-  role strings.
+- The Access Module and its immutable Casbin bundle become the sole Workspace/System
+  authorization policy evaluator; Web, MCP, jobs and business Modules must call the same
+  resource-action interface rather than branch on role strings.
 - Database lineage constraints, explicit Workspace context and finalizer re-authorization add
   schema and API surface, but prevent accidental cross-team references.
 - Instance administrators can perform tenancy recovery without receiving silent research-data

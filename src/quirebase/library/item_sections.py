@@ -63,8 +63,6 @@ class ItemSection(StrEnum):
 @dataclass(frozen=True)
 class ItemSectionData:
     item: Item
-    can_edit: bool
-    can_delete: bool
     revisions: tuple[FileRevision, ...]
 
 
@@ -219,8 +217,6 @@ async def _open_overview(
     tags = await _assigned_tags(db, item)
     return ItemOverviewData(
         item=item,
-        can_edit=action_allowed(context, ResourceAction.item_update),
-        can_delete=action_allowed(context, ResourceAction.item_delete),
         revisions=revisions[:1],
         revision_count=len(revisions),
         attachment_count=attachment_count,
@@ -255,8 +251,6 @@ async def _open_metadata(
     )
     return ItemMetadataData(
         item=item,
-        can_edit=action_allowed(context, ResourceAction.item_update),
-        can_delete=action_allowed(context, ResourceAction.item_delete),
         revisions=await _revisions(db, item.workspace_id, item.id),
         authors=authors,
         editors=editors,
@@ -279,8 +273,6 @@ async def _open_files(db: AsyncSession, context: WorkspaceContext, item: Item) -
     )
     return ItemFilesData(
         item=item,
-        can_edit=action_allowed(context, ResourceAction.item_update),
-        can_delete=action_allowed(context, ResourceAction.item_delete),
         revisions=await _revisions(db, item.workspace_id, item.id, all_revisions=True),
         attachments=attachments,
     )
@@ -316,8 +308,6 @@ async def _open_organize(
     )
     return ItemOrganizationData(
         item=item,
-        can_edit=action_allowed(context, ResourceAction.item_update),
-        can_delete=action_allowed(context, ResourceAction.item_delete),
         revisions=await _revisions(db, item.workspace_id, item.id),
         tags=tags,
         projects=project_options,
@@ -372,8 +362,6 @@ async def _open_annotations(
         )
     return ItemAnnotationsData(
         item=item,
-        can_edit=action_allowed(context, ResourceAction.item_update),
-        can_delete=action_allowed(context, ResourceAction.item_delete),
         revisions=revisions,
         annotations=annotations,
     )
@@ -397,8 +385,6 @@ async def _open_discussion(
     )
     return ItemDiscussionData(
         item=item,
-        can_edit=action_allowed(context, ResourceAction.item_update),
-        can_delete=action_allowed(context, ResourceAction.item_delete),
         revisions=await _revisions(db, item.workspace_id, item.id),
         messages=messages,
     )

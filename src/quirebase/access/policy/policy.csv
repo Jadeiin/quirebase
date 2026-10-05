@@ -18,7 +18,6 @@ p, workspace:viewer, private_annotation_reply, create, active, own
 p, workspace:viewer, private_annotation_reply, delete, active, own
 p, workspace:viewer, private_annotation_reply, restore, active, own
 p, workspace:viewer, private_annotation_reply, update, active, own
-p, workspace:viewer, project, discover, (active|archived|suspended), (open|participant|workspace)
 p, workspace:viewer, project_annotation, read, (active|archived|suspended), (other|own)
 p, workspace:viewer, project_membership, join, active, open
 p, workspace:viewer, project_membership, leave, active, open
@@ -59,7 +58,6 @@ p, workspace:admin, item, delete, active, any
 p, workspace:admin, item_discussion, delete, active, other
 p, workspace:admin, project, create, active, managed
 p, workspace:admin, project, delete, active, any
-p, workspace:admin, project, discover, (active|archived|suspended), managed
 p, workspace:admin, project_annotation, archive, active, other
 p, workspace:admin, project_annotation, delete, active, other
 p, workspace:admin, project_annotation, hide, active, other
@@ -68,6 +66,7 @@ p, workspace:admin, project_annotation, restore, active, other
 p, workspace:admin, project_annotation, review, (active|archived|suspended), any
 p, workspace:admin, project_annotation, unlock, active, other
 p, workspace:admin, project_discussion, delete, active, other
+p, workspace:admin, project_governance, read, (active|archived|suspended), any
 p, workspace:admin, project_membership, manage, active, managed
 p, workspace:admin, tag, manage, active, any
 p, workspace:admin, workspace, archive, active, any
@@ -76,6 +75,7 @@ p, workspace:admin, workspace, update, active, any
 p, workspace:admin, workspace_invitation, create, active, member
 p, workspace:admin, workspace_invitation, read, (active|archived), any
 p, workspace:admin, workspace_invitation, revoke, active, any
+p, workspace:admin, workspace_maintenance, run, active, any
 p, workspace:admin, workspace_member, change_role, active, member
 p, workspace:admin, workspace_member, reactivate, active, member
 p, workspace:admin, workspace_member, read, (active|archived), any

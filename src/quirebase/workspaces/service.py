@@ -20,6 +20,7 @@ from quirebase.access import (
     require_workspace_membership,
     system_action_allowed,
     workspace_member_relation,
+    workspace_member_role_action,
 )
 from quirebase.audit import record_event
 from quirebase.core.config import get_settings
@@ -310,10 +311,12 @@ async def list_workspace_members(
         (
             await db.scalars(
                 select(WorkspaceMember)
+                .join(User, User.id == WorkspaceMember.user_id)
                 .where(
                     WorkspaceMember.workspace_id == workspace_id,
                     WorkspaceMember.state == WorkspaceMemberState.active,
                     WorkspaceMember.terminated_at.is_(None),
+                    User.active.is_(True),
                 )
                 .order_by(WorkspaceMember.created_at, WorkspaceMember.id)
             )
@@ -646,12 +649,7 @@ async def set_workspace_member_role(
     if member.role is WorkspaceRole.owner or requested is WorkspaceRole.owner:
         raise ValidationFailure("use ownership transfer for the owner role")
     relation = workspace_member_relation(member.role)
-    action = (
-        "promote"
-        if requested is WorkspaceRole.admin and member.role is not WorkspaceRole.admin
-        else "change_role"
-    )
-    resource_action = ResourceAction(f"workspace_member.{action}")
+    resource_action = workspace_member_role_action(member.role, requested)
     require_action(context, resource_action, relation=relation)
     member.role = requested
     record_event(

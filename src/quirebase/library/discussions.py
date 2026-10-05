@@ -181,7 +181,7 @@ async def add_project_discussion_message(
     body: str,
 ) -> DiscussionMessage:
     context = await require_project_context(
-        db, user, workspace_id, project_id, ResourceAction.project_discussion_create
+        db, user, workspace_id, project_id, ResourceAction.project_discussion_create, lock="shared"
     )
     content = body.strip()
     if not content or len(content) > 20_000:
@@ -243,6 +243,7 @@ async def delete_project_discussion_message(
             project_id,
             ResourceAction.project_discussion_delete,
             relation="own",
+            lock="shared",
         )
     except PermissionDenied as error:
         raise ResourceUnavailable("discussion message not found or cannot be deleted") from error
@@ -290,6 +291,7 @@ async def moderate_project_discussion_message(
         project_id,
         ResourceAction.project_discussion_delete,
         relation=relation,
+        lock="shared",
     )
     # Hold the Workspace and Project roots before locking a cascading child row.
     message = await db.scalar(message_query.with_for_update())

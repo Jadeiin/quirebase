@@ -14,10 +14,10 @@ def test_workspace_projection_separates_base_grants_and_concrete_choices(role, l
 
     assert ResourceAction.project_create not in decisions.allowed
     assert ResourceAction.workspace_invitation_create not in decisions.allowed
-    assert ResourceAction.workspace_invitation_create not in decisions.relations
+    assert ResourceAction.workspace_invitation_create not in decisions.variants
     if lifecycle != "active":
         assert not invitations
-        assert ResourceAction.project_create not in decisions.relations
+        assert ResourceAction.project_create not in decisions.variants
         return
 
     expected_invitations = {
@@ -30,4 +30,4 @@ def test_workspace_projection_separates_base_grants_and_concrete_choices(role, l
         WorkspaceRole.admin: {"workspace", "open", "managed"},
         WorkspaceRole.editor: {"workspace", "open"},
     }.get(role, set())
-    assert set(decisions.relations.get(ResourceAction.project_create, ())) == expected_projects
+    assert set(decisions.variants.get(ResourceAction.project_create, ())) == expected_projects

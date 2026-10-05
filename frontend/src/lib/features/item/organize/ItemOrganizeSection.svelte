@@ -21,7 +21,7 @@
 
 	let tagFilter = $state('');
 	const canUseTags = $derived(can(data.authorization, 'tag.use'));
-	const canCreateTags = $derived(can(data.authorization, 'tag.create'));
+	const canCreateTags = $derived(canUseTags && can(data.authorization, 'tag.create'));
 	const canManageProjects = $derived(can(data.authorization, 'project_item.manage'));
 	const groups = $derived(
 		data.tag_matrix.groups

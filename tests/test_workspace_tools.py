@@ -15,6 +15,7 @@ from quirebase.models import (
     LoginSession,
     Project,
     ProjectMember,
+    ProjectParticipation,
     SystemSetting,
     Tag,
     User,
@@ -69,6 +70,63 @@ async def test_projects_have_a_dedicated_workspace(
             )
         )
         assert membership is None
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_participant_directory_tracks_account_activation(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    client, item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    owner = await async_db.get(User, item.created_by)
+    owner.role = "administrator"
+    target = User(username="participant-candidate", password_hash="unused")
+    async_db.add(target)
+    await async_db.flush()
+    async_db.add(
+        WorkspaceMember(
+            workspace_id=item.workspace_id, user_id=target.id, role=WorkspaceRole.editor
+        )
+    )
+    project = Project(
+        workspace_id=item.workspace_id,
+        name="Managed participants",
+        created_by=owner.id,
+        participation=ProjectParticipation.managed,
+    )
+    async_db.add(project)
+    await async_db.commit()
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
+    target_status = f"/api/v1/admin/users/{target.id}/status"
+    participant_path = f"{workspace_base}/projects/{project.id}/members"
+    try:
+        directory = await client.get(f"{workspace_base}/members")
+        assert directory.status_code == 200
+        assert target.id in {row["user_id"] for row in directory.json()}
+
+        disabled = await client.put(target_status, json={"active": False})
+        assert disabled.status_code == 200
+        directory = await client.get(f"{workspace_base}/members")
+        assert directory.status_code == 200
+        assert target.id not in {row["user_id"] for row in directory.json()}
+        governance = await client.get(f"{workspace_base}/governance/members")
+        assert governance.status_code == 200
+        member = next(row for row in governance.json() if row["user_id"] == target.id)
+        assert member["state"] == "active"
+        rejected = await client.put(participant_path, json={"username": target.username})
+        assert rejected.status_code == 404
+
+        reactivated = await client.put(target_status, json={"active": True})
+        assert reactivated.status_code == 200
+        directory = await client.get(f"{workspace_base}/members")
+        assert directory.status_code == 200
+        assert target.id in {row["user_id"] for row in directory.json()}
+        added = await client.put(participant_path, json={"username": target.username})
+        assert added.status_code == 200
     finally:
         await client.aclose()
         get_settings.cache_clear()
@@ -221,14 +279,14 @@ async def test_workspace_invitation_uses_username_and_global_acceptance_route(
             "state",
             "joined_at",
             "authorization",
+            "allowed_roles",
         }
         governed_view = next(
             row for row in governance_members.json() if row["user_id"] == governed_member.id
         )
+        assert set(governed_view["allowed_roles"]) == {"admin", "editor", "reviewer", "viewer"}
         assert set(governed_view["authorization"]["allowed"]) == {
             "workspace_member.transfer_ownership",
-            "workspace_member.change_role",
-            "workspace_member.promote",
             "workspace_member.suspend",
             "workspace_member.terminate",
         }
@@ -249,8 +307,9 @@ async def test_workspace_invitation_uses_username_and_global_acceptance_route(
         assert expiry <= datetime.now(UTC) + timedelta(days=7)
         token = created.json()["token"]
 
-        details = await client.get(f"/api/v1/workspace-invitations/{token}")
+        details = await client.get(f"/api/v1/invitations/{token}")
         assert details.status_code == 200
+        assert details.json()["kind"] == "workspace"
         assert details.json()["username"] == invitee.username
         assert details.json()["workspace_name"]
 
@@ -300,12 +359,12 @@ async def test_account_and_admin_workspace_apis(
             "viewer",
         }
         assert "project.create" not in current_workspace["authorization"]["allowed"]
-        assert set(current_workspace["authorization"]["relations"]["project.create"]) == {
+        assert set(current_workspace["authorization"]["variants"]["project.create"]) == {
             "workspace",
             "open",
             "managed",
         }
-        assert "workspace_invitation.create" not in current_workspace["authorization"]["relations"]
+        assert "workspace_invitation.create" not in current_workspace["authorization"]["variants"]
 
         user = await db.get(User, item.created_by)
         assert user is not None

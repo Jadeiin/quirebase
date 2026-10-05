@@ -17,7 +17,7 @@ const project = {
 			'project_membership.manage',
 			'project_discussion.create'
 		],
-		relations: { 'project.update': ['workspace', 'open', 'managed'] }
+		variants: { 'project.update': ['workspace', 'open', 'managed'] }
 	},
 	items: [],
 	members: [{ user_id: 'member-1', username: 'researcher' }]
@@ -27,7 +27,7 @@ async function mockWorkspaceRole(
 	page: Parameters<typeof mockSession>[0],
 	role: 'owner' | 'admin' | 'editor' | 'viewer',
 	allowedActions: string[],
-	relations: Record<string, string[]> = {}
+	variants: Record<string, string[]> = {}
 ) {
 	await page.route('**/api/v1/workspaces/workspace-1', (route) =>
 		route.fulfill({
@@ -38,16 +38,27 @@ async function mockWorkspaceRole(
 				state: 'active',
 				current_role: role,
 				governance_suspended: false,
-				authorization: { allowed: allowedActions, relations }
+				authorization: { allowed: allowedActions, variants }
 			}
 		})
 	);
 }
 
+test.beforeEach(async ({ page }) => {
+	await mockSession(page);
+	await page.route('**/api/v1/workspaces/workspace-1/members', (route) =>
+		route.fulfill({
+			json: [
+				{ user_id: 'member-1', username: 'researcher', role: 'editor' },
+				{ user_id: 'member-2', username: 'collaborator', role: 'reviewer' }
+			]
+		})
+	);
+});
+
 test('Workspace admins can open and govern managed Projects without being participants', async ({
 	page
 }) => {
-	await mockSession(page);
 	await mockWorkspaceRole(page, 'admin', [
 		'workspace.read',
 		'project_item.manage',
@@ -72,12 +83,11 @@ test('Workspace admins can open and govern managed Projects without being partic
 	await expect(page).toHaveURL(/\/workspace\/workspace-1\/projects\/project-1$/);
 	await expect(page.getByRole('heading', { name: 'Participation' })).toBeVisible();
 	await expect(page.getByText('researcher', { exact: true })).toBeVisible();
-	await expect(page.getByPlaceholder('Exact username')).toBeVisible();
+	await expect(page.getByRole('combobox', { name: 'Workspace member' })).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'Items', exact: true })).toBeVisible();
 });
 
 test('Workspace-wide Projects are listed separately from joined Projects', async ({ page }) => {
-	await mockSession(page);
 	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
 		route.fulfill({
 			json: [
@@ -113,7 +123,6 @@ test('Workspace-wide Projects are listed separately from joined Projects', async
 test('Workspace viewers can read Project Discussion without mutation controls', async ({
 	page
 }) => {
-	await mockSession(page);
 	await mockWorkspaceRole(page, 'viewer', ['workspace.read']);
 	await page.route('**/api/v1/workspaces/workspace-1/projects/visible-project', (route) =>
 		route.fulfill({
@@ -156,7 +165,6 @@ test('Workspace viewers can read Project Discussion without mutation controls', 
 test('an unjoined archived open Project stays discoverable and its Discussion loads', async ({
 	page
 }) => {
-	await mockSession(page);
 	await mockWorkspaceRole(page, 'viewer', ['workspace.read']);
 	const archivedProject = {
 		...project,
@@ -204,7 +212,6 @@ test('an unjoined archived open Project stays discoverable and its Discussion lo
 });
 
 test('an archived Project with delete authority exposes its delete control', async ({ page }) => {
-	await mockSession(page);
 	await mockWorkspaceRole(page, 'admin', ['workspace.read']);
 	await page.route(
 		'**/api/v1/workspaces/workspace-1/projects/archived-project/discussions',
@@ -230,7 +237,6 @@ test('an archived Project with delete authority exposes its delete control', asy
 test('Workspace admin moderates managed Project Discussion with an audited reason', async ({
 	page
 }) => {
-	await mockSession(page);
 	await mockWorkspaceRole(page, 'admin', [
 		'workspace.read',
 		'project_discussion.create',
@@ -281,7 +287,6 @@ test('Workspace admin moderates managed Project Discussion with an audited reaso
 test('a Workspace editor can create an open Project but not a managed Project', async ({
 	page
 }) => {
-	await mockSession(page);
 	await mockWorkspaceRole(
 		page,
 		'editor',
@@ -342,7 +347,6 @@ test('a Workspace editor can create an open Project but not a managed Project', 
 });
 
 test('a Workspace owner can create an empty managed Project', async ({ page }) => {
-	await mockSession(page);
 	await mockWorkspaceRole(
 		page,
 		'owner',
@@ -397,7 +401,6 @@ test('a Workspace owner can create an empty managed Project', async ({ page }) =
 test('Project creation defaults and submits only the projected participation variant', async ({
 	page
 }) => {
-	await mockSession(page);
 	await mockWorkspaceRole(page, 'owner', ['workspace.read'], {
 		'project.create': ['open']
 	});
@@ -426,10 +429,9 @@ test('Project creation defaults and submits only the projected participation var
 	await expect(page).toHaveURL(/\/projects\/project-1$/);
 });
 
-test('an action without relation projection exposes no Project creation variants', async ({
+test('an action without variant projection exposes no Project creation variants', async ({
 	page
 }) => {
-	await mockSession(page);
 	await mockWorkspaceRole(page, 'owner', ['workspace.read', 'project.create']);
 	await page.route('**/api/v1/workspaces/workspace-1/projects*', (route) =>
 		route.fulfill({ json: [] })
@@ -439,26 +441,61 @@ test('an action without relation projection exposes no Project creation variants
 	await expect(page.getByRole('button', { name: 'New Project' })).toHaveCount(0);
 });
 
-test('Project settings cannot submit a participation without relation projection', async ({
-	page
-}) => {
-	await mockSession(page);
-	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1', (route) =>
-		route.fulfill({ json: { ...project, authorization: { allowed: ['project.update'] } } })
-	);
+test('Project metadata can change independently of participation variants', async ({ page }) => {
+	let submitted: unknown;
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1', (route) => {
+		if (route.request().method() === 'PATCH') {
+			submitted = route.request().postDataJSON();
+			return route.fulfill({ json: { id: project.id } });
+		}
+		return route.fulfill({ json: { ...project, authorization: { allowed: ['project.update'] } } });
+	});
 	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/discussions', (route) =>
 		route.fulfill({ json: [] })
 	);
 	await page.goto('/workspace/workspace-1/projects/project-1');
 	await expect(page.getByRole('heading', { name: 'Project settings' })).toBeVisible();
-	await expect(page.getByLabel('Participation').locator('option')).toHaveCount(0);
-	await expect(page.getByRole('button', { name: 'Save Project settings' })).toBeDisabled();
+	await expect(page.getByLabel('Participation').locator('option')).toHaveCount(1);
+	await expect(page.getByLabel('Participation')).toHaveValue('managed');
+	await expect(page.getByRole('button', { name: 'Save Project settings' })).toBeEnabled();
+	await page.getByLabel('Name', { exact: true }).fill('Updated metadata');
+	await page.getByRole('button', { name: 'Save Project settings' }).click();
+	await expect
+		.poll(() => submitted)
+		.toEqual({
+			name: 'Updated metadata',
+			description: project.description,
+			participation: 'managed'
+		});
+	await expect(page.getByText('Project settings saved')).toBeVisible();
+});
+
+test('switching an open Project to managed preserves the participant guidance', async ({
+	page
+}) => {
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1', (route) =>
+		route.fulfill({ json: { ...project, participation: 'open' } })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/discussions', (route) =>
+		route.fulfill({ json: [] })
+	);
+	await page.goto('/workspace/workspace-1/projects/project-1');
+	await page.getByLabel('Participation').selectOption('managed');
+	await expect(
+		page.getByText(
+			'Switching between open and managed participation preserves current participants.'
+		)
+	).toBeVisible();
+	await expect(
+		page.getByText(
+			'A managed Project starts with no participants; Workspace owners/admins can add them.'
+		)
+	).toHaveCount(0);
 });
 
 test('a Workspace viewer cannot discover or deep-link into a managed Project they do not join', async ({
 	page
 }) => {
-	await mockSession(page);
 	await mockWorkspaceRole(page, 'viewer', ['workspace.read']);
 	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
 		route.fulfill({ json: [] })
@@ -482,7 +519,6 @@ test('a Workspace viewer cannot discover or deep-link into a managed Project the
 test('Workspace resource actions govern Project settings and managed participation', async ({
 	page
 }) => {
-	await mockSession(page);
 	await mockWorkspaceRole(
 		page,
 		'owner',
@@ -520,7 +556,7 @@ test('Workspace resource actions govern Project settings and managed participati
 							'project.delete',
 							'project_discussion.create'
 						],
-						relations: { 'project.update': ['workspace', 'open', 'managed'] }
+						variants: { 'project.update': ['workspace', 'open', 'managed'] }
 					},
 					members: participants
 				}
@@ -555,7 +591,8 @@ test('Workspace resource actions govern Project settings and managed participati
 			path: '/api/v1/workspaces/workspace-1/projects/project-1',
 			body: { name: 'Renamed research', description: 'Updated', participation: 'managed' }
 		});
-	await page.getByPlaceholder('Exact username').fill('collaborator');
+	await page.getByRole('combobox', { name: 'Workspace member' }).fill('collab');
+	await page.getByRole('option', { name: 'collaborator', exact: true }).click();
 	await page.getByRole('button', { name: 'Add participant' }).click();
 	await expect
 		.poll(() => mutations)
@@ -567,7 +604,6 @@ test('Workspace resource actions govern Project settings and managed participati
 });
 
 test('a managed Project may have zero participants', async ({ page }) => {
-	await mockSession(page);
 	await mockWorkspaceRole(page, 'owner', [
 		'workspace.read',
 		'project_item.manage',
@@ -598,4 +634,28 @@ test('a managed Project may have zero participants', async ({ page }) => {
 	await expect(page.getByRole('heading', { name: 'Paused direction' })).toBeVisible();
 	await page.getByRole('button', { name: 'Remove', exact: true }).click();
 	await expect(page.getByText('No Project participants yet.')).toBeVisible();
+});
+
+test('managed participant selection filters existing participants and requires a directory choice', async ({
+	page
+}) => {
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1', (route) =>
+		route.fulfill({ json: project })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/discussions', (route) =>
+		route.fulfill({ json: [] })
+	);
+	await page.goto('/workspace/workspace-1/projects/project-1');
+	const selection = page.getByRole('combobox', { name: 'Workspace member' });
+	await selection.click();
+	await expect(page.getByRole('option', { name: 'researcher', exact: true })).toHaveCount(0);
+	await expect(page.getByRole('option', { name: 'collaborator', exact: true })).toBeVisible();
+	await selection.fill('unlisted-user');
+	await expect(page.getByText('No matching members.')).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Add participant' })).toBeDisabled();
+	await selection.fill('collab');
+	await page.getByRole('option', { name: 'collaborator', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Add participant' })).toBeEnabled();
+	await selection.fill('researcher');
+	await expect(page.getByRole('button', { name: 'Add participant' })).toBeDisabled();
 });

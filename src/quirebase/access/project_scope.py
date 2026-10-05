@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
-from sqlalchemy import false, or_, select
+from sqlalchemy import or_, select
 
 from quirebase.access.context import (
     ProjectContext,
@@ -18,30 +18,25 @@ from quirebase.models import Project, ProjectMember, ProjectParticipation, Proje
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.sql.elements import ColumnElement
 
 
 def visible_project_ids_query(ctx: WorkspaceContext):
     """Select Projects discoverable to this active Workspace member.
 
-    SQL applies the canonical Workspace and participation facts. Casbin decides which relation
-    classes the current Workspace role may discover in the current lifecycle state.
+    Participation defines ordinary discovery. Policy grants only the additional ability to
+    inspect managed Projects for Workspace governance.
     """
     query = select(Project.id).where(
         Project.workspace_id == ctx.workspace_id,
         Project.state != ProjectState.deleted,
     )
-    relation_predicates = [
-        Project.participation == participation
-        for participation in (ProjectParticipation.workspace, ProjectParticipation.open)
-        if action_allowed(
-            ctx,
-            ResourceAction.project_discover,
-            relation=participation.value,
-        )
+    relation_predicates: list[ColumnElement[bool]] = [
+        Project.participation.in_((ProjectParticipation.workspace, ProjectParticipation.open))
     ]
-    if action_allowed(ctx, ResourceAction.project_discover, relation="managed"):
+    if action_allowed(ctx, ResourceAction.project_governance_read):
         relation_predicates.append(Project.participation == ProjectParticipation.managed)
-    if action_allowed(ctx, ResourceAction.project_discover, relation="participant"):
+    else:
         member_project_ids = select(ProjectMember.project_id).where(
             ProjectMember.workspace_id == ctx.workspace_id,
             ProjectMember.user_id == ctx.actor_id,
@@ -50,7 +45,7 @@ def visible_project_ids_query(ctx: WorkspaceContext):
             (Project.participation == ProjectParticipation.managed)
             & Project.id.in_(member_project_ids)
         )
-    return query.where(or_(*relation_predicates) if relation_predicates else false())
+    return query.where(or_(*relation_predicates))
 
 
 async def require_project_visibility(
@@ -61,13 +56,8 @@ async def require_project_visibility(
     """Check target lineage, lifecycle and discoverability without a second action gate."""
     if project.workspace_id != ctx.workspace.id or project.state is ProjectState.deleted:
         raise ResourceUnavailable("Project not found")
-    # Governance discoverability comes from the managed-discovery decision. Every other
-    # Workspace member must be an explicit Project participant before ordinary
-    # Project reads or mutations proceed.
-    discoverable = action_allowed(
-        ctx,
-        ResourceAction.project_discover,
-        relation=project.participation.value,
+    discoverable = project.participation is not ProjectParticipation.managed or action_allowed(
+        ctx, ResourceAction.project_governance_read
     )
     if not discoverable and project.participation is ProjectParticipation.managed:
         member_id = await db.scalar(
@@ -77,11 +67,7 @@ async def require_project_visibility(
                 ProjectMember.user_id == ctx.actor_id,
             )
         )
-        discoverable = member_id is not None and action_allowed(
-            ctx,
-            ResourceAction.project_discover,
-            relation="participant",
-        )
+        discoverable = member_id is not None
     if not discoverable:
         raise ResourceUnavailable("Project not found")
     return ProjectContext(ctx, project)
@@ -95,11 +81,14 @@ async def require_project_context(
     operation: ResourceAction,
     *,
     relation: str = "any",
+    lock: Literal["shared", "update"] | None = None,
 ) -> ProjectContext:
     mutating = action_spec(operation).mutating
+    if mutating and lock is None:
+        raise ValueError("Project mutations must explicitly select a root lock")
     workspace = (
         await lock_workspace_context(db, actor, workspace_id)
-        if mutating
+        if lock is not None
         else await require_workspace_membership(db, actor, workspace_id)
     )
     project_query = (
@@ -110,10 +99,8 @@ async def require_project_context(
         )
         .execution_options(populate_existing=True)
     )
-    if mutating:
-        # Project lifecycle changes take an exclusive root lock. Keep a shared
-        # lock until the scoped write commits, then inspect the refreshed state.
-        project_query = project_query.with_for_update(read=True)
+    if lock is not None:
+        project_query = project_query.with_for_update(read=lock == "shared")
     project = await db.scalar(project_query)
     if project is None:
         raise ResourceUnavailable("Project not found")

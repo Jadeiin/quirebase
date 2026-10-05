@@ -444,16 +444,13 @@ test('a user who is not yet a Workspace member can sign in and accept the global
 				json: { authenticated: true, user: { id: 'user-1', username: 'reader', role: 'member' } }
 			});
 		return route.fulfill({
-			status: 401,
-			json: { code: 'authentication_required', message: 'sign in required' }
+			json: { authenticated: false, user: null }
 		});
 	});
 	await page.route('**/api/v1/invitations/workspace-token', (route) =>
-		route.fulfill({ status: 404, json: { code: 'invitation_not_found', message: 'not found' } })
-	);
-	await page.route('**/api/v1/workspace-invitations/workspace-token', (route) =>
 		route.fulfill({
 			json: {
+				kind: 'workspace',
 				username: 'reader',
 				role: 'reviewer',
 				workspace_name: 'Research',
@@ -471,7 +468,8 @@ test('a user who is not yet a Workspace member can sign in and accept the global
 
 	await page.goto('/invite/workspace-token');
 	await expect(page.getByRole('heading', { name: 'Join Quirebase', exact: true })).toBeVisible();
-	await page.getByLabel('Username').fill('reader');
+	await expect(page.getByLabel('Username')).toHaveValue('reader');
+	await expect(page.getByLabel('Username')).toHaveAttribute('readonly', '');
 	await page.getByLabel('Password').fill('correct horse battery staple');
 	await page.getByRole('button', { name: 'Accept invitation' }).click();
 
@@ -554,6 +552,7 @@ test('Workspace admins do not get governance controls for other admin members', 
 			json: [
 				{
 					membership_id: 'admin-membership',
+					allowed_roles: [],
 					user_id: 'other-admin-user',
 					username: 'other-admin',
 					role: 'admin',
@@ -563,6 +562,7 @@ test('Workspace admins do not get governance controls for other admin members', 
 				},
 				{
 					membership_id: 'editor-membership',
+					allowed_roles: ['editor', 'reviewer', 'viewer'],
 					user_id: 'editor-user',
 					username: 'editor',
 					role: 'editor',
@@ -769,3 +769,144 @@ test('an inaccessible default Workspace is cleared before root navigation recove
 	await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
 	expect(await page.evaluate(() => localStorage.getItem('quirebase:default-workspace'))).toBeNull();
 });
+
+test('a Workspace invitation requires switching from the wrong account before acceptance', async ({
+	page
+}) => {
+	await mockWorkspaces(page);
+	let username = 'other-account';
+	let accepted = 0;
+	let signOuts = 0;
+	await page.route('**/api/v1/session', (route) => {
+		if (route.request().method() === 'DELETE') {
+			signOuts += 1;
+			username = '';
+			return route.fulfill({ status: 204 });
+		}
+		if (route.request().method() === 'POST') username = route.request().postDataJSON().username;
+		return route.fulfill({
+			json: {
+				authenticated: Boolean(username),
+				user: username
+					? {
+							id: 'user-1',
+							username,
+							role: 'member',
+							authorization: { allowed: [] }
+						}
+					: null
+			}
+		});
+	});
+	await page.route('**/api/v1/invitations/switch-token', (route) =>
+		route.fulfill({
+			json: {
+				kind: 'workspace',
+				username: 'reader',
+				role: 'reviewer',
+				workspace_name: 'Research',
+				expires_at: '2027-01-01T00:00:00Z'
+			}
+		})
+	);
+	await page.route('**/api/v1/workspace-invitations/switch-token/accept', (route) => {
+		accepted += 1;
+		expect(username).toBe('reader');
+		return route.fulfill({ json: { workspace_id: 'workspace-1' } });
+	});
+	await page.route('**/api/v1/workspaces/*/dashboard', (route) =>
+		route.fulfill({
+			json: {
+				new_items: [],
+				recent_items: [],
+				projects: [],
+				session_count: 1
+			}
+		})
+	);
+	await page.goto('/invite/switch-token');
+	await expect(
+		page.getByText(
+			'You are signed in as other-account. Switch to reader to accept this invitation.'
+		)
+	).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Accept invitation' })).toBeDisabled();
+	expect(accepted).toBe(0);
+	await page.getByRole('button', { name: 'Switch account' }).click();
+	await expect(page).toHaveURL(/\/invite\/switch-token$/);
+	await expect(page.getByLabel('Username')).toHaveValue('reader');
+	await page.getByLabel('Password').fill('correct horse battery staple');
+	await page.getByRole('button', { name: 'Accept invitation' }).click();
+	await expect(page).toHaveURL(/\/workspace\/workspace-1$/);
+	expect(signOuts).toBe(1);
+	expect(accepted).toBe(1);
+});
+
+test('member role choices use the concrete projection even when no generic role action is present', async ({
+	page
+}) => {
+	await mockSession(page);
+	let requestedRole = '';
+	await page.route('**/api/v1/workspaces/workspace-1/governance/members', (route) =>
+		route.fulfill({
+			json: [
+				{
+					membership_id: 'target-member',
+					user_id: 'target',
+					username: 'collaborator',
+					role: requestedRole || 'viewer',
+					state: 'active',
+					joined_at: '2026-01-01T00:00:00Z',
+					allowed_roles: ['admin'],
+					authorization: { allowed: [] }
+				}
+			]
+		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/invitations', (route) =>
+		route.fulfill({ json: [] })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/members/target-member/role', (route) => {
+		requestedRole = route.request().postDataJSON().role;
+		return route.fulfill({ json: { ok: true } });
+	});
+	await page.goto('/workspace/workspace-1/settings');
+	const roles = page.getByRole('combobox', { name: 'Role for collaborator' });
+	await expect(roles.locator('option:not([disabled])')).toHaveCount(1);
+	await roles.selectOption('admin');
+	await expect.poll(() => requestedRole).toBe('admin');
+});
+
+for (const maintenance of [false, true]) {
+	test(`Workspace maintenance is independent of metadata editing: ${maintenance}`, async ({
+		page
+	}) => {
+		await mockSession(page);
+		await page.route('**/api/v1/workspaces/workspace-1', (route) =>
+			route.fulfill({
+				json: {
+					id: 'workspace-1',
+					name: 'Research',
+					owner_id: 'owner',
+					state: 'active',
+					current_role: 'admin',
+					governance_suspended: false,
+					authorization: {
+						allowed: [
+							'workspace.read',
+							maintenance ? 'workspace_maintenance.run' : 'workspace.update'
+						]
+					}
+				}
+			})
+		);
+		await page.route('**/api/v1/workspaces/workspace-1/members', (route) =>
+			route.fulfill({ json: [] })
+		);
+		await page.goto('/workspace/workspace-1/settings');
+		await expect(page.getByRole('button', { name: 'Reindex Workspace' })).toHaveCount(
+			maintenance ? 1 : 0
+		);
+		await expect(page.getByRole('button', { name: 'Save name' })).toHaveCount(maintenance ? 0 : 1);
+	});
+}

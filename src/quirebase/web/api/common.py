@@ -8,6 +8,7 @@ from quirebase.access import (
     SystemAction,
     system_decisions,
 )
+from quirebase.models import ProjectParticipation
 
 
 class ErrorField(BaseModel):
@@ -46,7 +47,7 @@ class WorkspaceAuthorizationView(BaseModel):
     allowed: list[ResourceAction] = Field(
         description="Resolved action grants; excludes actions granted only for a request variant."
     )
-    relations: dict[str, list[str]] = Field(
+    variants: dict[ResourceAction, list[ProjectParticipation]] = Field(
         default_factory=dict,
         description="Concrete variant grants, independent of the base action grants in allowed.",
     )
@@ -56,15 +57,15 @@ class SystemAuthorizationView(BaseModel):
     """Instance resource-action decisions evaluated by the server."""
 
     allowed: list[SystemAction]
-    relations: dict[str, list[str]] = Field(default_factory=dict)
+    variants: dict[str, list[str]] = Field(default_factory=dict)
 
 
 def authorization_view(projection: AuthorizationProjection) -> WorkspaceAuthorizationView:
     return WorkspaceAuthorizationView(
         allowed=[ResourceAction(action.value) for action in projection.allowed],
-        relations={
-            action.value: list(relations)
-            for action, relations in projection.relations.items()
+        variants={
+            ResourceAction(action.value): [ProjectParticipation(value) for value in relations]
+            for action, relations in projection.variants.items()
             if relations
         },
     )
@@ -74,9 +75,9 @@ def system_authorization_view(role: str) -> SystemAuthorizationView:
     projection = system_decisions(role)
     return SystemAuthorizationView(
         allowed=[SystemAction(action.value) for action in projection.allowed],
-        relations={
+        variants={
             action.value: list(relations)
-            for action, relations in projection.relations.items()
+            for action, relations in projection.variants.items()
             if relations
         },
     )

@@ -70,8 +70,6 @@ async def test_open_item_overview_returns_a_typed_view_and_records_reading(async
 
     assert isinstance(view, ItemOverviewData)
     assert view.item.id == item.id
-    assert view.can_edit is True
-    assert view.can_delete is True
     assert view.revision_count == 0
     assert view.attachment_count == 0
     assert await db.get(ItemRead, (user.id, item.id)) is not None
@@ -121,7 +119,6 @@ async def test_open_item_sections_return_section_specific_views(async_db):
         finally:
             event.remove(db.sync_session, "do_orm_execute", record_queries)
         assert isinstance(result, expected_type)
-        assert result.can_edit and result.can_delete
         assert not locks
         assert not authority_reads
         assert await db.get(ItemRead, (user.id, item.id)) is not None
@@ -346,14 +343,6 @@ async def test_project_editor_can_edit_item_without_seeing_permanent_delete(
         assert "item.update" in editor_page.json()["authorization"]["allowed"]
         assert "item.delete" not in editor_page.json()["authorization"]["allowed"]
 
-        view = await open_item_section(
-            db,
-            await resolve_workspace_context(db, editor, item.workspace_id),
-            item.id,
-            ItemSection.overview,
-        )
-        assert view.can_edit is True
-        assert view.can_delete is False
     finally:
         await owner_client.aclose()
         get_settings.cache_clear()

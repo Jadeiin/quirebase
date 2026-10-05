@@ -523,6 +523,7 @@ async def _require_reply_action(
         project_item.project_id,
         resource_action,
         relation=relation,
+        lock="shared",
     )
 
 
@@ -671,6 +672,7 @@ async def create_document_annotation(
             data.project_id,
             ResourceAction.project_annotation_create,
             relation="own",
+            lock="shared",
         )
         project_item = await _lock_annotation_project_item(
             db,
@@ -748,6 +750,7 @@ async def update_document_annotation(
             data.project_id,
             ResourceAction.project_annotation_update,
             relation="own",
+            lock="shared",
         )
         project_item = await _lock_annotation_project_item(
             db,
@@ -980,6 +983,7 @@ async def moderate_document_annotation(
         project_item.project_id,
         moderation_action,
         relation=relation,
+        lock="shared",
     )
     workspace = project_context.workspace
 

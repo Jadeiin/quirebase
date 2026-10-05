@@ -205,7 +205,7 @@
 					<h2 class="m-0 mt-1 text-lg">{$t('Quick actions')}</h2>
 				</div>
 				<div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-					{#each quickActions.filter( (entry) => (entry.action === 'project.create' ? Boolean(workspace.view?.authorization.relations?.[entry.action]?.length) : workspace.can(entry.action)) ) as action (action.path)}
+					{#each quickActions.filter( (entry) => (entry.action === 'project.create' ? Boolean(workspace.view?.authorization.variants?.[entry.action]?.length) : workspace.can(entry.action)) ) as action (action.path)}
 						<a
 							class="group grid grid-cols-1 gap-2 rounded-lg border border-surface-300-700 p-3 no-underline hover:border-primary-700-300/40 hover:bg-primary-50-950"
 							href={resolve(workspaceHref(workspaceId, action.path))}

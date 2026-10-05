@@ -166,8 +166,10 @@ enforce(
 	'Item annotations route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/annotations'),
 	{
-		raw: 583000,
-		gzip: 186000
+		// Member selection and invitation account switching add shared localized copy.
+		// Measured growth is about 1.2 KiB raw / 0.2 KiB gzip; other route budgets still fit.
+		raw: 585000,
+		gzip: 186500
 	}
 );
 enforce(

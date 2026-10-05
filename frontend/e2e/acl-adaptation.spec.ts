@@ -346,7 +346,9 @@ test('Workspace rename refreshes the chooser cache and reindex tracks a scoped w
 		state: 'active',
 		current_role: 'admin',
 		governance_suspended: false,
-		authorization: { allowed: ['workspace.read', 'workspace.update'] }
+		authorization: {
+			allowed: ['workspace.read', 'workspace.update', 'workspace_maintenance.run']
+		}
 	});
 	await page.route('**/api/v1/workspaces', (route) => route.fulfill({ json: [projection()] }));
 	await page.route('**/api/v1/workspaces/workspace-1', (route) => {

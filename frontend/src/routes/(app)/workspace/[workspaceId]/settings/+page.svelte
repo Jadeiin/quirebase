@@ -125,7 +125,7 @@
 				await goto(resolve('workspace'), { replace: true });
 	}
 	async function reindex() {
-		if (!workspace.can('workspace.update')) return;
+		if (!workspace.can('workspace_maintenance.run')) return;
 		await run(
 			'reindex',
 			async () => {
@@ -192,7 +192,7 @@
 				>
 			</div>{/if}
 	</section>
-	{#if workspace.can('workspace.update')}
+	{#if workspace.can('workspace_maintenance.run')}
 		<section
 			class="grid max-w-2xl grid-cols-1 gap-3 rounded-container border border-surface-300-700 bg-surface-50-950 p-5"
 		>
@@ -300,10 +300,13 @@
 									><td class="p-3">{$t(domainLabel(member.state))}</td><td
 										class="flex flex-wrap gap-2 p-3"
 									>
-										{#if can(member.authorization, 'workspace_member.change_role')}
+										{#if member.allowed_roles.length > 0}
 											<select
 												aria-label={$t('Role for {username}', { username: member.username })}
-												value={member.role}
+												value={member.allowed_roles.some((role) => role === member.role)
+													? member.role
+													: ''}
+												disabled={busyId !== ''}
 												onchange={(event) => {
 													const role = event.currentTarget.value as
 														'admin' | 'editor' | 'reviewer' | 'viewer';
@@ -322,16 +325,10 @@
 													);
 												}}
 											>
-												<option
-													value="admin"
-													disabled={member.role !== 'admin' &&
-														!can(member.authorization, 'workspace_member.promote')}
-													>{$t('admin')}</option
-												>
-
-												<option value="editor">{$t('editor')}</option>
-												<option value="reviewer">{$t('reviewer')}</option>
-												<option value="viewer">{$t('viewer')}</option>
+												<option value="" disabled>{$t('Choose a role')}</option>
+												{#each member.allowed_roles as role (role)}
+													<option value={role}>{$t(domainLabel(role))}</option>
+												{/each}
 											</select>
 										{/if}
 										{#if can(member.authorization, 'workspace_member.suspend')}<Button

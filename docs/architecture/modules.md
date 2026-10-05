@@ -106,19 +106,20 @@ Business operations may use the thin `access.workspace_select()`
 lineage primitive and Module-owned aggregate loaders (`get_item`, `get_project`,
 `get_project_item`, and document loaders). The primitive only adds the Workspace lineage
 predicate; one concrete resource-action decision remains an explicit Access gate while Project
-participation contributes a canonical relation fact, and mutation statements retain their Workspace
-and CAS predicates at the linearization point. No generic
+participation contributes fixed domain discovery rules and concrete command facts, and mutation
+statements retain their Workspace and CAS predicates at the linearization point. No generic
 Repository or implicit ORM tenant filter is part of this seam.
 
 The Access Module owns one immutable Casbin model and policy bundle packaged with the application.
-Casbin is the sole allow/deny policy evaluator. System and Workspace requests both use
-`subject + resource + action + lifecycle + relation`; there is no separate capability namespace
-or preliminary coarse-grained gate. Relations such as author/other, Workspace-member class,
-Project participation and managed-Project discovery are inputs to that same decision.
+Casbin is the sole Workspace/System authorization policy evaluator. System and Workspace requests
+both use `subject + resource + action + lifecycle + relation`; there is no separate capability
+namespace or preliminary coarse-grained gate. Relations such as author/other, Workspace-member class and
+command participation variants are inputs to that decision. Ordinary Project discovery remains
+fixed domain behavior; only the additional `project_governance.read` privilege is decided by Casbin.
 Business Modules still load canonical User, membership, lifecycle, lineage, authorship and
 participation facts, retain their transaction locks and database constraints, and re-evaluate after
 the relevant lock when authority can change. The frontend receives only server-authored allowed
-resource-action sets, calls `can(action)` or strict `canVariant(action, relation)` and never
+resource-action sets, calls `can(action)` or strict `canVariant(action, variant)` and never
 reconstructs policy from roles.
 Dotted keys in the wire contract and Audit Events serialize a resource/action pair; they do not
 define a second policy vocabulary. MCP continues through the generated HTTP API and the same
@@ -130,7 +131,7 @@ operations use `create`, `read`, `update` and `delete`; relation facts distingui
 moderation decisions instead of introducing action aliases. Domain transitions keep their
 specific verbs, and `manage` is used only when the policy deliberately grants a whole subordinate
 mutation family. Relation-constrained variants keep the same resource-action key; API projections
-may include the effective relation set so adapters can gate a concrete variant without reconstructing
+include concrete `variants` so adapters can gate a command choice without reconstructing
 role policy.
 
 Citation Style lookup and access control cross the Library Interface. Library delegates CSL
@@ -186,7 +187,8 @@ Opening an Item crosses the Library interface through `open_item_section` with a
 section-specific read model; only the Web adapter maps those views to API projections. Access
 validation, section query selection and recent-reading persistence remain coordinated behind the
 same operation seam. The implementation lives in `library.item_sections`, which owns reads for
-one opened Item and no Item mutation or bulk behaviour.
+one opened Item and no Item mutation or bulk behaviour. The adapter projects each independent
+Item capability from the resolved context, without metadata-edit or delete boolean mirrors.
 
 Annotation and Annotation Reply CRUD cross the Documents interface through typed create/update
 commands and shared views. Documents owns the canonical per-page geometry and style schema,
@@ -227,10 +229,12 @@ Name, description and participation are validated before mutation and committed 
 Event in one transaction; the Web adapter sends the form as one request and does not coordinate
 partial Project updates.
 
-Project-scoped mutations lock the Project root only when changing Project state, participation
-policy or explicit participant associations. Project mutation authority comes from Workspace
-resource-action policy; ProjectMember has no role and never grants authority. `workspace` participation
-is implicit with no ProjectMember rows; `open` Projects are discoverable to all active Workspace
+Projects owns exclusive root locks for aggregate mutations and shared guards for subordinate
+associations. Other Project-scoped mutation callers explicitly select their root lock through Access
+before locking children; `ActionSpec.mutating` does not select a Project lock implicitly. Project
+mutation authority comes from Workspace resource-action policy; ProjectMember has no role and never
+grants authority. `workspace` participation is implicit with no ProjectMember rows; `open` Projects
+are discoverable to all active Workspace
 members and permit self-join/leave; `managed` Projects are discoverable only to participants and
 Workspace governors, who curate participation. Only Workspace governors may create managed
 Projects. Moving to `workspace` clears explicit associations in the same transaction; switching
@@ -316,7 +320,9 @@ tables without issuing Object Store HEAD requests; an Operations-owned scheduled
 performs Object Store I/O in retryable steps and commits thumbnail size backfills plus its result in
 a datasource transaction. Successful annotation exports persist lightweight Annotation Export Artifact
 records; scheduled maintenance deletes them in bounded expiration-ordered batches without scanning DBOS
-history. Global Search rebuilds and bulk Tag Recommendation requests use bounded keyset Item batches
+history. Workspace Search rebuilds use `workspace_maintenance.run` and reauthorize every bounded
+Item/Revision batch; Workspace renaming remains an independent `workspace.update` decision.
+Global Search rebuilds and bulk Tag Recommendation requests use bounded keyset Item batches
 rather than one large datasource output. Unknown keys and doctor probes are never managed.
 
 An internal helper imported across Modules is an architectural pressure point. Repeated use is

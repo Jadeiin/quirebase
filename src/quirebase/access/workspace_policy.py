@@ -17,6 +17,7 @@ class ResourceAction(ResourceActionKey):
     workspace_read = "workspace.read"
     workspace_export = "workspace.export"
     workspace_update = "workspace.update"
+    workspace_maintenance_run = "workspace_maintenance.run"
     workspace_archive = "workspace.archive"
     workspace_restore = "workspace.restore"
     workspace_delete = "workspace.delete"
@@ -36,7 +37,7 @@ class ResourceAction(ResourceActionKey):
     project_restore = "project.restore"
     project_delete = "project.delete"
     project_item_manage = "project_item.manage"
-    project_discover = "project.discover"
+    project_governance_read = "project_governance.read"
     project_membership_join = "project_membership.join"
     project_membership_leave = "project_membership.leave"
     project_membership_manage = "project_membership.manage"
@@ -94,11 +95,12 @@ _AUTHOR_RELATIONS = ("own", "other")
 _MEMBER_RELATIONS = ("member", "admin")
 _PARTICIPATION_RELATIONS = tuple(value.value for value in ProjectParticipation)
 
-# This registry describes command shape and lock behavior. Casbin remains the only grant source.
+# This registry describes command shape and mutation semantics. Casbin remains the only grant source.
 ACTION_SPECS: dict[ResourceAction, ActionSpec] = {
     ResourceAction.workspace_read: _READ,
     ResourceAction.workspace_export: _READ,
     ResourceAction.workspace_update: _WRITE,
+    ResourceAction.workspace_maintenance_run: _WRITE,
     ResourceAction.workspace_archive: _WRITE,
     ResourceAction.workspace_restore: _WRITE,
     ResourceAction.workspace_delete: _WRITE,
@@ -123,7 +125,7 @@ ACTION_SPECS: dict[ResourceAction, ActionSpec] = {
     ResourceAction.project_restore: _WRITE,
     ResourceAction.project_delete: _WRITE,
     ResourceAction.project_item_manage: _WRITE,
-    ResourceAction.project_discover: ActionSpec(False, (*_PARTICIPATION_RELATIONS, "participant")),
+    ResourceAction.project_governance_read: _READ,
     ResourceAction.project_membership_join: ActionSpec(True, ("open",)),
     ResourceAction.project_membership_leave: ActionSpec(True, ("open",)),
     ResourceAction.project_membership_manage: ActionSpec(True, ("managed",)),

@@ -92,23 +92,6 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/workspace-invitations/{token}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Workspace Invitation Details */
-		get: operations['workspaces.workspace_invitation_details'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
 	'/api/v1/workspace-invitations/{token}/accept': {
 		parameters: {
 			query?: never;
@@ -3236,10 +3219,14 @@ export interface components {
 		};
 		/** InvitationDetailsView */
 		InvitationDetailsView: {
+			/**
+			 * @description discriminator enum property added by openapi-typescript
+			 * @enum {string}
+			 */
+			kind: 'account';
 			/** Username */
 			username: string;
-			/** Role */
-			role: string;
+			role: components['schemas']['SystemRole'];
 			/**
 			 * Expires At
 			 * Format: date-time
@@ -3859,6 +3846,7 @@ export interface components {
 			| 'workspace.read'
 			| 'workspace.export'
 			| 'workspace.update'
+			| 'workspace_maintenance.run'
 			| 'workspace.archive'
 			| 'workspace.restore'
 			| 'workspace.delete'
@@ -3878,7 +3866,7 @@ export interface components {
 			| 'project.restore'
 			| 'project.delete'
 			| 'project_item.manage'
-			| 'project.discover'
+			| 'project_governance.read'
 			| 'project_membership.join'
 			| 'project_membership.leave'
 			| 'project_membership.manage'
@@ -4063,11 +4051,16 @@ export interface components {
 		SystemAuthorizationView: {
 			/** Allowed */
 			allowed: components['schemas']['SystemAction'][];
-			/** Relations */
-			relations?: {
+			/** Variants */
+			variants?: {
 				[key: string]: string[];
 			};
 		};
+		/**
+		 * SystemRole
+		 * @enum {string}
+		 */
+		SystemRole: 'administrator' | 'member';
 		/** TagMatrixGroupView */
 		TagMatrixGroupView: {
 			/** Letter */
@@ -4196,11 +4189,11 @@ export interface components {
 			 */
 			allowed: components['schemas']['ResourceAction'][];
 			/**
-			 * Relations
+			 * Variants
 			 * @description Concrete variant grants, independent of the base action grants in allowed.
 			 */
-			relations?: {
-				[key: string]: string[];
+			variants?: {
+				[key: string]: components['schemas']['ProjectParticipation'][];
 			};
 		};
 		/** WorkspaceCreateRequest */
@@ -4232,6 +4225,8 @@ export interface components {
 			 * Format: date-time
 			 */
 			joined_at: string;
+			/** Allowed Roles */
+			allowed_roles: components['schemas']['WorkspaceInvitationRole'][];
 			authorization: components['schemas']['WorkspaceAuthorizationView'];
 		};
 		/** WorkspaceInvitationAcceptanceView */
@@ -4258,6 +4253,11 @@ export interface components {
 		};
 		/** WorkspaceInvitationDetailsView */
 		WorkspaceInvitationDetailsView: {
+			/**
+			 * @description discriminator enum property added by openapi-typescript
+			 * @enum {string}
+			 */
+			kind: 'workspace';
 			/** Username */
 			username: string;
 			role: components['schemas']['WorkspaceInvitationRole'];
@@ -4674,46 +4674,6 @@ export interface operations {
 			};
 		};
 	};
-	'workspaces.workspace_invitation_details': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				token: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['WorkspaceInvitationDetailsView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
 	'workspaces.accept_workspace_invitation_api': {
 		parameters: {
 			query?: never;
@@ -4895,7 +4855,9 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['InvitationDetailsView'];
+					'application/json':
+						| components['schemas']['InvitationDetailsView']
+						| components['schemas']['WorkspaceInvitationDetailsView'];
 				};
 			};
 			/** @description Unprocessable Content */

@@ -1,6 +1,11 @@
 import { createContext } from 'svelte';
 import { createWorkspaceApi, type WorkspaceView } from '#lib/api/client.js';
-import { can, canVariant, type AuthorizationAction } from '#lib/authorization/can.js';
+import {
+	can,
+	canVariant,
+	type AuthorizationAction,
+	type AuthorizationVariant
+} from '#lib/authorization/can.js';
 
 export type WorkspaceContext = {
 	workspaceId: string;
@@ -8,7 +13,7 @@ export type WorkspaceContext = {
 	readonly view: WorkspaceView | undefined;
 	readonly role: WorkspaceView['current_role'] | undefined;
 	can: (action: AuthorizationAction) => boolean;
-	canVariant: (action: AuthorizationAction, relation: string) => boolean;
+	canVariant: (action: AuthorizationAction, variant: AuthorizationVariant) => boolean;
 };
 
 export function workspaceCan(
@@ -21,9 +26,9 @@ export function workspaceCan(
 export function workspaceCanVariant(
 	view: WorkspaceView | undefined,
 	action: AuthorizationAction,
-	relation: string
+	variant: AuthorizationVariant
 ): boolean {
-	return canVariant(view?.authorization, action, relation);
+	return canVariant(view?.authorization, action, variant);
 }
 
 export function workspaceRole(
@@ -50,8 +55,8 @@ export function provideWorkspaceContext(
 		can(action) {
 			return workspaceCan(getView(), action);
 		},
-		canVariant(action, relation) {
-			return workspaceCanVariant(getView(), action, relation);
+		canVariant(action, variant) {
+			return workspaceCanVariant(getView(), action, variant);
 		}
 	};
 	setWorkspaceContext(context);

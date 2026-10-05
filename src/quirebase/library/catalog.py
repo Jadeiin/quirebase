@@ -9,7 +9,6 @@ from sqlalchemy import func, or_, select
 
 from quirebase.access import (
     ResourceAction,
-    action_allowed,
     require_project_context,
     require_workspace_action,
     workspace_items_query,
@@ -128,15 +127,7 @@ async def get_dashboard_data(db: AsyncSession, user: User, workspace_id: str) ->
     projects = [
         project
         for project, _, is_member in await list_workspace_projects(db, context)
-        if is_member
-        or (
-            project.participation is ProjectParticipation.managed
-            and action_allowed(
-                context,
-                ResourceAction.project_discover,
-                relation="managed",
-            )
-        )
+        if is_member or project.participation is ProjectParticipation.managed
     ]
     sessions = list(
         (

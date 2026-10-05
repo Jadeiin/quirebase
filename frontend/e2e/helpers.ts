@@ -41,7 +41,7 @@ function workspaceView(id: string, name: string) {
 				'project_annotation.create',
 				'project_annotation.review'
 			],
-			relations: {
+			variants: {
 				'project.create': ['managed', 'open', 'workspace']
 			}
 		}

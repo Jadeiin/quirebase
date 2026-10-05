@@ -114,7 +114,7 @@ async def test_postgres_project_collection_and_direct_visibility_agree(
 
 
 @pytest.mark.anyio
-async def test_participant_discovery_does_not_bypass_participation_policy(async_db, monkeypatch):
+async def test_participation_discovery_is_independent_of_governance_grants(async_db, monkeypatch):
     from quirebase.access import project_scope
 
     actor = User(username="participant-discovery", password_hash="unused")
@@ -141,18 +141,25 @@ async def test_participant_discovery_does_not_bypass_participation_policy(async_
     await async_db.commit()
     context = await resolve_workspace_context(async_db, actor, workspace.id)
 
-    # Exercise a stricter policy where only the managed participant relation is granted.
-    monkeypatch.setattr(
-        project_scope,
-        "action_allowed",
-        lambda _ctx, _action, *, relation: relation == "participant",
-    )
+    # Revoking the governance privilege cannot redefine workspace/open modes or
+    # remove a managed participant's ordinary discovery.
+    monkeypatch.setattr(project_scope, "action_allowed", lambda _ctx, _action: False)
     visible = set((await async_db.scalars(visible_project_ids_query(context))).all())
     for project in projects:
-        if project.participation is ProjectParticipation.managed:
-            assert project.id in visible
-            await require_project_visibility(async_db, context, project)
-        else:
-            assert project.id not in visible
-            with pytest.raises(ResourceUnavailable):
-                await require_project_visibility(async_db, context, project)
+        assert project.id in visible
+        await require_project_visibility(async_db, context, project)
+
+    secret = Project(
+        workspace_id=workspace.id,
+        name="Unjoined managed",
+        created_by=actor.id,
+        participation=ProjectParticipation.managed,
+    )
+    async_db.add(secret)
+    await async_db.commit()
+    assert secret.id not in set((await async_db.scalars(visible_project_ids_query(context))).all())
+    with pytest.raises(ResourceUnavailable):
+        await require_project_visibility(async_db, context, secret)
+    monkeypatch.setattr(project_scope, "action_allowed", lambda _ctx, _action: True)
+    assert secret.id in set((await async_db.scalars(visible_project_ids_query(context))).all())
+    await require_project_visibility(async_db, context, secret)

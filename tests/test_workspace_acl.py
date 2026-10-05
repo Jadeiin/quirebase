@@ -211,6 +211,7 @@ def test_effective_resource_actions_follow_workspace_lifecycle():
         ResourceAction.project_create,
     )
     assert governance_suspended == frozenset({
+        ResourceAction.project_governance_read,
         ResourceAction.workspace_read,
         ResourceAction.workspace_export,
         ResourceAction.project_annotation_review,
@@ -1479,11 +1480,11 @@ async def test_project_settings_projection_lists_allowed_participation_targets(a
     editor_context = await resolve_workspace_context(async_db, editor, workspace_id)
     editor_decisions = project_decisions(editor_context, project, is_member=False)
     assert ResourceAction.project_update in editor_decisions.allowed
-    assert set(editor_decisions.relations[ResourceAction.project_update]) == {"workspace", "open"}
+    assert set(editor_decisions.variants[ResourceAction.project_update]) == {"workspace", "open"}
 
     owner_context = await resolve_workspace_context(async_db, owner, workspace_id)
     owner_decisions = project_decisions(owner_context, project, is_member=True)
-    assert set(owner_decisions.relations[ResourceAction.project_update]) == {
+    assert set(owner_decisions.variants[ResourceAction.project_update]) == {
         "workspace",
         "open",
         "managed",

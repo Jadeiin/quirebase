@@ -16,7 +16,7 @@ describe('can', () => {
 	it('keeps variant grants independent of the base action grant', () => {
 		const decisions = {
 			allowed: [],
-			relations: { 'project.create': ['open', 'workspace'] }
+			variants: { 'project.create': ['open', 'workspace'] }
 		} satisfies AuthorizationDecisionSet;
 
 		expect(can(decisions, 'project.create')).toBe(false);
@@ -27,7 +27,7 @@ describe('can', () => {
 	it('rejects variants without an explicit relation projection', () => {
 		expect(canVariant({ allowed: ['project.create'] }, 'project.create', 'open')).toBe(false);
 		expect(
-			canVariant({ allowed: ['project.create'], relations: {} }, 'project.create', 'open')
+			canVariant({ allowed: ['project.create'], variants: {} }, 'project.create', 'open')
 		).toBe(false);
 		expect(canVariant(undefined, 'project.create', 'open')).toBe(false);
 	});
@@ -35,7 +35,7 @@ describe('can', () => {
 	it('preserves metadata update grants alongside participation restrictions', () => {
 		const decisions = {
 			allowed: ['project.update'],
-			relations: { 'project.update': ['workspace', 'open'] }
+			variants: { 'project.update': ['workspace', 'open'] }
 		} satisfies AuthorizationDecisionSet;
 		expect(can(decisions, 'project.update')).toBe(true);
 		expect(canVariant(decisions, 'project.update', 'managed')).toBe(false);
@@ -44,8 +44,8 @@ describe('can', () => {
 	it('detects a surface from concrete server-authored actions', () => {
 		expect(hasAllowedAction({ allowed: ['workspace.read'] })).toBe(true);
 		expect(hasAllowedAction({ allowed: [] })).toBe(false);
-		expect(hasAllowedAction({ allowed: [], relations: { 'project.create': ['open'] } })).toBe(true);
-		expect(hasAllowedAction({ allowed: [], relations: { 'project.create': [] } })).toBe(false);
+		expect(hasAllowedAction({ allowed: [], variants: { 'project.create': ['open'] } })).toBe(true);
+		expect(hasAllowedAction({ allowed: [], variants: { 'project.create': [] } })).toBe(false);
 		expect(hasAllowedAction(undefined)).toBe(false);
 	});
 });

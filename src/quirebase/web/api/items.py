@@ -82,7 +82,7 @@ async def item_overview(workspace_id: str, item_id: str, context: WorkspaceAcces
         })
     return {
         "item": item_search_view(view.item),
-        "authorization": authorization_view(item_decisions(view, source_actions)),
+        "authorization": authorization_view(item_decisions(context)),
         "counts": {
             "revisions": view.revision_count,
             "attachments": view.attachment_count,
@@ -112,14 +112,13 @@ async def item_overview(workspace_id: str, item_id: str, context: WorkspaceAcces
 
 @router.get("/items/{item_id}/organize", response_model=ItemOrganizeView)
 async def item_organize(workspace_id: str, item_id: str, context: WorkspaceAccess, db: Database):
-    allowed_actions = context.allowed_actions
     view = await open_item_section(db, context, item_id, ItemSection.organize)
     if not isinstance(view, ItemOrganizationData):  # pragma: no cover
         raise TypeError("item organize section mismatch")
     matrix = view.tag_matrix
     return {
         "item": item_search_view(view.item),
-        "authorization": authorization_view(item_decisions(view, allowed_actions)),
+        "authorization": authorization_view(item_decisions(context)),
         "tags": [{"id": tag.id, "name": tag.name} for tag in view.tags],
         "projects": [
             {

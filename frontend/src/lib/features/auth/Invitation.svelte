@@ -11,12 +11,29 @@
 	import { sessionQuery } from '#lib/session.js';
 	import { setDefaultWorkspacePreference } from '#lib/workspaces/preference.js';
 	let { token } = $props<{ token: string }>();
-	let username = $state('');
 	let password = $state('');
 	let error = $state('');
 	let busy = $state(false);
 	const invitation = createQuery(() => invitationQuery(token));
 	const session = createQuery(() => sessionQuery());
+	const wrongAccount = $derived(
+		invitation.data?.kind === 'workspace' &&
+			session.data?.authenticated === true &&
+			session.data.user?.username !== invitation.data.username
+	);
+	async function switchAccount() {
+		busy = true;
+		error = '';
+		try {
+			await apiRequest('DELETE', '/session');
+			password = '';
+			await session.refetch();
+		} catch (reason) {
+			error = apiErrorMessage(reason, $t('Unable to sign out'));
+		} finally {
+			busy = false;
+		}
+	}
 	async function accept() {
 		busy = true;
 		error = '';
@@ -32,8 +49,9 @@
 				return;
 			}
 
+			if (wrongAccount || session.isPending || session.isError) return;
 			if (session.data?.authenticated !== true) {
-				await apiRequest('POST', '/session', { body: { username, password } });
+				await apiRequest('POST', '/session', { body: { username: data.username, password } });
 			}
 			const accepted = await apiRequest('POST', '/workspace-invitations/{token}/accept', {
 				params: { path: { token } }
@@ -63,7 +81,7 @@
 			</p>{:else if invitation.isError}<p class="text-error-700-300">
 				{$t('This invitation is invalid or expired.')}
 			</p>{:else if invitation.data?.kind === 'account'}
-			<p>{$t('Create a password for')} <strong>{invitation.data.invitation.username}</strong>.</p>
+			<p>{$t('Create a password for')} <strong>{invitation.data.username}</strong>.</p>
 			<label
 				>{$t('Password')}<input
 					class="input"
@@ -78,16 +96,32 @@
 			<Button variant="filled" type="submit" disabled={busy}>{$t('Create account')}</Button>
 		{:else if invitation.data?.kind === 'workspace'}
 			<p>
-				{$t('Join')} <strong>{invitation.data.invitation.workspace_name}</strong>
-				{$t('as')} <strong>{invitation.data.invitation.username}</strong>
-				({$t(domainLabel(invitation.data.invitation.role))}).
+				{$t('Join')} <strong>{invitation.data.workspace_name}</strong>
+				{$t('as')} <strong>{invitation.data.username}</strong>
+				({$t(domainLabel(invitation.data.role))}).
 			</p>
-			{#if session.data?.authenticated !== true}
+			{#if session.isPending}
+				<p>{$t('Checking account…')}</p>
+			{:else if session.isError}
+				<p class="text-error-700-300">{$t('Unable to check your account.')}</p>
+				<Button type="button" onclick={() => void session.refetch()}>{$t('Retry')}</Button>
+			{:else if wrongAccount}
+				<p>
+					{$t('You are signed in as {current}. Switch to {invited} to accept this invitation.', {
+						current: session.data?.user?.username ?? '',
+						invited: invitation.data.username
+					})}
+				</p>
+				<Button type="button" disabled={busy} onclick={() => void switchAccount()}
+					>{$t('Switch account')}</Button
+				>
+			{:else if session.data?.authenticated !== true}
 				<p>{$t('Sign in with the invited account to accept this invitation.')}</p>
 				<label
 					>{$t('Username')}<input
 						class="input"
-						bind:value={username}
+						value={invitation.data.username}
+						readonly
 						autocomplete="username"
 						required
 					/></label
@@ -103,7 +137,11 @@
 				>
 			{/if}
 			{#if error}<p class="text-error-700-300">{error}</p>{/if}
-			<Button variant="filled" type="submit" disabled={busy}>
+			<Button
+				variant="filled"
+				type="submit"
+				disabled={busy || wrongAccount || session.isPending || session.isError}
+			>
 				{$t('Accept invitation')}
 			</Button>
 		{/if}

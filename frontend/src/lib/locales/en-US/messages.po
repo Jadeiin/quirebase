@@ -270,7 +270,6 @@ msgstr "Add to Project"
 #. Workspace role.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "admin"
 msgstr "admin"
 
@@ -317,6 +316,11 @@ msgstr "Administrators only"
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Affiliation"
 msgstr "Affiliation"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "All active Workspace members already participate."
+msgstr "All active Workspace members already participate."
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/Projects.svelte
@@ -670,6 +674,11 @@ msgstr "Check stored objects"
 
 #. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
+msgid "Checking account…"
+msgstr "Checking account…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
 msgid "Checking invitation…"
 msgstr "Checking invitation…"
 
@@ -682,6 +691,11 @@ msgstr "Checking workspace creation availability…"
 #: src/lib/features/tools/Tools.svelte
 msgid "Choose a new name for this Tag."
 msgstr "Choose a new name for this Tag."
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Choose a role"
+msgstr "Choose a role"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -1340,11 +1354,6 @@ msgstr "Each workspace follows the same access and governance rules. Choose one 
 msgid "Edit metadata"
 msgstr "Edit metadata"
 
-#. js-lingui-explicit-id
-#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
-msgid "editor"
-msgstr "editor"
-
 #. Workspace role.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
@@ -1379,7 +1388,6 @@ msgid "Encoding"
 msgstr "Encoding"
 
 #. js-lingui-explicit-id
-#: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Exact username"
 msgstr "Exact username"
@@ -1997,6 +2005,7 @@ msgid "Loading Library…"
 msgstr "Loading Library…"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Loading members…"
 msgstr "Loading members…"
@@ -2391,6 +2400,11 @@ msgstr "No keywords."
 #: src/lib/features/admin/AdminMaintenance.svelte
 msgid "No maintenance workflows."
 msgstr "No maintenance workflows."
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "No matching members."
+msgstr "No matching members."
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
@@ -3154,7 +3168,9 @@ msgid "Restore workspace"
 msgstr "Restore workspace"
 
 #. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
 #: src/lib/features/import/ImportBatchPreview.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/routes/(app)/+page.svelte
 msgid "Retry"
 msgstr "Retry"
@@ -3182,7 +3198,6 @@ msgstr "Review the preview"
 #. Workspace role.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "reviewer"
 msgstr "reviewer"
 
@@ -3359,6 +3374,11 @@ msgid "Search Library"
 msgstr "Search Library"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Search members"
+msgstr "Search members"
+
+#. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
 msgid "Search results will appear here."
 msgstr "Search results will appear here."
@@ -3458,6 +3478,11 @@ msgstr "Settings"
 #: src/routes/(app)/admin/settings/+page.svelte
 msgid "Settings saved"
 msgstr "Settings saved"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Show members"
+msgstr "Show members"
 
 #. js-lingui-explicit-id
 #: src/lib/features/auth/Login.svelte
@@ -3591,6 +3616,11 @@ msgstr "Suspend governance"
 #: src/routes/(app)/admin/workspaces/+page.svelte
 msgid "suspended"
 msgstr "suspended"
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
+msgid "Switch account"
+msgstr "Switch account"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -3914,6 +3944,11 @@ msgid "Unable to check whether you can create a workspace. Refresh and try again
 msgstr "Unable to check whether you can create a workspace. Refresh and try again."
 
 #. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
+msgid "Unable to check your account."
+msgstr "Unable to check your account."
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Unable to commit Import"
 msgstr "Unable to commit Import"
@@ -3969,6 +4004,7 @@ msgid "Unable to load Import preview"
 msgstr "Unable to load Import preview"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Unable to load members."
 msgstr "Unable to load members."
@@ -4047,6 +4083,11 @@ msgstr "Unable to save changes"
 #: src/lib/features/auth/Login.svelte
 msgid "Unable to sign in"
 msgstr "Unable to sign in"
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
+msgid "Unable to sign out"
+msgstr "Unable to sign out"
 
 #. PDF annotation kind: text markup.
 #. js-lingui-explicit-id
@@ -4213,11 +4254,6 @@ msgstr "View all"
 msgid "View Items"
 msgstr "View Items"
 
-#. js-lingui-explicit-id
-#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
-msgid "viewer"
-msgstr "viewer"
-
 #. Workspace role.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
@@ -4316,6 +4352,11 @@ msgid "Workspace maintenance"
 msgstr "Workspace maintenance"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Workspace member"
+msgstr "Workspace member"
+
+#. js-lingui-explicit-id
 #: src/routes/(app)/workspace/+page.svelte
 msgid "Workspace name"
 msgstr "Workspace name"
@@ -4393,6 +4434,11 @@ msgstr "Write a message"
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "Year"
 msgstr "Year"
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
+msgid "You are signed in as {current}. Switch to {invited} to accept this invitation."
+msgstr "You are signed in as {current}. Switch to {invited} to accept this invitation."
 
 #. js-lingui-explicit-id
 #: src/lib/api/errors.ts

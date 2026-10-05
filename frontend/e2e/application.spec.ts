@@ -60,7 +60,7 @@ for (const [role, variants] of [
 			state: 'active',
 			current_role: role,
 			governance_suspended: false,
-			authorization: { allowed: ['workspace.read'], relations: { 'project.create': variants } }
+			authorization: { allowed: ['workspace.read'], variants: { 'project.create': variants } }
 		};
 		await page.route('**/api/v1/workspaces', (route) => route.fulfill({ json: [workspace] }));
 		await page.route('**/api/v1/workspaces/workspace-1', (route) =>

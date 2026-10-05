@@ -9,9 +9,10 @@ from quirebase.access import (
     workspace_decisions,
     workspace_invitation_roles,
     workspace_member_decisions,
+    workspace_member_roles,
 )
 from quirebase.core.errors import ResourceNotFound
-from quirebase.models import User, Workspace
+from quirebase.models import User
 from quirebase.operations import dispatch_workspace_reindex
 from quirebase.web.api.common import OkView, WriteResult, authorization_view
 from quirebase.web.api.dependencies import ApiUser, Database, WorkspaceAccess
@@ -21,7 +22,6 @@ from quirebase.web.api.workspace_schemas import (
     WorkspaceGovernanceMemberView,
     WorkspaceInvitationAcceptanceView,
     WorkspaceInvitationCreatedView,
-    WorkspaceInvitationDetailsView,
     WorkspaceInvitationRequest,
     WorkspaceInvitationView,
     WorkspaceMemberDirectoryView,
@@ -33,7 +33,6 @@ from quirebase.workspaces import (
     accept_workspace_invitation_by_token,
     archive_workspace,
     create_workspace,
-    get_workspace_invitation_by_token,
     invite_workspace_member,
     list_workspace_governance_members,
     list_workspace_invitations,
@@ -174,6 +173,7 @@ async def get_workspace_governance_members(
             role=member.role,
             state=member.state,
             joined_at=member.created_at,
+            allowed_roles=list(workspace_member_roles(context, member)),
             authorization=authorization_view(workspace_member_decisions(context, member)),
         )
         for member in members
@@ -241,23 +241,6 @@ async def revoke_workspace_invitation_api(
 ) -> OkView:
     await revoke_workspace_invitation(db, user, workspace_id, invitation_id)
     return OkView()
-
-
-@router.get("/workspace-invitations/{token}", response_model=WorkspaceInvitationDetailsView)
-async def workspace_invitation_details(token: str, db: Database) -> WorkspaceInvitationDetailsView:
-    invitation = await get_workspace_invitation_by_token(db, token)
-    if invitation is None:
-        raise ResourceNotFound("Workspace invitation not found or expired")
-    target = await db.get(User, invitation.user_id)
-    workspace = await db.get(Workspace, invitation.workspace_id)
-    if target is None or workspace is None:
-        raise ResourceNotFound("Workspace invitation not found or expired")
-    return WorkspaceInvitationDetailsView(
-        username=target.username,
-        role=invitation.role,
-        workspace_name=workspace.name,
-        expires_at=invitation.expires_at,
-    )
 
 
 @router.post(

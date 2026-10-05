@@ -52,6 +52,7 @@ class WorkspaceGovernanceMemberView(BaseModel):
     role: WorkspaceRole
     state: WorkspaceMemberState
     joined_at: datetime
+    allowed_roles: list[WorkspaceInvitationRole]
     authorization: WorkspaceAuthorizationView
 
 
@@ -82,13 +83,6 @@ class WorkspaceInvitationView(BaseModel):
     invited_by: str
     expires_at: datetime
     created_at: datetime
-
-
-class WorkspaceInvitationDetailsView(BaseModel):
-    username: str
-    role: WorkspaceInvitationRole
-    workspace_name: str
-    expires_at: datetime
 
 
 class WorkspaceInvitationAcceptanceView(BaseModel):

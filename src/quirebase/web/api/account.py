@@ -16,35 +16,50 @@ from quirebase.accounts import (
     revoke_session,
 )
 from quirebase.core.config import get_settings
+from quirebase.models import User, Workspace
 from quirebase.web.api.account_schemas import (
     AccountSummaryView,
     ApiTokenCreateRequest,
     ApiTokenGrantView,
     ApiTokenView,
     InvitationAcceptRequest,
-    InvitationDetailsView,
     PasswordChangeRequest,
+    PublicInvitationDetailsView,
     RegisterRequest,
+    WorkspaceInvitationDetailsView,
 )
 from quirebase.web.api.auth import require_same_origin
 from quirebase.web.api.common import OkView, system_authorization_view
 from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.session_schemas import LoginSessionView
 from quirebase.web.errors import ApiHTTPException
+from quirebase.workspaces import get_workspace_invitation_by_token
 
 router = APIRouter(tags=["Accounts and invitations"])
 
 
-@router.get("/invitations/{token}", response_model=InvitationDetailsView)
+@router.get("/invitations/{token}", response_model=PublicInvitationDetailsView)
 async def invitation_details(token: str, db: Database):
     invitation = await get_valid_invitation(db, token)
     if invitation is None:
+        workspace_invitation = await get_workspace_invitation_by_token(db, token)
+        if workspace_invitation is not None:
+            target = await db.get(User, workspace_invitation.user_id)
+            workspace = await db.get(Workspace, workspace_invitation.workspace_id)
+            if target is not None and workspace is not None:
+                return WorkspaceInvitationDetailsView(
+                    username=target.username,
+                    role=workspace_invitation.role,
+                    workspace_name=workspace.name,
+                    expires_at=workspace_invitation.expires_at,
+                )
         raise ApiHTTPException(
             status.HTTP_404_NOT_FOUND,
             "invitation_not_found",
             "invitation not found or expired",
         )
     return {
+        "kind": "account",
         "username": invitation.username,
         "role": invitation.role,
         "expires_at": invitation.expires_at,

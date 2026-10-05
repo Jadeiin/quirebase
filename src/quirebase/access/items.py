@@ -105,35 +105,30 @@ async def can_delete_item(db: AsyncSession, user: User, workspace_id: str, item_
     )
 
 
-def _item_query(workspace_id: str, item_id: str):
-    return (
-        select(Item)
-        .options(
-            selectinload(Item.author_links).selectinload(ItemAuthor.author),
-            selectinload(Item.identifier_links),
-        )
-        .where(Item.id == item_id, Item.workspace_id == workspace_id)
-    )
+async def require_item_action(
+    db: AsyncSession,
+    user: User,
+    workspace_id: str,
+    item_id: str,
+    action: ResourceAction,
+) -> Item:
+    context = await require_workspace_action(db, user, workspace_id, action)
+    item = await get_item(db, context, item_id)
+    if item is None:
+        raise ResourceUnavailable("Item not found")
+    return item
 
 
 async def require_readable_item(
     db: AsyncSession, user: User, workspace_id: str, item_id: str
 ) -> Item:
-    await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
-    item = await db.scalar(_item_query(workspace_id, item_id))
-    if item is None:
-        raise ResourceUnavailable("Item not found")
-    return item
+    return await require_item_action(db, user, workspace_id, item_id, ResourceAction.workspace_read)
 
 
 async def require_editable_item(
     db: AsyncSession, user: User, workspace_id: str, item_id: str
 ) -> Item:
-    await require_workspace_action(db, user, workspace_id, ResourceAction.item_update)
-    item = await db.scalar(_item_query(workspace_id, item_id))
-    if item is None:
-        raise ResourceUnavailable("Item not found")
-    return item
+    return await require_item_action(db, user, workspace_id, item_id, ResourceAction.item_update)
 
 
 async def require_accessible_items(

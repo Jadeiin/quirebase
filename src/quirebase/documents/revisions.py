@@ -18,8 +18,7 @@ from quirebase.access import (
 )
 from quirebase.access.documents import require_attachment, require_revision
 from quirebase.access.items import (
-    can_edit_item,
-    require_editable_item,
+    require_item_action,
     require_readable_item,
 )
 from quirebase.audit import record_event
@@ -27,7 +26,6 @@ from quirebase.core.config import get_settings
 from quirebase.core.errors import (
     DomainError,
     ResourceNotFound,
-    ResourceUnavailable,
     ValidationFailure,
 )
 from quirebase.core.storage import (
@@ -407,7 +405,7 @@ async def store_pdf_revision(
     from quirebase.operations.settings import get_effective_setting
 
     user_id = user.id
-    await require_editable_item(db, user, workspace_id, item_id)
+    await require_item_action(db, user, workspace_id, item_id, ResourceAction.file_manage)
     if not filename or not filename.lower().endswith(".pdf"):
         raise UnsupportedMediaType("a PDF file is required")
     if max_bytes is None:
@@ -488,8 +486,9 @@ async def create_attachment(
     from quirebase.operations.settings import get_effective_setting
 
     user_id = user.id
-    if not await can_edit_item(db, user, workspace_id, item_id) or not filename:
-        raise ResourceUnavailable("item not accessible or filename missing")
+    await require_item_action(db, user, workspace_id, item_id, ResourceAction.file_manage)
+    if not filename:
+        raise ValidationFailure("attachment filename is required")
     if max_bytes is None:
         max_bytes = await get_effective_setting(
             db, "max_attachment_bytes", get_settings().max_attachment_bytes

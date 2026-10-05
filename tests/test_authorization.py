@@ -41,7 +41,7 @@ def test_workspace_action_metadata_is_complete_and_classifies_reads():
         ResourceAction.workspace_export,
         ResourceAction.workspace_member_read,
         ResourceAction.workspace_invitation_read,
-        ResourceAction.project_discover,
+        ResourceAction.project_governance_read,
     ):
         assert not action_spec(action).mutating
     assert action_spec(ResourceAction.project_create).projected_relations == (
@@ -158,15 +158,10 @@ def test_relation_policies_cover_project_membership_authorship_and_governance():
 
     assert workspace_action_allowed(WorkspaceRole.editor, "item", "copy", lifecycle)
     assert not workspace_action_allowed(WorkspaceRole.reviewer, "item", "copy", lifecycle)
-    assert workspace_action_allowed(
-        WorkspaceRole.viewer, "project", "discover", lifecycle, "participant"
-    )
     assert not workspace_action_allowed(
-        WorkspaceRole.viewer, "project", "discover", lifecycle, "managed"
+        WorkspaceRole.viewer, "project_governance", "read", lifecycle
     )
-    assert workspace_action_allowed(
-        WorkspaceRole.admin, "project", "discover", lifecycle, "managed"
-    )
+    assert workspace_action_allowed(WorkspaceRole.admin, "project_governance", "read", lifecycle)
     assert workspace_action_allowed(
         WorkspaceRole.reviewer, "project_discussion", "delete", lifecycle, "own"
     )

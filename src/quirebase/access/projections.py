@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol
+from typing import Protocol
 
 from quirebase.access.authorization import (
     ResourceActionKey,
@@ -29,9 +29,6 @@ from quirebase.models import (
     WorkspaceState,
 )
 
-if TYPE_CHECKING:
-    from collections.abc import Collection
-
 
 @dataclass(frozen=True, slots=True)
 class AuthorizationProjection:
@@ -42,15 +39,7 @@ class AuthorizationProjection:
     """
 
     allowed: tuple[ResourceAction | SystemAction, ...]
-    relations: dict[ResourceActionKey, tuple[str, ...]]
-
-
-class ItemDecisionSource(Protocol):
-    @property
-    def can_edit(self) -> bool: ...
-
-    @property
-    def can_delete(self) -> bool: ...
+    variants: dict[ResourceActionKey, tuple[str, ...]]
 
 
 class DiscussionDecisionSource(Protocol):
@@ -84,14 +73,14 @@ def workspace_decisions(
     }
     return AuthorizationProjection(
         allowed=tuple(sorted(allowed, key=lambda action: action.value)),
-        relations={action: values for action, values in relations.items() if values},
+        variants={action: values for action, values in relations.items() if values},
     )
 
 
 def system_decisions(role: str) -> AuthorizationProjection:
     return AuthorizationProjection(
         allowed=tuple(sorted(effective_system_actions(role), key=lambda action: action.value)),
-        relations={},
+        variants={},
     )
 
 
@@ -115,39 +104,28 @@ def workspace_invitation_roles(
     )
 
 
-def item_decisions(
-    view: ItemDecisionSource,
-    allowed_actions: Collection[ResourceActionKey],
-) -> AuthorizationProjection:
-    actions: set[ResourceAction] = set()
-    if view.can_edit:
-        actions.add(ResourceAction.item_update)
-        actions.update(
-            action
-            for action in (
-                ResourceAction.file_manage,
-                ResourceAction.tag_use,
-                ResourceAction.tag_create,
-                ResourceAction.project_item_manage,
-            )
-            if action in allowed_actions
-        )
-    if ResourceAction.file_delete in allowed_actions:
-        actions.add(ResourceAction.file_delete)
-    if view.can_delete:
-        actions.add(ResourceAction.item_delete)
-    if ResourceAction.workspace_export in allowed_actions:
-        actions.add(ResourceAction.workspace_export)
+def item_decisions(context: WorkspaceContext) -> AuthorizationProjection:
+    """Project independent capabilities for an Item already loaded in this Workspace."""
+    actions = context.allowed_actions.intersection({
+        ResourceAction.item_update,
+        ResourceAction.item_delete,
+        ResourceAction.file_manage,
+        ResourceAction.file_delete,
+        ResourceAction.tag_use,
+        ResourceAction.tag_create,
+        ResourceAction.project_item_manage,
+        ResourceAction.workspace_export,
+    })
     return AuthorizationProjection(
         allowed=tuple(sorted(actions, key=lambda action: action.value)),
-        relations={},
+        variants={},
     )
 
 
 def copy_target_decisions(*, can_copy_into: bool) -> AuthorizationProjection:
     return AuthorizationProjection(
         allowed=(ResourceAction.item_copy,) if can_copy_into else (),
-        relations={},
+        variants={},
     )
 
 
@@ -155,7 +133,7 @@ def tag_decisions(context: WorkspaceContext) -> AuthorizationProjection:
     allowed = (
         (ResourceAction.tag_manage,) if action_allowed(context, ResourceAction.tag_manage) else ()
     )
-    return AuthorizationProjection(allowed=allowed, relations={})
+    return AuthorizationProjection(allowed=allowed, variants={})
 
 
 def project_participation_change_allowed(
@@ -248,7 +226,7 @@ def project_decisions(
         allowed.add(ResourceAction.project_discussion_delete)
     return AuthorizationProjection(
         allowed=tuple(sorted(allowed, key=lambda action: action.value)),
-        relations=relations,
+        variants=relations,
     )
 
 
@@ -257,11 +235,7 @@ def workspace_member_decisions(
     member: WorkspaceMember,
 ) -> AuthorizationProjection:
     relation = workspace_member_relation(member.role)
-    candidates = [
-        ResourceAction.workspace_member_change_role,
-        ResourceAction.workspace_member_promote,
-        ResourceAction.workspace_member_terminate,
-    ]
+    candidates = [ResourceAction.workspace_member_terminate]
     if member.state is WorkspaceMemberState.active:
         candidates.extend([
             ResourceAction.workspace_member_suspend,
@@ -273,7 +247,34 @@ def workspace_member_decisions(
         allowed=tuple(
             action for action in candidates if action_allowed(context, action, relation=relation)
         ),
-        relations={},
+        variants={},
+    )
+
+
+def workspace_member_role_action(
+    current: WorkspaceRole, requested: WorkspaceRole
+) -> ResourceAction:
+    """Select the authority needed for one concrete role transition."""
+    return (
+        ResourceAction.workspace_member_promote
+        if requested is WorkspaceRole.admin and current is not WorkspaceRole.admin
+        else ResourceAction.workspace_member_change_role
+    )
+
+
+def workspace_member_roles(
+    context: WorkspaceContext, member: WorkspaceMember
+) -> tuple[WorkspaceInvitationRole, ...]:
+    if member.role is WorkspaceRole.owner or member.terminated_at is not None:
+        return ()
+    return tuple(
+        target
+        for target in WorkspaceInvitationRole
+        if action_allowed(
+            context,
+            workspace_member_role_action(member.role, WorkspaceRole(target.value)),
+            relation=workspace_member_relation(member.role),
+        )
     )
 
 
@@ -287,8 +288,8 @@ def discussion_message_decisions(
     project_id = message.project_id
     relation = "own" if author_id == context.actor_id else "other"
     if not writable:
-        return AuthorizationProjection(allowed=(), relations={})
+        return AuthorizationProjection(allowed=(), variants={})
     resource = "project_discussion" if project_id is not None else "item_discussion"
     action = ResourceAction(f"{resource}.delete")
     allowed = (action,) if action_allowed(context, action, relation=relation) else ()
-    return AuthorizationProjection(allowed=allowed, relations={})
+    return AuthorizationProjection(allowed=allowed, variants={})

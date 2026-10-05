@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 
 from quirebase.access.items import (
     require_editable_item,
+    require_item_action,
     visible_items_query,
 )
 from quirebase.access.tags import visible_tags_query
@@ -117,8 +118,7 @@ async def get_or_create_tag(db: AsyncSession, user: User, workspace_id: str, nam
 async def add_tag_to_item(
     db: AsyncSession, user: User, workspace_id: str, item_id: str, name: str
 ) -> ItemTag:
-    await require_editable_item(db, user, workspace_id, item_id)
-    await require_workspace_action(db, user, workspace_id, ResourceAction.tag_use)
+    await require_item_action(db, user, workspace_id, item_id, ResourceAction.tag_use)
     tag = await get_or_create_tag(db, user, workspace_id, name)
     return await _add_tag_id_to_item(db, user, workspace_id, item_id, tag.id)
 
@@ -177,8 +177,7 @@ async def _add_tag_id_to_item(
 async def add_existing_tag_to_item(
     db: AsyncSession, user: User, workspace_id: str, item_id: str, tag_id: str
 ) -> ItemTag:
-    await require_editable_item(db, user, workspace_id, item_id)
-    await require_workspace_action(db, user, workspace_id, ResourceAction.tag_use)
+    await require_item_action(db, user, workspace_id, item_id, ResourceAction.tag_use)
     if (
         await db.scalar(select(Tag.id).where(Tag.id == tag_id, Tag.workspace_id == workspace_id))
         is None
@@ -193,8 +192,7 @@ async def add_existing_tag_to_item(
 async def remove_tag_from_item(
     db: AsyncSession, user: User, workspace_id: str, item_id: str, tag_id: str
 ) -> None:
-    await require_editable_item(db, user, workspace_id, item_id)
-    await require_workspace_action(db, user, workspace_id, ResourceAction.tag_use)
+    await require_item_action(db, user, workspace_id, item_id, ResourceAction.tag_use)
     await _remove_tag_from_item(db, user, workspace_id, item_id, tag_id)
 
 
@@ -245,8 +243,7 @@ async def apply_item_tag_selection(
     historical commit-by-default behaviour. Batch callers use this operation so all removals,
     existing Tag additions and new Tag additions share one transaction.
     """
-    await require_editable_item(db, user, workspace_id, item_id)
-    await require_workspace_action(db, user, workspace_id, ResourceAction.tag_use)
+    await require_item_action(db, user, workspace_id, item_id, ResourceAction.tag_use)
     try:
         remove_ids = set(remove_tag_ids or [])
         add_ids = set(tag_ids or [])

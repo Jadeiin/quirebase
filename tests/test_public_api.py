@@ -754,7 +754,7 @@ async def test_http_api_tags_use_effective_management_action(
             "id": tag.id,
             "name": "Read only",
             "accessible_item_count": 0,
-            "authorization": {"allowed": [], "relations": {}},
+            "authorization": {"allowed": [], "variants": {}},
         }
     ]
 

@@ -7,7 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, File, Form, Request, UploadFile, status
 from fastapi.responses import Response, StreamingResponse
 
-from quirebase.access.items import require_editable_item
+from quirebase.access import ResourceAction, require_item_action
 from quirebase.core.config import get_settings
 from quirebase.documents import (
     acquire_remote_attachment,
@@ -276,7 +276,7 @@ async def upload_remote_item_attachment(
     max_bytes = await get_effective_setting(
         db, "max_attachment_bytes", get_settings().max_attachment_bytes
     )
-    await require_editable_item(db, user, workspace_id, item_id)
+    await require_item_action(db, user, workspace_id, item_id, ResourceAction.file_manage)
     await db.rollback()
     async with acquire_remote_attachment(data.source, max_bytes) as attachment:
         workflow = await create_attachment(
@@ -376,7 +376,7 @@ async def upload_remote_item_pdf(
 ) -> WriteResult:
     settings = await get_effective_settings_model(db)
     max_bytes = await get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes)
-    await require_editable_item(db, user, workspace_id, item_id)
+    await require_item_action(db, user, workspace_id, item_id, ResourceAction.file_manage)
     await db.rollback()
     async with acquire_remote_pdf(data.source, settings, max_bytes) as document:
         workflow = await store_pdf_revision(

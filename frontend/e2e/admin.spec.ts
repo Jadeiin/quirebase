@@ -54,7 +54,12 @@ test('administrators receive the one-time invitation URL after creation', async 
 	);
 	await page.route('**/api/v1/invitations/one-time-secret', (route) =>
 		route.fulfill({
-			json: { username: 'invitee', role: 'member', expires_at: '2026-10-01T00:00:00Z' }
+			json: {
+				kind: 'account',
+				username: 'invitee',
+				role: 'member',
+				expires_at: '2026-10-01T00:00:00Z'
+			}
 		})
 	);
 

@@ -270,7 +270,6 @@ msgstr "添加到项目"
 #. Workspace role.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "admin"
 msgstr "管理员"
 
@@ -317,6 +316,11 @@ msgstr "仅限管理员"
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Affiliation"
 msgstr "机构单位"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "All active Workspace members already participate."
+msgstr "所有活跃工作区成员都已参与。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/Projects.svelte
@@ -670,6 +674,11 @@ msgstr "检查存储对象"
 
 #. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
+msgid "Checking account…"
+msgstr "正在检查账号…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
 msgid "Checking invitation…"
 msgstr "正在检查邀请…"
 
@@ -682,6 +691,11 @@ msgstr "正在检查创建工作区的权限…"
 #: src/lib/features/tools/Tools.svelte
 msgid "Choose a new name for this Tag."
 msgstr "为该标签输入一个新名称。"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Choose a role"
+msgstr "选择角色"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -1340,11 +1354,6 @@ msgstr "所有工作区遵循相同的访问和治理规则。选择一个以打
 msgid "Edit metadata"
 msgstr "编辑元数据"
 
-#. js-lingui-explicit-id
-#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
-msgid "editor"
-msgstr "编辑者"
-
 #. Workspace role.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
@@ -1379,7 +1388,6 @@ msgid "Encoding"
 msgstr "编码"
 
 #. js-lingui-explicit-id
-#: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Exact username"
 msgstr "精确用户名"
@@ -1997,6 +2005,7 @@ msgid "Loading Library…"
 msgstr "正在加载文献库…"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Loading members…"
 msgstr "正在加载成员…"
@@ -2391,6 +2400,11 @@ msgstr "暂无关键词。"
 #: src/lib/features/admin/AdminMaintenance.svelte
 msgid "No maintenance workflows."
 msgstr "暂无维护工作流。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "No matching members."
+msgstr "没有匹配的成员。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
@@ -3154,7 +3168,9 @@ msgid "Restore workspace"
 msgstr "恢复工作区"
 
 #. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
 #: src/lib/features/import/ImportBatchPreview.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/routes/(app)/+page.svelte
 msgid "Retry"
 msgstr "重试"
@@ -3182,7 +3198,6 @@ msgstr "审阅预览"
 #. Workspace role.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "reviewer"
 msgstr "审阅者"
 
@@ -3359,6 +3374,11 @@ msgid "Search Library"
 msgstr "搜索文献库"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Search members"
+msgstr "搜索成员"
+
+#. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
 msgid "Search results will appear here."
 msgstr "搜索结果将显示在这里。"
@@ -3458,6 +3478,11 @@ msgstr "设置"
 #: src/routes/(app)/admin/settings/+page.svelte
 msgid "Settings saved"
 msgstr "设置已保存"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Show members"
+msgstr "显示成员"
 
 #. js-lingui-explicit-id
 #: src/lib/features/auth/Login.svelte
@@ -3591,6 +3616,11 @@ msgstr "暂停治理"
 #: src/routes/(app)/admin/workspaces/+page.svelte
 msgid "suspended"
 msgstr "已暂停"
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
+msgid "Switch account"
+msgstr "切换账号"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -3914,6 +3944,11 @@ msgid "Unable to check whether you can create a workspace. Refresh and try again
 msgstr "无法检查你是否可以创建工作区。请刷新后重试。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
+msgid "Unable to check your account."
+msgstr "无法检查你的账号。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Unable to commit Import"
 msgstr "无法提交导入"
@@ -3969,6 +4004,7 @@ msgid "Unable to load Import preview"
 msgstr "无法加载导入预览"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Unable to load members."
 msgstr "无法加载成员。"
@@ -4047,6 +4083,11 @@ msgstr "无法保存更改"
 #: src/lib/features/auth/Login.svelte
 msgid "Unable to sign in"
 msgstr "无法登录"
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
+msgid "Unable to sign out"
+msgstr "无法退出登录"
 
 #. PDF annotation kind: text markup.
 #. js-lingui-explicit-id
@@ -4213,11 +4254,6 @@ msgstr "查看全部"
 msgid "View Items"
 msgstr "查看条目"
 
-#. js-lingui-explicit-id
-#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
-msgid "viewer"
-msgstr "查看者"
-
 #. Workspace role.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
@@ -4316,6 +4352,11 @@ msgid "Workspace maintenance"
 msgstr "工作区维护"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Workspace member"
+msgstr "工作区成员"
+
+#. js-lingui-explicit-id
 #: src/routes/(app)/workspace/+page.svelte
 msgid "Workspace name"
 msgstr "工作区名称"
@@ -4393,6 +4434,11 @@ msgstr "输入消息"
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "Year"
 msgstr "年份"
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
+msgid "You are signed in as {current}. Switch to {invited} to accept this invitation."
+msgstr "你当前以 {current} 登录。请切换到 {invited} 以接受此邀请。"
 
 #. js-lingui-explicit-id
 #: src/lib/api/errors.ts

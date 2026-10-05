@@ -165,6 +165,7 @@ async def _annotation_project_context(
         project_item.project_id,
         operation,
         relation=relation,
+        lock="shared",
     )
 
 
@@ -526,6 +527,7 @@ async def require_visible_annotation_for_reply_mutation(
                 project_item.project_id,
                 resource_action,
                 relation=relation,
+                lock="shared",
             )
             locked_user = project_context.workspace.actor
     except PermissionDenied as error:

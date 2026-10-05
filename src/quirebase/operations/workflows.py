@@ -76,7 +76,7 @@ async def dispatch_maintenance_workflow(db, admin: User, operation: str) -> str:
 
 async def dispatch_workspace_reindex(db, actor: User, workspace_id: str) -> str:
     context = await require_workspace_action(
-        db, actor, workspace_id, ResourceAction.workspace_update
+        db, actor, workspace_id, ResourceAction.workspace_maintenance_run
     )
     workflow_id = f"maintenance:reindex:{workspace_id}:{uuid4()}"
     record_event(
@@ -87,7 +87,7 @@ async def dispatch_workspace_reindex(db, actor: User, workspace_id: str) -> str:
         workflow_id,
         workspace_id=workspace_id,
         authorization_role=context.role.value,
-        authorization_resource_action=ResourceAction.workspace_update.value,
+        authorization_resource_action=ResourceAction.workspace_maintenance_run.value,
     )
     await db.flush()
     await durable_operations().enqueue_in_transaction(
@@ -117,7 +117,9 @@ async def list_reindex_item_ids_step(
     actor = await db.get(User, actor_id)
     if actor is None:
         raise ResourceUnavailable("reindex actor is unavailable")
-    await require_workspace_action(db, actor, workspace_id, ResourceAction.workspace_update)
+    await require_workspace_action(
+        db, actor, workspace_id, ResourceAction.workspace_maintenance_run
+    )
     query = select(Item.id).where(Item.workspace_id == workspace_id).order_by(Item.id).limit(limit)
     if after_id is not None:
         query = query.where(Item.id > after_id)
@@ -130,7 +132,9 @@ async def reindex_items_step(actor_id: str, workspace_id: str, item_ids: tuple[s
     actor = await db.get(User, actor_id)
     if actor is None:
         raise ResourceUnavailable("reindex actor is unavailable")
-    await require_workspace_action(db, actor, workspace_id, ResourceAction.workspace_update)
+    await require_workspace_action(
+        db, actor, workspace_id, ResourceAction.workspace_maintenance_run
+    )
     visible_ids = set(
         (
             await db.scalars(
@@ -156,7 +160,9 @@ async def list_reindex_revision_ids_step(
     actor = await db.get(User, actor_id)
     if actor is None:
         raise ResourceUnavailable("reindex actor is unavailable")
-    await require_workspace_action(db, actor, workspace_id, ResourceAction.workspace_update)
+    await require_workspace_action(
+        db, actor, workspace_id, ResourceAction.workspace_maintenance_run
+    )
     query = (
         select(FileRevision.id)
         .where(FileRevision.workspace_id == workspace_id)
@@ -176,7 +182,9 @@ async def reindex_revisions_step(
     actor = await db.get(User, actor_id)
     if actor is None:
         raise ResourceUnavailable("reindex actor is unavailable")
-    await require_workspace_action(db, actor, workspace_id, ResourceAction.workspace_update)
+    await require_workspace_action(
+        db, actor, workspace_id, ResourceAction.workspace_maintenance_run
+    )
     visible_ids = set(
         (
             await db.scalars(

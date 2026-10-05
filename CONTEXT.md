@@ -41,7 +41,9 @@ admin may perform `delete` on another author's `item_discussion`. Workspace line
 membership are established before the decision. A dotted key such as `item.update` is only the
 canonical API/audit serialization of the `resource=item`, `action=update` pair; it is not a separate
 capability namespace. When one resource-action varies by a canonical request fact, such as Project
-participation, API authorization projections may also expose the allowed relations for that same key.
+participation, API authorization projections may expose concrete `variants` for that key. Domain
+participation rules define ordinary Project discovery; `project_governance.read` grants additional
+managed-Project visibility to Workspace governors.
 
 **Item Stewardship**:
 The Workspace-governed authority to maintain or permanently delete a canonical Item. It is

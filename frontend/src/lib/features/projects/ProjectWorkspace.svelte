@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Combobox, Portal, useListCollection } from '@skeletonlabs/skeleton-svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
@@ -7,7 +8,8 @@
 	import {
 		can as isAllowed,
 		canVariant as isVariantAllowed,
-		type AuthorizationAction
+		type AuthorizationAction,
+		type AuthorizationVariant
 	} from '#lib/authorization/can.js';
 	import Button from '#lib/design/Button.svelte';
 	import ItemRow from '#lib/design/ItemRow.svelte';
@@ -44,7 +46,34 @@
 	let error = $state('');
 	let notice = $state('');
 	let busy = $state(false);
-	let username = $state('');
+	let memberSearch = $state('');
+	let selectedMemberId = $state('');
+	const directory = createQuery(() => ({
+		queryKey: workspaceKeys.members(workspaceId),
+		enabled: can('project_membership.manage'),
+		queryFn: ({ signal }: { signal: AbortSignal }) =>
+			workspace.api.request('GET', '/workspaces/{workspace_id}/members', { signal })
+	}));
+	const availableMembers = $derived(
+		(directory.data ?? []).filter(
+			(member) => !project?.members.some((participant) => participant.user_id === member.user_id)
+		)
+	);
+	const selectedMember = $derived(
+		availableMembers.find((member) => member.user_id === selectedMemberId)
+	);
+	const matchingMembers = $derived(
+		availableMembers.filter((member) =>
+			member.username.toLocaleLowerCase().includes(memberSearch.toLocaleLowerCase())
+		)
+	);
+	const collection = $derived(
+		useListCollection({
+			items: matchingMembers,
+			itemToValue: (member) => member.user_id,
+			itemToString: (member) => member.username
+		})
+	);
 	let body = $state('');
 	let settingsName = $state('');
 	let settingsDescription = $state('');
@@ -97,13 +126,18 @@
 		return isAllowed(project?.authorization, action);
 	}
 
-	function canVariant(action: AuthorizationAction, relation: string) {
-		return isVariantAllowed(project?.authorization, action, relation);
+	function canVariant(action: AuthorizationAction, variant: AuthorizationVariant) {
+		return isVariantAllowed(project?.authorization, action, variant);
 	}
 
 	async function saveSettings(event: SubmitEvent) {
 		event.preventDefault();
-		if (!canVariant('project.update', settingsParticipation)) return;
+		if (
+			!can('project.update') ||
+			(settingsParticipation !== project?.participation &&
+				!canVariant('project.update', settingsParticipation))
+		)
+			return;
 		await mutate(
 			() =>
 				workspace.api.request('PATCH', '/workspaces/{workspace_id}/projects/{project_id}', {
@@ -140,16 +174,20 @@
 
 	async function addMember(event: SubmitEvent) {
 		event.preventDefault();
-		if (!username.trim()) return;
+		if (!selectedMember || !can('project_membership.manage')) return;
+		const username = selectedMember.username;
 		const added = await mutate(
 			() =>
 				workspace.api.request('PUT', '/workspaces/{workspace_id}/projects/{project_id}/members', {
 					params: { path: { project_id: projectId } },
-					body: { username: username.trim() }
+					body: { username }
 				}),
 			$t('Project participant added')
 		);
-		if (added) username = '';
+		if (added) {
+			selectedMemberId = '';
+			memberSearch = '';
+		} else await directory.refetch();
 	}
 
 	async function removeMember(userId: string) {
@@ -321,12 +359,12 @@
 					>
 					<label class="grid grid-cols-1 gap-1"
 						>{$t('Participation')}<select class="select" bind:value={settingsParticipation}
-							>{#if canVariant('project.update', 'workspace')}<option value="workspace"
-									>{$t(domainLabel('workspace'))}</option
-								>{/if}{#if canVariant('project.update', 'open')}<option value="open"
-									>{$t(domainLabel('open'))}</option
-								>{/if}{#if canVariant('project.update', 'managed')}<option value="managed"
-									>{$t(domainLabel('managed'))}</option
+							>{#if project.participation === 'workspace' || canVariant('project.update', 'workspace')}<option
+									value="workspace">{$t(domainLabel('workspace'))}</option
+								>{/if}{#if project.participation === 'open' || canVariant('project.update', 'open')}<option
+									value="open">{$t(domainLabel('open'))}</option
+								>{/if}{#if project.participation === 'managed' || canVariant('project.update', 'managed')}<option
+									value="managed">{$t(domainLabel('managed'))}</option
 								>{/if}</select
 						></label
 					>
@@ -334,7 +372,7 @@
 						<p class="text-sm text-surface-600-400 md:col-span-2">
 							{#if settingsParticipation === 'workspace'}
 								{$t('All active Workspace members will participate in this Project.')}
-							{:else if settingsParticipation === 'managed'}
+							{:else if settingsParticipation === 'managed' && project.participation === 'workspace'}
 								{$t(
 									'A managed Project starts with no participants; Workspace owners/admins can add them.'
 								)}
@@ -357,7 +395,8 @@
 						<Button
 							disabled={busy ||
 								!settingsName.trim() ||
-								!canVariant('project.update', settingsParticipation)}
+								(settingsParticipation !== project.participation &&
+									!canVariant('project.update', settingsParticipation))}
 							>{$t('Save Project settings')}</Button
 						>
 					</div>
@@ -407,17 +446,52 @@
 				{:else}<p class="mt-3 text-sm text-surface-600-400">
 						{$t('No Project participants yet.')}
 					</p>{/if}
-				{#if can('project_membership.manage')}<form
-						class="mt-4 flex flex-wrap gap-2"
-						onsubmit={addMember}
-					>
-						<input
-							class="input min-w-64 flex-1"
-							bind:value={username}
-							placeholder={$t('Exact username')}
-							required
-						/><Button disabled={busy || !username.trim()}>{$t('Add participant')}</Button>
-					</form>{/if}
+				{#if can('project_membership.manage')}
+					{#if directory.isPending}<p>{$t('Loading members…')}</p>
+					{:else if directory.isError}
+						<Notice variant="error">{$t('Unable to load members.')}</Notice>
+						<Button onclick={() => void directory.refetch()}>{$t('Retry')}</Button>
+					{:else if availableMembers.length === 0}<p>
+							{$t('All active Workspace members already participate.')}
+						</p>
+					{:else}
+						<form class="mt-4 flex flex-wrap items-end gap-2" onsubmit={addMember}>
+							<Combobox
+								class="min-w-64 flex-1"
+								{collection}
+								inputValue={memberSearch}
+								value={selectedMemberId ? [selectedMemberId] : []}
+								disabled={busy}
+								openOnClick
+								onInputValueChange={(details) => {
+									memberSearch = details.inputValue;
+									if (details.reason === 'input-change') selectedMemberId = '';
+								}}
+								onValueChange={(details) => {
+									selectedMemberId = details.value[0] ?? '';
+								}}
+							>
+								<Combobox.Label>{$t('Workspace member')}</Combobox.Label>
+								<Combobox.Control>
+									<Combobox.Input placeholder={$t('Search members')} />
+									<Combobox.Trigger aria-label={$t('Show members')}>⌄</Combobox.Trigger>
+								</Combobox.Control>
+								<Portal
+									><Combobox.Positioner
+										><Combobox.Content>
+											{#each matchingMembers as member (member.user_id)}
+												<Combobox.Item item={member}
+													><Combobox.ItemText>{member.username}</Combobox.ItemText></Combobox.Item
+												>
+											{:else}<p class="p-3">{$t('No matching members.')}</p>{/each}
+										</Combobox.Content></Combobox.Positioner
+									></Portal
+								>
+							</Combobox>
+							<Button disabled={busy || !selectedMember}>{$t('Add participant')}</Button>
+						</form>
+					{/if}
+				{/if}
 			{/if}
 		</Panel>
 
