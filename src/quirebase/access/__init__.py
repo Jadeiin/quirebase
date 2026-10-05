@@ -39,7 +39,6 @@ from quirebase.access.items import (
     workspace_items_query,
 )
 from quirebase.access.project_scope import (
-    require_project_access,
     require_project_context,
     require_project_visibility,
     visible_project_ids_query,
@@ -55,6 +54,7 @@ from quirebase.access.projections import (
     system_decisions,
     tag_decisions,
     workspace_decisions,
+    workspace_invitation_roles,
     workspace_member_decisions,
 )
 from quirebase.access.scope import workspace_id_predicate, workspace_select
@@ -97,7 +97,6 @@ __all__ = [
     "require_attachment",
     "require_editable_annotation",
     "require_editable_item",
-    "require_project_access",
     "require_project_context",
     "require_project_participation_change",
     "require_project_visibility",
@@ -118,6 +117,7 @@ __all__ = [
     "visible_tags_query",
     "workspace_decisions",
     "workspace_id_predicate",
+    "workspace_invitation_roles",
     "workspace_items_query",
     "workspace_member_decisions",
     "workspace_member_relation",

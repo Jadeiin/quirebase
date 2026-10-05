@@ -7,8 +7,9 @@ from typing import TYPE_CHECKING
 from quirebase.access.scope import workspace_select
 from quirebase.access.workspaces import (
     ProjectContext,
+    ResourceAction,
     WorkspaceContext,
-    require_project_access,
+    require_action,
     visible_project_ids_query,
 )
 from quirebase.core.errors import ResourceUnavailable
@@ -56,24 +57,22 @@ async def require_project(
     db: AsyncSession,
     ctx: WorkspaceContext,
     project_id: str,
-    *,
-    write: bool = False,
 ) -> ProjectContext:
+    """Load a readable Project; commands authorize their exact operation under locks."""
+    require_action(ctx, ResourceAction.workspace_read)
     project = await get_project(db, ctx, project_id)
     if project is None:
         raise ResourceUnavailable("Project not found")
-    return await require_project_access(db, ctx, project, write=write)
+    return ProjectContext(ctx, project)
 
 
 async def require_project_item(
     db: AsyncSession,
     ctx: WorkspaceContext,
     project_item_id: str,
-    *,
-    write: bool = False,
 ) -> tuple[ProjectContext, ProjectItem]:
     project_item = await get_project_item(db, ctx, project_item_id)
     if project_item is None:
         raise ResourceUnavailable("Project item not found")
-    project_ctx = await require_project(db, ctx, project_item.project_id, write=write)
+    project_ctx = await require_project(db, ctx, project_item.project_id)
     return project_ctx, project_item

@@ -11,6 +11,7 @@ function workspaceView(id: string, name: string) {
 		state: 'active',
 		current_role: 'owner',
 		governance_suspended: false,
+		allowed_invitation_roles: ['viewer', 'reviewer', 'editor', 'admin'],
 		authorization: {
 			allowed: [
 				'workspace.read',
@@ -27,13 +28,11 @@ function workspaceView(id: string, name: string) {
 				'tag.create',
 				'tag.manage',
 				'citation_style.manage',
-				'project.create',
 				'project.update',
 				'project.archive',
 				'project.delete',
 				'project_item.manage',
 				'workspace_invitation.read',
-				'workspace_invitation.create',
 				'workspace_invitation.revoke',
 				'workspace_member.read',
 				'item_discussion.create',
@@ -43,8 +42,7 @@ function workspaceView(id: string, name: string) {
 				'project_annotation.review'
 			],
 			relations: {
-				'project.create': ['managed', 'open', 'workspace'],
-				'workspace_invitation.create': ['admin', 'member']
+				'project.create': ['managed', 'open', 'workspace']
 			}
 		}
 	};

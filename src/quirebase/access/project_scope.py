@@ -53,32 +53,10 @@ def visible_project_ids_query(ctx: WorkspaceContext):
     return query.where(or_(*relation_predicates) if relation_predicates else false())
 
 
-async def require_project_access(
-    db: AsyncSession,
-    ctx: WorkspaceContext,
-    project: Project,
-    *,
-    write: bool = False,
-) -> ProjectContext:
-    """Apply Project lineage/lifecycle after Workspace authorization.
-
-    `ProjectMember` gates discoverability only for managed Projects. It never grants Workspace
-    authority or access to canonical Workspace Items.
-    """
-
-    require_action(
-        ctx,
-        ResourceAction.project_update if write else ResourceAction.workspace_read,
-    )
-    return await require_project_visibility(db, ctx, project, write=write)
-
-
 async def require_project_visibility(
     db: AsyncSession,
     ctx: WorkspaceContext,
     project: Project,
-    *,
-    write: bool = False,
 ) -> ProjectContext:
     """Check target lineage, lifecycle and discoverability without a second action gate."""
     if project.workspace_id != ctx.workspace.id or project.state is ProjectState.deleted:
@@ -106,8 +84,6 @@ async def require_project_visibility(
         )
     if not discoverable:
         raise ResourceUnavailable("Project not found")
-    if write and project.state is not ProjectState.active:
-        raise ProjectLifecycleError("Project is read-only")
     return ProjectContext(ctx, project)
 
 
@@ -145,7 +121,6 @@ async def require_project_context(
         db,
         workspace,
         project,
-        write=False,
     )
     require_action(workspace, operation, relation=relation)
     if mutating and project.state is not ProjectState.active:

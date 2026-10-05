@@ -35,6 +35,7 @@ class WorkspaceView(BaseModel):
     state: WorkspaceState
     current_role: WorkspaceRole
     governance_suspended: bool
+    allowed_invitation_roles: list[WorkspaceInvitationRole] = Field(default_factory=list)
     authorization: WorkspaceAuthorizationView
 
 

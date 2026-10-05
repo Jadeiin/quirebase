@@ -171,7 +171,7 @@ def test_effective_resource_actions_follow_workspace_lifecycle():
     assert ResourceAction.item_create in active
     assert ResourceAction.item_copy in active
     assert ResourceAction.workspace_delete not in active
-    assert ResourceAction.project_create in active
+    assert ResourceAction.project_create not in active
     assert ResourceAction.file_delete in active
     assert ResourceAction.workspace_read in archived
     assert ResourceAction.workspace_member_read in archived
@@ -181,7 +181,7 @@ def test_effective_resource_actions_follow_workspace_lifecycle():
     assert ResourceAction.project_create not in archived
     assert ResourceAction.item_create not in archived
     assert ResourceAction.item_copy not in archived
-    assert ResourceAction.project_create in effective_resource_actions(
+    assert ResourceAction.project_create not in effective_resource_actions(
         WorkspaceRole.editor, WorkspaceState.active
     )
     assert ResourceAction.file_delete in effective_resource_actions(
@@ -1311,7 +1311,7 @@ async def test_managed_project_is_visible_only_to_members_and_workspace_governor
     )
     await async_db.commit()
     editor_actions = effective_resource_actions(WorkspaceRole.editor, WorkspaceState.active)
-    assert ResourceAction.project_create in editor_actions
+    assert ResourceAction.project_create not in editor_actions
     assert "managed" not in effective_resource_action_relations(
         WorkspaceRole.editor,
         WorkspaceState.active,

@@ -43,6 +43,49 @@ test('authenticated shell loads dashboard and navigates to Library', async ({ pa
 	await expect(page.getByRole('heading', { name: 'Library' })).toBeVisible();
 });
 
+for (const [role, variants] of [
+	['owner', ['managed']],
+	['admin', ['workspace']],
+	['editor', ['open']],
+	['owner', []]
+] as const) {
+	test(`Dashboard New Project shortcut follows ${role}'s projected variants: ${variants.join(',') || 'none'}`, async ({
+		page
+	}) => {
+		await mockSession(page);
+		const workspace = {
+			id: 'workspace-1',
+			name: 'Research',
+			owner_id: 'user-1',
+			state: 'active',
+			current_role: role,
+			governance_suspended: false,
+			authorization: { allowed: ['workspace.read'], relations: { 'project.create': variants } }
+		};
+		await page.route('**/api/v1/workspaces', (route) => route.fulfill({ json: [workspace] }));
+		await page.route('**/api/v1/workspaces/workspace-1', (route) =>
+			route.fulfill({ json: workspace })
+		);
+		await page.route('**/api/v1/workspaces/workspace-1/dashboard', (route) =>
+			route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 0 } })
+		);
+		await page.route('**/api/v1/workspaces/workspace-1/projects?view=*', (route) =>
+			route.fulfill({ json: [] })
+		);
+		await page.goto('/workspace/workspace-1');
+		await expect(page.getByRole('heading', { name: 'Quick actions' })).toBeVisible();
+		const shortcut = page.getByRole('link', { name: /New Project/ });
+		if (variants.length > 0) {
+			await expect(shortcut).toBeVisible();
+			await shortcut.click();
+			await expect(page).toHaveURL(/\/workspace\/workspace-1\/projects$/);
+			await expect(page.getByRole('button', { name: 'New Project' })).toBeVisible();
+		} else {
+			await expect(shortcut).toHaveCount(0);
+		}
+	});
+}
+
 test('theme preference persists and system mode follows the browser', async ({ page }) => {
 	await page.emulateMedia({ colorScheme: 'dark' });
 	await mockWorkspaces(page);

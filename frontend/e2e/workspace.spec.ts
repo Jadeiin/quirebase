@@ -634,6 +634,52 @@ test('Workspace members see the active directory without governance data', async
 	await expect.poll(() => governanceRequests).toBe(0);
 });
 
+for (const roles of [['reviewer'], []]) {
+	test(`Workspace invitations use only the projected roles: ${roles.join(',') || 'none'}`, async ({
+		page
+	}) => {
+		await mockSession(page);
+		const workspace = {
+			id: 'workspace-1',
+			name: 'Research',
+			owner_id: 'user-1',
+			state: 'active',
+			current_role: 'owner',
+			governance_suspended: false,
+			allowed_invitation_roles: roles,
+			authorization: { allowed: ['workspace.read', 'workspace_invitation.read'] }
+		};
+		await page.route('**/api/v1/workspaces', (route) => route.fulfill({ json: [workspace] }));
+		await page.route('**/api/v1/workspaces/workspace-1', (route) =>
+			route.fulfill({ json: workspace })
+		);
+		await page.route('**/api/v1/workspaces/workspace-1/members', (route) =>
+			route.fulfill({ json: [] })
+		);
+		let invitedRole = '';
+		await page.route('**/api/v1/workspaces/workspace-1/invitations', (route) => {
+			if (route.request().method() === 'POST') {
+				invitedRole = route.request().postDataJSON().role;
+				return route.fulfill({ status: 201, json: { token: 'one-time-token' } });
+			}
+			return route.fulfill({ json: [] });
+		});
+		await page.goto('/workspace/workspace-1/settings');
+		await expect(page.getByRole('heading', { name: 'Invitations', exact: true })).toBeVisible();
+		if (roles.length === 0) {
+			await expect(page.getByRole('button', { name: 'Create invitation' })).toHaveCount(0);
+			await expect(page.getByRole('combobox', { name: 'Role', exact: true })).toHaveCount(0);
+		} else {
+			const selection = page.getByRole('combobox', { name: 'Role', exact: true });
+			await expect(selection.locator('option')).toHaveCount(1);
+			await expect(selection).toHaveValue('reviewer');
+			await page.getByLabel('Exact username').fill('collaborator');
+			await page.getByRole('button', { name: 'Create invitation' }).click();
+			await expect.poll(() => invitedRole).toBe('reviewer');
+		}
+	});
+}
+
 test('browser history and two tabs retain their explicit Workspace URLs across refresh', async ({
 	page,
 	context

@@ -85,7 +85,11 @@ single Access decision. They must not add a coarse Workspace-wide gate before a 
 resource decision. The canonical dotted form such as `item.update` is used only to serialize a
 `resource=item`, `action=update` pair in API projections and Audit Events. Frontend code receives
 server-authored decision sets and asks `can(action)` or `canVariant(action, relation)`; a variant
-requires an explicit allowed relation in the projection. It never maps roles to actions.
+requires an explicit allowed relation in the projection. `allowed` contains resolved base-action
+grants, while `relations` independently grants concrete request variants. A variant-only action
+such as `project.create` is absent from `allowed`; it cannot be treated as an unconditional grant.
+A resource may expose both a base grant and constrained variants: `project.update` permits metadata
+updates while its relation set limits participation changes. Frontend code never maps roles to actions.
 
 Actions use one controlled vocabulary. Ordinary persistence operations use `create`, `read`,
 `update` and `delete`; `read` covers both collection and individual retrieval at the policy layer.
@@ -97,6 +101,9 @@ Command variants also remain relations rather than action suffixes: Project part
 `project.create`, and the configured creation mode constrains `workspace.create`. When a client
 must choose among such variants, `AuthorizationView.relations` carries the server-evaluated
 relation set for the same resource-action key; it is not a second policy namespace.
+When a domain value requires internal relation classification, the server projects the concrete
+choices instead. `WorkspaceView.allowed_invitation_roles` lists the roles the caller may invite;
+the frontend does not translate invitation roles into Casbin's `admin` or `member` classes.
 
 The initial role presets are:
 
@@ -161,6 +168,8 @@ Under `admins_only`, the administrator must specify an active Workspace owner by
 The administrator is not added as a Workspace member unless explicitly selected as that owner;
 Workspace creation does not grant instance administrators implicit content access. The lookup is
 exact and does not expose a browsable instance-wide user directory.
+The creation Audit Event records the actor's authorizing System role. Its detail records the selected
+owner, the resulting owner Workspace role and the instance creation policy.
 
 The policy never blocks creation of an ordinary Workspace as part of User provisioning.
 Quota and rate limits are intentionally separate concerns.

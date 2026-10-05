@@ -7,6 +7,7 @@ from quirebase.access import (
     ResourceAction,
     require_action,
     workspace_decisions,
+    workspace_invitation_roles,
     workspace_member_decisions,
 )
 from quirebase.core.errors import ResourceNotFound
@@ -69,6 +70,13 @@ def _workspace_view(workspace, member, *, owner_id: str) -> WorkspaceView:
         state=workspace.state,
         current_role=member.role,
         governance_suspended=workspace.governance_suspended_at is not None,
+        allowed_invitation_roles=list(
+            workspace_invitation_roles(
+                member.role,
+                workspace.state,
+                governance_suspended=workspace.governance_suspended_at is not None,
+            )
+        ),
         authorization=authorization_view(projection),
     )
 

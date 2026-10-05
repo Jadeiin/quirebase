@@ -16,11 +16,13 @@ from quirebase.access.workspace_policy import (
     effective_resource_action_relations,
     effective_resource_actions,
     workspace_member_relation,
+    workspace_resource_action_allowed,
 )
 from quirebase.models import (
     Project,
     ProjectParticipation,
     ProjectState,
+    WorkspaceInvitationRole,
     WorkspaceMember,
     WorkspaceMemberState,
     WorkspaceRole,
@@ -33,6 +35,12 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class AuthorizationProjection:
+    """Resolved action grants and independent grants for concrete request variants.
+
+    A relation-only grant does not imply a base action grant. A resource may expose both:
+    Project metadata updates, for example, coexist with constrained participation changes.
+    """
+
     allowed: tuple[ResourceAction | SystemAction, ...]
     relations: dict[ResourceActionKey, tuple[str, ...]]
 
@@ -84,6 +92,26 @@ def system_decisions(role: str) -> AuthorizationProjection:
     return AuthorizationProjection(
         allowed=tuple(sorted(effective_system_actions(role), key=lambda action: action.value)),
         relations={},
+    )
+
+
+def workspace_invitation_roles(
+    role: WorkspaceRole,
+    state: WorkspaceState,
+    *,
+    governance_suspended: bool = False,
+) -> tuple[WorkspaceInvitationRole, ...]:
+    """Project allowed admission roles without exposing policy classifications to clients."""
+    return tuple(
+        target
+        for target in WorkspaceInvitationRole
+        if workspace_resource_action_allowed(
+            role,
+            state,
+            ResourceAction.workspace_invitation_create,
+            governance_suspended=governance_suspended,
+            relation=workspace_member_relation(target.value),
+        )
     )
 
 

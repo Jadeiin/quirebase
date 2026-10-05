@@ -131,8 +131,6 @@ ACTION_SPECS: dict[ResourceAction, ActionSpec] = {
     ResourceAction.workspace_invitation_create: ActionSpec(
         mutating=True,
         policy_relations=_MEMBER_RELATIONS,
-        projected_relations=_MEMBER_RELATIONS,
-        relation_projection="workspace",
     ),
     ResourceAction.workspace_invitation_revoke: _WRITE,
     ResourceAction.workspace_member_read: _READ,
@@ -220,12 +218,6 @@ def effective_resource_actions(
         resource_action
         for resource_action in ResourceAction
         if workspace_resource_action_allowed(
-            role,
-            state,
-            resource_action,
-            governance_suspended=governance_suspended,
-        )
-        or effective_resource_action_relations(
             role,
             state,
             resource_action,

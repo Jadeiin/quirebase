@@ -42,7 +42,6 @@ from quirebase.models import (
     PdfAnnotationObject,
     PdfAnnotationReply,
     ProjectMember,
-    SystemRole,
     User,
     Workspace,
     WorkspaceInvitation,
@@ -202,14 +201,13 @@ async def create_workspace(
         "workspace.create",
         "workspace",
         workspace.id,
+        detail={
+            "owner_user_id": owner.id,
+            "owner_workspace_role": WorkspaceRole.owner.value,
+            "creation_policy": policy,
+        },
         workspace_id=workspace.id,
-        authorization_role=(
-            WorkspaceRole.owner.value
-            if owner.id == actor.id
-            else current_actor.role.value
-            if isinstance(current_actor.role, SystemRole)
-            else current_actor.role
-        ),
+        authorization_role=current_actor.role,
         authorization_resource_action=SystemAction.workspaces_create.value,
     )
     await db.commit()
@@ -377,7 +375,7 @@ async def invite_workspace_member(
         actor,
         workspace_id,
         ResourceAction.workspace_invitation_create,
-        relation="admin" if requested is WorkspaceInvitationRole.admin else "member",
+        relation=workspace_member_relation(requested.value),
     )
     now = datetime.now(UTC)
     if expires_at is None:

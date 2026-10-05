@@ -293,6 +293,19 @@ async def test_account_and_admin_workspace_apis(
         assert current_workspace["current_role"] == "owner"
         assert "role" not in current_workspace
         assert "workspace.read" in current_workspace["authorization"]["allowed"]
+        assert set(current_workspace["allowed_invitation_roles"]) == {
+            "admin",
+            "editor",
+            "reviewer",
+            "viewer",
+        }
+        assert "project.create" not in current_workspace["authorization"]["allowed"]
+        assert set(current_workspace["authorization"]["relations"]["project.create"]) == {
+            "workspace",
+            "open",
+            "managed",
+        }
+        assert "workspace_invitation.create" not in current_workspace["authorization"]["relations"]
 
         user = await db.get(User, item.created_by)
         assert user is not None

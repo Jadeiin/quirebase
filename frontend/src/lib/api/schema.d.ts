@@ -4187,12 +4187,18 @@ export interface components {
 		};
 		/**
 		 * WorkspaceAuthorizationView
-		 * @description Workspace resource-action decisions evaluated by the server.
+		 * @description Resolved Workspace action grants and independent concrete variant grants.
 		 */
 		WorkspaceAuthorizationView: {
-			/** Allowed */
+			/**
+			 * Allowed
+			 * @description Resolved action grants; excludes actions granted only for a request variant.
+			 */
 			allowed: components['schemas']['ResourceAction'][];
-			/** Relations */
+			/**
+			 * Relations
+			 * @description Concrete variant grants, independent of the base action grants in allowed.
+			 */
 			relations?: {
 				[key: string]: string[];
 			};
@@ -4347,6 +4353,8 @@ export interface components {
 			current_role: components['schemas']['WorkspaceRole'];
 			/** Governance Suspended */
 			governance_suspended: boolean;
+			/** Allowed Invitation Roles */
+			allowed_invitation_roles?: components['schemas']['WorkspaceInvitationRole'][];
 			authorization: components['schemas']['WorkspaceAuthorizationView'];
 		};
 		/** WriteResult */

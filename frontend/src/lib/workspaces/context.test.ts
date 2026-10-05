@@ -37,9 +37,10 @@ describe('workspaceCan', () => {
 		expect(workspaceCan(suspended, 'workspace.archive')).toBe(false);
 	});
 	it('requires server-authored variants even for an owner', () => {
-		const owner = view('owner', ['project.create']);
+		const owner = view('owner', []);
 		expect(workspaceCanVariant(owner, 'project.create', 'managed')).toBe(false);
 		owner.authorization.relations = { 'project.create': ['open'] };
+		expect(workspaceCan(owner, 'project.create')).toBe(false);
 		expect(workspaceCanVariant(owner, 'project.create', 'open')).toBe(true);
 		expect(workspaceCanVariant(owner, 'project.create', 'workspace')).toBe(false);
 	});

@@ -12,7 +12,6 @@ from quirebase.access.context import (
     resolve_workspace_context,
 )
 from quirebase.access.project_scope import (
-    require_project_access,
     require_project_context,
     require_project_visibility,
     visible_project_ids_query,
@@ -35,7 +34,6 @@ __all__ = [
     "effective_resource_actions",
     "lock_workspace_context",
     "require_action",
-    "require_project_access",
     "require_project_context",
     "require_project_visibility",
     "require_workspace_action",

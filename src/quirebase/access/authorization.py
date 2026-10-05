@@ -21,18 +21,6 @@ if TYPE_CHECKING:
 _POLICY_DIR = Path(__file__).with_name("policy")
 _MODEL_PATH = _POLICY_DIR / "model.conf"
 _POLICY_PATH = _POLICY_DIR / "policy.csv"
-_WORKSPACE_RELATIONS = frozenset({
-    "any",
-    "own",
-    "other",
-    "member",
-    "admin",
-    "managed",
-    "participant",
-    "workspace",
-    "open",
-})
-_SYSTEM_RELATIONS = frozenset({"any", "own", "members_allowed", "admins_only"})
 _WORKSPACE_LIFECYCLES = frozenset({"active", "archived", "suspended"})
 _EXPECTED_ROLE_EDGES = frozenset({
     ("workspace:owner", "workspace:admin"),
@@ -134,6 +122,12 @@ def _validate_policy_bundle() -> None:
 
     workspace_actions = {action.value for action in ResourceAction}
     system_actions = {action.value for action in SystemAction}
+    workspace_relations = {
+        relation for action in ResourceAction for relation in action_spec(action).policy_relations
+    }
+    system_relations = {
+        relation for relations in SYSTEM_POLICY_RELATIONS.values() for relation in relations
+    }
     known_actions = workspace_actions | system_actions
     workspace_roles = tuple(WorkspaceRole)
     system_roles = tuple(SystemRole)
@@ -175,7 +169,7 @@ def _validate_policy_bundle() -> None:
                 raise RuntimeError(
                     f"unknown Workspace lifecycle {lifecycle!r} on policy.csv:{line_number}"
                 )
-            if not alternatives(relation) <= _WORKSPACE_RELATIONS:
+            if not alternatives(relation) <= workspace_relations:
                 raise RuntimeError(
                     f"unknown Workspace relation {relation!r} on policy.csv:{line_number}"
                 )
@@ -187,7 +181,7 @@ def _validate_policy_bundle() -> None:
                 raise RuntimeError(
                     f"invalid System lifecycle {lifecycle!r} on policy.csv:{line_number}"
                 )
-            if not alternatives(relation) <= _SYSTEM_RELATIONS:
+            if not alternatives(relation) <= system_relations:
                 raise RuntimeError(
                     f"unknown System relation {relation!r} on policy.csv:{line_number}"
                 )
@@ -208,7 +202,7 @@ def _validate_policy_bundle() -> None:
         (action.resource, action.action, lifecycle, relation)
         for action in ResourceAction
         for lifecycle in _WORKSPACE_LIFECYCLES
-        for relation in _WORKSPACE_RELATIONS
+        for relation in workspace_relations
     }
     ordered_workspace_roles = tuple(reversed(workspace_roles))
     for lower, higher in pairwise(ordered_workspace_roles):
@@ -223,7 +217,7 @@ def _validate_policy_bundle() -> None:
     system_facts = {
         (action.resource, action.action, relation)
         for action in SystemAction
-        for relation in _SYSTEM_RELATIONS
+        for relation in system_relations
     }
     for resource, action, relation in system_facts:
         if _enforce(

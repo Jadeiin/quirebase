@@ -41,10 +41,15 @@ class OkView(BaseModel):
 
 
 class WorkspaceAuthorizationView(BaseModel):
-    """Workspace resource-action decisions evaluated by the server."""
+    """Resolved Workspace action grants and independent concrete variant grants."""
 
-    allowed: list[ResourceAction]
-    relations: dict[str, list[str]] = Field(default_factory=dict)
+    allowed: list[ResourceAction] = Field(
+        description="Resolved action grants; excludes actions granted only for a request variant."
+    )
+    relations: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description="Concrete variant grants, independent of the base action grants in allowed.",
+    )
 
 
 class SystemAuthorizationView(BaseModel):

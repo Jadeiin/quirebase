@@ -285,7 +285,7 @@ test('a Workspace editor can create an open Project but not a managed Project', 
 	await mockWorkspaceRole(
 		page,
 		'editor',
-		['workspace.read', 'project.create', 'project_item.manage', 'project_discussion.create'],
+		['workspace.read', 'project_item.manage', 'project_discussion.create'],
 		{ 'project.create': ['open', 'workspace'] }
 	);
 	let creation: Record<string, unknown> | null = null;
@@ -346,7 +346,7 @@ test('a Workspace owner can create an empty managed Project', async ({ page }) =
 	await mockWorkspaceRole(
 		page,
 		'owner',
-		['workspace.read', 'project.create', 'project_item.manage', 'project_membership.manage'],
+		['workspace.read', 'project_item.manage', 'project_membership.manage'],
 		{ 'project.create': ['managed', 'open', 'workspace'] }
 	);
 	let creation: Record<string, unknown> | null = null;
@@ -398,7 +398,7 @@ test('Project creation defaults and submits only the projected participation var
 	page
 }) => {
 	await mockSession(page);
-	await mockWorkspaceRole(page, 'owner', ['workspace.read', 'project.create'], {
+	await mockWorkspaceRole(page, 'owner', ['workspace.read'], {
 		'project.create': ['open']
 	});
 	let participation = '';
@@ -488,7 +488,6 @@ test('Workspace resource actions govern Project settings and managed participati
 		'owner',
 		[
 			'workspace.read',
-			'project.create',
 			'project_item.manage',
 			'project_membership.manage',
 			'project.delete',

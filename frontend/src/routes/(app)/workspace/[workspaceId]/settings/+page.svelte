@@ -37,11 +37,7 @@
 	let name = $state(workspace.view?.name ?? '');
 	let inviteUsername = $state('');
 	let inviteRole = $state<'admin' | 'editor' | 'reviewer' | 'viewer'>('viewer');
-	const inviteRoles = $derived(
-		(['viewer', 'reviewer', 'editor', 'admin'] as const).filter((role) =>
-			workspace.canVariant('workspace_invitation.create', role === 'admin' ? 'admin' : 'member')
-		)
-	);
+	const inviteRoles = $derived(workspace.view?.allowed_invitation_roles ?? []);
 	$effect(() => {
 		if (!inviteRoles.includes(inviteRole) && inviteRoles[0]) inviteRole = inviteRoles[0];
 	});

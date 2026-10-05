@@ -7,7 +7,7 @@ export type AuthorizationDecisionSet = Pick<
 	'allowed' | 'relations'
 >;
 
-/** Ask a server-authored decision set; never infer policy from roles or lifecycle in the UI. */
+/** Ask for a resolved base action grant; variant grants do not imply this decision. */
 export function can(
 	decisions: AuthorizationDecisionSet | null | undefined,
 	action: AuthorizationAction
@@ -15,16 +15,19 @@ export function can(
 	return decisions?.allowed.includes(action) === true;
 }
 
-/** A concrete variant requires an explicit relation projection from the server. */
+/** Ask for an independent concrete variant grant projected by the server. */
 export function canVariant(
 	decisions: AuthorizationDecisionSet | null | undefined,
 	action: AuthorizationAction,
 	relation: string
 ): boolean {
-	return can(decisions, action) && decisions?.relations?.[action]?.includes(relation) === true;
+	return decisions?.relations?.[action]?.includes(relation) === true;
 }
 
-/** Whether the server projected at least one concrete action for this surface. */
+/** Whether the server projected a base action or concrete variant for this surface. */
 export function hasAllowedAction(decisions: AuthorizationDecisionSet | null | undefined): boolean {
-	return Boolean(decisions?.allowed.length);
+	return Boolean(
+		decisions?.allowed.length ||
+		Object.values(decisions?.relations ?? {}).some((relations) => relations.length > 0)
+	);
 }

@@ -21,10 +21,7 @@ from quirebase.models import (
     User,
 )
 
-from ._locking import (
-    lock_project_delete,
-    lock_project_root,
-)
+from ._locking import lock_project_root
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -226,7 +223,7 @@ async def delete_project(
     confirmation: str,
 ) -> None:
     context = await lock_workspace_context(db, user, workspace_id)
-    project = await lock_project_delete(db, project_id, workspace_id)
+    project = await lock_project_root(db, project_id, workspace_id)
     if project.workspace_id != workspace_id or project.state is ProjectState.deleted:
         raise ResourceUnavailable("Project not found")
     await require_project_visibility(db, context, project)
