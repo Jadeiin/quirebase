@@ -3801,6 +3801,11 @@ msgstr "归档保留期结束后，此操作会永久删除工作区及其内容
 
 #. js-lingui-explicit-id
 #: src/lib/api/errors.ts
+msgid "This Project is read only in its current state."
+msgstr "此项目在当前状态下为只读。"
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
 msgid "This Project membership changed. Refresh and try again."
 msgstr "此项目的成员关系已更改。请刷新后重试。"
 

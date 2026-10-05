@@ -21,6 +21,7 @@ from quirebase.accounts import (
 from quirebase.audit import query_events
 from quirebase.core.errors import (
     PermissionDenied,
+    ProjectLifecycleError,
     ResourceUnavailable,
     ValidationFailure,
     VersionConflict,
@@ -376,7 +377,7 @@ async def test_project_discussion_waits_for_archive_and_rechecks_state(
             async with postgres_race.session("writer") as db:
                 actor = await db.get(User, owner_id)
                 assert actor is not None
-                with pytest.raises(WorkspaceLifecycleError):
+                with pytest.raises(ProjectLifecycleError):
                     await add_project_discussion_message(
                         db, actor, workspace_id, project_id, "After archive"
                     )

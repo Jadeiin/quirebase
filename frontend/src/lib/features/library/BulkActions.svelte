@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { can } from '#lib/authorization/can.js';
 	import type { LibraryProject } from '#lib/features/library/queries.js';
 	import { t } from '#lib/i18n.js';
 	import Button from '#lib/design/Button.svelte';
@@ -27,6 +28,14 @@
 		onClearSelection: () => void;
 	}>();
 	const workspace = getWorkspaceContext();
+	const assignableProjects: LibraryProject[] = $derived(
+		projects.filter((project: LibraryProject) => can(project.authorization, 'project_item.manage'))
+	);
+	$effect(() => {
+		if (bulkProject && !assignableProjects.some((project) => project.id === bulkProject)) {
+			bulkProject = '';
+		}
+	});
 </script>
 
 {#if selectedCount}
@@ -57,7 +66,8 @@
 				bind:value={bulkProject}
 				aria-label={$t('Select Project')}
 				><option value="">{$t('Select Project')}</option
-				>{#each projects as option (option.id)}<option value={option.id}>{option.name}</option
+				>{#each assignableProjects as option (option.id)}<option value={option.id}
+						>{option.name}</option
 					>{/each}</select
 			>{/if}
 		{#if bulkAction === 'add_tag'}<input

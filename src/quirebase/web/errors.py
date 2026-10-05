@@ -15,6 +15,7 @@ from quirebase.accounts.throttling import LoginThrottled
 from quirebase.core.errors import (
     DomainError,
     PermissionDenied,
+    ProjectLifecycleError,
     ResourceNotFound,
     ResourceUnavailable,
     SizeLimitExceeded,
@@ -103,6 +104,8 @@ def _domain_error(exc: DomainError) -> tuple[int, str, str, dict[str, Any] | Non
         return 404, "workspace_unavailable", "Workspace not found", None
     if isinstance(exc, WorkspaceLifecycleError):
         return 409, "workspace_lifecycle_error", str(exc), None
+    if isinstance(exc, ProjectLifecycleError):
+        return 409, "project_lifecycle_error", str(exc), None
     if isinstance(exc, ResourceNotFound):
         return 404, "not_found", str(exc) or "not found", None
     if isinstance(exc, PermissionDenied):

@@ -72,8 +72,8 @@ async def list_projects(
             id=project.id,
             name=project.name,
             item_count=count,
-            state=project.state.value,
-            participation=project.participation.value,
+            state=project.state,
+            participation=project.participation,
             description=project.description,
             is_member=is_member,
             authorization=authorization_view(

@@ -33,6 +33,7 @@ from quirebase.access.annotations import (
 from quirebase.core.config import get_settings
 from quirebase.core.errors import (
     PermissionDenied,
+    ProjectLifecycleError,
     ResourceNotFound,
     ResourceUnavailable,
     ValidationFailure,
@@ -149,6 +150,7 @@ from quirebase.workspaces import (
     permanently_delete_workspace,
     read_workspace_items_break_glass,
     recover_workspace_governance,
+    restore_workspace,
     set_workspace_member_role,
     suspend_workspace_governance,
     suspend_workspace_member,
@@ -1803,7 +1805,7 @@ async def test_project_discussion_moderation_respects_lifecycle_and_lineage(asyn
         )
     project.state = ProjectState.archived
     await async_db.commit()
-    with pytest.raises(WorkspaceLifecycleError):
+    with pytest.raises(ProjectLifecycleError):
         await moderate_project_discussion_message(
             async_db, owner, workspace_id, project.id, message.id, "Policy"
         )
@@ -1885,7 +1887,10 @@ async def test_reply_mutations_authorize_roots_before_locking_children(
     event.listen(async_db.sync_session, "do_orm_execute", record_locks)
     try:
         if read_only_root:
-            with pytest.raises(WorkspaceLifecycleError):
+            lifecycle_error = (
+                ProjectLifecycleError if read_only_root == "project" else WorkspaceLifecycleError
+            )
+            with pytest.raises(lifecycle_error):
                 await mutate()
             assert not {"project_items", "pdf_annotations", "pdf_annotation_replies"}.intersection(
                 locked_tables
@@ -2716,20 +2721,45 @@ async def test_item_organize_omits_deleted_projects(async_db):
 
 
 @pytest.mark.anyio
-async def test_governance_suspension_is_read_only(async_db):
+@pytest.mark.parametrize("archived", [False, True])
+async def test_governance_suspension_is_read_only_and_recovery_preserves_lifecycle(
+    async_db, archived
+):
     owner = await _user(async_db, "suspended-owner")
     admin = await _user(async_db, "suspending-instance-admin")
     admin.role = "administrator"
     await async_db.commit()
-    await suspend_workspace_governance(async_db, admin, fixture_workspace_id(owner))
+    workspace_id = fixture_workspace_id(owner)
+    if archived:
+        await archive_workspace(async_db, owner, workspace_id)
+    workspace = await async_db.get(Workspace, workspace_id)
+    state, archived_at = workspace.state, workspace.archived_at
+    await suspend_workspace_governance(async_db, admin, workspace_id)
 
-    await require_workspace_action(
-        async_db, owner, fixture_workspace_id(owner), ResourceAction.workspace_read
-    )
+    for action in (ResourceAction.workspace_read, ResourceAction.workspace_export):
+        await require_workspace_action(async_db, owner, workspace_id, action)
+    for action in (
+        ResourceAction.item_create,
+        ResourceAction.workspace_member_read,
+        ResourceAction.workspace_invitation_read,
+    ):
+        with pytest.raises(WorkspaceLifecycleError):
+            await require_workspace_action(async_db, owner, workspace_id, action)
     with pytest.raises(WorkspaceLifecycleError):
-        await require_workspace_action(
-            async_db, owner, fixture_workspace_id(owner), ResourceAction.item_create
-        )
+        await restore_workspace(async_db, owner, workspace_id)
+    with pytest.raises(WorkspaceLifecycleError):
+        await permanently_delete_workspace(async_db, owner, workspace_id)
+    with pytest.raises(WorkspaceMembershipRequired):
+        await require_workspace_action(async_db, admin, workspace_id, ResourceAction.workspace_read)
+
+    await recover_workspace_governance(async_db, admin, workspace_id)
+    assert workspace.state is state
+    assert workspace.archived_at == archived_at
+    assert workspace.governance_suspended_at is None
+    assert workspace.governance_suspended_by is None
+    context = await resolve_workspace_context(async_db, owner, workspace_id)
+    assert context.membership.state is WorkspaceMemberState.active
+    assert action_allowed(context, ResourceAction.item_create) is (not archived)
 
 
 @pytest.mark.anyio
@@ -2819,7 +2849,8 @@ async def test_break_glass_is_one_shot_read_only_and_audited(async_db):
         )
     )
     assert event is not None
-    assert event.source == "break_glass"
+    assert event.source == "internal"
+    assert json.loads(event.detail)["reason"] == "Investigate customer-reported data loss"
 
 
 @pytest.mark.anyio
@@ -3346,11 +3377,12 @@ async def test_archived_project_blocks_mutating_existing_annotations(async_db):
     )
     assert visible[0]["editable"] is False
     assert visible[0]["replies"][0]["editable"] is False
-    with pytest.raises(WorkspaceLifecycleError):
+    assert not await can_edit_annotation(async_db, author, workspace_id, annotation)
+    with pytest.raises(ProjectLifecycleError):
         await delete_document_annotation(
             async_db, author, workspace_id, item.id, annotation.id, annotation.version
         )
-    with pytest.raises(WorkspaceLifecycleError):
+    with pytest.raises(ProjectLifecycleError):
         await update_document_annotation(
             async_db,
             author,
@@ -3366,7 +3398,7 @@ async def test_archived_project_blocks_mutating_existing_annotations(async_db):
                 "payload": annotation.payload,
             }),
         )
-    with pytest.raises(WorkspaceLifecycleError):
+    with pytest.raises(ProjectLifecycleError):
         await create_annotation_reply(
             async_db,
             author,
@@ -3375,7 +3407,7 @@ async def test_archived_project_blocks_mutating_existing_annotations(async_db):
             annotation.id,
             AnnotationReplyCreate(id=uuid4(), body="After archive"),
         )
-    with pytest.raises(WorkspaceLifecycleError):
+    with pytest.raises(ProjectLifecycleError):
         await update_annotation_reply(
             async_db,
             author,
@@ -3385,13 +3417,13 @@ async def test_archived_project_blocks_mutating_existing_annotations(async_db):
             reply.id,
             AnnotationReplyUpdate(version=reply.version, body="Edited after archive"),
         )
-    with pytest.raises(WorkspaceLifecycleError):
+    with pytest.raises(ProjectLifecycleError):
         await delete_annotation_reply(
             async_db, author, workspace_id, item.id, annotation.id, reply.id, reply.version
         )
     annotation.deleted_at = datetime.now(UTC)
     await async_db.commit()
-    with pytest.raises(WorkspaceLifecycleError):
+    with pytest.raises(ProjectLifecycleError):
         await restore_document_annotation(
             async_db, author, workspace_id, item.id, annotation.id, annotation.version
         )

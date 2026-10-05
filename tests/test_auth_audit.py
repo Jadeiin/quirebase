@@ -1,4 +1,5 @@
 import asyncio
+import json
 import threading
 from datetime import UTC, datetime, timedelta
 
@@ -11,8 +12,10 @@ from quirebase.accounts import (
     InvalidCredentials,
     authenticate_user,
     change_own_password,
+    create_api_token,
     create_login_session,
 )
+from quirebase.audit import current_programmatic_invocation, programmatic_invocation
 from quirebase.core import crypto
 from quirebase.core.config import get_settings
 from quirebase.core.crypto import hash_password, token_hash, verify_password
@@ -82,6 +85,13 @@ async def test_failed_and_successful_logins_are_audited_without_credentials(
         assert events[0].actor_id is None
         assert events[0].target_id == user.id
         assert events[1].actor_id == user.id
+        for event in events:
+            assert event.source == "http"
+            assert json.loads(event.detail)["invocation"] == {
+                "protocol": "http",
+                "operation": "login_session",
+            }
+        assert current_programmatic_invocation() is None
         assert await db.get(LoginSession, events[1].target_id) is not None
         details = " ".join(event.detail or "" for event in events)
         assert "correct-password" not in details
@@ -90,6 +100,49 @@ async def test_failed_and_successful_logins_are_audited_without_credentials(
     finally:
         await client.aclose()
         get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_http_audit_preserves_mcp_provenance_and_isolates_cookie_credentials(
+    async_db, async_session_factory
+):
+    db = async_db
+    client, user = await web_client(db, async_session_factory, authenticated=True)
+    assert user is not None
+    grant = await create_api_token(db, user, "Caller", expires_in_days=1)
+    headers = {"Authorization": f"Bearer {grant.raw_token}"}
+    try:
+        bearer = await client.post(
+            "/api/v1/account/api-tokens", json={"name": "Bearer child", "days": 1}, headers=headers
+        )
+        with programmatic_invocation("mcp", "account.create_own_api_token", client_id="test-mcp"):
+            mcp = await client.post(
+                "/api/v1/account/api-tokens", json={"name": "MCP child", "days": 1}, headers=headers
+            )
+        cookie = await client.post(
+            "/api/v1/account/api-tokens", json={"name": "Cookie child", "days": 1}
+        )
+        for response, protocol, operation, client_id in (
+            (bearer, "http", "create_own_api_token", "http-api"),
+            (mcp, "mcp", "account.create_own_api_token", "test-mcp"),
+            (cookie, "http", "create_own_api_token", None),
+        ):
+            assert response.status_code == 201
+            event = await db.scalar(
+                select(AuditEvent).where(
+                    AuditEvent.action == "auth.api_token.create",
+                    AuditEvent.target_id == response.json()["id"],
+                )
+            )
+            assert event is not None
+            assert event.source == protocol
+            expected = {"protocol": protocol, "operation": operation}
+            if client_id is not None:
+                expected.update(api_token_id=grant.token_id, client_id=client_id)
+            assert json.loads(event.detail)["invocation"] == expected
+        assert current_programmatic_invocation() is None
+    finally:
+        await client.aclose()
 
 
 @pytest.mark.anyio
@@ -184,6 +237,8 @@ async def test_revoke_all_sessions_requires_same_origin_and_invalidates_every_se
         assert event is not None
         assert event.actor_id == user.id
         assert '"revoked_sessions": 2' in event.detail
+        assert event.source == "http"
+        assert json.loads(event.detail)["invocation"]["protocol"] == "http"
         assert (await client.get("/api/v1/session")).json()["authenticated"] is False
     finally:
         await client.aclose()

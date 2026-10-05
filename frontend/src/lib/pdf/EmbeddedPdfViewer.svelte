@@ -48,7 +48,7 @@
 		pageGeometry: number[][];
 		sources: AnnotationSources;
 		writeProject: string;
-		onstatus?: (status: string, failed: boolean) => void;
+		onstatus?: (status: string, failed: boolean, reason?: unknown) => void;
 	}>();
 
 	const disabledCategories = [
@@ -158,7 +158,7 @@
 				onstatus($t('Saved'), false);
 				break;
 			case 'sync-failed':
-				onstatus($t('Annotation sync failed'), true);
+				onstatus(apiErrorMessage(status.reason, $t('Annotation sync failed')), true, status.reason);
 				break;
 			case 'load-failed':
 				onstatus($t('Unable to load annotations'), true);

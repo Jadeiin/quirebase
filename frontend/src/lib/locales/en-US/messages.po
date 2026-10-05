@@ -3801,6 +3801,11 @@ msgstr "This permanently removes the workspace and its content after the archive
 
 #. js-lingui-explicit-id
 #: src/lib/api/errors.ts
+msgid "This Project is read only in its current state."
+msgstr "This Project is read only in its current state."
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
 msgid "This Project membership changed. Refresh and try again."
 msgstr "This Project membership changed. Refresh and try again."
 

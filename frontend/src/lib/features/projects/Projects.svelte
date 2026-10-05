@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { Dialog, Portal } from '@skeletonlabs/skeleton-svelte';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
+	import { ApiError } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import Badge from '#lib/design/Badge.svelte';
 	import Button from '#lib/design/Button.svelte';
@@ -97,6 +98,12 @@
 			await refresh();
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Unable to join Project'));
+			if (
+				reason instanceof ApiError &&
+				['project_lifecycle_error', 'project_member_conflict'].includes(reason.code)
+			) {
+				await refresh();
+			}
 		} finally {
 			busy = false;
 		}

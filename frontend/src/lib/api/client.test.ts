@@ -374,7 +374,7 @@ describe('structured API errors', () => {
 		logged.mockRestore();
 	});
 
-	it('signals a scoped conflict without affecting another Workspace', async () => {
+	it('signals a Workspace lifecycle conflict without affecting another Workspace', async () => {
 		const conflict = vi.fn();
 		const unregister = onWorkspaceConflict(conflict);
 		const fetcher = (async () => {
@@ -393,6 +393,41 @@ describe('structured API errors', () => {
 		expect(conflict).toHaveBeenCalledWith('workspace-1');
 		unregister();
 	});
+	it.each([
+		'version_conflict',
+		'project_lifecycle_error',
+		'project_member_conflict',
+		'tag_conflict',
+		'document_not_ready',
+		'import_batch_conflict'
+	])('leaves %s to the resource surface without refreshing the Workspace', async (code) => {
+		const conflict = vi.fn();
+		const unregister = onWorkspaceConflict(conflict);
+		const fetcher = (async () => {
+			const response = new Response(JSON.stringify({ code, message: 'conflict' }), {
+				status: 409,
+				headers: { 'Content-Type': 'application/json' }
+			});
+			Object.defineProperty(response, 'url', {
+				value: 'https://quirebase.test/api/v1/workspaces/workspace-1/items/item-1'
+			});
+			return response;
+		}) as typeof fetch;
+		try {
+			await expect(
+				workspaceApi.request(
+					'GET',
+					'/workspaces/{workspace_id}/items/{item_id}',
+					{ params: { path: { item_id: 'item-1' } } },
+					fetcher
+				)
+			).rejects.toMatchObject({ status: 409, code });
+			expect(conflict).not.toHaveBeenCalled();
+		} finally {
+			unregister();
+		}
+	});
+
 	it('signals Workspace membership loss so the URL owner can recover context', async () => {
 		const unavailable = vi.fn();
 		const unregister = onWorkspaceUnavailable(unavailable);

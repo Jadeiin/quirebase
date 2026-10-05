@@ -1,5 +1,5 @@
 import { mutationOptions, type QueryClient } from '@tanstack/svelte-query';
-import { createWorkspaceApi } from '#lib/api/client.js';
+import { ApiError, createWorkspaceApi } from '#lib/api/client.js';
 import { invalidateLibrary, invalidateProject } from '#lib/query/invalidation.js';
 import type { ExportPreferences } from '#lib/export-preferences.js';
 import { workspaceKeys } from '#lib/workspaces/keys.js';
@@ -126,6 +126,15 @@ export function libraryBulkMutationOptions(workspaceId: string, queryClient: Que
 		},
 		onSuccess: async (_result, mutation) => {
 			mutation.afterMutation?.();
+		},
+		onError: async (reason, { input }) => {
+			if (
+				input.action === 'add_project' &&
+				reason instanceof ApiError &&
+				reason.code === 'project_lifecycle_error'
+			) {
+				await invalidateProject(queryClient, workspaceId);
+			}
 		}
 	});
 }

@@ -6,7 +6,7 @@ export type WorkspaceContext = {
 	workspaceId: string;
 	api: ReturnType<typeof createWorkspaceApi>;
 	readonly view: WorkspaceView | undefined;
-	readonly role: string | undefined;
+	readonly role: WorkspaceView['current_role'] | undefined;
 	can: (action: AuthorizationAction) => boolean;
 	canVariant: (action: AuthorizationAction, relation: string) => boolean;
 };
@@ -26,7 +26,9 @@ export function workspaceCanVariant(
 	return canVariant(view?.authorization, action, relation);
 }
 
-export function workspaceRole(view: WorkspaceView | undefined): string | undefined {
+export function workspaceRole(
+	view: WorkspaceView | undefined
+): WorkspaceView['current_role'] | undefined {
 	return view?.current_role;
 }
 

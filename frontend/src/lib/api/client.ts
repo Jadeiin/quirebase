@@ -219,7 +219,7 @@ function responseError(response: Response, payload: unknown): ApiError {
 		for (const handler of workspaceContextRequiredHandlers) handler(diagnostic);
 	}
 	const workspaceId = response.url.match(/\/api\/v1\/workspaces\/([^/]+)/)?.[1];
-	if (error.status === 409 && workspaceId) {
+	if (error.code === 'workspace_lifecycle_error' && workspaceId) {
 		for (const handler of workspaceConflictHandlers) handler(decodeURIComponent(workspaceId));
 	}
 	if (error.code === 'workspace_membership_required' || error.code === 'workspace_unavailable') {

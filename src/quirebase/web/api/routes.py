@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from quirebase.core.errors import ResourceUnavailable, WorkspaceContextRequired
 from quirebase.web.api.account import router as account_router
 from quirebase.web.api.admin import router as admin_router
+from quirebase.web.api.auth import http_api_invocation
 from quirebase.web.api.dependencies import ApiUser
 from quirebase.web.api.session import router as session_router
 from quirebase.web.api.workspace_routes import router as workspace_api_router
@@ -36,6 +37,7 @@ CAPABILITY_ROUTERS = (
 
 router = APIRouter(
     prefix="/api/v1",
+    dependencies=[Depends(http_api_invocation)],
     generate_unique_id_function=generate_operation_id,
 )
 for capability_router in CAPABILITY_ROUTERS:

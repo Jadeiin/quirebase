@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
+	import { ApiError } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import {
 		can as isAllowed,
@@ -78,7 +79,14 @@
 			return true;
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Project action failed'));
-			await detail.refetch();
+			if (
+				reason instanceof ApiError &&
+				['project_lifecycle_error', 'project_member_conflict'].includes(reason.code)
+			) {
+				await invalidateProject(queryClient, workspaceId);
+			} else {
+				await detail.refetch();
+			}
 			return false;
 		} finally {
 			busy = false;

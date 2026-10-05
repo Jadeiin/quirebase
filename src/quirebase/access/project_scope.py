@@ -13,7 +13,7 @@ from quirebase.access.context import (
 )
 from quirebase.access.scope import workspace_select
 from quirebase.access.workspace_policy import ResourceAction, action_allowed, action_spec
-from quirebase.core.errors import ResourceUnavailable, WorkspaceLifecycleError
+from quirebase.core.errors import ProjectLifecycleError, ResourceUnavailable
 from quirebase.models import Project, ProjectMember, ProjectParticipation, ProjectState, User
 
 if TYPE_CHECKING:
@@ -107,7 +107,7 @@ async def require_project_visibility(
     if not discoverable:
         raise ResourceUnavailable("Project not found")
     if write and project.state is not ProjectState.active:
-        raise WorkspaceLifecycleError("Project is read-only")
+        raise ProjectLifecycleError("Project is read-only")
     return ProjectContext(ctx, project)
 
 
@@ -149,5 +149,5 @@ async def require_project_context(
     )
     require_action(workspace, operation, relation=relation)
     if mutating and project.state is not ProjectState.active:
-        raise WorkspaceLifecycleError("Project is read-only")
+        raise ProjectLifecycleError("Project is read-only")
     return project_context

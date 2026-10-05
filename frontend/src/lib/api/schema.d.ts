@@ -2344,8 +2344,7 @@ export interface components {
 			name: string;
 			/** Owner Id */
 			owner_id: string;
-			/** State */
-			state: string;
+			state: components['schemas']['WorkspaceState'];
 			/** Governance Suspended At */
 			governance_suspended_at?: string | null;
 			/** Governance Suspended By */
@@ -3714,12 +3713,8 @@ export interface components {
 		ProjectCreateRequest: {
 			/** Name */
 			name: string;
-			/**
-			 * Participation
-			 * @default workspace
-			 * @enum {string}
-			 */
-			participation: 'workspace' | 'open' | 'managed';
+			/** @default workspace */
+			participation: components['schemas']['ProjectParticipation'];
 			/**
 			 * Description
 			 * @default
@@ -3744,13 +3739,8 @@ export interface components {
 			name: string;
 			/** Item Count */
 			item_count: number;
-			/** State */
-			state: string;
-			/**
-			 * Participation
-			 * @enum {string}
-			 */
-			participation: 'workspace' | 'open' | 'managed';
+			state: components['schemas']['ProjectState'];
+			participation: components['schemas']['ProjectParticipation'];
 			/** Is Member */
 			is_member: boolean;
 			/**
@@ -3776,26 +3766,28 @@ export interface components {
 			/** Username */
 			username: string;
 		};
+		/**
+		 * ProjectParticipation
+		 * @enum {string}
+		 */
+		ProjectParticipation: 'workspace' | 'open' | 'managed';
 		/** ProjectParticipationRequest */
 		ProjectParticipationRequest: {
-			/**
-			 * Participation
-			 * @enum {string}
-			 */
-			participation: 'workspace' | 'open' | 'managed';
+			participation: components['schemas']['ProjectParticipation'];
 		};
 		/** ProjectSettingsRequest */
 		ProjectSettingsRequest: {
 			/** Name */
 			name: string;
-			/**
-			 * Participation
-			 * @enum {string}
-			 */
-			participation: 'workspace' | 'open' | 'managed';
+			participation: components['schemas']['ProjectParticipation'];
 			/** Description */
 			description: string;
 		};
+		/**
+		 * ProjectState
+		 * @enum {string}
+		 */
+		ProjectState: 'active' | 'archived' | 'deleted';
 		/** ProjectSummaryView */
 		ProjectSummaryView: {
 			/** Id */
@@ -3804,13 +3796,8 @@ export interface components {
 			name: string;
 			/** Item Count */
 			item_count: number;
-			/** State */
-			state: string;
-			/**
-			 * Participation
-			 * @enum {string}
-			 */
-			participation: 'workspace' | 'open' | 'managed';
+			state: components['schemas']['ProjectState'];
+			participation: components['schemas']['ProjectParticipation'];
 			/** Is Member */
 			is_member: boolean;
 			/**
@@ -4232,10 +4219,8 @@ export interface components {
 			user_id: string;
 			/** Username */
 			username: string;
-			/** Role */
-			role: string;
-			/** State */
-			state: string;
+			role: components['schemas']['WorkspaceRole'];
+			state: components['schemas']['WorkspaceMemberState'];
 			/**
 			 * Joined At
 			 * Format: date-time
@@ -4256,8 +4241,7 @@ export interface components {
 			user_id: string;
 			/** Username */
 			username: string;
-			/** Role */
-			role: string;
+			role: components['schemas']['WorkspaceInvitationRole'];
 			/**
 			 * Expires At
 			 * Format: date-time
@@ -4270,8 +4254,7 @@ export interface components {
 		WorkspaceInvitationDetailsView: {
 			/** Username */
 			username: string;
-			/** Role */
-			role: string;
+			role: components['schemas']['WorkspaceInvitationRole'];
 			/** Workspace Name */
 			workspace_name: string;
 			/**
@@ -4302,8 +4285,7 @@ export interface components {
 			user_id: string;
 			/** Username */
 			username: string;
-			/** Role */
-			role: string;
+			role: components['schemas']['WorkspaceInvitationRole'];
 			/** Invited By */
 			invited_by: string;
 			/**
@@ -4323,9 +4305,18 @@ export interface components {
 			user_id: string;
 			/** Username */
 			username: string;
-			/** Role */
-			role: string;
+			role: components['schemas']['WorkspaceRole'];
 		};
+		/**
+		 * WorkspaceMemberState
+		 * @enum {string}
+		 */
+		WorkspaceMemberState: 'active' | 'suspended';
+		/**
+		 * WorkspaceRole
+		 * @enum {string}
+		 */
+		WorkspaceRole: 'owner' | 'admin' | 'editor' | 'reviewer' | 'viewer';
 		/** WorkspaceRoleRequest */
 		WorkspaceRoleRequest: {
 			/**
@@ -4334,6 +4325,11 @@ export interface components {
 			 */
 			role: 'admin' | 'editor' | 'reviewer' | 'viewer';
 		};
+		/**
+		 * WorkspaceState
+		 * @enum {string}
+		 */
+		WorkspaceState: 'active' | 'archived' | 'deleted';
 		/** WorkspaceUpdateRequest */
 		WorkspaceUpdateRequest: {
 			/** Name */
@@ -4347,10 +4343,8 @@ export interface components {
 			name: string;
 			/** Owner Id */
 			owner_id: string;
-			/** State */
-			state: string;
-			/** Current Role */
-			current_role: string;
+			state: components['schemas']['WorkspaceState'];
+			current_role: components['schemas']['WorkspaceRole'];
 			/** Governance Suspended */
 			governance_suspended: boolean;
 			authorization: components['schemas']['WorkspaceAuthorizationView'];

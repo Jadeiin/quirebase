@@ -19,7 +19,7 @@ from quirebase.access import (
     workspace_select,
 )
 from quirebase.audit import record_event
-from quirebase.core.errors import ResourceUnavailable, ValidationFailure, WorkspaceLifecycleError
+from quirebase.core.errors import ProjectLifecycleError, ResourceUnavailable, ValidationFailure
 from quirebase.documents import delete_project_item_annotations
 from quirebase.models import (
     Item,
@@ -222,7 +222,7 @@ async def add_item_to_project(
     context = await require_project_visibility(db, workspace, project)
     require_action(workspace, ResourceAction.project_item_manage)
     if project.state is not ProjectState.active:
-        raise WorkspaceLifecycleError("Project is read-only")
+        raise ProjectLifecycleError("Project is read-only")
     item = await db.scalar(
         select(Item).where(Item.id == item_id, Item.workspace_id == workspace_id)
     )
@@ -266,7 +266,7 @@ async def remove_item_from_project(
     context = await require_project_visibility(db, workspace, project)
     require_action(workspace, ResourceAction.project_item_manage)
     if project.state is not ProjectState.active:
-        raise WorkspaceLifecycleError("Project is read-only")
+        raise ProjectLifecycleError("Project is read-only")
     project_item = await db.scalar(
         select(ProjectItem)
         .where(
@@ -302,7 +302,7 @@ async def add_items_to_project(
     await require_project_visibility(db, workspace, project)
     require_action(workspace, ResourceAction.project_item_manage)
     if project.state is not ProjectState.active:
-        raise WorkspaceLifecycleError("Project is read-only")
+        raise ProjectLifecycleError("Project is read-only")
     ids = tuple(sorted(dict.fromkeys(item_ids)))
     if not ids:
         return 0

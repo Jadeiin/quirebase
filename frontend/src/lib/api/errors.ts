@@ -13,6 +13,7 @@ const messages: Record<string, MessageKey> = {
 	workspace_context_required: msg('Refresh the page to restore Workspace context.'),
 	workspace_membership_required: msg('You no longer have access to this Workspace.'),
 	workspace_lifecycle_error: msg('This Workspace is read only in its current state.'),
+	project_lifecycle_error: msg('This Project is read only in its current state.'),
 	document_not_ready: msg('This Document is not ready yet.'),
 	import_batch_conflict: msg('This Import Batch cannot be changed in its current state.'),
 	unsupported_media_type: msg('This file type is not supported.'),

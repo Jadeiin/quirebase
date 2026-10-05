@@ -66,8 +66,8 @@ def _workspace_view(workspace, member, *, owner_id: str) -> WorkspaceView:
         id=workspace.id,
         name=workspace.name,
         owner_id=owner_id,
-        state=workspace.state.value,
-        current_role=member.role.value,
+        state=workspace.state,
+        current_role=member.role,
         governance_suspended=workspace.governance_suspended_at is not None,
         authorization=authorization_view(projection),
     )
@@ -146,7 +146,7 @@ async def get_workspace_members(
         WorkspaceMemberDirectoryView(
             user_id=member.user_id,
             username=usernames[member.user_id],
-            role=member.role.value,
+            role=member.role,
         )
         for member in members
     ]
@@ -163,8 +163,8 @@ async def get_workspace_governance_members(
             membership_id=member.id,
             user_id=member.user_id,
             username=usernames[member.user_id],
-            role=member.role.value,
-            state=member.state.value,
+            role=member.role,
+            state=member.state,
             joined_at=member.created_at,
             authorization=authorization_view(workspace_member_decisions(context, member)),
         )
@@ -195,7 +195,7 @@ async def create_workspace_invitation(
         id=invitation.id,
         user_id=invitation.user_id,
         username=data.username.strip(),
-        role=invitation.role.value,
+        role=invitation.role,
         expires_at=invitation.expires_at,
         token=raw,
     )
@@ -215,7 +215,7 @@ async def get_workspace_invitations(
             id=invitation.id,
             user_id=invitation.user_id,
             username=usernames[invitation.user_id],
-            role=invitation.role.value,
+            role=invitation.role,
             invited_by=invitation.invited_by,
             expires_at=invitation.expires_at,
             created_at=invitation.created_at,
@@ -246,7 +246,7 @@ async def workspace_invitation_details(token: str, db: Database) -> WorkspaceInv
         raise ResourceNotFound("Workspace invitation not found or expired")
     return WorkspaceInvitationDetailsView(
         username=target.username,
-        role=invitation.role.value,
+        role=invitation.role,
         workspace_name=workspace.name,
         expires_at=invitation.expires_at,
     )

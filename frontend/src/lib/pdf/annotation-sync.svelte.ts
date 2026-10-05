@@ -25,7 +25,7 @@ export type AnnotationSyncStatus =
 	| { state: 'saving-reply' }
 	| { state: 'saving-annotation' }
 	| { state: 'saved' }
-	| { state: 'sync-failed' }
+	| { state: 'sync-failed'; reason: unknown }
 	| { state: 'load-failed' };
 
 type WritableAnnotationEvent = Exclude<AnnotationEvent, { type: 'loaded' }>;
@@ -298,9 +298,9 @@ export function createAnnotationSync(options: AnnotationSyncOptions) {
 				scope.purgeAnnotation(existing.page_index, id);
 			}
 			options.onStatus({ state: 'saved' });
-		} catch {
+		} catch (reason) {
 			if (event.type === 'create') scope.purgeAnnotation(event.pageIndex, id);
-			options.onStatus({ state: 'sync-failed' });
+			options.onStatus({ state: 'sync-failed', reason });
 			await load(currentSources).catch(() => undefined);
 		}
 	}

@@ -13,7 +13,7 @@ from test_http import authenticated_async_client
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.crypto import hash_password
-from quirebase.core.errors import PermissionDenied, WorkspaceLifecycleError
+from quirebase.core.errors import PermissionDenied, ProjectLifecycleError
 from quirebase.core.storage import ObjectMetadata, ObjectResponse
 from quirebase.documents import create_item_document_bundle
 from quirebase.library import apply_bulk_item_action, download_selected_item_documents
@@ -33,6 +33,7 @@ from quirebase.models import (
     WorkspaceRole,
 )
 from quirebase.projects import set_project_state
+from quirebase.workspaces import archive_workspace
 
 
 @pytest.mark.anyio
@@ -234,7 +235,7 @@ async def test_bulk_action_rejects_archived_project_assignment(
     )
     await db.commit()
 
-    with pytest.raises(WorkspaceLifecycleError, match="read-only"):
+    with pytest.raises(ProjectLifecycleError, match="read-only"):
         await apply_bulk_item_action(
             db,
             owner,
@@ -254,6 +255,15 @@ async def test_bulk_action_rejects_archived_project_assignment(
         )
         is None
     )
+    path = f"/api/v1/workspaces/{item.workspace_id}/projects/{target_project.id}/items/{item.id}"
+    response = await client.put(path)
+    assert response.status_code == 409
+    assert response.json()["code"] == "project_lifecycle_error"
+
+    await archive_workspace(db, owner, item.workspace_id)
+    response = await client.put(path)
+    assert response.status_code == 409
+    assert response.json()["code"] == "workspace_lifecycle_error"
     await client.aclose()
 
 
@@ -306,7 +316,7 @@ async def test_bulk_action_revalidates_stale_project_state(async_db, async_sessi
                 ProjectState.archived,
             )
 
-        with pytest.raises(WorkspaceLifecycleError, match="Project is read-only"):
+        with pytest.raises(ProjectLifecycleError, match="Project is read-only"):
             await apply_bulk_item_action(
                 bulk_session,
                 bulk_owner,

@@ -1,6 +1,6 @@
 import { mutationOptions, type QueryClient } from '@tanstack/svelte-query';
-import { createWorkspaceApi } from '#lib/api/client.js';
-import { invalidateItemOrganize } from '#lib/query/invalidation.js';
+import { ApiError, createWorkspaceApi } from '#lib/api/client.js';
+import { invalidateItemOrganize, invalidateProject } from '#lib/query/invalidation.js';
 import { workspaceKeys } from '#lib/workspaces/keys.js';
 import type { OrganizeView } from '../types';
 
@@ -44,7 +44,15 @@ export function projectAssignmentMutationOptions(
 				: api.request('PUT', '/workspaces/{workspace_id}/projects/{project_id}/items/{item_id}', {
 						params: { path: { project_id: project.id, item_id: itemId } }
 					}),
-		onSuccess: () => invalidateItemOrganize(queryClient, workspaceId, itemId)
+		onSuccess: () => invalidateItemOrganize(queryClient, workspaceId, itemId),
+		onError: async (reason) => {
+			if (reason instanceof ApiError && reason.code === 'project_lifecycle_error') {
+				await Promise.all([
+					invalidateItemOrganize(queryClient, workspaceId, itemId),
+					invalidateProject(queryClient, workspaceId)
+				]);
+			}
+		}
 	});
 }
 

@@ -89,3 +89,82 @@ test('Tag page clamps after deleting the last page of Tags', async ({ page }) =>
 	await expect(tagRow('Tag 20')).toBeVisible();
 	await expect(page.getByText('Page 2 of 2')).toHaveCount(0);
 });
+
+for (const concurrentChange of ['created', 'renamed']) {
+	test(`Tag conflict refreshes Tools and merge targets after another member ${concurrentChange} a Tag`, async ({
+		page
+	}) => {
+		await mockSession(page);
+		const workspaceReads: string[] = [];
+		page.on('request', (request) => {
+			const path = new URL(request.url()).pathname;
+			if (
+				request.method() === 'GET' &&
+				(path === '/api/v1/workspaces' || path === '/api/v1/workspaces/workspace-1')
+			) {
+				workspaceReads.push(path);
+			}
+		});
+		let tagReads = 0;
+		let duplicateReads = 0;
+		let styleReads = 0;
+		const source = {
+			id: 'tag-1',
+			name: 'Methods',
+			accessible_item_count: 3,
+			authorization: { allowed: ['tag.manage'] }
+		};
+		const target = { ...source, id: 'tag-2', name: 'Previous name' };
+		let tags = concurrentChange === 'created' ? [source] : [source, target];
+		await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => {
+			tagReads++;
+			return route.fulfill({ json: tags });
+		});
+		await page.route('**/api/v1/workspaces/workspace-1/tags/tag-1', (route) => {
+			expect(route.request().method()).toBe('PATCH');
+			expect(route.request().postDataJSON()).toEqual({ name: 'Results' });
+			tags = [source, { ...target, name: 'Results' }];
+			return route.fulfill({
+				status: 409,
+				json: { code: 'tag_conflict', message: 'name already exists' }
+			});
+		});
+		await page.route('**/api/v1/workspaces/workspace-1/duplicates*', (route) => {
+			duplicateReads++;
+			return route.fulfill({ json: { groups: [] } });
+		});
+		await page.route('**/api/v1/workspaces/workspace-1/citation-styles*', (route) => {
+			styleReads++;
+			return route.fulfill({ json: { styles: [] } });
+		});
+
+		await page.goto('/workspace/workspace-1/tools');
+		await page.getByRole('button', { name: 'Check for duplicates' }).click();
+		await expect(page.getByText('No duplicate groups found.')).toBeVisible();
+		await page.getByRole('tab', { name: 'Manage Tags' }).click();
+		const sourceSelect = page.getByRole('combobox', { name: 'Source Tag', exact: true });
+		const targetSelect = page.getByRole('combobox', { name: 'Target Tag', exact: true });
+		await sourceSelect.selectOption('tag-1');
+		if (concurrentChange === 'renamed') await targetSelect.selectOption('tag-2');
+		const initialWorkspaceReads = [...workspaceReads];
+		const initialStyleReads = styleReads;
+		const initialDuplicateReads = duplicateReads;
+		await page.getByRole('button', { name: 'Rename', exact: true }).first().click();
+		const dialog = page.getByRole('dialog', { name: 'Rename Tag', exact: true });
+		await dialog.getByRole('textbox', { name: 'New Tag name' }).fill('Results');
+		await dialog.getByRole('button', { name: 'Rename', exact: true }).click();
+
+		await expect(page.getByText('This Tag conflicts with an existing Tag.')).toBeVisible();
+		await expect(page.locator('strong').filter({ hasText: /^Results$/ })).toBeVisible();
+		await expect(page.locator('strong').filter({ hasText: /^Methods$/ })).toBeVisible();
+		await expect(page.locator('strong').filter({ hasText: /^Previous name$/ })).toHaveCount(0);
+		await expect(targetSelect.locator('option[value="tag-2"]')).toHaveText('Results');
+		await expect(sourceSelect).toHaveValue('tag-1');
+		await targetSelect.selectOption('tag-2');
+		await expect(page.getByRole('button', { name: 'Merge Tags', exact: true })).toBeEnabled();
+		expect(tagReads).toBe(2);
+		expect(workspaceReads).toEqual(initialWorkspaceReads);
+		expect(styleReads).toBe(initialStyleReads);
+		expect(duplicateReads).toBe(initialDuplicateReads);
+	});
+}

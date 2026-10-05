@@ -5,6 +5,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from quirebase.models import WorkspaceState
+
 
 class AdminUserCreateRequest(BaseModel):
     username: str = Field(min_length=1, max_length=120)
@@ -24,7 +26,7 @@ class AdminWorkspaceView(BaseModel):
     id: str
     name: str
     owner_id: str
-    state: str
+    state: WorkspaceState
     governance_suspended_at: datetime | None = None
     governance_suspended_by: str | None = None
 

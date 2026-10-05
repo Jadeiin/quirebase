@@ -37,6 +37,10 @@ class WorkspaceLifecycleError(DomainError):
     pass
 
 
+class ProjectLifecycleError(DomainError):
+    pass
+
+
 class ValidationFailure(DomainError):
     pass
 

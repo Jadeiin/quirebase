@@ -2,6 +2,7 @@
 	import { resolve } from '$app/paths';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { Tabs } from '@skeletonlabs/skeleton-svelte';
+	import { ApiError } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import { can, type AuthorizationDecisionSet } from '#lib/authorization/can.js';
 	import ConfirmDialog from '#lib/design/ConfirmDialog.svelte';
@@ -82,6 +83,9 @@
 			return true;
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Tag action failed'));
+			if (reason instanceof ApiError && reason.code === 'tag_conflict') {
+				await queryClient.invalidateQueries({ queryKey: tagKeys.all(workspaceId) });
+			}
 			return false;
 		} finally {
 			busy = false;

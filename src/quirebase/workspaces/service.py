@@ -1050,7 +1050,6 @@ async def suspend_workspace_governance(
         workspace_id=workspace.id,
         authorization_role=current_actor.role,
         authorization_resource_action=SystemAction.workspaces_governance_suspend.value,
-        source="http",
     )
     await db.commit()
     return workspace
@@ -1081,7 +1080,6 @@ async def recover_workspace_governance(
         workspace_id=workspace.id,
         authorization_role=current_actor.role,
         authorization_resource_action=SystemAction.workspaces_governance_recover.value,
-        source="http",
     )
     await db.commit()
     return workspace
@@ -1131,7 +1129,6 @@ async def read_workspace_items_break_glass(
         authorization_role=current_actor.role,
         authorization_resource_action=SystemAction.workspaces_break_glass_read.value,
         result="succeeded",
-        source="break_glass",
     )
     await db.commit()
     return items

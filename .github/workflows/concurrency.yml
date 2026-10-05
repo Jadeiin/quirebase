@@ -37,6 +37,7 @@ jobs:
       - name: Replay the invariant matrix on an isolated database
         run: >-
           uv run pytest -q tests/test_postgres_concurrency.py tests/test_concurrency_harness.py
+          tests/test_project_visibility.py
           --concurrency-report-dir=concurrency-results --junitxml=concurrency-results/junit.xml
       - name: Preserve each round, including failures
         if: always()

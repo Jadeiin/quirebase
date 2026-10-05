@@ -65,7 +65,8 @@ rules.
 Workspace is the only persistent resource role axis. The roles are `owner`, `admin`, `editor`,
 `reviewer` and `viewer`; business code asks the Access Module for one decision and never branches
 directly on a role string. Casbin is the sole policy evaluator for both Workspace and System
-authorization. Every decision has the same shape:
+authorization; domain participation, lineage and lifecycle invariants remain explicit domain rules.
+Every authorization decision has the same shape:
 
 ```text
 subject + resource + action + lifecycle + relation -> allow | deny
@@ -263,6 +264,19 @@ not exposed as an ordinary business state.
 Archived Workspace governance member and invitation lists remain readable to owners/admins;
 their mutations remain disabled.
 
+An instance administrator may impose an administrative read-only freeze through
+`governance_suspended_at` and `governance_suspended_by`. This is an overlay on Workspace state,
+not a tenancy shutdown or a WorkspaceMember suspension. Active members retain content reads,
+downloads and exports, while all Workspace mutations, ownership transfers, member and invitation
+governance reads, restore and permanent deletion are blocked. Memberships and Project participation
+are preserved. Only an instance administrator may recover the Workspace by clearing the overlay;
+recovery preserves its underlying active/archived state and archive retention timestamp. An
+administrator gains no implicit content access by freezing or recovering a Workspace.
+
+Archive is member-controlled preservation with owner/admin governance reads and restoration;
+the administrative freeze reserves recovery to instance governance. Suspending an individual
+WorkspaceMember instead removes that member's effective content access.
+
 An archived Project is readable but rejects ProjectItem, Annotation, Discussion, Notes and
 membership mutations. Project archive/restore is controlled by separate `project.archive` and
 `project.restore` decisions and does not archive or remove its Workspace Items. Permanent Item
@@ -284,6 +298,11 @@ bibliographic metadata cache and workflow infrastructure. Audit Events are insta
 but Workspace resource events carry `workspace_id` and optional `project_id` context. Audit metadata
 records action, target IDs, the canonical authorizing resource-action key, source and time; it does
 not copy full Item or Annotation content.
+
+Inbound adapters bind Audit provenance for the invocation. HTTP includes both Login Session and
+Bearer requests; MCP preserves its protocol and operation through the HTTP adapter. Domain services
+do not select a transport source. Break-glass remains identified by its action and reason, while
+`source` records the invoking protocol; calls without an adapter context use `internal`.
 
 ### API, Agent and durable workflow context
 

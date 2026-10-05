@@ -7,7 +7,10 @@ import {
 	workspaceRole
 } from '#lib/workspaces/context.svelte.js';
 
-const view = (role: string, allowed: AuthorizationAction[]): WorkspaceView => ({
+const view = (
+	role: WorkspaceView['current_role'],
+	allowed: AuthorizationAction[]
+): WorkspaceView => ({
 	id: 'workspace-1',
 	name: 'Research',
 	owner_id: 'user-1',
@@ -24,7 +27,7 @@ describe('workspaceCan', () => {
 		expect(workspaceCan(undefined, 'workspace.read')).toBe(false);
 	});
 	it('respects the archived and suspended server projection even for an owner', () => {
-		const archived = {
+		const archived: WorkspaceView = {
 			...view('owner', ['workspace.read', 'workspace.archive']),
 			state: 'archived'
 		};

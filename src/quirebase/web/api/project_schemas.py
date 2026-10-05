@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, Field
 
+from quirebase.models import ProjectParticipation, ProjectState
 from quirebase.web.api.common import WorkspaceAuthorizationView
 from quirebase.web.api.library_schemas import ItemSearchView, item_search_view
 
@@ -12,8 +13,8 @@ class ProjectSummaryView(BaseModel):
     id: str
     name: str
     item_count: int
-    state: str
-    participation: Literal["workspace", "open", "managed"]
+    state: ProjectState
+    participation: ProjectParticipation
     is_member: bool
     description: str = ""
     authorization: WorkspaceAuthorizationView
@@ -38,8 +39,8 @@ def project_detail_view(
         id=workspace.project.id,
         name=workspace.project.name,
         item_count=len(workspace.items),
-        state=workspace.project.state.value,
-        participation=workspace.project.participation.value,
+        state=workspace.project.state,
+        participation=workspace.project.participation,
         is_member=workspace.is_member,
         description=workspace.project.description,
         authorization=authorization,
@@ -53,18 +54,18 @@ def project_detail_view(
 
 class ProjectCreateRequest(BaseModel):
     name: str = Field(max_length=240)
-    participation: Literal["workspace", "open", "managed"] = "workspace"
+    participation: ProjectParticipation = ProjectParticipation.workspace
     description: str = Field(default="", max_length=2000)
 
 
 class ProjectSettingsRequest(BaseModel):
     name: str = Field(max_length=240)
-    participation: Literal["workspace", "open", "managed"]
+    participation: ProjectParticipation
     description: str = Field(max_length=2000)
 
 
 class ProjectParticipationRequest(BaseModel):
-    participation: Literal["workspace", "open", "managed"]
+    participation: ProjectParticipation
 
 
 class ProjectDescriptionRequest(BaseModel):

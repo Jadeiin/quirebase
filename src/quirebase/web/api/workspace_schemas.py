@@ -5,7 +5,12 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from quirebase.models import WorkspaceInvitationRole
+from quirebase.models import (
+    WorkspaceInvitationRole,
+    WorkspaceMemberState,
+    WorkspaceRole,
+    WorkspaceState,
+)
 from quirebase.web.api.common import WorkspaceAuthorizationView
 
 
@@ -27,8 +32,8 @@ class WorkspaceView(BaseModel):
     id: str
     name: str
     owner_id: str
-    state: str
-    current_role: str
+    state: WorkspaceState
+    current_role: WorkspaceRole
     governance_suspended: bool
     authorization: WorkspaceAuthorizationView
 
@@ -36,15 +41,15 @@ class WorkspaceView(BaseModel):
 class WorkspaceMemberDirectoryView(BaseModel):
     user_id: str
     username: str
-    role: str
+    role: WorkspaceRole
 
 
 class WorkspaceGovernanceMemberView(BaseModel):
     membership_id: str
     user_id: str
     username: str
-    role: str
-    state: str
+    role: WorkspaceRole
+    state: WorkspaceMemberState
     joined_at: datetime
     authorization: WorkspaceAuthorizationView
 
@@ -63,7 +68,7 @@ class WorkspaceInvitationCreatedView(BaseModel):
     id: str
     user_id: str
     username: str
-    role: str
+    role: WorkspaceInvitationRole
     expires_at: datetime
     token: str
 
@@ -72,7 +77,7 @@ class WorkspaceInvitationView(BaseModel):
     id: str
     user_id: str
     username: str
-    role: str
+    role: WorkspaceInvitationRole
     invited_by: str
     expires_at: datetime
     created_at: datetime
@@ -80,7 +85,7 @@ class WorkspaceInvitationView(BaseModel):
 
 class WorkspaceInvitationDetailsView(BaseModel):
     username: str
-    role: str
+    role: WorkspaceInvitationRole
     workspace_name: str
     expires_at: datetime
 

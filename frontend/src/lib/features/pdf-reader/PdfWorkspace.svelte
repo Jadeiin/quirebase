@@ -3,7 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { Menu, Portal } from '@skeletonlabs/skeleton-svelte';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { isDownloadCancelled } from '#lib/api/client.js';
+	import { ApiError, isDownloadCancelled } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import Icon from '#lib/design/Icon.svelte';
 	import RichText from '#lib/design/RichText.svelte';
@@ -276,9 +276,12 @@
 					pageGeometry={viewer.data.revision.page_geometry}
 					{sources}
 					{writeProject}
-					onstatus={(text, failed) => {
+					onstatus={(text, failed, reason) => {
 						annotationStatus = text;
 						annotationSyncFailed = failed;
+						if (reason instanceof ApiError && reason.code === 'project_lifecycle_error') {
+							void viewer.refetch();
+						}
 					}}
 				/>{/key}{/if}
 	</div>

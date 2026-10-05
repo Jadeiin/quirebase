@@ -287,7 +287,7 @@ async def admin_workspaces(user: ApiUser, db: Database) -> list[AdminWorkspaceVi
             id=workspace.id,
             name=workspace.name,
             owner_id=owner_ids[workspace.id],
-            state=workspace.state.value,
+            state=workspace.state,
             governance_suspended_at=workspace.governance_suspended_at,
             governance_suspended_by=workspace.governance_suspended_by,
         )

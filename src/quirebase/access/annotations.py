@@ -15,6 +15,7 @@ from quirebase.access.project_scope import require_project_context, visible_proj
 from quirebase.access.workspace_policy import ResourceAction, action_allowed
 from quirebase.core.errors import (
     PermissionDenied,
+    ProjectLifecycleError,
     ResourceUnavailable,
     WorkspaceLifecycleError,
     WorkspaceMembershipRequired,
@@ -131,6 +132,7 @@ async def can_edit_annotation(
         await _require_annotation_action(db, user, workspace_id, annotation, "update")
     except (
         PermissionDenied,
+        ProjectLifecycleError,
         ResourceUnavailable,
         WorkspaceLifecycleError,
         WorkspaceMembershipRequired,
