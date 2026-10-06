@@ -182,7 +182,7 @@ async def copy_item_to_workspace(
             ).all()
         )
     )
-    await require_workspace_action(db, actor, target_workspace_id, ResourceAction.item_copy)
+    await require_workspace_action(db, actor, target_workspace_id, ResourceAction.item_create)
 
     # Release every authorization/read lock before object-store GET/PUT. The
     # copied snapshot is revalidated under short-lived locks immediately before
@@ -243,7 +243,7 @@ async def copy_item_to_workspace(
             db, current_actor, source_workspace_id, ResourceAction.workspace_export
         )
         target_context = await require_workspace_action(
-            db, current_actor, target_workspace_id, ResourceAction.item_copy
+            db, current_actor, target_workspace_id, ResourceAction.item_create
         )
 
         current_source = await db.scalar(
@@ -407,7 +407,7 @@ async def copy_item_to_workspace(
             workspace_id=target_workspace_id,
             target_ids=[item_id],
             authorization_role=target_context.role.value,
-            authorization_resource_action=ResourceAction.item_copy.value,
+            authorization_resource_action=ResourceAction.item_create.value,
         )
         await db.commit()
         return target

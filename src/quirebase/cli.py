@@ -33,8 +33,9 @@ from .models import User
 from .operations import check_objects, create_backup, restore_backup, verify_backup
 from .operations.object_migration import migrate_legacy_objects
 from .operations.workflows import maintenance_schedules
+from .projects import check_project_integrity
 from .search import reindex_all
-from .workspaces import provision_initial_workspace
+from .workspaces import check_workspace_integrity, provision_initial_workspace
 
 app = typer.Typer(help="Quirebase administration")
 
@@ -159,22 +160,27 @@ def revoke_api_token_command(
 
 @app.command("doctor")
 def doctor():
-    async def database_check() -> tuple[str, bool, list[str]]:
+    async def database_check() -> tuple[str, bool, list[str], list[str]]:
         async with engine.connect() as connection:
             await connection.execute(text("SELECT 1"))
             dialect = connection.dialect.name
             has_users = await connection.run_sync(lambda sync: inspect(sync).has_table("users"))
         object_errors: list[str] = []
+        domain_errors: list[str] = []
         if has_users:
             async with AsyncSessionLocal() as db:
                 object_errors = await check_objects(db)
-        return dialect, has_users, object_errors
+                domain_errors = await check_workspace_integrity(db) + await check_project_integrity(
+                    db
+                )
+        return dialect, has_users, object_errors, domain_errors
 
     failures = 0
     has_users = False
     object_errors: list[str] = []
+    domain_errors: list[str] = []
     try:
-        dialect, has_users, object_errors = asyncio.run(database_check())
+        dialect, has_users, object_errors, domain_errors = asyncio.run(database_check())
         typer.echo(f"[ok] database ({dialect})")
     except Exception as error:
         failures += 1
@@ -234,6 +240,12 @@ def doctor():
                 typer.echo(f"[failed] object {object_error}")
         else:
             typer.echo("[ok] object integrity")
+        if domain_errors:
+            failures += len(domain_errors)
+            for domain_error in domain_errors:
+                typer.echo(f"[failed] domain {domain_error}")
+        else:
+            typer.echo("[ok] domain integrity")
     raise typer.Exit(code=1 if failures else 0)
 
 

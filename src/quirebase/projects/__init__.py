@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from quirebase.projects.integrity import check_project_integrity
 from quirebase.projects.lifecycle import (
     delete_project,
     rename_project,
@@ -41,6 +42,7 @@ __all__ = [
     "add_item_to_project",
     "add_items_to_project",
     "add_project_member",
+    "check_project_integrity",
     "create_project",
     "delete_project",
     "get_project",

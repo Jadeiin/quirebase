@@ -145,9 +145,9 @@ def test_policy_decisions_and_system_projection_reuse_immutable_results():
     assert effective_system_actions(SystemRole.administrator) is actions
 
     _enforce_canonical.cache_clear()
-    assert workspace_action_allowed(WorkspaceRole.editor, "item", "copy", WorkspaceState.active)
+    assert workspace_action_allowed(WorkspaceRole.editor, "item", "create", WorkspaceState.active)
     first = _enforce_canonical.cache_info()
-    assert workspace_action_allowed(WorkspaceRole.editor, "item", "copy", "active")
+    assert workspace_action_allowed(WorkspaceRole.editor, "item", "create", "active")
     repeated = _enforce_canonical.cache_info()
     assert repeated.misses == first.misses
     assert repeated.hits == first.hits + 1
@@ -156,8 +156,8 @@ def test_policy_decisions_and_system_projection_reuse_immutable_results():
 def test_relation_policies_cover_project_membership_authorship_and_governance():
     lifecycle = WorkspaceState.active
 
-    assert workspace_action_allowed(WorkspaceRole.editor, "item", "copy", lifecycle)
-    assert not workspace_action_allowed(WorkspaceRole.reviewer, "item", "copy", lifecycle)
+    assert workspace_action_allowed(WorkspaceRole.editor, "item", "create", lifecycle)
+    assert not workspace_action_allowed(WorkspaceRole.reviewer, "item", "create", lifecycle)
     assert not workspace_action_allowed(
         WorkspaceRole.viewer, "project_governance", "read", lifecycle
     )

@@ -11,7 +11,7 @@ from quirebase.access import (
     WorkspaceContext,
     require_action,
     require_system_resource_action,
-    require_workspace_action,
+    require_workspace_membership,
     workspace_member_relation,
 )
 from quirebase.audit import record_event
@@ -69,10 +69,9 @@ async def invite_workspace_member(
     if target is None or not target.active:
         raise ValidationFailure("Workspace invitations require an exact active username")
     await _lock_workspace(db, workspace_id)
-    context = await require_workspace_action(
-        db,
-        actor,
-        workspace_id,
+    context = await require_workspace_membership(db, actor, workspace_id)
+    require_action(
+        context,
         ResourceAction.workspace_invitation_create,
         relation=workspace_member_relation(requested.value),
     )
@@ -291,9 +290,8 @@ async def revoke_workspace_invitation(
     db: AsyncSession, actor: User, workspace_id: str, invitation_id: str
 ) -> None:
     await _lock_workspace(db, workspace_id)
-    context = await require_workspace_action(
-        db, actor, workspace_id, ResourceAction.workspace_invitation_revoke
-    )
+    context = await require_workspace_membership(db, actor, workspace_id)
+    require_action(context, ResourceAction.workspace_invitation_revoke)
     invitation = await db.scalar(
         select(WorkspaceInvitation)
         .where(

@@ -9,7 +9,8 @@ from sqlalchemy import delete, select, text
 
 from quirebase.access import (
     ResourceAction,
-    require_workspace_action,
+    require_action,
+    require_workspace_membership,
 )
 from quirebase.audit import record_event
 from quirebase.core.config import get_settings
@@ -44,9 +45,8 @@ async def update_workspace(
     db: AsyncSession, actor: User, workspace_id: str, name: str
 ) -> Workspace:
     workspace = await _lock_workspace(db, workspace_id)
-    context = await require_workspace_action(
-        db, actor, workspace_id, ResourceAction.workspace_update
-    )
+    context = await require_workspace_membership(db, actor, workspace_id)
+    require_action(context, ResourceAction.workspace_update)
     cleaned = name.strip()
     if not cleaned or len(cleaned) > 240:
         raise ValidationFailure("Workspace name must contain 1 to 240 characters")
@@ -67,9 +67,8 @@ async def update_workspace(
 
 async def archive_workspace(db: AsyncSession, actor: User, workspace_id: str) -> Workspace:
     workspace = await _lock_workspace(db, workspace_id)
-    context = await require_workspace_action(
-        db, actor, workspace_id, ResourceAction.workspace_archive
-    )
+    context = await require_workspace_membership(db, actor, workspace_id)
+    require_action(context, ResourceAction.workspace_archive)
     workspace.state = WorkspaceState.archived
     workspace.archived_at = datetime.now(UTC)
     record_event(
@@ -91,9 +90,8 @@ async def restore_workspace(db: AsyncSession, actor: User, workspace_id: str) ->
     workspace = await _lock_workspace(db, workspace_id)
     if workspace.governance_suspended_at is not None:
         raise WorkspaceLifecycleError("Workspace governance is suspended")
-    context = await require_workspace_action(
-        db, actor, workspace_id, ResourceAction.workspace_restore
-    )
+    context = await require_workspace_membership(db, actor, workspace_id)
+    require_action(context, ResourceAction.workspace_restore)
     workspace.state = WorkspaceState.active
     workspace.archived_at = None
     record_event(
@@ -117,9 +115,8 @@ async def permanently_delete_workspace(
     workspace = await _lock_workspace(db, workspace_id)
     if workspace.governance_suspended_at is not None:
         raise WorkspaceLifecycleError("Workspace governance is suspended")
-    context = await require_workspace_action(
-        db, actor, workspace_id, ResourceAction.workspace_delete
-    )
+    context = await require_workspace_membership(db, actor, workspace_id)
+    require_action(context, ResourceAction.workspace_delete)
     if workspace.state is not WorkspaceState.archived:
         raise ValidationFailure("Workspace must be archived before permanent deletion")
     now = datetime.now(UTC)

@@ -3816,7 +3816,6 @@ export interface components {
 			| 'workspace.archive'
 			| 'workspace.restore'
 			| 'workspace.delete'
-			| 'item.copy'
 			| 'item.create'
 			| 'item.update'
 			| 'item.delete'

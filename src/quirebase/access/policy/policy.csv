@@ -42,7 +42,6 @@ p, workspace:reviewer, project_discussion, delete, active, own
 p, workspace:editor, citation_style, manage, active, any
 p, workspace:editor, file, delete, active, any
 p, workspace:editor, file, manage, active, any
-p, workspace:editor, item, copy, active, any
 p, workspace:editor, item, create, active, any
 p, workspace:editor, item, update, active, any
 p, workspace:editor, project, archive, active, any

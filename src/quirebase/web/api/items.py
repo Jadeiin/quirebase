@@ -66,7 +66,7 @@ async def item_overview(workspace_id: str, item_id: str, context: WorkspaceAcces
                 workspace.state,
                 governance_suspended=workspace.governance_suspended_at is not None,
             ).allowed
-            if ResourceAction.item_copy in target_actions:
+            if ResourceAction.item_create in target_actions:
                 copy_targets.append({"id": workspace.id, "name": workspace.name})
     return {
         "item": item_search_view(view.item),

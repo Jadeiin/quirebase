@@ -310,7 +310,8 @@ rejects Item, file, Tag, Project, membership and shared Discussion mutations. Ow
 restore it. Permanent Workspace deletion is owner-only and requires archive plus a retention
 period (30 days by default). The deletion transaction removes the Workspace root and cascades
 its owned rows; a durable, reference-aware cleanup removes its stored objects. Audit Events keep
-the deleted Workspace ID as historical metadata. `deleted` is an internal cleanup state and is
+the deleted Workspace and Project IDs as historical metadata, without live-resource foreign keys.
+`deleted` is an internal cleanup state and is
 not exposed as an ordinary business state.
 
 Archived Workspace governance member and invitation lists remain readable to owners/admins;
@@ -347,7 +348,7 @@ to these commands. Workspace archive/restore retain their lifecycle-specific cap
 Ordinary relations cannot cross Workspaces. In particular, a ProjectItem, ItemTag or Project
 Annotation must have matching Workspace lineage. Cross-Workspace `copy` and `import` create new
 canonical resources in the destination Workspace and never create live ACL links. Copy requires
-the source `workspace.export` decision and re-checks the destination `item.copy` decision; other
+the source `workspace.export` decision and re-checks the destination `item.create` decision; other
 import flows use `item.create`. Every such operation records actor, source and destination
 Workspace IDs and the resource ID mapping in an Audit Event. A future live-sharing model requires
 a separate decision and explicit share resource.
@@ -397,10 +398,17 @@ is the final boundary against cross-Workspace references.
 
 Partial unique indexes enforce at most one current owner membership per Workspace and at most
 one current membership per Workspace/User pair. Current means `terminated_at IS NULL`, including
-suspended memberships. The database does not enforce the existence or active state of an owner.
+suspended memberships. A row CHECK requires every owner membership to be active and non-terminated;
+the database does not enforce the existence of an owner or the owner's account activity.
 Service transactions preserve exactly one active owner for every surviving Workspace through
 provisioning, atomic ownership transfer and prohibitions on owner suspension, termination and account
-deactivation; `workspace_owner_ids()` validates this invariant on reads. Workspace-local Tag
+deactivation; `workspace_owner_ids()` validates owner membership and account activity on reads in
+the same snapshot as Workspace existence. A concurrently deleted root is omitted, while an invalid
+surviving root is an integrity failure. `doctor` diagnoses missing or invalid owners and Project
+participation drift: Workspace-mode Projects must have no ProjectMember rows, and each explicit
+participant must have a current membership in the same Workspace. Suspended memberships and
+inactive accounts may retain participation for recovery; terminated memberships may not.
+Workspace-local Tag
 uniqueness is enforced by `UNIQUE(workspace_id, normalized_name)`. Projects have no owner invariant.
 The schema must not materialize implicit Workspace-wide participation or require a minimum
 ProjectMember count.

@@ -157,7 +157,6 @@ from quirebase.workspaces import (
     suspend_workspace_member,
     terminate_workspace_member,
     transfer_workspace_ownership,
-    workspace_owner_ids,
 )
 from quirebase.workspaces.workflows import cleanup_deleted_workspace_objects_step
 
@@ -170,7 +169,6 @@ def test_effective_resource_actions_follow_workspace_lifecycle():
     )
 
     assert ResourceAction.item_create in active
-    assert ResourceAction.item_copy in active
     assert ResourceAction.workspace_delete not in active
     assert ResourceAction.project_create not in active
     assert ResourceAction.file_delete in active
@@ -181,7 +179,6 @@ def test_effective_resource_actions_follow_workspace_lifecycle():
     assert ResourceAction.workspace_delete in archived
     assert ResourceAction.project_create not in archived
     assert ResourceAction.item_create not in archived
-    assert ResourceAction.item_copy not in archived
     assert ResourceAction.project_create not in effective_resource_actions(
         WorkspaceRole.editor, WorkspaceState.active
     )
@@ -268,30 +265,6 @@ async def _user(db, username: str) -> User:
     await provision_initial_workspace(db, user)
     await db.commit()
     return user
-
-
-@pytest.mark.anyio
-@pytest.mark.parametrize("owner_change", ["role", "suspend", "terminate", "remove"])
-async def test_workspace_owner_lookup_rejects_missing_owner_for_existing_workspace(
-    async_db, owner_change
-):
-    owner = await _user(async_db, f"missing-owner-{owner_change}")
-    workspace_id = fixture_workspace_id(owner)
-    membership = await async_db.scalar(
-        select(WorkspaceMember).where(WorkspaceMember.workspace_id == workspace_id)
-    )
-    if owner_change == "role":
-        membership.role = WorkspaceRole.editor
-    elif owner_change == "suspend":
-        membership.state = WorkspaceMemberState.suspended
-    elif owner_change == "terminate":
-        membership.terminated_at = datetime.now(UTC)
-    else:
-        await async_db.delete(membership)
-    await async_db.commit()
-
-    with pytest.raises(RuntimeError, match="Workspace owner membership invariant failed"):
-        await workspace_owner_ids(async_db, {workspace_id})
 
 
 async def _shared_annotation_context(db, name: str):
@@ -549,7 +522,7 @@ async def test_annotation_reply_editability_projection_checks_each_reply_author(
 async def test_annotation_editability_helpers_hide_missing_workspace_membership(async_db):
     (
         author,
-        _viewer,
+        successor,
         _item,
         _project,
         _revision,
@@ -557,6 +530,13 @@ async def test_annotation_editability_helpers_hide_missing_workspace_membership(
         reply,
     ) = await _shared_annotation_context(async_db, "annotation-editability-membership")
     workspace_id = fixture_workspace_id(author)
+    successor_membership = await async_db.scalar(
+        select(WorkspaceMember).where(
+            WorkspaceMember.workspace_id == workspace_id,
+            WorkspaceMember.user_id == successor.id,
+        )
+    )
+    await transfer_workspace_ownership(async_db, author, workspace_id, successor_membership.id)
     membership = await async_db.scalar(
         select(WorkspaceMember).where(
             WorkspaceMember.workspace_id == workspace_id,
@@ -565,8 +545,7 @@ async def test_annotation_editability_helpers_hide_missing_workspace_membership(
         )
     )
     assert membership is not None
-    membership.state = "suspended"
-    await async_db.commit()
+    await suspend_workspace_member(async_db, successor, workspace_id, membership.id)
 
     assert not await can_edit_annotation(async_db, author, workspace_id, annotation)
     assert (
@@ -3698,7 +3677,7 @@ async def test_cross_workspace_copy_creates_detached_item_and_file(async_db, mon
         )
     )
     assert import_event is not None
-    assert import_event.authorization_resource_action == ResourceAction.item_copy.value
+    assert import_event.authorization_resource_action == ResourceAction.item_create.value
 
 
 @pytest.mark.anyio

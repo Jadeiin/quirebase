@@ -188,6 +188,10 @@ class WorkspaceMember(Base):
             name="ck_workspace_members_role",
         ),
         CheckConstraint("state IN ('active', 'suspended')", name="ck_workspace_members_state"),
+        CheckConstraint(
+            "role <> 'owner' OR (state = 'active' AND terminated_at IS NULL)",
+            name="ck_workspace_members_owner_active",
+        ),
         # PostgreSQL and SQLite both support this partial uniqueness form.
         Index(
             "uq_workspace_members_current",
@@ -827,9 +831,7 @@ class AuditEvent(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     actor_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     workspace_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
-    project_id: Mapped[str | None] = mapped_column(
-        ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True
-    )
+    project_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     action: Mapped[str] = mapped_column(String(120), index=True)
     target_type: Mapped[str] = mapped_column(String(80))
     target_id: Mapped[str | None] = mapped_column(String(36))

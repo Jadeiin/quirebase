@@ -5,30 +5,41 @@ import shutil
 import subprocess
 import sys
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import CheckConstraint, UniqueConstraint, create_engine, inspect, text
+from sqlalchemy import CheckConstraint, UniqueConstraint, create_engine, event, inspect, text
 from sqlalchemy.engine import make_url
-from sqlalchemy.exc import CompileError
+from sqlalchemy.exc import CompileError, IntegrityError
+from sqlalchemy.orm import Session
 
 import quirebase.models  # ruff: ignore[unused-import]
 from quirebase.core.config import get_settings
 from quirebase.core.database import Base, async_database_url
+from quirebase.models import (
+    AuditEvent,
+    Project,
+    User,
+    Workspace,
+    WorkspaceMember,
+    WorkspaceRole,
+)
 
 if TYPE_CHECKING:
     from sqlalchemy import Engine, Inspector
 
-UPGRADE_SCRIPT = """
+MIGRATION_SCRIPT = """
+import sys
 from alembic import command
 from alembic.config import Config
 
 config = Config()
 config.set_main_option("script_location", "migrations")
-command.upgrade(config, "head")
+getattr(command, sys.argv[1])(config, sys.argv[2])
 """
 
 # Autogenerate ignores the dialect-specific search projections (see migrations/env.py), so
@@ -51,11 +62,13 @@ ALLOWED_EXTRA_TABLES = (
 )
 
 
-def _upgrade_database(database_url: str) -> None:
+def _migrate_database(
+    database_url: str, revision: str = "head", *, downgrade: bool = False
+) -> None:
     environment = os.environ.copy()
     environment["QUIREBASE_DATABASE_URL"] = database_url
     subprocess.run(
-        [sys.executable, "-c", UPGRADE_SCRIPT],
+        [sys.executable, "-c", MIGRATION_SCRIPT, "downgrade" if downgrade else "upgrade", revision],
         check=True,
         capture_output=True,
         text=True,
@@ -156,7 +169,7 @@ def _assert_schema_matches_metadata(inspector: Inspector, engine: Engine) -> Non
         actual = reflected[table]
         assert actual["columns"] == wanted["columns"], f"column drift in {table}"
         assert actual["primary_key"] == wanted["primary_key"], f"primary key drift in {table}"
-        assert wanted["foreign_keys"] <= actual["foreign_keys"], f"missing foreign key in {table}"
+        assert wanted["foreign_keys"] == actual["foreign_keys"], f"foreign key drift in {table}"
         assert wanted["unique"] <= actual["unique"], f"missing unique constraint in {table}"
         for index_name, index in wanted["indexes"].items():
             assert index_name in actual["indexes"], f"missing index {index_name} on {table}"
@@ -164,20 +177,33 @@ def _assert_schema_matches_metadata(inspector: Inspector, engine: Engine) -> Non
         assert wanted["checks"] <= actual["checks"], f"missing check constraint in {table}"
 
 
-def test_sqlite_schema_matches_metadata(tmp_path: Path):
-    database = tmp_path / "parity.db"
-    _upgrade_database(f"sqlite:///{database}")
-    engine = create_engine(f"sqlite:///{database}")
-    try:
-        _assert_schema_matches_metadata(inspect(engine), engine)
-    finally:
-        engine.dispose()
-
-
-@pytest.mark.skipif(
-    not os.getenv("QUIREBASE_TEST_POSTGRES_URL"), reason="PostgreSQL is not configured"
+@pytest.fixture(
+    params=[
+        "sqlite",
+        pytest.param(
+            "postgres",
+            marks=pytest.mark.skipif(
+                not os.getenv("QUIREBASE_TEST_POSTGRES_URL"), reason="PostgreSQL is not configured"
+            ),
+        ),
+    ]
 )
-def test_postgresql_schema_matches_metadata():
+def migration_database(request, tmp_path):
+    if request.param == "sqlite":
+        database_url = f"sqlite:///{tmp_path / 'parity.db'}"
+        engine = create_engine(database_url)
+
+        @event.listens_for(engine, "connect")
+        def enable_foreign_keys(dbapi_connection, _connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+
+        try:
+            yield database_url, engine
+        finally:
+            engine.dispose()
+        return
     url = make_url(async_database_url(os.environ["QUIREBASE_TEST_POSTGRES_URL"]))
     name = f"quirebase_parity_{uuid.uuid4().hex[:8]}"
     admin_engine = create_engine(
@@ -191,10 +217,9 @@ def test_postgresql_schema_matches_metadata():
         hide_password=False
     )
     try:
-        _upgrade_database(libpq_parity_url)
         engine = create_engine(parity_url)
         try:
-            _assert_schema_matches_metadata(inspect(engine), engine)
+            yield libpq_parity_url, engine
         finally:
             engine.dispose()
     finally:
@@ -203,9 +228,88 @@ def test_postgresql_schema_matches_metadata():
         admin_engine.dispose()
 
 
+def test_schema_matches_metadata(migration_database):
+    database_url, engine = migration_database
+    _migrate_database(database_url)
+    _assert_schema_matches_metadata(inspect(engine), engine)
+
+
+def test_initial_schema_retains_audit_history_and_rejects_inactive_owners(migration_database):
+    database_url, engine = migration_database
+    _migrate_database(database_url)
+    with Session(engine) as db:
+        user = User(username="migration-owner", password_hash="unused")
+        db.add(user)
+        db.flush()
+        workspace = Workspace(name="Migration Workspace", created_by=user.id)
+        db.add(workspace)
+        db.flush()
+        owner = WorkspaceMember(
+            workspace_id=workspace.id, user_id=user.id, role=WorkspaceRole.owner
+        )
+        db.add(owner)
+        project = Project(workspace_id=workspace.id, name="Migration Project", created_by=user.id)
+        db.add(project)
+        db.flush()
+        event = AuditEvent(
+            action="project.history",
+            target_type="project",
+            workspace_id=workspace.id,
+            project_id=project.id,
+        )
+        db.add(event)
+        db.commit()
+        workspace_id, project_id, event_id, owner_id = workspace.id, project.id, event.id, owner.id
+        for values in (
+            {"state": "suspended"},
+            {"terminated_at": datetime.now(UTC)},
+        ):
+            with pytest.raises(IntegrityError), db.begin_nested():
+                db.execute(
+                    WorkspaceMember.__table__
+                    .update()
+                    .where(WorkspaceMember.id == owner_id)
+                    .values(**values)
+                )
+    with engine.begin() as connection:
+        assert (
+            connection.scalar(
+                text("SELECT project_id FROM audit_events WHERE id = :id"), {"id": event_id}
+            )
+            == project_id
+        )
+        connection.execute(text("DELETE FROM workspaces WHERE id = :id"), {"id": workspace_id})
+        assert (
+            connection.scalar(text("SELECT id FROM projects WHERE id = :id"), {"id": project_id})
+            is None
+        )
+        assert (
+            connection.scalar(
+                text("SELECT project_id FROM audit_events WHERE id = :id"), {"id": event_id}
+            )
+            == project_id
+        )
+
+        assert (
+            connection.scalar(
+                text("SELECT workspace_id FROM audit_events WHERE id = :id"), {"id": event_id}
+            )
+            == workspace_id
+        )
+
+
+def test_initial_schema_upgrade_downgrade_roundtrip(migration_database):
+    database_url, engine = migration_database
+    _migrate_database(database_url)
+    _migrate_database(database_url, "base", downgrade=True)
+    assert inspect(engine).get_table_names() == ["alembic_version"]
+    _migrate_database(database_url)
+    _assert_schema_matches_metadata(inspect(engine), engine)
+
+
 def test_autogenerate_has_no_pending_schema_changes(tmp_path: Path, monkeypatch):
     database = tmp_path / "autogenerate.db"
-    _upgrade_database(f"sqlite:///{database}")
+    _migrate_database(f"sqlite:///{database}")
     monkeypatch.setenv("QUIREBASE_DATABASE_URL", f"sqlite:///{database}")
     get_settings.cache_clear()
     script_location = tmp_path / "migrations"

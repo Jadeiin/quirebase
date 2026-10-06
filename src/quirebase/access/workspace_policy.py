@@ -21,7 +21,6 @@ class ResourceAction(ResourceActionKey):
     workspace_archive = "workspace.archive"
     workspace_restore = "workspace.restore"
     workspace_delete = "workspace.delete"
-    item_copy = "item.copy"
     item_create = "item.create"
     item_update = "item.update"
     item_delete = "item.delete"
@@ -102,7 +101,6 @@ ACTION_SPECS: dict[ResourceAction, ActionSpec] = {
     ResourceAction.workspace_archive: _WRITE,
     ResourceAction.workspace_restore: _WRITE,
     ResourceAction.workspace_delete: _WRITE,
-    ResourceAction.item_copy: _WRITE,
     ResourceAction.item_create: _WRITE,
     ResourceAction.item_update: _WRITE,
     ResourceAction.item_delete: _WRITE,

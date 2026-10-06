@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, case, func, select
 
 from quirebase.access import (
     ResourceAction,
@@ -40,30 +40,60 @@ async def list_workspaces(db: AsyncSession, actor: User) -> list[tuple[Workspace
     return list(rows.tuples())
 
 
-async def workspace_owner_ids(db: AsyncSession, workspace_ids: set[str]) -> dict[str, str]:
-    """Return owners of surviving Workspaces, validating their owner membership."""
-    if not workspace_ids:
-        return {}
-    rows = await db.execute(
-        select(Workspace.id, WorkspaceMember.user_id)
+def _workspace_owners_query():
+    return (
+        select(
+            Workspace.id,
+            case(
+                (
+                    and_(func.count(WorkspaceMember.id) == 1, func.count(User.id) == 1),
+                    func.min(User.id),
+                ),
+                else_=None,
+            ).label("owner_id"),
+        )
         .outerjoin(
             WorkspaceMember,
             and_(
                 WorkspaceMember.workspace_id == Workspace.id,
                 WorkspaceMember.role == WorkspaceRole.owner,
-                WorkspaceMember.state == WorkspaceMemberState.active,
                 WorkspaceMember.terminated_at.is_(None),
             ),
         )
-        .where(Workspace.id.in_(workspace_ids), Workspace.state != WorkspaceState.deleted)
+        .outerjoin(
+            User,
+            and_(
+                User.id == WorkspaceMember.user_id,
+                User.active.is_(True),
+                WorkspaceMember.state == WorkspaceMemberState.active,
+            ),
+        )
+        .where(Workspace.state != WorkspaceState.deleted)
+        .group_by(Workspace.id)
     )
+
+
+async def workspace_owner_ids(db: AsyncSession, workspace_ids: set[str]) -> dict[str, str]:
+    """Return owners of surviving Workspaces, validating membership and account state."""
+    if not workspace_ids:
+        return {}
+    rows = await db.execute(_workspace_owners_query().where(Workspace.id.in_(workspace_ids)))
     # Read root existence and membership in one snapshot: a concurrent root
     # deletion also removes its owner and is not an invariant violation.
     owner_rows = rows.tuples().all()
     missing = {workspace_id for workspace_id, owner_id in owner_rows if owner_id is None}
     if missing:
-        raise RuntimeError(f"Workspace owner membership invariant failed for: {sorted(missing)}")
+        raise RuntimeError(f"Workspace owner invariant failed for: {sorted(missing)}")
     return {workspace_id: owner_id for workspace_id, owner_id in owner_rows if owner_id is not None}
+
+
+async def check_workspace_integrity(db: AsyncSession) -> list[str]:
+    rows = await db.execute(_workspace_owners_query().order_by(Workspace.id))
+    return [
+        f"Workspace {workspace_id} must have exactly one current active owner with an active account"
+        for workspace_id, owner_id in rows
+        if owner_id is None
+    ]
 
 
 async def get_workspace(

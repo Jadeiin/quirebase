@@ -78,6 +78,12 @@ jobs:
       - run: uv run quirebase init-db
       - run: uv run quirebase doctor
       - run: uv build --all-packages --no-sources
+      - name: Initialize authorization from installed wheels
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: |
+          uv venv "${RUNNER_TEMP}/quirebase-wheel-smoke" --python 3.12
+          uv pip install --python "${RUNNER_TEMP}/quirebase-wheel-smoke/bin/python" dist/*.whl
+          "${RUNNER_TEMP}/quirebase-wheel-smoke/bin/python" -I -c "from quirebase.access import initialize_authorization; initialize_authorization()"
   postgres:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -107,6 +113,7 @@ jobs:
           uv run pytest -q tests/test_postgres_contract.py tests/test_postgres_concurrency.py
           tests/test_project_visibility.py
           tests/test_workspace_commands.py
+          tests/test_workspace_integrity.py
           tests/test_concurrency_harness.py tests/test_concurrency_reporting.py tests/test_schema_parity.py
           --concurrency-report-dir=concurrency-results --junitxml=concurrency-results/junit.xml
       - name: Preserve concurrency coverage and failure evidence

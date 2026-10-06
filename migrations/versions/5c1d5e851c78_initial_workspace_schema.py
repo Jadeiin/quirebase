@@ -280,6 +280,7 @@ def upgrade() -> None:
     sa.Column('terminated_at', sa.DateTime(timezone=True), nullable=True),
     sa.CheckConstraint("role IN ('owner', 'admin', 'editor', 'reviewer', 'viewer')", name='ck_workspace_members_role'),
     sa.CheckConstraint("state IN ('active', 'suspended')", name='ck_workspace_members_state'),
+    sa.CheckConstraint("role <> 'owner' OR (state = 'active' AND terminated_at IS NULL)", name='ck_workspace_members_owner_active'),
     sa.ForeignKeyConstraint(['invited_by'], ['users.id'], ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['workspace_id'], ['workspaces.id'], ondelete='CASCADE'),
@@ -325,7 +326,6 @@ def upgrade() -> None:
     sa.Column('source', sa.String(length=32), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.ForeignKeyConstraint(['actor_id'], ['users.id'], ondelete='SET NULL'),
-    sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_audit_events_action'), 'audit_events', ['action'], unique=False)

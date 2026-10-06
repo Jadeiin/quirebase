@@ -16,7 +16,6 @@ domain rules; this table alone does not establish permission for a concrete comm
 | `citation_style.manage` | `any` | A | A | A | — | — |
 | `file.delete` | `any` | A | A | A | — | — |
 | `file.manage` | `any` | A | A | A | — | — |
-| `item.copy` | `any` | A | A | A | — | — |
 | `item.create` | `any` | A | A | A | — | — |
 | `item.delete` | `any` | A | A | — | — | — |
 | `item.update` | `any` | A | A | A | — | — |

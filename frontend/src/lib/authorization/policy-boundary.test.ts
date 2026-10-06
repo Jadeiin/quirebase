@@ -1,5 +1,5 @@
 import { ESLint } from 'eslint';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 const eslint = new ESLint();
 
@@ -12,15 +12,26 @@ async function violations(source: string) {
 }
 
 describe('capability policy boundary', () => {
-	it.each([
-		"workspace.role === 'admin'",
-		"workspaceContext.role !== 'viewer'",
-		"workspace.view.current_role === 'owner'",
-		"workspace.view?.current_role === 'owner'",
-		"session.data.user?.role === 'administrator'",
-		"['owner', 'admin'].includes(workspace.role)"
-	])('rejects principal role decisions in TypeScript: %s', async (decision) => {
-		expect(await violations(`const allowed = ${decision};`)).toHaveLength(1);
+	beforeAll(async () => {
+		// Configuration and the TypeScript project service load lazily on the first lint.
+		await violations('const warmup = true;');
+	}, 15_000);
+
+	it('rejects each principal role decision in TypeScript', async () => {
+		const decisions = [
+			"workspace.role === 'admin'",
+			"workspaceContext.role !== 'viewer'",
+			"workspace.view.current_role === 'owner'",
+			"workspace.view?.current_role === 'owner'",
+			"session.data.user?.role === 'administrator'",
+			"['owner', 'admin'].includes(workspace.role)"
+		];
+		const source = decisions
+			.map((decision, index) => `const allowed${index} = ${decision};`)
+			.join('\n');
+		expect((await violations(source)).map((message) => message.line)).toEqual(
+			decisions.map((_, index) => index + 1)
+		);
 	});
 
 	it('rejects role decisions in Svelte templates', async () => {
@@ -28,6 +39,7 @@ describe('capability policy boundary', () => {
 			"<script lang='ts'>const workspace = getWorkspaceContext();</script>{#if workspace.role === 'admin'}<button>Delete</button>{/if}",
 			{ filePath: 'src/lib/features/projects/Projects.svelte' }
 		);
+		expect(result.fatalErrorCount).toBe(0);
 		expect(
 			result.messages.filter((message) => message.ruleId === 'no-restricted-syntax')
 		).toHaveLength(1);
