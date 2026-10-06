@@ -1,0 +1,50 @@
+{
+  "advanced_alchemy": "1.11.0",
+  "postgres_runtime": false,
+  "json": {
+    "existing_engine_uuid_failure": "TypeError",
+    "aa_engine_config_uuid_roundtrip": true,
+    "uuid_inside_json_returns_string": true,
+    "sqlite_type": "JSON"
+  },
+  "mutable_list": {
+    "dict_replacement_error": "cannot use 'dict' as a set element (unhashable type: 'dict')"
+  },
+  "file_metadata": {
+    "actual_attachment_mapping": true,
+    "in_place_change_persists_without_listener": false,
+    "same_path_replacement_persists": false,
+    "file_equality_ignores_metadata": true,
+    "explicit_sql_update_persists": true
+  },
+  "projection": {
+    "result_converter_existing_admin_dto": true,
+    "aa_default_encode_json_pagination_type": "str",
+    "fastapi_jsonable_encoder_roundtrip": true,
+    "schema_allowlist_excludes_password": true,
+    "pagination_fields": [
+      "items",
+      "limit",
+      "offset",
+      "total"
+    ]
+  },
+  "unique_mixin": {
+    "actual_author_table": true,
+    "session_deduplication": true,
+    "rollback_returns_stale_transient_cached_object": true,
+    "independent_session_creates_require_conflict_handling": true,
+    "current_author_helper_resolves_committed_identity": true
+  },
+  "bulk_upsert": {
+    "actual_author_table": true,
+    "matched_existing_identity_is_updated": true,
+    "session_rollback_preserved": true,
+    "implementation_is_read_then_add_update_not_atomic_conflict_insert": true
+  },
+  "encrypted_string": {
+    "explicit_key_ciphertext_at_rest": true,
+    "engine_reopen_roundtrip": true,
+    "stable_key_required_across_workers_and_restarts": true
+  }
+}

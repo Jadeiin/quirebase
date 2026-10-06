@@ -104,3 +104,6 @@ SQLite 的初始迁移、upgrade/downgrade roundtrip、schema parity 和 autogen
 前端 **114 passed**，Svelte 检查 0 errors / 0 warnings，Ruff、142 个源文件的 mypy、
 锁文件检查和 OpenAPI 类型重复生成通过。跳过项包括未配置的 PostgreSQL 与外部测试数据；
 它们没有被计入运行时验证结论。
+
+后续能力的源码研究、优先级和追加行为探针见
+[further-adoption.md](further-adoption.md)。该研究没有改变应用行为或 schema。
