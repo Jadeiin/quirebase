@@ -6,6 +6,7 @@ from sqlalchemy import select
 
 from quirebase.core.errors import (
     ResourceNotFound,
+    WorkspaceUnavailable,
 )
 from quirebase.models import (
     Workspace,
@@ -25,7 +26,7 @@ async def _lock_workspace(db: AsyncSession, workspace_id: str) -> Workspace:
         .with_for_update()
     )
     if workspace is None or workspace.state is WorkspaceState.deleted:
-        raise ResourceNotFound("Workspace not found")
+        raise WorkspaceUnavailable("Workspace not found")
     return workspace
 
 

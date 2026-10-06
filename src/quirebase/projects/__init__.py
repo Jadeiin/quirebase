@@ -19,6 +19,7 @@ from quirebase.projects.loaders import (
 )
 from quirebase.projects.members import (
     ProjectMemberConflict,
+    ProjectParticipant,
     add_project_member,
     join_project,
     leave_project,
@@ -26,7 +27,6 @@ from quirebase.projects.members import (
 )
 from quirebase.projects.workspaces import (
     ProjectWorkspace,
-    ProjectWorkspaceMember,
     add_item_to_project,
     add_items_to_project,
     create_project,
@@ -37,8 +37,8 @@ from quirebase.projects.workspaces import (
 
 __all__ = [
     "ProjectMemberConflict",
+    "ProjectParticipant",
     "ProjectWorkspace",
-    "ProjectWorkspaceMember",
     "add_item_to_project",
     "add_items_to_project",
     "add_project_member",

@@ -433,9 +433,9 @@ describe('structured API errors', () => {
 		const unregister = onWorkspaceUnavailable(unavailable);
 		const fetcher = (async () => {
 			const response = new Response(
-				JSON.stringify({ code: 'workspace_membership_required', message: 'removed' }),
+				JSON.stringify({ code: 'workspace_unavailable', message: 'Workspace not found' }),
 				{
-					status: 403,
+					status: 404,
 					headers: { 'Content-Type': 'application/json' }
 				}
 			);
@@ -447,19 +447,22 @@ describe('structured API errors', () => {
 
 		await expect(
 			workspaceApi.request('GET', '/workspaces/{workspace_id}/items', undefined, fetcher)
-		).rejects.toMatchObject({ code: 'workspace_membership_required' });
+		).rejects.toMatchObject({ code: 'workspace_unavailable' });
 		expect(unavailable).toHaveBeenCalledWith('workspace-1');
 		unregister();
 	});
 
-	it('does not treat a nested resource 404 as an unavailable Workspace', async () => {
+	it.each([
+		['not_found', 404],
+		['permission_denied', 403]
+	])('does not treat %s as an unavailable Workspace', async (code, status) => {
 		const unavailable = vi.fn();
 		const unregister = onWorkspaceUnavailable(unavailable);
 		const fetcher = (async () => {
-			const response = new Response(
-				JSON.stringify({ code: 'not_found', message: 'Item not found' }),
-				{ status: 404, headers: { 'Content-Type': 'application/json' } }
-			);
+			const response = new Response(JSON.stringify({ code, message: 'Resource action failed' }), {
+				status,
+				headers: { 'Content-Type': 'application/json' }
+			});
 			Object.defineProperty(response, 'url', {
 				value: 'https://quirebase.test/api/v1/workspaces/workspace-1/items/item-1'
 			});
@@ -473,7 +476,7 @@ describe('structured API errors', () => {
 				{ params: { path: { item_id: 'item-1' } } },
 				fetcher
 			)
-		).rejects.toMatchObject({ code: 'not_found' });
+		).rejects.toMatchObject({ code, status });
 		expect(unavailable).not.toHaveBeenCalled();
 		unregister();
 	});

@@ -222,7 +222,7 @@ function responseError(response: Response, payload: unknown): ApiError {
 	if (error.code === 'workspace_lifecycle_error' && workspaceId) {
 		for (const handler of workspaceConflictHandlers) handler(decodeURIComponent(workspaceId));
 	}
-	if (error.code === 'workspace_membership_required' || error.code === 'workspace_unavailable') {
+	if (error.code === 'workspace_unavailable') {
 		if (workspaceId) {
 			for (const handler of workspaceUnavailableHandlers) handler(decodeURIComponent(workspaceId));
 		}

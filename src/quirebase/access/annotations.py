@@ -11,7 +11,7 @@ from quirebase.access.context import (
     resolve_workspace_context,
 )
 from quirebase.access.items import require_readable_item
-from quirebase.access.project_scope import require_project_context, visible_project_ids_query
+from quirebase.access.project_scope import discoverable_project_ids_query, require_project_context
 from quirebase.access.workspace_policy import ResourceAction, action_allowed
 from quirebase.core.errors import (
     PermissionDenied,
@@ -285,7 +285,7 @@ async def _active_visible_project_item_ids(
                     ProjectItem.id.in_(project_item_ids),
                     ProjectItem.workspace_id == context.workspace_id,
                     Project.state == ProjectState.active,
-                    Project.id.in_(visible_project_ids_query(context)),
+                    Project.id.in_(discoverable_project_ids_query(context)),
                 )
             )
         ).all()

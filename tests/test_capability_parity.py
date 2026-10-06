@@ -14,8 +14,10 @@ from quirebase.access import (
     effective_resource_actions,
     item_decisions,
     project_decisions,
+    project_participation_change_allowed,
     require_action,
     require_project_context,
+    require_project_participation_change,
     resolve_workspace_context,
     workspace_member_roles,
 )
@@ -155,6 +157,35 @@ def test_restore_projection_requires_archived_project_even_without_archive_grant
         ResourceAction.project_restore
         in project_decisions(context, project, is_participating=True).allowed
     )
+
+
+@pytest.mark.parametrize("role", WorkspaceRole)
+@pytest.mark.parametrize("lifecycle", ["active", "archived", "suspended"])
+@pytest.mark.parametrize("current", ProjectParticipation)
+@pytest.mark.parametrize("target", ProjectParticipation)
+def test_participation_choices_match_enforcement_for_every_transition(
+    role, lifecycle, current, target
+):
+    context = _context(role, lifecycle)
+    governance_transitions = {
+        ("workspace", "managed"),
+        ("open", "managed"),
+        ("managed", "workspace"),
+        ("managed", "open"),
+    }
+    expected = lifecycle == "active" and role in {
+        WorkspaceRole.owner,
+        WorkspaceRole.admin,
+        WorkspaceRole.editor,
+    }
+    if (current.value, target.value) in governance_transitions:
+        expected = expected and role in {WorkspaceRole.owner, WorkspaceRole.admin}
+    assert project_participation_change_allowed(context, current, target) is expected
+    if expected:
+        require_project_participation_change(context, current, target)
+    else:
+        with pytest.raises((PermissionDenied, WorkspaceLifecycleError)):
+            require_project_participation_change(context, current, target)
 
 
 @pytest.mark.anyio

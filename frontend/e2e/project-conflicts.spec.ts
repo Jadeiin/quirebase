@@ -346,7 +346,7 @@ for (const action of ['Delete', 'Moderate']) {
 					participation: 'workspace',
 					item_count: 0,
 					items: [],
-					members: [],
+					active_participants: [],
 					authorization: { allowed: archived ? [] : ['project_discussion.create'] }
 				}
 			})

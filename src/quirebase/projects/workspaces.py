@@ -11,10 +11,10 @@ from sqlalchemy.exc import IntegrityError
 from quirebase.access import (
     ResourceAction,
     WorkspaceContext,
+    discoverable_project_ids_query,
     lock_workspace_context,
     require_action,
     require_workspace_action,
-    visible_project_ids_query,
     workspace_select,
 )
 from quirebase.audit import record_event
@@ -33,7 +33,9 @@ from quirebase.models import (
 )
 
 from ._locking import lock_project_root
+from .lifecycle import _validate_description, _validate_name
 from .loaders import require_project
+from .members import ProjectParticipant
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -42,14 +44,9 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class ProjectWorkspaceMember:
-    user: User
-
-
-@dataclass(frozen=True)
 class ProjectWorkspace:
     project: Project
-    members: tuple[ProjectWorkspaceMember, ...]
+    active_participants: tuple[ProjectParticipant, ...]
     items: tuple[Item, ...]
     is_participating: bool
 
@@ -62,16 +59,12 @@ async def create_project(
     participation: ProjectParticipation | str = ProjectParticipation.workspace,
     description: str = "",
 ) -> Project:
-    normalized = name.strip()
-    if not normalized or len(normalized) > 240:
-        raise ValidationFailure("Project name must contain 1 to 240 characters")
+    normalized = _validate_name(name)
     try:
         parsed_participation = ProjectParticipation(participation)
     except ValueError as error:
         raise ValidationFailure("invalid Project participation") from error
-    normalized_description = description.replace("\r\n", "\n").replace("\r", "\n").strip()
-    if len(normalized_description) > 2000:
-        raise ValidationFailure("Project description is too long")
+    normalized_description = _validate_description(description)
     create_action = ResourceAction.project_create
     context = await require_workspace_action(
         db,
@@ -118,7 +111,7 @@ async def list_workspace_projects(
     *,
     view: Literal["mine", "joinable", "all"] = "all",
 ) -> list[tuple[Project, int, bool]]:
-    """List visible Projects, optionally limited to the caller's participation view."""
+    """List discoverable Projects, optionally limited to the caller's participation view."""
     if view not in {"mine", "joinable", "all"}:
         raise ValidationFailure("invalid Project list view")
     require_action(context, ResourceAction.workspace_read)
@@ -137,7 +130,7 @@ async def list_workspace_projects(
         .outerjoin(ProjectItem, ProjectItem.project_id == Project.id)
         .where(
             Project.state != ProjectState.deleted,
-            Project.id.in_(visible_project_ids_query(context)),
+            Project.id.in_(discoverable_project_ids_query(context)),
         )
         .group_by(Project.id)
         .order_by(Project.name)
@@ -159,10 +152,10 @@ async def open_project_workspace(
 ) -> ProjectWorkspace:
     context = await require_project(db, workspace, project_id)
     workspace_id = workspace.workspace_id
-    members_rows: Sequence[User] = ()
+    participant_users: Sequence[User] = ()
     is_participating = context.project.participation is ProjectParticipation.workspace
     if context.project.participation is not ProjectParticipation.workspace:
-        members_rows = (
+        participant_users = (
             await db.scalars(
                 select(User)
                 .join(ProjectMember, ProjectMember.user_id == User.id)
@@ -207,7 +200,9 @@ async def open_project_workspace(
     )
     return ProjectWorkspace(
         project=context.project,
-        members=tuple(ProjectWorkspaceMember(user=row) for row in members_rows),
+        active_participants=tuple(
+            ProjectParticipant(user_id=row.id, username=row.username) for row in participant_users
+        ),
         items=items,
         is_participating=is_participating,
     )

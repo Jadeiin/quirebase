@@ -34,6 +34,13 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class WorkspaceContext:
+    """Loaded authority with the role captured when authorization was resolved.
+
+    A command may change this membership, such as demoting the previous owner
+    during ownership transfer. Audit must retain the role that authorized that
+    command. A subsequent command resolves a fresh context under its own locks.
+    """
+
     actor: User
     workspace: Workspace
     membership: WorkspaceMember

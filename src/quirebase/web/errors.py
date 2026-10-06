@@ -98,9 +98,10 @@ def _domain_error(exc: DomainError) -> tuple[int, str, str, dict[str, Any] | Non
         return 404, "not_found", "not found", None
     if isinstance(exc, WorkspaceContextRequired):
         return 400, "workspace_context_required", str(exc) or "Workspace context required", None
-    if isinstance(exc, WorkspaceMembershipRequired):
-        return 403, "workspace_membership_required", str(exc), None
-    if isinstance(exc, WorkspaceUnavailable):
+    if isinstance(exc, (WorkspaceMembershipRequired, WorkspaceUnavailable)):
+        # Ordinary callers must not distinguish a missing Workspace from one
+        # whose membership is absent, suspended or terminated. Keep the domain
+        # exceptions distinct for workflow revocation handling.
         return 404, "workspace_unavailable", "Workspace not found", None
     if isinstance(exc, WorkspaceLifecycleError):
         return 409, "workspace_lifecycle_error", str(exc), None

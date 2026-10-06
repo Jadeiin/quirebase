@@ -34,6 +34,7 @@ from quirebase.models import (
     User,
     Workspace,
     WorkspaceMember,
+    WorkspaceMemberState,
     WorkspaceRole,
     WorkspaceState,
 )
@@ -232,6 +233,57 @@ async def test_managed_project_nonmember_cannot_discover_project_contexts(
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize(
+    "availability", ["missing", "deleted", "nonmember", "suspended", "terminated"]
+)
+@pytest.mark.parametrize("surface", ["detail", "projects", "create"])
+async def test_inaccessible_workspace_responses_do_not_expose_existence(
+    async_db, async_session_factory, tmp_path, monkeypatch, availability, surface
+):
+    client, item, _ = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    workspace_id = str(uuid4())
+    if availability != "missing":
+        owner = User(username="unavailable-owner", password_hash="unused")
+        async_db.add(owner)
+        await async_db.flush()
+        workspace = await provision_initial_workspace(async_db, owner)
+        workspace_id = workspace.id
+        if availability == "deleted":
+            workspace.state = WorkspaceState.deleted
+        if availability in {"suspended", "terminated"}:
+            async_db.add(
+                WorkspaceMember(
+                    workspace_id=workspace_id,
+                    user_id=item.created_by,
+                    role=WorkspaceRole.viewer,
+                    state=(
+                        WorkspaceMemberState.suspended
+                        if availability == "suspended"
+                        else WorkspaceMemberState.active
+                    ),
+                    terminated_at=datetime.now(UTC) if availability == "terminated" else None,
+                )
+            )
+        await async_db.commit()
+    base = f"/api/v1/workspaces/{workspace_id}"
+    try:
+        response = (
+            await client.post(f"{base}/projects", json={"name": "Rejected"})
+            if surface == "create"
+            else await client.get(base if surface == "detail" else f"{base}/projects")
+        )
+        assert response.status_code == 404
+        assert response.json() == {
+            "code": "workspace_unavailable",
+            "message": "Workspace not found",
+        }
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.anyio
 async def test_cross_workspace_copy_api_checks_target_membership_and_resource_action(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
@@ -250,8 +302,11 @@ async def test_cross_workspace_copy_api_checks_target_membership_and_resource_ac
 
     try:
         missing = await client.post(url, headers=headers, json=request)
-        assert missing.status_code == 403
-        assert missing.json()["code"] == "workspace_membership_required"
+        assert missing.status_code == 404
+        assert missing.json()["code"] == "workspace_unavailable"
+        nonexistent = await client.post(url, json={"target_workspace_id": str(uuid4())})
+        assert nonexistent.status_code == missing.status_code
+        assert nonexistent.json() == missing.json()
 
         membership = WorkspaceMember(
             workspace_id=target_workspace_id,
@@ -264,6 +319,7 @@ async def test_cross_workspace_copy_api_checks_target_membership_and_resource_ac
 
         viewer = await client.post(url, headers=headers, json=request)
         assert viewer.status_code == 403
+        assert viewer.json()["code"] == "permission_denied"
 
         membership.role = WorkspaceRole.editor
         await async_db.commit()

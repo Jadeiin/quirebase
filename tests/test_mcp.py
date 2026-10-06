@@ -140,6 +140,16 @@ async def test_generated_tool_schemas_come_from_the_api_contract(async_session_f
         "description",
         "participation",
     }
+    assert set(tools["projects.add_project_participant"].parameters["properties"]) == {
+        "workspace_id",
+        "project_id",
+        "username",
+    }
+    assert set(tools["projects.remove_project_participant"].parameters["properties"]) == {
+        "workspace_id",
+        "project_id",
+        "user_id",
+    }
     assert set(tools["annotations.update_annotation"].parameters["properties"]) == {
         "workspace_id",
         "item_id",

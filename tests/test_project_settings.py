@@ -130,7 +130,7 @@ async def test_suspension_retains_participation_but_termination_removes_it(
     view = await open_project_workspace(
         async_db, await resolve_workspace_context(async_db, owner, item.workspace_id), project.id
     )
-    assert target.id not in {member.user.id for member in view.members}
+    assert target.id not in {participant.user_id for participant in view.active_participants}
 
     await reactivate_workspace_member(async_db, owner, item.workspace_id, membership.id)
     context = await resolve_workspace_context(async_db, target, item.workspace_id)
@@ -187,8 +187,8 @@ async def test_added_participant_response_survives_post_commit_deactivation(
 
     monkeypatch.setattr(projects_api, "add_project_member", add_then_deactivate)
     try:
-        response = await client.put(
-            f"/api/v1/workspaces/{item.workspace_id}/projects/{project.id}/members",
+        response = await client.post(
+            f"/api/v1/workspaces/{item.workspace_id}/projects/{project.id}/participants",
             json={"username": username},
         )
         assert response.status_code == 200

@@ -55,7 +55,7 @@ _DEFINITIONS = (
     ),
     McpToolDefinition(
         "projects.get_project",
-        "Get one Project in the explicitly specified Workspace, its members, and bibliographic Items.",
+        "Get one Project in the explicitly specified Workspace, its active participants, and bibliographic Items.",
         ToolEffect.READ,
     ),
     McpToolDefinition(
@@ -79,9 +79,13 @@ _DEFINITIONS = (
     McpToolDefinition(
         "projects.remove_project_item", "Remove an Item from a Project.", ToolEffect.DESTRUCTIVE
     ),
-    McpToolDefinition("projects.set_project_member", "Add a Project member.", ToolEffect.WRITE),
     McpToolDefinition(
-        "projects.remove_project_member", "Remove a Project member.", ToolEffect.DESTRUCTIVE
+        "projects.add_project_participant", "Add a managed Project participant.", ToolEffect.WRITE
+    ),
+    McpToolDefinition(
+        "projects.remove_project_participant",
+        "Remove a managed Project participant.",
+        ToolEffect.DESTRUCTIVE,
     ),
     McpToolDefinition(
         "projects.list_project_discussions",

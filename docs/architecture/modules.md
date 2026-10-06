@@ -24,7 +24,7 @@ reviewable without maintaining another grant table.
 
 The [`main` PostgreSQL merge gate](https://github.com/Jadeiin/quirebase/rules/24554596) requires
 the GitHub Actions `postgres` check against the current base branch. That job runs database
-contracts, controlled concurrency, visibility and state-command retries, followed by fresh
+contracts, controlled concurrency, discovery and state-command retries, followed by fresh
 database initialization and durable-workflow diagnostics.
 
 | Package | Role | Owns |
@@ -121,6 +121,11 @@ Workspace authorization is resolved once at an inbound request or workflow bound
 `access.WorkspaceContext`. Read models reuse that context and project decisions from loaded facts.
 Mutation commands retain actor/Workspace identifiers, acquire their transaction locks and reload
 authority; a request-time context must not replace those checks or cross durable checkpoints.
+The context captures the role used for authorization: a command that changes its actor's
+membership records the original role in its Audit Event, then later commands resolve fresh facts.
+The HTTP boundary returns the same `workspace_unavailable` 404 for a missing Workspace and an
+absent, suspended or terminated membership. An admitted member lacking a capability still
+receives `permission_denied` 403; authentication failures remain 401.
 Business operations may use the thin `access.workspace_select()`
 lineage primitive and Module-owned aggregate loaders (`get_item`, `get_project`,
 `get_project_item`, and document loaders). The primitive only adds the Workspace lineage
@@ -235,13 +240,18 @@ identifier. Library metadata writes enqueue generation transactionally through C
 Adapter, and the Library-owned workflow invokes the Library operation.
 
 Opening a Project crosses the Projects interface through `open_project_workspace`, which returns
-a typed read model containing the Project, explicit participants for `open` and `managed` modes,
+a typed read model containing the Project, active explicit participants for `open` and `managed` modes,
 the caller's participation state, and assigned Items. Workspace membership and concrete
 resource-action decisions are checked against the boundary-resolved WorkspaceContext behind that
 operation. ProjectMember gates discoverability only for `managed` Projects; it never grants
 Workspace authority or canonical Item access. Projects have no owner or ownership-transfer
 operation; `created_by` is provenance only. Only the Web adapter
 maps the typed view to an API projection.
+The read model reuses the ProjectParticipant value returned by participation commands; it does
+not wrap mutable User objects. `active_participants` excludes suspended memberships and inactive
+Users, while their stored ProjectMember selections remain available for reactivation.
+Managed participation uses `POST /projects/{id}/participants` and
+`DELETE /projects/{id}/participants/{user_id}`; these commands do not change Workspace membership.
 
 The Project settings form crosses the Projects interface through `update_project_settings`.
 The Web adapter sends only changed name, description and participation fields in one partial PATCH;
@@ -258,7 +268,7 @@ grants authority. `workspace` participation is implicit with no ProjectMember ro
 are discoverable to all active Workspace
 members and permit self-join/leave; `managed` Projects are discoverable only to participants and
 Workspace governors, who curate participation. Collection reads, direct loaders and root locks use
-one SQL visibility predicate; mutations also recheck visibility in a fresh statement after acquiring
+one SQL discovery predicate; mutations also recheck discoverability in a fresh statement after acquiring
 the lock. Only Workspace governors may create managed
 Projects. Moving to `workspace` clears explicit associations in the same transaction; switching
 between `open` and `managed` preserves them. There is no last-participant or Project ownership

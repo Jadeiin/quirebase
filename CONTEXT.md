@@ -44,7 +44,7 @@ capability namespace. When one resource-action varies by a canonical request fac
 participation, API read models expose domain choices such as `allowed_project_participations`
 and `allowed_participation_changes`; Casbin relations stay internal to Access. Domain
 participation rules define ordinary Project discovery; `project_governance.read` grants additional
-managed-Project visibility to Workspace governors.
+managed-Project discoverability to Workspace governors.
 
 **Item Stewardship**:
 The Workspace-governed authority to maintain or permanently delete a canonical Item. It is
@@ -70,6 +70,12 @@ An explicit User–Project association that records a User's selected Project wo
 has no Project role and grants no Workspace authority. It controls discoverability of `managed`
 Projects only; it never grants access to canonical Workspace Items. Workspace-participation
 Projects have implicit participation and no Project Member rows.
+
+**Project Participant**:
+A User participating in a Project working context, implicitly in `workspace` mode or through an
+explicit Project Member selection in `open` and `managed` modes. Project detail exposes only
+active explicit participants in `active_participants`; a suspended Workspace membership retains
+its stored selection but has no effective participation until reactivated.
 
 **Project Participation**:
 The Project `participation` field that expresses discoverability and participation policy, not a Project
@@ -128,7 +134,7 @@ available until its recorded expiration time and is then eligible for physical c
 **Discussion Message**:
 A conversational message attached to an Item and visible through Workspace Item access. A
 Project Discussion/Note is a separate Project-scoped collaboration resource governed by Project
-visibility and Workspace resource-action decisions.
+discoverability and Workspace resource-action decisions.
 _Avoid_: Annotation, Comment
 
 **Tag**:

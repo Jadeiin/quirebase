@@ -457,7 +457,11 @@ async def test_http_api_suggests_authors(async_db, async_session_factory, tmp_pa
     forbidden = await client.get(
         f"/api/v1/workspaces/{fixture_workspace_id(other)}/authors?query=le"
     )
-    assert forbidden.status_code == 403
+    assert forbidden.status_code == 404
+    assert forbidden.json() == {
+        "code": "workspace_unavailable",
+        "message": "Workspace not found",
+    }
 
     client.cookies.clear()
     assert (await client.get(f"{workspace_base}/authors?query=le")).status_code == 401

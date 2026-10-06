@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, model_validator
 from pydantic.json_schema import SkipJsonSchema  # ruff: ignore[typing-only-third-party-import] — Pydantic resolves field annotations.
 
 from quirebase.models import ProjectParticipation, ProjectState
+from quirebase.projects import ProjectParticipant, ProjectWorkspace
 from quirebase.web.api.common import WorkspaceAuthorizationView
 from quirebase.web.api.library_schemas import ItemSearchView, item_search_view
 
@@ -22,18 +23,15 @@ class ProjectSummaryView(BaseModel):
     authorization: WorkspaceAuthorizationView
 
 
-class ProjectMemberView(BaseModel):
-    user_id: str
-    username: str
-
-
 class ProjectDetailView(ProjectSummaryView):
-    members: list[ProjectMemberView]
+    active_participants: list[ProjectParticipant] = Field(
+        description="Active explicit participants; Workspace participation is implicit."
+    )
     items: list[ItemSearchView]
 
 
 def project_detail_view(
-    workspace: Any,
+    workspace: ProjectWorkspace,
     *,
     authorization: WorkspaceAuthorizationView,
     allowed_participation_changes: list[ProjectParticipation],
@@ -48,10 +46,7 @@ def project_detail_view(
         description=workspace.project.description,
         authorization=authorization,
         allowed_participation_changes=allowed_participation_changes,
-        members=[
-            ProjectMemberView(user_id=member.user.id, username=member.user.username)
-            for member in workspace.members
-        ],
+        active_participants=list(workspace.active_participants),
         items=[item_search_view(item) for item in workspace.items],
     )
 
@@ -81,5 +76,5 @@ class ProjectDeleteRequest(BaseModel):
     confirmation: str
 
 
-class ProjectMemberRequest(BaseModel):
+class ProjectParticipantRequest(BaseModel):
     username: str

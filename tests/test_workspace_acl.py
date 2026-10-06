@@ -1532,6 +1532,16 @@ async def test_dashboard_uses_participation_instead_of_governance_visibility(asy
     context = await resolve_workspace_context(async_db, actor, workspace_id)
     directory = await list_workspace_projects(async_db, context)
     assert {project.id for project, _, _ in directory} == {project.id for project in projects}
+    assert (
+        next(
+            is_participating
+            for project, _, is_participating in directory
+            if project.id == projects[4].id
+        )
+        is False
+    )
+    mine = await list_workspace_projects(async_db, context, view="mine")
+    assert {project.id for project, _, _ in mine} == {projects[index].id for index in (0, 1, 3)}
     dashboard = await get_dashboard_data(async_db, actor, workspace_id)
     assert {project.id for project in dashboard["projects"]} == {
         projects[index].id for index in (0, 1, 3)
@@ -2282,7 +2292,7 @@ async def test_managed_project_participants_are_independent_of_workspace_governa
     opened = await open_project_workspace(
         async_db, await resolve_workspace_context(async_db, owner, workspace_id), project_id
     )
-    assert {member.user.username for member in opened.members} == {editor.username}
+    assert {participant.username for participant in opened.active_participants} == {editor.username}
     assert opened.is_participating is False
     await set_project_state(async_db, owner, workspace_id, project_id, ProjectState.archived)
     await set_project_state(async_db, owner, workspace_id, project_id, ProjectState.active)
@@ -2354,7 +2364,7 @@ async def test_workspace_project_has_implicit_participation_and_no_member_rows(a
     opened = await open_project_workspace(
         async_db, await resolve_workspace_context(async_db, owner, workspace_id), project.id
     )
-    assert opened.members == ()
+    assert opened.active_participants == ()
     assert opened.is_participating is True
     with pytest.raises(ProjectMemberConflict, match="managed Projects"):
         await add_project_member(async_db, owner, workspace_id, project.id, editor.username)

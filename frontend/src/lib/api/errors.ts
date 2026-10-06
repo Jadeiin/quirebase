@@ -11,7 +11,7 @@ const messages: Record<string, MessageKey> = {
 	tag_conflict: msg('This Tag conflicts with an existing Tag.'),
 	project_member_conflict: msg('This Project membership changed. Refresh and try again.'),
 	workspace_context_required: msg('Refresh the page to restore Workspace context.'),
-	workspace_membership_required: msg('You no longer have access to this Workspace.'),
+	workspace_unavailable: msg('You no longer have access to this Workspace.'),
 	workspace_lifecycle_error: msg('This Workspace is read only in its current state.'),
 	project_lifecycle_error: msg('This Project is read only in its current state.'),
 	document_not_ready: msg('This Document is not ready yet.'),

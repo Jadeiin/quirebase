@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy import func, select
 
+from quirebase.access import resolve_workspace_context
 from quirebase.core.errors import PermissionDenied, ResourceNotFound
 from quirebase.core.timezones import as_utc
 from quirebase.models import (
@@ -26,6 +27,7 @@ from quirebase.workspaces import (
     suspend_workspace_governance,
     suspend_workspace_member,
     terminate_workspace_member,
+    transfer_workspace_ownership,
 )
 
 
@@ -132,6 +134,35 @@ async def test_member_retry_reloads_state_changed_by_another_session(command_ses
                 await fresh.get(WorkspaceMember, member_id)
             ).state is WorkspaceMemberState.active
             assert await _event_count(fresh, "workspace.member.reactivate", member_id) == 1
+
+
+@pytest.mark.anyio
+async def test_ownership_transfer_audits_the_authorizing_role_and_reloads_next_command(
+    command_sessions,
+):
+    async with command_sessions() as db:
+        owner, _, workspace, target = await _members(db)
+        owner_id, workspace_id, target_id = owner.id, workspace.id, target.id
+        context = await resolve_workspace_context(db, owner, workspace_id)
+        await transfer_workspace_ownership(db, owner, workspace_id, target_id)
+        assert context.membership.role is WorkspaceRole.admin
+        assert context.role is WorkspaceRole.owner
+        event = await db.scalar(
+            select(AuditEvent).where(
+                AuditEvent.action == "workspace.ownership.transfer",
+                AuditEvent.target_id == workspace_id,
+            )
+        )
+        assert event.actor_id == owner_id
+        assert event.authorization_role == "owner"
+        assert target.role is WorkspaceRole.owner
+        fresh = await resolve_workspace_context(db, owner, workspace_id)
+        assert fresh.role is WorkspaceRole.admin
+        previous_owner = fresh.membership.id
+        with pytest.raises(PermissionDenied):
+            await transfer_workspace_ownership(db, owner, workspace_id, previous_owner)
+        await db.rollback()
+        assert await _event_count(db, "workspace.ownership.transfer", workspace_id) == 1
 
 
 @pytest.mark.anyio

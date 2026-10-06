@@ -102,8 +102,11 @@ async def test_http_api_includes_the_public_capability_set(
         ("POST", "/api/v1/workspaces/{workspace_id}/projects/{project_id}/restore"),
         ("PUT", "/api/v1/workspaces/{workspace_id}/projects/{project_id}/items/{item_id}"),
         ("DELETE", "/api/v1/workspaces/{workspace_id}/projects/{project_id}/items/{item_id}"),
-        ("PUT", "/api/v1/workspaces/{workspace_id}/projects/{project_id}/members"),
-        ("DELETE", "/api/v1/workspaces/{workspace_id}/projects/{project_id}/members/{user_id}"),
+        ("POST", "/api/v1/workspaces/{workspace_id}/projects/{project_id}/participants"),
+        (
+            "DELETE",
+            "/api/v1/workspaces/{workspace_id}/projects/{project_id}/participants/{user_id}",
+        ),
         ("GET", "/api/v1/workspaces/{workspace_id}/items/{item_id}/documents"),
         ("GET", "/api/v1/workspaces/{workspace_id}/items/{item_id}/annotations"),
         ("POST", "/api/v1/workspaces/{workspace_id}/items/{item_id}/annotations"),
@@ -833,7 +836,7 @@ async def test_project_participation_does_not_gate_workspace_project_access(
 
         active_detail = await client.get(f"{base}/{active.id}", headers=headers)
         assert active_detail.status_code == 200
-        assert active_detail.json()["members"] == []
+        assert active_detail.json()["active_participants"] == []
         assert active_detail.json()["authorization"] == summaries[active.id]["authorization"]
 
         workspace_summary = next(
@@ -842,14 +845,14 @@ async def test_project_participation_does_not_gate_workspace_project_access(
         assert workspace_summary["is_participating"] is True
         assert "project_membership.manage" not in workspace_summary["authorization"]["allowed"]
         workspace_detail = await client.get(f"{base}/{workspace_visible.id}", headers=headers)
-        assert workspace_detail.json()["members"] == []
-        add_workspace_member = await client.put(
-            f"{base}/{workspace_visible.id}/members",
+        assert workspace_detail.json()["active_participants"] == []
+        add_workspace_member = await client.post(
+            f"{base}/{workspace_visible.id}/participants",
             headers=headers,
             json={"username": administrator.username},
         )
         remove_workspace_member = await client.delete(
-            f"{base}/{workspace_visible.id}/members/{administrator.id}", headers=headers
+            f"{base}/{workspace_visible.id}/participants/{administrator.id}", headers=headers
         )
         assert add_workspace_member.status_code == 409
         assert add_workspace_member.json()["code"] == "project_member_conflict"
@@ -886,8 +889,8 @@ async def test_project_participation_does_not_gate_workspace_project_access(
             json={"name": "Still accessible", "description": "", "participation": "managed"},
         )
         assert managed_settings.status_code == 200
-        participant = await client.put(
-            f"{base}/{active.id}/members",
+        participant = await client.post(
+            f"{base}/{active.id}/participants",
             headers=headers,
             json={"username": owner.username},
         )

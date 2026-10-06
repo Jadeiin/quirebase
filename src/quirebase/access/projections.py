@@ -123,22 +123,26 @@ def tag_decisions(context: WorkspaceContext) -> AuthorizationProjection:
     return AuthorizationProjection(allowed=allowed)
 
 
+def _project_participation_change_requirements(
+    current: ProjectParticipation,
+    target: ProjectParticipation,
+) -> tuple[tuple[ResourceAction, str], ...]:
+    """One capability requirement set for both choices and command enforcement."""
+    requirements = ((ResourceAction.project_update, "any"),)
+    if current is not target and ProjectParticipation.managed in {current, target}:
+        return (*requirements, (ResourceAction.project_membership_manage, "managed"))
+    return requirements
+
+
 def project_participation_change_allowed(
     context: WorkspaceContext,
     current: ProjectParticipation,
     target: ProjectParticipation,
 ) -> bool:
-    if not action_allowed(context, ResourceAction.project_update):
-        return False
-    if current is target:
-        return True
-    if ProjectParticipation.managed in {current, target}:
-        return action_allowed(
-            context,
-            ResourceAction.project_membership_manage,
-            relation="managed",
-        )
-    return True
+    return all(
+        action_allowed(context, action, relation=relation)
+        for action, relation in _project_participation_change_requirements(current, target)
+    )
 
 
 def project_participation_changes(
@@ -158,15 +162,8 @@ def require_project_participation_change(
     current: ProjectParticipation,
     target: ProjectParticipation,
 ) -> None:
-    require_action(context, ResourceAction.project_update)
-    if current is target:
-        return
-    if ProjectParticipation.managed in {current, target}:
-        require_action(
-            context,
-            ResourceAction.project_membership_manage,
-            relation="managed",
-        )
+    for action, relation in _project_participation_change_requirements(current, target):
+        require_action(context, action, relation=relation)
 
 
 def project_decisions(

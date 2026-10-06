@@ -222,7 +222,10 @@ test('an instance administrator who assigns another owner is not added to Worksp
 	});
 	await page.route('**/api/v1/workspaces/workspace-created', (route) => {
 		openedWorkspace = true;
-		return route.fulfill({ status: 403, json: { code: 'workspace_membership_required' } });
+		return route.fulfill({
+			status: 404,
+			json: { code: 'workspace_unavailable', message: 'Workspace not found' }
+		});
 	});
 
 	await page.goto('/workspace');
@@ -362,8 +365,8 @@ test('availability recovery releases its guard for a later membership revocation
 	await page.route('**/api/v1/workspaces/workspace-1/items*', (route) => {
 		if (membershipRevoked)
 			return route.fulfill({
-				status: 403,
-				json: { code: 'workspace_membership_required', message: 'membership revoked' }
+				status: 404,
+				json: { code: 'workspace_unavailable', message: 'Workspace not found' }
 			});
 		return route.fulfill({ json: { items: [], total: 0, page: 1, per_page: 25 } });
 	});
@@ -413,8 +416,8 @@ test('membership revoked while a page is open returns the user to the Workspace 
 	await page.route('**/api/v1/workspaces/workspace-1/items*', (route) => {
 		if (membershipRevoked)
 			return route.fulfill({
-				status: 403,
-				json: { code: 'workspace_membership_required', message: 'membership revoked' }
+				status: 404,
+				json: { code: 'workspace_unavailable', message: 'Workspace not found' }
 			});
 		return route.fulfill({
 			json: { items: [], total: 0, page: 1, per_page: 25 }

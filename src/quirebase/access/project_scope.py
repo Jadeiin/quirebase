@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from sqlalchemy.sql.elements import ColumnElement
 
 
-def project_visibility_predicate(ctx: WorkspaceContext) -> ColumnElement[bool]:
+def project_discovery_predicate(ctx: WorkspaceContext) -> ColumnElement[bool]:
     """One domain scope predicate for collection, direct and locked Project reads.
 
     Participation defines ordinary discovery; policy grants only the additional
@@ -50,11 +50,11 @@ def project_visibility_predicate(ctx: WorkspaceContext) -> ColumnElement[bool]:
     )
 
 
-def visible_project_ids_query(ctx: WorkspaceContext):
-    return select(Project.id).where(project_visibility_predicate(ctx))
+def discoverable_project_ids_query(ctx: WorkspaceContext):
+    return select(Project.id).where(project_discovery_predicate(ctx))
 
 
-async def require_project_visibility(
+async def require_project_discoverable(
     db: AsyncSession,
     ctx: WorkspaceContext,
     project: Project,
@@ -64,10 +64,10 @@ async def require_project_visibility(
     A statement waiting for a Project lock can have a membership snapshot from
     before the prior transaction removed that participant.
     """
-    visible = await db.scalar(
-        select(Project.id).where(Project.id == project.id, project_visibility_predicate(ctx))
+    discoverable_id = await db.scalar(
+        select(Project.id).where(Project.id == project.id, project_discovery_predicate(ctx))
     )
-    if visible is None:
+    if discoverable_id is None:
         raise ResourceUnavailable("Project not found")
     return ProjectContext(ctx, project)
 
@@ -94,7 +94,7 @@ async def require_project_context(
         workspace_select(Project, workspace)
         .where(
             Project.id == project_id,
-            project_visibility_predicate(workspace),
+            project_discovery_predicate(workspace),
         )
         .execution_options(populate_existing=True)
     )
@@ -104,7 +104,7 @@ async def require_project_context(
     if project is None:
         raise ResourceUnavailable("Project not found")
     project_context = (
-        await require_project_visibility(db, workspace, project)
+        await require_project_discoverable(db, workspace, project)
         if lock is not None
         else ProjectContext(workspace, project)
     )

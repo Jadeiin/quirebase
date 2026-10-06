@@ -55,6 +55,14 @@ the Workspace Item Library, including canonical Item metadata, File Revisions, A
 Item Discussions. A suspended or terminated membership has no effective access; it does not alter
 resource provenance.
 
+Ordinary Workspace-scoped HTTP endpoints return the same `workspace_unavailable` 404, with no
+membership detail, when the root is missing/deleted or the caller has no active membership.
+This prevents Workspace existence from becoming observable through an authorization failure.
+An authenticated active member lacking a resource-action capability receives `permission_denied`
+403; invalid credentials still receive 401. Internal membership exceptions remain distinct for
+workflow revocation handling. The browser refreshes its accessible Workspace list and recovers
+through the chooser when its current URL context becomes unavailable.
+
 All Workspaces have the same domain and authorization semantics, regardless of whether one is
 created during User provisioning or later. There is no personal/shared Workspace kind or ACL mode.
 Each Workspace may be renamed, shared, archived, restored, transferred or deleted using the same
@@ -223,14 +231,20 @@ Ordinary discovery is fixed domain behavior: active Workspace members discover `
 `open` Projects, and explicit participants discover `managed` Projects. Casbin cannot redefine
 those modes. The narrow `project_governance.read` decision adds discovery of managed Projects
 for governance; the initial policy grants it to owners/admins, including read-only lifecycle states.
-Collection, direct-link and locked reads share one SQL visibility predicate. Mutation loaders
-filter invisible roots before locking and recheck visibility in a fresh statement after acquiring
+Collection, direct-link and locked reads share one SQL discovery predicate. Mutation loaders
+filter undiscoverable roots before locking and recheck discoverability in a fresh statement after acquiring
 the Project lock, including after waiting behind participant removal.
 
 Read models call implicit or explicit participation `is_participating`; the existence of a
 ProjectMember row is a different fact. Dashboard and personal Project lists include only
 participating Projects. Managed Projects visible solely for governance stay in the directory
 and governance surfaces, rather than entering the governor's personal working context.
+
+Project detail exposes `active_participants`, a list of active Users with active Workspace
+memberships and explicit selections. It is empty for implicit Workspace participation and omits
+retained selections of suspended members or inactive Users. Managed participation commands use
+`POST /projects/{id}/participants` and `DELETE /projects/{id}/participants/{user_id}`; the
+persisted ProjectMember association remains a working-context selection, not an ACL membership.
 
 Project settings use one partial `PATCH /projects/{id}` command and one transaction. Omitted
 fields stay unchanged; metadata-only updates do not alter participation or ProjectMember rows.

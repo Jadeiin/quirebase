@@ -20,7 +20,7 @@ const project = {
 		]
 	},
 	items: [],
-	members: [{ user_id: 'member-1', username: 'researcher' }]
+	active_participants: [{ user_id: 'member-1', username: 'researcher' }]
 };
 
 async function mockWorkspaceRole(
@@ -134,7 +134,7 @@ test('Workspace viewers can read Project Discussion without mutation controls', 
 				participation: 'workspace',
 				is_participating: true,
 				authorization: { allowed: [] },
-				members: []
+				active_participants: []
 			}
 		})
 	);
@@ -175,7 +175,7 @@ test('an unjoined archived open Project stays discoverable and its Discussion lo
 		participation: 'open',
 		is_participating: false,
 		authorization: { allowed: [] },
-		members: []
+		active_participants: []
 	};
 	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
 		route.fulfill({ json: [archivedProject] })
@@ -324,7 +324,7 @@ test('a Workspace editor can create an open Project but not a managed Project', 
 						'project_discussion.create'
 					]
 				},
-				members: [{ user_id: 'user-1', username: 'reader' }]
+				active_participants: [{ user_id: 'user-1', username: 'reader' }]
 			}
 		})
 	);
@@ -384,7 +384,7 @@ test('a Workspace owner can create an empty managed Project', async ({ page }) =
 						'project_membership.manage'
 					]
 				},
-				members: []
+				active_participants: []
 			}
 		})
 	);
@@ -560,14 +560,14 @@ test('Workspace resource actions govern Project settings and managed participati
 							'project_discussion.create'
 						]
 					},
-					members: participants
+					active_participants: participants
 				}
 			});
 		const body = request.postDataJSON();
 		mutations.push({ method: request.method(), path, body });
 		if (request.method() === 'PATCH')
 			currentParticipation = body.participation as 'workspace' | 'managed';
-		if (request.method() === 'PUT')
+		if (request.method() === 'POST')
 			participants = [...participants, { user_id: 'member-2', username: 'collaborator' }];
 		return route.fulfill({ json: { ok: true, id: 'project-1' } });
 	});
@@ -599,8 +599,8 @@ test('Workspace resource actions govern Project settings and managed participati
 	await expect
 		.poll(() => mutations)
 		.toContainEqual({
-			method: 'PUT',
-			path: '/api/v1/workspaces/workspace-1/projects/project-1/members',
+			method: 'POST',
+			path: '/api/v1/workspaces/workspace-1/projects/project-1/participants',
 			body: { username: 'collaborator' }
 		});
 });
@@ -617,7 +617,7 @@ test('a managed Project may have zero participants', async ({ page }) => {
 		const path = new URL(request.url()).pathname;
 		if (request.method() === 'GET' && path.endsWith('/discussions'))
 			return route.fulfill({ json: [] });
-		if (request.method() === 'DELETE' && path.endsWith('/members/user-1')) {
+		if (request.method() === 'DELETE' && path.endsWith('/participants/user-1')) {
 			participants = [];
 			return route.fulfill({ json: { ok: true } });
 		}
@@ -627,7 +627,7 @@ test('a managed Project may have zero participants', async ({ page }) => {
 				id: 'empty-project',
 				name: 'Paused direction',
 				authorization: { allowed: ['project_membership.manage'] },
-				members: participants
+				active_participants: participants
 			}
 		});
 	});
@@ -675,7 +675,7 @@ for (const mode of ['open', 'managed']) {
 				return route.fulfill({ json: { id: project.id } });
 			}
 			// Suspended participants are retained in storage but omitted from this read model.
-			return route.fulfill({ json: { ...project, participation: mode, members: [] } });
+			return route.fulfill({ json: { ...project, participation: mode, active_participants: [] } });
 		});
 		await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/discussions', (route) =>
 			route.fulfill({ json: [] })

@@ -11,10 +11,10 @@ from sqlalchemy.exc import IntegrityError
 from quirebase.access import (
     ResourceAction,
     action_allowed,
+    discoverable_project_ids_query,
     require_project_context,
     require_workspace_action,
     resolve_workspace_context,
-    visible_project_ids_query,
 )
 from quirebase.access.annotations import (
     annotation_decisions,
@@ -576,7 +576,7 @@ async def list_document_annotations(
                 .where(
                     ProjectItem.workspace_id == workspace_id,
                     ProjectItem.item_id == item_id,
-                    Project.id.in_(visible_project_ids_query(workspace)),
+                    Project.id.in_(discoverable_project_ids_query(workspace)),
                 )
                 .order_by(Project.name, Project.id)
             )
@@ -590,7 +590,7 @@ async def list_document_annotations(
     project_item_ids = select(ProjectItem.id).where(
         ProjectItem.workspace_id == workspace_id,
         ProjectItem.item_id == item_id,
-        ProjectItem.project_id.in_(visible_project_ids_query(workspace)),
+        ProjectItem.project_id.in_(discoverable_project_ids_query(workspace)),
         ProjectItem.project_id.in_(project_ids if project_ids is not None else visible_project_ids),
     )
     moderator = action_allowed(workspace, ResourceAction.project_annotation_review)

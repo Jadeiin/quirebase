@@ -13,8 +13,8 @@ from sqlalchemy import select
 from quirebase.access import (
     ResourceAction,
     action_allowed,
+    discoverable_project_ids_query,
     require_workspace_action,
-    visible_project_ids_query,
 )
 from quirebase.access.documents import require_attachment, require_revision
 from quirebase.access.items import (
@@ -821,7 +821,7 @@ async def get_pdf_viewer_data(
                 .where(
                     Project.workspace_id == workspace_id,
                     Project.state != ProjectState.deleted,
-                    Project.id.in_(visible_project_ids_query(context)),
+                    Project.id.in_(discoverable_project_ids_query(context)),
                     ProjectItem.workspace_id == workspace_id,
                     ProjectItem.item_id == item_id,
                 )

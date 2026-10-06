@@ -8,7 +8,7 @@ A dash means denied in all three lifecycles. Each row uses a valid action relati
 relations are internal request facts, rather than a public API policy language.
 
 This is capability policy for an already resolved active User/Workspace membership.
-Project participation, visibility, target state, lineage and owner invariants remain
+Project participation, discoverability, target state, lineage and owner invariants remain
 domain rules; this table alone does not establish permission for a concrete command.
 
 | Resource action | Relation | owner | admin | editor | reviewer | viewer |

@@ -53,7 +53,8 @@
 	}));
 	const availableMembers = $derived(
 		(directory.data ?? []).filter(
-			(member) => !project?.members.some((participant) => participant.user_id === member.user_id)
+			(member) =>
+				!project?.active_participants.some((participant) => participant.user_id === member.user_id)
 		)
 	);
 	const selectedMember = $derived(
@@ -203,10 +204,14 @@
 		const username = selectedMember.username;
 		const added = await mutate(
 			() =>
-				workspace.api.request('PUT', '/workspaces/{workspace_id}/projects/{project_id}/members', {
-					params: { path: { project_id: projectId } },
-					body: { username }
-				}),
+				workspace.api.request(
+					'POST',
+					'/workspaces/{workspace_id}/projects/{project_id}/participants',
+					{
+						params: { path: { project_id: projectId } },
+						body: { username }
+					}
+				),
 			$t('Project participant added')
 		);
 		if (added) {
@@ -220,7 +225,7 @@
 			() =>
 				workspace.api.request(
 					'DELETE',
-					'/workspaces/{workspace_id}/projects/{project_id}/members/{user_id}',
+					'/workspaces/{workspace_id}/projects/{project_id}/participants/{user_id}',
 					{ params: { path: { project_id: projectId, user_id: userId } } }
 				),
 			$t('Project participant removed')
@@ -454,9 +459,9 @@
 						)}
 					{/if}
 				</p>
-				{#if project.members.length > 0}
+				{#if project.active_participants.length > 0}
 					<ul class="mt-3 grid grid-cols-1 gap-2">
-						{#each project.members as member (member.user_id)}<li
+						{#each project.active_participants as member (member.user_id)}<li
 								class="flex items-center justify-between gap-2 border-t border-surface-300-700 py-2"
 							>
 								<span>{member.username}</span>

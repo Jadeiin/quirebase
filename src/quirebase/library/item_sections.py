@@ -14,10 +14,10 @@ from quirebase.access import (
     ResourceAction,
     WorkspaceContext,
     action_allowed,
+    discoverable_project_ids_query,
     get_item,
     require_action,
     visible_annotation_scope_predicate,
-    visible_project_ids_query,
 )
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
 from quirebase.library.authors import get_item_authors
@@ -168,7 +168,7 @@ async def _open_overview(
         .where(
             ProjectItem.workspace_id == item.workspace_id,
             Project.state != ProjectState.deleted,
-            Project.id.in_(visible_project_ids_query(context)),
+            Project.id.in_(discoverable_project_ids_query(context)),
         )
     )
     revision_ids = [revision.id for revision in revisions]
@@ -298,7 +298,7 @@ async def _open_organize(
             .where(
                 Project.workspace_id == item.workspace_id,
                 Project.state == ProjectState.active,
-                Project.id.in_(visible_project_ids_query(context)),
+                Project.id.in_(discoverable_project_ids_query(context)),
             )
             .order_by(Project.name)
         )
@@ -342,7 +342,7 @@ async def _open_annotations(
             .where(
                 ProjectItem.workspace_id == item.workspace_id,
                 Project.state != ProjectState.deleted,
-                Project.id.in_(visible_project_ids_query(context)),
+                Project.id.in_(discoverable_project_ids_query(context)),
             )
         )
         rows = (

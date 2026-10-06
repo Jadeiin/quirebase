@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Literal
 
 from sqlalchemy import select
 
-from quirebase.access.project_scope import project_visibility_predicate, require_project_visibility
+from quirebase.access.project_scope import project_discovery_predicate, require_project_discoverable
 from quirebase.core.errors import ResourceUnavailable
 from quirebase.models import Project, ProjectParticipation, ProjectState
 
@@ -24,12 +24,12 @@ async def lock_project_root(
     participation: ProjectParticipation | None = None,
     message: str = "Project not found",
 ) -> Project:
-    """Lock a visible Project, then recheck discovery after any lock wait.
+    """Lock a discoverable Project, then recheck discovery after any lock wait.
 
     Project aggregate changes use an exclusive lock; association commands use
     a shared guard. The Workspace root must already be held by the command.
     """
-    predicates = [Project.id == project_id, project_visibility_predicate(context)]
+    predicates = [Project.id == project_id, project_discovery_predicate(context)]
     if state is not None:
         predicates.append(Project.state == state)
     if participation is not None:
@@ -42,5 +42,5 @@ async def lock_project_root(
     )
     if project is None:
         raise ResourceUnavailable(message)
-    await require_project_visibility(db, context, project)
+    await require_project_discoverable(db, context, project)
     return project

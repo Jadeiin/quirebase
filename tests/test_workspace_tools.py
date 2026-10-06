@@ -102,7 +102,7 @@ async def test_participant_directory_tracks_account_activation(
     await async_db.commit()
     workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     target_status = f"/api/v1/admin/users/{target.id}/status"
-    participant_path = f"{workspace_base}/projects/{project.id}/members"
+    participant_path = f"{workspace_base}/projects/{project.id}/participants"
     try:
         directory = await client.get(f"{workspace_base}/members")
         assert directory.status_code == 200
@@ -117,7 +117,7 @@ async def test_participant_directory_tracks_account_activation(
         assert governance.status_code == 200
         member = next(row for row in governance.json() if row["user_id"] == target.id)
         assert member["state"] == "active"
-        rejected = await client.put(participant_path, json={"username": target.username})
+        rejected = await client.post(participant_path, json={"username": target.username})
         assert rejected.status_code == 404
 
         reactivated = await client.put(target_status, json={"active": True})
@@ -125,7 +125,7 @@ async def test_participant_directory_tracks_account_activation(
         directory = await client.get(f"{workspace_base}/members")
         assert directory.status_code == 200
         assert target.id in {row["user_id"] for row in directory.json()}
-        added = await client.put(participant_path, json={"username": target.username})
+        added = await client.post(participant_path, json={"username": target.username})
         assert added.status_code == 200
     finally:
         await client.aclose()

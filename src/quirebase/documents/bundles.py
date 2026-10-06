@@ -19,9 +19,9 @@ from sqlalchemy import select
 
 from quirebase.access import (
     ResourceAction,
+    discoverable_project_ids_query,
     require_workspace_action,
     visible_annotation_scope_predicate,
-    visible_project_ids_query,
 )
 from quirebase.access.documents import require_revision
 from quirebase.access.items import require_accessible_items
@@ -175,7 +175,7 @@ async def _own_annotations(
 ) -> list[PdfAnnotation]:
     workspace_id = revision.workspace_id
     context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
-    visible_projects = visible_project_ids_query(context)
+    visible_projects = discoverable_project_ids_query(context)
     visible_project_items = select(ProjectItem.id).where(
         ProjectItem.workspace_id == workspace_id,
         ProjectItem.item_id == revision.item_id,

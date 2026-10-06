@@ -1263,7 +1263,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/members': {
+	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/participants': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1271,16 +1271,16 @@ export interface paths {
 			cookie?: never;
 		};
 		get?: never;
-		/** Set Project Member */
-		put: operations['projects.set_project_member'];
-		post?: never;
+		put?: never;
+		/** Add Project Participant */
+		post: operations['projects.add_project_participant'];
 		delete?: never;
 		options?: never;
 		head?: never;
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/members/{user_id}': {
+	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/participants/{user_id}': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1290,8 +1290,8 @@ export interface paths {
 		get?: never;
 		put?: never;
 		post?: never;
-		/** Remove Project Member */
-		delete: operations['projects.remove_project_member'];
+		/** Remove Project Participant */
+		delete: operations['projects.remove_project_participant'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -3703,20 +3703,23 @@ export interface components {
 			/** Allowed Participation Changes */
 			allowed_participation_changes: components['schemas']['ProjectParticipation'][];
 			authorization: components['schemas']['WorkspaceAuthorizationView'];
-			/** Members */
-			members: components['schemas']['ProjectMemberView'][];
+			/**
+			 * Active Participants
+			 * @description Active explicit participants; Workspace participation is implicit.
+			 */
+			active_participants: components['schemas']['ProjectParticipant'][];
 			/** Items */
 			items: components['schemas']['ItemSearchView'][];
 		};
-		/** ProjectMemberRequest */
-		ProjectMemberRequest: {
+		/** ProjectParticipant */
+		ProjectParticipant: {
+			/** User Id */
+			user_id: string;
 			/** Username */
 			username: string;
 		};
-		/** ProjectMemberView */
-		ProjectMemberView: {
-			/** User Id */
-			user_id: string;
+		/** ProjectParticipantRequest */
+		ProjectParticipantRequest: {
 			/** Username */
 			username: string;
 		};
@@ -8053,7 +8056,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['ProjectMemberView'];
+					'application/json': components['schemas']['ProjectParticipant'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -8117,7 +8120,7 @@ export interface operations {
 			};
 		};
 	};
-	'projects.set_project_member': {
+	'projects.add_project_participant': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -8129,7 +8132,7 @@ export interface operations {
 		};
 		requestBody: {
 			content: {
-				'application/json': components['schemas']['ProjectMemberRequest'];
+				'application/json': components['schemas']['ProjectParticipantRequest'];
 			};
 		};
 		responses: {
@@ -8139,7 +8142,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['ProjectMemberView'];
+					'application/json': components['schemas']['ProjectParticipant'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -8162,7 +8165,7 @@ export interface operations {
 			};
 		};
 	};
-	'projects.remove_project_member': {
+	'projects.remove_project_participant': {
 		parameters: {
 			query?: never;
 			header?: never;

@@ -199,7 +199,7 @@ test('adding a Library Item invalidates a previously opened Project', async ({ p
 							}
 						]
 					: [],
-				members: [{ user_id: 'user-1', username: 'reader' }]
+				active_participants: [{ user_id: 'user-1', username: 'reader' }]
 			}
 		});
 	});

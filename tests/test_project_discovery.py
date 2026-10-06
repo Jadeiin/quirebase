@@ -6,10 +6,10 @@ from sqlalchemy import delete, select
 
 from quirebase.access import (
     ResourceAction,
+    discoverable_project_ids_query,
     require_project_context,
-    require_project_visibility,
+    require_project_discoverable,
     resolve_workspace_context,
-    visible_project_ids_query,
 )
 from quirebase.core.errors import ResourceUnavailable, WorkspaceUnavailable
 from quirebase.models import (
@@ -26,12 +26,12 @@ from quirebase.models import (
 from quirebase.projects import update_project_settings
 
 
-async def _assert_visibility_matrix(db, role, lifecycle):
-    owner = User(username="visibility-owner", password_hash="unused")
+async def _assert_discovery_matrix(db, role, lifecycle):
+    owner = User(username="discovery-owner", password_hash="unused")
     actor = (
         owner
         if role is WorkspaceRole.owner
-        else User(username="visibility-actor", password_hash="unused")
+        else User(username="discovery-actor", password_hash="unused")
     )
     db.add_all([owner] if actor is owner else [owner, actor])
     await db.flush()
@@ -74,7 +74,7 @@ async def _assert_visibility_matrix(db, role, lifecycle):
     await db.commit()
 
     context = await resolve_workspace_context(db, actor, workspace.id)
-    listed_ids = set((await db.scalars(visible_project_ids_query(context))).all())
+    listed_ids = set((await db.scalars(discoverable_project_ids_query(context))).all())
     for project, participant in cases:
         # Independent domain expectations prevent two equally wrong implementations from passing.
         expected = (
@@ -87,10 +87,10 @@ async def _assert_visibility_matrix(db, role, lifecycle):
             )
         )
         if expected:
-            assert (await require_project_visibility(db, context, project)).project is project
+            assert (await require_project_discoverable(db, context, project)).project is project
         else:
             with pytest.raises(ResourceUnavailable):
-                await require_project_visibility(db, context, project)
+                await require_project_discoverable(db, context, project)
         assert (project.id in listed_ids) is expected, project.name
 
     workspace.state = WorkspaceState.deleted
@@ -102,19 +102,19 @@ async def _assert_visibility_matrix(db, role, lifecycle):
 @pytest.mark.anyio
 @pytest.mark.parametrize("role", WorkspaceRole)
 @pytest.mark.parametrize("lifecycle", ["active", "archived", "suspended"])
-async def test_sqlite_project_collection_and_direct_visibility_agree(async_db, role, lifecycle):
-    await _assert_visibility_matrix(async_db, role, lifecycle)
+async def test_sqlite_project_collection_and_direct_discovery_agree(async_db, role, lifecycle):
+    await _assert_discovery_matrix(async_db, role, lifecycle)
 
 
 @pytest.mark.anyio
 @pytest.mark.shared_postgres
 @pytest.mark.parametrize("role", WorkspaceRole)
 @pytest.mark.parametrize("lifecycle", ["active", "archived", "suspended"])
-async def test_postgres_project_collection_and_direct_visibility_agree(
+async def test_postgres_project_collection_and_direct_discovery_agree(
     postgres_sessions, role, lifecycle
 ):
     async with postgres_sessions() as db:
-        await _assert_visibility_matrix(db, role, lifecycle)
+        await _assert_discovery_matrix(db, role, lifecycle)
 
 
 @pytest.mark.anyio
@@ -148,10 +148,10 @@ async def test_participation_discovery_is_independent_of_governance_grants(async
     # Revoking the governance privilege cannot redefine workspace/open modes or
     # remove a managed participant's ordinary discovery.
     monkeypatch.setattr(project_scope, "action_allowed", lambda _ctx, _action: False)
-    visible = set((await async_db.scalars(visible_project_ids_query(context))).all())
+    visible = set((await async_db.scalars(discoverable_project_ids_query(context))).all())
     for project in projects:
         assert project.id in visible
-        await require_project_visibility(async_db, context, project)
+        await require_project_discoverable(async_db, context, project)
 
     secret = Project(
         workspace_id=workspace.id,
@@ -161,28 +161,30 @@ async def test_participation_discovery_is_independent_of_governance_grants(async
     )
     async_db.add(secret)
     await async_db.commit()
-    assert secret.id not in set((await async_db.scalars(visible_project_ids_query(context))).all())
+    assert secret.id not in set(
+        (await async_db.scalars(discoverable_project_ids_query(context))).all()
+    )
     with pytest.raises(ResourceUnavailable):
-        await require_project_visibility(async_db, context, secret)
+        await require_project_discoverable(async_db, context, secret)
     monkeypatch.setattr(project_scope, "action_allowed", lambda _ctx, _action: True)
-    assert secret.id in set((await async_db.scalars(visible_project_ids_query(context))).all())
-    await require_project_visibility(async_db, context, secret)
+    assert secret.id in set((await async_db.scalars(discoverable_project_ids_query(context))).all())
+    await require_project_discoverable(async_db, context, secret)
 
 
 @pytest.mark.anyio
 @pytest.mark.shared_postgres
 @pytest.mark.concurrency_case("participation-recheck")
 @pytest.mark.parametrize("loader", ["command", "shared", "update"])
-@pytest.mark.parametrize("initially_visible", [False, True])
+@pytest.mark.parametrize("initially_discoverable", [False, True])
 async def test_locked_project_loaders_filter_then_recheck_participation(
-    postgres_sessions, postgres_race, loader, initially_visible
+    postgres_sessions, postgres_race, loader, initially_discoverable
 ):
     async with postgres_sessions() as db:
-        owner = User(username="visibility-lock-owner", password_hash="unused")
-        actor = User(username="visibility-lock-actor", password_hash="unused")
+        owner = User(username="discovery-lock-owner", password_hash="unused")
+        actor = User(username="discovery-lock-actor", password_hash="unused")
         db.add_all([owner, actor])
         await db.flush()
-        workspace = Workspace(name="Locked visibility", created_by=owner.id)
+        workspace = Workspace(name="Locked discovery", created_by=owner.id)
         db.add(workspace)
         await db.flush()
         db.add_all([
@@ -197,7 +199,7 @@ async def test_locked_project_loaders_filter_then_recheck_participation(
         )
         db.add(project)
         await db.flush()
-        if initially_visible:
+        if initially_discoverable:
             db.add(
                 ProjectMember(workspace_id=workspace.id, project_id=project.id, user_id=actor.id)
             )
@@ -224,22 +226,22 @@ async def test_locked_project_loaders_filter_then_recheck_participation(
             except ResourceUnavailable:
                 await db.rollback()
                 return "not found"
-            return "unexpectedly visible"
+            return "unexpectedly discoverable"
 
     async with postgres_race.session("governor") as db:
         await db.scalar(select(Project).where(Project.id == project_id).with_for_update())
-        if initially_visible:
+        if initially_discoverable:
             await db.execute(
                 delete(ProjectMember).where(
                     ProjectMember.project_id == project_id, ProjectMember.user_id == actor_id
                 )
             )
         postgres_race.start("load", load())
-        if initially_visible:
+        if initially_discoverable:
             await postgres_race.wait_blocked("caller", "governor")
             await db.commit()
         assert await postgres_race.join("load") == "not found"
-        # An invisible caller finishes even while governance still holds the root lock.
+        # An undiscoverable caller finishes even while governance still holds the root lock.
         await db.rollback()
 
     async with postgres_sessions() as db:
