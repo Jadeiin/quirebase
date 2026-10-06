@@ -1,3 +1,4 @@
+import { directoryPage } from './helpers';
 import { expect, test, type Page } from '@playwright/test';
 import { mockSession } from './helpers';
 
@@ -20,7 +21,9 @@ async function projectActions(
 	await page.route('**/api/v1/workspaces/workspace-1', (route) =>
 		route.fulfill({ json: workspace })
 	);
-	await page.route('**/api/v1/workspaces', (route) => route.fulfill({ json: [workspace] }));
+	await page.route(/\/api\/v1\/workspaces(?:\?.*)?$/, (route) =>
+		route.fulfill({ json: directoryPage([workspace], route) })
+	);
 }
 
 const overview = {
@@ -178,8 +181,8 @@ for (const [role, allowedActions, visible] of [
 		await page.route('**/api/v1/workspaces/workspace-1/tags', (route) =>
 			route.fulfill({ json: [] })
 		);
-		await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
-			route.fulfill({ json: [] })
+		await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
+			route.fulfill({ json: directoryPage([], route) })
 		);
 		await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) =>
 			route.fulfill({
@@ -351,7 +354,9 @@ test('Workspace rename refreshes the chooser cache and reindex tracks a scoped w
 			allowed: ['workspace.read', 'workspace.update', 'workspace_maintenance.run']
 		}
 	});
-	await page.route('**/api/v1/workspaces', (route) => route.fulfill({ json: [projection()] }));
+	await page.route(/\/api\/v1\/workspaces(?:\?.*)?$/, (route) =>
+		route.fulfill({ json: directoryPage([projection()], route) })
+	);
 	await page.route('**/api/v1/workspaces/workspace-1', (route) => {
 		if (route.request().method() === 'PATCH') {
 			name = (route.request().postDataJSON() as { name: string }).name;
@@ -401,7 +406,9 @@ test('a lifecycle conflict refreshes the Workspace action projection', async ({ 
 				: ['workspace.read', 'workspace.update', 'workspace.archive']
 		}
 	});
-	await page.route('**/api/v1/workspaces', (route) => route.fulfill({ json: [projection()] }));
+	await page.route(/\/api\/v1\/workspaces(?:\?.*)?$/, (route) =>
+		route.fulfill({ json: directoryPage([projection()], route) })
+	);
 	await page.route('**/api/v1/workspaces/workspace-1', (route) => {
 		if (route.request().method() === 'PATCH') {
 			archived = true;

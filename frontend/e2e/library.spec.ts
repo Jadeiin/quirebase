@@ -1,13 +1,55 @@
+import { directoryPage } from './helpers';
 import { expect, test } from '@playwright/test';
 import { mockSession } from './helpers';
+
+test('a Project filter outside the first directory page resolves directly and survives search', async ({
+	page
+}) => {
+	await mockSession(page);
+	const projects = Array.from({ length: 26 }, (_, index) => ({
+		id: `project-${index + 1}`,
+		name: `Project ${index + 1}`,
+		item_count: 0,
+		state: 'active',
+		participation: 'workspace',
+		is_participating: true,
+		allowed_participation_changes: [],
+		authorization: { allowed: [] }
+	}));
+	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
+		route.fulfill({ json: directoryPage(projects, route) })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-26', (route) =>
+		route.fulfill({ json: { ...projects[25], active_participants: [], items: [] } })
+	);
+	const itemFilters: Array<string | null> = [];
+	await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) => {
+		itemFilters.push(new URL(route.request().url()).searchParams.get('project'));
+		return route.fulfill({ json: { items: [], total: 0, page: 1, per_page: 25 } });
+	});
+
+	await page.goto('/workspace/workspace-1/library?project=project-26');
+	await page.getByRole('button', { name: 'Filters', exact: true }).click();
+	await expect(page.getByRole('combobox', { name: 'Project', exact: true })).toHaveValue(
+		'project-26'
+	);
+	await expect(page.getByRole('option', { name: 'Project 26', exact: true })).toHaveCount(1);
+	await page.getByRole('button', { name: 'Load more Projects' }).click();
+	await expect(page.getByRole('option', { name: 'Project 26', exact: true })).toHaveCount(1);
+	await page.getByPlaceholder('Search title, author, Tag, or full text').fill('retained filter');
+	await page.getByRole('button', { name: 'Search', exact: true }).click();
+	await expect(page).toHaveURL(/project=project-26/);
+	await expect.poll(() => itemFilters.at(-1)).toBe('project-26');
+});
 
 test('library renders canonical rich titles and exposes later pages', async ({ page }) => {
 	await mockSession(page);
 	const requestedPages: number[] = [];
 	const requestedQueries: Array<{ query: string | null; q: string | null }> = [];
 	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
-		route.fulfill({ json: [] })
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/items*', (route) => {
 		const searchParameters = new URL(route.request().url()).searchParams;
@@ -63,8 +105,8 @@ test('Library page selection toggles and icon pagination reaches every boundary'
 		})
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
-		route.fulfill({ json: [] })
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) => {
 		const currentPage = Number(new URL(route.request().url()).searchParams.get('page') ?? '1');
@@ -111,8 +153,8 @@ test('Library page selection toggles and icon pagination reaches every boundary'
 test('Library history navigation restores filter drafts and clears selection', async ({ page }) => {
 	await mockSession(page);
 	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
-		route.fulfill({ json: [] })
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) => {
 		const query = new URL(route.request().url()).searchParams.get('query') ?? 'all';
@@ -203,29 +245,32 @@ test('adding a Library Item invalidates a previously opened Project', async ({ p
 			}
 		});
 	});
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
 		route.fulfill({
-			json: [
-				{
-					id: 'project-1',
-					name: 'Research',
-					authorization: {
-						allowed: [
-							'project.update',
-							'project.archive',
-							'project_item.manage',
-							'project_membership.manage',
-							'project.delete'
-						]
-					},
-					is_participating: true,
-					item_count: added ? 1 : 0,
-					state: 'active',
-					participation: 'workspace',
-					allowed_participation_changes: ['workspace', 'open', 'managed'],
-					description: 'Reading list'
-				}
-			]
+			json: directoryPage(
+				[
+					{
+						id: 'project-1',
+						name: 'Research',
+						authorization: {
+							allowed: [
+								'project.update',
+								'project.archive',
+								'project_item.manage',
+								'project_membership.manage',
+								'project.delete'
+							]
+						},
+						is_participating: true,
+						item_count: added ? 1 : 0,
+						state: 'active',
+						participation: 'workspace',
+						allowed_participation_changes: ['workspace', 'open', 'managed'],
+						description: 'Reading list'
+					}
+				],
+				route
+			)
 		})
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) =>
@@ -336,8 +381,8 @@ for (const workspaceId of ['workspace-1', 'workspace-2']) {
 		await page.route(`**/api/v1/workspaces/${workspaceId}/tags`, (route) =>
 			route.fulfill({ json: [] })
 		);
-		await page.route(`**/api/v1/workspaces/${workspaceId}/projects?view=all`, (route) =>
-			route.fulfill({ json: [] })
+		await page.route(`**/api/v1/workspaces/${workspaceId}/projects?view=all*`, (route) =>
+			route.fulfill({ json: directoryPage([], route) })
 		);
 		await page.route(`**/api/v1/workspaces/${workspaceId}/items/bibliography`, (route) => {
 			exportBody = route.request().postDataJSON();
@@ -393,8 +438,8 @@ test('library filters do not overflow narrow viewports', async ({ page }) => {
 	await page.setViewportSize({ width: 320, height: 720 });
 	await mockSession(page);
 	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
-		route.fulfill({ json: [] })
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/items*', (route) =>
 		route.fulfill({ json: { items: [], total: 0, page: 1, per_page: 25 } })

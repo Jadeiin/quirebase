@@ -59,7 +59,7 @@ async def item_overview(workspace_id: UUID, item_id: UUID, context: WorkspaceAcc
         }
     copy_targets = []
     if ResourceAction.workspace_export in source_actions:
-        for workspace, member in await list_workspaces(db, user):
+        for workspace, member in (await list_workspaces(db, user, limit=None))[0]:
             if workspace.id == workspace_id:
                 continue
             target_actions = workspace_decisions(
@@ -86,8 +86,8 @@ async def item_overview(workspace_id: UUID, item_id: UUID, context: WorkspaceAcc
         "latest_revision": (
             {
                 "id": latest.id,
-                "original_name": latest.original_name,
-                "size": latest.size,
+                "original_name": latest.file.metadata["original_name"],
+                "size": latest.file.size,
                 "page_count": latest.page_count,
                 "processing_state": enum_value(latest.processing_state),
             }

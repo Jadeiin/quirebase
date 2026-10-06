@@ -133,9 +133,8 @@ async def get_dashboard_data(db: AsyncSession, user: User, workspace_id: UUID) -
             )
         ).all()
     )
-    projects = [
-        project for project, _, _ in await list_workspace_projects(db, context, view="mine")
-    ]
+    project_rows, project_count = await list_workspace_projects(db, context, view="mine", limit=10)
+    projects = [project for project, _, _ in project_rows]
     sessions = list(
         (
             await db.scalars(
@@ -150,6 +149,7 @@ async def get_dashboard_data(db: AsyncSession, user: User, workspace_id: UUID) -
         "new_items": new_items,
         "recent_items": recent_items,
         "projects": projects,
+        "project_count": project_count,
         "sessions": sessions,
     }
 

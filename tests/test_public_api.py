@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import json
 from contextlib import asynccontextmanager
 from uuid import uuid4
 
 import httpx2
 import pytest
+from advanced_alchemy.types import FileObject
 from app_helpers import create_web_test_app, json_payload
 from sqlalchemy import select
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
@@ -182,7 +182,7 @@ async def test_http_api_library_project_tag_and_discussion_lifecycle(
             )
         )
         assert event is not None
-        assert json.loads(event.detail) == json_payload({
+        assert event.detail == json_payload({
             "invocation": {
                 "protocol": "http",
                 "operation": "create_library_item",
@@ -301,14 +301,17 @@ async def test_http_api_document_and_annotation_views_match_api_contracts(
     revision = FileRevision(
         workspace_id=fixture_workspace_id(user),
         item_id=item_id,
-        object_key="objects/api.pdf",
-        size=100,
-        mime_type="application/pdf",
-        original_name="api.pdf",
         page_count=1,
-        page_geometry="[[0, 0, 100, 100]]",
+        page_geometry=[[0, 0, 100, 100]],
         processing_state="ready",
         created_by=user_id,
+        file=FileObject(
+            backend="documents",
+            filename="objects/api.pdf",
+            size=100,
+            content_type="application/pdf",
+            metadata={"original_name": "api.pdf"},
+        ),
     )
     db.add(revision)
     await db.commit()
@@ -527,14 +530,17 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
     revision = FileRevision(
         workspace_id=workspace_id,
         item_id=item.id,
-        object_key="objects/admin-annotations.pdf",
-        size=100,
-        mime_type="application/pdf",
-        original_name="admin-annotations.pdf",
         page_count=1,
-        page_geometry="[[0, 0, 100, 100]]",
+        page_geometry=[[0, 0, 100, 100]],
         processing_state="ready",
         created_by=author.id,
+        file=FileObject(
+            backend="documents",
+            filename="objects/admin-annotations.pdf",
+            size=100,
+            content_type="application/pdf",
+            metadata={"original_name": "admin-annotations.pdf"},
+        ),
     )
     db.add_all([revision, project_item, archived_project_item, archived_project_member])
     await db.flush()
@@ -725,7 +731,7 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
     )
     assert event is not None
     assert event.authorization_resource_action == "project_annotation.delete"
-    assert json.loads(event.detail or "{}")["author_id"] == str(author.id)
+    assert (event.detail or {})["author_id"] == str(author.id)
 
 
 @pytest.mark.anyio
@@ -828,15 +834,17 @@ async def test_project_participation_does_not_gate_workspace_project_access(
     async with api_client(async_session_factory) as (client, _app):
         projects = await client.get(base, headers=headers)
         assert projects.status_code == 200
-        summaries = {project["id"]: project for project in projects.json()}
+        summaries = {project["id"]: project for project in projects.json()["items"]}
         mine = await client.get(f"{base}?view=mine", headers=headers)
         joinable = await client.get(f"{base}?view=joinable", headers=headers)
         invalid_view = await client.get(f"{base}?view=other", headers=headers)
         assert mine.status_code == 200
-        assert {project["id"] for project in mine.json()} == set(map(str, {workspace_visible.id}))
+        assert {project["id"] for project in mine.json()["items"]} == set(
+            map(str, {workspace_visible.id})
+        )
         assert joinable.status_code == 200
-        assert {project["id"] for project in joinable.json()} == {str(open_project.id)}
-        assert joinable.json()[0]["is_participating"] is False
+        assert {project["id"] for project in joinable.json()["items"]} == {str(open_project.id)}
+        assert joinable.json()["items"][0]["is_participating"] is False
         assert invalid_view.status_code == 422
         active_actions = set(summaries[str(active.id)]["authorization"]["allowed"])
         archived_actions = set(summaries[str(archived.id)]["authorization"]["allowed"])
@@ -854,7 +862,7 @@ async def test_project_participation_does_not_gate_workspace_project_access(
         assert active_detail.json()["authorization"] == summaries[str(active.id)]["authorization"]
 
         workspace_summary = next(
-            row for row in projects.json() if row["id"] == str(workspace_visible.id)
+            row for row in projects.json()["items"] if row["id"] == str(workspace_visible.id)
         )
         assert workspace_summary["is_participating"] is True
         assert "project_membership.manage" not in workspace_summary["authorization"]["allowed"]
@@ -886,7 +894,7 @@ async def test_project_participation_does_not_gate_workspace_project_access(
         join = await client.post(f"{base}/{active.id}/join", headers=headers)
         assert join.status_code == 200
         joined_mine = await client.get(f"{base}?view=mine", headers=headers)
-        assert {project["id"] for project in joined_mine.json()} == {
+        assert {project["id"] for project in joined_mine.json()["items"]} == {
             str(active.id),
             str(workspace_visible.id),
         }
@@ -896,7 +904,9 @@ async def test_project_participation_does_not_gate_workspace_project_access(
         leave = await client.post(f"{base}/{active.id}/leave", headers=headers)
         assert leave.status_code == 200
         left_mine = await client.get(f"{base}?view=mine", headers=headers)
-        assert {project["id"] for project in left_mine.json()} == {str(workspace_visible.id)}
+        assert {project["id"] for project in left_mine.json()["items"]} == {
+            str(workspace_visible.id)
+        }
         project_detail = await client.get(f"{base}/{active.id}", headers=headers)
         assert project_detail.status_code == 200
         assert project_detail.json()["is_participating"] is False

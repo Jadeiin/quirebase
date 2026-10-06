@@ -6,13 +6,13 @@
 	import { apiRequest } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import Button from '#lib/design/Button.svelte';
+	import Pagination from '#lib/design/Pagination.svelte';
 	import Notice from '#lib/design/Notice.svelte';
 	import { t } from '#lib/i18n.js';
 	import { getSession } from '#lib/session.js';
 	import { workspaceKeys } from '#lib/workspaces/keys.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
 	import {
-		clearDefaultWorkspacePreference,
 		defaultWorkspacePreference,
 		setDefaultWorkspacePreference
 	} from '#lib/workspaces/preference.js';
@@ -22,7 +22,14 @@
 	} from '#lib/workspaces/queries.js';
 	import { domainLabel } from '#lib/domain-labels.js';
 
-	const workspaces = createQuery(() => workspaceListQuery());
+	let offset = $state(0);
+	let search = $state('');
+	const workspaces = createQuery(() => workspaceListQuery(offset, search));
+	const pageCount = $derived(Math.max(1, Math.ceil((workspaces.data?.total ?? 0) / 25)));
+	$effect(() => {
+		if (workspaces.data && offset >= workspaces.data.total && offset > 0)
+			offset = (pageCount - 1) * 25;
+	});
 	const creation = createQuery(() => workspaceCreationAvailabilityQuery());
 	const queryClient = useQueryClient();
 	const session = getSession().query;
@@ -35,26 +42,6 @@
 
 	onMount(() => {
 		defaultWorkspaceId = defaultWorkspacePreference();
-		if (
-			defaultWorkspaceId &&
-			workspaces.data &&
-			!workspaces.data.some((workspace) => workspace.id === defaultWorkspaceId)
-		) {
-			clearDefaultWorkspacePreference();
-			defaultWorkspaceId = null;
-		}
-	});
-
-	$effect(() => {
-		const list = workspaces.data;
-		if (
-			!list ||
-			!defaultWorkspaceId ||
-			list.some((workspace) => workspace.id === defaultWorkspaceId)
-		)
-			return;
-		clearDefaultWorkspacePreference();
-		defaultWorkspaceId = null;
 	});
 
 	async function createWorkspace() {
@@ -122,11 +109,21 @@
 			</div>
 		</div>
 
+		<label
+			>{$t('Search workspaces')}<input
+				class="input"
+				value={search}
+				oninput={(event) => {
+					search = event.currentTarget.value;
+					offset = 0;
+				}}
+			/></label
+		>
 		{#if workspaces.isPending}<p class="text-surface-600-400">{$t('Loading workspaces…')}</p>
 		{:else if workspaces.isError}<Notice variant="error">{$t('Unable to load workspaces.')}</Notice>
-		{:else if workspaces.data?.length}
+		{:else if workspaces.data?.items.length}
 			<div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-				{#each workspaces.data as workspace (workspace.id)}
+				{#each workspaces.data.items as workspace (workspace.id)}
 					<a
 						class="group hover:border-primary-500-400 flex min-h-28 items-center justify-between gap-4 rounded-container border border-surface-300-700 bg-surface-50-950 p-5 text-inherit no-underline transition-colors hover:bg-primary-50-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
 						href={resolve(workspaceHref(workspace.id))}
@@ -159,6 +156,15 @@
 		{:else}
 			<Notice>{$t('No workspaces are available for this account yet.')}</Notice>
 		{/if}
+		<Pagination
+			page={Math.floor(offset / 25) + 1}
+			{pageCount}
+			onPage={(page) => {
+				offset = (page - 1) * 25;
+			}}
+			busy={workspaces.isFetching}
+			label={$t('Workspaces')}
+		/>
 	</section>
 
 	{#if creation.isPending}<p class="text-sm text-surface-600-400">

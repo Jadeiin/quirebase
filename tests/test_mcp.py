@@ -201,7 +201,7 @@ async def test_generated_library_tool_calls_api_and_preserves_mcp_audit_provenan
         )
     )
     assert event is not None
-    assert json.loads(event.detail) == json_payload({
+    assert event.detail == json_payload({
         "invocation": {
             "protocol": "mcp",
             "operation": "library.create_library_item",
@@ -252,7 +252,7 @@ async def test_tool_search_proxy_calls_the_curated_tool(async_db, async_session_
         )
     )
     assert event is not None
-    assert json.loads(event.detail)["invocation"]["operation"] == "library.create_library_item"
+    assert event.detail["invocation"]["operation"] == "library.create_library_item"
 
 
 async def test_generated_tool_returns_api_version_conflict_as_mcp_error(

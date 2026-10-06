@@ -222,7 +222,7 @@ async def _revision_member(
     if annotations:
         target = _temporary_path(prefix="quirebase-annotated-", suffix=".pdf")
         try:
-            async with store.materialize(revision.object_key) as source:
+            async with store.materialize(revision.file.path) as source:
                 await asyncio.to_thread(
                     export_annotations,
                     source,
@@ -237,7 +237,7 @@ async def _revision_member(
             raise
         body = _bridge(_path_body(target, delete_after=True), active_reads)
     else:
-        response = await store.get(revision.object_key)
+        response = await store.get(revision.file.path)
         size = response.metadata.size
         body = _bridge(response.body, active_reads)
     return (
@@ -276,7 +276,7 @@ async def _item_members(
     manifest: list[dict[str, object]] = []
     for index, revision in enumerate(revisions, start=1):
         filename = _revision_archive_name(
-            prefix, index, revision.original_name, annotated=include_annotations
+            prefix, index, revision.file.metadata["original_name"], annotated=include_annotations
         )
         archive_filename = _bundle_path(root, filename)
         yield await _revision_member(
@@ -291,7 +291,7 @@ async def _item_members(
         manifest.append({
             "version": index,
             "revision_id": revision.id,
-            "original_name": revision.original_name,
+            "original_name": revision.file.metadata["original_name"],
             "filename": archive_filename,
             "created_at": revision.created_at.isoformat(),
             "processing_state": getattr(
@@ -509,7 +509,7 @@ async def export_revision_pdf(
                     )
                 ).all()
                 author_names = {row[0]: row[1] for row in rows}
-            async with store.materialize(revision.object_key) as source:
+            async with store.materialize(revision.file.path) as source:
                 await asyncio.to_thread(
                     export_annotations,
                     source,
@@ -518,16 +518,18 @@ async def export_revision_pdf(
                     author_names=author_names,
                     display_timezone=annotation_export_timezone(timezone),
                 )
-            safe_name = _archive_name(Path(revision.original_name).stem, "document")
+            safe_name = _archive_name(
+                Path(revision.file.metadata["original_name"]).stem, "document"
+            )
             filename = f"{safe_name}-annotated.pdf"
         except BaseException:
             await asyncio.to_thread(target.unlink, missing_ok=True)
             raise
         body: AsyncIterable[bytes] = _path_body(target, delete_after=True)
     else:
-        response = await store.get(revision.object_key)
+        response = await store.get(revision.file.path)
         body = response.body
-        filename = revision.original_name
+        filename = revision.file.metadata["original_name"]
     try:
         await _record_revision_pdf_export(
             db,

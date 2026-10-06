@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import json
 
 import pytest
+from advanced_alchemy.types import FileObject
 from sqlalchemy import select
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
@@ -90,8 +90,8 @@ async def test_item_creation_enqueues_and_worker_persists_yake_results(async_db,
 
     await db.refresh(record)
     assert record.generated_at is not None
-    assert len(json.loads(record.single_words or "[]")) <= 10
-    assert len(json.loads(record.phrases or "[]")) <= 10
+    assert len(record.single_words or []) <= 10
+    assert len(record.phrases or []) <= 10
 
 
 @pytest.mark.anyio
@@ -232,12 +232,16 @@ async def test_generation_result_does_not_include_source_text(async_db, monkeypa
         FileRevision(
             workspace_id=fixture_workspace_id(user),
             item_id=item.id,
-            object_key="aa/bb/full-text.pdf",
-            size=1,
-            original_name="full-text.pdf",
             full_text="checkpoint sentinel " * 20_000,
             processing_state=FileRevisionProcessingState.ready,
             created_by=user.id,
+            file=FileObject(
+                backend="documents",
+                filename="aa/bb/full-text.pdf",
+                size=1,
+                content_type="application/pdf",
+                metadata={"original_name": "full-text.pdf"},
+            ),
         )
     )
     settings = Settings(

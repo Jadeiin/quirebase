@@ -1,3 +1,4 @@
+import { directoryPage } from './helpers';
 import { expect, test } from '@playwright/test';
 import { minimalPdf, mockSession } from './helpers';
 
@@ -200,25 +201,28 @@ test('read-only Item metadata does not expose mutation controls', async ({ page 
 
 test('cross-Workspace copy uses the server-provided eligible destinations', async ({ page }) => {
 	await mockSession(page);
-	await page.route('**/api/v1/workspaces', (route) =>
+	await page.route(/\/api\/v1\/workspaces(?:\?.*)?$/, (route) =>
 		route.fulfill({
-			json: [
-				{
-					id: 'workspace-1',
-					name: 'Source',
-					authorization: { allowed: ['workspace.read'] }
-				},
-				{
-					id: 'workspace-2',
-					name: 'Eligible destination',
-					authorization: { allowed: ['workspace.read', 'item.create'] }
-				},
-				{
-					id: 'workspace-3',
-					name: 'Read-only destination',
-					authorization: { allowed: ['workspace.read'] }
-				}
-			]
+			json: directoryPage(
+				[
+					{
+						id: 'workspace-1',
+						name: 'Source',
+						authorization: { allowed: ['workspace.read'] }
+					},
+					{
+						id: 'workspace-2',
+						name: 'Eligible destination',
+						authorization: { allowed: ['workspace.read', 'item.create'] }
+					},
+					{
+						id: 'workspace-3',
+						name: 'Read-only destination',
+						authorization: { allowed: ['workspace.read'] }
+					}
+				],
+				route
+			)
 		})
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/items/item-copy/overview', (route) =>

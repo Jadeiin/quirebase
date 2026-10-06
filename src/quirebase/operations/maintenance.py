@@ -256,7 +256,7 @@ async def cleanup_local_exports(ttl_hours: int) -> int:
 async def list_expired_export_artifacts(db: AsyncSession, limit: int) -> tuple[dict[str, str], ...]:
     rows = (
         await db.execute(
-            select(ExportArtifact.workflow_id, ExportArtifact.object_key)
+            select(ExportArtifact.workflow_id, ExportArtifact.file["filename"].as_string())
             .where(ExportArtifact.expires_at <= datetime.now(UTC))
             .order_by(ExportArtifact.expires_at, ExportArtifact.workflow_id)
             .limit(limit)
@@ -307,20 +307,12 @@ async def check_objects(db: AsyncSession) -> list[str]:
 
 async def scan_objects(
     db: AsyncSession, *, retention_hours: int | None = None
-) -> tuple[list[str], tuple[str, ...], dict[str, int]]:
+) -> tuple[list[str], tuple[str, ...], dict[str, dict]]:
     """Check references and find old orphans using one Object Store listing."""
     effective_hours = retention_hours or get_settings().object_orphan_retention_hours
     cutoff = datetime.now(UTC) - timedelta(hours=effective_hours)
     revisions = (
-        await db.execute(
-            select(
-                FileRevision.id,
-                FileRevision.object_key,
-                FileRevision.size,
-                FileRevision.thumbnail_object_key,
-                FileRevision.thumbnail_size,
-            )
-        )
+        await db.execute(select(FileRevision.id, FileRevision.file, FileRevision.thumbnail))
     ).all()
     attachments = (
         await db.execute(
@@ -331,10 +323,14 @@ async def scan_objects(
             )
         )
     ).all()
-    export_keys = set((await db.scalars(select(ExportArtifact.object_key))).all())
+    export_keys = set((await db.scalars(select(ExportArtifact.file["filename"].as_string()))).all())
     referenced = (
-        {revision.object_key for revision in revisions}
-        | {revision.thumbnail_object_key for revision in revisions if revision.thumbnail_object_key}
+        {revision.file.path for revision in revisions}
+        | {
+            (revision.thumbnail.path if revision.thumbnail else None)
+            for revision in revisions
+            if (revision.thumbnail.path if revision.thumbnail else None)
+        }
         | {attachment.object_key for attachment in attachments}
         | export_keys
     )
@@ -351,20 +347,24 @@ async def scan_objects(
     )
     stored = {item.key: item async for item in get_object_store().iter_prefix("")}
     errors: list[str] = []
-    thumbnail_sizes: dict[str, int] = {}
+    thumbnail_sizes: dict[str, dict] = {}
     for revision in revisions:
-        item = stored.get(revision.object_key)
+        item = stored.get(revision.file.path)
         if item is None:
             errors.append(f"{revision.id}: missing object")
-        elif item.size != revision.size:
+        elif item.size != revision.file.size:
             errors.append(f"{revision.id}: size mismatch")
-        if revision.thumbnail_object_key:
-            thumbnail = stored.get(revision.thumbnail_object_key)
+        descriptor = revision.thumbnail
+        if descriptor is not None:
+            thumbnail = stored.get(descriptor.path)
             if thumbnail is None:
                 errors.append(f"{revision.id}: missing thumbnail")
-            elif revision.thumbnail_size is None:
-                thumbnail_sizes[revision.id] = thumbnail.size
-            elif thumbnail.size != revision.thumbnail_size:
+            elif descriptor.size is None:
+                thumbnail_sizes[str(revision.id)] = {
+                    "path": descriptor.path,
+                    "size": thumbnail.size,
+                }
+            elif thumbnail.size != descriptor.size:
                 errors.append(f"{revision.id}: thumbnail size mismatch")
     for attachment in attachments:
         item = stored.get(attachment.object_key)
@@ -383,13 +383,7 @@ async def scan_objects(
     return errors, candidates, thumbnail_sizes
 
 
-def _import_object_keys(records_json: str) -> set[str]:
-    try:
-        rows = json.loads(records_json)
-    except (json.JSONDecodeError, TypeError):
-        return set()
-    if not isinstance(rows, list):
-        return set()
+def _import_object_keys(rows: list[dict]) -> set[str]:
     return {
         key
         for row in rows
@@ -400,9 +394,11 @@ def _import_object_keys(records_json: str) -> set[str]:
 
 
 async def _referenced_object_keys(db: AsyncSession) -> set[str]:
-    keys = set((await db.scalars(select(FileRevision.object_key))).all())
+    keys = set((await db.scalars(select(FileRevision.file["filename"].as_string()))).all())
     keys.update(
-        key for key in (await db.scalars(select(FileRevision.thumbnail_object_key))).all() if key
+        key
+        for key in (await db.scalars(select(FileRevision.thumbnail["filename"].as_string()))).all()
+        if key
     )
     keys.update((await db.scalars(select(Attachment.file["filename"].as_string()))).all())
     for records in (await db.scalars(select(ImportBatch.records))).all():

@@ -61,35 +61,28 @@ _ITEM_FIELDS = (
 @dataclass(frozen=True, slots=True)
 class _RevisionSnapshot:
     id: UUID
-    object_key: str
-    thumbnail_object_key: str | None
-    size: int
-    mime_type: str
-    original_name: str
+    file: dict[str, Any]
+    thumbnail: dict[str, Any] | None
     page_count: int | None
     full_text: str | None
-    page_geometry: str | None
+    page_geometry: list[list[float]] | None
     processing_state: FileRevisionProcessingState
 
 
 @dataclass(frozen=True, slots=True)
 class _AttachmentSnapshot:
     id: UUID
-    object_key: str
-    size: int
-    mime_type: str
-    original_name: str
+    file: dict[str, Any]
     role: AttachmentRole | None
 
 
 def _revision_snapshot(revision: FileRevision) -> _RevisionSnapshot:
+    if revision.file.size is None:
+        raise ValueError("persisted File Revision requires a file size")
     return _RevisionSnapshot(
         id=revision.id,
-        object_key=revision.object_key,
-        thumbnail_object_key=revision.thumbnail_object_key,
-        size=revision.size,
-        mime_type=revision.mime_type,
-        original_name=revision.original_name,
+        file=revision.file.to_dict(),
+        thumbnail=revision.thumbnail.to_dict() if revision.thumbnail else None,
         page_count=revision.page_count,
         full_text=revision.full_text,
         page_geometry=revision.page_geometry,
@@ -102,10 +95,7 @@ def _attachment_snapshot(attachment: Attachment) -> _AttachmentSnapshot:
         raise ValueError("persisted Attachment requires a file size")
     return _AttachmentSnapshot(
         id=attachment.id,
-        object_key=attachment.file.path,
-        size=attachment.file.size,
-        mime_type=attachment.file.content_type,
-        original_name=attachment.file.metadata["original_name"],
+        file=attachment.file.to_dict(),
         role=attachment.role,
     )
 
@@ -196,13 +186,15 @@ async def copy_item_to_workspace(
     try:
         copied_revision_objects: list[tuple[str, int, str | None, int | None]] = []
         for revision in revisions:
-            revision_key, revision_size = await _copy_object(revision.object_key, ObjectSuffix.PDF)
+            revision_key, revision_size = await _copy_object(
+                revision.file["filename"], ObjectSuffix.PDF
+            )
             copied_keys.append(revision_key)
             thumbnail_key = None
             thumbnail_size = None
-            if revision.thumbnail_object_key:
+            if revision.thumbnail is not None:
                 thumbnail_key, thumbnail_size = await _copy_object(
-                    revision.thumbnail_object_key, ObjectSuffix.PNG
+                    revision.thumbnail["filename"], ObjectSuffix.PNG
                 )
                 copied_keys.append(thumbnail_key)
             copied_revision_objects.append((
@@ -215,7 +207,7 @@ async def copy_item_to_workspace(
         copied_attachment_objects: list[tuple[str, int]] = []
         for attachment in attachments:
             attachment_key, attachment_size = await _copy_object(
-                attachment.object_key, ObjectSuffix.BINARY
+                attachment.file["filename"], ObjectSuffix.BINARY
             )
             copied_keys.append(attachment_key)
             copied_attachment_objects.append((attachment_key, attachment_size))
@@ -350,17 +342,19 @@ async def copy_item_to_workspace(
             copied_revision = FileRevision(
                 workspace_id=target_workspace_id,
                 item_id=target.id,
-                object_key=revision_key,
-                size=revision_size,
-                mime_type=revision.mime_type,
-                original_name=revision.original_name,
                 page_count=revision.page_count,
                 full_text=revision.full_text,
                 page_geometry=revision.page_geometry,
                 processing_state=revision.processing_state,
-                thumbnail_object_key=thumbnail_key,
-                thumbnail_size=thumbnail_size,
                 created_by=current_actor.id,
+                file=FileObject(
+                    **(revision.file | {"filename": revision_key, "size": revision_size})
+                ),
+                thumbnail=FileObject(
+                    **(revision.thumbnail | {"filename": thumbnail_key, "size": thumbnail_size})
+                )
+                if revision.thumbnail is not None
+                else None,
             )
             db.add(copied_revision)
             copied_revisions.append(copied_revision)
@@ -374,11 +368,7 @@ async def copy_item_to_workspace(
                     workspace_id=target_workspace_id,
                     item_id=target.id,
                     file=FileObject(
-                        backend="documents",
-                        filename=attachment_key,
-                        size=attachment_size,
-                        content_type=attachment.mime_type,
-                        metadata={"original_name": attachment.original_name},
+                        **(attachment.file | {"filename": attachment_key, "size": attachment_size})
                     ),
                     role=attachment.role,
                     created_by=current_actor.id,

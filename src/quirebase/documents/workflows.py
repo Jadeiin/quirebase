@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -9,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Literal, TypedDict, cast
 
 from advanced_alchemy.types import FileObject
 from dbos import DBOS
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from quirebase.access import (
     ResourceAction,
@@ -100,7 +99,7 @@ class PdfInspectionData(TypedDict):
     size: int
     page_count: int
     full_text: str
-    page_geometry: str
+    page_geometry: list[list[float]]
 
 
 class PdfInspection(PdfInspectionData):
@@ -219,7 +218,7 @@ async def _inspect_pdf_object(
         "size": metadata.size,
         "page_count": page_count,
         "full_text": text,
-        "page_geometry": json.dumps(geometry, separators=(",", ":")),
+        "page_geometry": geometry,
     }
 
 
@@ -245,6 +244,28 @@ async def inspect_uploaded_pdf(
     }
 
 
+def _ready_revision_values(inspected: PdfInspectionData, key: str, filename: str) -> dict:
+    return {
+        "file": FileObject(
+            backend="documents",
+            filename=key,
+            size=inspected["size"],
+            content_type="application/pdf",
+            metadata={"original_name": Path(filename).name[:255]},
+        ),
+        "thumbnail": FileObject(
+            backend="documents",
+            filename=inspected["thumbnail_object_key"],
+            size=inspected["thumbnail_size"],
+            content_type="image/png",
+        ),
+        "page_count": inspected["page_count"],
+        "page_geometry": inspected["page_geometry"],
+        "full_text": inspected["full_text"],
+        "processing_state": FileRevisionProcessingState.ready,
+    }
+
+
 @ads.transaction()
 async def commit_uploaded_revision(
     actor_id: UUID,
@@ -260,30 +281,23 @@ async def commit_uploaded_revision(
         if existing.workspace_id != workspace_id or existing.item_id != item_id:
             raise ValueError("uploaded revision does not belong to the requested item")
         if existing.processing_state == FileRevisionProcessingState.pending:
-            existing.object_key = inspected["object_key"]
-            existing.thumbnail_object_key = inspected["thumbnail_object_key"]
-            existing.thumbnail_size = inspected["thumbnail_size"]
-            existing.size = inspected["size"]
-            existing.page_count = inspected["page_count"]
-            existing.page_geometry = inspected["page_geometry"]
-            existing.full_text = inspected["full_text"]
-            existing.processing_state = FileRevisionProcessingState.ready
+            await db.execute(
+                update(FileRevision)
+                .where(
+                    FileRevision.id == existing.id,
+                    FileRevision.processing_state == FileRevisionProcessingState.pending,
+                )
+                .values(**_ready_revision_values(inspected, inspected["object_key"], filename))
+            )
+            await db.refresh(existing)
             await search_index(db).index_revision(db, existing.id)
         return {"revision_id": existing.id, "item_id": existing.item_id}
     revision = FileRevision(
         id=inspected["revision_id"],
         workspace_id=workspace_id,
         item_id=item_id,
-        object_key=inspected["object_key"],
-        thumbnail_object_key=inspected["thumbnail_object_key"],
-        thumbnail_size=inspected["thumbnail_size"],
-        size=inspected["size"],
-        original_name=Path(filename).name[:255],
-        page_count=inspected["page_count"],
-        page_geometry=inspected["page_geometry"],
-        full_text=inspected["full_text"],
-        processing_state=FileRevisionProcessingState.ready,
         created_by=actor_id,
+        **_ready_revision_values(inspected, inspected["object_key"], filename),
     )
     db.add(revision)
     await db.flush()
@@ -398,13 +412,19 @@ async def commit_imported_revision(
     if revision is None or revision.workspace_id != workspace_id:
         raise ValueError("imported revision no longer exists")
     if revision.processing_state == FileRevisionProcessingState.pending:
-        revision.thumbnail_object_key = inspected["thumbnail_object_key"]
-        revision.thumbnail_size = inspected["thumbnail_size"]
-        revision.size = inspected["size"]
-        revision.page_count = inspected["page_count"]
-        revision.full_text = inspected["full_text"]
-        revision.page_geometry = inspected["page_geometry"]
-        revision.processing_state = FileRevisionProcessingState.ready
+        await db.execute(
+            update(FileRevision)
+            .where(
+                FileRevision.id == revision.id,
+                FileRevision.processing_state == FileRevisionProcessingState.pending,
+            )
+            .values(
+                **_ready_revision_values(
+                    inspected, revision.file.path, revision.file.metadata["original_name"]
+                )
+            )
+        )
+        await db.refresh(revision)
         await search_index(db).index_revision(db, revision.id)
     return {"revision_id": revision.id, "item_id": revision.item_id}
 
@@ -608,7 +628,7 @@ async def build_annotation_export(
             )
         ).all()
         author_names = {row[0]: row[1] for row in author_rows}
-        revision_key = revision.object_key
+        revision_key = revision.file.path
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as output:
         output_path = Path(output.name)
     try:
@@ -732,9 +752,13 @@ async def record_annotation_export_artifact(
         ExportArtifact(
             workflow_id=workflow_id,
             workspace_id=workspace_id,
-            object_key=result["object_key"],
-            filename=result["filename"],
-            size=result["size_bytes"],
             expires_at=datetime.now(UTC) + timedelta(hours=ttl_hours),
+            file=FileObject(
+                backend="documents",
+                filename=result["object_key"],
+                size=result["size_bytes"],
+                content_type="application/pdf",
+                metadata={"original_name": result["filename"]},
+            ),
         )
     )

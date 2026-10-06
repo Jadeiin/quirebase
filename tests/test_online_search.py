@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from unittest.mock import AsyncMock
 
 import httpx2
@@ -67,7 +66,7 @@ async def test_online_search_page_keeps_search_separate_from_import(
         }
         event = await db.scalar(select(AuditEvent).where(AuditEvent.action == "metadata.search"))
         assert event is not None
-        assert json.loads(event.detail)["fields"] == ["title"]
+        assert event.detail["fields"] == ["title"]
         assert await db.scalar(select(AuditEvent).where(AuditEvent.action == "item.create")) is None
         assert (await db.scalars(select(Item.title))).all() == ["Paper"]
     finally:

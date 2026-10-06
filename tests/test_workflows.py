@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from advanced_alchemy.types import FileObject
 from sqlalchemy import select
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
@@ -391,10 +391,14 @@ async def test_imported_revision_inspection_enqueues_derived_state_sync(
     revision = FileRevision(
         workspace_id=fixture_workspace_id(user),
         item_id=item.id,
-        object_key=stored.key,
-        size=stored.size,
-        original_name="imported.pdf",
         created_by=user.id,
+        file=FileObject(
+            backend="documents",
+            filename=stored.key,
+            size=stored.size,
+            content_type="application/pdf",
+            metadata={"original_name": "imported.pdf"},
+        ),
     )
     async_db.add(revision)
     await async_db.commit()
@@ -598,10 +602,14 @@ async def test_annotation_export_artifact_transaction_records_lifetime(async_db,
     revision = FileRevision(
         workspace_id=fixture_workspace_id(user),
         item_id=item.id,
-        object_key="aa/bb/source.pdf",
-        size=42,
-        original_name="source.pdf",
         created_by=user.id,
+        file=FileObject(
+            backend="documents",
+            filename="aa/bb/source.pdf",
+            size=42,
+            content_type="application/pdf",
+            metadata={"original_name": "source.pdf"},
+        ),
     )
     async_db.add(revision)
     await async_db.commit()
@@ -623,9 +631,9 @@ async def test_annotation_export_artifact_transaction_records_lifetime(async_db,
 
     artifact = await async_db.get(ExportArtifact, "workflow-id")
     assert artifact is not None
-    assert artifact.object_key == "aa/bb/artifact.pdf"
-    assert artifact.filename == "artifact.pdf"
-    assert artifact.size == 42
+    assert artifact.file.path == "aa/bb/artifact.pdf"
+    assert artifact.file.metadata["original_name"] == "artifact.pdf"
+    assert artifact.file.size == 42
     assert artifact.expires_at.replace(tzinfo=UTC) >= before + timedelta(minutes=59)
 
 
@@ -645,10 +653,14 @@ async def test_project_annotation_export_rejects_replaced_assignment(async_db, m
     revision = FileRevision(
         workspace_id=workspace_id,
         item_id=item.id,
-        object_key="aa/bb/source.pdf",
-        size=42,
-        original_name="source.pdf",
         created_by=user.id,
+        file=FileObject(
+            backend="documents",
+            filename="aa/bb/source.pdf",
+            size=42,
+            content_type="application/pdf",
+            metadata={"original_name": "source.pdf"},
+        ),
     )
     assignment = ProjectItem(
         workspace_id=workspace_id,
@@ -710,12 +722,21 @@ async def test_integrity_scan_applies_database_backfills_in_datasource_transacti
     revision = FileRevision(
         workspace_id=fixture_workspace_id(user),
         item_id=item.id,
-        object_key=pdf.key,
-        size=pdf.size,
-        thumbnail_object_key=thumbnail.key,
-        thumbnail_size=None,
-        original_name="integrity.pdf",
         created_by=user.id,
+        file=FileObject(
+            backend="documents",
+            filename=pdf.key,
+            size=pdf.size,
+            content_type="application/pdf",
+            metadata={"original_name": "integrity.pdf"},
+        ),
+        thumbnail=(
+            FileObject(
+                backend="documents", filename=thumbnail.key, size=None, content_type="image/png"
+            )
+            if thumbnail.key is not None
+            else None
+        ),
     )
     async_db.add(revision)
     await async_db.commit()
@@ -724,14 +745,16 @@ async def test_integrity_scan_applies_database_backfills_in_datasource_transacti
     report = await operation_workflows.scan_objects_step()
 
     await async_db.refresh(revision)
-    assert revision.thumbnail_size is None
-    assert report["thumbnail_sizes"] == {revision.id: thumbnail.size}
+    assert revision.thumbnail.size is None
+    assert report["thumbnail_sizes"] == {
+        str(revision.id): {"path": thumbnail.key, "size": thumbnail.size}
+    }
 
     await operation_workflows.record_integrity_scan_step(
         report["errors"], report["thumbnail_sizes"]
     )
     await async_db.refresh(revision)
-    assert revision.thumbnail_size == thumbnail.size
+    assert revision.thumbnail.size == thumbnail.size
     assert (
         await async_db.scalar(
             select(ObjectIntegrityScan).order_by(ObjectIntegrityScan.checked_at.desc()).limit(1)
@@ -834,7 +857,7 @@ async def test_commit_uploaded_revision_uses_datasource_transaction(async_db):
         "size": 1024,
         "page_count": 2,
         "full_text": "Extracted text content",
-        "page_geometry": "[]",
+        "page_geometry": [],
     }
     result = await document_workflows.commit_uploaded_revision(
         user.id, fixture_workspace_id(user), item.id, "my_doc.pdf", inspected
@@ -843,7 +866,7 @@ async def test_commit_uploaded_revision_uses_datasource_transaction(async_db):
 
     saved = await async_db.get(FileRevision, rev_id)
     assert saved is not None
-    assert saved.object_key == "aa/bb/doc.pdf"
+    assert saved.file.path == "aa/bb/doc.pdf"
     assert saved.page_count == 2
     assert saved.full_text == "Extracted text content"
 
@@ -1149,8 +1172,8 @@ async def test_pdf_import_workflow_marks_batch_failed_and_preserves_pdf(async_db
         workspace_id=fixture_workspace_id(user),
         actor_id=user.id,
         file_format="pdf",
-        records=json.dumps([pending]),
-        errors="[]",
+        records=[pending],
+        errors=[],
         status="pending",
         workflow_id="prepare-pdf-import:failed",
     )
@@ -1264,3 +1287,56 @@ async def test_tag_recommendation_item_listing_is_workspace_scoped(async_db):
         async_db, fixture_workspace_id(user), None, 100
     )
     assert listed == (own.id,)
+
+
+@pytest.mark.anyio
+async def test_integrity_backfill_does_not_overwrite_a_replaced_thumbnail(
+    async_db, async_session_factory, monkeypatch
+):
+    user = await _provisioned_user(async_db, "thumbnail-repair-race")
+    item = Item(workspace_id=fixture_workspace_id(user), title="Repair race", created_by=user.id)
+    async_db.add(item)
+    await async_db.flush()
+    pdf = await get_object_store().put_object(
+        uuid4(), ObjectSuffix.PDF, b"%PDF-repair", max_bytes=100
+    )
+    old_thumbnail = await get_object_store().put_object(
+        uuid4(), ObjectSuffix.PNG, b"old", max_bytes=100
+    )
+    new_thumbnail = await get_object_store().put_object(
+        uuid4(), ObjectSuffix.PNG, b"replacement", max_bytes=100
+    )
+    revision = FileRevision(
+        workspace_id=item.workspace_id,
+        item_id=item.id,
+        created_by=user.id,
+        file=FileObject(
+            backend="documents",
+            filename=pdf.key,
+            size=pdf.size,
+            content_type="application/pdf",
+            metadata={"original_name": "repair.pdf"},
+        ),
+        thumbnail=FileObject(
+            backend="documents", filename=old_thumbnail.key, content_type="image/png"
+        ),
+    )
+    async_db.add(revision)
+    await async_db.commit()
+    monkeypatch.setattr(operation_workflows, "AsyncSessionLocal", async_session_factory)
+    report = await operation_workflows.scan_objects_step()
+    await async_db.refresh(revision)
+    revision.thumbnail = FileObject(
+        backend="documents",
+        filename=new_thumbnail.key,
+        content_type="image/png",
+        metadata={"generation": "new"},
+    )
+    await async_db.commit()
+    await operation_workflows.record_integrity_scan_step(
+        report["errors"], report["thumbnail_sizes"]
+    )
+    await async_db.refresh(revision)
+    assert revision.thumbnail.path == new_thumbnail.key
+    assert revision.thumbnail.size is None
+    assert revision.thumbnail.metadata == {"generation": "new"}

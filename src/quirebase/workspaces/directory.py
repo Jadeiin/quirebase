@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from advanced_alchemy.filters import LimitOffset
+from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from sqlalchemy import and_, case, func, select
 
 from quirebase.access import (
@@ -25,11 +27,22 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
-async def list_workspaces(db: AsyncSession, actor: User) -> list[tuple[Workspace, WorkspaceMember]]:
+class WorkspaceReadRepository(SQLAlchemyAsyncRepository[Workspace]):
+    model_type = Workspace
+
+
+async def list_workspaces(
+    db: AsyncSession,
+    actor: User,
+    *,
+    limit: int | None = 25,
+    offset: int = 0,
+    search: str = "",
+) -> tuple[list[tuple[Workspace, WorkspaceMember]], int]:
     if not actor.active:
-        return []
-    rows = await db.execute(
-        select(Workspace, WorkspaceMember)
+        return [], 0
+    query = (
+        select(Workspace)
         .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
         .where(
             WorkspaceMember.user_id == actor.id,
@@ -39,7 +52,29 @@ async def list_workspaces(db: AsyncSession, actor: User) -> list[tuple[Workspace
         )
         .order_by(Workspace.name, Workspace.id)
     )
-    return list(rows.tuples())
+    if search.strip():
+        query = query.where(Workspace.name.ilike(f"%{search.strip()}%"))
+    filters = (LimitOffset(limit=limit, offset=offset),) if limit is not None else ()
+    roots, total = await WorkspaceReadRepository(session=db, statement=query).get_many_and_count(
+        *filters,
+        count_with_window_function=False,
+    )
+    if not roots:
+        return [], total
+    members = {
+        member.workspace_id: member
+        for member in await db.scalars(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id.in_([workspace.id for workspace in roots]),
+                WorkspaceMember.user_id == actor.id,
+                WorkspaceMember.state == WorkspaceMemberState.active,
+                WorkspaceMember.terminated_at.is_(None),
+            )
+        )
+    }
+    return [
+        (workspace, members[workspace.id]) for workspace in roots if workspace.id in members
+    ], total
 
 
 def _workspace_owners_query():

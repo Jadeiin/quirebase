@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import func, or_, select
+from advanced_alchemy.filters import LimitOffset
+from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+from sqlalchemy import Text, cast, or_, select
 
 from quirebase.access.authorization import SystemAction, require_system_action
 from quirebase.audit.invocations import current_programmatic_invocation
@@ -41,11 +42,6 @@ def record_event(
             detail = {"message": detail, "invocation": invocation.detail()}
         else:
             detail = {"invocation": invocation.detail()}
-    detail_text: str | None = None
-    if isinstance(detail, dict):
-        detail_text = json.dumps(detail, ensure_ascii=False, default=str)
-    elif isinstance(detail, str):
-        detail_text = detail
     event = AuditEvent(
         actor_id=actor_id,
         workspace_id=workspace_id,
@@ -53,10 +49,8 @@ def record_event(
         action=action,
         target_type=target_type,
         target_id=str(target_id) if target_id is not None else None,
-        detail=detail_text,
-        target_ids=json.dumps([str(target_id) for target_id in target_ids])
-        if target_ids is not None
-        else None,
+        detail=detail,
+        target_ids=[str(target_id) for target_id in target_ids] if target_ids is not None else None,
         authorization_role=authorization_role,
         authorization_resource_action=authorization_resource_action,
         result=result,
@@ -64,6 +58,10 @@ def record_event(
     )
     db.add(event)
     return event
+
+
+class AuditReadRepository(SQLAlchemyAsyncRepository[AuditEvent]):
+    model_type = AuditEvent
 
 
 async def query_events(
@@ -78,7 +76,6 @@ async def query_events(
 ) -> tuple[list[AuditEvent], int]:
     await require_system_action(db, admin, SystemAction.audit_read)
     query = select(AuditEvent)
-    count_query = select(func.count(AuditEvent.id))
     filters = []
     if actor_id:
         filters.append(AuditEvent.actor_id == actor_id)
@@ -93,19 +90,15 @@ async def query_events(
                 AuditEvent.action.ilike(term),
                 AuditEvent.target_type.ilike(term),
                 AuditEvent.target_id.ilike(term),
-                AuditEvent.detail.ilike(term),
+                cast(AuditEvent.detail, Text).ilike(term),
             )
         )
     if filters:
         query = query.where(*filters)
-        count_query = count_query.where(*filters)
-    total = await db.scalar(count_query) or 0
-    offset = max(0, (page - 1) * page_size)
-    events = list(
-        (
-            await db.scalars(
-                query.order_by(AuditEvent.created_at.desc()).offset(offset).limit(page_size)
-            )
-        ).all()
+    return await AuditReadRepository(
+        session=db,
+        statement=query.order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc()),
+    ).get_many_and_count(
+        LimitOffset(limit=page_size, offset=max(0, (page - 1) * page_size)),
+        count_with_window_function=False,
     )
-    return events, total

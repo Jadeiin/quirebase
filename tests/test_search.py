@@ -1,4 +1,5 @@
 import pytest
+from advanced_alchemy.types import FileObject
 from sqlalchemy import select
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
@@ -23,12 +24,16 @@ async def add_item(db, user, *, title, abstract=None, full_text=None):
             FileRevision(
                 workspace_id=fixture_workspace_id(user),
                 item_id=item.id,
-                object_key=f"objects/{item.id}",
-                size=1,
-                original_name="paper.pdf",
                 full_text=full_text,
                 processing_state="ready",
                 created_by=user.id,
+                file=FileObject(
+                    backend="documents",
+                    filename=f"objects/{item.id}",
+                    size=1,
+                    content_type="application/pdf",
+                    metadata={"original_name": "paper.pdf"},
+                ),
             )
         )
         await db.flush()

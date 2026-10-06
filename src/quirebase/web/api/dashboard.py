@@ -30,5 +30,6 @@ async def dashboard(workspace_id: UUID, user: ApiUser, db: Database):
             }
             for project in data["projects"]
         ],
+        "project_count": data["project_count"],
         "session_count": len(data["sessions"]),
     }

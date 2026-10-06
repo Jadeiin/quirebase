@@ -76,7 +76,9 @@ async def list_annotations(
     )
     return AnnotationListView(
         revisions=[
-            AnnotationRevisionView(id=revision.id, original_name=revision.original_name)
+            AnnotationRevisionView(
+                id=revision.id, original_name=revision.file.metadata["original_name"]
+            )
             for revision in result.revisions
         ],
         projects=[

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -105,10 +104,7 @@ def metadata_from_item(
     """Project persisted Item metadata into the same shape accepted by replacement writes."""
     custom_fields: tuple[CustomField, ...] = ()
     if item.custom_fields:
-        try:
-            parsed_custom_fields = json.loads(item.custom_fields)
-        except (json.JSONDecodeError, TypeError) as error:
-            raise ValidationFailure("stored custom fields are invalid JSON") from error
+        parsed_custom_fields = item.custom_fields
         if not isinstance(parsed_custom_fields, dict):
             raise ValidationFailure("stored custom fields must be a JSON object")
         custom_fields = tuple(
@@ -230,7 +226,7 @@ def _contributor_payload(contributors: tuple[Contributor, ...], *, editor: bool)
     return payload
 
 
-def _serialize_custom_fields(fields: tuple[CustomField, ...]) -> str | None:
+def _custom_field_values(fields: tuple[CustomField, ...]) -> dict | None:
     values: dict[str, JsonValue] = {}
     for custom_field in fields:
         name = custom_field.name.strip()
@@ -239,7 +235,7 @@ def _serialize_custom_fields(fields: tuple[CustomField, ...]) -> str | None:
         if name in values:
             raise ValidationFailure("custom field names must be unique")
         values[name] = custom_field.value
-    return json.dumps(values, ensure_ascii=False) if values else None
+    return values or None
 
 
 async def _create_item(
@@ -251,7 +247,7 @@ async def _create_item(
     context = await require_workspace_action(db, actor, workspace_id, ResourceAction.item_create)
     values = _bibliographic_values(metadata)
     values.update(
-        custom_fields=_serialize_custom_fields(metadata.custom_fields),
+        custom_fields=_custom_field_values(metadata.custom_fields),
         created_by=actor.id,
         workspace_id=workspace_id,
     )
@@ -316,7 +312,7 @@ async def _revise_item_metadata(
     item = await require_editable_item(db, actor, workspace_id, item_id)
     values = _bibliographic_values(metadata)
     values.update(
-        custom_fields=_serialize_custom_fields(metadata.custom_fields),
+        custom_fields=_custom_field_values(metadata.custom_fields),
         updated_by=actor_id,
         updated_at=datetime.now(UTC),
         version=Item.version + 1,

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -189,8 +188,8 @@ async def _store_item_tag_recommendation(
         or record.workflow_id != workflow_id
     ):
         return {"stale": True}
-    record.single_words = json.dumps(candidates["single_words"], ensure_ascii=False)
-    record.phrases = json.dumps(candidates["phrases"], ensure_ascii=False)
+    record.single_words = candidates["single_words"]
+    record.phrases = candidates["phrases"]
     record.generated_at = datetime.now(UTC)
     return {
         "single_words": len(candidates["single_words"]),

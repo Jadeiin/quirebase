@@ -1,3 +1,4 @@
+import { directoryPage } from './helpers';
 import { expect, test, type Page } from '@playwright/test';
 import type { AnnotationPlugin, PluginRegistry } from '@embedpdf/svelte-pdf-viewer';
 import { annotationList, minimalPdf, mockSession } from './helpers';
@@ -196,30 +197,33 @@ test('Library refreshes Project targets on a lifecycle conflict and keeps select
 	let archived = false;
 	const submissions: Array<{ project_id: string; item_ids: string[] }> = [];
 	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
 		route.fulfill({
-			json: [
-				{
-					id: 'project-1',
-					name: 'Reading Project',
-					state: archived ? 'archived' : 'active',
-					participation: 'workspace',
-					is_participating: true,
-					item_count: 0,
-					description: null,
-					authorization: { allowed: archived ? [] : ['project_item.manage'] }
-				},
-				{
-					id: 'project-2',
-					name: 'Another Project',
-					state: 'active',
-					participation: 'workspace',
-					is_participating: true,
-					item_count: 0,
-					description: null,
-					authorization: { allowed: ['project_item.manage'] }
-				}
-			]
+			json: directoryPage(
+				[
+					{
+						id: 'project-1',
+						name: 'Reading Project',
+						state: archived ? 'archived' : 'active',
+						participation: 'workspace',
+						is_participating: true,
+						item_count: 0,
+						description: null,
+						authorization: { allowed: archived ? [] : ['project_item.manage'] }
+					},
+					{
+						id: 'project-2',
+						name: 'Another Project',
+						state: 'active',
+						participation: 'workspace',
+						is_participating: true,
+						item_count: 0,
+						description: null,
+						authorization: { allowed: ['project_item.manage'] }
+					}
+				],
+				route
+			)
 		})
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) =>
@@ -304,7 +308,9 @@ for (const code of ['project_member_conflict', 'project_lifecycle_error']) {
 				description: '',
 				authorization: { allowed: changed ? [] : ['project_membership.join'] }
 			};
-			return route.fulfill({ json: view === 'joinable' && changed ? [] : [project] });
+			return route.fulfill({
+				json: directoryPage(view === 'joinable' && changed ? [] : [project], route)
+			});
 		});
 		await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/join', (route) => {
 			changed = true;

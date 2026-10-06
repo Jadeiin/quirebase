@@ -5,9 +5,15 @@ from enum import StrEnum
 from typing import Any, Protocol
 from uuid import UUID  # ruff: ignore[typing-only-standard-library-import] - SQLAlchemy resolves mappings
 
-from advanced_alchemy.types import GUID, DateTimeUTC, FileObject, HashedPassword, StoredObject
+from advanced_alchemy.types import (
+    GUID,
+    DateTimeUTC,
+    FileObject,
+    HashedPassword,
+    JsonB,
+    StoredObject,
+)
 from sqlalchemy import (
-    JSON,
     Boolean,
     CheckConstraint,
     ForeignKey,
@@ -301,7 +307,7 @@ class Item(EntityBase):
     bibtex_type: Mapped[str | None] = mapped_column(String(40))
     urls: Mapped[str | None] = mapped_column(Text)
     keywords: Mapped[str | None] = mapped_column(Text)
-    custom_fields: Mapped[str | None] = mapped_column(Text)
+    custom_fields: Mapped[dict | None] = mapped_column(JsonB)
     created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
     updated_by: Mapped[UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -499,8 +505,8 @@ class ItemTagRecommendation(EntityBase):
     item_id: Mapped[UUID] = mapped_column(GUID(), unique=True, index=True)
     generation_token: Mapped[int] = mapped_column(Integer, default=1)
     workflow_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
-    single_words: Mapped[str | None] = mapped_column(Text, nullable=True)
-    phrases: Mapped[str | None] = mapped_column(Text, nullable=True)
+    single_words: Mapped[list[str] | None] = mapped_column(JsonB, nullable=True)
+    phrases: Mapped[list[str] | None] = mapped_column(JsonB, nullable=True)
     generated_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True), nullable=True)
 
 
@@ -553,14 +559,12 @@ class FileRevision(EntityBase):
     )
     workspace_id: Mapped[UUID] = mapped_column(GUID(), index=True)
     item_id: Mapped[UUID] = mapped_column(GUID(), index=True)
-    object_key: Mapped[str] = mapped_column(String(200), index=True)
-    thumbnail_object_key: Mapped[str | None] = mapped_column(String(200), nullable=True, index=True)
-    thumbnail_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    size: Mapped[int] = mapped_column(Integer)
-    mime_type: Mapped[str] = mapped_column(String(100), default="application/pdf")
-    original_name: Mapped[str] = mapped_column(String(255))
+    file: Mapped[FileObject] = mapped_column(StoredObject(backend="documents"))
+    thumbnail: Mapped[FileObject | None] = mapped_column(
+        StoredObject(backend="documents"), nullable=True
+    )
     page_count: Mapped[int | None] = mapped_column(Integer)
-    page_geometry: Mapped[str | None] = mapped_column(Text)
+    page_geometry: Mapped[list[list[float]] | None] = mapped_column(JsonB)
     full_text: Mapped[str | None] = mapped_column(Text)
     processing_state: Mapped[FileRevisionProcessingState] = mapped_column(
         enum_type(FileRevisionProcessingState, "file_revision_processing_state"),
@@ -660,7 +664,7 @@ class PdfAnnotation(EntityBase):
     project_item_id: Mapped[UUID | None] = mapped_column(GUID(), nullable=True, index=True)
     body: Mapped[str | None] = mapped_column(Text)
     selected_text: Mapped[str | None] = mapped_column(Text)
-    payload: Mapped[dict] = mapped_column(JSON)
+    payload: Mapped[dict] = mapped_column(JsonB)
     version: Mapped[int] = mapped_column(Integer, default=1)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
     deleted_by_moderation: Mapped[bool] = mapped_column(
@@ -729,9 +733,7 @@ class ExportArtifact(Base):
     workspace_id: Mapped[UUID] = mapped_column(
         ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
     )
-    object_key: Mapped[str] = mapped_column(String(500), unique=True)
-    filename: Mapped[str] = mapped_column(String(255))
-    size: Mapped[int] = mapped_column(Integer)
+    file: Mapped[FileObject] = mapped_column(StoredObject(backend="documents"))
     expires_at: Mapped[datetime] = mapped_column(DateTimeUTC(timezone=True), index=True)
 
 
@@ -748,11 +750,11 @@ class ImportBatch(EntityBase):
     )
     actor_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     file_format: Mapped[str] = mapped_column(String(16))
-    records: Mapped[str] = mapped_column(Text)
-    errors: Mapped[str] = mapped_column(Text)
+    records: Mapped[list[dict]] = mapped_column(JsonB)
+    errors: Mapped[list[dict]] = mapped_column(JsonB)
     status: Mapped[str] = mapped_column(String(16), default="ready")
     workflow_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
-    committed_item_ids: Mapped[str | None] = mapped_column(Text, nullable=True)
+    committed_item_ids: Mapped[list[str] | None] = mapped_column(JsonB, nullable=True)
 
 
 class CitationStyle(EntityBase):
@@ -776,8 +778,8 @@ class AuditEvent(IdentityBase):
     action: Mapped[str] = mapped_column(String(120), index=True)
     target_type: Mapped[str] = mapped_column(String(80))
     target_id: Mapped[str | None] = mapped_column(String(36))
-    detail: Mapped[str | None] = mapped_column(Text)
-    target_ids: Mapped[str | None] = mapped_column(Text)
+    detail: Mapped[dict | str | None] = mapped_column(JsonB)
+    target_ids: Mapped[list[str] | None] = mapped_column(JsonB)
     authorization_role: Mapped[str | None] = mapped_column(String(32))
     authorization_resource_action: Mapped[str | None] = mapped_column(String(80))
     result: Mapped[str | None] = mapped_column(String(32))
@@ -802,7 +804,7 @@ class ObjectIntegrityScan(EntityBase):
     status: Mapped[str] = mapped_column(String(32))
     missing_count: Mapped[int] = mapped_column(Integer, default=0)
     mismatch_count: Mapped[int] = mapped_column(Integer, default=0)
-    errors: Mapped[str] = mapped_column(Text, default="[]")
+    errors: Mapped[list[str]] = mapped_column(JsonB, default=list)
     checked_at: Mapped[datetime] = mapped_column(
         DateTimeUTC(timezone=True), default=now, index=True
     )

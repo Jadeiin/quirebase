@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, status
+from advanced_alchemy.service import OffsetPagination
+from fastapi import APIRouter, Query, status
 from sqlalchemy import select
 
 from quirebase.access import (
@@ -97,15 +99,22 @@ async def _usernames(db, user_ids: set[UUID]) -> dict[UUID, str]:
     return dict(rows.all())
 
 
-@router.get("/workspaces", response_model=list[WorkspaceView])
-async def get_workspaces(user: ApiUser, db: Database) -> list[WorkspaceView]:
-    rows = await list_workspaces(db, user)
+@router.get("/workspaces", response_model=OffsetPagination[WorkspaceView])
+async def get_workspaces(
+    user: ApiUser,
+    db: Database,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    search: str = "",
+) -> OffsetPagination[WorkspaceView]:
+    rows, total = await list_workspaces(db, user, limit=limit, offset=offset, search=search)
     owner_ids = await workspace_owner_ids(db, {workspace.id for workspace, _ in rows})
-    return [
+    items = [
         _workspace_view(workspace, member, owner_id=owner_ids[workspace.id])
         for workspace, member in rows
         if workspace.id in owner_ids
     ]
+    return OffsetPagination(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.get("/workspaces/creation-availability", response_model=WorkspaceCreationAvailabilityView)

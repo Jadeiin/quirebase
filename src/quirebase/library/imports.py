@@ -72,11 +72,7 @@ async def _finish_cleanup_despite_cancellation(task: asyncio.Task[None]) -> None
             _consume_current_cancellation()
 
 
-def _pdf_object_keys(records_json: str) -> set[str]:
-    try:
-        records = json.loads(records_json)
-    except (json.JSONDecodeError, TypeError):
-        return set()
+def _pdf_object_keys(records: list[dict]) -> set[str]:
     return {
         pdf["object_key"]
         for record in records
@@ -86,7 +82,7 @@ def _pdf_object_keys(records_json: str) -> set[str]:
     }
 
 
-def _record_to_item_payload(record: BibliographyRecord) -> dict[str, str | None]:
+def _record_to_item_payload(record: BibliographyRecord) -> dict:
     """Serialize a parsed record into the Item-column dictionary stored on Import Batches."""
     return {
         "title": record.title or None,
@@ -109,9 +105,7 @@ def _record_to_item_payload(record: BibliographyRecord) -> dict[str, str | None]
         "identifiers": json.dumps(dict(record.identifiers), ensure_ascii=False)
         if record.identifiers
         else None,
-        "custom_fields": json.dumps(dict(record.custom_fields), ensure_ascii=False)
-        if record.custom_fields
-        else None,
+        "custom_fields": dict(record.custom_fields) if record.custom_fields else None,
     }
 
 
@@ -133,8 +127,8 @@ async def stage_import_batch(
         workspace_id=workspace_id,
         actor_id=user.id,
         file_format=file_format,
-        records=json.dumps(records, ensure_ascii=False),
-        errors=json.dumps(errors, ensure_ascii=False),
+        records=records,
+        errors=errors,
     )
     db.add(batch)
     await db.commit()
@@ -168,8 +162,8 @@ async def stage_identifier_import_batch(
         workspace_id=workspace_id,
         actor_id=user.id,
         file_format=f"metadata:{record.identifier.provider}",
-        records=json.dumps([rec_dict], ensure_ascii=False),
-        errors="[]",
+        records=[rec_dict],
+        errors=[],
     )
     db.add(batch)
     await db.flush()
@@ -253,8 +247,8 @@ async def stage_pdf_import_batch(
             workspace_id=workspace_id,
             actor_id=reloaded_user.id,
             file_format="pdf",
-            records=json.dumps(pending_records, ensure_ascii=False),
-            errors=json.dumps(errors, ensure_ascii=False),
+            records=pending_records,
+            errors=errors,
             status="pending",
         )
         db.add(batch)
@@ -449,19 +443,19 @@ async def finalize_pdf_import_batch(
     except DomainError:
         # The failed batch still owns its staged PDFs. Reference-aware cleanup
         # must leave these retry inputs intact until retry or explicit discard.
-        batch.errors = json.dumps([
-            *json.loads(batch.errors),
+        batch.errors = [
+            *batch.errors,
             {
                 "row": 0,
                 "code": "authorization_revoked",
                 "message": "Workspace authorization is no longer available",
             },
-        ])
+        ]
         batch.status = "failed"
         return False
-    initial_errors = json.loads(batch.errors)
-    batch.records = json.dumps(records, ensure_ascii=False)
-    batch.errors = json.dumps([*initial_errors, *errors], ensure_ascii=False)
+    initial_errors = batch.errors
+    batch.records = records
+    batch.errors = [*initial_errors, *errors]
     batch.status = "ready"
     record_event(
         db,
@@ -501,8 +495,8 @@ async def get_import_batch_preview(
         db, batch, workflow
     ):
         await db.commit()
-    records = json.loads(batch.records) if batch.status in {"ready", "committed"} else []
-    return batch, records, json.loads(batch.errors)
+    records = batch.records if batch.status in {"ready", "committed"} else []
+    return batch, records, batch.errors
 
 
 async def _converge_pdf_import_batch_status(
@@ -562,7 +556,7 @@ async def retry_pdf_import_batch(
         await _converge_pdf_import_batch_status(db, batch, workflow)
     if batch.file_format != "pdf" or batch.status != "failed":
         raise BatchConflict("only a failed PDF import batch can be retried")
-    pending_records = json.loads(batch.records)
+    pending_records = batch.records
     if not isinstance(pending_records, list) or not any(
         isinstance(record, dict) and isinstance(record.get("_pdf"), dict)
         for record in pending_records
@@ -576,9 +570,7 @@ async def retry_pdf_import_batch(
     batch.actor_id = user.id
     batch.status = "pending"
     batch.workflow_id = workflow_id
-    batch.errors = json.dumps([
-        error for error in json.loads(batch.errors) if error.get("code") != "authorization_revoked"
-    ])
+    batch.errors = [error for error in batch.errors if error.get("code") != "authorization_revoked"]
     await durable_operations().enqueue_in_transaction(
         db,
         "library.prepare_pdf_import",
@@ -630,10 +622,7 @@ async def commit_import_batch(
     if batch is None or batch.workspace_id != workspace_id:
         raise ResourceUnavailable("import batch not found")
     if batch.status == "committed":
-        try:
-            committed_ids = json.loads(batch.committed_item_ids or "[]")
-        except (TypeError, json.JSONDecodeError) as error:
-            raise BatchConflict("the committed batch has invalid results") from error
+        committed_ids = batch.committed_item_ids or []
         if not isinstance(committed_ids, list) or not all(
             isinstance(item_id, str) for item_id in committed_ids
         ):
@@ -646,10 +635,10 @@ async def commit_import_batch(
         return result_ids
     if batch.status != "ready":
         raise BatchConflict("the import batch is still being prepared")
-    errors = json.loads(batch.errors)
+    errors = batch.errors
     if errors and batch.file_format != "pdf":
         raise BatchConflict("the preview contains errors")
-    records = json.loads(batch.records)
+    records = batch.records
     if not records:
         raise BatchConflict("the import batch has no candidate records")
     if batch.file_format == "pdf":
@@ -696,14 +685,14 @@ async def commit_import_batch(
             authorization_resource_action=ResourceAction.item_create.value,
         )
         committed_item_ids.append(item.id)
-    batch.committed_item_ids = json.dumps([str(item_id) for item_id in committed_item_ids])
+    batch.committed_item_ids = [str(item_id) for item_id in committed_item_ids]
     # A committed batch no longer owns staged upload objects.  Drop the PDF
     # staging payload so cleanup cannot mistake it for a live reservation.
-    batch.records = json.dumps([
+    batch.records = [
         {key: value for key, value in record.items() if key != "_pdf"}
         for record in records
         if isinstance(record, dict)
-    ])
+    ]
     batch.status = "committed"
     await db.commit()
     return committed_item_ids

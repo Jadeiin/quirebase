@@ -76,7 +76,7 @@ async def test_http_api_creates_complete_metadata(
     assert json.loads(created.identifiers or "") == {"pmid": "12345"}
     assert created.keywords == "forms; metadata"
     assert created.urls == "https://example.test/record\nhttps://example.test/pdf"
-    assert json.loads(created.custom_fields or "") == {"rating": 5}
+    assert (created.custom_fields or {}) == {"rating": 5}
     await client.aclose()
 
 
@@ -142,7 +142,7 @@ async def test_http_api_edits_rich_metadata_and_structured_contributors(
     assert updated.pages == "5998-6008"
     assert updated.affiliation == "Google Brain"
     assert updated.bibtex_id == "vaswani2017attention"
-    assert json.loads(updated.custom_fields or "") == {
+    assert (updated.custom_fields or {}) == {
         "rating": 5,
         "flags": ["reviewed"],
         "meta": {"source": "manual"},
@@ -192,8 +192,8 @@ async def test_http_api_tag_matrix_and_selection(
             generation_token=1,
         )
         db.add(recommendation)
-    recommendation.single_words = json.dumps([])
-    recommendation.phrases = json.dumps(["Natural Language Processing", "New Research Direction"])
+    recommendation.single_words = []
+    recommendation.phrases = ["Natural Language Processing", "New Research Direction"]
     recommendation.generated_at = datetime.now(UTC)
     await db.commit()
 
@@ -252,8 +252,8 @@ async def test_http_api_tag_recommendation_pending_failed_and_retry_states(
         item_id=item.id,
         generation_token=1,
         workflow_id=workflow_id,
-        single_words=json.dumps(["stale-candidate"]),
-        phrases=json.dumps([]),
+        single_words=["stale-candidate"],
+        phrases=[],
     )
     db.add(recommendation)
     await db.commit()

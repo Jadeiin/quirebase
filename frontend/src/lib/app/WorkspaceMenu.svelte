@@ -2,12 +2,13 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { Menu, Portal } from '@skeletonlabs/skeleton-svelte';
-	import { createQuery } from '@tanstack/svelte-query';
+	import { createInfiniteQuery, createQuery } from '@tanstack/svelte-query';
 	import Icon from '#lib/design/Icon.svelte';
+	import Button from '#lib/design/Button.svelte';
 	import { domainLabel } from '#lib/domain-labels.js';
 	import { t } from '#lib/i18n.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
-	import { workspaceListQuery } from '#lib/workspaces/queries.js';
+	import { workspaceOptionsQuery, workspaceQuery } from '#lib/workspaces/queries.js';
 	import { setDefaultWorkspacePreference } from '#lib/workspaces/preference.js';
 
 	let {
@@ -20,10 +21,9 @@
 		mobile?: boolean;
 	}>();
 
-	const workspaces = createQuery(() => workspaceListQuery());
-	const currentWorkspace = $derived(
-		(workspaces.data ?? []).find((workspace) => workspace.id === workspaceId)
-	);
+	const workspaces = createInfiniteQuery(() => workspaceOptionsQuery());
+	const current = createQuery(() => workspaceQuery(workspaceId ?? ''));
+	const currentWorkspace = $derived(current.data);
 
 	function openWorkspace(nextId: string) {
 		if (nextId === workspaceId) return;
@@ -107,6 +107,11 @@
 						><Icon name="settings" /> {$t('Workspace settings')}</Menu.Item
 					>
 				{/if}
+				{#if workspaces.hasNextPage}<Button
+						class="w-full"
+						disabled={workspaces.isFetchingNextPage}
+						onclick={() => void workspaces.fetchNextPage()}>{$t('Load more workspaces')}</Button
+					>{/if}
 			</Menu.Content>
 		</Menu.Positioner>
 	</Portal>

@@ -1,5 +1,3 @@
-import json
-
 import pytest
 from app_helpers import json_payload
 from sqlalchemy import select
@@ -41,7 +39,7 @@ async def test_workspace_creation_audits_authorizing_system_role(
     assert event.actor_id == actor.id
     assert event.authorization_role == actor_role
     assert event.authorization_resource_action == "workspace.create"
-    assert json.loads(event.detail) == json_payload({
+    assert event.detail == json_payload({
         "owner_user_id": owner.id,
         "owner_workspace_role": "owner",
         "creation_policy": policy,

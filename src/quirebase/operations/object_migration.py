@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from uuid import UUID, uuid5
 
@@ -61,12 +60,8 @@ async def _copy_verified(
     return target_key, True
 
 
-def _pdf_rows(records_json: str) -> list[dict]:
-    try:
-        records = json.loads(records_json)
-    except (json.JSONDecodeError, TypeError):
-        return []
-    return records if isinstance(records, list) else []
+def _pdf_rows(records: list[dict]) -> list[dict]:
+    return records
 
 
 async def migrate_legacy_objects(db, *, apply: bool = False) -> ObjectMigrationReport:
@@ -79,21 +74,21 @@ async def migrate_legacy_objects(db, *, apply: bool = False) -> ObjectMigrationR
     obsolete_keys: set[str] = set()
 
     for revision in revisions:
-        if not is_managed_object_key(revision.object_key):
-            if not is_legacy_cas_key(revision.object_key):
-                raise ValueError(f"unsupported File Revision object key: {revision.object_key}")
+        if not is_managed_object_key(revision.file.path):
+            if not is_legacy_cas_key(revision.file.path):
+                raise ValueError(f"unsupported File Revision object key: {revision.file.path}")
             planned += 1
-            obsolete_keys.add(revision.object_key)
+            obsolete_keys.add(revision.file.path)
             if apply:
                 target, did_copy = await _copy_verified(
                     store,
-                    revision.object_key,
+                    revision.file.path,
                     _stable_uuid("revision", revision.id),
                     ObjectSuffix.PDF,
-                    revision.size,
+                    revision.file.size,
                 )
                 copied += int(did_copy)
-                revision.object_key = target
+                revision.file = FileObject(**(revision.file.to_dict() | {"filename": target}))
                 updated += 1
                 await db.commit()
         legacy_thumbnail = f"thumbnails/{revision.id}.png"
@@ -110,8 +105,13 @@ async def migrate_legacy_objects(db, *, apply: bool = False) -> ObjectMigrationR
                     expected,
                 )
                 copied += int(did_copy)
-                if revision.thumbnail_object_key != target:
-                    revision.thumbnail_object_key = target
+                if revision.thumbnail is None or revision.thumbnail.path != target:
+                    revision.thumbnail = FileObject(
+                        backend="documents",
+                        filename=target,
+                        size=expected,
+                        content_type="image/png",
+                    )
                     updated += 1
                     await db.commit()
 
@@ -168,12 +168,12 @@ async def migrate_legacy_objects(db, *, apply: bool = False) -> ObjectMigrationR
                 changed = True
                 updated += 1
         if apply and changed:
-            batch.records = json.dumps(records, ensure_ascii=False)
+            batch.records = records
             await db.commit()
 
     if apply:
         referenced = {
-            *(await db.scalars(select(FileRevision.object_key))).all(),
+            *(await db.scalars(select(FileRevision.file["filename"].as_string()))).all(),
             *(await db.scalars(select(Attachment.file["filename"].as_string()))).all(),
         }
         for batch in (await db.scalars(select(ImportBatch.records))).all():

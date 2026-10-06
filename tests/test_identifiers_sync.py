@@ -5,6 +5,7 @@ import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from advanced_alchemy.types import FileObject
 from inquiro import (
     CandidateNotFound,
     CandidateRecord,
@@ -185,11 +186,15 @@ async def test_rescan_pdf_doi(async_db):
     revision = FileRevision(
         workspace_id=fixture_workspace_id(user),
         item_id=item.id,
-        object_key="rev-1",
-        size=1024,
-        original_name="paper.pdf",
         full_text="Published in Nature. doi: 10.1038/s41586-020-2649-2. All rights reserved.",
         created_by=user.id,
+        file=FileObject(
+            backend="documents",
+            filename="rev-1",
+            size=1024,
+            content_type="application/pdf",
+            metadata={"original_name": "paper.pdf"},
+        ),
     )
     db.add(revision)
     await db.flush()
@@ -224,11 +229,15 @@ async def test_rescan_pdf_doi_does_not_replace_manual_doi(async_db):
         FileRevision(
             workspace_id=fixture_workspace_id(user),
             item_id=item.id,
-            object_key="manual-rev",
-            size=1,
-            original_name="manual.pdf",
             full_text="doi: 10.1000/detected",
             created_by=user.id,
+            file=FileObject(
+                backend="documents",
+                filename="manual-rev",
+                size=1,
+                content_type="application/pdf",
+                metadata={"original_name": "manual.pdf"},
+            ),
         )
     )
     await db.commit()
@@ -477,7 +486,7 @@ async def test_sync_metadata_cleans_html_and_syncs_bibtex_type(async_db):
         .order_by(AuditEvent.created_at.desc())
     )
     assert event is not None
-    detail = json.loads(event.detail)
+    detail = event.detail
     assert detail["provider"] == "doi"
     assert detail["new_bibtex_key"].startswith("Arute2019")
     assert detail["bibtex_key_updated"] is True

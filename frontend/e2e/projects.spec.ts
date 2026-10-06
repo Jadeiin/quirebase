@@ -1,3 +1,4 @@
+import { directoryPage } from './helpers';
 import { expect, test } from '@playwright/test';
 import { mockSession } from './helpers';
 
@@ -66,11 +67,11 @@ test('Workspace admins can open and govern managed Projects without being partic
 		'project_membership.manage',
 		'project_discussion.create'
 	]);
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=joinable', (route) =>
-		route.fulfill({ json: [] })
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=joinable*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
-		route.fulfill({ json: [project] })
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
+		route.fulfill({ json: directoryPage([project], route) })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/discussions', (route) =>
 		route.fulfill({ json: [] })
@@ -89,28 +90,31 @@ test('Workspace admins can open and govern managed Projects without being partic
 });
 
 test('Workspace-wide Projects are listed separately from joined Projects', async ({ page }) => {
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
 		route.fulfill({
-			json: [
-				{
-					...project,
-					id: 'workspace-project',
-					name: 'Shared library',
-					participation: 'workspace',
-					is_participating: true
-				},
-				{
-					...project,
-					id: 'joined-project',
-					name: 'My reading group',
-					participation: 'open',
-					is_participating: true
-				}
-			]
+			json: directoryPage(
+				[
+					{
+						...project,
+						id: 'workspace-project',
+						name: 'Shared library',
+						participation: 'workspace',
+						is_participating: true
+					},
+					{
+						...project,
+						id: 'joined-project',
+						name: 'My reading group',
+						participation: 'open',
+						is_participating: true
+					}
+				],
+				route
+			)
 		})
 	);
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=joinable', (route) =>
-		route.fulfill({ json: [] })
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=joinable*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 
 	await page.goto('/workspace/workspace-1/projects');
@@ -177,11 +181,11 @@ test('an unjoined archived open Project stays discoverable and its Discussion lo
 		authorization: { allowed: [] },
 		active_participants: []
 	};
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
-		route.fulfill({ json: [archivedProject] })
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
+		route.fulfill({ json: directoryPage([archivedProject], route) })
 	);
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=joinable', (route) =>
-		route.fulfill({ json: [] })
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=joinable*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/projects/archived-open', (route) =>
 		route.fulfill({ json: archivedProject })
@@ -300,10 +304,10 @@ test('a Workspace editor can create an open Project but not a managed Project', 
 			creation = route.request().postDataJSON();
 			return route.fulfill({ status: 201, json: { id: 'project-1' } });
 		}
-		return route.fulfill({ json: [] });
+		return route.fulfill({ json: directoryPage([], route) });
 	});
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=joinable', (route) =>
-		route.fulfill({ json: [] })
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=joinable*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/discussions', (route) =>
 		route.fulfill({ json: [] })
@@ -360,10 +364,10 @@ test('a Workspace owner can create an empty managed Project', async ({ page }) =
 			creation = route.request().postDataJSON();
 			return route.fulfill({ status: 201, json: { id: 'managed-project' } });
 		}
-		return route.fulfill({ json: [] });
+		return route.fulfill({ json: directoryPage([], route) });
 	});
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=joinable', (route) =>
-		route.fulfill({ json: [] })
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=joinable*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 	await page.route(
 		'**/api/v1/workspaces/workspace-1/projects/managed-project/discussions',
@@ -409,7 +413,7 @@ test('Project creation defaults and submits only the projected participation var
 			participation = route.request().postDataJSON().participation;
 			return route.fulfill({ status: 201, json: { id: 'project-1' } });
 		}
-		return route.fulfill({ json: [] });
+		return route.fulfill({ json: directoryPage([], route) });
 	});
 	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1', (route) =>
 		route.fulfill({ json: { ...project, participation: 'open', authorization: { allowed: [] } } })
@@ -433,7 +437,7 @@ test('an action without variant projection exposes no Project creation variants'
 }) => {
 	await mockWorkspaceRole(page, 'owner', ['workspace.read', 'project.create']);
 	await page.route('**/api/v1/workspaces/workspace-1/projects*', (route) =>
-		route.fulfill({ json: [] })
+		route.fulfill({ json: directoryPage([], route) })
 	);
 	await page.goto('/workspace/workspace-1/projects');
 	await expect(page.getByRole('heading', { name: 'Projects', exact: true })).toBeVisible();
@@ -500,11 +504,11 @@ test('a Workspace viewer cannot discover or deep-link into a managed Project the
 	page
 }) => {
 	await mockWorkspaceRole(page, 'viewer', ['workspace.read']);
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
-		route.fulfill({ json: [] })
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=joinable', (route) =>
-		route.fulfill({ json: [] })
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=joinable*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/projects/managed-secret', (route) =>
 		route.fulfill({
@@ -571,8 +575,8 @@ test('Workspace resource actions govern Project settings and managed participati
 			participants = [...participants, { user_id: 'member-2', username: 'collaborator' }];
 		return route.fulfill({ json: { ok: true, id: 'project-1' } });
 	});
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
-		route.fulfill({ json: [] })
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 
 	await page.goto('/workspace/workspace-1/projects/project-1');
@@ -760,22 +764,25 @@ test('Project groups come from one collection while Join follows the server capa
 	await page.route('**/api/v1/workspaces/workspace-1/projects?*', (route) => {
 		requests.push(new URL(route.request().url()).searchParams.get('view') ?? 'all');
 		return route.fulfill({
-			json: [
-				{
-					...project,
-					id: 'joinable',
-					name: 'Joinable direction',
-					participation: 'open',
-					authorization: { allowed: ['project_membership.join'] }
-				},
-				{
-					...project,
-					id: 'visible',
-					name: 'Visible direction',
-					participation: 'open',
-					authorization: { allowed: [] }
-				}
-			]
+			json: directoryPage(
+				[
+					{
+						...project,
+						id: 'joinable',
+						name: 'Joinable direction',
+						participation: 'open',
+						authorization: { allowed: ['project_membership.join'] }
+					},
+					{
+						...project,
+						id: 'visible',
+						name: 'Visible direction',
+						participation: 'open',
+						authorization: { allowed: [] }
+					}
+				],
+				route
+			)
 		});
 	});
 	await page.goto('/workspace/workspace-1/projects');

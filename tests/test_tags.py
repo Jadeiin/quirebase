@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -71,7 +70,7 @@ async def test_tag_mutations_are_workspace_scoped_and_audited(async_db):
     )
     assert event is not None
     assert event.workspace_id == workspace_id
-    assert json.loads(event.detail or "{}") == json_payload({"tag_id": assignment.tag_id})
+    assert (event.detail or {}) == json_payload({"tag_id": assignment.tag_id})
 
 
 @pytest.mark.anyio
@@ -133,8 +132,8 @@ async def test_tag_matrix_and_normalized_names_are_workspace_scoped(async_db):
             workspace_id=workspace_id,
             item_id=item.id,
             generation_token=1,
-            single_words=json.dumps(["Algorithms", "Compiler"]),
-            phrases=json.dumps(["New Optimizer"]),
+            single_words=["Algorithms", "Compiler"],
+            phrases=["New Optimizer"],
             generated_at=datetime.now(UTC),
         )
     )

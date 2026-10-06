@@ -2961,6 +2961,8 @@ export interface components {
 			recent_items: components['schemas']['DashboardRecentItemView'][];
 			/** Projects */
 			projects: components['schemas']['DashboardProjectView'][];
+			/** Project Count */
+			project_count: number;
 			/** Session Count */
 			session_count: number;
 		};
@@ -3705,6 +3707,34 @@ export interface components {
 			 * @enum {string}
 			 */
 			type: 'note';
+		};
+		/**
+		 * OffsetPagination
+		 * @description Container for data returned using limit/offset pagination.
+		 */
+		OffsetPagination_ProjectSummaryView_: {
+			/** Items */
+			items: components['schemas']['ProjectSummaryView'][];
+			/** Limit */
+			limit: number;
+			/** Offset */
+			offset: number;
+			/** Total */
+			total: number;
+		};
+		/**
+		 * OffsetPagination
+		 * @description Container for data returned using limit/offset pagination.
+		 */
+		OffsetPagination_WorkspaceView_: {
+			/** Items */
+			items: components['schemas']['WorkspaceView'][];
+			/** Limit */
+			limit: number;
+			/** Offset */
+			offset: number;
+			/** Total */
+			total: number;
 		};
 		/** OkView */
 		OkView: {
@@ -4685,7 +4715,11 @@ export interface operations {
 	};
 	'workspaces.get_workspaces': {
 		parameters: {
-			query?: never;
+			query?: {
+				limit?: number;
+				offset?: number;
+				search?: string;
+			};
 			header?: never;
 			path?: never;
 			cookie?: never;
@@ -4698,7 +4732,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['WorkspaceView'][];
+					'application/json': components['schemas']['OffsetPagination_WorkspaceView_'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -7827,6 +7861,9 @@ export interface operations {
 		parameters: {
 			query?: {
 				view?: 'mine' | 'joinable' | 'all';
+				limit?: number;
+				offset?: number;
+				search?: string;
 			};
 			header?: never;
 			path: {
@@ -7842,7 +7879,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['ProjectSummaryView'][];
+					'application/json': components['schemas']['OffsetPagination_ProjectSummaryView_'];
 				};
 			};
 			/** @description Unprocessable Content */

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-from contextlib import suppress
 from dataclasses import asdict
 from typing import Annotated, Literal
 from uuid import UUID
@@ -81,20 +79,6 @@ def _workflow_view(workflow) -> dict:
 
 
 def _audit_view(event) -> dict:
-    target_ids = None
-    if event.target_ids:
-        try:
-            parsed = json.loads(event.target_ids)
-            if isinstance(parsed, list) and all(isinstance(value, str) for value in parsed):
-                target_ids = parsed
-        except (TypeError, ValueError):
-            # Audit metadata is intentionally best-effort JSON.  Preserve the
-            # event itself even if an old/internal writer stored malformed text.
-            target_ids = None
-    detail = event.detail
-    if detail:
-        with suppress(TypeError, ValueError):
-            detail = json.loads(detail)
     return {
         "id": event.id,
         "actor_id": event.actor_id,
@@ -103,12 +87,12 @@ def _audit_view(event) -> dict:
         "action": event.action,
         "target_type": event.target_type,
         "target_id": event.target_id,
-        "target_ids": target_ids,
+        "target_ids": event.target_ids,
         "authorization_role": event.authorization_role,
         "authorization_resource_action": event.authorization_resource_action,
         "result": event.result,
         "source": event.source,
-        "detail": detail,
+        "detail": event.detail,
         "created_at": event.created_at,
     }
 

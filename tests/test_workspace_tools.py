@@ -45,7 +45,7 @@ async def test_projects_have_a_dedicated_workspace(
         assert created.status_code == 201
         assert created.json()["id"] == str(project.id)
         listing = await client.get(f"{workspace_base}/projects")
-        assert [row["name"] for row in listing.json()] == ["Review queue"]
+        assert [row["name"] for row in listing.json()["items"]] == ["Review queue"]
         detail = await client.get(f"{workspace_base}/projects/{project.id}")
         assert detail.json()["name"] == "Review queue"
         updated = await client.patch(
@@ -357,7 +357,7 @@ async def test_account_and_admin_workspace_apis(
 
         workspaces = await client.get("/api/v1/workspaces")
         assert workspaces.status_code == 200
-        current_workspace = workspaces.json()[0]
+        current_workspace = workspaces.json()["items"][0]
         assert current_workspace["current_role"] == "owner"
         assert "role" not in current_workspace
         assert "workspace.read" in current_workspace["authorization"]["allowed"]
@@ -401,7 +401,7 @@ async def test_account_and_admin_workspace_apis(
         assert created.status_code == 201
         created_workspace = next(
             workspace
-            for workspace in (await client.get("/api/v1/workspaces")).json()
+            for workspace in (await client.get("/api/v1/workspaces")).json()["items"]
             if workspace["id"] == created.json()["id"]
         )
         assert created_workspace["name"] == "Created in UI"

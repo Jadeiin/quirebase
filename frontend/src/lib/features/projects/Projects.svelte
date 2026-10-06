@@ -8,6 +8,7 @@
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import Badge from '#lib/design/Badge.svelte';
 	import Button from '#lib/design/Button.svelte';
+	import Pagination from '#lib/design/Pagination.svelte';
 	import DialogCloseButton from '#lib/design/DialogCloseButton.svelte';
 	import DialogTriggerButton from '#lib/design/DialogTriggerButton.svelte';
 	import Icon from '#lib/design/Icon.svelte';
@@ -25,28 +26,35 @@
 	const workspace = getWorkspaceContext();
 	const workspaceId = workspace.workspaceId;
 	const queryClient = useQueryClient();
-	const projects = createQuery(() => projectListQuery(workspaceId));
+	let offset = $state(0);
+	let search = $state('');
+	let view = $state<'all' | 'mine' | 'joinable'>('all');
+	const projects = createQuery(() => projectListQuery(workspaceId, view, offset, search));
+	const pageCount = $derived(Math.max(1, Math.ceil((projects.data?.total ?? 0) / 25)));
+	$effect(() => {
+		if (projects.data && offset >= projects.data.total && offset > 0) offset = (pageCount - 1) * 25;
+	});
 	const joinable = $derived(
-		(projects.data ?? []).filter(
+		(projects.data?.items ?? []).filter(
 			(project) =>
 				project.participation === 'open' && project.state === 'active' && !project.is_participating
 		)
 	);
 	const workspaceProjects = $derived(
-		(projects.data ?? []).filter((project) => project.participation === 'workspace')
+		(projects.data?.items ?? []).filter((project) => project.participation === 'workspace')
 	);
 	const myProjects = $derived(
-		(projects.data ?? []).filter(
+		(projects.data?.items ?? []).filter(
 			(project) => project.is_participating && project.participation !== 'workspace'
 		)
 	);
 	const managedProjects = $derived(
-		(projects.data ?? []).filter(
+		(projects.data?.items ?? []).filter(
 			(project) => project.participation === 'managed' && !project.is_participating
 		)
 	);
 	const archivedOpenProjects = $derived(
-		(projects.data ?? []).filter(
+		(projects.data?.items ?? []).filter(
 			(project) =>
 				project.participation === 'open' &&
 				project.state === 'archived' &&
@@ -191,6 +199,38 @@
 	{/snippet}
 </SectionHeader>
 
+<form
+	class="mb-4 flex flex-wrap items-end gap-3"
+	onsubmit={(event) => {
+		event.preventDefault();
+		offset = 0;
+	}}
+>
+	<label
+		>{$t('Search Projects')}<input
+			class="input"
+			value={search}
+			oninput={(event) => {
+				search = event.currentTarget.value;
+				offset = 0;
+			}}
+		/></label
+	>
+	<label
+		>{$t('Projects')}<select
+			class="select"
+			bind:value={view}
+			onchange={() => {
+				offset = 0;
+			}}
+		>
+			<option value="all">{$t('All Projects')}</option>
+			<option value="mine">{$t('Your Projects')}</option>
+			<option value="joinable">{$t('Open Projects')}</option>
+		</select></label
+	>
+</form>
+
 {#if error}<Notice variant="error">{error}</Notice>{/if}
 
 {#if workspaceProjects.length > 0}
@@ -237,7 +277,9 @@
 						>{project.item_count} {$t('Items')} · {$t(domainLabel(project.participation))}</span
 					>
 				</ItemRow>
-			{:else}<p class="text-surface-600-400">{$t('No Projects yet.')}</p>{/each}{/if}
+			{:else}<p class="text-surface-600-400">
+					{$t('No participating Projects on this page.')}
+				</p>{/each}{/if}
 	</Panel>
 	<Panel as="aside">
 		<h2>{$t('Open Projects')}</h2>
@@ -310,3 +352,13 @@
 		{/each}
 	</Panel>
 {/if}
+
+<Pagination
+	page={Math.floor(offset / 25) + 1}
+	{pageCount}
+	onPage={(page) => {
+		offset = (page - 1) * 25;
+	}}
+	busy={projects.isFetching}
+	label={$t('Projects')}
+/>

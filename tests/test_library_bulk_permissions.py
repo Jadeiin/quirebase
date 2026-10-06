@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 
 import pymupdf
 import pytest
+from advanced_alchemy.types import FileObject
 from app_helpers import json_payload
 from sqlalchemy import select
 from storage_helpers import collect_body, local_object_path, put_pdf_object
@@ -60,10 +61,10 @@ async def test_streaming_bundle_cancellation_releases_object_stream(
 
     class BlockingStore:
         async def get(self, key):
-            assert key == revision.object_key
+            assert key == revision.file.path
             return ObjectResponse(
-                metadata=ObjectMetadata(key, revision.size, None, datetime.now(UTC)),
-                byte_range=(0, revision.size),
+                metadata=ObjectMetadata(key, revision.file.size, None, datetime.now(UTC)),
+                byte_range=(0, revision.file.size),
                 body=blocking_body(),
             )
 
@@ -206,7 +207,7 @@ async def test_bulk_action_records_single_bulk_audit_event(
         .order_by(AuditEvent.created_at.desc())
     )
     assert event is not None
-    assert json.loads(event.detail)["item_ids"] == json_payload([item.id])
+    assert event.detail["item_ids"] == json_payload([item.id])
     await client.aclose()
 
 
@@ -349,14 +350,14 @@ async def test_bulk_delete_preserves_object_referenced_by_pending_pdf_import(
     )
     owner = await db.get(User, item.created_by)
     assert owner is not None
-    object_path = local_object_path(revision.object_key)
+    object_path = local_object_path(revision.file.path)
     db.add(
         ImportBatch(
             workspace_id=item.workspace_id,
             actor_id=owner.id,
             file_format="pdf",
-            records=json.dumps([{"_pdf": {"object_key": revision.object_key}}]),
-            errors="[]",
+            records=[{"_pdf": {"object_key": revision.file.path}}],
+            errors=[],
         )
     )
     await db.commit()
@@ -400,7 +401,7 @@ async def test_bulk_download_pdfs_records_audit_event(
         .order_by(AuditEvent.created_at.desc())
     )
     assert event is not None
-    detail = json.loads(event.detail)
+    detail = event.detail
     assert detail["item_ids"] == json_payload([item.id])
     assert detail["include_annotations"] is False
     assert detail["include_supplements"] is False
@@ -422,11 +423,15 @@ async def test_item_download_bundle_contains_all_pdf_versions_with_manifest(
         FileRevision(
             workspace_id=item.workspace_id,
             item_id=item.id,
-            object_key=key,
-            size=size,
-            original_name="published.pdf",
             processing_state="ready",
             created_by=owner.id,
+            file=FileObject(
+                backend="documents",
+                filename=key,
+                size=size,
+                content_type="application/pdf",
+                metadata={"original_name": "published.pdf"},
+            ),
         )
     )
     await db.commit()
@@ -458,8 +463,7 @@ async def test_item_download_embeds_annotations_in_pdf_without_a_sidecar(
         document.new_page(width=300, height=400)
         source = document.tobytes()
     key, size = await put_pdf_object(source, 100_000)
-    revision.object_key = key
-    revision.size = size
+    revision.file = FileObject(**(revision.file.to_dict() | {"filename": key, "size": size}))
     annotation = PdfAnnotation(
         workspace_id=item.workspace_id,
         file_revision_id=revision.id,

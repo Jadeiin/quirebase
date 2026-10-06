@@ -1,9 +1,9 @@
-import type { Page } from '@playwright/test';
+import type { Page, Route } from '@playwright/test';
 
 export const defaultCitationKeyFormula = 'auth.capitalize + year + shorttitle(1).capitalize';
 export const WORKSPACE_ID = 'workspace-1';
 
-function workspaceView(id: string, name: string) {
+export function workspaceView(id: string, name: string) {
 	return {
 		id,
 		name,
@@ -51,10 +51,10 @@ export async function mockWorkspaces(page: Page, creationAllowed = false) {
 		workspaceView(WORKSPACE_ID, 'Research'),
 		workspaceView('workspace-2', 'Archive')
 	];
-	await page.route('**/api/v1/workspaces', (route) => {
+	await page.route(/\/api\/v1\/workspaces(?:\?.*)?$/, (route) => {
 		if (route.request().method() === 'POST')
 			return route.fulfill({ status: 201, json: workspaceView('workspace-new', 'New Workspace') });
-		return route.fulfill({ json: workspaces });
+		return route.fulfill({ json: directoryPage(workspaces, route) });
 	});
 	await page.route('**/api/v1/workspaces/*', (route) => {
 		const workspaceId = new URL(route.request().url()).pathname.split('/').at(-1);
@@ -62,7 +62,7 @@ export async function mockWorkspaces(page: Page, creationAllowed = false) {
 		if (!workspace)
 			return route.fulfill({
 				status: 404,
-				json: { code: 'not_found', message: 'not found' }
+				json: { code: 'workspace_unavailable', message: 'Workspace unavailable' }
 			});
 		return route.fulfill({ json: workspace });
 	});
@@ -162,4 +162,11 @@ export async function setAnnotationSource(page: Page, name: string, checked = tr
 	await sources.locator('summary').click();
 	await sources.getByLabel(name, { exact: true }).setChecked(checked);
 	await sources.locator('summary').click();
+}
+
+export function directoryPage(items: unknown[], route: Route) {
+	const params = new URL(route.request().url()).searchParams;
+	const limit = Number(params.get('limit') ?? 25);
+	const offset = Number(params.get('offset') ?? 0);
+	return { items: items.slice(offset, offset + limit), total: items.length, limit, offset };
 }

@@ -285,16 +285,11 @@ async def apply_metadata_record(
     if rec.get("keywords") or not merge:
         item.keywords = "; ".join(keywords) if keywords else None
 
-    raw_custom_fields = rec.get("custom_fields")
-    if raw_custom_fields:
-        with contextlib.suppress(json.JSONDecodeError, TypeError):
-            parsed_custom_fields = (
-                json.loads(raw_custom_fields)
-                if isinstance(raw_custom_fields, str)
-                else raw_custom_fields
-            )
-            if isinstance(parsed_custom_fields, dict):
-                item.custom_fields = json.dumps(parsed_custom_fields, ensure_ascii=False)
+    custom_fields = rec.get("custom_fields")
+    if custom_fields is not None:
+        if not isinstance(custom_fields, dict):
+            raise ValidationFailure("custom fields must be a JSON object")
+        item.custom_fields = dict(custom_fields)
 
     if not item.bibtex_id:
         candidate_key = str(rec.get("bibtex_id") or "").strip() or generate_bibtex_key(item)

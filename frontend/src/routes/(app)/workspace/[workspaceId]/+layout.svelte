@@ -4,7 +4,7 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { onWorkspaceConflict, onWorkspaceUnavailable } from '#lib/api/client.js';
+	import { ApiError, onWorkspaceConflict, onWorkspaceUnavailable } from '#lib/api/client.js';
 	import { workspaceKeys } from '#lib/workspaces/keys.js';
 	import WorkspaceProvider from '#lib/workspaces/WorkspaceProvider.svelte';
 	import { workspaceListQuery, workspaceQuery } from '#lib/workspaces/queries.js';
@@ -22,24 +22,30 @@
 	let unavailable = $state(false);
 	let checkedWorkspaceError = $state<unknown>();
 
+	async function recover() {
+		if (recoveryStarted) return;
+		recoveryStarted = true;
+		try {
+			const [list, current] = await Promise.all([workspaceList.refetch(), workspace.refetch()]);
+			if (list.isError) return;
+			if (current.isError) {
+				if (!(current.error instanceof ApiError) || current.error.code !== 'workspace_unavailable')
+					return;
+				clearDefaultWorkspacePreference();
+				unavailable = true;
+				void goto(resolve('workspace'), { replace: true });
+			} else {
+				unavailable = false;
+			}
+		} finally {
+			checkedWorkspaceError = workspace.error;
+			recoveryStarted = false;
+		}
+	}
+
 	onMount(() => {
 		const unregisterUnavailable = onWorkspaceUnavailable((failedWorkspaceId) => {
-			if (failedWorkspaceId !== workspaceId || recoveryStarted) return;
-			recoveryStarted = true;
-			void workspaceList.refetch().then((result) => {
-				if (result.isError) {
-					recoveryStarted = false;
-					return;
-				}
-				const stillAvailable = result.data?.some((candidate) => candidate.id === workspaceId);
-				if (!stillAvailable) {
-					clearDefaultWorkspacePreference();
-					unavailable = true;
-					void goto(resolve('workspace'), { replace: true });
-				} else {
-					recoveryStarted = false;
-				}
-			});
+			if (failedWorkspaceId === workspaceId) void recover();
 		});
 		const unregisterConflict = onWorkspaceConflict((failedWorkspaceId) => {
 			if (failedWorkspaceId !== workspaceId) return;
@@ -55,28 +61,15 @@
 	});
 
 	$effect(() => {
-		if (!workspace.isError) {
+		if (workspace.isSuccess) {
 			checkedWorkspaceError = undefined;
 			return;
 		}
+		if (!workspace.isError) return;
 		const currentError = workspace.error;
 		if (recoveryStarted || checkedWorkspaceError === currentError) return;
 		checkedWorkspaceError = currentError;
-		recoveryStarted = true;
-		void workspaceList.refetch().then((result) => {
-			if (result.isError) {
-				recoveryStarted = false;
-				return;
-			}
-			const stillAvailable = result.data?.some((candidate) => candidate.id === workspaceId);
-			if (!stillAvailable) clearDefaultWorkspacePreference();
-			unavailable = !stillAvailable;
-			if (!stillAvailable) {
-				void goto(resolve('workspace'), { replace: true });
-			} else {
-				recoveryStarted = false;
-			}
-		});
+		void recover();
 	});
 </script>
 

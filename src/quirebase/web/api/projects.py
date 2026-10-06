@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, status
+from advanced_alchemy.service import OffsetPagination
+from fastapi import APIRouter, Query, status
 
 from quirebase.access import (
     ResourceAction,
@@ -57,14 +58,20 @@ from quirebase.web.api.project_schemas import (
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
 
-@router.get("", response_model=list[ProjectSummaryView])
+@router.get("", response_model=OffsetPagination[ProjectSummaryView])
 async def list_projects(
     workspace_id: UUID,
     context: WorkspaceAccess,
     db: Database,
     view: Literal["mine", "joinable", "all"] = "all",
-):
-    return [
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    search: str = "",
+) -> OffsetPagination[ProjectSummaryView]:
+    rows, total = await list_workspace_projects(
+        db, context, view=view, limit=limit, offset=offset, search=search
+    )
+    items = [
         ProjectSummaryView(
             id=project.id,
             name=project.name,
@@ -78,10 +85,9 @@ async def list_projects(
                 project_decisions(context, project, is_participating=is_participating)
             ),
         )
-        for project, count, is_participating in await list_workspace_projects(
-            db, context, view=view
-        )
+        for project, count, is_participating in rows
     ]
+    return OffsetPagination(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.post("", response_model=WriteResult, status_code=status.HTTP_201_CREATED)

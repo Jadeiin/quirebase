@@ -24,6 +24,9 @@ class PreparedPasswordHash(PasswordHash):
         super().__init__(backend=password_backend)
         self.impl = Text()
 
+    def __repr__(self) -> str:
+        return "PreparedPasswordHash()"
+
     def process_bind_param(self, value: Any, dialect: Dialect) -> str | None:
         if value is None:
             return None

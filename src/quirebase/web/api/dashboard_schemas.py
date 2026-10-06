@@ -24,4 +24,5 @@ class DashboardView(BaseModel):
     new_items: list[ItemSearchView]
     recent_items: list[DashboardRecentItemView]
     projects: list[DashboardProjectView]
+    project_count: int
     session_count: int

@@ -1,3 +1,4 @@
+import { directoryPage } from './helpers';
 import { expect, test } from '@playwright/test';
 import { mockSession, mockWorkspaces } from './helpers';
 
@@ -22,8 +23,8 @@ test('authenticated shell loads dashboard and navigates to Library', async ({ pa
 		route.fulfill({ json: { items: [], total: 0, page: 1, per_page: 25 } })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
-		route.fulfill({ json: [] })
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 
 	await page.goto('/');
@@ -63,7 +64,9 @@ for (const [role, choices] of [
 			allowed_project_participations: choices,
 			authorization: { allowed: ['workspace.read'] }
 		};
-		await page.route('**/api/v1/workspaces', (route) => route.fulfill({ json: [workspace] }));
+		await page.route(/\/api\/v1\/workspaces(?:\?.*)?$/, (route) =>
+			route.fulfill({ json: directoryPage([workspace], route) })
+		);
 		await page.route('**/api/v1/workspaces/workspace-1', (route) =>
 			route.fulfill({ json: workspace })
 		);
@@ -71,7 +74,7 @@ for (const [role, choices] of [
 			route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 0 } })
 		);
 		await page.route('**/api/v1/workspaces/workspace-1/projects?view=*', (route) =>
-			route.fulfill({ json: [] })
+			route.fulfill({ json: directoryPage([], route) })
 		);
 		await page.goto('/workspace/workspace-1');
 		await expect(page.getByRole('heading', { name: 'Quick actions' })).toBeVisible();
@@ -182,8 +185,8 @@ test('mobile navigation keeps primary destinations visible and moves utilities i
 		route.fulfill({ json: { items: [], total: 0, page: 1, per_page: 25 } })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
-		route.fulfill({ json: [] })
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 	await page.goto('/workspace/workspace-1/library');
 

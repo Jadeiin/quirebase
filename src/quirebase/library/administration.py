@@ -28,7 +28,10 @@ async def get_storage_metrics(db: AsyncSession, admin: User) -> dict[str, Any]:
     total_items = await db.scalar(select(func.count(Item.id))) or 0
     revisions_count, revisions_bytes = (
         await db.execute(
-            select(func.count(FileRevision.id), func.coalesce(func.sum(FileRevision.size), 0))
+            select(
+                func.count(FileRevision.id),
+                func.coalesce(func.sum(FileRevision.file["size"].as_integer()), 0),
+            )
         )
     ).one()
     attachments_count, attachments_bytes = (
@@ -42,8 +45,8 @@ async def get_storage_metrics(db: AsyncSession, admin: User) -> dict[str, Any]:
     thumbnails_count, thumbnails_bytes = (
         await db.execute(
             select(
-                func.count(FileRevision.thumbnail_object_key),
-                func.coalesce(func.sum(FileRevision.thumbnail_size), 0),
+                func.count(FileRevision.thumbnail["filename"].as_string()),
+                func.coalesce(func.sum(FileRevision.thumbnail["size"].as_integer()), 0),
             )
         )
     ).one()
@@ -83,7 +86,7 @@ async def delete_item(db: AsyncSession, actor: User, workspace_id: UUID, item_id
     cleanup_keys = list(
         (
             await db.scalars(
-                select(FileRevision.object_key).where(
+                select(FileRevision.file["filename"].as_string()).where(
                     FileRevision.workspace_id == workspace_id,
                     FileRevision.item_id == item.id,
                 )
@@ -105,7 +108,7 @@ async def delete_item(db: AsyncSession, actor: User, workspace_id: UUID, item_id
         key
         for key in (
             await db.scalars(
-                select(FileRevision.thumbnail_object_key).where(
+                select(FileRevision.thumbnail["filename"].as_string()).where(
                     FileRevision.workspace_id == workspace_id,
                     FileRevision.item_id == item.id,
                 )

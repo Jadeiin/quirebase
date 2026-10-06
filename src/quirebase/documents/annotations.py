@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
@@ -215,10 +214,7 @@ def _page_size(revision: FileRevision, page_index: int) -> tuple[float, float]:
         or revision.processing_state != FileRevisionProcessingState.ready
     ):
         raise DocumentNotReady("PDF is not ready")
-    try:
-        geometry = json.loads(revision.page_geometry or "[]")
-    except (TypeError, json.JSONDecodeError) as error:
-        raise DocumentNotReady("PDF geometry is not ready") from error
+    geometry = revision.page_geometry or []
     if len(geometry) != revision.page_count:
         raise DocumentNotReady("PDF geometry is not ready")
     if page_index >= revision.page_count:
@@ -382,7 +378,9 @@ async def _annotation_views(
         revision_names = dict(
             (
                 await db.execute(
-                    select(FileRevision.id, FileRevision.original_name).where(
+                    select(
+                        FileRevision.id, FileRevision.file["metadata"]["original_name"].as_string()
+                    ).where(
                         FileRevision.id.in_({record.file_revision_id for record in records}),
                         FileRevision.workspace_id == workspace_id,
                     )
@@ -625,7 +623,11 @@ async def list_document_annotations(
     )
     # Read names with their annotations: a later statement under READ COMMITTED
     # could see the revision's cascade deletion after these ORM objects are loaded.
-    query = select(PdfAnnotation, FileRevision.original_name).join(FileRevision).where(*filters)
+    query = (
+        select(PdfAnnotation, FileRevision.file["metadata"]["original_name"].as_string())
+        .join(FileRevision)
+        .where(*filters)
+    )
     if pagination == "cursor":
         # IDs never move when content is edited, and a deleted cursor row need
         # not exist for the next page to remain reachable.

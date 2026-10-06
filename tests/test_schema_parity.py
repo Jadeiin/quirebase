@@ -120,6 +120,7 @@ def _metadata_schema(engine: Engine) -> dict[str, dict]:
                 constraint.name
                 for constraint in table.constraints
                 if isinstance(constraint, CheckConstraint)
+                and constraint._should_create_for_compiler(dialect.ddl_compiler(dialect, None))
             },
         }
     return schema
@@ -336,3 +337,26 @@ def test_autogenerate_has_no_pending_schema_changes(tmp_path: Path, monkeypatch)
     upgrade = source.split("def upgrade()", 1)[1].split("def downgrade()", 1)[0]
     assert "op." not in upgrade, f"autogenerate produced operations:\n{upgrade}"
     assert "item_search" not in source and "revision_search" not in source
+
+
+def test_native_type_rendering_generates_an_executable_initial_schema(tmp_path: Path, monkeypatch):
+    database_url = f"sqlite:///{tmp_path / 'native-types.db'}"
+    monkeypatch.setenv("QUIREBASE_DATABASE_URL", database_url)
+    get_settings.cache_clear()
+    script_location = tmp_path / "migrations"
+    script_location.mkdir()
+    (script_location / "versions").mkdir()
+    for name in ("env.py", "script.py.mako"):
+        shutil.copyfile(Path("migrations") / name, script_location / name)
+    config = Config()
+    config.set_main_option("script_location", str(script_location))
+    engine = create_engine(database_url)
+    try:
+        command.revision(config, message="native AA types", autogenerate=True)
+        command.upgrade(config, "head")
+        _assert_schema_matches_metadata(inspect(engine), engine)
+        command.downgrade(config, "base")
+        assert inspect(engine).get_table_names() == ["alembic_version"]
+    finally:
+        engine.dispose()
+        get_settings.cache_clear()

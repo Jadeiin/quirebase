@@ -137,7 +137,7 @@ async def test_suspension_retains_participation_but_termination_removes_it(
     context = await resolve_workspace_context(async_db, target, item.workspace_id)
     assert (await open_project_workspace(async_db, context, project.id)).is_participating
     assert project.id in {
-        p.id for p, _, _ in await list_workspace_projects(async_db, context, view="mine")
+        p.id for p, _, _ in (await list_workspace_projects(async_db, context, view="mine"))[0]
     }
 
     await terminate_workspace_member(async_db, owner, item.workspace_id, membership.id)
@@ -148,12 +148,12 @@ async def test_suspension_retains_participation_but_termination_removes_it(
     await accept_workspace_invitation(async_db, target, item.workspace_id, token)
     context = await resolve_workspace_context(async_db, target, item.workspace_id)
     assert project.id not in {
-        p.id for p, _, _ in await list_workspace_projects(async_db, context, view="mine")
+        p.id for p, _, _ in (await list_workspace_projects(async_db, context, view="mine"))[0]
     }
     if participation is ProjectParticipation.open:
         assert not (await open_project_workspace(async_db, context, project.id)).is_participating
     else:
-        assert await list_workspace_projects(async_db, context) == []
+        assert (await list_workspace_projects(async_db, context))[0] == []
 
 
 @pytest.mark.anyio

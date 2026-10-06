@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 from typing import Annotated
 from uuid import UUID
@@ -408,10 +407,10 @@ async def pdf_viewer_configuration(
         "annotation_author": user.username,
         "revision": {
             "id": revision.id,
-            "original_name": revision.original_name,
+            "original_name": revision.file.metadata["original_name"],
             "page_count": revision.page_count,
             "processing_state": enum_value(revision.processing_state),
-            "page_geometry": json.loads(revision.page_geometry or "[]"),
+            "page_geometry": revision.page_geometry or [],
             "content_url": (
                 f"/api/v1/workspaces/{workspace_id}/items/{item_id}/revisions/{revision_id}/content"
             ),

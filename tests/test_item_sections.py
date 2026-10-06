@@ -197,7 +197,7 @@ async def test_item_sections_separate_page_responsibilities(
 
         files = await client.get(f"{workspace_base}/items/{item.id}/documents")
         assert files.status_code == 200
-        assert revision.original_name in files.text
+        assert revision.file.metadata["original_name"] in files.text
 
         organize = await client.get(f"{workspace_base}/tags")
         assert organize.status_code == 200
@@ -613,7 +613,9 @@ async def test_item_overview_projection_includes_thumbnail_metadata(
         thumb = await store.put_object(
             uuid4(), ObjectSuffix.PNG, b"\x89PNG\r\n\x1a\nthumb", max_bytes=100
         )
-        revision.thumbnail_object_key = thumb.key
+        revision.thumbnail = FileObject(
+            backend="documents", filename=thumb.key, content_type="image/png"
+        )
         await db.commit()
 
         response = await client.get(f"{workspace_base}/items/{item.id}/overview")

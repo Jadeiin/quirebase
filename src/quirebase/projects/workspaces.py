@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
+from advanced_alchemy.filters import LimitOffset
+from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -106,12 +108,19 @@ async def create_project(
     return project
 
 
+class ProjectReadRepository(SQLAlchemyAsyncRepository[Project]):
+    model_type = Project
+
+
 async def list_workspace_projects(
     db: AsyncSession,
     context: WorkspaceContext,
     *,
     view: Literal["mine", "joinable", "all"] = "all",
-) -> list[tuple[Project, int, bool]]:
+    limit: int | None = 25,
+    offset: int = 0,
+    search: str = "",
+) -> tuple[list[tuple[Project, int, bool]], int]:
     """List discoverable Projects, optionally limited to the caller's participation view."""
     if view not in {"mine", "joinable", "all"}:
         raise ValidationFailure("invalid Project list view")
@@ -127,14 +136,11 @@ async def list_workspace_projects(
     )
     query = (
         workspace_select(Project, context)
-        .with_only_columns(Project, func.count(ProjectItem.id), is_participating)
-        .outerjoin(ProjectItem, ProjectItem.project_id == Project.id)
         .where(
             Project.state != ProjectState.deleted,
             Project.id.in_(discoverable_project_ids_query(context)),
         )
-        .group_by(Project.id)
-        .order_by(Project.name)
+        .order_by(Project.name, Project.id)
     )
     if view == "mine":
         query = query.where(is_participating)
@@ -144,8 +150,37 @@ async def list_workspace_projects(
             Project.participation == ProjectParticipation.open,
             ~is_participating,
         )
-    rows = (await db.execute(query)).all()
-    return [(row[0], row[1], bool(row[2])) for row in rows]
+    if search.strip():
+        query = query.where(Project.name.ilike(f"%{search.strip()}%"))
+    filters = (LimitOffset(limit=limit, offset=offset),) if limit is not None else ()
+    roots, total = await ProjectReadRepository(session=db, statement=query).get_many_and_count(
+        *filters,
+        count_with_window_function=False,
+    )
+    ids = [project.id for project in roots]
+    if not ids:
+        return [], total
+    counts: dict[UUID, int] = dict(
+        (
+            await db.execute(
+                workspace_select(ProjectItem, context)
+                .with_only_columns(ProjectItem.project_id, func.count(ProjectItem.id))
+                .where(ProjectItem.project_id.in_(ids))
+                .group_by(ProjectItem.project_id)
+            )
+        )
+        .tuples()
+        .all()
+    )
+    joined = set((await db.scalars(member_ids.where(ProjectMember.project_id.in_(ids)))).all())
+    return [
+        (
+            project,
+            counts.get(project.id, 0),
+            project.participation is ProjectParticipation.workspace or project.id in joined,
+        )
+        for project in roots
+    ], total
 
 
 async def open_project_workspace(

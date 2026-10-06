@@ -3,21 +3,17 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, cast
 
 from advanced_alchemy.base import DefaultBase, UUIDv7AuditBase, UUIDv7Base
-from advanced_alchemy.config import AsyncSessionConfig, SQLAlchemyAsyncConfig
+from advanced_alchemy.config import AsyncSessionConfig, EngineConfig, SQLAlchemyAsyncConfig
 from advanced_alchemy.types import GUID
 from sqlalchemy import event
-from sqlalchemy.ext.asyncio import (
-    AsyncEngine,
-    AsyncSession,
-    async_sessionmaker,
-    create_async_engine,
-)
 from sqlalchemy.ext.compiler import compiles
 
 from quirebase.core.config import get_settings
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
+
+    from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 
 @compiles(GUID, "sqlite")
@@ -79,9 +75,18 @@ def is_sqlite_database_url(url: str | None = None) -> bool:
     return database_url.startswith(("sqlite:///", "sqlite+aiosqlite:///"))
 
 
-def make_async_engine(url: str | None = None) -> AsyncEngine:
+def _make_database_config(url: str | None = None) -> SQLAlchemyAsyncConfig:
     database_url = async_database_url(url)
-    engine = create_async_engine(database_url, pool_pre_ping=True)
+    config = SQLAlchemyAsyncConfig(
+        connection_string=database_url,
+        engine_config=EngineConfig(pool_pre_ping=True),
+        metadata=Base.metadata,
+        session_config=AsyncSessionConfig(expire_on_commit=False),
+        enable_file_object_listener=False,
+        # AuditColumns supplies onupdate for ORM and SQL DML; keep explicit overrides.
+        enable_touch_updated_timestamp_listener=False,
+    )
+    engine = config.get_engine()
     if database_url.startswith("sqlite"):
 
         @event.listens_for(engine.sync_engine, "connect")
@@ -91,18 +96,15 @@ def make_async_engine(url: str | None = None) -> AsyncEngine:
             cursor.execute("PRAGMA journal_mode=WAL")
             cursor.close()
 
-    return engine
+    return config
 
 
-engine = make_async_engine()
-database_config = SQLAlchemyAsyncConfig(
-    engine_instance=engine,
-    metadata=Base.metadata,
-    session_config=AsyncSessionConfig(expire_on_commit=False),
-    enable_file_object_listener=False,
-    # AuditColumns supplies onupdate for ORM and SQL DML; keep explicit overrides.
-    enable_touch_updated_timestamp_listener=False,
-)
+def make_async_engine(url: str | None = None) -> AsyncEngine:
+    return _make_database_config(url).get_engine()
+
+
+database_config = _make_database_config()
+engine = database_config.get_engine()
 AsyncSessionLocal = cast("async_sessionmaker[AsyncSession]", database_config.create_session_maker())
 
 

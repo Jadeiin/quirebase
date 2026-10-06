@@ -48,9 +48,7 @@ def _item_payload(record):
         "identifiers": _json.dumps(dict(record.identifiers), ensure_ascii=False)
         if record.identifiers
         else None,
-        "custom_fields": _json.dumps(dict(record.custom_fields), ensure_ascii=False)
-        if record.custom_fields
-        else None,
+        "custom_fields": dict(record.custom_fields) if record.custom_fields else None,
     }
 
 
@@ -209,13 +207,13 @@ async def test_bibtex_export_can_include_identifiers_and_custom_fields(async_db)
     item = Item(
         title="Extra fields",
         identifiers=json.dumps({"openalex": "W123", "arxiv": "2401.00001"}),
-        custom_fields=json.dumps({
+        custom_fields={
             "dataset_id": "DS-42",
             "Study Quality": "High",
             "study_quality": "Medium",
             "foo:bar": "Baz",
             "reviewed": True,
-        }),
+        },
         created_by=user.id,
     )
 
@@ -238,7 +236,7 @@ async def test_bibtex_export_can_include_identifiers_and_custom_fields(async_db)
     typed, errors = parse_bibliography_records(output, "bibtex")
     records = [_item_payload(record) for record in typed]
     assert errors == []
-    assert json.loads(records[0]["custom_fields"]) == {
+    assert records[0]["custom_fields"] == {
         "dataset_id": "DS-42",
         "study_quality": "High",
         "study_quality_2": "Medium",

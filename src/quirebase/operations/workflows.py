@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
+from advanced_alchemy.types import FileObject
 from dbos import DBOS
 from sqlalchemy import select, update
 
@@ -251,17 +251,25 @@ async def delete_orphan_candidates_step(candidates: list[str]) -> list[str]:
 
 
 @ads.transaction(isolation_level="READ COMMITTED")
-async def record_integrity_scan_step(errors: list[str], thumbnail_sizes: dict[str, int]) -> None:
+async def record_integrity_scan_step(errors: list[str], thumbnail_sizes: dict[str, dict]) -> None:
     db = ads.sql_session()
-    for revision_id, thumbnail_size in thumbnail_sizes.items():
-        await db.execute(
-            update(FileRevision)
-            .where(
-                FileRevision.id == revision_id,
-                FileRevision.thumbnail_size.is_(None),
-            )
-            .values(thumbnail_size=thumbnail_size)
+    for revision_id, repair in thumbnail_sizes.items():
+        revision = await db.scalar(
+            select(FileRevision).where(FileRevision.id == UUID(revision_id)).with_for_update()
         )
+        if (
+            revision is not None
+            and revision.thumbnail is not None
+            and revision.thumbnail.path == repair["path"]
+            and revision.thumbnail.size is None
+        ):
+            # FileObject equality ignores metadata at an unchanged path. Always emit SQL.
+            descriptor = FileObject(**(revision.thumbnail.to_dict() | {"size": repair["size"]}))
+            await db.execute(
+                update(FileRevision)
+                .where(FileRevision.id == revision.id)
+                .values(thumbnail=descriptor)
+            )
     missing_count = sum("missing " in error for error in errors)
     mismatch_count = sum("mismatch" in error for error in errors)
     db.add(
@@ -269,7 +277,7 @@ async def record_integrity_scan_step(errors: list[str], thumbnail_sizes: dict[st
             status="ok" if not errors else "inconsistencies_found",
             missing_count=missing_count,
             mismatch_count=mismatch_count,
-            errors=json.dumps(errors, ensure_ascii=False),
+            errors=errors,
         )
     )
     await db.flush()

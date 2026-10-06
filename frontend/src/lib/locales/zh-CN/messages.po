@@ -345,6 +345,7 @@ msgstr "所有成员"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryFilters.svelte
+#: src/lib/features/projects/Projects.svelte
 msgid "All Projects"
 msgstr "全部项目"
 
@@ -1988,6 +1989,17 @@ msgid "Line"
 msgstr "直线"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/Library.svelte
+msgid "Load more Projects"
+msgstr "加载更多 Project"
+
+#. js-lingui-explicit-id
+#: src/lib/app/WorkspaceMenu.svelte
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Load more workspaces"
+msgstr "加载更多 Workspace"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/ItemSectionState.svelte
 #: src/lib/features/pdf-reader/PdfWorkspace.svelte
 msgid "Loading"
@@ -2452,6 +2464,11 @@ msgid "No open Projects are available to join."
 msgstr "暂无可加入的开放项目。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "No participating Projects on this page."
+msgstr "此页没有你参与的 Project。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "No Project participants yet."
 msgstr "暂无项目参与者。"
@@ -2459,11 +2476,6 @@ msgstr "暂无项目参与者。"
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "No projects yet."
-msgstr "暂无项目。"
-
-#. js-lingui-explicit-id
-#: src/lib/features/projects/Projects.svelte
-msgid "No Projects yet."
 msgstr "暂无项目。"
 
 #. js-lingui-explicit-id
@@ -3415,6 +3427,7 @@ msgstr "搜索成员"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/projects/Projects.svelte
 msgid "Search Projects"
 msgstr "搜索项目"
 
@@ -3437,6 +3450,11 @@ msgstr "搜索样式"
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "Search title, author, Tag, or full text"
 msgstr "搜索标题、作者、标签或全文"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Search workspaces"
+msgstr "搜索 Workspace"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/Library.svelte
@@ -4456,6 +4474,7 @@ msgstr "全工作区"
 #. js-lingui-explicit-id
 #: src/lib/app/WorkspaceMenu.svelte
 #: src/lib/features/admin/AdminShell.svelte
+#: src/routes/(app)/workspace/+page.svelte
 msgid "Workspaces"
 msgstr "工作区"
 

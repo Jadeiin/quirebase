@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { createQuery } from '@tanstack/svelte-query';
+	import { createInfiniteQuery, createQuery } from '@tanstack/svelte-query';
 	import { onMount, untrack } from 'svelte';
 	import Panel from '#lib/design/Panel.svelte';
 	import SectionHeader from '#lib/design/SectionHeader.svelte';
@@ -15,7 +15,7 @@
 	} from '#lib/export-preferences.js';
 	import { t } from '#lib/i18n.js';
 	import Button from '#lib/design/Button.svelte';
-	import { workspaceListQuery } from '#lib/workspaces/queries.js';
+	import { workspaceOptionsQuery } from '#lib/workspaces/queries.js';
 
 	let { userId } = $props<{ userId: string }>();
 	let preferences = $state<ExportPreferences>(structuredClone(defaultExportPreferences));
@@ -27,7 +27,7 @@
 	let ready = $state(false);
 	let saved = $state(false);
 	let savedTimer: number | undefined;
-	const workspaces = createQuery(() => workspaceListQuery());
+	const workspaces = createInfiniteQuery(() => workspaceOptionsQuery());
 	const styles = createQuery(() =>
 		exportCitationStylesQuery(workspaceId, styleQuery, preferences.citation.style)
 	);
@@ -125,6 +125,10 @@
 				>{/each}</select
 		></label
 	>
+	{#if workspaces.hasNextPage}<Button
+			disabled={workspaces.isFetchingNextPage}
+			onclick={() => void workspaces.fetchNextPage()}>{$t('Load more workspaces')}</Button
+		>{/if}
 	{#if !workspaceId}<p class="text-sm text-surface-600-400">
 			{$t(
 				'Select a Workspace to load its citation styles and preview endpoint. The account route does not infer a Workspace from stored preferences.'

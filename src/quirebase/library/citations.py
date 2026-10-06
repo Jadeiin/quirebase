@@ -187,6 +187,10 @@ def _json_fields(value: str | None) -> tuple[tuple[str, str], ...]:
         parsed = json.loads(value or "{}")
     if not isinstance(parsed, dict):
         return ()
+    return _field_pairs(parsed)
+
+
+def _field_pairs(parsed: dict | None) -> tuple[tuple[str, str], ...]:
     return tuple(
         (
             str(key),
@@ -194,7 +198,7 @@ def _json_fields(value: str | None) -> tuple[tuple[str, str], ...]:
             if isinstance(field_value, (dict, list))
             else str(field_value),
         )
-        for key, field_value in parsed.items()
+        for key, field_value in (parsed or {}).items()
         if field_value not in (None, "")
     )
 
@@ -244,7 +248,7 @@ def _item_to_bibliography_record(item: Item) -> BibliographyRecord:
         doi=item.doi,
         urls=tuple(part.strip() for part in (item.urls or "").splitlines() if part.strip()),
         identifiers=_json_fields(item.identifiers),
-        custom_fields=_json_fields(item.custom_fields),
+        custom_fields=_field_pairs(item.custom_fields),
     )
 
 

@@ -132,7 +132,10 @@ lineage primitive and Module-owned aggregate loaders (`get_item`, `get_project`,
 predicate; one concrete resource-action decision remains an explicit Access gate while Project
 participation contributes fixed domain discovery rules and concrete command facts, and mutation
 statements retain their Workspace and CAS predicates at the linearization point. No generic
-Repository or implicit ORM tenant filter is part of this seam.
+Repository or implicit ORM tenant filter is part of this seam. Module-owned AA read repositories
+may paginate an explicitly authorized root statement after that seam; transaction ownership stays
+with the caller. Core owns AA configuration and shared persistence value types, as described in
+ADR 0014.
 
 The Access Module owns one immutable Casbin model and policy bundle packaged with the application.
 Casbin is the sole Workspace/System resource-action capability policy evaluator. System and Workspace requests

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
+from advanced_alchemy.types import FileObject
 from sqlalchemy import select
 from uuid_utils.compat import uuid7
 
@@ -211,10 +211,14 @@ async def attach_staged_pdf(
     revision = FileRevision(
         workspace_id=item.workspace_id,
         item_id=item.id,
-        object_key=key,
-        size=size,
-        original_name=original_name,
         created_by=user.id,
+        file=FileObject(
+            backend="documents",
+            filename=key,
+            size=size,
+            content_type="application/pdf",
+            metadata={"original_name": original_name},
+        ),
     )
     db.add(revision)
     await db.flush()
@@ -254,13 +258,7 @@ async def attach_staged_pdf(
     return revision
 
 
-def _pdf_import_object_keys(records_json: str) -> set[str]:
-    try:
-        records = json.loads(records_json)
-    except (json.JSONDecodeError, TypeError):
-        return set()
-    if not isinstance(records, list):
-        return set()
+def _pdf_import_object_keys(records: list[dict]) -> set[str]:
     return {
         object_key
         for record in records
@@ -274,7 +272,9 @@ async def _referenced_candidates(db: AsyncSession, object_keys: tuple[str, ...])
     referenced = set(
         (
             await db.scalars(
-                select(FileRevision.object_key).where(FileRevision.object_key.in_(object_keys))
+                select(FileRevision.file["filename"].as_string()).where(
+                    FileRevision.file["filename"].as_string().in_(object_keys)
+                )
             )
         ).all()
     )
@@ -282,8 +282,8 @@ async def _referenced_candidates(db: AsyncSession, object_keys: tuple[str, ...])
         key
         for key in (
             await db.scalars(
-                select(FileRevision.thumbnail_object_key).where(
-                    FileRevision.thumbnail_object_key.in_(object_keys)
+                select(FileRevision.thumbnail["filename"].as_string()).where(
+                    FileRevision.thumbnail["filename"].as_string().in_(object_keys)
                 )
             )
         ).all()
@@ -301,7 +301,9 @@ async def _referenced_candidates(db: AsyncSession, object_keys: tuple[str, ...])
     referenced.update(
         (
             await db.scalars(
-                select(ExportArtifact.object_key).where(ExportArtifact.object_key.in_(object_keys))
+                select(ExportArtifact.file["filename"].as_string()).where(
+                    ExportArtifact.file["filename"].as_string().in_(object_keys)
+                )
             )
         ).all()
     )
@@ -595,11 +597,15 @@ async def get_revision_file(
         raise ResourceNotFound("revision not found for item")
     store = get_object_store()
     response = (
-        await store.get_range(revision.object_key, *byte_range)
+        await store.get_range(revision.file.path, *byte_range)
         if byte_range is not None
-        else await store.get(revision.object_key)
+        else await store.get(revision.file.path)
     )
-    return response, revision.original_name, revision.mime_type or "application/pdf"
+    return (
+        response,
+        revision.file.metadata["original_name"],
+        revision.file.content_type or "application/pdf",
+    )
 
 
 async def head_revision_file(
@@ -609,9 +615,9 @@ async def head_revision_file(
     if revision.item_id != item_id:
         raise ResourceNotFound("revision not found for item")
     return (
-        await get_object_store().head(revision.object_key),
-        revision.original_name,
-        revision.mime_type or "application/pdf",
+        await get_object_store().head(revision.file.path),
+        revision.file.metadata["original_name"],
+        revision.file.content_type or "application/pdf",
     )
 
 
@@ -621,7 +627,7 @@ async def get_revision_thumbnail(
     revision = await require_revision(db, user, workspace_id, revision_id)
     if revision.item_id != item_id:
         raise ResourceNotFound("revision not found for item")
-    key = revision.thumbnail_object_key
+    key = revision.thumbnail.path if revision.thumbnail else None
     if key is None:
         raise ResourceNotFound("revision thumbnail not found")
     if not await get_object_store().exists(key):
@@ -635,7 +641,7 @@ async def head_revision_thumbnail(
     revision = await require_revision(db, user, workspace_id, revision_id)
     if revision.item_id != item_id:
         raise ResourceNotFound("revision not found for item")
-    key = revision.thumbnail_object_key
+    key = revision.thumbnail.path if revision.thumbnail else None
     if key is None:
         raise ResourceNotFound("revision thumbnail not found")
     store = get_object_store()
@@ -676,7 +682,7 @@ async def resolve_item_thumbnail(
         )
     ).all()
     for revision in revisions:
-        key = revision.thumbnail_object_key
+        key = revision.thumbnail.path if revision.thumbnail else None
         if key is None:
             continue
         store = get_object_store()
@@ -723,8 +729,8 @@ async def delete_file_revision(
     )
     if revision is None or revision.item_id != item_id:
         raise ResourceNotFound("file revision not found")
-    object_key = revision.object_key
-    thumbnail_key = revision.thumbnail_object_key
+    object_key = revision.file.path
+    thumbnail_key = revision.thumbnail.path if revision.thumbnail else None
     await search_index(db).remove_revision(db, revision.id)
     await db.delete(revision)
     await db.flush()

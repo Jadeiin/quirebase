@@ -73,9 +73,9 @@ def document_list_view(item_id: UUID, item_files: Any) -> DocumentListView:
         FileView(
             id=row.id,
             kind="revision",
-            original_name=row.original_name,
-            mime_type=row.mime_type,
-            size=row.size,
+            original_name=row.file.metadata["original_name"],
+            mime_type=row.file.content_type,
+            size=row.file.size,
             created_at=row.created_at.isoformat(),
             page_count=row.page_count,
             processing_state=row.processing_state,

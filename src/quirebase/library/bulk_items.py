@@ -114,7 +114,7 @@ async def apply_bulk_item_action(
         cleanup_keys = list(
             (
                 await db.scalars(
-                    select(FileRevision.object_key).where(
+                    select(FileRevision.file["filename"].as_string()).where(
                         FileRevision.workspace_id == workspace_id,
                         FileRevision.item_id.in_([item.id for item in items]),
                     )
@@ -135,7 +135,7 @@ async def apply_bulk_item_action(
             key
             for key in (
                 await db.scalars(
-                    select(FileRevision.thumbnail_object_key).where(
+                    select(FileRevision.thumbnail["filename"].as_string()).where(
                         FileRevision.workspace_id == workspace_id,
                         FileRevision.item_id.in_([item.id for item in items]),
                     )

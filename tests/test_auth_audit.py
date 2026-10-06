@@ -88,13 +88,13 @@ async def test_failed_and_successful_logins_are_audited_without_credentials(
         assert events[1].actor_id == user.id
         for event in events:
             assert event.source == "http"
-            assert json.loads(event.detail)["invocation"] == {
+            assert event.detail["invocation"] == {
                 "protocol": "http",
                 "operation": "login_session",
             }
         assert current_programmatic_invocation() is None
         assert await db.get(LoginSession, events[1].target_id) is not None
-        details = " ".join(event.detail or "" for event in events)
+        details = " ".join(json.dumps(event.detail) for event in events)
         assert "correct-password" not in details
         assert "wrong-password" not in details
         assert "audited" not in details
@@ -144,7 +144,7 @@ async def test_http_audit_preserves_mcp_provenance_and_isolates_cookie_credentia
             expected = {"protocol": protocol, "operation": operation}
             if client_id is not None:
                 expected.update(api_token_id=grant.token_id, client_id=client_id)
-            assert json.loads(event.detail)["invocation"] == json_payload(expected)
+            assert event.detail["invocation"] == json_payload(expected)
         assert current_programmatic_invocation() is None
     finally:
         await client.aclose()
@@ -241,9 +241,9 @@ async def test_revoke_all_sessions_requires_same_origin_and_invalidates_every_se
         )
         assert event is not None
         assert event.actor_id == user.id
-        assert '"revoked_sessions": 2' in event.detail
+        assert event.detail["revoked_sessions"] == 2
         assert event.source == "http"
-        assert json.loads(event.detail)["invocation"]["protocol"] == "http"
+        assert event.detail["invocation"]["protocol"] == "http"
         assert (await client.get("/api/v1/session")).json()["authenticated"] is False
     finally:
         await client.aclose()

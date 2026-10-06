@@ -73,6 +73,12 @@ import sys
 from alembic import command
 from alembic.config import Config
 
+import quirebase.core.storage
+
+def storage_unavailable():
+    raise AssertionError("applying migrations must not initialize object storage")
+
+quirebase.core.storage.get_object_store = storage_unavailable
 config = Config()
 config.set_main_option("script_location", "migrations")
 command.upgrade(config, "head")

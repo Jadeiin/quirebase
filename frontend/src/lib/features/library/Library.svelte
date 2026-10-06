@@ -1,8 +1,14 @@
 <script lang="ts">
+	import Button from '#lib/design/Button.svelte';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
+	import {
+		createMutation,
+		createInfiniteQuery,
+		createQuery,
+		useQueryClient
+	} from '@tanstack/svelte-query';
 	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
 	import { isDownloadCancelled } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
@@ -16,7 +22,7 @@
 		type LibraryBulkAction
 	} from '#lib/features/library/mutations.js';
 	import { libraryListQuery } from '#lib/features/library/queries.js';
-	import { projectListQuery } from '#lib/features/projects/queries.js';
+	import { projectDetailQuery, projectOptionsQuery } from '#lib/features/projects/queries.js';
 	import { tagsQuery } from '#lib/features/tags/queries.js';
 	import { getSession } from '#lib/session.js';
 	import {
@@ -77,7 +83,16 @@
 
 	const library = createQuery(() => libraryListQuery(workspaceId, submitted, pageNumber));
 	const tags = createQuery(() => tagsQuery(workspaceId));
-	const projects = createQuery(() => projectListQuery(workspaceId));
+	const projects = createInfiniteQuery(() => projectOptionsQuery(workspaceId));
+	const selectedProject = createQuery(() => ({
+		...projectDetailQuery(workspaceId, submitted.project),
+		enabled: Boolean(submitted.project) && !projects.data?.some((p) => p.id === submitted.project)
+	}));
+	const projectChoices = $derived(
+		selectedProject.data && !projects.data?.some((p) => p.id === selectedProject.data?.id)
+			? [selectedProject.data, ...(projects.data ?? [])]
+			: (projects.data ?? [])
+	);
 	const totalPages = $derived(
 		Math.max(1, Math.ceil((library.data?.total ?? 0) / (library.data?.per_page ?? 25)))
 	);
@@ -204,7 +219,7 @@
 	bind:author
 	bind:filtersOpen
 	tags={tags.data ?? []}
-	projects={projects.data ?? []}
+	projects={projectChoices}
 	onSearch={() => updateUrl()}
 	onClear={clearFilters}
 />
@@ -215,11 +230,16 @@
 	bind:bulkProject
 	bind:bulkTag
 	bind:exportFormat
-	projects={projects.data ?? []}
+	projects={projectChoices}
 	{busy}
 	onApply={requestBulkAction}
 	onClearSelection={() => selected.clear()}
 />
+
+{#if projects.hasNextPage}<Button
+		disabled={projects.isFetchingNextPage}
+		onclick={() => void projects.fetchNextPage()}>{$t('Load more Projects')}</Button
+	>{/if}
 
 <ConfirmDialog
 	bind:open={confirmDeleteOpen}

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -295,10 +294,14 @@ async def _shared_annotation_context(db, name: str):
     revision = FileRevision(
         workspace_id=workspace_id,
         item_id=item.id,
-        object_key=f"objects/{name}.pdf",
-        size=1,
-        original_name=f"{name}.pdf",
         created_by=author.id,
+        file=FileObject(
+            backend="documents",
+            filename=f"objects/{name}.pdf",
+            size=1,
+            content_type="application/pdf",
+            metadata={"original_name": f"{name}.pdf"},
+        ),
     )
     db.add_all([project_item, revision])
     await db.flush()
@@ -715,7 +718,7 @@ async def test_invitation_creation_audit_references_invitation_and_invitee(async
 
     assert event is not None
     assert event.workspace_id == workspace_id
-    assert json.loads(event.detail) == json_payload({"user_id": invitee.id, "role": "viewer"})
+    assert event.detail == json_payload({"user_id": invitee.id, "role": "viewer"})
     assert event.authorization_resource_action == "workspace_invitation.create"
 
 
@@ -989,10 +992,14 @@ async def test_workspace_delete_waits_for_retention_and_purges_owned_data(
     revision = FileRevision(
         workspace_id=workspace_id,
         item_id=item.id,
-        object_key=revision_object.key,
-        size=revision_object.size,
-        original_name="purge.pdf",
         created_by=owner.id,
+        file=FileObject(
+            backend="documents",
+            filename=revision_object.key,
+            size=revision_object.size,
+            content_type="application/pdf",
+            metadata={"original_name": "purge.pdf"},
+        ),
     )
     async_db.add(revision)
     await async_db.flush()
@@ -1038,16 +1045,20 @@ async def test_workspace_delete_waits_for_retention_and_purges_owned_data(
             workspace_id=workspace_id,
             actor_id=owner.id,
             file_format="pdf",
-            records=json.dumps([{"_pdf": {"object_key": staged_object.key}}]),
-            errors="[]",
+            records=[{"_pdf": {"object_key": staged_object.key}}],
+            errors=[],
         ),
         ExportArtifact(
             workflow_id=f"export:{uuid4()}",
             workspace_id=workspace_id,
-            object_key=export_object.key,
-            filename="export.pdf",
-            size=export_object.size,
             expires_at=datetime.now(UTC) + timedelta(days=1),
+            file=FileObject(
+                backend="documents",
+                filename=export_object.key,
+                size=export_object.size,
+                content_type="application/pdf",
+                metadata={"original_name": "export.pdf"},
+            ),
         ),
         reply,
     ])
@@ -1280,17 +1291,19 @@ async def test_managed_project_is_visible_only_to_members_and_workspace_governor
     )
     assert [
         row[0].id
-        for row in await list_workspace_projects(
-            async_db, await resolve_workspace_context(async_db, owner, fixture_workspace_id(owner))
-        )
+        for row in (
+            await list_workspace_projects(
+                async_db,
+                await resolve_workspace_context(async_db, owner, fixture_workspace_id(owner)),
+            )
+        )[0]
     ] == [project.id]
     assert (
         await list_workspace_projects(
             async_db,
             await resolve_workspace_context(async_db, outsider, fixture_workspace_id(owner)),
         )
-        == []
-    )
+    )[0] == []
 
     with pytest.raises(ResourceUnavailable, match="Project not found"):
         await require_project_context(
@@ -1309,10 +1322,12 @@ async def test_managed_project_is_visible_only_to_members_and_workspace_governor
     )
     assert [
         row[0].id
-        for row in await list_workspace_projects(
-            async_db,
-            await resolve_workspace_context(async_db, outsider, fixture_workspace_id(owner)),
-        )
+        for row in (
+            await list_workspace_projects(
+                async_db,
+                await resolve_workspace_context(async_db, outsider, fixture_workspace_id(owner)),
+            )
+        )[0]
     ] == [project.id]
     member_context = await require_project_context(
         async_db, outsider, fixture_workspace_id(owner), project.id, ResourceAction.workspace_read
@@ -1354,8 +1369,7 @@ async def test_managed_project_mutations_use_resource_actions(async_db):
         await list_workspace_projects(
             async_db, await resolve_workspace_context(async_db, editor, workspace_id)
         )
-        == []
-    )
+    )[0] == []
 
     with pytest.raises(ResourceUnavailable, match="Project not found"):
         await update_project_settings(
@@ -1528,7 +1542,7 @@ async def test_dashboard_uses_participation_instead_of_governance_visibility(asy
     await async_db.commit()
 
     context = await resolve_workspace_context(async_db, actor, workspace_id)
-    directory = await list_workspace_projects(async_db, context)
+    directory = (await list_workspace_projects(async_db, context))[0]
     assert {project.id for project, _, _ in directory} == {project.id for project in projects}
     assert (
         next(
@@ -1538,7 +1552,7 @@ async def test_dashboard_uses_participation_instead_of_governance_visibility(asy
         )
         is False
     )
-    mine = await list_workspace_projects(async_db, context, view="mine")
+    mine = (await list_workspace_projects(async_db, context, view="mine"))[0]
     assert {project.id for project, _, _ in mine} == {projects[index].id for index in (0, 1, 3)}
     dashboard = await get_dashboard_data(async_db, actor, workspace_id)
     assert {project.id for project in dashboard["projects"]} == {
@@ -1753,7 +1767,7 @@ async def test_discussion_moderation_is_workspace_governance_with_audited_reason
     )
     assert event.actor_id == admin.id
     assert event.authorization_resource_action == ResourceAction.item_discussion_delete.value
-    assert json.loads(event.detail)["reason"] == "Policy violation"
+    assert event.detail["reason"] == "Policy violation"
 
 
 @pytest.mark.anyio
@@ -2626,7 +2640,10 @@ async def test_revision_pdf_export_excludes_moderated_annotations(async_db, role
     with pymupdf.open() as document:
         document.new_page(width=300, height=400)
         original_pdf = document.tobytes()
-    revision.object_key, revision.size = await put_pdf_object(original_pdf)
+    revision_key, revision_size = await put_pdf_object(original_pdf)
+    revision.file = FileObject(
+        **(revision.file.to_dict() | {"filename": revision_key, "size": revision_size})
+    )
     payload = NotePayload.model_validate(shared.payload).model_dump(mode="json")
     shared.payload = payload
     now = datetime.now(UTC)
@@ -2833,7 +2850,7 @@ async def test_break_glass_is_one_shot_read_only_and_audited(async_db):
     )
     assert event is not None
     assert event.source == "internal"
-    assert json.loads(event.detail)["reason"] == "Investigate customer-reported data loss"
+    assert event.detail["reason"] == "Investigate customer-reported data loss"
 
 
 @pytest.mark.anyio
@@ -2869,10 +2886,14 @@ async def test_annotation_moderation_preserves_authored_content_and_hides_shared
     revision = FileRevision(
         workspace_id=fixture_workspace_id(owner),
         item_id=item.id,
-        object_key="objects/moderation.pdf",
-        size=1,
-        original_name="moderation.pdf",
         created_by=author.id,
+        file=FileObject(
+            backend="documents",
+            filename="objects/moderation.pdf",
+            size=1,
+            content_type="application/pdf",
+            metadata={"original_name": "moderation.pdf"},
+        ),
     )
     async_db.add_all([project_item, revision])
     await async_db.flush()
@@ -3107,7 +3128,7 @@ async def test_annotation_moderation_rejects_authors_and_audits_versioned_deleti
     assert event is not None
     assert event.actor_id == administrator.id
     assert event.authorization_resource_action == ResourceAction.project_annotation_delete.value
-    assert json.loads(event.detail or "{}") == json_payload({"author_id": author.id})
+    assert (event.detail or {}) == json_payload({"author_id": author.id})
 
 
 @pytest.mark.anyio
@@ -3215,10 +3236,14 @@ async def test_permanent_document_deletion_is_an_editor_decision(async_db, fake_
     revision = FileRevision(
         workspace_id=workspace_id,
         item_id=item.id,
-        object_key="objects/governed.pdf",
-        size=1,
-        original_name="governed.pdf",
         created_by=owner.id,
+        file=FileObject(
+            backend="documents",
+            filename="objects/governed.pdf",
+            size=1,
+            content_type="application/pdf",
+            metadata={"original_name": "governed.pdf"},
+        ),
     )
     attachment = Attachment(
         workspace_id=workspace_id,
@@ -3549,6 +3574,64 @@ async def test_annotation_export_status_and_file_are_requester_only(
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("artifact_state", ["available", "expired", "removed"])
+async def test_export_download_uses_the_persisted_descriptor_and_enforces_expiry(
+    async_db, fake_durable_operations, artifact_state
+):
+    requester = await _user(async_db, f"descriptor-export-{artifact_state}")
+    workspace_id = fixture_workspace_id(requester)
+    item = Item(workspace_id=workspace_id, title="Descriptor export", created_by=requester.id)
+    async_db.add(item)
+    await async_db.flush()
+    store = get_object_store()
+    content = b"%PDF-canonical-export"
+    stored = await store.put_object(uuid4(), ObjectSuffix.PDF, content, max_bytes=1024)
+    file = FileObject(
+        backend="documents",
+        filename=stored.key,
+        size=stored.size,
+        content_type="application/pdf",
+        metadata={"original_name": "export.pdf"},
+    )
+    revision = FileRevision(
+        workspace_id=workspace_id, item_id=item.id, created_by=requester.id, file=file
+    )
+    async_db.add(revision)
+    workflow_id = f"annotation-export:{uuid4()}"
+    if artifact_state != "removed":
+        async_db.add(
+            ExportArtifact(
+                workflow_id=workflow_id,
+                workspace_id=workspace_id,
+                file=file,
+                expires_at=datetime.now(UTC)
+                + timedelta(hours=1 if artifact_state == "available" else -1),
+            )
+        )
+    await async_db.commit()
+    fake_durable_operations.workflows[workflow_id] = WorkflowSummary(
+        id=workflow_id,
+        name=ANNOTATION_EXPORT_WORKFLOW,
+        state="succeeded",
+        raw_status="SUCCESS",
+        queue_name=None,
+        executor_id=None,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        output={"revision_id": revision.id, "object_key": "obsolete-export.pdf"},
+        attributes=json_payload({"actor_id": requester.id, "workspace_id": workspace_id}),
+    )
+
+    if artifact_state == "available":
+        response = await get_export_file(async_db, requester, workspace_id, workflow_id)
+        assert (await collect_body(response.body)).getvalue() == content
+    else:
+        with pytest.raises(ResourceNotFound, match="export artifact expired or deleted"):
+            await get_export_file(async_db, requester, workspace_id, workflow_id)
+        assert await store.exists(stored.key)
+
+
+@pytest.mark.anyio
 async def test_project_annotation_export_file_rejects_replaced_assignment(
     async_db, fake_durable_operations
 ):
@@ -3564,10 +3647,14 @@ async def test_project_annotation_export_file_rejects_replaced_assignment(
     revision = FileRevision(
         workspace_id=workspace_id,
         item_id=item.id,
-        object_key="objects/source.pdf",
-        size=1,
-        original_name="source.pdf",
         created_by=requester.id,
+        file=FileObject(
+            backend="documents",
+            filename="objects/source.pdf",
+            size=1,
+            content_type="application/pdf",
+            metadata={"original_name": "source.pdf"},
+        ),
     )
     assignment = ProjectItem(
         workspace_id=workspace_id,
@@ -3640,12 +3727,16 @@ async def test_cross_workspace_copy_creates_detached_item_and_file(async_db, mon
     source_revision = FileRevision(
         workspace_id=fixture_workspace_id(actor),
         item_id=source.id,
-        object_key=stored.key,
-        size=stored.size,
-        original_name="source.pdf",
         full_text="Unique copied PDF search phrase",
         processing_state="ready",
         created_by=actor.id,
+        file=FileObject(
+            backend="documents",
+            filename=stored.key,
+            size=stored.size,
+            content_type="application/pdf",
+            metadata={"original_name": "source.pdf"},
+        ),
     )
     async_db.add(source_revision)
     await async_db.commit()
@@ -3684,9 +3775,9 @@ async def test_cross_workspace_copy_creates_detached_item_and_file(async_db, mon
     assert copied.workspace_id == fixture_workspace_id(target_owner)
     assert copied.title == source.title
     assert copied_revision is not None
-    assert copied_revision.object_key != source_revision.object_key
-    assert await get_object_store().exists(source_revision.object_key)
-    assert await get_object_store().exists(copied_revision.object_key)
+    assert copied_revision.file.path != source_revision.file.path
+    assert await get_object_store().exists(source_revision.file.path)
+    assert await get_object_store().exists(copied_revision.file.path)
     assert await search_index(async_db).search(async_db, "copied PDF search") == [copied.id]
     import_event = await async_db.scalar(
         select(AuditEvent).where(
@@ -3725,11 +3816,15 @@ async def test_cross_workspace_copy_preserves_objects_after_ambiguous_commit(asy
         FileRevision(
             workspace_id=source.workspace_id,
             item_id=source.id,
-            object_key=stored.key,
-            size=stored.size,
-            original_name="ambiguous.pdf",
             processing_state="ready",
             created_by=actor.id,
+            file=FileObject(
+                backend="documents",
+                filename=stored.key,
+                size=stored.size,
+                content_type="application/pdf",
+                metadata={"original_name": "ambiguous.pdf"},
+            ),
         )
     )
     await async_db.commit()
@@ -3766,7 +3861,7 @@ async def test_cross_workspace_copy_preserves_objects_after_ambiguous_commit(asy
         select(FileRevision).where(FileRevision.item_id == copied.id)
     )
     assert copied_revision is not None
-    assert await get_object_store().exists(copied_revision.object_key)
+    assert await get_object_store().exists(copied_revision.file.path)
 
 
 @pytest.mark.anyio
@@ -3791,11 +3886,15 @@ async def test_cross_workspace_copy_rejects_pending_file_revision(async_db):
         FileRevision(
             workspace_id=source.workspace_id,
             item_id=source.id,
-            object_key="objects/pending-copy.pdf",
-            size=1,
-            original_name="pending.pdf",
             processing_state="pending",
             created_by=actor.id,
+            file=FileObject(
+                backend="documents",
+                filename="objects/pending-copy.pdf",
+                size=1,
+                content_type="application/pdf",
+                metadata={"original_name": "pending.pdf"},
+            ),
         )
     )
     await async_db.commit()
@@ -3830,10 +3929,14 @@ async def test_annotation_list_filters_multiple_sources_and_revisions_without_wi
     old_revision = FileRevision(
         workspace_id=workspace_id,
         item_id=item.id,
-        object_key="objects/old-sources.pdf",
-        size=1,
-        original_name="old-sources.pdf",
         created_by=owner.id,
+        file=FileObject(
+            backend="documents",
+            filename="objects/old-sources.pdf",
+            size=1,
+            content_type="application/pdf",
+            metadata={"original_name": "old-sources.pdf"},
+        ),
     )
     async_db.add_all([second_project, restricted_project, old_revision])
     await async_db.flush()
@@ -3894,7 +3997,10 @@ async def test_annotation_list_filters_multiple_sources_and_revisions_without_wi
     assert by_id[shared.id]["project_name"] == project.name
     assert by_id[second.id]["project_name"] == second_project.name
     assert by_id[private.id]["project_name"] is None
-    assert all(entry["revision_name"] == revision.original_name for entry in both.annotations)
+    assert all(
+        entry["revision_name"] == revision.file.metadata["original_name"]
+        for entry in both.annotations
+    )
     project_only = await list_document_annotations(
         async_db,
         viewer,
@@ -4038,7 +4144,7 @@ async def test_annotation_list_survives_revision_deletion_during_response_assemb
     )
     workspace_id = fixture_workspace_id(owner)
     revision_id = revision.id
-    revision_name = revision.original_name
+    revision_name = revision.file.metadata["original_name"]
     async with async_session_factory() as reader:
         reading_user = await reader.get(User, viewer.id)
         assert reading_user is not None
@@ -4094,7 +4200,7 @@ async def test_annotation_update_reports_revision_deleted_after_commit(
     )
     workspace_id = fixture_workspace_id(owner)
     revision.page_count = 1
-    revision.page_geometry = "[[0, 0, 300, 400]]"
+    revision.page_geometry = [[0, 0, 300, 400]]
     revision.processing_state = FileRevisionProcessingState.ready
     await async_db.commit()
     async with async_session_factory() as writer:
@@ -4139,7 +4245,7 @@ async def test_annotation_cursor_traversal_survives_changes_between_pages(async_
     )
     workspace_id = fixture_workspace_id(owner)
     revision.page_count = 1
-    revision.page_geometry = "[[0, 0, 300, 400]]"
+    revision.page_geometry = [[0, 0, 300, 400]]
     revision.processing_state = FileRevisionProcessingState.ready
     additional = [
         PdfAnnotation(

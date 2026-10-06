@@ -1,5 +1,6 @@
+import { directoryPage } from './helpers';
 import { expect, test, type Page } from '@playwright/test';
-import { mockSession, mockWorkspaces } from './helpers';
+import { mockSession, mockWorkspaces, workspaceView } from './helpers';
 
 async function switchWorkspace(page: Page, name: string) {
 	await page.getByRole('button', { name: 'Workspace' }).click();
@@ -13,8 +14,8 @@ test('Workspace switching and governance live in the Quirebase menu, not the dai
 	await page.route('**/api/v1/workspaces/workspace-1/dashboard', (route) =>
 		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 0 } })
 	);
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
-		route.fulfill({ json: [] })
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 
 	await page.goto('/workspace/workspace-1');
@@ -87,8 +88,8 @@ test('an explicit Workspace URL wins over the saved default, and switching chang
 		});
 	});
 	await page.route('**/api/v1/workspaces/*/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/workspaces/*/projects?view=all', (route) =>
-		route.fulfill({ json: [] })
+	await page.route('**/api/v1/workspaces/*/projects?view=all*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 	await page.route('**/api/v1/workspaces/*/dashboard', (route) =>
 		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 1 } })
@@ -130,9 +131,12 @@ test('an archived Workspace selected as default opens again from the root', asyn
 		allowed_project_participations: [],
 		authorization: { allowed: ['workspace.read', 'workspace.export', 'workspace.restore'] }
 	};
-	await page.route('**/api/v1/workspaces', (route) =>
+	await page.route(/\/api\/v1\/workspaces(?:\?.*)?$/, (route) =>
 		route.fulfill({
-			json: [{ ...archived, id: 'workspace-1', name: 'Research', state: 'active' }, archived]
+			json: directoryPage(
+				[{ ...archived, id: 'workspace-1', name: 'Research', state: 'active' }, archived],
+				route
+			)
 		})
 	);
 	await page.route('**/api/v1/workspaces/workspace-2', (route) =>
@@ -169,13 +173,13 @@ test('workspace creation submits an explicit owner and opens the Workspace when 
 	};
 	let createBody: unknown;
 	let workspaceCreated = false;
-	await page.route('**/api/v1/workspaces', (route) => {
+	await page.route(/\/api\/v1\/workspaces(?:\?.*)?$/, (route) => {
 		if (route.request().method() === 'POST') {
 			createBody = route.request().postDataJSON();
 			workspaceCreated = true;
 			return route.fulfill({ status: 201, json: { id: workspace.id } });
 		}
-		return route.fulfill({ json: workspaceCreated ? [workspace] : [] });
+		return route.fulfill({ json: directoryPage(workspaceCreated ? [workspace] : [], route) });
 	});
 	await page.route(`**/api/v1/workspaces/${workspace.id}`, (route) =>
 		route.fulfill({ json: workspace })
@@ -202,22 +206,25 @@ test('an instance administrator who assigns another owner is not added to Worksp
 }) => {
 	await mockSession(page, 'administrator');
 	let openedWorkspace = false;
-	await page.route('**/api/v1/workspaces', (route) => {
+	await page.route(/\/api\/v1\/workspaces(?:\?.*)?$/, (route) => {
 		if (route.request().method() === 'POST')
 			return route.fulfill({ status: 201, json: { id: 'workspace-created' } });
 		return route.fulfill({
-			json: [
-				{
-					id: 'workspace-1',
-					name: 'Research',
-					owner_id: 'user-1',
-					state: 'active',
-					current_role: 'owner',
-					governance_suspended: false,
-					allowed_project_participations: [],
-					authorization: { allowed: ['workspace.read'] }
-				}
-			]
+			json: directoryPage(
+				[
+					{
+						id: 'workspace-1',
+						name: 'Research',
+						owner_id: 'user-1',
+						state: 'active',
+						current_role: 'owner',
+						governance_suspended: false,
+						allowed_project_participations: [],
+						authorization: { allowed: ['workspace.read'] }
+					}
+				],
+				route
+			)
 		});
 	});
 	await page.route('**/api/v1/workspaces/workspace-created', (route) => {
@@ -247,7 +254,15 @@ test('a user with no Workspace is sent to the chooser without a repair request',
 }) => {
 	await mockSession(page);
 	let repairRequested = false;
-	await page.route('**/api/v1/workspaces', (route) => route.fulfill({ json: [] }));
+	await page.route(/\/api\/v1\/workspaces(?:\?.*)?$/, (route) =>
+		route.fulfill({ json: directoryPage([], route) })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1', (route) =>
+		route.fulfill({
+			status: 404,
+			json: { code: 'workspace_unavailable', message: 'Workspace unavailable' }
+		})
+	);
 	await page.route('**/api/v1/account/initial-workspace/repair', (route) => {
 		repairRequested = true;
 		return route.fulfill({ status: 404, json: { code: 'not_found', message: 'not found' } });
@@ -263,7 +278,7 @@ test('the root route surfaces Workspace list failures and retries', async ({ pag
 	await mockSession(page);
 	let listAvailable = false;
 	let listRequests = 0;
-	await page.route('**/api/v1/workspaces', (route) => {
+	await page.route(/\/api\/v1\/workspaces(?:\?.*)?$/, (route) => {
 		listRequests += 1;
 		if (!listAvailable)
 			return route.fulfill({
@@ -271,18 +286,21 @@ test('the root route surfaces Workspace list failures and retries', async ({ pag
 				json: { code: 'request_failed', message: 'temporarily unavailable' }
 			});
 		return route.fulfill({
-			json: [
-				{
-					id: 'workspace-1',
-					name: 'Research',
-					owner_id: 'user-1',
-					state: 'active',
-					current_role: 'owner',
-					governance_suspended: false,
-					allowed_project_participations: [],
-					authorization: { allowed: ['workspace.read'] }
-				}
-			]
+			json: directoryPage(
+				[
+					{
+						id: 'workspace-1',
+						name: 'Research',
+						owner_id: 'user-1',
+						state: 'active',
+						current_role: 'owner',
+						governance_suspended: false,
+						allowed_project_participations: [],
+						authorization: { allowed: ['workspace.read'] }
+					}
+				],
+				route
+			)
 		});
 	});
 	await page.route('**/api/v1/workspaces/workspace-1/dashboard', (route) =>
@@ -303,24 +321,27 @@ test('the root route surfaces Workspace list failures and retries', async ({ pag
 test('a failed availability refetch preserves an explicit Workspace route', async ({ page }) => {
 	await mockSession(page);
 	let listRequests = 0;
-	await page.route('**/api/v1/workspaces', (route) => {
+	let detailRequests = 0;
+	await page.route(/\/api\/v1\/workspaces(?:\?.*)?$/, (route) => {
 		listRequests += 1;
 		return route.fulfill({
 			status: 503,
 			json: { code: 'request_failed', message: 'temporarily unavailable' }
 		});
 	});
-	await page.route('**/api/v1/workspaces/workspace-1', (route) =>
-		route.fulfill({
+	await page.route('**/api/v1/workspaces/workspace-1', (route) => {
+		detailRequests += 1;
+		return route.fulfill({
 			status: 503,
 			json: { code: 'request_failed', message: 'temporarily unavailable' }
-		})
-	);
+		});
+	});
 
 	await page.goto('/workspace/workspace-1');
 	await expect.poll(() => listRequests).toBeGreaterThanOrEqual(2);
 	await expect(page.getByRole('alert')).toContainText('The request could not be completed.');
 	expect(listRequests).toBe(2);
+	expect(detailRequests).toBe(2);
 	await expect(page).toHaveURL(/\/workspace\/workspace-1$/);
 	expect(await page.evaluate(() => localStorage.getItem('quirebase:default-workspace'))).toBe(
 		'workspace-1'
@@ -343,12 +364,18 @@ test('availability recovery releases its guard for a later membership revocation
 	};
 	let detailRequests = 0;
 	let membershipRevoked = false;
-	await page.route('**/api/v1/workspaces', (route) =>
-		route.fulfill({ json: membershipRevoked ? [] : [workspace] })
+	let detailAvailable = false;
+	await page.route(/\/api\/v1\/workspaces(?:\?.*)?$/, (route) =>
+		route.fulfill({ json: directoryPage(membershipRevoked ? [] : [workspace], route) })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1', (route) => {
 		detailRequests += 1;
-		if (detailRequests === 1)
+		if (membershipRevoked)
+			return route.fulfill({
+				status: 404,
+				json: { code: 'workspace_unavailable', message: 'Workspace unavailable' }
+			});
+		if (!detailAvailable)
 			return route.fulfill({
 				status: 503,
 				json: { code: 'request_failed', message: 'temporarily unavailable' }
@@ -359,8 +386,8 @@ test('availability recovery releases its guard for a later membership revocation
 		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 0 } })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
-		route.fulfill({ json: [] })
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/items*', (route) => {
 		if (membershipRevoked)
@@ -373,6 +400,8 @@ test('availability recovery releases its guard for a later membership revocation
 
 	await page.goto('/workspace/workspace-1');
 	await expect(page.getByRole('alert')).toContainText('The request could not be completed.');
+	expect(detailRequests).toBe(2);
+	detailAvailable = true;
 	await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
 	await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
 
@@ -388,30 +417,26 @@ test('membership revoked while a page is open returns the user to the Workspace 
 }) => {
 	await mockSession(page);
 	let membershipRevoked = false;
-	await page.route('**/api/v1/workspaces', (route) =>
+	const workspace = workspaceView('workspace-1', 'Research');
+	await page.route(/\/api\/v1\/workspaces(?:\?.*)?$/, (route) =>
 		route.fulfill({
-			json: membershipRevoked
-				? []
-				: [
-						{
-							id: 'workspace-1',
-							name: 'Research',
-							owner_id: 'user-1',
-							state: 'active',
-							current_role: 'owner',
-							governance_suspended: false,
-							allowed_project_participations: [],
-							authorization: { allowed: ['workspace.read'] }
-						}
-					]
+			json: directoryPage(membershipRevoked ? [] : [workspace], route)
 		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1', (route) =>
+		membershipRevoked
+			? route.fulfill({
+					status: 404,
+					json: { code: 'workspace_unavailable', message: 'Workspace unavailable' }
+				})
+			: route.fulfill({ json: workspace })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/dashboard', (route) =>
 		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 0 } })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all', (route) =>
-		route.fulfill({ json: [] })
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/items*', (route) => {
 		if (membershipRevoked)
@@ -521,8 +546,8 @@ test('a pending Workspace A response cannot replace Workspace B after switching'
 		});
 	});
 	await page.route('**/api/v1/workspaces/*/tags', (route) => route.fulfill({ json: [] }));
-	await page.route('**/api/v1/workspaces/*/projects?view=all', (route) =>
-		route.fulfill({ json: [] })
+	await page.route('**/api/v1/workspaces/*/projects?view=all*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 	await page.route('**/api/v1/workspaces/*/dashboard', (route) =>
 		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 1 } })
@@ -553,7 +578,9 @@ test('Workspace admins do not get governance controls for other admin members', 
 		allowed_project_participations: [],
 		authorization: { allowed: ['workspace.read', 'workspace_member.read'] }
 	};
-	await page.route('**/api/v1/workspaces', (route) => route.fulfill({ json: [workspace] }));
+	await page.route(/\/api\/v1\/workspaces(?:\?.*)?$/, (route) =>
+		route.fulfill({ json: directoryPage([workspace], route) })
+	);
 	await page.route('**/api/v1/workspaces/workspace-1', (route) =>
 		route.fulfill({ json: workspace })
 	);
@@ -615,7 +642,9 @@ test('Workspace members see the active directory without governance data', async
 		allowed_project_participations: [],
 		authorization: { allowed: ['workspace.read', 'workspace.export', 'item.update'] }
 	};
-	await page.route('**/api/v1/workspaces', (route) => route.fulfill({ json: [workspace] }));
+	await page.route(/\/api\/v1\/workspaces(?:\?.*)?$/, (route) =>
+		route.fulfill({ json: directoryPage([workspace], route) })
+	);
 	await page.route('**/api/v1/workspaces/workspace-1', (route) =>
 		route.fulfill({ json: workspace })
 	);
@@ -661,7 +690,9 @@ for (const roles of [['reviewer'], []]) {
 			allowed_invitation_roles: roles,
 			authorization: { allowed: ['workspace.read', 'workspace_invitation.read'] }
 		};
-		await page.route('**/api/v1/workspaces', (route) => route.fulfill({ json: [workspace] }));
+		await page.route(/\/api\/v1\/workspaces(?:\?.*)?$/, (route) =>
+			route.fulfill({ json: directoryPage([workspace], route) })
+		);
 		await page.route('**/api/v1/workspaces/workspace-1', (route) =>
 			route.fulfill({ json: workspace })
 		);
@@ -722,8 +753,8 @@ test('browser history and two tabs retain their explicit Workspace URLs across r
 			});
 		});
 		await activePage.route('**/api/v1/workspaces/*/tags', (route) => route.fulfill({ json: [] }));
-		await activePage.route('**/api/v1/workspaces/*/projects?view=all', (route) =>
-			route.fulfill({ json: [] })
+		await activePage.route('**/api/v1/workspaces/*/projects?view=all*', (route) =>
+			route.fulfill({ json: directoryPage([], route) })
 		);
 		await activePage.route('**/api/v1/workspaces/*/dashboard', (route) =>
 			route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 1 } })
@@ -755,22 +786,25 @@ test('an inaccessible default Workspace is cleared before root navigation recove
 	await page.addInitScript(() =>
 		localStorage.setItem('quirebase:default-workspace', 'workspace-removed')
 	);
-	await page.route('**/api/v1/workspaces', (route) =>
+	await page.route(/\/api\/v1\/workspaces(?:\?.*)?$/, (route) =>
 		route.fulfill({
-			json: [
-				{
-					...{
-						id: 'workspace-1',
-						name: 'Research',
-						owner_id: 'user-1',
-						state: 'active',
-						current_role: 'owner',
-						governance_suspended: false,
-						allowed_project_participations: [],
-						authorization: { allowed: ['workspace.read', 'item.create'] }
+			json: directoryPage(
+				[
+					{
+						...{
+							id: 'workspace-1',
+							name: 'Research',
+							owner_id: 'user-1',
+							state: 'active',
+							current_role: 'owner',
+							governance_suspended: false,
+							allowed_project_participations: [],
+							authorization: { allowed: ['workspace.read', 'item.create'] }
+						}
 					}
-				}
-			]
+				],
+				route
+			)
 		})
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/dashboard', (route) =>
@@ -924,3 +958,46 @@ for (const maintenance of [false, true]) {
 		await expect(page.getByRole('button', { name: 'Save name' })).toHaveCount(maintenance ? 0 : 1);
 	});
 }
+
+test('A preferred Workspace outside the first directory page opens directly and remains selected', async ({
+	page
+}) => {
+	await mockSession(page);
+	const roots = Array.from({ length: 28 }, (_, index) =>
+		workspaceView(`workspace-${index}`, `Workspace ${String(index).padStart(2, '0')}`)
+	);
+	const preferred = roots[27];
+	await page.addInitScript(
+		(id) => localStorage.setItem('quirebase:default-workspace', id),
+		preferred.id
+	);
+	await page.route(/\/api\/v1\/workspaces(?:\?.*)?$/, (route) =>
+		route.fulfill({ json: directoryPage(roots, route) })
+	);
+	await page.route('**/api/v1/workspaces/*', (route) => {
+		const id = new URL(route.request().url()).pathname.split('/').at(-1);
+		const root = roots.find((workspace) => workspace.id === id);
+		return route.fulfill({ json: root });
+	});
+	await page.route('**/api/v1/workspaces/*/dashboard', (route) =>
+		route.fulfill({
+			json: { new_items: [], recent_items: [], projects: [], project_count: 0, session_count: 1 }
+		})
+	);
+	await page.goto('/');
+	await expect(page).toHaveURL(/\/workspace\/workspace-27$/);
+	await expect(page.getByRole('button', { name: 'Workspace', exact: true })).toContainText(
+		'Workspace 27'
+	);
+	await page.goto('/workspace');
+	await expect(
+		page.getByRole('link', { name: 'Open workspace Workspace 27', exact: true })
+	).toHaveCount(0);
+	await page.getByRole('button', { name: 'Next', exact: true }).click();
+	const choice = page.getByRole('link', { name: 'Open workspace Workspace 27', exact: true });
+	await expect(choice).toBeVisible();
+	await expect(choice).toContainText('Default');
+	expect(await page.evaluate(() => localStorage.getItem('quirebase:default-workspace'))).toBe(
+		preferred.id
+	);
+});

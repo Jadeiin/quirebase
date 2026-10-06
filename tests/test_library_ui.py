@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import io
-import json
 import zipfile
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -67,7 +66,7 @@ def provider_candidate(identifier: str, title: str, *, authors: str | None = Non
 
 
 async def finish_pdf_import_preview(db, session_factory, batch: ImportBatch, monkeypatch) -> None:
-    pending = json.loads(batch.records)
+    pending = batch.records
 
     async def check(batch_id, candidate, detected_doi):
         async with session_factory() as worker_db:
@@ -189,7 +188,7 @@ async def test_pdf_import_revalidates_user_after_provider_io(
         )
         == 0
     )
-    retained = json.loads(failed_batch.records)
+    retained = failed_batch.records
     assert len(retained) == 1
     assert local_object_path(retained[0]["_pdf"]["object_key"]).exists()
     assert len(set(get_settings().object_dir.rglob("*.pdf")) - objects_before) == 1
@@ -251,12 +250,12 @@ async def test_pdf_import_authorization_failure_preserves_objects_for_another_ed
         ],
         max_bytes=100_000,
     )
-    pending = json.loads(batch.records)
+    pending = batch.records
     keys = [record["_pdf"]["object_key"] for record in pending]
     await finish_pdf_import_preview(async_db, async_session_factory, batch, monkeypatch)
     assert batch.status == "failed"
-    assert json.loads(batch.records) == pending
-    assert json.loads(batch.errors)[0]["code"] == "authorization_revoked"
+    assert batch.records == pending
+    assert batch.errors[0]["code"] == "authorization_revoked"
     for key in keys:
         assert await get_object_store().exists(key)
 
@@ -273,7 +272,7 @@ async def test_pdf_import_authorization_failure_preserves_objects_for_another_ed
     await finish_pdf_import_preview(async_db, async_session_factory, batch, monkeypatch)
     assert batch.actor_id == retrying_editor.id
     assert batch.status == "ready"
-    assert json.loads(batch.records)[0]["_pdf"]["object_key"] == keys[0]
+    assert batch.records[0]["_pdf"]["object_key"] == keys[0]
     assert await get_object_store().exists(keys[0])
     assert not await get_object_store().exists(keys[1])
 
@@ -295,7 +294,7 @@ async def test_pdf_import_leaves_transient_provider_failure_for_dbos_retry(
         [(published_pdf_bytes("10.1000/retry"), "retry.pdf")],
         max_bytes=100_000,
     )
-    pending = json.loads(batch.records)[0]
+    pending = batch.records[0]
     monkeypatch.setattr(
         "quirebase.library.imports.lookup_candidate",
         AsyncMock(side_effect=UpstreamServiceError("provider temporarily unavailable")),
@@ -334,8 +333,8 @@ async def test_failed_pdf_import_can_retry_with_a_new_durable_workflow(
             workspace_id=item.workspace_id,
             actor_id=item.created_by,
             file_format="pdf",
-            records=json.dumps(pending),
-            errors="[]",
+            records=pending,
+            errors=[],
             status="failed",
             workflow_id="prepare-pdf-import:old",
         )
@@ -405,8 +404,8 @@ async def test_workspace_editor_retry_rebinds_pdf_batch_and_hides_actor_workflow
         workspace_id=workspace_id,
         actor_id=owner.id,
         file_format="pdf",
-        records=json.dumps(pending),
-        errors="[]",
+        records=pending,
+        errors=[],
         status="failed",
         workflow_id="prepare-pdf-import:shared-old",
     )
@@ -477,8 +476,8 @@ async def test_terminal_or_missing_pdf_import_workflow_can_retry_while_batch_is_
             workspace_id=item.workspace_id,
             actor_id=item.created_by,
             file_format="pdf",
-            records=json.dumps(pending),
-            errors="[]",
+            records=pending,
+            errors=[],
             status="pending",
             workflow_id=old_workflow_id,
         )
@@ -549,8 +548,8 @@ async def test_stale_preview_convergence_does_not_overwrite_concurrent_pdf_impor
             workspace_id=item.workspace_id,
             actor_id=item.created_by,
             file_format="pdf",
-            records=json.dumps(pending),
-            errors="[]",
+            records=pending,
+            errors=[],
             status="pending",
             workflow_id=old_workflow_id,
         )
@@ -630,7 +629,7 @@ async def test_cancelled_pdf_import_keeps_staged_objects_owned_by_batch(
         [(published_pdf_bytes("10.1000/cancelled"), "cancelled.pdf")],
         max_bytes=100_000,
     )
-    pending = json.loads(batch.records)[0]
+    pending = batch.records[0]
     async with async_session_factory() as worker_db:
         importing = asyncio.create_task(prepare_pdf_import_candidate(worker_db, batch.id, pending))
         await provider_started.wait()
@@ -975,8 +974,8 @@ async def test_pdf_import_batch_previews_before_creating_items(
             select(Item).options(selectinload(Item.revisions)).where(Item.doi == "10.1000/second")
         )
         assert first is not None and second is not None
-        assert first.revisions[0].original_name == "first.pdf"
-        assert second.revisions[0].original_name == "second.pdf"
+        assert first.revisions[0].file.metadata["original_name"] == "first.pdf"
+        assert second.revisions[0].file.metadata["original_name"] == "second.pdf"
         committed_batch = await db.get(ImportBatch, batch.id)
         assert committed_batch is not None
         assert committed_batch.status == "committed"
@@ -1021,7 +1020,7 @@ async def test_pdf_import_batch_keeps_successes_and_reports_failed_files(
         preview = await client.get(f"{workspace_base}/imports/{batch.id}")
         assert "valid.pdf" in preview.text
         assert "missing-doi.pdf" in preview.text
-        assert '"code": "missing_doi"' in batch.errors
+        assert any(error["code"] == "missing_doi" for error in batch.errors)
         assert len(set(get_settings().object_dir.rglob("*.pdf")) - objects_before) == 1
 
         committed = await client.post(
@@ -1033,7 +1032,7 @@ async def test_pdf_import_batch_keeps_successes_and_reports_failed_files(
             select(Item).options(selectinload(Item.revisions)).where(Item.doi == "10.1000/valid")
         )
         assert article is not None
-        assert article.revisions[0].original_name == "valid.pdf"
+        assert article.revisions[0].file.metadata["original_name"] == "valid.pdf"
     finally:
         await client.aclose()
         get_settings.cache_clear()
@@ -1071,8 +1070,8 @@ async def test_pdf_import_batch_rejects_an_accessible_duplicate_doi(
         await finish_pdf_import_preview(db, async_session_factory, batch, monkeypatch)
         preview = await client.get(f"{workspace_base}/imports/{batch.id}")
         assert "duplicate.pdf" in preview.text
-        assert '"code": "existing_doi"' in batch.errors
-        assert batch.records == "[]"
+        assert any(error["code"] == "existing_doi" for error in batch.errors)
+        assert batch.records == []
         assert set(get_settings().object_dir.rglob("*.pdf")) == objects_before
     finally:
         await client.aclose()
@@ -1116,7 +1115,7 @@ async def test_discard_pdf_import_batch_removes_staged_objects(
         assert preview.status_code == 202
         batch = await db.scalar(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
         assert batch is not None
-        pending_key = json.loads(batch.records)[0]["_pdf"]["object_key"]
+        pending_key = batch.records[0]["_pdf"]["object_key"]
         assert len(set(get_settings().object_dir.rglob("*.pdf")) - objects_before) == 1
 
         discarded = await client.delete(f"{workspace_base}/imports/{batch.id}")
@@ -1178,8 +1177,8 @@ async def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(
         batches = list(
             await db.scalars(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
         )
-        first_pdf = json.loads(batches[0].records)[0]["_pdf"]
-        second_pdf = json.loads(batches[1].records)[0]["_pdf"]
+        first_pdf = batches[0].records[0]["_pdf"]
+        second_pdf = batches[1].records[0]["_pdf"]
         assert first_pdf["object_key"] != second_pdf["object_key"]
         first_path = local_object_path(first_pdf["object_key"])
         second_path = local_object_path(second_pdf["object_key"])
@@ -1205,7 +1204,7 @@ async def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(
             .where(Item.doi == "10.1000/shared-staged")
         )
         assert imported is not None
-        assert local_object_path(imported.revisions[0].object_key).is_file()
+        assert local_object_path(imported.revisions[0].file.path).is_file()
     finally:
         await client.aclose()
         get_settings.cache_clear()
@@ -1239,7 +1238,7 @@ async def test_cleanup_preserves_object_referenced_by_an_uncommitted_pdf_import_
         workspace_id=item.workspace_id,
         actor_id=item.created_by,
         file_format="pdf",
-        records=json.dumps([
+        records=[
             {
                 "title": "In-flight staged PDF",
                 "_pdf": {
@@ -1248,8 +1247,8 @@ async def test_cleanup_preserves_object_referenced_by_an_uncommitted_pdf_import_
                     "original_name": in_flight.original_name,
                 },
             }
-        ]),
-        errors="[]",
+        ],
+        errors=[],
     )
     db.add(batch)
     await db.flush()
@@ -1289,7 +1288,7 @@ async def test_cleanup_preserves_object_reserved_by_active_pdf_import_workflow(
         max_bytes=100_000,
     )
     workflow_id = batch.workflow_id
-    object_key = json.loads(batch.records)[0]["_pdf"]["object_key"]
+    object_key = batch.records[0]["_pdf"]["object_key"]
     object_path = local_object_path(object_key)
     await db.delete(batch)
     await db.commit()

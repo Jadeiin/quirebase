@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
@@ -14,7 +15,7 @@ from quirebase.access.documents import require_revision
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
 from quirebase.core.storage import ObjectResponse, ObjectSuffix, get_object_store, object_key
 from quirebase.core.workflows import DOCUMENTS_QUEUE, durable_operations
-from quirebase.models import ProjectItem, User
+from quirebase.models import ExportArtifact, ProjectItem, User
 
 from .workflows import ANNOTATION_EXPORT_WORKFLOW
 
@@ -125,7 +126,13 @@ async def get_export_file(
             is None
         ):
             raise ResourceUnavailable("project item not found")
-    key = workflow.output.get("object_key")
-    if not isinstance(key, str) or not await get_object_store().exists(key):
+    artifact = await db.scalar(
+        select(ExportArtifact).where(
+            ExportArtifact.workflow_id == workflow_id,
+            ExportArtifact.workspace_id == workspace_id,
+            ExportArtifact.expires_at > datetime.now(UTC),
+        )
+    )
+    if artifact is None or not await get_object_store().exists(artifact.file.path):
         raise ResourceNotFound("export artifact expired or deleted")
-    return await get_object_store().get(key)
+    return await get_object_store().get(artifact.file.path)

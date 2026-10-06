@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from uuid import uuid4
 
 import pytest
+from advanced_alchemy.types import FileObject
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
@@ -130,7 +131,7 @@ async def test_workspace_read_tolerates_committed_root_deletion(postgres_session
             context = await resolve_workspace_context(read_db, owner, workspace_id)
             workspace_ids = {context.workspace_id}
         elif surface == "list":
-            rows = await list_workspaces(read_db, owner)
+            rows = (await list_workspaces(read_db, owner))[0]
             workspace_ids = {workspace.id for workspace, _member in rows}
         else:
             rows = await list_workspaces_for_governance(read_db, owner)
@@ -216,10 +217,14 @@ async def _project_annotation_context(
     revision = FileRevision(
         workspace_id=workspace_id,
         item_id=item.id,
-        object_key=f"objects/{prefix}.pdf",
-        size=1,
-        original_name=f"{prefix}.pdf",
         created_by=owner_id,
+        file=FileObject(
+            backend="documents",
+            filename=f"objects/{prefix}.pdf",
+            size=1,
+            content_type="application/pdf",
+            metadata={"original_name": f"{prefix}.pdf"},
+        ),
     )
     db.add_all([assignment, revision])
     await db.flush()
@@ -991,8 +996,8 @@ async def test_import_confirmation_and_deactivation_follow_user_workspace_lock_o
             workspace_id=workspace_id,
             actor_id=administrator.id,
             file_format="bibtex",
-            records='[{"title": "Confirmed without a deadlock"}]',
-            errors="[]",
+            records=[{"title": "Confirmed without a deadlock"}],
+            errors=[],
             status="ready",
         )
         db.add(batch)

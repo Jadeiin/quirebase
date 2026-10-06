@@ -100,7 +100,7 @@
 				><Icon name="projects" size={20} /></span
 			>
 			<span
-				><strong class="block text-xl tabular-nums">{dashboard.data?.projects.length ?? 0}</strong
+				><strong class="block text-xl tabular-nums">{dashboard.data?.project_count ?? 0}</strong
 				><small class="text-surface-600-400">{$t('visible Projects')}</small></span
 			>
 		</Panel>

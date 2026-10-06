@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import importlib.metadata
 import importlib.util
-import json
 import os
 import re
 from dataclasses import dataclass
@@ -163,12 +162,7 @@ def decoded_candidates(
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
     if record is None or record.generated_at is None:
         return (), ()
-    try:
-        words = tuple(str(value) for value in json.loads(record.single_words or "[]"))
-        phrases = tuple(str(value) for value in json.loads(record.phrases or "[]"))
-    except (TypeError, json.JSONDecodeError):
-        return (), ()
-    return words, phrases
+    return tuple(record.single_words or ()), tuple(record.phrases or ())
 
 
 __all__ = [

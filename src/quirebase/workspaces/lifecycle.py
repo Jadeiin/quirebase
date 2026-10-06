@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
@@ -128,7 +127,9 @@ async def permanently_delete_workspace(
     object_keys = set(
         (
             await db.scalars(
-                select(FileRevision.object_key).where(FileRevision.workspace_id == workspace_id)
+                select(FileRevision.file["filename"].as_string()).where(
+                    FileRevision.workspace_id == workspace_id
+                )
             )
         ).all()
     )
@@ -136,9 +137,9 @@ async def permanently_delete_workspace(
         key
         for key in (
             await db.scalars(
-                select(FileRevision.thumbnail_object_key).where(
+                select(FileRevision.thumbnail["filename"].as_string()).where(
                     FileRevision.workspace_id == workspace_id,
-                    FileRevision.thumbnail_object_key.is_not(None),
+                    FileRevision.thumbnail["filename"].as_string().is_not(None),
                 )
             )
         ).all()
@@ -156,21 +157,17 @@ async def permanently_delete_workspace(
     object_keys.update(
         (
             await db.scalars(
-                select(ExportArtifact.object_key).where(ExportArtifact.workspace_id == workspace_id)
+                select(ExportArtifact.file["filename"].as_string()).where(
+                    ExportArtifact.workspace_id == workspace_id
+                )
             )
         ).all()
     )
-    for records_json in (
+    for records in (
         await db.scalars(
             select(ImportBatch.records).where(ImportBatch.workspace_id == workspace_id)
         )
     ).all():
-        try:
-            records = json.loads(records_json)
-        except (TypeError, json.JSONDecodeError) as error:
-            raise ValidationFailure("Workspace Import Batch records are invalid") from error
-        if not isinstance(records, list):
-            raise ValidationFailure("Workspace Import Batch records are invalid")
         for record in records:
             if isinstance(record, dict) and isinstance((pdf := record.get("_pdf")), dict):
                 key = pdf.get("object_key")

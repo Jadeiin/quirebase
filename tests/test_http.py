@@ -1,5 +1,4 @@
 import asyncio
-import json
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from uuid import uuid4
@@ -9,6 +8,7 @@ import pytest
 from advanced_alchemy.types import FileObject
 from app_helpers import create_web_test_app, json_payload
 from sqlalchemy import select
+from sqlalchemy.orm.attributes import flag_modified
 from storage_helpers import local_object_path, put_pdf_object
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
@@ -69,13 +69,17 @@ async def authenticated_async_client(db, session_factory, tmp_path, monkeypatch)
     revision = FileRevision(
         workspace_id=fixture_workspace_id(user),
         item_id=item.id,
-        object_key=key,
-        size=size,
-        original_name="paper.pdf",
         page_count=1,
-        page_geometry=json.dumps([[0, 0, 300, 400]]),
+        page_geometry=[[0, 0, 300, 400]],
         processing_state="ready",
         created_by=user.id,
+        file=FileObject(
+            backend="documents",
+            filename=key,
+            size=size,
+            content_type="application/pdf",
+            metadata={"original_name": "paper.pdf"},
+        ),
     )
     db.add(revision)
     await db.commit()
@@ -147,9 +151,10 @@ async def test_workspace_read_tolerates_deletion_before_owner_lookup(
         if detail:
             assert before.json()["owner_id"] == str(owner_id)
         else:
-            assert {view["id"] for view in before.json()} == set(
-                map(str, {workspace_id, retained.id})
-            )
+            assert {
+                view["id"]
+                for view in (before.json()["items"] if surface == "list" else before.json())
+            } == set(map(str, {workspace_id, retained.id}))
 
         monkeypatch.setattr(api, "workspace_owner_ids", delete_before_owner_lookup)
         response = await client.get(url)
@@ -157,9 +162,10 @@ async def test_workspace_read_tolerates_deletion_before_owner_lookup(
             assert response.status_code == 404
         else:
             assert response.status_code == 200
-            assert [(view["id"], view["owner_id"]) for view in response.json()] == [
-                (str(retained.id), str(owner_id))
-            ]
+            assert [
+                (view["id"], view["owner_id"])
+                for view in (response.json()["items"] if surface == "list" else response.json())
+            ] == [(str(retained.id), str(owner_id))]
     finally:
         await client.aclose()
 
@@ -228,7 +234,7 @@ async def test_managed_project_nonmember_cannot_discover_project_contexts(
         organize = await client.get(base + f"/items/{item.id}/organize")
         viewer = await client.get(base + f"/items/{item.id}/revisions/{revision.id}/viewer")
         assert listed.status_code == organize.status_code == viewer.status_code == 200
-        assert project.id not in {row["id"] for row in listed.json()}
+        assert project.id not in {row["id"] for row in listed.json()["items"]}
         assert project.id not in {row["id"] for row in organize.json()["projects"]}
         assert project.id not in {row["id"] for row in viewer.json()["projects"]}
     finally:
@@ -348,8 +354,8 @@ async def test_cross_workspace_copy_api_checks_target_membership_and_resource_ac
         assert copied_item is not None
         assert copied_item.workspace_id == target_workspace_id
         assert copied_revision is not None
-        assert copied_revision.object_key != source_revision.object_key
-        assert await get_object_store().exists(copied_revision.object_key)
+        assert copied_revision.file.path != source_revision.file.path
+        assert await get_object_store().exists(copied_revision.file.path)
         events = (
             await async_db.scalars(
                 select(AuditEvent).where(
@@ -565,7 +571,8 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         )
         assert mismatched.status_code == 404
 
-        revision.original_name = "论文.pdf"
+        revision.file.update_metadata({"original_name": "论文.pdf"})
+        flag_modified(revision, "file")
         await db.commit()
         unicode_content = await client.get(
             f"{workspace_base}/items/{item.id}/revisions/{revision.id}/content"
@@ -585,7 +592,8 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
             assert (
                 "filename*=utf-8''%E8%AE%BA%E6%96%87.pdf" in response.headers["content-disposition"]
             )
-        revision.original_name = "paper.pdf"
+        revision.file.update_metadata({"original_name": "paper.pdf"})
+        flag_modified(revision, "file")
         await db.commit()
 
         exported = await client.get(
@@ -602,7 +610,7 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
                 )
             )
         )
-        details = [json.loads(event.detail) for event in events]
+        details = [event.detail for event in events]
         assert any(detail["item_id"] == str(item.id) for detail in details)
         assert all(event.actor_id == item.created_by for event in events)
 
@@ -798,7 +806,9 @@ async def test_item_overview_uses_the_ready_revision_thumbnail(
     thumbnail = await get_object_store().put_object(
         uuid4(), ObjectSuffix.PNG, b"\x89PNG\r\n\x1a\nthumbnail", max_bytes=100
     )
-    revision.thumbnail_object_key = thumbnail.key
+    revision.thumbnail = FileObject(
+        backend="documents", filename=thumbnail.key, content_type="image/png"
+    )
     await async_db.commit()
     thumbnail_url = f"{workspace_base}/items/{item.id}/thumbnail"
 
@@ -824,7 +834,9 @@ async def test_item_thumbnail_revalidates_all_if_none_match_forms(
     thumbnail = await get_object_store().put_object(
         uuid4(), ObjectSuffix.PNG, b"cached-thumbnail", max_bytes=100
     )
-    revision.thumbnail_object_key = thumbnail.key
+    revision.thumbnail = FileObject(
+        backend="documents", filename=thumbnail.key, content_type="image/png"
+    )
     await async_db.commit()
     thumbnail_url = f"{workspace_base}/items/{item.id}/thumbnail"
 
@@ -871,7 +883,9 @@ async def test_item_thumbnail_fetches_the_source_checked_for_cache_metadata(
     replacement = await get_object_store().put_object(
         uuid4(), ObjectSuffix.PNG, b"newer-thumbnail-with-a-different-size", max_bytes=100
     )
-    revision.thumbnail_object_key = original.key
+    revision.thumbnail = FileObject(
+        backend="documents", filename=original.key, content_type="image/png"
+    )
     await async_db.commit()
     checked_metadata: ObjectMetadata | None = None
     original_head = documents_api.head_item_thumbnail
@@ -879,7 +893,9 @@ async def test_item_thumbnail_fetches_the_source_checked_for_cache_metadata(
     async def switch_source_after_head(source):
         nonlocal checked_metadata
         checked_metadata = await original_head(source)
-        revision.thumbnail_object_key = replacement.key
+        revision.thumbnail = FileObject(
+            backend="documents", filename=replacement.key, content_type="image/png"
+        )
         await async_db.flush()
         return checked_metadata
 
@@ -930,26 +946,34 @@ async def test_deleting_latest_pdf_revision_removes_its_files_and_falls_back_thu
     old_thumbnail = await get_object_store().put_object(
         uuid4(), ObjectSuffix.PNG, b"old-thumbnail", max_bytes=100
     )
-    old_revision.thumbnail_object_key = old_thumbnail.key
+    old_revision.thumbnail = FileObject(
+        backend="documents", filename=old_thumbnail.key, content_type="image/png"
+    )
     old_revision.full_text = "fallbacksearchtoken"
     key, size = await put_pdf_object(b"%PDF-1.4\nnewer", 100)
     new_revision = FileRevision(
         workspace_id=item.workspace_id,
         item_id=item_id,
-        object_key=key,
-        size=size,
-        original_name="newer.pdf",
         page_count=1,
-        page_geometry="[[0,0,300,400]]",
+        page_geometry=[[0, 0, 300, 400]],
         processing_state="ready",
         full_text="deletedsearchtoken",
         created_by=item.created_by,
         created_at=old_revision.created_at + timedelta(seconds=1),
+        file=FileObject(
+            backend="documents",
+            filename=key,
+            size=size,
+            content_type="application/pdf",
+            metadata={"original_name": "newer.pdf"},
+        ),
     )
     new_thumbnail = await get_object_store().put_object(
         uuid4(), ObjectSuffix.PNG, b"new-thumbnail", max_bytes=100
     )
-    new_revision.thumbnail_object_key = new_thumbnail.key
+    new_revision.thumbnail = FileObject(
+        backend="documents", filename=new_thumbnail.key, content_type="image/png"
+    )
     db.add(new_revision)
     await db.commit()
     new_revision_id = new_revision.id
