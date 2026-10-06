@@ -2,6 +2,10 @@
 
 Status: accepted.
 
+ADR 0014 extends the persistence implementation with Advanced Alchemy configuration and
+Module-owned repositories/services over the same native AsyncSession. Transaction ownership
+and explicit authorization remain as decided here.
+
 This decision supersedes the synchronous `ProviderRuntime` lifecycle in ADR 0005 and applies to
 the complete Quirebase/Inquiro runtime path: Provider access, SQLAlchemy persistence, Library
 Search, Web/API, MCP and Pipeline workers.
@@ -51,7 +55,8 @@ shell entry points and call one `asyncio.run`-driven implementation.
 
 - A synchronous SQLAlchemy Session behind a thread bridge was rejected because it hides blocking
   database work and permits accidental event-loop stalls.
-- A Repository/Unit-of-Work or dual sync/async seam was rejected because it duplicates ownership
-  and leaves transaction boundaries ambiguous.
+- A second Repository/Unit-of-Work transaction boundary or dual sync/async seam was rejected
+  because it duplicates ownership and leaves transaction boundaries ambiguous. ADR 0014 permits
+  Module-owned AA repositories/services that use the caller's Session without owning commits.
 - A synchronous Provider compatibility layer was rejected because it would preserve the old
   blocking contract and complicate cancellation and resource ownership.

@@ -1,4 +1,4 @@
-# Advanced Alchemy persistence values and bounded directories
+# Advanced Alchemy persistence, repositories and services
 
 Status: accepted.
 
@@ -7,8 +7,44 @@ Status: accepted.
 Core owns Advanced Alchemy's `SQLAlchemyAsyncConfig` and `EngineConfig`, including its JSON
 serializer, session factory and shared metadata. Each request or durable transaction continues
 using its existing `AsyncSession`. This extends ADR 0006's persistence decision: Module-owned
-read repositories may apply pagination to an already authorized root query. They neither own
-commits nor introduce a Unit of Work or another authorization seam.
+repositories and services handle ordinary model reads and writes inside the caller's transaction.
+They neither introduce a Unit of Work nor establish another authorization seam.
+
+Core's `Repository`, `ReadService` and `Service` subclasses configure native AA behavior only:
+no automatic commit, refresh or expunge, raw SQLAlchemy exceptions, and independent pagination
+counts. They add no CRUD implementation. Models remain attached to the caller's Session, while
+commands retain their existing commit/rollback boundaries and Audit Event, Search and durable
+enqueue ordering. Constraint errors remain available to savepoint recovery and domain conflict
+translation. AA not-found errors from repeated mutation reads translate into owned domain
+errors when a concurrent deletion removes the root. Audit queries use a read service;
+immutable Audit Events still join commands through
+the synchronous `record_event` operation.
+
+Core ensures a physical SQLite outer transaction before the first savepoint when sqlite3's
+legacy driver has not begun one. Releasing that savepoint therefore cannot commit rows
+independently of the caller's rollback. Ordinary reads keep the existing SQLite statement-level
+behavior; eagerly beginning read snapshots would turn concurrent CAS conflicts into snapshot
+upgrade failures instead of the expected domain conflict.
+
+Repositories name each mapped model inside its owning Module; they are never exported through
+business facades. Services provide native pagination, counts, conversion hooks and bulk writes.
+Library's Tag service normalizes create/update values, and its Citation Style service validates
+CSL and handles concurrent name installation. Operations' runtime-setting service validates the
+whole batch before writing, reads existing keys once, and uses native batch create/update with
+fresh identity-map values. Concurrent first creation retains a savepoint and bounded progress
+through reloading conflicting keys; AA's select-then-write upsert is not an atomic database upsert.
+Accounts, Workspaces, Projects, Items, Import Batches and durable Document creation reuse their
+Module-owned repositories/services without changing public use-case interfaces.
+
+Authorization and query scoping stay explicit. An authorized root statement may be passed to AA
+for filtering and pagination, but its SELECT predicates do not automatically scope arbitrary
+generic writes. Workspace lineage, command locks, fresh authority checks and version predicates
+remain at the mutation point. CAS updates, membership/lifecycle commands, dialect-specific
+`ON CONFLICT` associations, multi-column projections and reference-aware cleanup keep explicit
+SQL. No new Session, implicit tenant filter, transaction interceptor or second retry framework is
+introduced. Native `ResultConverter.to_schema` replaces attribute-only administrative DTO
+mapping in Web; authorization and domain-choice projections remain explicitly authored there,
+and Web DTOs never enter business services.
 
 Entities use `UUIDv7AuditBase`; immutable identities use `UUIDv7Base`; natural/composite keys
 use `DefaultBase`. All use native Python UUIDs and UTC timestamps. PostgreSQL stores native

@@ -26,12 +26,11 @@ The architecture suite keeps this list complete when mappings are added or remov
 | --- | --- |
 | Accounts | `User`, `LoginSession`, `LoginThrottle`, `Invitation`, `ApiToken` |
 | Workspaces | `Workspace`, `WorkspaceMember`, `WorkspaceInvitation` |
-| Library | `Item`, `Author`, `ItemAuthor`, `ItemIdentifier`, `ItemRead`, `Tag`, `ItemTag`, `DiscussionMessage` |
+| Library | `Item`, `Author`, `ItemAuthor`, `ItemIdentifier`, `ItemRead`, `Tag`, `ItemTag`, `ItemTagRecommendation`, `DiscussionMessage`, `ImportBatch`, `CitationStyle` |
 | Projects | `Project`, `ProjectMember`, `ProjectItem` |
 | Documents | `FileRevision`, `Attachment`, `PdfAnnotationObject`, `PdfAnnotation`, `PdfAnnotationReply`, `ExportArtifact` |
-| Discovery | `ImportBatch`, `CitationStyle` |
 | Audit | `AuditEvent` |
-| Operations | `SystemSetting` |
+| Operations | `SystemSetting`, `ObjectIntegrityScan` |
 
 ## Migration interface
 
@@ -47,3 +46,7 @@ export concrete adapters, mutable registries, mapper collaborators, migration he
 compatibility-only aliases. Internal code imports those symbols from their owning implementation
 module. Because Quirebase has no published Python plugin ABI, removed facade exports receive no
 long-lived re-export shims.
+
+ADR 0014 places AA repositories and services beside their owning use cases or in internal
+`_persistence` files. They reuse this centralized mapping and the caller's AsyncSession; the
+business facade remains the use-case interface.

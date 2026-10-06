@@ -668,6 +668,62 @@ def test_package_facades_do_not_export_internal_persistence_collaborators():
         assert not leaked, f"quirebase.{package} facade leaks internal symbols {sorted(leaked)}"
 
 
+def test_alchemy_repositories_and_services_stay_with_their_model_owner():
+    collaborators = {}
+    for py_file in get_python_files(SRC_ROOT):
+        owner = py_file.relative_to(SRC_ROOT).parts[0]
+        tree = ast.parse(py_file.read_text(encoding="utf-8"))
+        for node in tree.body:
+            if not isinstance(node, ast.ClassDef):
+                continue
+            bases = {
+                base.value.id
+                for base in node.bases
+                if isinstance(base, ast.Subscript) and isinstance(base.value, ast.Name)
+            }
+            if not bases & {"Repository", "Service", "ReadService"}:
+                continue
+            collaborators[node.name] = owner
+            for statement in node.body:
+                if isinstance(statement, ast.Assign) and any(
+                    isinstance(target, ast.Name) and target.id == "model_type"
+                    for target in statement.targets
+                ):
+                    assert isinstance(statement.value, ast.Name)
+                    assert ORM_MODEL_OWNERS[statement.value.id] == owner, py_file
+            for call in ast.walk(node):
+                if isinstance(call, ast.Call) and isinstance(call.func, ast.Name):
+                    assert call.func.id not in {
+                        "AsyncSession",
+                        "AsyncSessionLocal",
+                        "async_sessionmaker",
+                        "make_async_engine",
+                    }, f"{py_file}:{call.lineno} creates a Session outside its caller"
+                if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute):
+                    assert call.func.attr not in {"commit", "rollback", "close"}, (
+                        f"{py_file}:{call.lineno} makes an internal collaborator own a transaction"
+                    )
+    assert collaborators
+    for owner in set(collaborators.values()):
+        assert not exported_names(owner) & collaborators.keys(), owner
+    for py_file in get_python_files(SRC_ROOT):
+        owner = py_file.relative_to(SRC_ROOT).parts[0]
+        tree = ast.parse(py_file.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                for alias in node.names:
+                    if alias.name in collaborators:
+                        assert collaborators[alias.name] == owner, (
+                            f"{py_file} imports another Module's internal {alias.name}"
+                        )
+            if isinstance(node, ast.Call):
+                for keyword in node.keywords:
+                    if keyword.arg == "auto_commit":
+                        assert (
+                            isinstance(keyword.value, ast.Constant) and keyword.value.value is False
+                        ), f"{py_file}:{node.lineno} enables implicit transaction ownership"
+
+
 def test_library_facade_exposes_owned_import_citation_and_recommendation_operations():
     missing = LIBRARY_FACADE_OPERATIONS - exported_names("library")
     assert not missing, f"quirebase.library facade is missing owned operations {sorted(missing)}"

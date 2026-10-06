@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from advanced_alchemy.filters import LimitOffset
-from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from sqlalchemy import delete, inspect, or_, select
 from sqlalchemy.exc import IntegrityError
 
@@ -28,18 +27,16 @@ from quirebase.models import (
 )
 from quirebase.workspaces import provision_initial_workspace
 
+from ._persistence import InvitationRepository, UserService
+
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.sql.elements import ColumnElement
 
 
-class UserReadRepository(SQLAlchemyAsyncRepository[User]):
-    model_type = User
-
-
 async def list_users(db: AsyncSession, admin: User) -> list[User]:
     await require_system_action(db, admin, SystemAction.users_read)
-    return list((await db.scalars(select(User).order_by(User.username))).all())
+    return list(await UserService(db).get_many(order_by=[("username", False), ("id", False)]))
 
 
 async def list_users_paginated(
@@ -67,12 +64,12 @@ async def list_users_paginated(
     if filters:
         query = query.where(*filters)
     offset = max(0, (page - 1) * page_size)
-    return await UserReadRepository(
+    records, total = await UserService(
         session=db, statement=query.order_by(User.username, User.id)
     ).get_many_and_count(
         LimitOffset(limit=page_size, offset=offset),
-        count_with_window_function=False,
     )
+    return list(records), total
 
 
 async def _lock_admin_and_target(
@@ -127,9 +124,8 @@ async def create_user_admin(
         role=role,
         active=True,
     )
-    db.add(user)
     try:
-        await db.flush()
+        user = await UserService(db).create(user)
         await provision_initial_workspace(db, user)
         record_event(
             db,
@@ -284,4 +280,8 @@ async def revoke_user_sessions(db: AsyncSession, admin: User, user_id: UUID) -> 
 
 async def list_invitations(db: AsyncSession, admin: User) -> list[Invitation]:
     await require_system_action(db, admin, SystemAction.invitations_read)
-    return list((await db.scalars(select(Invitation).order_by(Invitation.created_at.desc()))).all())
+    return list(
+        await InvitationRepository(session=db).get_many(
+            order_by=[("created_at", True), ("id", True)]
+        )
+    )

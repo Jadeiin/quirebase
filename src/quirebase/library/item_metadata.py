@@ -24,6 +24,8 @@ from quirebase.library.workflows import request_item_tag_recommendation
 from quirebase.models import Item, normalize_author_identity
 from quirebase.search import search_index
 
+from ._persistence import ItemService
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from uuid import UUID
@@ -252,8 +254,7 @@ async def _create_item(
         workspace_id=workspace_id,
     )
     item = Item(**values)
-    db.add(item)
-    await db.flush()
+    item = await ItemService(db).create(item)
     await set_item_identifiers(db, actor, workspace_id, item.id, _identifier_pairs(metadata))
     await set_item_authors(
         db,

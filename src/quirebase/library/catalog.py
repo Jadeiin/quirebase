@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from advanced_alchemy.filters import LimitOffset
-from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from inquiro.richtext import convert_rich_text
 from sqlalchemy import or_, select
 
@@ -30,13 +29,11 @@ from quirebase.models import (
 from quirebase.projects import list_workspace_projects
 from quirebase.search import search_index
 
+from ._persistence import ItemService
+
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.sql.elements import ColumnElement
-
-
-class ItemReadRepository(SQLAlchemyAsyncRepository[Item]):
-    model_type = Item
 
 
 async def search_library(
@@ -93,13 +90,13 @@ async def search_library(
         item_query = item_query.where(Item.keywords.ilike(f"%{keyword}%"))
     if author:
         item_query = item_query.where(Item.authors.ilike(f"%{author}%"))
-    return await ItemReadRepository(
+    records, total = await ItemService(
         session=db,
         statement=item_query.order_by(Item.updated_at.desc(), Item.id),
     ).get_many_and_count(
         LimitOffset(limit=per_page, offset=(page - 1) * per_page),
-        count_with_window_function=False,
     )
+    return list(records), total
 
 
 def _normalized_title(title: str) -> str:

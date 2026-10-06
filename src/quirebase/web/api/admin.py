@@ -4,6 +4,7 @@ from dataclasses import asdict
 from typing import Annotated, Literal
 from uuid import UUID
 
+from advanced_alchemy.service import ResultConverter
 from fastapi import APIRouter, Query, status
 
 from quirebase.access import SystemAction, require_system_action
@@ -22,15 +23,16 @@ from quirebase.audit import query_events
 from quirebase.core.errors import ResourceNotFound, ValidationFailure
 from quirebase.core.workflows import durable_operations
 from quirebase.library import get_storage_metrics
-from quirebase.models import User
 from quirebase.operations import (
     dispatch_maintenance_workflow,
     get_runtime_settings,
     update_runtime_settings,
 )
 from quirebase.web.api.admin_schemas import (
+    AdminAuditEventView,
     AdminAuditView,
     AdminInvitationCreatedView,
+    AdminInvitationView,
     AdminMaintenanceView,
     AdminOverviewView,
     AdminSettingsView,
@@ -64,37 +66,11 @@ router = APIRouter(
 )
 
 
-def _user_view(user: User) -> dict:
-    return {
-        "id": user.id,
-        "username": user.username,
-        "role": user.role,
-        "active": user.active,
-        "created_at": user.created_at,
-    }
+result_converter = ResultConverter()
 
 
 def _workflow_view(workflow) -> dict:
     return asdict(workflow)
-
-
-def _audit_view(event) -> dict:
-    return {
-        "id": event.id,
-        "actor_id": event.actor_id,
-        "workspace_id": event.workspace_id,
-        "project_id": event.project_id,
-        "action": event.action,
-        "target_type": event.target_type,
-        "target_id": event.target_id,
-        "target_ids": event.target_ids,
-        "authorization_role": event.authorization_role,
-        "authorization_resource_action": event.authorization_resource_action,
-        "result": event.result,
-        "source": event.source,
-        "detail": event.detail,
-        "created_at": event.created_at,
-    }
 
 
 @router.get("/overview", response_model=AdminOverviewView)
@@ -111,7 +87,7 @@ async def admin_overview(user: ApiUser, db: Database):
         ),
         "failed_workflows": [_workflow_view(workflow) for workflow in failed],
         "storage": await get_storage_metrics(db, user),
-        "recent_events": [_audit_view(event) for event in events],
+        "recent_events": result_converter.to_schema(events, schema_type=AdminAuditEventView).items,
     }
 
 
@@ -129,38 +105,38 @@ async def admin_users(
     )
     invitations = await list_invitations(db, user)
     return {
-        "users": [_user_view(row) for row in users],
+        "users": result_converter.to_schema(users, schema_type=AdminUserView).items,
         "total": total,
         "page": page,
         "per_page": 20,
-        "invitations": [
-            {
-                "id": invitation.id,
-                "username": invitation.username,
-                "role": invitation.role,
-                "expires_at": invitation.expires_at,
-                "accepted_at": invitation.accepted_at,
-            }
-            for invitation in invitations
-        ],
+        "invitations": result_converter.to_schema(
+            invitations, schema_type=AdminInvitationView
+        ).items,
     }
 
 
 @router.post("/users", response_model=AdminUserView, status_code=status.HTTP_201_CREATED)
 async def admin_create_user(data: AdminUserCreateRequest, user: ApiUser, db: Database):
-    return _user_view(await create_user_admin(db, user, data.username, data.password, data.role))
+    return result_converter.to_schema(
+        await create_user_admin(db, user, data.username, data.password, data.role),
+        schema_type=AdminUserView,
+    )
 
 
 @router.put("/users/{user_id}/status", response_model=AdminUserView)
 async def admin_update_user_status(
     user_id: UUID, data: UserStatusRequest, user: ApiUser, db: Database
 ):
-    return _user_view(await update_user_status(db, user, user_id, data.active))
+    return result_converter.to_schema(
+        await update_user_status(db, user, user_id, data.active), schema_type=AdminUserView
+    )
 
 
 @router.put("/users/{user_id}/role", response_model=AdminUserView)
 async def admin_update_user_role(user_id: UUID, data: UserRoleRequest, user: ApiUser, db: Database):
-    return _user_view(await change_user_role(db, user, user_id, data.role))
+    return result_converter.to_schema(
+        await change_user_role(db, user, user_id, data.role), schema_type=AdminUserView
+    )
 
 
 @router.put("/users/{user_id}/password", response_model=OkView)
@@ -214,7 +190,7 @@ async def admin_audit(
         page_size=50,
     )
     return {
-        "events": [_audit_view(event) for event in events],
+        "events": result_converter.to_schema(events, schema_type=AdminAuditEventView).items,
         "total": total,
         "page": page,
         "per_page": 50,

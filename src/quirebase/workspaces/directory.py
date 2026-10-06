@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from advanced_alchemy.filters import LimitOffset
-from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+from advanced_alchemy.filters import LimitOffset, SearchFilter
 from sqlalchemy import and_, case, func, select
 
 from quirebase.access import (
@@ -21,14 +20,13 @@ from quirebase.models import (
     WorkspaceState,
 )
 
+from ._persistence import WorkspaceMemberRepository, WorkspaceService
+
 if TYPE_CHECKING:
     from uuid import UUID
 
+    from advanced_alchemy.filters import StatementFilter
     from sqlalchemy.ext.asyncio import AsyncSession
-
-
-class WorkspaceReadRepository(SQLAlchemyAsyncRepository[Workspace]):
-    model_type = Workspace
 
 
 async def list_workspaces(
@@ -52,24 +50,23 @@ async def list_workspaces(
         )
         .order_by(Workspace.name, Workspace.id)
     )
+    filters: list[StatementFilter] = (
+        [LimitOffset(limit=limit, offset=offset)] if limit is not None else []
+    )
     if search.strip():
-        query = query.where(Workspace.name.ilike(f"%{search.strip()}%"))
-    filters = (LimitOffset(limit=limit, offset=offset),) if limit is not None else ()
-    roots, total = await WorkspaceReadRepository(session=db, statement=query).get_many_and_count(
+        filters.append(SearchFilter(field_name="name", value=search.strip(), ignore_case=True))
+    roots, total = await WorkspaceService(session=db, statement=query).get_many_and_count(
         *filters,
-        count_with_window_function=False,
     )
     if not roots:
         return [], total
     members = {
         member.workspace_id: member
-        for member in await db.scalars(
-            select(WorkspaceMember).where(
-                WorkspaceMember.workspace_id.in_([workspace.id for workspace in roots]),
-                WorkspaceMember.user_id == actor.id,
-                WorkspaceMember.state == WorkspaceMemberState.active,
-                WorkspaceMember.terminated_at.is_(None),
-            )
+        for member in await WorkspaceMemberRepository(session=db).get_many(
+            WorkspaceMember.workspace_id.in_([workspace.id for workspace in roots]),
+            user_id=actor.id,
+            state=WorkspaceMemberState.active,
+            terminated_at=None,
         )
     }
     return [

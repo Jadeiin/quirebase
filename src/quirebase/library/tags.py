@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
+from advanced_alchemy.exceptions import NotFoundError
 from advanced_alchemy.types import GUID
 from sqlalchemy import and_, delete, func, literal, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -27,6 +28,7 @@ from quirebase.core.errors import (
     ResourceUnavailable,
     ValidationFailure,
 )
+from quirebase.core.persistence import Repository, Service
 from quirebase.library.tag_recommendations import decoded_candidates
 from quirebase.library.workflows import (
     item_tag_recommendation_status,
@@ -37,6 +39,7 @@ from quirebase.models import Item, ItemTag, ItemTagRecommendation, Tag, User
 if TYPE_CHECKING:
     from uuid import UUID
 
+    from advanced_alchemy.service import ModelDictT
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -85,37 +88,50 @@ def normalize_tag_name(name: str) -> str:
     return normalized
 
 
-async def get_or_create_tag(db: AsyncSession, user: User, workspace_id: UUID, name: str) -> Tag:
-    await require_workspace_action(db, user, workspace_id, ResourceAction.tag_create)
-    normalized = normalize_tag_name(name)
-    normalized_key = normalized.casefold()
-    tag = await db.scalar(
-        select(Tag).where(
-            Tag.workspace_id == workspace_id,
-            Tag.normalized_name == normalized_key,
+class TagRepository(Repository[Tag]):
+    model_type = Tag
+
+
+class TagService(Service[Tag]):
+    repository_type = TagRepository
+
+    async def to_model_on_create(self, data: ModelDictT[Tag]) -> Tag:
+        tag = await self.to_model(data)
+        tag.name = normalize_tag_name(tag.name)
+        tag.normalized_name = tag.name.casefold()
+        return tag
+
+    async def to_model_on_update(self, data: ModelDictT[Tag]) -> Tag:
+        return await self.to_model_on_create(data)
+
+    async def find_or_create(self, workspace_id: UUID, actor_id: UUID, name: str) -> Tag:
+        candidate = await self.to_model(
+            {"workspace_id": workspace_id, "created_by": actor_id, "name": name}, "create"
         )
-    )
-    if tag is None:
+        tag = await self.get_one_or_none(
+            workspace_id=workspace_id, normalized_name=candidate.normalized_name
+        )
+        if tag is not None:
+            return tag
         try:
-            async with db.begin_nested():
-                tag = Tag(
-                    workspace_id=workspace_id,
-                    name=normalized,
-                    normalized_name=normalized_key,
-                    created_by=user.id,
-                )
-                db.add(tag)
-                await db.flush()
+            async with self.repository.session.begin_nested():
+                return await self.repository.add(candidate)
         except IntegrityError:
-            tag = await db.scalar(
-                select(Tag).where(
-                    Tag.workspace_id == workspace_id,
-                    Tag.normalized_name == normalized_key,
-                )
+            tag = await self.get_one_or_none(
+                workspace_id=workspace_id, normalized_name=candidate.normalized_name
             )
             if tag is None:  # pragma: no cover - constraint unrelated to Tag identity
                 raise
-    return tag
+            return tag
+
+
+class ItemTagRepository(Repository[ItemTag]):
+    model_type = ItemTag
+
+
+async def get_or_create_tag(db: AsyncSession, user: User, workspace_id: UUID, name: str) -> Tag:
+    await require_workspace_action(db, user, workspace_id, ResourceAction.tag_create)
+    return await TagService(db).find_or_create(workspace_id, user.id, name)
 
 
 async def add_tag_to_item(
@@ -147,8 +163,7 @@ async def _add_tag_id_to_item(
         try:
             async with db.begin_nested():
                 assignment = ItemTag(workspace_id=workspace_id, item_id=item_id, tag_id=tag_id)
-                db.add(assignment)
-                await db.flush()
+                assignment = await ItemTagRepository(session=db).add(assignment)
                 created = True
         except IntegrityError:
             assignment = await db.scalar(
@@ -283,34 +298,28 @@ async def rename_tag(
     db: AsyncSession, user: User, workspace_id: UUID, tag_id: UUID, name: str
 ) -> Tag:
     await require_workspace_action(db, user, workspace_id, ResourceAction.tag_manage)
-    tag = await db.scalar(
-        select(Tag).where(Tag.id == tag_id, Tag.workspace_id == workspace_id).with_for_update()
-    )
+    service = TagService(db, statement=select(Tag).where(Tag.workspace_id == workspace_id))
+    tag = await service.get_one_or_none(id=tag_id, with_for_update=True)
     if tag is None:
         raise ResourceUnavailable("tag not found")
     normalized = normalize_tag_name(name)
     normalized_key = normalized.casefold()
-    if await db.scalar(
-        select(Tag.id).where(
-            Tag.workspace_id == workspace_id,
-            Tag.normalized_name == normalized_key,
-            Tag.id != tag.id,
-        )
-    ):
+    if await service.exists(Tag.id != tag.id, normalized_name=normalized_key):
         raise TagConflict("tag name already exists")
-    tag.name = normalized
-    tag.normalized_name = normalized_key
-    record_event(
-        db,
-        user.id,
-        "tag.rename",
-        "tag",
-        tag.id,
-        workspace_id=workspace_id,
-        authorization_resource_action=ResourceAction.tag_manage.value,
-    )
     try:
+        tag = await service.update({"name": normalized}, item_id=tag_id)
+        record_event(
+            db,
+            user.id,
+            "tag.rename",
+            "tag",
+            tag.id,
+            workspace_id=workspace_id,
+            authorization_resource_action=ResourceAction.tag_manage.value,
+        )
         await db.commit()
+    except NotFoundError as error:
+        raise ResourceUnavailable("tag not found") from error
     except IntegrityError as error:
         await db.rollback()
         raise TagConflict("tag name already exists") from error
@@ -320,13 +329,14 @@ async def rename_tag(
 async def delete_tag(db: AsyncSession, user: User, workspace_id: UUID, tag_id: UUID) -> None:
     await require_workspace_action(db, user, workspace_id, ResourceAction.tag_manage)
     # Deleting a taxonomy root must block FK association inserts until commit.
-    tag = await db.scalar(
-        select(Tag).where(Tag.id == tag_id, Tag.workspace_id == workspace_id).with_for_update()
-    )
+    service = TagService(db, statement=select(Tag).where(Tag.workspace_id == workspace_id))
+    tag = await service.get_one_or_none(id=tag_id, with_for_update=True)
     if tag is None:
         raise ResourceUnavailable("tag not found")
-    await db.delete(tag)
-    await db.flush()
+    try:
+        await service.delete(tag.id)
+    except NotFoundError as error:
+        raise ResourceUnavailable("tag not found") from error
     record_event(
         db,
         user.id,
@@ -370,7 +380,9 @@ async def list_accessible_tags_with_counts(
 async def get_tag_matrix_for_item(db: AsyncSession, item: Item) -> TagMatrix:
     """Build the Tag matrix for an Item already loaded through its authorized section."""
     workspace_id, item_id = item.workspace_id, item.id
-    all_tags = list((await db.scalars(visible_tags_query(workspace_id).order_by(Tag.name))).all())
+    all_tags = await TagService(
+        db, statement=visible_tags_query(workspace_id).order_by(Tag.name, Tag.id)
+    ).get_many()
     assigned_ids = set(
         (
             await db.scalars(

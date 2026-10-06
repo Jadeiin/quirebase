@@ -96,6 +96,13 @@ def _make_database_config(url: str | None = None) -> SQLAlchemyAsyncConfig:
             cursor.execute("PRAGMA journal_mode=WAL")
             cursor.close()
 
+        @event.listens_for(engine.sync_engine, "savepoint")
+        def begin_sqlite_before_savepoint(connection, _name):
+            # Legacy SQLite reads do not begin a physical transaction. A first
+            # savepoint must have an outer BEGIN or its release commits the rows.
+            if not connection.connection.driver_connection.in_transaction:
+                connection.exec_driver_sql("BEGIN")
+
     return config
 
 

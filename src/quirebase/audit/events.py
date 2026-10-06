@@ -3,11 +3,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from advanced_alchemy.filters import LimitOffset
-from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from sqlalchemy import Text, cast, or_, select
 
 from quirebase.access.authorization import SystemAction, require_system_action
 from quirebase.audit.invocations import current_programmatic_invocation
+from quirebase.core.persistence import ReadService, Repository
 from quirebase.models import AuditEvent
 
 if TYPE_CHECKING:
@@ -60,8 +60,12 @@ def record_event(
     return event
 
 
-class AuditReadRepository(SQLAlchemyAsyncRepository[AuditEvent]):
+class AuditRepository(Repository[AuditEvent]):
     model_type = AuditEvent
+
+
+class AuditReadService(ReadService[AuditEvent]):
+    repository_type = AuditRepository
 
 
 async def query_events(
@@ -95,10 +99,10 @@ async def query_events(
         )
     if filters:
         query = query.where(*filters)
-    return await AuditReadRepository(
+    records, total = await AuditReadService(
         session=db,
         statement=query.order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc()),
     ).get_many_and_count(
         LimitOffset(limit=page_size, offset=max(0, (page - 1) * page_size)),
-        count_with_window_function=False,
     )
+    return list(records), total

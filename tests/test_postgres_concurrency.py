@@ -53,9 +53,11 @@ from quirebase.library import (
     search_library,
     stage_import_batch,
 )
+from quirebase.library.citations import CitationStyleService, create_custom_citation_style
 from quirebase.models import (
     AnnotationKind,
     AnnotationScope,
+    CitationStyle,
     DiscussionMessage,
     FileRevision,
     ImportBatch,
@@ -67,6 +69,7 @@ from quirebase.models import (
     ProjectMember,
     ProjectParticipation,
     ProjectState,
+    SystemSetting,
     Tag,
     User,
     Workspace,
@@ -74,6 +77,7 @@ from quirebase.models import (
     WorkspaceRole,
     WorkspaceState,
 )
+from quirebase.operations.settings import RuntimeSettingsService, update_runtime_settings
 from quirebase.projects import (
     ProjectMemberConflict,
     add_item_to_project,
@@ -1690,3 +1694,85 @@ async def test_concurrent_metadata_replacements_reject_stale_version(
         assert (await search_library(db, actor, workspace_id, q=loser))[1] == 0
         events, total = await query_events(db, actor, action="item.update")
         assert total == 1 and events[0].target_id == str(item_id)
+
+
+@pytest.mark.concurrency_case("settings-install")
+async def test_concurrent_setting_install_reloads_conflicts_and_preserves_whole_batch(
+    postgres_sessions, postgres_race
+):
+    async with postgres_sessions() as db:
+        first = User(username="settings-first", password_hash="unused", role="administrator")
+        second = User(username="settings-second", password_hash="unused", role="administrator")
+        db.add_all([first, second, SystemSetting(key="session_days", value="30")])
+        await db.commit()
+        first_id, second_id = first.id, second.id
+
+    async def install_second():
+        async with postgres_race.session("second") as db:
+            actor = await db.get(User, second_id)
+            await update_runtime_settings(
+                db,
+                actor,
+                {
+                    "metadata_contact_email": "second@example.org",
+                    "ncbi_api_key": "second-key",
+                    "session_days": 60,
+                },
+            )
+
+    async with postgres_race.session("first") as db:
+        await RuntimeSettingsService(db).store(
+            first_id, {"metadata_contact_email": "first@example.org", "session_days": 45}
+        )
+        postgres_race.start("second", install_second())
+        await postgres_race.wait_blocked("second", "first")
+        await db.commit()
+        await postgres_race.join("second")
+
+    async with postgres_race.session("verify") as db:
+        rows = {record.key: record for record in await RuntimeSettingsService(db).get_many()}
+        assert {key: record.value for key, record in rows.items()} == {
+            "metadata_contact_email": "second@example.org",
+            "ncbi_api_key": "second-key",
+            "session_days": "60",
+        }
+        assert {record.updated_by for record in rows.values()} == {second_id}
+        actor = await db.get(User, second_id)
+        events, total = await query_events(db, actor, action="system.settings_update")
+        assert total == 1 and events[0].actor_id == second_id
+
+
+@pytest.mark.concurrency_case("citation-style-install")
+async def test_concurrent_citation_style_install_translates_unique_race_and_keeps_session_usable(
+    postgres_sessions, postgres_race
+):
+    from inquiro.bibliography import builtin_style_xml
+
+    xml = builtin_style_xml("apa")
+    assert xml is not None
+    async with postgres_sessions() as db:
+        owner = await _user(db, "citation-installer")
+        actor_id, workspace_id = owner.id, fixture_workspace_id(owner)
+
+    async def install_second():
+        async with postgres_race.session("second") as db:
+            actor = await db.get(User, actor_id)
+            with pytest.raises(ValidationFailure, match="already exists"):
+                await create_custom_citation_style(db, actor, workspace_id, " Shared ", xml)
+            # A uniqueness conflict rolls back only its savepoint.
+            await create_custom_citation_style(db, actor, workspace_id, "Distinct", xml)
+
+    async with postgres_race.session("first") as db:
+        await CitationStyleService(db).install(workspace_id, actor_id, "Shared", xml)
+        postgres_race.start("second", install_second())
+        await postgres_race.wait_blocked("second", "first")
+        await db.commit()
+        await postgres_race.join("second")
+
+    async with postgres_race.session("verify") as db:
+        names = set(
+            await db.scalars(
+                select(CitationStyle.name).where(CitationStyle.workspace_id == workspace_id)
+            )
+        )
+        assert names == {"Shared", "Distinct"}

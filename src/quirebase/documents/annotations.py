@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access import (
@@ -50,6 +50,8 @@ from quirebase.models import (
     ProjectState,
     User,
 )
+
+from ._persistence import AnnotationReplyService, AnnotationService
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -618,9 +620,7 @@ async def list_document_annotations(
     ]
     if revision_id is not None:
         filters.append(PdfAnnotation.file_revision_id == revision_id)
-    total = int(
-        await db.scalar(select(func.count()).select_from(PdfAnnotation).where(*filters)) or 0
-    )
+    total = await AnnotationService(db).count(*filters)
     # Read names with their annotations: a later statement under READ COMMITTED
     # could see the revision's cascade deletion after these ORM objects are loaded.
     query = (
@@ -713,8 +713,7 @@ async def create_document_annotation(
     )
     try:
         async with db.begin_nested():
-            db.add(record)
-            await db.flush()
+            record = await AnnotationService(db).create(record)
     except IntegrityError as error:
         raise VersionConflict(message="annotation object ID already exists") from error
     record_event(
@@ -1090,8 +1089,7 @@ async def create_annotation_reply(
     )
     try:
         async with db.begin_nested():
-            db.add(record)
-            await db.flush()
+            record = await AnnotationReplyService(db).create(record)
     except IntegrityError as error:
         raise VersionConflict(message="annotation object ID already exists") from error
     record_event(

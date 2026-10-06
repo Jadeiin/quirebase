@@ -132,10 +132,16 @@ lineage primitive and Module-owned aggregate loaders (`get_item`, `get_project`,
 predicate; one concrete resource-action decision remains an explicit Access gate while Project
 participation contributes fixed domain discovery rules and concrete command facts, and mutation
 statements retain their Workspace and CAS predicates at the linearization point. No generic
-Repository or implicit ORM tenant filter is part of this seam. Module-owned AA read repositories
-may paginate an explicitly authorized root statement after that seam; transaction ownership stays
-with the caller. Core owns AA configuration and shared persistence value types, as described in
-ADR 0014.
+Repository or implicit ORM tenant filter is part of this authorization seam. Module-owned AA
+repositories/services apply model reads, pagination, normalization hooks, ordinary writes and
+bulk persistence after explicit authorization; transaction ownership stays with the use-case
+command or durable datasource transaction. Concrete classes remain internal to their owner,
+including `_persistence` implementation files where several use cases share them. Neither
+inbound adapters nor peer Modules instantiate another Module's repository/service. AA's native
+schema converter may run in Web without a repository or Session; transport DTOs never enter
+business services. Core owns AA configuration, session-neutral persistence defaults and shared
+value types, as described in ADR 0014. CAS predicates, lock order, lineage checks, idempotent
+association SQL and reference-aware cleanup remain explicit rather than becoming generic CRUD.
 
 The Access Module owns one immutable Casbin model and policy bundle packaged with the application.
 Casbin is the sole Workspace/System resource-action capability policy evaluator. System and Workspace requests

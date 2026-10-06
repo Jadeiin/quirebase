@@ -37,6 +37,7 @@ from quirebase.models import (
 )
 from quirebase.search import search_index
 
+from ._persistence import AttachmentService, ExportArtifactService, FileRevisionService
 from .pdf import create_thumbnail, export_annotations, inspect_pdf, validate_pdf_container
 
 if TYPE_CHECKING:
@@ -299,8 +300,7 @@ async def commit_uploaded_revision(
         created_by=actor_id,
         **_ready_revision_values(inspected, inspected["object_key"], filename),
     )
-    db.add(revision)
-    await db.flush()
+    revision = await FileRevisionService(db).create(revision)
     await search_index(db).index_revision(db, revision.id)
     record_event(
         db,
@@ -505,7 +505,7 @@ async def commit_uploaded_attachment(
         role=role,
         created_by=actor_id,
     )
-    db.add(attachment)
+    attachment = await AttachmentService(db).create(attachment)
     record_event(
         db,
         actor_id,
@@ -748,7 +748,7 @@ async def record_annotation_export_artifact(
         if assignment is None:
             raise PermissionError("project assignment no longer exists")
     ttl_hours = await get_effective_setting(db, "export_ttl_hours", get_settings().export_ttl_hours)
-    db.add(
+    await ExportArtifactService(db).create(
         ExportArtifact(
             workflow_id=workflow_id,
             workspace_id=workspace_id,

@@ -3,8 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
-from advanced_alchemy.filters import LimitOffset
-from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+from advanced_alchemy.filters import LimitOffset, SearchFilter
 from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -35,6 +34,7 @@ from quirebase.models import (
 )
 
 from ._locking import lock_project_root
+from ._persistence import ProjectMemberRepository, ProjectService
 from .lifecycle import _validate_description, _validate_name
 from .loaders import require_project
 from .members import ProjectParticipant
@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from uuid import UUID
 
+    from advanced_alchemy.filters import StatementFilter
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -83,10 +84,9 @@ async def create_project(
         participation=parsed_participation,
         description=normalized_description,
     )
-    db.add(project)
-    await db.flush()
+    project = await ProjectService(db).create(project)
     if parsed_participation is ProjectParticipation.open:
-        db.add(
+        await ProjectMemberRepository(session=db).add(
             ProjectMember(
                 workspace_id=workspace_id,
                 project_id=project.id,
@@ -106,10 +106,6 @@ async def create_project(
     )
     await db.commit()
     return project
-
-
-class ProjectReadRepository(SQLAlchemyAsyncRepository[Project]):
-    model_type = Project
 
 
 async def list_workspace_projects(
@@ -150,12 +146,13 @@ async def list_workspace_projects(
             Project.participation == ProjectParticipation.open,
             ~is_participating,
         )
+    filters: list[StatementFilter] = (
+        [LimitOffset(limit=limit, offset=offset)] if limit is not None else []
+    )
     if search.strip():
-        query = query.where(Project.name.ilike(f"%{search.strip()}%"))
-    filters = (LimitOffset(limit=limit, offset=offset),) if limit is not None else ()
-    roots, total = await ProjectReadRepository(session=db, statement=query).get_many_and_count(
+        filters.append(SearchFilter(field_name="name", value=search.strip(), ignore_case=True))
+    roots, total = await ProjectService(session=db, statement=query).get_many_and_count(
         *filters,
-        count_with_window_function=False,
     )
     ids = [project.id for project in roots]
     if not ids:

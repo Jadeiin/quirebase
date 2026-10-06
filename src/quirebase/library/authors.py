@@ -12,6 +12,8 @@ from quirebase.access.items import require_editable_item
 from quirebase.core.errors import ValidationFailure
 from quirebase.models import Author, Item, ItemAuthor, User, normalize_author_identity
 
+from ._persistence import AuthorRepository, ItemAuthorRepository
+
 if TYPE_CHECKING:
     from uuid import UUID
 
@@ -62,16 +64,15 @@ async def find_or_create_author(
         raise ValidationFailure("author name is too long")
     identity_key = normalize_author_identity(last, first)
 
-    stmt = select(Author).where(Author.identity_key == identity_key)
-    author = await db.scalar(stmt)
+    repository = AuthorRepository(session=db)
+    author = await repository.get_one_or_none(identity_key=identity_key)
     if author is None:
         try:
             async with db.begin_nested():
                 author = Author(last_name=last, first_name=first, identity_key=identity_key)
-                db.add(author)
-                await db.flush()
+                author = await repository.add(author)
         except IntegrityError:
-            author = await db.scalar(stmt)
+            author = await repository.get_one_or_none(identity_key=identity_key)
             if author is None:  # pragma: no cover - constraint unrelated to author identity
                 raise
     return author
@@ -125,7 +126,6 @@ async def set_item_authors(
             role=role,
             is_corresponding=is_corr,
         )
-        db.add(link)
         links.append(link)
         formatted_names.append(
             BibliographyContributor(
@@ -140,7 +140,7 @@ async def set_item_authors(
     elif role == "editor":
         item.editors = joined_str
 
-    await db.flush()
+    await ItemAuthorRepository(session=db).add_many(links)
     return links
 
 

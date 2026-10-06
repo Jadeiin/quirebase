@@ -24,6 +24,8 @@ from quirebase.models import (
 )
 from quirebase.operations.settings import get_effective_setting
 
+from ._persistence import WorkspaceMemberRepository, WorkspaceService
+
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -49,9 +51,8 @@ async def provision_initial_workspace(db: AsyncSession, user: User) -> Workspace
         raise ValidationFailure("Workspace provisioning is only available during User creation")
 
     workspace = Workspace(name=_workspace_name(locked), created_by=locked.id)
-    db.add(workspace)
-    await db.flush()
-    db.add(
+    workspace = await WorkspaceService(db).create(workspace)
+    await WorkspaceMemberRepository(session=db).add(
         WorkspaceMember(
             workspace_id=workspace.id,
             user_id=locked.id,
@@ -153,9 +154,8 @@ async def create_workspace(
     if owner is None or not owner.active:
         raise ValidationFailure("Workspace owner must be an active User")
     workspace = Workspace(name=cleaned, created_by=actor.id)
-    db.add(workspace)
-    await db.flush()
-    db.add(
+    workspace = await WorkspaceService(db).create(workspace)
+    await WorkspaceMemberRepository(session=db).add(
         WorkspaceMember(
             workspace_id=workspace.id,
             user_id=owner.id,
