@@ -94,7 +94,7 @@ class ItemFilesData(ItemSectionData):
 @dataclass(frozen=True)
 class ProjectAssignmentOption:
     project: Project
-    is_member: bool
+    is_participating: bool
 
 
 @dataclass(frozen=True)
@@ -289,12 +289,12 @@ async def _open_organize(
         ProjectMember.workspace_id == context.workspace_id,
         ProjectMember.user_id == context.actor_id,
     )
-    is_member = (Project.participation == ProjectParticipation.workspace) | Project.id.in_(
+    is_participating = (Project.participation == ProjectParticipation.workspace) | Project.id.in_(
         member_project_ids
     )
     project_rows = (
         await db.execute(
-            select(Project, is_member)
+            select(Project, is_participating)
             .where(
                 Project.workspace_id == item.workspace_id,
                 Project.state == ProjectState.active,
@@ -304,7 +304,7 @@ async def _open_organize(
         )
     ).all()
     project_options = tuple(
-        ProjectAssignmentOption(project=project, is_member=bool(member))
+        ProjectAssignmentOption(project=project, is_participating=bool(member))
         for project, member in project_rows
     )
     visible_project_ids = {option.project.id for option in project_options}

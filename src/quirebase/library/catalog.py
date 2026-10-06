@@ -21,7 +21,6 @@ from quirebase.models import (
     ItemTag,
     LoginSession,
     ProjectItem,
-    ProjectParticipation,
     Tag,
     User,
 )
@@ -125,9 +124,7 @@ async def get_dashboard_data(db: AsyncSession, user: User, workspace_id: str) ->
         ).all()
     )
     projects = [
-        project
-        for project, _, is_member in await list_workspace_projects(db, context)
-        if is_member or project.participation is ProjectParticipation.managed
+        project for project, _, _ in await list_workspace_projects(db, context, view="mine")
     ]
     sessions = list(
         (

@@ -156,7 +156,10 @@ Instance registration and Workspace admission are separate operations:
 - Admission to another Workspace uses a separate `WorkspaceInvitation` or an owner/admin
   membership mutation for an existing User.
 - Both invitation types resolve through the public `/invitations/{token}` API with an explicit
-  `kind` discriminator. Workspace admission still accepts only the invited existing User; the UI
+  `kind` discriminator and share the browser entry `/invite/{token}`. Acceptance remains two
+  distinct commands: `POST /invitations/{token}/accept` provisions an account, while
+  `POST /workspace-invitations/{token}/accept` admits an existing User. Workspace admission still
+  accepts only the invited existing User; the UI
   keeps the invitation open while switching away from a different signed-in account.
 - A valid membership has state `active` or `suspended`. Removal terminates the membership and is
   retained as an audit/history record, not as an ACL-satisfying `removed` state.
@@ -223,6 +226,11 @@ for governance; the initial policy grants it to owners/admins, including read-on
 Collection, direct-link and locked reads share one SQL visibility predicate. Mutation loaders
 filter invisible roots before locking and recheck visibility in a fresh statement after acquiring
 the Project lock, including after waiting behind participant removal.
+
+Read models call implicit or explicit participation `is_participating`; the existence of a
+ProjectMember row is a different fact. Dashboard and personal Project lists include only
+participating Projects. Managed Projects visible solely for governance stay in the directory
+and governance surfaces, rather than entering the governor's personal working context.
 
 Project settings use one partial `PATCH /projects/{id}` command and one transaction. Omitted
 fields stay unchanged; metadata-only updates do not alter participation or ProjectMember rows.
@@ -327,6 +335,13 @@ membership mutations. Project archive/restore is controlled by separate `project
 deletion is limited to the `item.delete` decision. Instance administrators have no implicit delete
 authority; recovery or break-glass writes are explicit, temporary and fully audited.
 
+Project archive/restore, Workspace-member suspend/reactivate and role setting, invitation revoke,
+and instance governance freeze/recover tolerate retries after reaching the requested state.
+They still acquire their roots and recheck current authority before returning success; a repeat
+does not change timestamps or add an Audit Event. Invitation revocation also leaves an already
+expired invitation unchanged. Accepted invitations and terminated memberships remain unavailable
+to these commands. Workspace archive/restore retain their lifecycle-specific capability checks.
+
 ### Cross-Workspace data flows
 
 Ordinary relations cannot cross Workspaces. In particular, a ProjectItem, ItemTag or Project
@@ -336,6 +351,10 @@ the source `workspace.export` decision and re-checks the destination `item.copy`
 import flows use `item.create`. Every such operation records actor, source and destination
 Workspace IDs and the resource ID mapping in an Audit Event. A future live-sharing model requires
 a separate decision and explicit share resource.
+
+Item copy selectors receive only destinations currently satisfying both copy decisions, rather
+than unusable options with empty grants. This read model is a hint; the copy command rechecks
+current source and destination authority before committing.
 
 Instance-global resources may include User/authentication, system/provider configuration, external
 bibliographic metadata cache and workflow infrastructure. Audit Events are instance-global records,

@@ -53,11 +53,7 @@
 		itemFilesQuery(workspaceId, itemId, open && section === 'documents')
 	);
 	const revisions = $derived(files.data?.files.filter((file) => file.kind === 'revision') ?? []);
-	const copyDestinations = $derived(
-		overview.copy_targets.filter((candidate: ItemOverviewView['copy_targets'][number]) =>
-			can(candidate.authorization, 'item.copy')
-		)
-	);
+	const copyDestinations = $derived(overview.copy_targets);
 	const externalIdentifiers = $derived(
 		overview.identifiers.filter(
 			(identifier: ItemOverviewView['identifiers'][number]) => identifier.provider !== 'doi'

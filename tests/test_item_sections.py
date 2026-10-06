@@ -42,6 +42,7 @@ from quirebase.models import (
     Tag,
     User,
     WorkspaceMember,
+    WorkspaceMemberState,
     WorkspaceRole,
     WorkspaceState,
 )
@@ -349,8 +350,9 @@ async def test_project_editor_can_edit_item_without_seeing_permanent_delete(
 
 
 @pytest.mark.anyio
-async def test_item_overview_projects_copy_target_decisions_from_both_workspaces(
-    async_db, async_session_factory, tmp_path, monkeypatch
+@pytest.mark.parametrize("blocked_reason", ["archived", "frozen", "viewer", "suspended"])
+async def test_item_overview_offers_only_eligible_copy_targets_and_rechecks_on_copy(
+    async_db, async_session_factory, tmp_path, monkeypatch, blocked_reason
 ):
     db = async_db
     client, item, _revision = await authenticated_async_client(
@@ -364,7 +366,10 @@ async def test_item_overview_projects_copy_target_decisions_from_both_workspaces
     await db.flush()
     active_target = await provision_initial_workspace(db, active_owner)
     archived_target = await provision_initial_workspace(db, archived_owner)
-    archived_target.state = WorkspaceState.archived
+    if blocked_reason == "archived":
+        archived_target.state = WorkspaceState.archived
+    elif blocked_reason == "frozen":
+        archived_target.governance_suspended_at = datetime.now(UTC)
     db.add_all([
         WorkspaceMember(
             workspace_id=active_target.id,
@@ -375,7 +380,12 @@ async def test_item_overview_projects_copy_target_decisions_from_both_workspaces
         WorkspaceMember(
             workspace_id=archived_target.id,
             user_id=actor.id,
-            role=WorkspaceRole.editor,
+            role=WorkspaceRole.viewer if blocked_reason == "viewer" else WorkspaceRole.editor,
+            state=(
+                WorkspaceMemberState.suspended
+                if blocked_reason == "suspended"
+                else WorkspaceMemberState.active
+            ),
             invited_by=archived_owner.id,
         ),
     ])
@@ -386,9 +396,23 @@ async def test_item_overview_projects_copy_target_decisions_from_both_workspaces
             f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/overview"
         )
         assert response.status_code == 200
-        targets = {target["id"]: target for target in response.json()["copy_targets"]}
-        assert targets[active_target.id]["authorization"]["allowed"] == ["item.copy"]
-        assert targets[archived_target.id]["authorization"]["allowed"] == []
+        assert response.json()["copy_targets"] == [
+            {"id": active_target.id, "name": active_target.name}
+        ]
+        # Eligibility is a read-model hint, never a durable grant for the command.
+        member = await db.scalar(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == active_target.id,
+                WorkspaceMember.user_id == actor.id,
+            )
+        )
+        member.role = WorkspaceRole.viewer
+        await db.commit()
+        denied = await client.post(
+            f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/copy",
+            json={"target_workspace_id": active_target.id},
+        )
+        assert denied.status_code == 403
     finally:
         await client.aclose()
         get_settings.cache_clear()

@@ -71,13 +71,15 @@ async def list_projects(
             state=project.state,
             participation=project.participation,
             description=project.description,
-            is_member=is_member,
+            is_participating=is_participating,
             allowed_participation_changes=list(project_participation_changes(context, project)),
             authorization=authorization_view(
-                project_decisions(context, project, is_member=is_member)
+                project_decisions(context, project, is_participating=is_participating)
             ),
         )
-        for project, count, is_member in await list_workspace_projects(db, context, view=view)
+        for project, count, is_participating in await list_workspace_projects(
+            db, context, view=view
+        )
     ]
 
 
@@ -105,7 +107,7 @@ async def get_project(
             project_decisions(
                 context,
                 workspace.project,
-                is_member=workspace.is_member,
+                is_participating=workspace.is_participating,
             )
         ),
     )

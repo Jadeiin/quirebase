@@ -174,6 +174,9 @@ async def set_project_state(
     workspace = await lock_workspace_context(db, user, workspace_id)
     project = await lock_project_root(db, workspace, project_id)
     require_action(workspace, authorization_resource_action)
+    if project.state is desired:
+        await db.commit()
+        return project
     project.state = desired
     record_event(
         db,

@@ -29,7 +29,7 @@
 	const joinable = $derived(
 		(projects.data ?? []).filter(
 			(project) =>
-				project.participation === 'open' && project.state === 'active' && !project.is_member
+				project.participation === 'open' && project.state === 'active' && !project.is_participating
 		)
 	);
 	const workspaceProjects = $derived(
@@ -37,18 +37,20 @@
 	);
 	const myProjects = $derived(
 		(projects.data ?? []).filter(
-			(project) => project.is_member && project.participation !== 'workspace'
+			(project) => project.is_participating && project.participation !== 'workspace'
 		)
 	);
 	const managedProjects = $derived(
 		(projects.data ?? []).filter(
-			(project) => project.participation === 'managed' && !project.is_member
+			(project) => project.participation === 'managed' && !project.is_participating
 		)
 	);
 	const archivedOpenProjects = $derived(
 		(projects.data ?? []).filter(
 			(project) =>
-				project.participation === 'open' && project.state === 'archived' && !project.is_member
+				project.participation === 'open' &&
+				project.state === 'archived' &&
+				!project.is_participating
 		)
 	);
 

@@ -198,9 +198,7 @@ test('read-only Item metadata does not expose mutation controls', async ({ page 
 	await expect(page.getByRole('button', { name: 'Record tools' })).toHaveCount(0);
 });
 
-test('cross-Workspace copy only offers destinations allowed by the copy decision', async ({
-	page
-}) => {
+test('cross-Workspace copy uses the server-provided eligible destinations', async ({ page }) => {
 	await mockSession(page);
 	await page.route('**/api/v1/workspaces', (route) =>
 		route.fulfill({
@@ -232,13 +230,7 @@ test('cross-Workspace copy only offers destinations allowed by the copy decision
 				copy_targets: [
 					{
 						id: 'workspace-2',
-						name: 'Eligible destination',
-						authorization: { allowed: ['item.copy'] }
-					},
-					{
-						id: 'workspace-3',
-						name: 'Read-only destination',
-						authorization: { allowed: [] }
+						name: 'Eligible destination'
 					}
 				],
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },

@@ -134,7 +134,7 @@ async def test_suspension_retains_participation_but_termination_removes_it(
 
     await reactivate_workspace_member(async_db, owner, item.workspace_id, membership.id)
     context = await resolve_workspace_context(async_db, target, item.workspace_id)
-    assert (await open_project_workspace(async_db, context, project.id)).is_member
+    assert (await open_project_workspace(async_db, context, project.id)).is_participating
     assert project.id in {
         p.id for p, _, _ in await list_workspace_projects(async_db, context, view="mine")
     }
@@ -150,7 +150,7 @@ async def test_suspension_retains_participation_but_termination_removes_it(
         p.id for p, _, _ in await list_workspace_projects(async_db, context, view="mine")
     }
     if participation is ProjectParticipation.open:
-        assert not (await open_project_workspace(async_db, context, project.id)).is_member
+        assert not (await open_project_workspace(async_db, context, project.id)).is_participating
     else:
         assert await list_workspace_projects(async_db, context) == []
 

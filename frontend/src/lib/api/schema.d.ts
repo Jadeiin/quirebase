@@ -2879,8 +2879,7 @@ export interface components {
 			id: string;
 			/** Name */
 			name: string;
-			/** Participation */
-			participation: string;
+			participation: components['schemas']['ProjectParticipation'];
 		};
 		/** DashboardRecentItemView */
 		DashboardRecentItemView: {
@@ -3199,13 +3198,15 @@ export interface components {
 			 */
 			expires_at: string;
 		};
-		/** ItemCopyTargetView */
+		/**
+		 * ItemCopyTargetView
+		 * @description A currently eligible copy destination; the command rechecks authority.
+		 */
 		ItemCopyTargetView: {
 			/** Id */
 			id: string;
 			/** Name */
 			name: string;
-			authorization: components['schemas']['WorkspaceAuthorizationView'];
 		};
 		/** ItemDetailView */
 		ItemDetailView: {
@@ -3398,8 +3399,8 @@ export interface components {
 			/** Assigned */
 			assigned: boolean;
 			participation: components['schemas']['ProjectParticipation'];
-			/** Is Member */
-			is_member: boolean;
+			/** Is Participating */
+			is_participating: boolean;
 		};
 		/** ItemOrganizeView */
 		ItemOrganizeView: {
@@ -3692,8 +3693,8 @@ export interface components {
 			item_count: number;
 			state: components['schemas']['ProjectState'];
 			participation: components['schemas']['ProjectParticipation'];
-			/** Is Member */
-			is_member: boolean;
+			/** Is Participating */
+			is_participating: boolean;
 			/**
 			 * Description
 			 * @default
@@ -3748,8 +3749,8 @@ export interface components {
 			item_count: number;
 			state: components['schemas']['ProjectState'];
 			participation: components['schemas']['ProjectParticipation'];
-			/** Is Member */
-			is_member: boolean;
+			/** Is Participating */
+			is_participating: boolean;
 			/**
 			 * Description
 			 * @default

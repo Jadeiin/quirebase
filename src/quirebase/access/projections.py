@@ -116,12 +116,6 @@ def item_decisions(context: WorkspaceContext) -> AuthorizationProjection:
     )
 
 
-def copy_target_decisions(*, can_copy_into: bool) -> AuthorizationProjection:
-    return AuthorizationProjection(
-        allowed=(ResourceAction.item_copy,) if can_copy_into else (),
-    )
-
-
 def tag_decisions(context: WorkspaceContext) -> AuthorizationProjection:
     allowed = (
         (ResourceAction.tag_manage,) if action_allowed(context, ResourceAction.tag_manage) else ()
@@ -179,7 +173,7 @@ def project_decisions(
     context: WorkspaceContext,
     project: Project,
     *,
-    is_member: bool,
+    is_participating: bool,
 ) -> AuthorizationProjection:
     allowed: set[ResourceAction] = set()
     actions = context.allowed_actions
@@ -190,7 +184,7 @@ def project_decisions(
         allowed.add(ResourceAction.project_item_manage)
     if project.state is ProjectState.active and ResourceAction.project_archive in actions:
         allowed.add(ResourceAction.project_archive)
-    elif ResourceAction.project_restore in actions:
+    elif project.state is ProjectState.archived and ResourceAction.project_restore in actions:
         allowed.add(ResourceAction.project_restore)
     if (
         action_allowed(context, ResourceAction.project_membership_manage, relation="managed")
@@ -199,13 +193,13 @@ def project_decisions(
     ):
         allowed.add(ResourceAction.project_membership_manage)
     if project.state is ProjectState.active and project.participation is ProjectParticipation.open:
-        if is_member and action_allowed(
+        if is_participating and action_allowed(
             context,
             ResourceAction.project_membership_leave,
             relation=project.participation.value,
         ):
             allowed.add(ResourceAction.project_membership_leave)
-        elif not is_member and action_allowed(
+        elif not is_participating and action_allowed(
             context,
             ResourceAction.project_membership_join,
             relation=project.participation.value,

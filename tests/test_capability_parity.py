@@ -13,6 +13,7 @@ from quirebase.access import (
     authorization,
     effective_resource_actions,
     item_decisions,
+    project_decisions,
     require_action,
     require_project_context,
     resolve_workspace_context,
@@ -31,6 +32,7 @@ from quirebase.models import (
     FileRevision,
     Project,
     ProjectParticipation,
+    ProjectState,
     Tag,
     User,
     Workspace,
@@ -132,6 +134,27 @@ def test_item_projection_does_not_infer_independent_grants(policy_bundle, action
     context = _context(WorkspaceRole.editor)
     assert item_decisions(context).allowed == (action,)
     require_action(context, action)
+
+
+def test_restore_projection_requires_archived_project_even_without_archive_grant(policy_bundle):
+    policy_bundle((ResourceAction.project_archive, "editor", "owner"))
+    context = _context(WorkspaceRole.editor)
+    project = Project(
+        workspace_id=context.workspace_id,
+        name="Independent restore",
+        created_by=context.actor_id,
+        participation=ProjectParticipation.workspace,
+        state=ProjectState.active,
+    )
+    require_action(context, ResourceAction.project_restore)
+    active = project_decisions(context, project, is_participating=True)
+    assert ResourceAction.project_archive not in active.allowed
+    assert ResourceAction.project_restore not in active.allowed
+    project.state = ProjectState.archived
+    assert (
+        ResourceAction.project_restore
+        in project_decisions(context, project, is_participating=True).allowed
+    )
 
 
 @pytest.mark.anyio

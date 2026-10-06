@@ -24,14 +24,14 @@
 	const primaryProjects = $derived(
 		data.projects.filter(
 			(project: OrganizeView['projects'][number]) =>
-				project.assigned || project.is_member || project.participation === 'workspace'
+				project.assigned || project.is_participating || project.participation === 'workspace'
 		)
 	);
 	const otherOpenProjects = $derived(
 		data.projects.filter(
 			(project: OrganizeView['projects'][number]) =>
 				!project.assigned &&
-				!project.is_member &&
+				!project.is_participating &&
 				project.participation === 'open' &&
 				project.name.toLocaleLowerCase().includes(projectFilter.toLocaleLowerCase())
 		)
@@ -39,7 +39,7 @@
 	const managedProjects = $derived(
 		data.projects.filter(
 			(project: OrganizeView['projects'][number]) =>
-				!project.assigned && !project.is_member && project.participation === 'managed'
+				!project.assigned && !project.is_participating && project.participation === 'managed'
 		)
 	);
 	const canUseTags = $derived(can(data.authorization, 'tag.use'));
@@ -124,7 +124,7 @@
 				<p class="text-sm text-surface-600-400">{$t('Assigned, Workspace and Your Projects')}</p>
 				{@render projectRows(primaryProjects)}
 			{/if}
-			{#if data.projects.some((project: OrganizeView['projects'][number]) => !project.assigned && !project.is_member && project.participation === 'open')}
+			{#if data.projects.some((project: OrganizeView['projects'][number]) => !project.assigned && !project.is_participating && project.participation === 'open')}
 				<details class="mt-3">
 					<summary class="cursor-pointer text-sm font-semibold">{$t('Other open Projects')}</summary
 					>

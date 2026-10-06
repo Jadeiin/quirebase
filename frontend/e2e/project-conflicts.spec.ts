@@ -38,35 +38,35 @@ test('Organize prioritizes working contexts without restricting other Project as
 			id: 'workspace',
 			name: 'Shared Workspace',
 			assigned: false,
-			is_member: true,
+			is_participating: true,
 			participation: 'workspace'
 		},
 		{
 			id: 'joined',
 			name: 'Joined direction',
 			assigned: false,
-			is_member: true,
+			is_participating: true,
 			participation: 'open'
 		},
 		{
 			id: 'assigned',
 			name: 'Already assigned',
 			assigned: true,
-			is_member: false,
+			is_participating: false,
 			participation: 'open'
 		},
 		{
 			id: 'other',
 			name: 'Other open direction',
 			assigned: false,
-			is_member: false,
+			is_participating: false,
 			participation: 'open'
 		},
 		{
 			id: 'managed',
 			name: 'Governed direction',
 			assigned: false,
-			is_member: false,
+			is_participating: false,
 			participation: 'managed'
 		}
 	];
@@ -148,7 +148,7 @@ for (const assigned of [false, true]) {
 									name: 'Reading Project',
 									assigned,
 									participation: 'workspace',
-									is_member: true
+									is_participating: true
 								}
 							],
 					tags: [],
@@ -204,7 +204,7 @@ test('Library refreshes Project targets on a lifecycle conflict and keeps select
 					name: 'Reading Project',
 					state: archived ? 'archived' : 'active',
 					participation: 'workspace',
-					is_member: true,
+					is_participating: true,
 					item_count: 0,
 					description: null,
 					authorization: { allowed: archived ? [] : ['project_item.manage'] }
@@ -214,7 +214,7 @@ test('Library refreshes Project targets on a lifecycle conflict and keeps select
 					name: 'Another Project',
 					state: 'active',
 					participation: 'workspace',
-					is_member: true,
+					is_participating: true,
 					item_count: 0,
 					description: null,
 					authorization: { allowed: ['project_item.manage'] }
@@ -299,7 +299,7 @@ for (const code of ['project_member_conflict', 'project_lifecycle_error']) {
 				name: 'Reading Project',
 				state: changed && code === 'project_lifecycle_error' ? 'archived' : 'active',
 				participation: changed && code === 'project_member_conflict' ? 'managed' : 'open',
-				is_member: false,
+				is_participating: false,
 				item_count: 0,
 				description: '',
 				authorization: { allowed: changed ? [] : ['project_membership.join'] }

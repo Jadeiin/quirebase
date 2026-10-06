@@ -16,7 +16,7 @@ class ProjectSummaryView(BaseModel):
     item_count: int
     state: ProjectState
     participation: ProjectParticipation
-    is_member: bool
+    is_participating: bool
     description: str = ""
     allowed_participation_changes: list[ProjectParticipation]
     authorization: WorkspaceAuthorizationView
@@ -44,7 +44,7 @@ def project_detail_view(
         item_count=len(workspace.items),
         state=workspace.project.state,
         participation=workspace.project.participation,
-        is_member=workspace.is_member,
+        is_participating=workspace.is_participating,
         description=workspace.project.description,
         authorization=authorization,
         allowed_participation_changes=allowed_participation_changes,

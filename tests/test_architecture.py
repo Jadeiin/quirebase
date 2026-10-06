@@ -314,6 +314,7 @@ def test_casbin_is_the_only_application_authorization_policy_source():
 
     forbidden_names = {"ROLE_CAPABILITIES", "role_has_capability"}
     system_role_bypasses: list[str] = []
+    workspace_role_bypasses: list[str] = []
     for py_file in get_python_files(SRC_ROOT):
         source = py_file.read_text(encoding="utf-8")
         assert not any(name in source for name in forbidden_names), (
@@ -340,10 +341,25 @@ def test_casbin_is_the_only_application_authorization_policy_source():
             )
             if compares_role and compares_administrator:
                 system_role_bypasses.append(f"{py_file}:{node.lineno}")
+            if py_file.parent.name == "access":
+                continue
+            if any(
+                isinstance(operand, ast.Attribute)
+                and operand.attr == "role"
+                and isinstance(operand.value, ast.Name)
+                and operand.value.id in {"ctx", "context", "workspace", "workspace_context"}
+                for operand in operands
+            ):
+                workspace_role_bypasses.append(f"{py_file}:{node.lineno}")
 
     assert not system_role_bypasses, (
         "System Role authorization must cross the Casbin-backed Access seam: "
         f"{system_role_bypasses}"
+    )
+    assert not workspace_role_bypasses, (
+        "WorkspaceContext authority must cross the Casbin-backed Access seam; "
+        "target membership roles and owner invariants remain domain facts: "
+        f"{workspace_role_bypasses}"
     )
 
 

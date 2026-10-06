@@ -184,7 +184,7 @@ test('adding a Library Item invalidates a previously opened Project', async ({ p
 				item_count: added ? 1 : 0,
 				state: 'active',
 				participation: 'workspace',
-				is_member: true,
+				is_participating: true,
 				allowed_participation_changes: ['workspace', 'open', 'managed'],
 				items: added
 					? [
@@ -218,7 +218,7 @@ test('adding a Library Item invalidates a previously opened Project', async ({ p
 							'project.delete'
 						]
 					},
-					is_member: true,
+					is_participating: true,
 					item_count: added ? 1 : 0,
 					state: 'active',
 					participation: 'workspace',

@@ -1446,14 +1446,14 @@ async def test_project_settings_projection_lists_allowed_participation_targets(a
     project = await create_project(async_db, owner, workspace_id, "Participation projection")
 
     editor_context = await resolve_workspace_context(async_db, editor, workspace_id)
-    editor_decisions = project_decisions(editor_context, project, is_member=False)
+    editor_decisions = project_decisions(editor_context, project, is_participating=False)
     assert ResourceAction.project_update in editor_decisions.allowed
     assert set(project_participation_changes(editor_context, project)) == {"workspace", "open"}
 
     owner_context = await resolve_workspace_context(async_db, owner, workspace_id)
     assert (
         ResourceAction.project_update
-        in project_decisions(owner_context, project, is_member=True).allowed
+        in project_decisions(owner_context, project, is_participating=True).allowed
     )
     assert set(project_participation_changes(owner_context, project)) == {
         "workspace",
@@ -1524,16 +1524,39 @@ async def test_open_project_participation_rejects_read_only_workspaces(async_db,
 
 
 @pytest.mark.anyio
-async def test_dashboard_includes_managed_projects_for_workspace_governors(async_db):
+@pytest.mark.parametrize("role", [WorkspaceRole.owner, WorkspaceRole.admin])
+async def test_dashboard_uses_participation_instead_of_governance_visibility(async_db, role):
     owner = await _user(async_db, "dashboard-managed-owner")
     workspace_id = fixture_workspace_id(owner)
-    project = await create_project(
-        async_db, owner, workspace_id, "Governor dashboard", ProjectParticipation.managed
-    )
+    actor = owner
+    if role is WorkspaceRole.admin:
+        actor = await _user(async_db, "dashboard-admin")
+        async_db.add(WorkspaceMember(workspace_id=workspace_id, user_id=actor.id, role=role))
+    projects = [
+        Project(workspace_id=workspace_id, name=name, created_by=owner.id, participation=mode)
+        for name, mode in [
+            ("Workspace direction", ProjectParticipation.workspace),
+            ("Joined open", ProjectParticipation.open),
+            ("Other open", ProjectParticipation.open),
+            ("Joined managed", ProjectParticipation.managed),
+            ("Governance only", ProjectParticipation.managed),
+        ]
+    ]
+    async_db.add_all(projects)
+    await async_db.flush()
+    async_db.add_all([
+        ProjectMember(workspace_id=workspace_id, project_id=project.id, user_id=actor.id)
+        for project in (projects[1], projects[3])
+    ])
+    await async_db.commit()
 
-    dashboard = await get_dashboard_data(async_db, owner, workspace_id)
-
-    assert [row.id for row in dashboard["projects"]] == [project.id]
+    context = await resolve_workspace_context(async_db, actor, workspace_id)
+    directory = await list_workspace_projects(async_db, context)
+    assert {project.id for project, _, _ in directory} == {project.id for project in projects}
+    dashboard = await get_dashboard_data(async_db, actor, workspace_id)
+    assert {project.id for project in dashboard["projects"]} == {
+        projects[index].id for index in (0, 1, 3)
+    }
 
 
 @pytest.mark.anyio
@@ -2281,7 +2304,7 @@ async def test_managed_project_participants_are_independent_of_workspace_governa
         async_db, await resolve_workspace_context(async_db, owner, workspace_id), project_id
     )
     assert {member.user.username for member in opened.members} == {editor.username}
-    assert opened.is_member is False
+    assert opened.is_participating is False
     await set_project_state(async_db, owner, workspace_id, project_id, ProjectState.archived)
     await set_project_state(async_db, owner, workspace_id, project_id, ProjectState.active)
     await add_project_member(async_db, owner, workspace_id, project_id, candidate.username)
@@ -2353,7 +2376,7 @@ async def test_workspace_project_has_implicit_participation_and_no_member_rows(a
         async_db, await resolve_workspace_context(async_db, owner, workspace_id), project.id
     )
     assert opened.members == ()
-    assert opened.is_member is True
+    assert opened.is_participating is True
     with pytest.raises(ProjectMemberConflict, match="managed Projects"):
         await add_project_member(async_db, owner, workspace_id, project.id, editor.username)
     with pytest.raises(ProjectMemberConflict, match="managed Projects"):

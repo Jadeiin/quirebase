@@ -4,6 +4,7 @@ from datetime import datetime  # ruff: ignore[typing-only-standard-library-impor
 
 from pydantic import BaseModel
 
+from quirebase.models import ProjectParticipation
 from quirebase.web.api.library_schemas import ItemSearchView
 
 
@@ -15,7 +16,7 @@ class DashboardRecentItemView(BaseModel):
 class DashboardProjectView(BaseModel):
     id: str
     name: str
-    participation: str
+    participation: ProjectParticipation
 
 
 class DashboardView(BaseModel):

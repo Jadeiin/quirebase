@@ -56,9 +56,10 @@ class ItemThumbnailView(BaseModel):
 
 
 class ItemCopyTargetView(BaseModel):
+    """A currently eligible copy destination; the command rechecks authority."""
+
     id: str
     name: str
-    authorization: WorkspaceAuthorizationView
 
 
 class ItemOverviewView(BaseModel):
@@ -77,7 +78,7 @@ class ItemOrganizeProjectView(BaseModel):
     name: str
     assigned: bool
     participation: ProjectParticipation
-    is_member: bool
+    is_participating: bool
 
 
 class TagMatrixGroupView(BaseModel):

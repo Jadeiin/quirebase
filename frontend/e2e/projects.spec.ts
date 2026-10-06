@@ -8,7 +8,7 @@ const project = {
 	item_count: 0,
 	state: 'active',
 	participation: 'managed',
-	is_member: false,
+	is_participating: false,
 	allowed_participation_changes: ['workspace', 'open', 'managed'],
 	authorization: {
 		allowed: [
@@ -97,14 +97,14 @@ test('Workspace-wide Projects are listed separately from joined Projects', async
 					id: 'workspace-project',
 					name: 'Shared library',
 					participation: 'workspace',
-					is_member: true
+					is_participating: true
 				},
 				{
 					...project,
 					id: 'joined-project',
 					name: 'My reading group',
 					participation: 'open',
-					is_member: true
+					is_participating: true
 				}
 			]
 		})
@@ -132,7 +132,7 @@ test('Workspace viewers can read Project Discussion without mutation controls', 
 				id: 'visible-project',
 				name: 'Shared reading group',
 				participation: 'workspace',
-				is_member: true,
+				is_participating: true,
 				authorization: { allowed: [] },
 				members: []
 			}
@@ -173,7 +173,7 @@ test('an unjoined archived open Project stays discoverable and its Discussion lo
 		name: 'Archived reading group',
 		state: 'archived',
 		participation: 'open',
-		is_member: false,
+		is_participating: false,
 		authorization: { allowed: [] },
 		members: []
 	};
@@ -314,7 +314,7 @@ test('a Workspace editor can create an open Project but not a managed Project', 
 				...project,
 				name: 'Members research',
 				description: 'Scoped reading list',
-				is_member: true,
+				is_participating: true,
 				participation: 'open',
 				authorization: {
 					allowed: [
@@ -549,7 +549,7 @@ test('Workspace resource actions govern Project settings and managed participati
 					name: 'Research',
 					description: 'Initial',
 					participation: currentParticipation,
-					is_member: currentParticipation === 'workspace',
+					is_participating: currentParticipation === 'workspace',
 					authorization: {
 						allowed: [
 							'project.update',

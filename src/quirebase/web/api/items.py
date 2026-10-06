@@ -6,7 +6,6 @@ from fastapi import APIRouter
 
 from quirebase.access import (
     ResourceAction,
-    copy_target_decisions,
     item_decisions,
     workspace_decisions,
 )
@@ -57,29 +56,18 @@ async def item_overview(workspace_id: str, item_id: str, context: WorkspaceAcces
             "source_kind": resolved.source_kind,
             "source_id": resolved.source_id,
         }
-    workspace_rows = await list_workspaces(db, user)
-    actions_by_workspace = {
-        workspace.id: workspace_decisions(
-            member.role,
-            workspace.state,
-            governance_suspended=workspace.governance_suspended_at is not None,
-        ).allowed
-        for workspace, member in workspace_rows
-    }
     copy_targets = []
-    for workspace, _member in workspace_rows:
-        if workspace.id == workspace_id:
-            continue
-        target_actions = actions_by_workspace[workspace.id]
-        can_copy_into = (
-            ResourceAction.workspace_export in source_actions
-            and ResourceAction.item_copy in target_actions
-        )
-        copy_targets.append({
-            "id": workspace.id,
-            "name": workspace.name,
-            "authorization": authorization_view(copy_target_decisions(can_copy_into=can_copy_into)),
-        })
+    if ResourceAction.workspace_export in source_actions:
+        for workspace, member in await list_workspaces(db, user):
+            if workspace.id == workspace_id:
+                continue
+            target_actions = workspace_decisions(
+                member.role,
+                workspace.state,
+                governance_suspended=workspace.governance_suspended_at is not None,
+            ).allowed
+            if ResourceAction.item_copy in target_actions:
+                copy_targets.append({"id": workspace.id, "name": workspace.name})
     return {
         "item": item_search_view(view.item),
         "authorization": authorization_view(item_decisions(context)),
@@ -126,7 +114,7 @@ async def item_organize(workspace_id: str, item_id: str, context: WorkspaceAcces
                 "name": project_option.project.name,
                 "assigned": project_option.project.id in view.assigned_project_ids,
                 "participation": project_option.project.participation,
-                "is_member": project_option.is_member,
+                "is_participating": project_option.is_participating,
             }
             for project_option in view.projects
         ],

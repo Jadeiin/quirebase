@@ -47,7 +47,6 @@ from quirebase.access.project_scope import (
 )
 from quirebase.access.projections import (
     AuthorizationProjection,
-    copy_target_decisions,
     discussion_message_decisions,
     item_decisions,
     project_decisions,
@@ -85,7 +84,6 @@ __all__ = [
     "can_edit_annotation",
     "can_edit_item",
     "can_read_item",
-    "copy_target_decisions",
     "discussion_message_decisions",
     "effective_resource_actions",
     "effective_system_actions",

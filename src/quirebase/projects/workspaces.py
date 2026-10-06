@@ -51,7 +51,7 @@ class ProjectWorkspace:
     project: Project
     members: tuple[ProjectWorkspaceMember, ...]
     items: tuple[Item, ...]
-    is_member: bool
+    is_participating: bool
 
 
 async def create_project(
@@ -128,12 +128,12 @@ async def list_workspace_projects(
         .where(ProjectMember.user_id == context.actor_id)
         .with_only_columns(ProjectMember.project_id)
     )
-    is_member = (Project.participation == ProjectParticipation.workspace) | Project.id.in_(
+    is_participating = (Project.participation == ProjectParticipation.workspace) | Project.id.in_(
         member_ids
     )
     query = (
         workspace_select(Project, context)
-        .with_only_columns(Project, func.count(ProjectItem.id), is_member)
+        .with_only_columns(Project, func.count(ProjectItem.id), is_participating)
         .outerjoin(ProjectItem, ProjectItem.project_id == Project.id)
         .where(
             Project.state != ProjectState.deleted,
@@ -143,12 +143,12 @@ async def list_workspace_projects(
         .order_by(Project.name)
     )
     if view == "mine":
-        query = query.where(is_member)
+        query = query.where(is_participating)
     elif view == "joinable":
         query = query.where(
             Project.state == ProjectState.active,
             Project.participation == ProjectParticipation.open,
-            ~is_member,
+            ~is_participating,
         )
     rows = (await db.execute(query)).all()
     return [(row[0], row[1], bool(row[2])) for row in rows]
@@ -160,7 +160,7 @@ async def open_project_workspace(
     context = await require_project(db, workspace, project_id)
     workspace_id = workspace.workspace_id
     members_rows: Sequence[User] = ()
-    is_member = context.project.participation is ProjectParticipation.workspace
+    is_participating = context.project.participation is ProjectParticipation.workspace
     if context.project.participation is not ProjectParticipation.workspace:
         members_rows = (
             await db.scalars(
@@ -183,7 +183,7 @@ async def open_project_workspace(
                 .order_by(User.username)
             )
         ).all()
-        is_member = (
+        is_participating = (
             await db.scalar(
                 select(ProjectMember.id).where(
                     ProjectMember.workspace_id == workspace_id,
@@ -209,7 +209,7 @@ async def open_project_workspace(
         project=context.project,
         members=tuple(ProjectWorkspaceMember(user=row) for row in members_rows),
         items=items,
-        is_member=is_member,
+        is_participating=is_participating,
     )
 
 

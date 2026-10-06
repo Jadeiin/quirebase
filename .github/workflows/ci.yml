@@ -71,6 +71,7 @@ jobs:
       - run: uv sync
       - run: bun install --cwd frontend --frozen-lockfile
       - run: bun run --cwd frontend build
+      - run: uv run python scripts/export-authorization-matrix.py --check
       - run: uv run prek run --all-files
       - run: uv run mypy src/quirebase
       - run: uv run pytest -q -m "not oa" -n 4 --dist loadscope
@@ -105,6 +106,7 @@ jobs:
         run: >-
           uv run pytest -q tests/test_postgres_contract.py tests/test_postgres_concurrency.py
           tests/test_project_visibility.py
+          tests/test_workspace_commands.py
           tests/test_concurrency_harness.py tests/test_concurrency_reporting.py tests/test_schema_parity.py
           --concurrency-report-dir=concurrency-results --junitxml=concurrency-results/junit.xml
       - name: Preserve concurrency coverage and failure evidence

@@ -819,11 +819,11 @@ async def test_project_participation_does_not_gate_workspace_project_access(
         assert {project["id"] for project in mine.json()} == {workspace_visible.id}
         assert joinable.status_code == 200
         assert {project["id"] for project in joinable.json()} == {open_project.id}
-        assert joinable.json()[0]["is_member"] is False
+        assert joinable.json()[0]["is_participating"] is False
         assert invalid_view.status_code == 422
         active_actions = set(summaries[active.id]["authorization"]["allowed"])
         archived_actions = set(summaries[archived.id]["authorization"]["allowed"])
-        assert summaries[active.id]["is_member"] is False
+        assert summaries[active.id]["is_participating"] is False
         assert "project_membership.manage" in active_actions
         assert "project.update" in active_actions
         assert "project.archive" in active_actions
@@ -839,7 +839,7 @@ async def test_project_participation_does_not_gate_workspace_project_access(
         workspace_summary = next(
             row for row in projects.json() if row["id"] == workspace_visible.id
         )
-        assert workspace_summary["is_member"] is True
+        assert workspace_summary["is_participating"] is True
         assert "project_membership.manage" not in workspace_summary["authorization"]["allowed"]
         workspace_detail = await client.get(f"{base}/{workspace_visible.id}", headers=headers)
         assert workspace_detail.json()["members"] == []
@@ -871,14 +871,14 @@ async def test_project_participation_does_not_gate_workspace_project_access(
         }
         project_detail = await client.get(f"{base}/{active.id}", headers=headers)
         assert project_detail.status_code == 200
-        assert project_detail.json()["is_member"] is True
+        assert project_detail.json()["is_participating"] is True
         leave = await client.post(f"{base}/{active.id}/leave", headers=headers)
         assert leave.status_code == 200
         left_mine = await client.get(f"{base}?view=mine", headers=headers)
         assert {project["id"] for project in left_mine.json()} == {workspace_visible.id}
         project_detail = await client.get(f"{base}/{active.id}", headers=headers)
         assert project_detail.status_code == 200
-        assert project_detail.json()["is_member"] is False
+        assert project_detail.json()["is_participating"] is False
 
         managed_settings = await client.patch(
             f"{base}/{active.id}",

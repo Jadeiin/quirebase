@@ -8,6 +8,25 @@ Planned deepening work is ordered in `docs/architecture/deep-module-roadmap.md`.
 
 ## Package roles and ownership
 
+Workspace commands are implemented by `creation` (including provisioning), `directory`,
+`invitations`, `membership`, `lifecycle` and `governance` inside `workspaces/`.
+`workspaces.__init__` exports their owned operations directly. The private `_locking` module
+owns exclusive Workspace-root acquisition and fresh target-member loading; callers recheck
+authority and state while retaining that root lock. Invitation invalidation stays owned by
+`invitations`, and physical cleanup remains in `workflows`. These are implementation files
+within one Business Module, rather than additional service or repository layers.
+
+Frontend principal-role comparisons cannot select behavior; ESLint guards direct comparisons
+and `includes` checks, while backend architecture tests guard direct WorkspaceContext role
+branches outside Access. Role labels and target-role form values remain presentation facts.
+The [generated capability matrix](authorization-matrix.md) makes effective policy changes
+reviewable without maintaining another grant table.
+
+The [`main` PostgreSQL merge gate](https://github.com/Jadeiin/quirebase/rules/24554596) requires
+the GitHub Actions `postgres` check against the current base branch. That job runs database
+contracts, controlled concurrency, visibility and state-command retries, followed by fresh
+database initialization and durable-workflow diagnostics.
+
 | Package | Role | Owns |
 | --- | --- | --- |
 | `accounts` | Business Module | User authentication, Invitations, Login Sessions, API Tokens and login throttling |
