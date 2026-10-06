@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass
 from uuid import UUID, uuid5
 
+from advanced_alchemy.types import FileObject
 from sqlalchemy import select
 
 from quirebase.core.storage import (
@@ -27,11 +28,8 @@ class ObjectMigrationReport:
     legacy_deleted: int
 
 
-def _stable_uuid(kind: str, identity: str) -> UUID:
-    try:
-        return UUID(identity)
-    except ValueError:
-        return uuid5(OBJECT_MIGRATION_NAMESPACE, f"{kind}:{identity}")
+def _stable_uuid(kind: str, identity: UUID) -> UUID:
+    return uuid5(OBJECT_MIGRATION_NAMESPACE, f"{kind}:{identity}")
 
 
 async def _copy_verified(
@@ -118,22 +116,22 @@ async def migrate_legacy_objects(db, *, apply: bool = False) -> ObjectMigrationR
                     await db.commit()
 
     for attachment in attachments:
-        if is_managed_object_key(attachment.object_key):
+        if is_managed_object_key(attachment.file.path):
             continue
-        if not is_legacy_cas_key(attachment.object_key):
-            raise ValueError(f"unsupported Attachment object key: {attachment.object_key}")
+        if not is_legacy_cas_key(attachment.file.path):
+            raise ValueError(f"unsupported Attachment object key: {attachment.file.path}")
         planned += 1
-        obsolete_keys.add(attachment.object_key)
+        obsolete_keys.add(attachment.file.path)
         if apply:
             target, did_copy = await _copy_verified(
                 store,
-                attachment.object_key,
+                attachment.file.path,
                 _stable_uuid("attachment", attachment.id),
                 ObjectSuffix.BINARY,
-                attachment.size,
+                attachment.file.size,
             )
             copied += int(did_copy)
-            attachment.object_key = target
+            attachment.file = FileObject(**(attachment.file.to_dict() | {"filename": target}))
             updated += 1
             await db.commit()
 
@@ -176,7 +174,7 @@ async def migrate_legacy_objects(db, *, apply: bool = False) -> ObjectMigrationR
     if apply:
         referenced = {
             *(await db.scalars(select(FileRevision.object_key))).all(),
-            *(await db.scalars(select(Attachment.object_key))).all(),
+            *(await db.scalars(select(Attachment.file["filename"].as_string()))).all(),
         }
         for batch in (await db.scalars(select(ImportBatch.records))).all():
             for row in _pdf_rows(batch):

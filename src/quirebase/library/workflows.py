@@ -25,6 +25,8 @@ from .tag_recommendations import (
 )
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 RECOMMEND_TAGS_WORKFLOW = "library.recommend_tags"
@@ -50,10 +52,10 @@ async def item_tag_recommendation_status(
 
 async def request_item_tag_recommendation(
     db: AsyncSession,
-    item_id: str,
+    item_id: UUID,
     *,
-    workspace_id: str,
-    actor_id: str,
+    workspace_id: UUID,
+    actor_id: UUID,
     force: bool = False,
 ) -> ItemTagRecommendation:
     """Create an idempotent generation request without committing its caller's transaction."""
@@ -157,9 +159,9 @@ async def request_item_tag_recommendation(
 
 async def _store_item_tag_recommendation(
     db: AsyncSession,
-    actor_id: str,
-    workspace_id: str,
-    item_id: str,
+    actor_id: UUID,
+    workspace_id: UUID,
+    item_id: UUID,
     generation_token: int,
     workflow_id: str,
     candidates: RecommendationCandidates,
@@ -197,8 +199,8 @@ async def _store_item_tag_recommendation(
 
 
 async def item_ids_for_tag_recommendation(
-    db: AsyncSession, workspace_id: str, after_id: str | None, limit: int
-) -> tuple[str, ...]:
+    db: AsyncSession, workspace_id: UUID, after_id: UUID | None, limit: int
+) -> tuple[UUID, ...]:
     query = select(Item.id).where(Item.workspace_id == workspace_id).order_by(Item.id).limit(limit)
     if after_id is not None:
         query = query.where(Item.id > after_id)
@@ -214,7 +216,7 @@ async def extract_pdf_import_doi_step(pending: dict[str, Any]) -> dict[str, Any]
 
 @ads.transaction(isolation_level="READ COMMITTED")
 async def check_pdf_import_doi_step(
-    batch_id: str,
+    batch_id: UUID,
     pending: dict[str, Any],
     detected_doi: str,
 ) -> dict[str, Any]:
@@ -225,7 +227,7 @@ async def check_pdf_import_doi_step(
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
 async def lookup_pdf_import_candidate_step(
-    batch_id: str,
+    batch_id: UUID,
     pending: dict[str, Any],
     detected_doi: str,
 ) -> dict[str, Any]:
@@ -237,9 +239,9 @@ async def lookup_pdf_import_candidate_step(
 
 @ads.transaction()
 async def finalize_pdf_import_batch_step(
-    actor_id: str,
-    workspace_id: str,
-    batch_id: str,
+    actor_id: UUID,
+    workspace_id: UUID,
+    batch_id: UUID,
     workflow_id: str,
     records: list[dict[str, Any]],
     errors: list[dict[str, Any]],
@@ -252,7 +254,7 @@ async def finalize_pdf_import_batch_step(
 
 
 @ads.transaction()
-async def fail_pdf_import_batch_step(batch_id: str, workflow_id: str) -> bool:
+async def fail_pdf_import_batch_step(batch_id: UUID, workflow_id: str) -> bool:
     """Publish terminal failure only for the workflow generation that still owns the batch."""
     batch = await ads.sql_session().get(ImportBatch, batch_id)
     if batch is None or batch.status != "pending" or batch.workflow_id != workflow_id:
@@ -263,9 +265,9 @@ async def fail_pdf_import_batch_step(batch_id: str, workflow_id: str) -> bool:
 
 @DBOS.workflow(name=PREPARE_PDF_IMPORT_WORKFLOW)
 async def prepare_pdf_import_workflow(
-    actor_id: str,
-    workspace_id: str,
-    batch_id: str,
+    actor_id: UUID,
+    workspace_id: UUID,
+    batch_id: UUID,
     workflow_id: str,
     pending_records: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -334,7 +336,7 @@ async def prepare_pdf_import_workflow(
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
 async def request_item_tag_recommendation_step(
-    actor_id: str, workspace_id: str, item_id: str
+    actor_id: UUID, workspace_id: UUID, item_id: UUID
 ) -> None:
     """Retry the idempotent request boundary, including its separate DBOS Client lookup."""
     async with AsyncSessionLocal() as db:
@@ -358,14 +360,14 @@ async def request_item_tag_recommendation_step(
 
 @DBOS.workflow(name=FILE_REVISION_CHANGED_WORKFLOW)
 async def file_revision_changed_workflow(
-    actor_id: str, workspace_id: str, revision_id: str, item_id: str
+    actor_id: UUID, workspace_id: UUID, revision_id: UUID, item_id: UUID
 ) -> None:
     await request_item_tag_recommendation_step(actor_id, workspace_id, item_id)
 
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
 async def generate_item_tag_recommendation_step(
-    item_id: str,
+    item_id: UUID,
 ) -> RecommendationCandidates | None:
     """Retry a read-only generation; its checkpoint contains no Item full text."""
     async with AsyncSessionLocal() as db:
@@ -378,7 +380,7 @@ async def generate_item_tag_recommendation_step(
 
 @ads.transaction(isolation_level="READ COMMITTED")
 async def item_tag_recommendation_is_current_step(
-    item_id: str,
+    item_id: UUID,
     generation_token: int,
     workflow_id: str,
 ) -> bool:
@@ -395,9 +397,9 @@ async def item_tag_recommendation_is_current_step(
 
 @ads.transaction()
 async def commit_item_tag_recommendation_step(
-    actor_id: str,
-    workspace_id: str,
-    item_id: str,
+    actor_id: UUID,
+    workspace_id: UUID,
+    item_id: UUID,
     generation_token: int,
     workflow_id: str,
     candidates: RecommendationCandidates,
@@ -410,9 +412,9 @@ async def commit_item_tag_recommendation_step(
 
 @DBOS.workflow(name=RECOMMEND_TAGS_WORKFLOW)
 async def recommend_tags_workflow(
-    actor_id: str,
-    workspace_id: str,
-    item_id: str,
+    actor_id: UUID,
+    workspace_id: UUID,
+    item_id: UUID,
     generation_token: int,
     workflow_id: str,
 ) -> dict[str, Any]:

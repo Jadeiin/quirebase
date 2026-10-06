@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from sqlalchemy import select
 
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 
 async def create_export_job(
-    db: AsyncSession, user: User, workspace_id: str, item_id: str, data: ExportCreate
+    db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID, data: ExportCreate
 ) -> str:
     revision = await require_revision(db, user, workspace_id, data.revision_id)
     if revision.item_id != item_id:
@@ -51,13 +51,13 @@ async def create_export_job(
         user.id,
         workspace_id,
         data.revision_id,
-        str(object_id),
+        object_id,
         data.project_id,
         data.include_private,
         data.timezone,
         queue_name=DOCUMENTS_QUEUE,
         workflow_id=workflow_id,
-        partition_key=data.revision_id,
+        partition_key=str(data.revision_id),
         attributes={
             "capability": "documents",
             "operation": "annotation_export",
@@ -71,22 +71,22 @@ async def create_export_job(
     return workflow_id
 
 
-async def _workspace_export(user: User, workspace_id: str, workflow_id: str):
+async def _workspace_export(user: User, workspace_id: UUID, workflow_id: str):
     workflow = await durable_operations().get(workflow_id)
     attributes = workflow.attributes if workflow else None
     if (
         workflow is None
         or workflow.name != ANNOTATION_EXPORT_WORKFLOW
         or not attributes
-        or attributes.get("workspace_id") != workspace_id
-        or attributes.get("actor_id") != user.id
+        or attributes.get("workspace_id") != str(workspace_id)
+        or attributes.get("actor_id") != str(user.id)
     ):
         raise ResourceNotFound("export workflow not found")
     return workflow
 
 
 async def get_export_status(
-    db: AsyncSession, user: User, workspace_id: str, workflow_id: str
+    db: AsyncSession, user: User, workspace_id: UUID, workflow_id: str
 ) -> dict[str, Any]:
     await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_export)
     workflow = await _workspace_export(user, workspace_id, workflow_id)
@@ -94,28 +94,31 @@ async def get_export_status(
 
 
 async def get_export_file(
-    db: AsyncSession, user: User, workspace_id: str, workflow_id: str
+    db: AsyncSession, user: User, workspace_id: UUID, workflow_id: str
 ) -> ObjectResponse:
     await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_export)
     workflow = await _workspace_export(user, workspace_id, workflow_id)
     if workflow.state != "succeeded" or not isinstance(workflow.output, dict):
         raise ResourceNotFound("export workflow not found or not ready")
-    revision = await require_revision(
-        db, user, workspace_id, str(workflow.output.get("revision_id", ""))
-    )
+    revision_id = workflow.output.get("revision_id")
+    if not isinstance(revision_id, UUID):
+        raise ResourceNotFound("export revision not found")
+    revision = await require_revision(db, user, workspace_id, revision_id)
     project_id = workflow.output.get("project_id")
     if project_id:
+        if not isinstance(project_id, UUID):
+            raise ResourceNotFound("export project not found")
         await require_project_context(
-            db, user, workspace_id, str(project_id), ResourceAction.workspace_export
+            db, user, workspace_id, project_id, ResourceAction.workspace_export
         )
         project_item_id = workflow.output.get("project_item_id")
         if (
-            not isinstance(project_item_id, str)
+            not isinstance(project_item_id, UUID)
             or await db.scalar(
                 select(ProjectItem.id).where(
                     ProjectItem.id == project_item_id,
                     ProjectItem.workspace_id == workspace_id,
-                    ProjectItem.project_id == str(project_id),
+                    ProjectItem.project_id == project_id,
                     ProjectItem.item_id == revision.item_id,
                 )
             )

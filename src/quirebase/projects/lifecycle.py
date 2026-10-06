@@ -23,6 +23,8 @@ from quirebase.models import (
 from ._locking import lock_project_root
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -50,8 +52,8 @@ def _validate_description(description: str) -> str:
 async def update_project_settings(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    project_id: str,
+    workspace_id: UUID,
+    project_id: UUID,
     *,
     name: str | None = None,
     description: str | None = None,
@@ -131,13 +133,13 @@ async def update_project_settings(
 
 
 async def rename_project(
-    db: AsyncSession, user: User, workspace_id: str, project_id: str, name: str
+    db: AsyncSession, user: User, workspace_id: UUID, project_id: UUID, name: str
 ) -> Project:
     return await update_project_settings(db, user, workspace_id, project_id, name=name)
 
 
 async def update_project_description(
-    db: AsyncSession, user: User, workspace_id: str, project_id: str, description: str
+    db: AsyncSession, user: User, workspace_id: UUID, project_id: UUID, description: str
 ) -> Project:
     return await update_project_settings(
         db, user, workspace_id, project_id, description=description
@@ -147,8 +149,8 @@ async def update_project_description(
 async def set_project_participation(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    project_id: str,
+    workspace_id: UUID,
+    project_id: UUID,
     participation: ProjectParticipation | str,
 ) -> Project:
     return await update_project_settings(
@@ -159,8 +161,8 @@ async def set_project_participation(
 async def set_project_state(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    project_id: str,
+    workspace_id: UUID,
+    project_id: UUID,
     state: ProjectState | str,
 ) -> Project:
     desired = validate_project_state(state)
@@ -196,8 +198,8 @@ async def set_project_state(
 async def delete_project(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    project_id: str,
+    workspace_id: UUID,
+    project_id: UUID,
     confirmation: str,
 ) -> None:
     context = await lock_workspace_context(db, user, workspace_id)

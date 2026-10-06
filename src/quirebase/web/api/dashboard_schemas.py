@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime  # ruff: ignore[typing-only-standard-library-import]
+from datetime import datetime
+from uuid import UUID
 
 from pydantic import BaseModel
 
@@ -14,7 +15,7 @@ class DashboardRecentItemView(BaseModel):
 
 
 class DashboardProjectView(BaseModel):
-    id: str
+    id: UUID
     name: str
     participation: ProjectParticipation
 

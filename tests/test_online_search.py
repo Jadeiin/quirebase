@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 
 import httpx2
 import pytest
+from app_helpers import json_payload
 from inquiro import CandidatePage, CandidateRecord, Identifier
 from provider_helpers import provider_runtime
 from sqlalchemy import select
@@ -38,10 +39,10 @@ async def test_online_search_page_keeps_search_separate_from_import(
     try:
         searched = await client.post(
             f"/api/v1/workspaces/{item.workspace_id}/discovery/search",
-            json={
+            json=json_payload({
                 "provider": "openalex",
                 "clauses": [{"operator": "and", "field": "title", "term": "quantum"}],
-            },
+            }),
         )
         assert searched.status_code == 200
         assert searched.json() == {
@@ -97,10 +98,10 @@ async def test_discovery_imported_check_queries_only_returned_identifiers(
     try:
         searched = await client.post(
             f"/api/v1/workspaces/{item.workspace_id}/discovery/search",
-            json={
+            json=json_payload({
                 "provider": "openalex",
                 "clauses": [{"operator": "and", "field": "title", "term": "imported"}],
-            },
+            }),
         )
 
         assert searched.status_code == 200
@@ -130,10 +131,10 @@ async def test_discovery_search_uses_runtime_provider_settings(
         providers = await client.get(f"/api/v1/workspaces/{item.workspace_id}/discovery/providers")
         searched = await client.post(
             f"/api/v1/workspaces/{item.workspace_id}/discovery/search",
-            json={
+            json=json_payload({
                 "provider": "nasa",
                 "clauses": [{"operator": "and", "field": "any", "term": "stars"}],
-            },
+            }),
         )
 
         assert searched.status_code == 200
@@ -161,11 +162,11 @@ async def test_discovery_search_rejects_invalid_years(
     try:
         response = await client.post(
             f"/api/v1/workspaces/{item.workspace_id}/discovery/search",
-            json={
+            json=json_payload({
                 "provider": "crossref",
                 "clauses": [{"field": "title", "operator": "and", "term": "quantum"}],
                 "year_from": year_from,
-            },
+            }),
         )
 
         assert response.status_code == 422
@@ -194,14 +195,14 @@ async def test_discovery_search_preserves_sparse_condition_rows(
     try:
         response = await client.post(
             f"/api/v1/workspaces/{item.workspace_id}/discovery/search",
-            json={
+            json=json_payload({
                 "provider": "openalex",
                 "clauses": [
                     {"field": "title", "operator": "and", "term": "quantum"},
                     {"field": "author", "operator": "and", "term": ""},
                     {"field": "abstract", "operator": "not", "term": "review"},
                 ],
-            },
+            }),
         )
         assert response.status_code == 200
         search = search_candidates.await_args.args[0]
@@ -228,7 +229,7 @@ async def test_fallback_identifiers_can_be_staged_for_import(async_db, monkeypat
         if request.url.host == "api.adsabs.harvard.edu":
             return httpx2.Response(
                 200,
-                json={
+                json=json_payload({
                     "response": {
                         "docs": [
                             {
@@ -240,12 +241,12 @@ async def test_fallback_identifiers_can_be_staged_for_import(async_db, monkeypat
                             }
                         ]
                     }
-                },
+                }),
             )
         if request.url.host == "ieeexploreapi.ieee.org":
             return httpx2.Response(
                 200,
-                json={
+                json=json_payload({
                     "articles": [
                         {
                             "title": "IEEE No-DOI result",
@@ -255,7 +256,7 @@ async def test_fallback_identifiers_can_be_staged_for_import(async_db, monkeypat
                             "authors": {"authors": [{"full_name": "Ieee Author"}]},
                         }
                     ]
-                },
+                }),
             )
         raise NotImplementedError(str(request.url))
 

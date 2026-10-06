@@ -1,0 +1,37 @@
+{
+  "backend": {
+    "command": "pytest -q -m \"not oa\" -n 4 --dist loadscope",
+    "passed": 1042,
+    "skipped": 88
+  },
+  "frontend": {
+    "command": "bun run test",
+    "passed": 114,
+    "svelte_check_errors": 0,
+    "svelte_check_warnings": 0
+  },
+  "mypy": {
+    "source_files": 142,
+    "passed": true
+  },
+  "ruff": {
+    "check": true,
+    "format": true
+  },
+  "lock": {
+    "uv_lock_check_offline": true
+  },
+  "openapi": {
+    "generated_types_reproducible": true
+  },
+  "sqlite": {
+    "schema_parity": true,
+    "initial_upgrade_downgrade": true,
+    "autogenerate_no_diff": true,
+    "real_use_cases_and_doctor": true
+  },
+  "postgresql": {
+    "initial_migration_offline_compiles": true,
+    "runtime_tested": false
+  }
+}

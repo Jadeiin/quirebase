@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 import httpx2
 import pytest
+from app_helpers import json_payload
 from inquiro import CandidateRecord, Identifier
 from inquiro.bibliography import (
     builtin_style_xml,
@@ -102,7 +103,7 @@ async def test_seam1_oa_corpus_metadata_lookup_and_reconstruction():
     """Seam 1: External OpenAlex lookup parses inverted index, cleans HTML, and formats URLs/UIDs for OA paper."""
 
     def mock_handler(_request: httpx2.Request) -> httpx2.Response:
-        return httpx2.Response(200, json=OA_CORPUS_OPENALEX_PAYLOAD)
+        return httpx2.Response(200, json=json_payload(OA_CORPUS_OPENALEX_PAYLOAD))
 
     async with provider_runtime(transport=httpx2.MockTransport(mock_handler)) as runtime:
         record = await runtime.lookup("10.3390/ejihpe13110181", provider="openalex")
@@ -148,7 +149,7 @@ async def test_seam2_oa_corpus_batch_import_and_relational_mapping(async_db, mon
     user_id = user.id
 
     def mock_handler(_request: httpx2.Request) -> httpx2.Response:
-        return httpx2.Response(200, json=OA_CORPUS_OPENALEX_PAYLOAD)
+        return httpx2.Response(200, json=json_payload(OA_CORPUS_OPENALEX_PAYLOAD))
 
     monkeypatch.setattr(
         "quirebase.library.providers.provider_runtime",
@@ -288,7 +289,7 @@ async def test_seam3_oa_corpus_upstream_sync_and_reconciliation(async_db):
     # Audit event recorded
     audit = await db.scalar(
         select(AuditEvent)
-        .where(AuditEvent.target_id == item.id)
+        .where(AuditEvent.target_id == str(item.id))
         .where(AuditEvent.action == "item.sync_upstream")
     )
     assert audit is not None
@@ -389,7 +390,7 @@ async def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(
         # 2. Submit edit form modifying title and adding second author
         edit_resp = await client.put(
             f"/api/v1/workspaces/{seed_item.workspace_id}/items/{item_id}",
-            json={
+            json=json_payload({
                 "expected_version": item_version,
                 "metadata": {
                     "title": "Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives",
@@ -403,7 +404,7 @@ async def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(
                     "pages": "2599-2614",
                     "doi": "10.3390/ejihpe13110181",
                 },
-            },
+            }),
         )
         assert edit_resp.status_code == 200
         edited = await client.get(f"/api/v1/workspaces/{seed_item.workspace_id}/items/{item_id}")

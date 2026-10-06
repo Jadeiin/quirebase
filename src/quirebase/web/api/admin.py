@@ -4,6 +4,7 @@ import json
 from contextlib import suppress
 from dataclasses import asdict
 from typing import Annotated, Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
@@ -168,26 +169,26 @@ async def admin_create_user(data: AdminUserCreateRequest, user: ApiUser, db: Dat
 
 @router.put("/users/{user_id}/status", response_model=AdminUserView)
 async def admin_update_user_status(
-    user_id: str, data: UserStatusRequest, user: ApiUser, db: Database
+    user_id: UUID, data: UserStatusRequest, user: ApiUser, db: Database
 ):
     return _user_view(await update_user_status(db, user, user_id, data.active))
 
 
 @router.put("/users/{user_id}/role", response_model=AdminUserView)
-async def admin_update_user_role(user_id: str, data: UserRoleRequest, user: ApiUser, db: Database):
+async def admin_update_user_role(user_id: UUID, data: UserRoleRequest, user: ApiUser, db: Database):
     return _user_view(await change_user_role(db, user, user_id, data.role))
 
 
 @router.put("/users/{user_id}/password", response_model=OkView)
 async def admin_reset_password(
-    user_id: str, data: PasswordResetRequest, user: ApiUser, db: Database
+    user_id: UUID, data: PasswordResetRequest, user: ApiUser, db: Database
 ) -> OkView:
     await reset_user_password(db, user, user_id, data.password)
     return OkView()
 
 
 @router.delete("/users/{user_id}/sessions", response_model=OkView)
-async def admin_revoke_sessions(user_id: str, user: ApiUser, db: Database) -> OkView:
+async def admin_revoke_sessions(user_id: UUID, user: ApiUser, db: Database) -> OkView:
     await revoke_user_sessions(db, user, user_id)
     return OkView()
 
@@ -213,7 +214,7 @@ async def admin_audit(
     user: ApiUser,
     db: Database,
     search: str = "",
-    actor_id: str = "",
+    actor_id: UUID | None = None,
     action: str = "",
     target_type: str = "",
     page: Annotated[int, Query(ge=1)] = 1,
@@ -221,7 +222,7 @@ async def admin_audit(
     events, total = await query_events(
         db,
         user,
-        actor_id=actor_id.strip() or None,
+        actor_id=actor_id,
         action=action.strip() or None,
         target_type=target_type.strip() or None,
         search=search,
@@ -297,13 +298,13 @@ async def admin_workspaces(user: ApiUser, db: Database) -> list[AdminWorkspaceVi
 
 
 @router.post("/workspaces/{workspace_id}/suspend", response_model=OkView)
-async def admin_suspend_workspace(workspace_id: str, user: ApiUser, db: Database) -> OkView:
+async def admin_suspend_workspace(workspace_id: UUID, user: ApiUser, db: Database) -> OkView:
     await suspend_workspace_governance(db, user, workspace_id)
     return OkView()
 
 
 @router.post("/workspaces/{workspace_id}/recover", response_model=OkView)
-async def admin_recover_workspace(workspace_id: str, user: ApiUser, db: Database) -> OkView:
+async def admin_recover_workspace(workspace_id: UUID, user: ApiUser, db: Database) -> OkView:
     await recover_workspace_governance(db, user, workspace_id)
     return OkView()
 
@@ -313,7 +314,7 @@ async def admin_recover_workspace(workspace_id: str, user: ApiUser, db: Database
     response_model=list[ItemSearchView],
 )
 async def admin_break_glass_items(
-    workspace_id: str,
+    workspace_id: UUID,
     data: BreakGlassReadRequest,
     user: ApiUser,
     db: Database,

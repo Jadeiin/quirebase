@@ -28,7 +28,7 @@ from quirebase.access.items import require_accessible_items
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceNotFound
 from quirebase.core.storage import get_object_store
-from quirebase.core.timezones import annotation_export_timezone, as_utc
+from quirebase.core.timezones import annotation_export_timezone
 from quirebase.documents.annotations import select_visible_annotations
 from quirebase.documents.pdf import export_annotations
 from quirebase.models import (
@@ -42,6 +42,7 @@ from quirebase.models import (
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterable, AsyncIterator
+    from uuid import UUID
 
     from sqlalchemy.ext.asyncio import AsyncSession
     from stream_zip import AsyncMemberFile
@@ -68,7 +69,7 @@ def _archive_name(value: str, fallback: str) -> str:
 def _item_archive_prefix(item: Item) -> str:
     return _archive_name(
         item.bibtex_id or convert_rich_text(item.title, source="html", target="text"),
-        item.id[:8],
+        str(item.id)[:8],
     )
 
 
@@ -254,7 +255,7 @@ async def _item_members(
     item: Item,
     *,
     root: str = "",
-    revision_ids: list[str] | None = None,
+    revision_ids: list[UUID] | None = None,
     include_annotations: bool,
     include_supplements: bool,
     timezone: str | None,
@@ -292,12 +293,14 @@ async def _item_members(
             "revision_id": revision.id,
             "original_name": revision.original_name,
             "filename": archive_filename,
-            "created_at": as_utc(revision.created_at).isoformat(),
+            "created_at": revision.created_at.isoformat(),
             "processing_state": getattr(
                 revision.processing_state, "value", revision.processing_state
             ),
         })
-    manifest_bytes = json.dumps({"pdf_revisions": manifest}, ensure_ascii=False, indent=2).encode()
+    manifest_bytes = json.dumps(
+        {"pdf_revisions": manifest}, ensure_ascii=False, indent=2, default=str
+    ).encode()
     yield (
         _bundle_path(root, "manifest.json"),
         item.updated_at,
@@ -319,9 +322,9 @@ async def _item_members(
         ).all()
         for index, attachment in enumerate(attachments, start=1):
             safe_name = _archive_name(
-                Path(attachment.original_name).name, f"supplement-{index:02d}"
+                Path(attachment.file.metadata["original_name"]).name, f"supplement-{index:02d}"
             )
-            response = await store.get(attachment.object_key)
+            response = await store.get(attachment.file.path)
             yield (
                 _bundle_path(root, f"supplements/{index:02d}-{safe_name}"),
                 attachment.created_at,
@@ -348,10 +351,10 @@ async def _zip_body(
 async def create_item_document_bundle(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     *,
-    revision_ids: list[str] | None = None,
+    revision_ids: list[UUID] | None = None,
     include_annotations: bool = False,
     include_supplements: bool = False,
     timezone: str | None = None,
@@ -409,7 +412,7 @@ async def assemble_document_bundle(
         for item in items:
             root = _item_archive_prefix(item)
             if root in used_roots:
-                root = f"{root}-{item.id[:8]}"
+                root = f"{root}-{str(item.id)[:8]}"
             used_roots.add(root)
             async for member in _item_members(
                 db,
@@ -427,7 +430,9 @@ async def assemble_document_bundle(
                 "title": convert_rich_text(item.title, source="html", target="text"),
                 "folder": root,
             })
-        value = json.dumps({"items": item_manifest}, ensure_ascii=False, indent=2).encode()
+        value = json.dumps(
+            {"items": item_manifest}, ensure_ascii=False, indent=2, default=str
+        ).encode()
         yield (
             "manifest.json",
             items[0].updated_at,
@@ -447,12 +452,12 @@ async def assemble_document_bundle(
 async def _record_revision_pdf_export(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
-    revision_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    revision_id: UUID,
     *,
     include_annotations: bool,
-    project_id: str | None,
+    project_id: UUID | None,
 ) -> None:
     record_event(
         db,
@@ -474,12 +479,12 @@ async def _record_revision_pdf_export(
 async def export_revision_pdf(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
-    revision_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    revision_id: UUID,
     *,
     include_annotations: bool = True,
-    project_id: str | None = None,
+    project_id: UUID | None = None,
     timezone: str | None = None,
 ) -> ExportedRevision:
     revision = await require_revision(db, user, workspace_id, revision_id)

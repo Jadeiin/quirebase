@@ -15,6 +15,8 @@ from quirebase.library.providers import search_candidates
 from quirebase.models import User
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from quirebase.core.config import Settings
@@ -53,7 +55,7 @@ class CandidatePageView:
 async def search_candidate_records(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
+    workspace_id: UUID,
     provider: str,
     clauses: tuple[DiscoveryClause, ...],
     *,

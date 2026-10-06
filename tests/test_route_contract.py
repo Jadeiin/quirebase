@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 import pytest
+from app_helpers import json_payload
 from test_http import authenticated_async_client
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
@@ -76,14 +79,14 @@ async def test_http_behavioral_contract(async_db, async_session_factory, tmp_pat
 
     edit_resp = await client.put(
         f"{workspace_base}/items/{other_item.id}",
-        json={"expected_version": 1, "metadata": {"title": "New Title"}},
+        json=json_payload({"expected_version": 1, "metadata": {"title": "New Title"}}),
     )
     assert edit_resp.status_code == 404
 
     # 3. Version conflict returns the current version as structured metadata.
     conflict_resp = await client.put(
         f"{workspace_base}/items/{item_id}",
-        json={"expected_version": 999, "metadata": {"title": "Conflict Title"}},
+        json=json_payload({"expected_version": 999, "metadata": {"title": "Conflict Title"}}),
     )
     assert conflict_resp.status_code == 409
     assert conflict_resp.json() == {
@@ -145,9 +148,11 @@ async def test_tag_rename_conceals_missing_and_foreign_tags(
     db.add(foreign_tag)
     await db.commit()
     try:
-        missing = await client.patch(f"{workspace_base}/tags/missing", json={"name": "Renamed"})
+        missing = await client.patch(
+            f"{workspace_base}/tags/{uuid4()}", json=json_payload({"name": "Renamed"})
+        )
         foreign = await client.patch(
-            f"{workspace_base}/tags/{foreign_tag.id}", json={"name": "Renamed"}
+            f"{workspace_base}/tags/{foreign_tag.id}", json=json_payload({"name": "Renamed"})
         )
 
         assert foreign.status_code == 404
@@ -177,7 +182,7 @@ async def test_tag_delete_conceals_missing_and_foreign_tags(
     db.add(foreign_tag)
     await db.commit()
     try:
-        missing = await client.delete(f"{workspace_base}/tags/missing")
+        missing = await client.delete(f"{workspace_base}/tags/{uuid4()}")
         foreign = await client.delete(f"{workspace_base}/tags/{foreign_tag.id}")
 
         assert foreign.status_code == 404
@@ -243,7 +248,7 @@ async def test_discussion_delete_conceals_missing_and_foreign_messages(
     db.add(foreign_message)
     await db.commit()
     try:
-        missing = await client.delete(f"{workspace_base}/items/{item.id}/discussions/missing")
+        missing = await client.delete(f"{workspace_base}/items/{item.id}/discussions/{uuid4()}")
         foreign = await client.delete(
             f"{workspace_base}/items/{item.id}/discussions/{foreign_message.id}"
         )
@@ -278,10 +283,12 @@ async def test_workspace_owner_moderates_foreign_item_discussion_with_reason(
         listing = await client.get(base)
         assert listing.status_code == 200
         assert listing.json()[0]["authorization"]["allowed"] == ["item_discussion.delete"]
-        invalid = await client.post(f"{base}/{message.id}/moderation", json={"reason": "  "})
+        invalid = await client.post(
+            f"{base}/{message.id}/moderation", json=json_payload({"reason": "  "})
+        )
         assert invalid.status_code == 422
         response = await client.post(
-            f"{base}/{message.id}/moderation", json={"reason": "Policy violation"}
+            f"{base}/{message.id}/moderation", json=json_payload({"reason": "Policy violation"})
         )
         assert response.status_code == 200
         assert response.json() == {"ok": True}
@@ -300,7 +307,7 @@ async def test_invitation_creation_is_hidden_from_non_administrators(
     try:
         response = await client.post(
             "/api/v1/admin/invitations",
-            json={"username": "invitee", "role": "member"},
+            json=json_payload({"username": "invitee", "role": "member"}),
         )
 
         assert response.status_code == 404
@@ -320,7 +327,7 @@ async def test_admin_mutation_requires_same_origin_before_authorization(
         response = await client.post(
             "/api/v1/admin/invitations",
             headers={"Origin": "https://attacker.example"},
-            json={"username": "invitee", "role": "member"},
+            json=json_payload({"username": "invitee", "role": "member"}),
         )
 
         assert response.status_code == 403
@@ -375,7 +382,7 @@ async def test_administrator_can_create_invitation(
     try:
         response = await client.post(
             "/api/v1/admin/invitations",
-            json={"username": "new-member", "role": "member"},
+            json=json_payload({"username": "new-member", "role": "member"}),
         )
 
         assert response.status_code == 201

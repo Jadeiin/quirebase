@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING
+from uuid import UUID
 
-from sqlalchemy import delete, func, inspect, or_, select
+from advanced_alchemy.filters import LimitOffset
+from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+from sqlalchemy import delete, inspect, or_, select
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access import SystemAction, require_system_action
@@ -26,6 +30,11 @@ from quirebase.workspaces import provision_initial_workspace
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.sql.elements import ColumnElement
+
+
+class UserReadRepository(SQLAlchemyAsyncRepository[User]):
+    model_type = User
 
 
 async def list_users(db: AsyncSession, admin: User) -> list[User]:
@@ -44,37 +53,39 @@ async def list_users_paginated(
 ) -> tuple[list[User], int]:
     await require_system_action(db, admin, SystemAction.users_read)
     query = select(User)
-    count_query = select(func.count(User.id))
     filters = []
     if search.strip():
         term = f"%{search.strip()}%"
-        filters.append(or_(User.username.ilike(term), User.id == search.strip()))
+        matches: list[ColumnElement[bool]] = [User.username.ilike(term)]
+        with contextlib.suppress(ValueError):
+            matches.append(User.id == UUID(search.strip()))
+        filters.append(or_(*matches))
     if role.strip() and role in ("administrator", "member"):
         filters.append(User.role == role)
     if active is not None:
         filters.append(User.active == active)
     if filters:
         query = query.where(*filters)
-        count_query = count_query.where(*filters)
-    total = await db.scalar(count_query) or 0
     offset = max(0, (page - 1) * page_size)
-    users = list(
-        (await db.scalars(query.order_by(User.username).offset(offset).limit(page_size))).all()
+    return await UserReadRepository(
+        session=db, statement=query.order_by(User.username, User.id)
+    ).get_many_and_count(
+        LimitOffset(limit=page_size, offset=offset),
+        count_with_window_function=False,
     )
-    return users, total
 
 
 async def _lock_admin_and_target(
     db: AsyncSession,
     admin: User,
-    user_id: str,
+    user_id: UUID,
     action: SystemAction,
 ) -> tuple[User, User | None]:
     """Lock the authority source and mutated User in stable identity order."""
 
     identity = inspect(admin).identity
     admin_id = identity[0] if identity else admin.id
-    locked: dict[str, User] = {}
+    locked: dict[UUID, User] = {}
     for current_id in sorted({admin_id, user_id}):
         query = select(User).where(User.id == current_id).execution_options(populate_existing=True)
         if current_id == user_id:
@@ -136,7 +147,7 @@ async def create_user_admin(
     return user
 
 
-async def update_user_status(db: AsyncSession, admin: User, user_id: str, active: bool) -> User:
+async def update_user_status(db: AsyncSession, admin: User, user_id: UUID, active: bool) -> User:
     admin, user = await _lock_admin_and_target(db, admin, user_id, SystemAction.users_status_manage)
     if user is None:
         raise ResourceNotFound("user not found")
@@ -200,7 +211,7 @@ async def update_user_status(db: AsyncSession, admin: User, user_id: str, active
     return user
 
 
-async def change_user_role(db: AsyncSession, admin: User, user_id: str, new_role: str) -> User:
+async def change_user_role(db: AsyncSession, admin: User, user_id: UUID, new_role: str) -> User:
     if new_role not in (SystemRole.administrator.value, SystemRole.member.value):
         raise ValidationFailure("invalid user role")
     admin, user = await _lock_admin_and_target(db, admin, user_id, SystemAction.users_roles_manage)
@@ -223,7 +234,7 @@ async def change_user_role(db: AsyncSession, admin: User, user_id: str, new_role
 
 
 async def reset_user_password(
-    db: AsyncSession, admin: User, user_id: str, new_password: str
+    db: AsyncSession, admin: User, user_id: UUID, new_password: str
 ) -> None:
     await require_system_action(db, admin, SystemAction.users_password_reset)
     if len(new_password) < 12:
@@ -250,7 +261,7 @@ async def reset_user_password(
     await db.commit()
 
 
-async def revoke_user_sessions(db: AsyncSession, admin: User, user_id: str) -> int:
+async def revoke_user_sessions(db: AsyncSession, admin: User, user_id: UUID) -> int:
     admin = await require_system_action(
         db, admin, SystemAction.users_sessions_revoke, lock="shared"
     )

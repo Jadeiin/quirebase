@@ -424,7 +424,7 @@ async def test_imported_revision_inspection_enqueues_derived_state_sync(
         fixture_workspace_id(user),
         revision.id,
         stored.key,
-        str(uuid4()),
+        uuid4(),
     )
 
     assert enqueued == [(revision.id, item.id, user.id, fixture_workspace_id(user))]
@@ -462,7 +462,7 @@ async def test_imported_revision_keeps_thumbnail_after_database_commit(monkeypat
             "workspace-id",
             "revision-id",
             "aa/bb/imported.pdf",
-            "00000000-0000-0000-0000-000000000001",
+            uuid4(),
         )
 
     assert removed == []
@@ -574,7 +574,7 @@ async def test_annotation_export_workflow_records_expiring_artifact(monkeypatch)
         "actor-id",
         "workspace-id",
         "revision-id",
-        "00000000-0000-0000-0000-000000000001",
+        uuid4(),
         None,
         True,
         "UTC",
@@ -732,7 +732,12 @@ async def test_integrity_scan_applies_database_backfills_in_datasource_transacti
     )
     await async_db.refresh(revision)
     assert revision.thumbnail_size == thumbnail.size
-    assert await async_db.get(ObjectIntegrityScan, "latest") is not None
+    assert (
+        await async_db.scalar(
+            select(ObjectIntegrityScan).order_by(ObjectIntegrityScan.checked_at.desc()).limit(1)
+        )
+        is not None
+    )
 
 
 @pytest.mark.anyio
@@ -820,7 +825,7 @@ async def test_commit_uploaded_revision_uses_datasource_transaction(async_db):
     async_db.add(item)
     await async_db.commit()
 
-    rev_id = str(uuid4())
+    rev_id = uuid4()
     inspected = {
         "revision_id": rev_id,
         "object_key": "aa/bb/doc.pdf",
@@ -854,7 +859,7 @@ async def test_commit_uploaded_attachment_uses_datasource_transaction(async_db):
     async_db.add(item)
     await async_db.commit()
 
-    att_id = str(uuid4())
+    att_id = uuid4()
     receipt = {"object_key": "aa/bb/data.bin", "size": 256}
     result = await document_workflows.commit_uploaded_attachment(
         user.id,
@@ -870,8 +875,8 @@ async def test_commit_uploaded_attachment_uses_datasource_transaction(async_db):
 
     saved = await async_db.get(Attachment, att_id)
     assert saved is not None
-    assert saved.object_key == "aa/bb/data.bin"
-    assert saved.size == 256
+    assert saved.file.path == "aa/bb/data.bin"
+    assert saved.file.size == 256
 
 
 @pytest.mark.anyio
@@ -907,8 +912,8 @@ async def test_invalid_graphical_abstract_worker_deletes_owned_object_and_writes
             user.id,
             item.workspace_id,
             item.id,
-            str(object_id),
-            str(object_id),
+            object_id,
+            object_id,
             "abstract.png",
             "image/png",
             "graphical_abstract",
@@ -972,8 +977,8 @@ async def test_cancelled_graphical_abstract_validation_deletes_owned_object(asyn
             user.id,
             item.workspace_id,
             item.id,
-            str(object_id),
-            str(object_id),
+            object_id,
+            object_id,
             "abstract.png",
             "image/png",
             "graphical_abstract",

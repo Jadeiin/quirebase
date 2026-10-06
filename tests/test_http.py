@@ -6,7 +6,8 @@ from uuid import uuid4
 
 import httpx2
 import pytest
-from app_helpers import create_web_test_app
+from advanced_alchemy.types import FileObject
+from app_helpers import create_web_test_app, json_payload
 from sqlalchemy import select
 from storage_helpers import local_object_path, put_pdf_object
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
@@ -144,9 +145,11 @@ async def test_workspace_read_tolerates_deletion_before_owner_lookup(
         before = await client.get(url)
         assert before.status_code == 200
         if detail:
-            assert before.json()["owner_id"] == owner_id
+            assert before.json()["owner_id"] == str(owner_id)
         else:
-            assert {view["id"] for view in before.json()} == {workspace_id, retained.id}
+            assert {view["id"] for view in before.json()} == set(
+                map(str, {workspace_id, retained.id})
+            )
 
         monkeypatch.setattr(api, "workspace_owner_ids", delete_before_owner_lookup)
         response = await client.get(url)
@@ -155,7 +158,7 @@ async def test_workspace_read_tolerates_deletion_before_owner_lookup(
         else:
             assert response.status_code == 200
             assert [(view["id"], view["owner_id"]) for view in response.json()] == [
-                (retained.id, owner_id)
+                (str(retained.id), str(owner_id))
             ]
     finally:
         await client.aclose()
@@ -270,7 +273,7 @@ async def test_inaccessible_workspace_responses_do_not_expose_existence(
     base = f"/api/v1/workspaces/{workspace_id}"
     try:
         response = (
-            await client.post(f"{base}/projects", json={"name": "Rejected"})
+            await client.post(f"{base}/projects", json=json_payload({"name": "Rejected"}))
             if surface == "create"
             else await client.get(base if surface == "detail" else f"{base}/projects")
         )
@@ -301,10 +304,12 @@ async def test_cross_workspace_copy_api_checks_target_membership_and_resource_ac
     headers = {"X-CSRF-Token": "test-csrf"}
 
     try:
-        missing = await client.post(url, headers=headers, json=request)
+        missing = await client.post(url, headers=headers, json=json_payload(request))
         assert missing.status_code == 404
         assert missing.json()["code"] == "workspace_unavailable"
-        nonexistent = await client.post(url, json={"target_workspace_id": str(uuid4())})
+        nonexistent = await client.post(
+            url, json=json_payload({"target_workspace_id": str(uuid4())})
+        )
         assert nonexistent.status_code == missing.status_code
         assert nonexistent.json() == missing.json()
 
@@ -317,13 +322,13 @@ async def test_cross_workspace_copy_api_checks_target_membership_and_resource_ac
         async_db.add(membership)
         await async_db.commit()
 
-        viewer = await client.post(url, headers=headers, json=request)
+        viewer = await client.post(url, headers=headers, json=json_payload(request))
         assert viewer.status_code == 403
         assert viewer.json()["code"] == "permission_denied"
 
         membership.role = WorkspaceRole.editor
         await async_db.commit()
-        copied = await client.post(url, headers=headers, json=request)
+        copied = await client.post(url, headers=headers, json=json_payload(request))
         assert copied.status_code == 201
         copy_view = copied.json()
         assert set(copy_view) == {
@@ -332,9 +337,9 @@ async def test_cross_workspace_copy_api_checks_target_membership_and_resource_ac
             "target_workspace_id",
             "target_item_id",
         }
-        assert copy_view["source_workspace_id"] == source.workspace_id
-        assert copy_view["source_item_id"] == source.id
-        assert copy_view["target_workspace_id"] == target_workspace_id
+        assert copy_view["source_workspace_id"] == str(source.workspace_id)
+        assert copy_view["source_item_id"] == str(source.id)
+        assert copy_view["target_workspace_id"] == str(target_workspace_id)
         copied_id = copy_view["target_item_id"]
         copied_item = await async_db.get(Item, copied_id)
         copied_revision = await async_db.scalar(
@@ -387,7 +392,7 @@ async def test_read_only_workspace_pdf_viewer_disables_annotation_edits(
         assert content.status_code == 200
         created = await client.post(
             f"{base}/annotations",
-            json={
+            json=json_payload({
                 "id": str(uuid4()),
                 "revision_id": revision.id,
                 "page_index": 0,
@@ -398,7 +403,7 @@ async def test_read_only_workspace_pdf_viewer_disables_annotation_edits(
                     "type": "note",
                     "rect": {"x": 10, "y": 10, "width": 20, "height": 20},
                 },
-            },
+            }),
         )
         assert created.status_code == 409
         assert created.json()["code"] == "workspace_lifecycle_error"
@@ -419,7 +424,7 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
             f"{workspace_base}/items/{item.id}/revisions/{revision.id}/viewer"
         )
         assert viewer.status_code == 200
-        assert viewer.json()["revision"]["id"] == revision.id
+        assert viewer.json()["revision"]["id"] == str(revision.id)
         assert viewer.json()["revision"]["page_geometry"] == [[0, 0, 300, 400]]
         assert viewer.json()["editable"] is True
         assert viewer.json()["annotation_author"] == "reader"
@@ -465,7 +470,7 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         created = await client.post(
             f"{workspace_base}/items/{item.id}/annotations",
             headers={"X-CSRF-Token": "test-csrf"},
-            json={
+            json=json_payload({
                 "id": str(uuid4()),
                 "revision_id": revision.id,
                 "page_index": 0,
@@ -479,7 +484,7 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
                     "style": {"stroke_color": "#FFEB33", "opacity": 0.35},
                     "segment_rects": [{"x": 10, "y": 10, "width": 20, "height": 10}],
                 },
-            },
+            }),
         )
         assert created.status_code == 201
         annotation = created.json()
@@ -490,7 +495,7 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         replied = await client.post(
             f"{workspace_base}/items/{item.id}/annotations/{annotation['id']}/replies",
             headers={"X-CSRF-Token": "test-csrf"},
-            json={"id": reply_id, "body": "Collaborative reply"},
+            json=json_payload({"id": reply_id, "body": "Collaborative reply"}),
         )
         assert replied.status_code == 201
         reply = replied.json()
@@ -506,7 +511,7 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         updated_reply = await client.patch(
             f"{workspace_base}/items/{item.id}/annotations/{annotation['id']}/replies/{reply_id}",
             headers={"X-CSRF-Token": "test-csrf"},
-            json={"version": reply["version"], "body": "Updated reply"},
+            json=json_payload({"version": reply["version"], "body": "Updated reply"}),
         )
         assert updated_reply.status_code == 200
         assert updated_reply.json()["version"] == 2
@@ -534,7 +539,7 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         duplicate = await client.post(
             f"{workspace_base}/items/{item.id}/annotations",
             headers={"X-CSRF-Token": "test-csrf"},
-            json={
+            json=json_payload({
                 "id": annotation["id"],
                 "revision_id": revision.id,
                 "page_index": annotation["page_index"],
@@ -544,7 +549,7 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
                 "body": annotation["body"],
                 "selected_text": annotation["selected_text"],
                 "payload": annotation["payload"],
-            },
+            }),
         )
         assert duplicate.status_code == 409
 
@@ -593,18 +598,18 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
             await db.scalars(
                 select(AuditEvent).where(
                     AuditEvent.action == "item.download_revision_pdf",
-                    AuditEvent.target_id == revision.id,
+                    AuditEvent.target_id == str(revision.id),
                 )
             )
         )
         details = [json.loads(event.detail) for event in events]
-        assert any(detail["item_id"] == item.id for detail in details)
+        assert any(detail["item_id"] == str(item.id) for detail in details)
         assert all(event.actor_id == item.created_by for event in events)
 
         underlined = await client.post(
             f"{workspace_base}/items/{item.id}/annotations",
             headers={"X-CSRF-Token": "test-csrf"},
-            json={
+            json=json_payload({
                 "id": str(uuid4()),
                 "revision_id": revision.id,
                 "page_index": 0,
@@ -618,7 +623,7 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
                     "style": {"stroke_color": "#FF5959", "opacity": 0.9},
                     "segment_rects": [{"x": 10, "y": 10, "width": 20, "height": 10}],
                 },
-            },
+            }),
         )
         assert underlined.status_code == 201
         assert underlined.json()["kind"] == "underline"
@@ -627,7 +632,7 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         conflict = await client.patch(
             f"{workspace_base}/items/{item.id}/annotations/{annotation['id']}",
             headers={"X-CSRF-Token": "test-csrf"},
-            json={
+            json=json_payload({
                 "version": 99,
                 "page_index": annotation["page_index"],
                 "kind": annotation["kind"],
@@ -636,7 +641,7 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
                 "body": annotation["body"],
                 "selected_text": annotation["selected_text"],
                 "payload": annotation["payload"],
-            },
+            }),
         )
         assert conflict.status_code == 409
 
@@ -664,13 +669,13 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         assert await db.scalar(
             select(AuditEvent).where(
                 AuditEvent.action == "annotation.delete",
-                AuditEvent.target_id == annotation["id"],
+                AuditEvent.target_id == str(annotation["id"]),
             )
         )
         assert await db.scalar(
             select(AuditEvent).where(
                 AuditEvent.action == "annotation.restore",
-                AuditEvent.target_id == annotation["id"],
+                AuditEvent.target_id == str(annotation["id"]),
             )
         )
     finally:
@@ -737,7 +742,7 @@ async def test_pdf_viewer_creation_permissions_match_annotation_scope(
         )
         created = await owner_client.post(
             f"{workspace_base}/items/{item.id}/annotations",
-            json={
+            json=json_payload({
                 "id": str(uuid4()),
                 "revision_id": revision.id,
                 "page_index": 0,
@@ -748,19 +753,19 @@ async def test_pdf_viewer_creation_permissions_match_annotation_scope(
                     "type": "note",
                     "rect": {"x": 10, "y": 10, "width": 20, "height": 20},
                 },
-            },
+            }),
         )
 
         assert viewer.status_code == 200
         assert viewer.json()["editable"] is True
         project_editable = role is WorkspaceRole.reviewer and project_state is ProjectState.active
-        assert viewer.json()["projects"] == [
+        assert viewer.json()["projects"] == json_payload([
             {"id": project.id, "name": project.name, "editable": project_editable}
-        ]
+        ])
         assert created.status_code == 201
         project_created = await owner_client.post(
             f"{workspace_base}/items/{item.id}/annotations",
-            json={
+            json=json_payload({
                 "id": str(uuid4()),
                 "revision_id": revision.id,
                 "page_index": 0,
@@ -772,7 +777,7 @@ async def test_pdf_viewer_creation_permissions_match_annotation_scope(
                     "type": "note",
                     "rect": {"x": 10, "y": 10, "width": 20, "height": 20},
                 },
-            },
+            }),
         )
         assert project_created.status_code == (
             201 if project_editable else 403 if role is WorkspaceRole.viewer else 409
@@ -1048,7 +1053,6 @@ async def test_uploaded_graphical_abstract_is_served_as_item_thumbnail(
     )
     item_id = item.id
     workspace_id = item.workspace_id
-    actor_id = item.created_by
     workspace_base = f"/api/v1/workspaces/{workspace_id}"
     image = b"\x89PNG\r\n\x1a\ngraphical"
 
@@ -1075,23 +1079,15 @@ async def test_uploaded_graphical_abstract_is_served_as_item_thumbnail(
 
         monkeypatch.setattr(document_workflows, "DBOS", SimpleNamespace(recv_async=receive))
         worker_body = document_workflows.upload_attachment_workflow.__wrapped__.__wrapped__
-        attachment_id = workflow_id.removeprefix("upload-attachment:")
-        result = await worker_body(
-            actor_id,
-            workspace_id,
-            item_id,
-            attachment_id,
-            attachment_id,
-            "abstract.png",
-            "image/png",
-            "graphical_abstract",
-        )
+        enqueue = fake_durable_operations.enqueues[-1]
+        attachment_id = enqueue["args"][3]
+        result = await worker_body(*enqueue["args"])
 
         assert result == {"attachment_id": attachment_id, "item_id": item_id}
         saved = await db.get(Attachment, attachment_id)
         assert saved is not None
         assert saved.role is AttachmentRole.graphical_abstract
-        assert saved.mime_type == "image/png"
+        assert saved.file.content_type == "image/png"
 
         thumbnail = await client.get(f"{workspace_base}/items/{item_id}/thumbnail")
 
@@ -1140,10 +1136,10 @@ async def test_item_update_detects_conflicts_and_updates_search(
     try:
         updated = await client.put(
             f"{workspace_base}/items/{item.id}",
-            json={
+            json=json_payload({
                 "expected_version": 1,
                 "metadata": {"title": "Revised Paper", "abstract": "Quantum transport"},
-            },
+            }),
         )
         assert updated.status_code == 200
         await db.refresh(item)
@@ -1156,7 +1152,7 @@ async def test_item_update_detects_conflicts_and_updates_search(
 
         stale = await client.put(
             f"{workspace_base}/items/{item.id}",
-            json={"expected_version": 1, "metadata": {"title": "Lost update"}},
+            json=json_payload({"expected_version": 1, "metadata": {"title": "Lost update"}}),
         )
         assert stale.status_code == 409
         await db.refresh(item)
@@ -1237,10 +1233,13 @@ async def test_content_media_types_at_runtime(
             id=str(uuid4()),
             workspace_id=item.workspace_id,
             item_id=item_id,
-            object_key=att_key,
-            original_name="test.pdf",
-            mime_type="application/pdf",
-            size=13,
+            file=FileObject(
+                backend="documents",
+                filename=att_key,
+                size=13,
+                content_type="application/pdf",
+                metadata={"original_name": "test.pdf"},
+            ),
             role=None,
             created_by=item.created_by,
         )
@@ -1287,10 +1286,13 @@ async def test_content_media_types_at_runtime(
             id=str(uuid4()),
             workspace_id=item.workspace_id,
             item_id=item_id,
-            object_key=ga_key,
-            original_name="abstract.jpg",
-            mime_type="image/jpeg",
-            size=11,
+            file=FileObject(
+                backend="documents",
+                filename=ga_key,
+                size=11,
+                content_type="image/jpeg",
+                metadata={"original_name": "abstract.jpg"},
+            ),
             role=AttachmentRole.graphical_abstract,
             created_by=item.created_by,
         )

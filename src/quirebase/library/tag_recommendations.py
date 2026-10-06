@@ -29,6 +29,8 @@ from quirebase.models import (
 )
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 _URL = re.compile(r"https?://\S+|www\.\S+", re.IGNORECASE)
@@ -134,7 +136,7 @@ def _engine(settings: Settings):
 
 async def recommend_item_tags(
     db: AsyncSession,
-    item_id: str,
+    item_id: UUID,
     *,
     settings: Settings | None = None,
 ) -> RecommendationCandidates:
@@ -145,7 +147,7 @@ async def recommend_item_tags(
     text = await _item_text(db, item, effective)
     result = await asyncio.to_thread(
         lambda: _engine(effective).recommend(
-            (RecommendationDocument(identifier=item_id, text=text),),
+            (RecommendationDocument(identifier=str(item_id), text=text),),
             RecommendationLimits(single_words=10, phrases=10),
         )
     )

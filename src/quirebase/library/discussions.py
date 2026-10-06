@@ -23,11 +23,13 @@ from quirebase.core.errors import (
 from quirebase.models import DiscussionMessage, User
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def add_discussion_message(
-    db: AsyncSession, user: User, workspace_id: str, item_id: str, body: str
+    db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID, body: str
 ) -> DiscussionMessage:
     context = await require_workspace_action(
         db, user, workspace_id, ResourceAction.item_discussion_create
@@ -57,7 +59,7 @@ async def add_discussion_message(
 
 
 async def delete_discussion_message(
-    db: AsyncSession, user: User, workspace_id: str, item_id: str, message_id: str
+    db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID, message_id: UUID
 ) -> None:
     context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     if not await can_read_item(db, user, workspace_id, item_id):
@@ -106,9 +108,9 @@ async def delete_discussion_message(
 async def moderate_discussion_message(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
-    message_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    message_id: UUID,
     reason: str,
 ) -> None:
     context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
@@ -176,8 +178,8 @@ async def list_project_discussion_messages(
 async def add_project_discussion_message(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    project_id: str,
+    workspace_id: UUID,
+    project_id: UUID,
     body: str,
 ) -> DiscussionMessage:
     context = await require_project_context(
@@ -213,9 +215,9 @@ async def add_project_discussion_message(
 async def delete_project_discussion_message(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    project_id: str,
-    message_id: str,
+    workspace_id: UUID,
+    project_id: UUID,
+    message_id: UUID,
 ) -> None:
     context = await require_project_context(
         db, user, workspace_id, project_id, ResourceAction.workspace_read
@@ -265,9 +267,9 @@ async def delete_project_discussion_message(
 async def moderate_project_discussion_message(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    project_id: str,
-    message_id: str,
+    workspace_id: UUID,
+    project_id: UUID,
+    message_id: UUID,
     reason: str,
 ) -> None:
     context = await require_project_context(

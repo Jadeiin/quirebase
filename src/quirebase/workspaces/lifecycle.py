@@ -3,9 +3,10 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
-from uuid import uuid4
+from uuid import UUID, uuid4
 
-from sqlalchemy import delete, select, text
+from advanced_alchemy.types import GUID
+from sqlalchemy import bindparam, delete, select, text
 
 from quirebase.access import (
     ResourceAction,
@@ -18,7 +19,6 @@ from quirebase.core.errors import (
     ValidationFailure,
     WorkspaceLifecycleError,
 )
-from quirebase.core.timezones import as_utc
 from quirebase.core.workflows import DOCUMENT_CLEANUP_QUEUE, durable_operations
 from quirebase.models import (
     Attachment,
@@ -42,7 +42,7 @@ from ._locking import _lock_workspace
 
 
 async def update_workspace(
-    db: AsyncSession, actor: User, workspace_id: str, name: str
+    db: AsyncSession, actor: User, workspace_id: UUID, name: str
 ) -> Workspace:
     workspace = await _lock_workspace(db, workspace_id)
     context = await require_workspace_membership(db, actor, workspace_id)
@@ -65,7 +65,7 @@ async def update_workspace(
     return workspace
 
 
-async def archive_workspace(db: AsyncSession, actor: User, workspace_id: str) -> Workspace:
+async def archive_workspace(db: AsyncSession, actor: User, workspace_id: UUID) -> Workspace:
     workspace = await _lock_workspace(db, workspace_id)
     context = await require_workspace_membership(db, actor, workspace_id)
     require_action(context, ResourceAction.workspace_archive)
@@ -85,7 +85,7 @@ async def archive_workspace(db: AsyncSession, actor: User, workspace_id: str) ->
     return workspace
 
 
-async def restore_workspace(db: AsyncSession, actor: User, workspace_id: str) -> Workspace:
+async def restore_workspace(db: AsyncSession, actor: User, workspace_id: UUID) -> Workspace:
     # Restore is the one mutation intentionally authorized while archived.
     workspace = await _lock_workspace(db, workspace_id)
     if workspace.governance_suspended_at is not None:
@@ -109,7 +109,7 @@ async def restore_workspace(db: AsyncSession, actor: User, workspace_id: str) ->
 
 
 async def permanently_delete_workspace(
-    db: AsyncSession, actor: User, workspace_id: str
+    db: AsyncSession, actor: User, workspace_id: UUID
 ) -> Workspace:
     # Deletion is permitted only from archived state, so membership and role are checked separately.
     workspace = await _lock_workspace(db, workspace_id)
@@ -120,7 +120,7 @@ async def permanently_delete_workspace(
     if workspace.state is not WorkspaceState.archived:
         raise ValidationFailure("Workspace must be archived before permanent deletion")
     now = datetime.now(UTC)
-    archived_at = as_utc(workspace.archived_at) if workspace.archived_at else None
+    archived_at = workspace.archived_at or None
     retention = timedelta(days=get_settings().workspace_delete_retention_days)
     if archived_at is None or archived_at > now - retention:
         raise WorkspaceLifecycleError("Workspace archive retention period has not elapsed")
@@ -147,7 +147,9 @@ async def permanently_delete_workspace(
     object_keys.update(
         (
             await db.scalars(
-                select(Attachment.object_key).where(Attachment.workspace_id == workspace_id)
+                select(Attachment.file["filename"].as_string()).where(
+                    Attachment.workspace_id == workspace_id
+                )
             )
         ).all()
     )
@@ -195,14 +197,14 @@ async def permanently_delete_workspace(
         text(
             "DELETE FROM revision_search WHERE item_id IN "
             "(SELECT id FROM items WHERE workspace_id = :workspace_id)"
-        ),
+        ).bindparams(bindparam("workspace_id", type_=GUID())),
         {"workspace_id": workspace_id},
     )
     await db.execute(
         text(
             "DELETE FROM item_search WHERE item_id IN "
             "(SELECT id FROM items WHERE workspace_id = :workspace_id)"
-        ),
+        ).bindparams(bindparam("workspace_id", type_=GUID())),
         {"workspace_id": workspace_id},
     )
 

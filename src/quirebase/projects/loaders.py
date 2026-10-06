@@ -17,10 +17,12 @@ from quirebase.core.errors import ResourceUnavailable
 from quirebase.models import Project, ProjectItem, ProjectState
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
-async def get_project(db: AsyncSession, ctx: WorkspaceContext, project_id: str) -> Project | None:
+async def get_project(db: AsyncSession, ctx: WorkspaceContext, project_id: UUID) -> Project | None:
     return await db.scalar(
         workspace_select(Project, ctx).where(
             Project.id == project_id,
@@ -31,7 +33,7 @@ async def get_project(db: AsyncSession, ctx: WorkspaceContext, project_id: str) 
 
 
 async def get_project_for_update(
-    db: AsyncSession, ctx: WorkspaceContext, project_id: str
+    db: AsyncSession, ctx: WorkspaceContext, project_id: UUID
 ) -> Project | None:
     project = await db.scalar(
         workspace_select(Project, ctx)
@@ -46,7 +48,7 @@ async def get_project_for_update(
 
 
 async def get_project_item(
-    db: AsyncSession, ctx: WorkspaceContext, project_item_id: str
+    db: AsyncSession, ctx: WorkspaceContext, project_item_id: UUID
 ) -> ProjectItem | None:
     return await db.scalar(
         workspace_select(ProjectItem, ctx)
@@ -61,7 +63,7 @@ async def get_project_item(
 async def require_project(
     db: AsyncSession,
     ctx: WorkspaceContext,
-    project_id: str,
+    project_id: UUID,
 ) -> ProjectContext:
     """Load a readable Project; commands authorize their exact operation under locks."""
     require_action(ctx, ResourceAction.workspace_read)
@@ -74,7 +76,7 @@ async def require_project(
 async def require_project_item(
     db: AsyncSession,
     ctx: WorkspaceContext,
-    project_item_id: str,
+    project_item_id: UUID,
 ) -> tuple[ProjectContext, ProjectItem]:
     project_item = await get_project_item(db, ctx, project_item_id)
     if project_item is None:

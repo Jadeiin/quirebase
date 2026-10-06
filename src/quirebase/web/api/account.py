@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from fastapi import APIRouter, Request, Response, status
 
 from quirebase.accounts import (
@@ -132,7 +134,7 @@ async def create_own_api_token(
 
 
 @router.delete("/account/api-tokens/{token_id}", response_model=OkView)
-async def revoke_own_api_token(token_id: str, user: ApiUser, db: Database) -> OkView:
+async def revoke_own_api_token(token_id: UUID, user: ApiUser, db: Database) -> OkView:
     await revoke_api_token(db, user, token_id)
     return OkView()
 
@@ -144,7 +146,7 @@ async def update_password(data: PasswordChangeRequest, user: ApiUser, db: Databa
 
 
 @router.delete("/account/sessions/{session_id}", response_model=OkView)
-async def revoke_own_session(session_id: str, user: ApiUser, db: Database) -> OkView:
+async def revoke_own_session(session_id: UUID, user: ApiUser, db: Database) -> OkView:
     await revoke_session(db, user, session_id)
     return OkView()
 

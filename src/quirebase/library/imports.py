@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from typing import TYPE_CHECKING
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from inquiro.bibliography import (
     SUPPORTED_FORMATS,
@@ -116,7 +116,7 @@ def _record_to_item_payload(record: BibliographyRecord) -> dict[str, str | None]
 
 
 async def stage_import_batch(
-    db: AsyncSession, user: User, workspace_id: str, file_bytes: bytes, file_format: str
+    db: AsyncSession, user: User, workspace_id: UUID, file_bytes: bytes, file_format: str
 ) -> tuple[ImportBatch, list[dict], list[dict]]:
     await require_workspace_action(db, user, workspace_id, ResourceAction.item_create)
     if file_format not in SUPPORTED_FORMATS:
@@ -144,7 +144,7 @@ async def stage_import_batch(
 async def stage_identifier_import_batch(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
+    workspace_id: UUID,
     identifier: str,
     provider: str = "auto",
     settings: Settings | None = None,
@@ -190,7 +190,7 @@ async def stage_identifier_import_batch(
 async def stage_pdf_import_batch(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
+    workspace_id: UUID,
     uploads: Sequence[tuple[ObjectSource, str]],
     *,
     max_bytes: int | None = None,
@@ -338,7 +338,7 @@ async def extract_pdf_import_doi(pending: dict) -> dict:
 
 async def check_pdf_import_doi(
     db: AsyncSession,
-    batch_id: str,
+    batch_id: UUID,
     pending: dict,
     detected_doi: str,
 ) -> dict:
@@ -368,7 +368,7 @@ async def check_pdf_import_doi(
 
 async def lookup_pdf_import_candidate(
     db: AsyncSession,
-    batch_id: str,
+    batch_id: UUID,
     pending: dict,
     detected_doi: str,
 ) -> dict:
@@ -409,7 +409,7 @@ async def lookup_pdf_import_candidate(
 
 async def prepare_pdf_import_candidate(
     db: AsyncSession,
-    batch_id: str,
+    batch_id: UUID,
     pending: dict,
 ) -> dict:
     """Prepare one candidate through the same seams used by the durable workflow."""
@@ -425,9 +425,9 @@ async def prepare_pdf_import_candidate(
 
 async def finalize_pdf_import_batch(
     db: AsyncSession,
-    actor_id: str,
-    workspace_id: str,
-    batch_id: str,
+    actor_id: UUID,
+    workspace_id: UUID,
+    batch_id: UUID,
     workflow_id: str,
     records: list[dict],
     errors: list[dict],
@@ -477,7 +477,7 @@ async def finalize_pdf_import_batch(
 
 
 async def get_import_batch_preview(
-    db: AsyncSession, user: User, workspace_id: str, batch_id: str
+    db: AsyncSession, user: User, workspace_id: UUID, batch_id: UUID
 ) -> tuple[ImportBatch, list[dict], list[dict]]:
     await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     observed = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id))
@@ -534,7 +534,7 @@ async def _converge_pdf_import_batch_status(
 
 
 async def retry_pdf_import_batch(
-    db: AsyncSession, user: User, workspace_id: str, batch_id: str
+    db: AsyncSession, user: User, workspace_id: UUID, batch_id: UUID
 ) -> ImportBatch:
     """Retry a failed PDF Import Batch without relinquishing its staged objects."""
     await require_workspace_action(db, user, workspace_id, ResourceAction.item_create)
@@ -612,8 +612,8 @@ async def retry_pdf_import_batch(
 
 
 async def commit_import_batch(
-    db: AsyncSession, user: User, workspace_id: str, batch_id: str
-) -> list[str]:
+    db: AsyncSession, user: User, workspace_id: UUID, batch_id: UUID
+) -> list[UUID]:
     # Lock the confirmer before Workspace authorization. Account deactivation
     # uses the same User-before-Workspace order, so it cannot deadlock a
     # confirmation while the Import Batch root is being committed.
@@ -638,8 +638,12 @@ async def commit_import_batch(
             isinstance(item_id, str) for item_id in committed_ids
         ):
             raise BatchConflict("the committed batch has invalid results")
+        try:
+            result_ids = [UUID(item_id) for item_id in committed_ids]
+        except ValueError as error:
+            raise BatchConflict("the committed batch has invalid results") from error
         await db.commit()
-        return committed_ids
+        return result_ids
     if batch.status != "ready":
         raise BatchConflict("the import batch is still being prepared")
     errors = json.loads(batch.errors)
@@ -664,7 +668,7 @@ async def commit_import_batch(
                 raise BatchConflict("another PDF in this batch has the same DOI")
             if normalized_doi:
                 candidate_dois.add(normalized_doi)
-    committed_item_ids: list[str] = []
+    committed_item_ids: list[UUID] = []
     for record in records:
         candidate = dict(record)
         pdf = candidate.pop("_pdf", None)
@@ -692,7 +696,7 @@ async def commit_import_batch(
             authorization_resource_action=ResourceAction.item_create.value,
         )
         committed_item_ids.append(item.id)
-    batch.committed_item_ids = json.dumps(committed_item_ids)
+    batch.committed_item_ids = json.dumps([str(item_id) for item_id in committed_item_ids])
     # A committed batch no longer owns staged upload objects.  Drop the PDF
     # staging payload so cleanup cannot mistake it for a live reservation.
     batch.records = json.dumps([
@@ -706,7 +710,7 @@ async def commit_import_batch(
 
 
 async def discard_import_batch(
-    db: AsyncSession, user: User, workspace_id: str, batch_id: str
+    db: AsyncSession, user: User, workspace_id: UUID, batch_id: UUID
 ) -> None:
     await require_workspace_action(db, user, workspace_id, ResourceAction.item_create)
     batch = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update())
@@ -739,7 +743,7 @@ async def discard_import_batch(
 async def export_accessible_bibliography(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
+    workspace_id: UUID,
     file_format: str,
     style_key: str = "apa",
     options: BibliographyExportOptions | None = None,
@@ -764,8 +768,8 @@ async def export_accessible_bibliography(
 async def export_selected_bibliography(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_ids: list[str],
+    workspace_id: UUID,
+    item_ids: list[UUID],
     file_format: str,
     style_key: str = "apa",
     options: BibliographyExportOptions | None = None,

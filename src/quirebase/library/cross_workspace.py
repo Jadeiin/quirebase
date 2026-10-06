@@ -5,8 +5,9 @@ from __future__ import annotations
 from contextlib import suppress
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
+from advanced_alchemy.types import FileObject
 from sqlalchemy import select
 
 from quirebase.access import ResourceAction, require_workspace_action
@@ -59,7 +60,7 @@ _ITEM_FIELDS = (
 
 @dataclass(frozen=True, slots=True)
 class _RevisionSnapshot:
-    id: str
+    id: UUID
     object_key: str
     thumbnail_object_key: str | None
     size: int
@@ -73,7 +74,7 @@ class _RevisionSnapshot:
 
 @dataclass(frozen=True, slots=True)
 class _AttachmentSnapshot:
-    id: str
+    id: UUID
     object_key: str
     size: int
     mime_type: str
@@ -97,12 +98,14 @@ def _revision_snapshot(revision: FileRevision) -> _RevisionSnapshot:
 
 
 def _attachment_snapshot(attachment: Attachment) -> _AttachmentSnapshot:
+    if attachment.file.size is None:
+        raise ValueError("persisted Attachment requires a file size")
     return _AttachmentSnapshot(
         id=attachment.id,
-        object_key=attachment.object_key,
-        size=attachment.size,
-        mime_type=attachment.mime_type,
-        original_name=attachment.original_name,
+        object_key=attachment.file.path,
+        size=attachment.file.size,
+        mime_type=attachment.file.content_type,
+        original_name=attachment.file.metadata["original_name"],
         role=attachment.role,
     )
 
@@ -122,9 +125,9 @@ async def _copy_object(source_key: str, suffix: ObjectSuffix) -> tuple[str, int]
 async def copy_item_to_workspace(
     db: AsyncSession,
     actor: User,
-    source_workspace_id: str,
-    target_workspace_id: str,
-    item_id: str,
+    source_workspace_id: UUID,
+    target_workspace_id: UUID,
+    item_id: UUID,
 ) -> Item:
     """Create a new canonical Item and independent file objects in the target Workspace."""
     if source_workspace_id == target_workspace_id:
@@ -370,10 +373,13 @@ async def copy_item_to_workspace(
                 Attachment(
                     workspace_id=target_workspace_id,
                     item_id=target.id,
-                    object_key=attachment_key,
-                    size=attachment_size,
-                    mime_type=attachment.mime_type,
-                    original_name=attachment.original_name,
+                    file=FileObject(
+                        backend="documents",
+                        filename=attachment_key,
+                        size=attachment_size,
+                        content_type=attachment.mime_type,
+                        metadata={"original_name": attachment.original_name},
+                    ),
                     role=attachment.role,
                     created_by=current_actor.id,
                 )

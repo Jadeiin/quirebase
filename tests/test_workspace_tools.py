@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from app_helpers import json_payload
 from sqlalchemy import select
 from test_http import authenticated_async_client
 from workspace_helpers import provision_initial_workspace
@@ -37,23 +38,23 @@ async def test_projects_have_a_dedicated_workspace(
     try:
         created = await client.post(
             f"{workspace_base}/projects",
-            json={"name": "Review queue"},
+            json=json_payload({"name": "Review queue"}),
         )
         project = await db.scalar(select(Project).where(Project.name == "Review queue"))
         assert project is not None
         assert created.status_code == 201
-        assert created.json()["id"] == project.id
+        assert created.json()["id"] == str(project.id)
         listing = await client.get(f"{workspace_base}/projects")
         assert [row["name"] for row in listing.json()] == ["Review queue"]
         detail = await client.get(f"{workspace_base}/projects/{project.id}")
         assert detail.json()["name"] == "Review queue"
         updated = await client.patch(
             f"{workspace_base}/projects/{project.id}",
-            json={
+            json=json_payload({
                 "name": "Review complete",
                 "description": "Reviewed together",
                 "participation": "workspace",
-            },
+            }),
         )
         assert updated.status_code == 200
         refreshed = await client.get(f"{workspace_base}/projects/{project.id}")
@@ -106,26 +107,30 @@ async def test_participant_directory_tracks_account_activation(
     try:
         directory = await client.get(f"{workspace_base}/members")
         assert directory.status_code == 200
-        assert target.id in {row["user_id"] for row in directory.json()}
+        assert str(target.id) in {row["user_id"] for row in directory.json()}
 
-        disabled = await client.put(target_status, json={"active": False})
+        disabled = await client.put(target_status, json=json_payload({"active": False}))
         assert disabled.status_code == 200
         directory = await client.get(f"{workspace_base}/members")
         assert directory.status_code == 200
         assert target.id not in {row["user_id"] for row in directory.json()}
         governance = await client.get(f"{workspace_base}/governance/members")
         assert governance.status_code == 200
-        member = next(row for row in governance.json() if row["user_id"] == target.id)
+        member = next(row for row in governance.json() if row["user_id"] == str(target.id))
         assert member["state"] == "active"
-        rejected = await client.post(participant_path, json={"username": target.username})
+        rejected = await client.post(
+            participant_path, json=json_payload({"username": target.username})
+        )
         assert rejected.status_code == 404
 
-        reactivated = await client.put(target_status, json={"active": True})
+        reactivated = await client.put(target_status, json=json_payload({"active": True}))
         assert reactivated.status_code == 200
         directory = await client.get(f"{workspace_base}/members")
         assert directory.status_code == 200
-        assert target.id in {row["user_id"] for row in directory.json()}
-        added = await client.post(participant_path, json={"username": target.username})
+        assert str(target.id) in {row["user_id"] for row in directory.json()}
+        added = await client.post(
+            participant_path, json=json_payload({"username": target.username})
+        )
         assert added.status_code == 200
     finally:
         await client.aclose()
@@ -162,7 +167,9 @@ async def test_tools_detect_duplicates_and_manage_owned_tags(
         tools = await client.get(f"{workspace_base}/duplicates?mode=doi")
         assert tools.status_code == 200
         assert len(tools.json()["groups"]) == 1
-        assert {row["id"] for row in tools.json()["groups"][0]} == {item.id, duplicate.id}
+        assert {row["id"] for row in tools.json()["groups"][0]} == set(
+            map(str, {item.id, duplicate.id})
+        )
         invalid_mode = await client.get(f"{workspace_base}/duplicates?mode=unknown")
         assert invalid_mode.status_code == 422
         tags = await client.get(f"{workspace_base}/tags")
@@ -172,11 +179,11 @@ async def test_tools_detect_duplicates_and_manage_owned_tags(
         # The Library API accepts Tag UUIDs and names.
         filtered_by_id = await client.get(f"{workspace_base}/items", params={"tag": tag.id})
         assert filtered_by_id.status_code == 200
-        assert [row["id"] for row in filtered_by_id.json()["items"]] == [item.id]
+        assert [row["id"] for row in filtered_by_id.json()["items"]] == [str(item.id)]
 
         filtered_by_name = await client.get(f"{workspace_base}/items", params={"tag": "Old tag"})
         assert filtered_by_name.status_code == 200
-        assert [row["id"] for row in filtered_by_name.json()["items"]] == [item.id]
+        assert [row["id"] for row in filtered_by_name.json()["items"]] == [str(item.id)]
 
         orphan_tag = Tag(
             workspace_id=item.workspace_id,
@@ -204,10 +211,10 @@ async def test_tools_detect_duplicates_and_manage_owned_tags(
         await db.commit()
         merged = await client.post(
             f"{workspace_base}/tags/merge",
-            json={
+            json=json_payload({
                 "source_tag_id": tag.id,
                 "target_tag_id": target_tag.id,
-            },
+            }),
         )
         assert merged.status_code == 200
         assert await db.get(Tag, tag.id) is None
@@ -215,7 +222,7 @@ async def test_tools_detect_duplicates_and_manage_owned_tags(
 
         renamed = await client.patch(
             f"{workspace_base}/tags/{target_tag.id}",
-            json={"name": "Reviewed"},
+            json=json_payload({"name": "Reviewed"}),
         )
         assert renamed.status_code == 200
         await db.refresh(target_tag)
@@ -265,7 +272,9 @@ async def test_workspace_invitation_uses_username_and_global_acceptance_route(
         assert members.status_code == 200
         assert set(members.json()[0]) == {"user_id", "username", "role"}
         assert (
-            next(row for row in members.json() if row["user_id"] == item.created_by)["username"]
+            next(row for row in members.json() if row["user_id"] == str(item.created_by))[
+                "username"
+            ]
             == "reader"
         )
 
@@ -282,7 +291,7 @@ async def test_workspace_invitation_uses_username_and_global_acceptance_route(
             "allowed_roles",
         }
         governed_view = next(
-            row for row in governance_members.json() if row["user_id"] == governed_member.id
+            row for row in governance_members.json() if row["user_id"] == str(governed_member.id)
         )
         assert set(governed_view["allowed_roles"]) == {"admin", "editor", "reviewer", "viewer"}
         assert set(governed_view["authorization"]["allowed"]) == {
@@ -294,10 +303,10 @@ async def test_workspace_invitation_uses_username_and_global_acceptance_route(
         before_invitation = datetime.now(UTC)
         created = await client.post(
             f"{workspace_base}/invitations",
-            json={
+            json=json_payload({
                 "username": invitee.username,
                 "role": invitation_role,
-            },
+            }),
         )
         assert created.status_code == 201
         assert created.json()["username"] == invitee.username
@@ -318,7 +327,7 @@ async def test_workspace_invitation_uses_username_and_global_acceptance_route(
             f"/api/v1/workspace-invitations/{token}/accept",
         )
         assert accepted.status_code == 200
-        assert accepted.json() == {"workspace_id": item.workspace_id}
+        assert accepted.json() == {"workspace_id": str(item.workspace_id)}
         member = await async_db.scalar(
             select(WorkspaceMember).where(
                 WorkspaceMember.workspace_id == item.workspace_id,
@@ -381,13 +390,13 @@ async def test_account_and_admin_workspace_apis(
         assert availability.json() == {"allowed": True, "owner_username_required": True}
 
         missing_owner = await client.post(
-            "/api/v1/workspaces", json={"name": "Created without an owner"}
+            "/api/v1/workspaces", json=json_payload({"name": "Created without an owner"})
         )
         assert missing_owner.status_code == 422
 
         created = await client.post(
             "/api/v1/workspaces",
-            json={"name": "Created in UI", "owner_username": user.username},
+            json=json_payload({"name": "Created in UI", "owner_username": user.username}),
         )
         assert created.status_code == 201
         created_workspace = next(

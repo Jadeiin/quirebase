@@ -323,7 +323,13 @@ async def scan_objects(
         )
     ).all()
     attachments = (
-        await db.execute(select(Attachment.id, Attachment.object_key, Attachment.size))
+        await db.execute(
+            select(
+                Attachment.id,
+                Attachment.file["filename"].as_string().label("object_key"),
+                Attachment.file["size"].as_integer().label("size"),
+            )
+        )
     ).all()
     export_keys = set((await db.scalars(select(ExportArtifact.object_key))).all())
     referenced = (
@@ -398,7 +404,7 @@ async def _referenced_object_keys(db: AsyncSession) -> set[str]:
     keys.update(
         key for key in (await db.scalars(select(FileRevision.thumbnail_object_key))).all() if key
     )
-    keys.update((await db.scalars(select(Attachment.object_key))).all())
+    keys.update((await db.scalars(select(Attachment.file["filename"].as_string()))).all())
     for records in (await db.scalars(select(ImportBatch.records))).all():
         keys.update(_import_object_keys(records))
     return keys

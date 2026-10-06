@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
+from uuid import UUID  # ruff: ignore[typing-only-standard-library-import] - Pydantic exposes ProjectParticipant
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -34,15 +35,15 @@ class ProjectMemberConflict(DomainError):
 
 @dataclass(frozen=True, slots=True)
 class ProjectParticipant:
-    user_id: str
+    user_id: UUID
     username: str
 
 
 async def _add_participant(
     db: AsyncSession,
     actor: User,
-    workspace_id: str,
-    project_id: str,
+    workspace_id: UUID,
+    project_id: UUID,
     target: User,
     *,
     action: str,
@@ -85,7 +86,7 @@ async def _add_participant(
 
 
 async def join_project(
-    db: AsyncSession, user: User, workspace_id: str, project_id: str
+    db: AsyncSession, user: User, workspace_id: UUID, project_id: UUID
 ) -> ProjectMember:
     """Record an active Workspace member's opt-in to an open Project."""
     context = await lock_workspace_context(db, user, workspace_id)
@@ -105,7 +106,7 @@ async def join_project(
     )
 
 
-async def leave_project(db: AsyncSession, user: User, workspace_id: str, project_id: str) -> None:
+async def leave_project(db: AsyncSession, user: User, workspace_id: UUID, project_id: UUID) -> None:
     """Remove the current User's opt-in from an open Project."""
     context = await lock_workspace_context(db, user, workspace_id)
     project = await lock_project_root(db, context, project_id, state=ProjectState.active)
@@ -139,8 +140,8 @@ async def leave_project(db: AsyncSession, user: User, workspace_id: str, project
 async def add_project_member(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    project_id: str,
+    workspace_id: UUID,
+    project_id: UUID,
     username: str,
 ) -> ProjectParticipant:
     """Add an active Workspace member to a managed Project's working context."""
@@ -179,9 +180,9 @@ async def add_project_member(
 async def remove_project_member(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    project_id: str,
-    member_user_id: str,
+    workspace_id: UUID,
+    project_id: UUID,
+    member_user_id: UUID,
 ) -> None:
     """Remove a participant from a managed Project without a minimum-count invariant."""
     context = await lock_workspace_context(db, user, workspace_id)

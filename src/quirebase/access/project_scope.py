@@ -17,6 +17,8 @@ from quirebase.core.errors import ProjectLifecycleError, ResourceUnavailable
 from quirebase.models import Project, ProjectMember, ProjectParticipation, ProjectState, User
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.sql.elements import ColumnElement
 
@@ -75,8 +77,8 @@ async def require_project_discoverable(
 async def require_project_context(
     db: AsyncSession,
     actor: User,
-    workspace_id: str,
-    project_id: str,
+    workspace_id: UUID,
+    project_id: UUID,
     operation: ResourceAction,
     *,
     relation: str = "any",

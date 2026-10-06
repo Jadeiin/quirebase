@@ -10,10 +10,11 @@ from quirebase.access import require_system_resource_action
 from quirebase.audit import record_event
 from quirebase.core.crypto import generate_token, token_hash
 from quirebase.core.errors import ResourceNotFound
-from quirebase.core.timezones import as_utc
 from quirebase.models import LoginSession, User
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -39,7 +40,7 @@ async def get_login_session_by_token(db: AsyncSession, raw_token: str) -> LoginS
         .options(selectinload(LoginSession.user))
         .where(LoginSession.token_hash == token_hash(raw_token))
     )
-    if login is None or as_utc(login.expires_at) <= datetime.now(UTC) or not login.user.active:
+    if login is None or login.expires_at <= datetime.now(UTC) or not login.user.active:
         return None
     return login
 
@@ -57,7 +58,7 @@ async def list_user_sessions(db: AsyncSession, user: User) -> list[LoginSession]
     )
 
 
-async def revoke_session(db: AsyncSession, user: User, session_id: str) -> None:
+async def revoke_session(db: AsyncSession, user: User, session_id: UUID) -> None:
     target = await db.get(LoginSession, session_id)
     relation = "own" if target is not None and target.user_id == user.id else "other"
     user = await require_system_resource_action(

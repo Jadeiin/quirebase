@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 
 import httpx2
 import pytest
+from app_helpers import json_payload
 from sqlalchemy import select
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
@@ -108,7 +109,7 @@ async def test_admin_workspace_governance_directory(async_db, tmp_path, monkeypa
     client, admin, _login = await admin_client(async_db, tmp_path, monkeypatch)
     response = await client.get("/api/v1/admin/workspaces")
     assert response.status_code == 200
-    assert any(row["id"] == fixture_workspace_id(admin) for row in response.json())
+    assert any(row["id"] == str(fixture_workspace_id(admin)) for row in response.json())
     await client.aclose()
 
 
@@ -166,11 +167,11 @@ async def test_admin_create_user_endpoint(async_db, tmp_path, monkeypatch):
 
     res = await client.post(
         "/api/v1/admin/users",
-        json={
+        json=json_payload({
             "username": "http_created_user",
             "password": "strong_password_123",
             "role": "member",
-        },
+        }),
     )
     assert res.status_code == 201
     assert res.json()["username"] == "http_created_user"
@@ -188,7 +189,7 @@ async def test_admin_settings_endpoint(async_db, tmp_path, monkeypatch):
 
     res = await client.put(
         "/api/v1/admin/settings",
-        json={
+        json=json_payload({
             "metadata_contact_email": "http_admin@institution.edu",
             "ncbi_api_key": "ncbi_key_xyz",
             "openalex_api_key": "",
@@ -198,7 +199,7 @@ async def test_admin_settings_endpoint(async_db, tmp_path, monkeypatch):
             "max_pdf_bytes": 104857600,
             "max_attachment_bytes": 104857600,
             "export_ttl_hours": 48,
-        },
+        }),
     )
     assert res.status_code == 200
 
@@ -217,7 +218,7 @@ async def test_admin_maintenance_triggers(async_db, tmp_path, monkeypatch, fake_
     for route, operation in routes.items():
         res = await client.post(
             route,
-            json={},
+            json=json_payload({}),
         )
         assert res.status_code == 200
         workflow_id = res.json()["id"]

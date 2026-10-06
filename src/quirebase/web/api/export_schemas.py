@@ -1,8 +1,12 @@
+from __future__ import annotations
+
+from uuid import UUID
+
 from pydantic import BaseModel, Field
 
 
 class BibliographyExportRequest(BaseModel):
-    item_ids: list[str] = Field(default_factory=list)
+    item_ids: list[UUID] = Field(default_factory=list)
     file_format: str
     style: str = "apa"
     include_abstract: bool = True
@@ -20,7 +24,7 @@ class BibliographyExportRequest(BaseModel):
 
 
 class DocumentArchiveRequest(BaseModel):
-    item_ids: list[str]
+    item_ids: list[UUID]
     include_annotations: bool = False
     include_supplements: bool = False
     timezone: str = ""

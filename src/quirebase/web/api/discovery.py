@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from fastapi import APIRouter
 
 from quirebase.library import CandidatePageView, search_candidate_records
@@ -12,7 +14,7 @@ router = APIRouter(tags=["Discovery"])
 
 @router.post("/discovery/search", response_model=CandidatePageView)
 async def search_discovery(
-    workspace_id: str,
+    workspace_id: UUID,
     data: DiscoverySearchRequest,
     user: ApiUser,
     db: Database,

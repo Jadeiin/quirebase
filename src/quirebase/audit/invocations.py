@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+    from uuid import UUID
 
 ProgrammaticProtocol = Literal["http", "mcp"]
 
@@ -17,13 +18,13 @@ class ProgrammaticInvocation:
 
     protocol: ProgrammaticProtocol
     operation: str
-    api_token_id: str | None = None
+    api_token_id: UUID | None = None
     client_id: str | None = None
 
     def detail(self) -> dict[str, str]:
         values = {"protocol": self.protocol, "operation": self.operation}
         if self.api_token_id is not None:
-            values["api_token_id"] = self.api_token_id
+            values["api_token_id"] = str(self.api_token_id)
         if self.client_id is not None:
             values["client_id"] = self.client_id
         return values
@@ -39,7 +40,7 @@ def programmatic_invocation(
     protocol: ProgrammaticProtocol,
     operation: str,
     *,
-    api_token_id: str | None = None,
+    api_token_id: UUID | None = None,
     client_id: str | None = None,
 ) -> Iterator[ProgrammaticInvocation]:
     """Bind source metadata while an inbound adapter invokes business behaviour."""
@@ -56,7 +57,7 @@ def programmatic_invocation(
         _current_invocation.reset(marker)
 
 
-def identify_programmatic_invocation(*, api_token_id: str, client_id: str) -> None:
+def identify_programmatic_invocation(*, api_token_id: UUID, client_id: str) -> None:
     """Attach the verified credential without exposing it to business interfaces."""
     invocation = _current_invocation.get()
     if invocation is not None:

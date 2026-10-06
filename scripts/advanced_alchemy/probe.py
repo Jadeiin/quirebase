@@ -1,8 +1,7 @@
 """Throwaway persistence probe. Uses scratch SQLite, never the configured database.
 
 Run from the prototype checkout:
-uv run --frozen --with 'advanced-alchemy[uuid]==1.11.0' python \
-    src/quirebase/core/advanced_alchemy_prototype/backend.py
+uv run --frozen python scripts/advanced_alchemy/probe.py
 """
 
 from __future__ import annotations
@@ -115,12 +114,12 @@ class NanoRecord(NanoIDBase):
     __bind_key__ = "prototype_nano"
 
 
-# AA accepts existing mappings at runtime; its ModelProtocol bound needs a typing bridge.
-class ProjectReadRepository(SQLAlchemyAsyncRepository[Project]):  # type: ignore[type-var]
+# BasicAttributes on the shared Base satisfies AA repository typing bounds.
+class ProjectReadRepository(SQLAlchemyAsyncRepository[Project]):
     model_type = Project
 
 
-class WorkspaceReadRepository(SQLAlchemyAsyncRepository[Workspace]):  # type: ignore[type-var]
+class WorkspaceReadRepository(SQLAlchemyAsyncRepository[Workspace]):
     model_type = Workspace
 
 
@@ -131,6 +130,8 @@ async def probe() -> dict[str, Any]:
         metadata=Base.metadata,
         session_config=AsyncSessionConfig(expire_on_commit=False),
         commit_mode="manual",
+        enable_file_object_listener=False,
+        enable_touch_updated_timestamp_listener=False,
     )
     report: dict[str, Any] = {
         "environment": {
@@ -218,13 +219,13 @@ async def probe() -> dict[str, Any]:
         }
 
         admin, editor, owner = (
-            User(id=str(uuid7()), username=name, password_hash="scratch-only")
+            User(id=uuid7(), username=name, password_hash="scratch-only")
             for name in ("prototype-admin", "prototype-editor", "prototype-owner")
         )
         db.add_all([admin, editor, owner])
         await db.flush()
         roots = [
-            Workspace(id=str(uuid7()), name=name, created_by=owner.id)
+            Workspace(id=uuid7(), name=name, created_by=owner.id)
             for name in ("Alpha", "Beta", "Gamma")
         ]
         db.add_all(roots)
@@ -254,7 +255,7 @@ async def probe() -> dict[str, Any]:
         )
         projects = [
             Project(
-                id=str(uuid7()),
+                id=uuid7(),
                 workspace_id=current.id,
                 name=name,
                 participation=mode,
@@ -264,9 +265,7 @@ async def probe() -> dict[str, Any]:
             for index, (name, mode) in enumerate(modes)
         ]
         projects[-2].state, projects[-1].state = ProjectState.archived, ProjectState.deleted
-        foreign = Project(
-            id=str(uuid7()), workspace_id=roots[0].id, name="Foreign", created_by=owner.id
-        )
+        foreign = Project(id=uuid7(), workspace_id=roots[0].id, name="Foreign", created_by=owner.id)
         db.add_all([*projects, foreign])
         await db.flush()
         for project in (projects[1], projects[3]):
@@ -275,9 +274,7 @@ async def probe() -> dict[str, Any]:
                     ProjectMember(workspace_id=current.id, project_id=project.id, user_id=user.id)
                 )
         items = [
-            Item(
-                id=str(uuid7()), workspace_id=current.id, title=f"Item {index}", created_by=owner.id
-            )
+            Item(id=uuid7(), workspace_id=current.id, title=f"Item {index}", created_by=owner.id)
             for index in range(2)
         ]
         db.add_all(items)
@@ -498,7 +495,7 @@ async def probe() -> dict[str, Any]:
 if __name__ == "__main__":
     result = asyncio.run(probe())
     evidence_path = HERE / "evidence.json"
-    evidence_path.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n")
+    evidence_path.write_text(json.dumps(result, indent=2, ensure_ascii=False, default=str) + "\n")
     demo_path = HERE / "demo.html"
     if demo_path.exists():
         demo = demo_path.read_text()
@@ -513,6 +510,7 @@ if __name__ == "__main__":
             + json.dumps(
                 {key: value for key, value in result.items() if key != "ddl"},
                 ensure_ascii=False,
+                default=str,
             ).replace("</", "<\\/")
             + "\n"
             + end_marker
@@ -522,6 +520,7 @@ if __name__ == "__main__":
         json.dumps(
             {key: value for key, value in result.items() if key not in ("ddl", "demo_fixture")},
             indent=2,
+            default=str,
         )
     )
     print(f"Full dialect DDL and observations: {evidence_path}")

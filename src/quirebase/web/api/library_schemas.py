@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 from typing import Any, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from quirebase.access import WorkspaceContext, discussion_message_decisions
-from quirebase.core.timezones import as_utc
 from quirebase.library import ItemMetadata
 from quirebase.web.api.common import WorkspaceAuthorizationView, authorization_view
 
 
 class ItemSearchView(BaseModel):
-    id: str
+    id: UUID
     title_html: str
     authors: str | None
     publication_date: str | None
@@ -28,9 +28,9 @@ class LibrarySearchView(BaseModel):
 
 
 class BulkActionRequest(BaseModel):
-    item_ids: list[str]
+    item_ids: list[UUID]
     action: str
-    project_id: str = ""
+    project_id: UUID | None = None
     tag_name: str = ""
     confirmation: str = ""
 
@@ -55,17 +55,17 @@ class ItemDetailView(ItemSearchView):
 
 
 class TagView(BaseModel):
-    id: str
+    id: UUID
     name: str
     accessible_item_count: int
     authorization: WorkspaceAuthorizationView
 
 
 class DiscussionMessageView(BaseModel):
-    id: str
-    item_id: str | None = None
-    project_id: str | None = None
-    author_id: str
+    id: UUID
+    item_id: UUID | None = None
+    project_id: UUID | None = None
+    author_id: UUID
     author_username: str
     mine: bool
     body: str
@@ -80,7 +80,7 @@ class CitationView(BaseModel):
 
 
 class AuthorSuggestionView(BaseModel):
-    id: str
+    id: UUID
     last_name: str
     first_name: str | None = None
     full_name: str
@@ -151,8 +151,8 @@ def discussion_message_view(
         author_username=row.author.username,
         mine=relation == "own",
         body=row.body,
-        created_at=as_utc(row.created_at).isoformat(),
-        updated_at=as_utc(row.updated_at).isoformat(),
+        created_at=row.created_at.isoformat(),
+        updated_at=row.updated_at.isoformat(),
         authorization=authorization_view(
             discussion_message_decisions(context, row, writable=writable)
         ),
@@ -171,14 +171,14 @@ class ItemUpdateRequest(BaseModel):
 
 
 class CrossWorkspaceCopyRequest(BaseModel):
-    target_workspace_id: str = Field(min_length=1, max_length=36)
+    target_workspace_id: UUID
 
 
 class CrossWorkspaceCopyView(BaseModel):
-    source_workspace_id: str
-    source_item_id: str
-    target_workspace_id: str
-    target_item_id: str
+    source_workspace_id: UUID
+    source_item_id: UUID
+    target_workspace_id: UUID
+    target_item_id: UUID
 
 
 class NameRequest(BaseModel):
@@ -188,8 +188,8 @@ class NameRequest(BaseModel):
 class TagSetRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    add_tag_ids: list[str] = Field(default_factory=list)
-    remove_tag_ids: list[str] = Field(default_factory=list)
+    add_tag_ids: list[UUID] = Field(default_factory=list)
+    remove_tag_ids: list[UUID] = Field(default_factory=list)
     new_names: list[str] = Field(default_factory=list)
 
 

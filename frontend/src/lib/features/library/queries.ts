@@ -30,7 +30,7 @@ export function libraryListQuery(workspaceId: string, filters: LibraryFilters, p
 						page,
 						query: filters.query,
 						tag: filters.tag,
-						project: filters.project,
+						project: filters.project || undefined,
 						year: filters.year,
 						keyword: filters.keyword,
 						author: filters.author

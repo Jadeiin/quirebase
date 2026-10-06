@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access import require_system_resource_action
@@ -20,14 +20,16 @@ from quirebase.core.crypto import (
     compare_digest,
     hash_password_async,
     token_hash,
+    verify_and_update_password,
     verify_password_async,
 )
 from quirebase.core.errors import DomainError, ResourceNotFound, ValidationFailure
-from quirebase.core.timezones import as_utc
 from quirebase.models import Invitation, LoginSession, User
 from quirebase.workspaces import provision_initial_workspace
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -39,7 +41,7 @@ class InvalidCredentials(AuthenticationFailure):
     pass
 
 
-async def resolve_api_token_user(db: AsyncSession, subject: str) -> User:
+async def resolve_api_token_user(db: AsyncSession, subject: UUID) -> User:
     """Resolve a verified API Token subject to an active local User."""
     user = await db.get(User, subject)
     if user is None or not user.active:
@@ -68,10 +70,11 @@ async def authenticate_user(
         raise
 
     user = await db.scalar(select(User).where(User.username == username))
-    password_valid = bool(
-        user is not None
-        and user.active
-        and await verify_password_async(user.password_hash, password)
+    original_hash = user.password_hash.hash_string if user is not None else None
+    password_valid, upgraded = (
+        await verify_and_update_password(user.password_hash, password)
+        if user is not None and user.active
+        else (False, None)
     )
     if not password_valid:
         await record_login_failure(db, identity)
@@ -87,6 +90,14 @@ async def authenticate_user(
         raise InvalidCredentials("Invalid credentials")
 
     assert user is not None
+    if upgraded is not None:
+        # A concurrent password change must never be overwritten by opportunistic rehash.
+        await db.execute(
+            update(User)
+            .where(User.id == user.id, User.password_hash == original_hash)
+            .values(password_hash=upgraded)
+            .execution_options(synchronize_session=False)
+        )
     await clear_login_failures(db, identity)
     login_session, raw = await create_login_session(db, user, session_days=session_days)
     record_event(
@@ -118,7 +129,7 @@ async def accept_invitation(db: AsyncSession, token: str, password: str) -> User
     if (
         invitation is None
         or invitation.accepted_at is not None
-        or as_utc(invitation.expires_at) <= datetime.now(UTC)
+        or invitation.expires_at <= datetime.now(UTC)
     ):
         raise ResourceNotFound("invitation not found or expired")
     if await db.scalar(select(User).where(User.username == invitation.username)):
@@ -136,7 +147,7 @@ async def accept_invitation(db: AsyncSession, token: str, password: str) -> User
     if (
         invitation is None
         or invitation.accepted_at is not None
-        or as_utc(invitation.expires_at) <= datetime.now(UTC)
+        or invitation.expires_at <= datetime.now(UTC)
     ):
         raise ResourceNotFound("invitation not found or expired")
     if await db.scalar(select(User).where(User.username == invitation.username)):
@@ -161,8 +172,8 @@ async def change_own_password(
     current_user = await require_system_resource_action(
         db, user, "account", "change_password", relation="own"
     )
-    verified_password_hash = current_user.password_hash
-    if not await verify_password_async(verified_password_hash, current_password):
+    verified_password_hash = current_user.password_hash.hash_string
+    if not await verify_password_async(current_user.password_hash, current_password):
         raise InvalidCredentials("Current password incorrect")
     try:
         password_hash = await hash_password_async(new_password)
@@ -176,7 +187,7 @@ async def change_own_password(
         relation="own",
         lock="write",
     )
-    if not compare_digest(current_user.password_hash, verified_password_hash):
+    if not compare_digest(current_user.password_hash.hash_string, verified_password_hash):
         raise InvalidCredentials("Current password incorrect")
     current_user.password_hash = password_hash
     record_event(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from app_helpers import json_payload
 from sqlalchemy import select
 
 from quirebase.core.crypto import hash_password
@@ -31,7 +32,9 @@ async def test_dispatch_maintenance_workflow_is_transactional_and_audited(
     assert workflow is not None
     assert workflow.name == "operations.check_objects"
     assert workflow.queue_name == "operations"
-    audit = await async_db.scalar(select(AuditEvent).where(AuditEvent.target_id == workflow_id))
+    audit = await async_db.scalar(
+        select(AuditEvent).where(AuditEvent.target_id == str(workflow_id))
+    )
     assert audit is not None
     assert audit.action == "admin.maintenance.check_objects"
 
@@ -46,12 +49,12 @@ async def test_all_supported_maintenance_operations_use_the_global_queue(
         workflow = await fake_durable_operations.get(workflow_id)
         assert workflow is not None
         assert workflow.queue_name == "operations"
-        assert workflow.attributes == {
+        assert workflow.attributes == json_payload({
             "capability": "operations",
             "operation": operation,
             "actor_id": admin.id,
             "workspace_id": None,
-        }
+        })
 
 
 @pytest.mark.anyio

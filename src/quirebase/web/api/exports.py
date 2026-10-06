@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from fastapi import APIRouter, status
 from fastapi.responses import StreamingResponse
 
@@ -22,8 +24,8 @@ router = APIRouter(tags=["Document exports"])
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def create_export(
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     data: ExportCreate,
     user: ApiUser,
     db: Database,
@@ -37,7 +39,7 @@ async def create_export(
 
 
 @router.get("/annotation-exports/{workflow_id}", response_model=WorkflowStatusView)
-async def export_status(workspace_id: str, workflow_id: str, user: ApiUser, db: Database):
+async def export_status(workspace_id: UUID, workflow_id: str, user: ApiUser, db: Database):
     return await get_export_status(db, user, workspace_id, workflow_id)
 
 
@@ -52,7 +54,7 @@ async def export_status(workspace_id: str, workflow_id: str, user: ApiUser, db: 
         }
     },
 )
-async def export_content(workspace_id: str, workflow_id: str, user: ApiUser, db: Database):
+async def export_content(workspace_id: UUID, workflow_id: str, user: ApiUser, db: Database):
     response = await get_export_file(db, user, workspace_id, workflow_id)
     return StreamingResponse(
         response.body,

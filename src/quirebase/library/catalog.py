@@ -3,9 +3,12 @@ from __future__ import annotations
 import re
 from difflib import SequenceMatcher
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
+from advanced_alchemy.filters import LimitOffset
+from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from inquiro.richtext import convert_rich_text
-from sqlalchemy import func, or_, select
+from sqlalchemy import or_, select
 
 from quirebase.access import (
     ResourceAction,
@@ -29,15 +32,20 @@ from quirebase.search import search_index
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.sql.elements import ColumnElement
+
+
+class ItemReadRepository(SQLAlchemyAsyncRepository[Item]):
+    model_type = Item
 
 
 async def search_library(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
+    workspace_id: UUID,
     q: str = "",
     tag: str = "",
-    project: str = "",
+    project: UUID | None = None,
     year: str = "",
     keyword: str = "",
     author: str = "",
@@ -51,13 +59,20 @@ async def search_library(
     if matching_ids is not None:
         item_query = item_query.where(Item.id.in_(matching_ids))
     if tag:
+        tag_filter: ColumnElement[bool]
+        try:
+            tag_id = UUID(tag)
+        except ValueError:
+            tag_filter = Tag.name == tag
+        else:
+            tag_filter = or_(Tag.id == tag_id, Tag.name == tag)
         item_query = item_query.where(
             Item.id.in_(
                 workspace_select(ItemTag, context)
                 .with_only_columns(ItemTag.item_id)
                 .join(Tag, Tag.id == ItemTag.tag_id)
                 .where(
-                    or_(Tag.id == tag, Tag.name == tag),
+                    tag_filter,
                 )
             )
         )
@@ -78,18 +93,13 @@ async def search_library(
         item_query = item_query.where(Item.keywords.ilike(f"%{keyword}%"))
     if author:
         item_query = item_query.where(Item.authors.ilike(f"%{author}%"))
-    total = await db.scalar(select(func.count()).select_from(item_query.subquery())) or 0
-    items = list(
-        (
-            await db.scalars(
-                item_query
-                .order_by(Item.updated_at.desc())
-                .offset((page - 1) * per_page)
-                .limit(per_page)
-            )
-        ).all()
+    return await ItemReadRepository(
+        session=db,
+        statement=item_query.order_by(Item.updated_at.desc(), Item.id),
+    ).get_many_and_count(
+        LimitOffset(limit=per_page, offset=(page - 1) * per_page),
+        count_with_window_function=False,
     )
-    return items, total
 
 
 def _normalized_title(title: str) -> str:
@@ -100,7 +110,7 @@ def _normalized_title(title: str) -> str:
     ).strip()
 
 
-async def get_dashboard_data(db: AsyncSession, user: User, workspace_id: str) -> dict[str, Any]:
+async def get_dashboard_data(db: AsyncSession, user: User, workspace_id: UUID) -> dict[str, Any]:
     context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     new_items = list(
         (
@@ -145,7 +155,7 @@ async def get_dashboard_data(db: AsyncSession, user: User, workspace_id: str) ->
 
 
 async def find_duplicates(
-    db: AsyncSession, user: User, workspace_id: str, mode: str
+    db: AsyncSession, user: User, workspace_id: UUID, mode: str
 ) -> list[list[Item]]:
     if mode not in ("", "doi", "title", "similar"):
         raise ValidationFailure(f"unknown duplicate mode: {mode}")

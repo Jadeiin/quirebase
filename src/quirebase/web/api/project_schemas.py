@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
 from pydantic.json_schema import SkipJsonSchema  # ruff: ignore[typing-only-third-party-import] — Pydantic resolves field annotations.
@@ -12,7 +13,7 @@ from quirebase.web.api.library_schemas import ItemSearchView, item_search_view
 
 
 class ProjectSummaryView(BaseModel):
-    id: str
+    id: UUID
     name: str
     item_count: int
     state: ProjectState

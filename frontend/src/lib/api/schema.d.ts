@@ -2108,7 +2108,10 @@ export interface components {
 		};
 		/** AdminAuditEventView */
 		AdminAuditEventView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Actor Id */
 			actor_id?: string | null;
@@ -2153,7 +2156,10 @@ export interface components {
 		};
 		/** AdminInvitationCreatedView */
 		AdminInvitationCreatedView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Username */
 			username: string;
@@ -2171,7 +2177,10 @@ export interface components {
 		};
 		/** AdminInvitationView */
 		AdminInvitationView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Username */
 			username: string;
@@ -2253,7 +2262,10 @@ export interface components {
 		};
 		/** AdminUserView */
 		AdminUserView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Username */
 			username: string;
@@ -2287,11 +2299,17 @@ export interface components {
 		};
 		/** AdminWorkspaceView */
 		AdminWorkspaceView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Name */
 			name: string;
-			/** Owner Id */
+			/**
+			 * Owner Id
+			 * Format: uuid
+			 */
 			owner_id: string;
 			state: components['schemas']['WorkspaceState'];
 			/** Governance Suspended At */
@@ -2306,7 +2324,10 @@ export interface components {
 			 * Format: uuid4
 			 */
 			id: string;
-			/** Revision Id */
+			/**
+			 * Revision Id
+			 * Format: uuid
+			 */
 			revision_id: string;
 			/** Page Index */
 			page_index: number;
@@ -2383,7 +2404,10 @@ export interface components {
 		};
 		/** AnnotationProjectView */
 		AnnotationProjectView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Name */
 			name: string;
@@ -2407,9 +2431,15 @@ export interface components {
 		};
 		/** AnnotationReplyView */
 		AnnotationReplyView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
-			/** Annotation Id */
+			/**
+			 * Annotation Id
+			 * Format: uuid
+			 */
 			annotation_id: string;
 			/** Body */
 			body: string;
@@ -2428,7 +2458,10 @@ export interface components {
 		};
 		/** AnnotationRevisionView */
 		AnnotationRevisionView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Original Name */
 			original_name: string;
@@ -2486,9 +2519,15 @@ export interface components {
 		};
 		/** AnnotationView */
 		AnnotationView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
-			/** Revision Id */
+			/**
+			 * Revision Id
+			 * Format: uuid
+			 */
 			revision_id: string;
 			/** Revision Name */
 			revision_name: string;
@@ -2563,7 +2602,10 @@ export interface components {
 		};
 		/** ApiTokenGrantView */
 		ApiTokenGrantView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Token */
 			token: string;
@@ -2575,7 +2617,10 @@ export interface components {
 		};
 		/** ApiTokenView */
 		ApiTokenView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Name */
 			name: string;
@@ -2641,7 +2686,10 @@ export interface components {
 		};
 		/** AuthorSuggestionView */
 		AuthorSuggestionView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Last Name */
 			last_name: string;
@@ -2730,11 +2778,8 @@ export interface components {
 			item_ids: string[];
 			/** Action */
 			action: string;
-			/**
-			 * Project Id
-			 * @default
-			 */
-			project_id: string;
+			/** Project Id */
+			project_id?: string | null;
 			/**
 			 * Tag Name
 			 * @default
@@ -2847,18 +2892,33 @@ export interface components {
 		};
 		/** CrossWorkspaceCopyRequest */
 		CrossWorkspaceCopyRequest: {
-			/** Target Workspace Id */
+			/**
+			 * Target Workspace Id
+			 * Format: uuid
+			 */
 			target_workspace_id: string;
 		};
 		/** CrossWorkspaceCopyView */
 		CrossWorkspaceCopyView: {
-			/** Source Workspace Id */
+			/**
+			 * Source Workspace Id
+			 * Format: uuid
+			 */
 			source_workspace_id: string;
-			/** Source Item Id */
+			/**
+			 * Source Item Id
+			 * Format: uuid
+			 */
 			source_item_id: string;
-			/** Target Workspace Id */
+			/**
+			 * Target Workspace Id
+			 * Format: uuid
+			 */
 			target_workspace_id: string;
-			/** Target Item Id */
+			/**
+			 * Target Item Id
+			 * Format: uuid
+			 */
 			target_item_id: string;
 		};
 		/** CustomField */
@@ -2875,7 +2935,10 @@ export interface components {
 		};
 		/** DashboardProjectView */
 		DashboardProjectView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Name */
 			name: string;
@@ -2950,13 +3013,19 @@ export interface components {
 		};
 		/** DiscussionMessageView */
 		DiscussionMessageView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Item Id */
 			item_id?: string | null;
 			/** Project Id */
 			project_id?: string | null;
-			/** Author Id */
+			/**
+			 * Author Id
+			 * Format: uuid
+			 */
 			author_id: string;
 			/** Author Username */
 			author_username: string;
@@ -3002,7 +3071,10 @@ export interface components {
 		};
 		/** DocumentListView */
 		DocumentListView: {
-			/** Item Id */
+			/**
+			 * Item Id
+			 * Format: uuid
+			 */
 			item_id: string;
 			/** Files */
 			files: components['schemas']['FileView'][];
@@ -3033,7 +3105,10 @@ export interface components {
 		};
 		/** ExportCreate */
 		ExportCreate: {
-			/** Revision Id */
+			/**
+			 * Revision Id
+			 * Format: uuid
+			 */
 			revision_id: string;
 			/** Project Id */
 			project_id?: string | null;
@@ -3054,7 +3129,10 @@ export interface components {
 		};
 		/** FileView */
 		FileView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/**
 			 * Kind
@@ -3123,7 +3201,10 @@ export interface components {
 		};
 		/** ImportBatchRetryView */
 		ImportBatchRetryView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Status */
 			status: string;
@@ -3132,7 +3213,10 @@ export interface components {
 		};
 		/** ImportBatchView */
 		ImportBatchView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** File Format */
 			file_format: string;
@@ -3203,14 +3287,20 @@ export interface components {
 		 * @description A currently eligible copy destination; the command rechecks authority.
 		 */
 		ItemCopyTargetView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Name */
 			name: string;
 		};
 		/** ItemDetailView */
 		ItemDetailView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Title Html */
 			title_html: string;
@@ -3253,7 +3343,10 @@ export interface components {
 		};
 		/** ItemLatestRevisionView */
 		ItemLatestRevisionView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Original Name */
 			original_name: string;
@@ -3392,7 +3485,10 @@ export interface components {
 		};
 		/** ItemOrganizeProjectView */
 		ItemOrganizeProjectView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Name */
 			name: string;
@@ -3439,7 +3535,10 @@ export interface components {
 		};
 		/** ItemSearchView */
 		ItemSearchView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Title Html */
 			title_html: string;
@@ -3456,7 +3555,10 @@ export interface components {
 		};
 		/** ItemTagView */
 		ItemTagView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Name */
 			name: string;
@@ -3465,7 +3567,10 @@ export interface components {
 		ItemThumbnailView: {
 			/** Source Kind */
 			source_kind: string;
-			/** Source Id */
+			/**
+			 * Source Id
+			 * Format: uuid
+			 */
 			source_id: string;
 		};
 		/** ItemUpdateRequest */
@@ -3556,7 +3661,10 @@ export interface components {
 		};
 		/** LoginSessionView */
 		LoginSessionView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/**
 			 * Current
@@ -3620,7 +3728,10 @@ export interface components {
 		};
 		/** PdfViewerProjectView */
 		PdfViewerProjectView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Name */
 			name: string;
@@ -3632,7 +3743,10 @@ export interface components {
 		};
 		/** PdfViewerRevisionView */
 		PdfViewerRevisionView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Original Name */
 			original_name: string;
@@ -3685,7 +3799,10 @@ export interface components {
 		};
 		/** ProjectDetailView */
 		ProjectDetailView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Name */
 			name: string;
@@ -3713,7 +3830,10 @@ export interface components {
 		};
 		/** ProjectParticipant */
 		ProjectParticipant: {
-			/** User Id */
+			/**
+			 * User Id
+			 * Format: uuid
+			 */
 			user_id: string;
 			/** Username */
 			username: string;
@@ -3744,7 +3864,10 @@ export interface components {
 		ProjectState: 'active' | 'archived' | 'deleted';
 		/** ProjectSummaryView */
 		ProjectSummaryView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Name */
 			name: string;
@@ -3937,7 +4060,10 @@ export interface components {
 		};
 		/** SessionUserView */
 		SessionUserView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Username */
 			username: string;
@@ -4055,9 +4181,15 @@ export interface components {
 		};
 		/** TagMergeRequest */
 		TagMergeRequest: {
-			/** Source Tag Id */
+			/**
+			 * Source Tag Id
+			 * Format: uuid
+			 */
 			source_tag_id: string;
-			/** Target Tag Id */
+			/**
+			 * Target Tag Id
+			 * Format: uuid
+			 */
 			target_tag_id: string;
 		};
 		/** TagSetRequest */
@@ -4071,7 +4203,10 @@ export interface components {
 		};
 		/** TagView */
 		TagView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Name */
 			name: string;
@@ -4169,9 +4304,15 @@ export interface components {
 		};
 		/** WorkspaceGovernanceMemberView */
 		WorkspaceGovernanceMemberView: {
-			/** Membership Id */
+			/**
+			 * Membership Id
+			 * Format: uuid
+			 */
 			membership_id: string;
-			/** User Id */
+			/**
+			 * User Id
+			 * Format: uuid
+			 */
 			user_id: string;
 			/** Username */
 			username: string;
@@ -4188,14 +4329,23 @@ export interface components {
 		};
 		/** WorkspaceInvitationAcceptanceView */
 		WorkspaceInvitationAcceptanceView: {
-			/** Workspace Id */
+			/**
+			 * Workspace Id
+			 * Format: uuid
+			 */
 			workspace_id: string;
 		};
 		/** WorkspaceInvitationCreatedView */
 		WorkspaceInvitationCreatedView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
-			/** User Id */
+			/**
+			 * User Id
+			 * Format: uuid
+			 */
 			user_id: string;
 			/** Username */
 			username: string;
@@ -4242,14 +4392,23 @@ export interface components {
 		WorkspaceInvitationRole: 'admin' | 'editor' | 'reviewer' | 'viewer';
 		/** WorkspaceInvitationView */
 		WorkspaceInvitationView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
-			/** User Id */
+			/**
+			 * User Id
+			 * Format: uuid
+			 */
 			user_id: string;
 			/** Username */
 			username: string;
 			role: components['schemas']['WorkspaceInvitationRole'];
-			/** Invited By */
+			/**
+			 * Invited By
+			 * Format: uuid
+			 */
 			invited_by: string;
 			/**
 			 * Expires At
@@ -4264,7 +4423,10 @@ export interface components {
 		};
 		/** WorkspaceMemberDirectoryView */
 		WorkspaceMemberDirectoryView: {
-			/** User Id */
+			/**
+			 * User Id
+			 * Format: uuid
+			 */
 			user_id: string;
 			/** Username */
 			username: string;
@@ -4300,11 +4462,17 @@ export interface components {
 		};
 		/** WorkspaceView */
 		WorkspaceView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Name */
 			name: string;
-			/** Owner Id */
+			/**
+			 * Owner Id
+			 * Format: uuid
+			 */
 			owner_id: string;
 			state: components['schemas']['WorkspaceState'];
 			current_role: components['schemas']['WorkspaceRole'];
@@ -5506,7 +5674,7 @@ export interface operations {
 		parameters: {
 			query?: {
 				search?: string;
-				actor_id?: string;
+				actor_id?: string | null;
 				action?: string;
 				target_type?: string;
 				page?: number;
@@ -6569,7 +6737,7 @@ export interface operations {
 			query?: {
 				query?: string;
 				tag?: string;
-				project?: string;
+				project?: string | null;
 				year?: string;
 				keyword?: string;
 				author?: string;

@@ -20,6 +20,8 @@ from quirebase.models import (
 )
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -73,7 +75,7 @@ def _workspace_owners_query():
     )
 
 
-async def workspace_owner_ids(db: AsyncSession, workspace_ids: set[str]) -> dict[str, str]:
+async def workspace_owner_ids(db: AsyncSession, workspace_ids: set[UUID]) -> dict[UUID, UUID]:
     """Return owners of surviving Workspaces, validating membership and account state."""
     if not workspace_ids:
         return {}
@@ -97,7 +99,7 @@ async def check_workspace_integrity(db: AsyncSession) -> list[str]:
 
 
 async def get_workspace(
-    db: AsyncSession, actor: User, workspace_id: str
+    db: AsyncSession, actor: User, workspace_id: UUID
 ) -> tuple[Workspace, WorkspaceMember]:
     context = await require_workspace_action(db, actor, workspace_id, ResourceAction.workspace_read)
     return context.workspace, context.membership

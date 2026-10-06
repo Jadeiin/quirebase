@@ -1,6 +1,7 @@
 """Database invariants, diagnostic findings, and retained historical context."""
 
 from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
 import anyio
 import pytest
@@ -90,9 +91,7 @@ async def test_owner_lookup_and_diagnostics_reject_invalid_surviving_roots(
     async with integrity_sessions() as db:
         owner, _, workspace, _ = await _workspace(db)
         workspace_id = workspace.id
-        assert await workspace_owner_ids(db, {workspace_id, "vanished-root"}) == {
-            workspace_id: owner.id
-        }
+        assert await workspace_owner_ids(db, {workspace_id, uuid4()}) == {workspace_id: owner.id}
         if corruption == "missing_owner":
             await db.execute(
                 update(WorkspaceMember)
@@ -113,10 +112,10 @@ async def test_owner_lookup_and_diagnostics_reject_invalid_surviving_roots(
         else:
             owner.active = False
         await db.commit()
-        with pytest.raises(RuntimeError, match=workspace_id):
+        with pytest.raises(RuntimeError, match=str(workspace_id)):
             await workspace_owner_ids(db, {workspace_id})
         findings = await check_workspace_integrity(db)
-        assert len(findings) == 1 and workspace_id in findings[0]
+        assert len(findings) == 1 and str(workspace_id) in findings[0]
 
 
 @pytest.mark.anyio
@@ -143,7 +142,7 @@ async def test_project_diagnostics_respect_retained_participation_and_detect_dri
         explicit = await db.scalar(
             select(ProjectMember).where(ProjectMember.project_id == managed.id)
         )
-        assert len(findings) == 1 and explicit.id in findings[0]
+        assert len(findings) == 1 and str(explicit.id) in findings[0]
         member.terminated_at = None
         await db.commit()
         await terminate_workspace_member(db, owner, workspace.id, member.id)
@@ -160,7 +159,7 @@ async def test_project_diagnostics_respect_retained_participation_and_detect_dri
         )
         await db.commit()
         findings = await check_project_integrity(db)
-        assert len(findings) == 1 and implicit.id in findings[0]
+        assert len(findings) == 1 and str(implicit.id) in findings[0]
 
 
 @pytest.mark.anyio

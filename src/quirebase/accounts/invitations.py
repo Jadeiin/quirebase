@@ -9,7 +9,6 @@ from sqlalchemy.exc import IntegrityError
 from quirebase.access import SystemAction, require_system_action
 from quirebase.core.crypto import generate_token, token_hash
 from quirebase.core.errors import DomainError, ResourceNotFound, ValidationFailure
-from quirebase.core.timezones import as_utc
 from quirebase.models import Invitation, User
 
 if TYPE_CHECKING:
@@ -24,11 +23,7 @@ async def get_valid_invitation(db: AsyncSession, token: str) -> Invitation | Non
     invitation = await db.scalar(
         select(Invitation).where(Invitation.token_hash == token_hash(token))
     )
-    if (
-        invitation
-        and invitation.accepted_at is None
-        and as_utc(invitation.expires_at) > datetime.now(UTC)
-    ):
+    if invitation and invitation.accepted_at is None and invitation.expires_at > datetime.now(UTC):
         return invitation
     return None
 

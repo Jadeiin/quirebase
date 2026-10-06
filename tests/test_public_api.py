@@ -6,7 +6,7 @@ from uuid import uuid4
 
 import httpx2
 import pytest
-from app_helpers import create_web_test_app
+from app_helpers import create_web_test_app, json_payload
 from sqlalchemy import select
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
@@ -167,29 +167,29 @@ async def test_http_api_library_project_tag_and_discussion_lifecycle(
         created = await client.post(
             f"{workspace_base}/items",
             headers=headers,
-            json={
+            json=json_payload({
                 "title": "HTTP API Item",
                 "abstract": "Shared contract",
                 "authors": [{"last_name": "Li", "first_name": "Ming"}],
                 "custom_fields": [{"name": "rating", "value": 5}],
-            },
+            }),
         )
         assert created.status_code == 201
         item_id = created.json()["id"]
         event = await db.scalar(
             select(AuditEvent).where(
-                AuditEvent.action == "item.create", AuditEvent.target_id == item_id
+                AuditEvent.action == "item.create", AuditEvent.target_id == str(item_id)
             )
         )
         assert event is not None
-        assert json.loads(event.detail) == {
+        assert json.loads(event.detail) == json_payload({
             "invocation": {
                 "protocol": "http",
                 "operation": "create_library_item",
                 "api_token_id": grant.token_id,
                 "client_id": "http-api",
             }
-        }
+        })
 
         listed = await client.get(f"{workspace_base}/items?query=HTTP", headers=headers)
         detail = await client.get(f"{workspace_base}/items/{item_id}", headers=headers)
@@ -201,12 +201,14 @@ async def test_http_api_library_project_tag_and_discussion_lifecycle(
         updated = await client.put(
             f"{workspace_base}/items/{item_id}",
             headers=headers,
-            json={"expected_version": detail.json()["version"], "metadata": metadata},
+            json=json_payload({"expected_version": detail.json()["version"], "metadata": metadata}),
         )
         assert updated.status_code == 200
 
         project = await client.post(
-            f"{workspace_base}/projects", headers=headers, json={"name": "API Project"}
+            f"{workspace_base}/projects",
+            headers=headers,
+            json=json_payload({"name": "API Project"}),
         )
         project_id = project.json()["id"]
         assert (
@@ -219,7 +221,9 @@ async def test_http_api_library_project_tag_and_discussion_lifecycle(
         ).json()["item_count"] == 1
 
         tag = await client.post(
-            f"{workspace_base}/items/{item_id}/tags", headers=headers, json={"name": "Reviewed"}
+            f"{workspace_base}/items/{item_id}/tags",
+            headers=headers,
+            json=json_payload({"name": "Reviewed"}),
         )
         assert tag.status_code == 200
         assert (await client.get(f"{workspace_base}/tags", headers=headers)).json()[0][
@@ -228,7 +232,11 @@ async def test_http_api_library_project_tag_and_discussion_lifecycle(
         cleared = await client.put(
             f"{workspace_base}/items/{item_id}/tags",
             headers=headers,
-            json={"add_tag_ids": [], "remove_tag_ids": [tag.json()["id"]], "new_names": []},
+            json=json_payload({
+                "add_tag_ids": [],
+                "remove_tag_ids": [tag.json()["id"]],
+                "new_names": [],
+            }),
         )
         assert cleared.status_code == 200
         assert await db.get(ItemTag, (item_id, tag.json()["id"])) is None
@@ -236,7 +244,7 @@ async def test_http_api_library_project_tag_and_discussion_lifecycle(
         discussion = await client.post(
             f"{workspace_base}/items/{item_id}/discussions",
             headers=headers,
-            json={"body": "Programmatic note"},
+            json=json_payload({"body": "Programmatic note"}),
         )
         assert discussion.status_code == 201
         message_id = discussion.json()["id"]
@@ -269,7 +277,9 @@ async def test_http_api_document_and_annotation_views_match_api_contracts(
     async with api_client(async_session_factory) as (client, _app):
         item_id = (
             await client.post(
-                f"{workspace_base}/items", headers=headers, json={"title": item_response_title}
+                f"{workspace_base}/items",
+                headers=headers,
+                json=json_payload({"title": item_response_title}),
             )
         ).json()["id"]
 
@@ -311,7 +321,7 @@ async def test_http_api_document_and_annotation_views_match_api_contracts(
         created = await client.post(
             f"{workspace_base}/items/{item_id}/annotations",
             headers=headers,
-            json={
+            json=json_payload({
                 "id": str(uuid4()),
                 "revision_id": revision.id,
                 "page_index": 0,
@@ -323,7 +333,7 @@ async def test_http_api_document_and_annotation_views_match_api_contracts(
                     "type": "note",
                     "rect": {"x": 10, "y": 20, "width": 24, "height": 24},
                 },
-            },
+            }),
         )
         assert created.status_code == 201
         annotation = created.json()
@@ -334,21 +344,21 @@ async def test_http_api_document_and_annotation_views_match_api_contracts(
         root_id_as_reply = await client.post(
             f"{workspace_base}/items/{item_id}/annotations/{annotation_id}/replies",
             headers=headers,
-            json={"id": annotation_id, "body": "Conflicting reply ID"},
+            json=json_payload({"id": annotation_id, "body": "Conflicting reply ID"}),
         )
         assert root_id_as_reply.status_code == 409
         reply_id = str(uuid4())
         created_reply = await client.post(
             f"{workspace_base}/items/{item_id}/annotations/{annotation_id}/replies",
             headers=headers,
-            json={"id": reply_id, "body": "API reply"},
+            json=json_payload({"id": reply_id, "body": "API reply"}),
         )
         assert created_reply.status_code == 201
         assert created_reply.json()["body"] == "API reply"
         reply_id_as_root = await client.post(
             f"{workspace_base}/items/{item_id}/annotations",
             headers=headers,
-            json={
+            json=json_payload({
                 "id": reply_id,
                 "revision_id": revision.id,
                 "page_index": 0,
@@ -360,7 +370,7 @@ async def test_http_api_document_and_annotation_views_match_api_contracts(
                     "type": "note",
                     "rect": {"x": 10, "y": 20, "width": 24, "height": 24},
                 },
-            },
+            }),
         )
         assert reply_id_as_root.status_code == 409
         listed = await client.get(
@@ -376,21 +386,23 @@ async def test_http_api_document_and_annotation_views_match_api_contracts(
             headers=headers,
         )
         assert review.status_code == 200
-        assert review.json()["revisions"] == [{"id": revision.id, "original_name": "api.pdf"}]
+        assert review.json()["revisions"] == json_payload([
+            {"id": revision.id, "original_name": "api.pdf"}
+        ])
         assert review.json()["annotations"][0]["id"] == annotation_id
         assert review.json()["annotations"][0]["revision_name"] == "api.pdf"
         assert review.json()["annotations"][0]["replies"][0]["id"] == reply_id
         updated_reply = await client.patch(
             f"{workspace_base}/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}",
             headers=headers,
-            json={"version": 1, "body": "Updated API reply"},
+            json=json_payload({"version": 1, "body": "Updated API reply"}),
         )
         assert updated_reply.status_code == 200
         assert updated_reply.json()["version"] == 2
         updated = await client.patch(
             f"{workspace_base}/items/{item_id}/annotations/{annotation_id}",
             headers=headers,
-            json={
+            json=json_payload({
                 "version": annotation["version"],
                 "page_index": annotation["page_index"],
                 "kind": annotation["kind"],
@@ -399,7 +411,7 @@ async def test_http_api_document_and_annotation_views_match_api_contracts(
                 "body": "Updated API annotation",
                 "selected_text": annotation["selected_text"],
                 "payload": annotation["payload"],
-            },
+            }),
         )
         assert updated.status_code == 200
         assert updated.json()["body"] == "Updated API annotation"
@@ -415,7 +427,7 @@ async def test_http_api_document_and_annotation_views_match_api_contracts(
         deleted_reply_id_as_root = await client.post(
             f"{workspace_base}/items/{item_id}/annotations",
             headers=headers,
-            json={
+            json=json_payload({
                 "id": reply_id,
                 "revision_id": revision.id,
                 "page_index": 0,
@@ -427,7 +439,7 @@ async def test_http_api_document_and_annotation_views_match_api_contracts(
                     "type": "note",
                     "rect": {"x": 10, "y": 20, "width": 24, "height": 24},
                 },
-            },
+            }),
         )
         assert deleted_reply_id_as_root.status_code == 409
         conflict = await client.delete(
@@ -579,12 +591,12 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
         )
         assert review.status_code == 200
         reviewed = {entry["id"]: entry for entry in review.json()["annotations"]}
-        assert set(reviewed) == {annotation.id for annotation in annotations} | {
-            archived_annotation.id
-        }
+        assert set(reviewed) == set(
+            map(str, {annotation.id for annotation in annotations} | {archived_annotation.id})
+        )
         assert review.json()["total"] == 3
-        assert set(reviewed[archived_annotation.id]["authorization"]["allowed"]) == set()
-        assert set(reviewed[annotations[0].id]["authorization"]["allowed"]) == {
+        assert set(reviewed[str(archived_annotation.id)]["authorization"]["allowed"]) == set()
+        assert set(reviewed[str(annotations[0].id)]["authorization"]["allowed"]) == {
             "project_annotation.hide",
             "project_annotation.archive",
             "project_annotation.lock",
@@ -610,8 +622,8 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
             archived_project.name,
         }
         assert {entry["id"] for entry in sources.json()["projects"]} == {
-            project.id,
-            archived_project.id,
+            str(project.id),
+            str(archived_project.id),
         }
         cursor_ids = []
         cursor = None
@@ -633,8 +645,8 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
             ({"pagination": "unknown"}, 422),
             ({"pagination": "cursor", "page": 2}, 422),
             ({"cursor": annotations[0].id}, 422),
-            ({"project_id": "unavailable"}, 404),
-            ({"revision_id": "unavailable"}, 404),
+            ({"project_id": uuid4()}, 404),
+            ({"revision_id": uuid4()}, 404),
             ({"page": 0}, 422),
             ({"per_page": 101}, 422),
             ({"scope": "unknown"}, 422),
@@ -672,7 +684,7 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
                 "project_annotation.delete",
             }
             for response in paged_reviews
-            if response.json()["annotations"][0]["id"] != archived_annotation.id
+            if response.json()["annotations"][0]["id"] != str(archived_annotation.id)
         )
 
         for annotation, action in zip(annotations, ("hide", "archive"), strict=True):
@@ -680,18 +692,18 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
                 f"/api/v1/workspaces/{workspace_id}/items/{item.id}/annotations/"
                 f"{annotation.id}/moderation",
                 headers=headers,
-                json={"action": action, "version": 1},
+                json=json_payload({"action": action, "version": 1}),
             )
             assert moderated.status_code == 200
             assert moderated.json()["body"] is None
             assert moderated.json()["version"] == 2
-            assert moderated.json()["moderated_by"] == administrator.id
+            assert moderated.json()["moderated_by"] == str(administrator.id)
 
         deleted = await client.post(
             f"/api/v1/workspaces/{workspace_id}/items/{item.id}/annotations/"
             f"{annotations[0].id}/moderation",
             headers=headers,
-            json={"action": "delete", "version": 2},
+            json=json_payload({"action": "delete", "version": 2}),
         )
         assert deleted.status_code == 200
         assert deleted.json()["version"] == 3
@@ -701,17 +713,19 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
             headers=headers,
         )
         assert remaining.status_code == 200
-        assert annotations[0].id not in {entry["id"] for entry in remaining.json()["annotations"]}
+        assert str(annotations[0].id) not in {
+            entry["id"] for entry in remaining.json()["annotations"]
+        }
 
     event = await db.scalar(
         select(AuditEvent).where(
             AuditEvent.action == "annotation.moderate.delete",
-            AuditEvent.target_id == annotations[0].id,
+            AuditEvent.target_id == str(annotations[0].id),
         )
     )
     assert event is not None
     assert event.authorization_resource_action == "project_annotation.delete"
-    assert json.loads(event.detail or "{}")["author_id"] == author.id
+    assert json.loads(event.detail or "{}")["author_id"] == str(author.id)
 
 
 @pytest.mark.anyio
@@ -751,14 +765,14 @@ async def test_http_api_tags_use_effective_management_action(
         )
 
     assert response.status_code == 200
-    assert response.json() == [
+    assert response.json() == json_payload([
         {
             "id": tag.id,
             "name": "Read only",
             "accessible_item_count": 0,
             "authorization": {"allowed": []},
         }
-    ]
+    ])
 
 
 @pytest.mark.anyio
@@ -819,14 +833,14 @@ async def test_project_participation_does_not_gate_workspace_project_access(
         joinable = await client.get(f"{base}?view=joinable", headers=headers)
         invalid_view = await client.get(f"{base}?view=other", headers=headers)
         assert mine.status_code == 200
-        assert {project["id"] for project in mine.json()} == {workspace_visible.id}
+        assert {project["id"] for project in mine.json()} == set(map(str, {workspace_visible.id}))
         assert joinable.status_code == 200
-        assert {project["id"] for project in joinable.json()} == {open_project.id}
+        assert {project["id"] for project in joinable.json()} == {str(open_project.id)}
         assert joinable.json()[0]["is_participating"] is False
         assert invalid_view.status_code == 422
-        active_actions = set(summaries[active.id]["authorization"]["allowed"])
-        archived_actions = set(summaries[archived.id]["authorization"]["allowed"])
-        assert summaries[active.id]["is_participating"] is False
+        active_actions = set(summaries[str(active.id)]["authorization"]["allowed"])
+        archived_actions = set(summaries[str(archived.id)]["authorization"]["allowed"])
+        assert summaries[str(active.id)]["is_participating"] is False
         assert "project_membership.manage" in active_actions
         assert "project.update" in active_actions
         assert "project.archive" in active_actions
@@ -837,10 +851,10 @@ async def test_project_participation_does_not_gate_workspace_project_access(
         active_detail = await client.get(f"{base}/{active.id}", headers=headers)
         assert active_detail.status_code == 200
         assert active_detail.json()["active_participants"] == []
-        assert active_detail.json()["authorization"] == summaries[active.id]["authorization"]
+        assert active_detail.json()["authorization"] == summaries[str(active.id)]["authorization"]
 
         workspace_summary = next(
-            row for row in projects.json() if row["id"] == workspace_visible.id
+            row for row in projects.json() if row["id"] == str(workspace_visible.id)
         )
         assert workspace_summary["is_participating"] is True
         assert "project_membership.manage" not in workspace_summary["authorization"]["allowed"]
@@ -849,7 +863,7 @@ async def test_project_participation_does_not_gate_workspace_project_access(
         add_workspace_member = await client.post(
             f"{base}/{workspace_visible.id}/participants",
             headers=headers,
-            json={"username": administrator.username},
+            json=json_payload({"username": administrator.username}),
         )
         remove_workspace_member = await client.delete(
             f"{base}/{workspace_visible.id}/participants/{administrator.id}", headers=headers
@@ -862,15 +876,19 @@ async def test_project_participation_does_not_gate_workspace_project_access(
         settings = await client.patch(
             f"{base}/{active.id}",
             headers=headers,
-            json={"name": "Still accessible", "description": "", "participation": "open"},
+            json=json_payload({
+                "name": "Still accessible",
+                "description": "",
+                "participation": "open",
+            }),
         )
         assert settings.status_code == 200
         join = await client.post(f"{base}/{active.id}/join", headers=headers)
         assert join.status_code == 200
         joined_mine = await client.get(f"{base}?view=mine", headers=headers)
         assert {project["id"] for project in joined_mine.json()} == {
-            active.id,
-            workspace_visible.id,
+            str(active.id),
+            str(workspace_visible.id),
         }
         project_detail = await client.get(f"{base}/{active.id}", headers=headers)
         assert project_detail.status_code == 200
@@ -878,7 +896,7 @@ async def test_project_participation_does_not_gate_workspace_project_access(
         leave = await client.post(f"{base}/{active.id}/leave", headers=headers)
         assert leave.status_code == 200
         left_mine = await client.get(f"{base}?view=mine", headers=headers)
-        assert {project["id"] for project in left_mine.json()} == {workspace_visible.id}
+        assert {project["id"] for project in left_mine.json()} == {str(workspace_visible.id)}
         project_detail = await client.get(f"{base}/{active.id}", headers=headers)
         assert project_detail.status_code == 200
         assert project_detail.json()["is_participating"] is False
@@ -886,12 +904,16 @@ async def test_project_participation_does_not_gate_workspace_project_access(
         managed_settings = await client.patch(
             f"{base}/{active.id}",
             headers=headers,
-            json={"name": "Still accessible", "description": "", "participation": "managed"},
+            json=json_payload({
+                "name": "Still accessible",
+                "description": "",
+                "participation": "managed",
+            }),
         )
         assert managed_settings.status_code == 200
         participant = await client.post(
             f"{base}/{active.id}/participants",
             headers=headers,
-            json={"username": owner.username},
+            json=json_payload({"username": owner.username}),
         )
         assert participant.status_code == 200

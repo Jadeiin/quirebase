@@ -21,9 +21,9 @@
     "cross_workspace_composite_fk_rejected": true,
     "object_key_prefixes_in_burst": {
       "uuid7": 1,
-      "uuid4": 256,
+      "uuid4": 255,
       "samples": [
-        "01/a1/01a110da8a707b609c548b6083697cfd.pdf"
+        "01/a1/01a11108d2417c51967d9b15138ffb09.pdf"
       ]
     }
   },
@@ -94,34 +94,34 @@
     "direct_resolution": "Gamma"
   },
   "demo_fixture": {
-    "currentWorkspaceId": "01a110da-8a55-7842-8a3f-f395bd9a32e1",
+    "currentWorkspaceId": "01a11108-d217-7d92-8770-cf0967049f65",
     "workspaces": [
       {
-        "id": "01a110da-8a55-7842-8a3f-f3768d68cd2e",
+        "id": "01a11108-d217-7d92-8770-cee6064e78a7",
         "name": "Alpha"
       },
       {
-        "id": "01a110da-8a55-7842-8a3f-f38bd29122b6",
+        "id": "01a11108-d217-7d92-8770-cef49a94ecce",
         "name": "Beta"
       },
       {
-        "id": "01a110da-8a55-7842-8a3f-f395bd9a32e1",
+        "id": "01a11108-d217-7d92-8770-cf0967049f65",
         "name": "Gamma"
       }
     ],
     "workspaceAccess": {
       "admin": [
-        "01a110da-8a55-7842-8a3f-f3768d68cd2e",
-        "01a110da-8a55-7842-8a3f-f38bd29122b6",
-        "01a110da-8a55-7842-8a3f-f395bd9a32e1"
+        "01a11108-d217-7d92-8770-cee6064e78a7",
+        "01a11108-d217-7d92-8770-cef49a94ecce",
+        "01a11108-d217-7d92-8770-cf0967049f65"
       ],
       "editor": [
-        "01a110da-8a55-7842-8a3f-f395bd9a32e1"
+        "01a11108-d217-7d92-8770-cf0967049f65"
       ]
     },
     "projects": [
       {
-        "id": "01a110da-8a55-7842-8a3f-f3aa57ef6e3e",
+        "id": "01a11108-d218-7d82-9687-ecafad4a86db",
         "name": "Workspace desk",
         "participation": "workspace",
         "createdAt": "2026-01-01T00:00:00+00:00",
@@ -136,7 +136,7 @@
         ]
       },
       {
-        "id": "01a110da-8a55-7842-8a3f-f3b53c6f6fe0",
+        "id": "01a11108-d218-7d82-9687-ecb91ef2ff4c",
         "name": "Open joined",
         "participation": "open",
         "createdAt": "2026-01-01T00:00:00+00:00",
@@ -151,7 +151,7 @@
         ]
       },
       {
-        "id": "01a110da-8a55-7842-8a3f-f3c9754b031c",
+        "id": "01a11108-d218-7d82-9687-ecc38e94bdb2",
         "name": "Open joinable",
         "participation": "open",
         "createdAt": "2026-01-01T00:00:01+00:00",
@@ -163,7 +163,7 @@
         "participatingFor": []
       },
       {
-        "id": "01a110da-8a55-7842-8a3f-f3d84597441d",
+        "id": "01a11108-d218-7d82-9687-ecd3e2a39e23",
         "name": "Managed joined",
         "participation": "managed",
         "createdAt": "2026-01-01T00:00:01+00:00",
@@ -178,7 +178,7 @@
         ]
       },
       {
-        "id": "01a110da-8a55-7842-8a3f-f3e7587416c7",
+        "id": "01a11108-d218-7d82-9687-ece26411d75b",
         "name": "Managed governance",
         "participation": "managed",
         "createdAt": "2026-01-01T00:00:02+00:00",
@@ -189,7 +189,7 @@
         "participatingFor": []
       },
       {
-        "id": "01a110da-8a55-7842-8a3f-f3fc23d4260e",
+        "id": "01a11108-d218-7d82-9687-ecf695501035",
         "name": "Archived open",
         "participation": "open",
         "createdAt": "2026-01-01T00:00:02+00:00",
@@ -229,9 +229,9 @@
   "ddl": {
     "sqlite": {
       "prototype_native_records": "\nCREATE TABLE prototype_native_records (\n\tid CHAR(32) NOT NULL, \n\tcreated_at DATETIME NOT NULL, \n\tPRIMARY KEY (id)\n)\n\n",
-      "prototype_aa_workspaces": "\nCREATE TABLE prototype_aa_workspaces (\n\tid BINARY(16) NOT NULL, \n\tname VARCHAR(100) NOT NULL, \n\tsa_orm_sentinel INTEGER, \n\tcreated_at DATETIME NOT NULL, \n\tupdated_at DATETIME NOT NULL, \n\tCONSTRAINT pk_prototype_aa_workspaces PRIMARY KEY (id)\n)\n\n",
-      "prototype_aa_records": "\nCREATE TABLE prototype_aa_records (\n\tid BINARY(16) NOT NULL, \n\tworkspace_id BINARY(16) NOT NULL, \n\tversion INTEGER NOT NULL, \n\tname VARCHAR(100) NOT NULL, \n\tsa_orm_sentinel INTEGER, \n\tcreated_at DATETIME NOT NULL, \n\tupdated_at DATETIME NOT NULL, \n\tCONSTRAINT pk_prototype_aa_records PRIMARY KEY (id), \n\tCONSTRAINT uq_prototype_aa_records_workspace_id UNIQUE (workspace_id, id), \n\tCONSTRAINT fk_prototype_aa_records_workspace_id_prototype_aa_workspaces FOREIGN KEY(workspace_id) REFERENCES prototype_aa_workspaces (id)\n)\n\n",
-      "prototype_aa_links": "\nCREATE TABLE prototype_aa_links (\n\tid INTEGER NOT NULL, \n\tworkspace_id BINARY(16) NOT NULL, \n\trecord_id BINARY(16) NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(workspace_id, record_id) REFERENCES prototype_aa_records (workspace_id, id)\n)\n\n",
+      "prototype_aa_workspaces": "\nCREATE TABLE prototype_aa_workspaces (\n\tid BLOB NOT NULL, \n\tname VARCHAR(100) NOT NULL, \n\tsa_orm_sentinel INTEGER, \n\tcreated_at DATETIME NOT NULL, \n\tupdated_at DATETIME NOT NULL, \n\tCONSTRAINT pk_prototype_aa_workspaces PRIMARY KEY (id)\n)\n\n",
+      "prototype_aa_records": "\nCREATE TABLE prototype_aa_records (\n\tid BLOB NOT NULL, \n\tworkspace_id BLOB NOT NULL, \n\tversion INTEGER NOT NULL, \n\tname VARCHAR(100) NOT NULL, \n\tsa_orm_sentinel INTEGER, \n\tcreated_at DATETIME NOT NULL, \n\tupdated_at DATETIME NOT NULL, \n\tCONSTRAINT pk_prototype_aa_records PRIMARY KEY (id), \n\tCONSTRAINT uq_prototype_aa_records_workspace_id UNIQUE (workspace_id, id), \n\tCONSTRAINT fk_prototype_aa_records_workspace_id_prototype_aa_workspaces FOREIGN KEY(workspace_id) REFERENCES prototype_aa_workspaces (id)\n)\n\n",
+      "prototype_aa_links": "\nCREATE TABLE prototype_aa_links (\n\tid INTEGER NOT NULL, \n\tworkspace_id BLOB NOT NULL, \n\trecord_id BLOB NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(workspace_id, record_id) REFERENCES prototype_aa_records (workspace_id, id)\n)\n\n",
       "prototype_nano_records": "\nCREATE TABLE prototype_nano_records (\n\tid VARCHAR NOT NULL, \n\tsa_orm_sentinel INTEGER, \n\tCONSTRAINT pk_prototype_nano_records PRIMARY KEY (id)\n)\n\n"
     },
     "postgresql": {

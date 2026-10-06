@@ -15,10 +15,12 @@ from quirebase.models import (
 )
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
-async def _lock_workspace(db: AsyncSession, workspace_id: str) -> Workspace:
+async def _lock_workspace(db: AsyncSession, workspace_id: UUID) -> Workspace:
     workspace = await db.scalar(
         select(Workspace)
         .where(Workspace.id == workspace_id)
@@ -31,7 +33,7 @@ async def _lock_workspace(db: AsyncSession, workspace_id: str) -> Workspace:
 
 
 async def _current_member(
-    db: AsyncSession, workspace_id: str, membership_id: str
+    db: AsyncSession, workspace_id: UUID, membership_id: UUID
 ) -> WorkspaceMember:
     member = await db.scalar(
         select(WorkspaceMember)

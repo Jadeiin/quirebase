@@ -4,7 +4,7 @@ import asyncio
 
 import httpx2
 import pytest
-from app_helpers import create_web_test_app
+from app_helpers import create_web_test_app, json_payload
 from inquiro import CandidatePage
 from sqlalchemy import func, select
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
@@ -108,7 +108,7 @@ async def test_http_api_and_database_share_the_asyncio_request_loop(async_sessio
         created = await client.post(
             f"/api/v1/workspaces/{workspace_id}/items",
             headers=headers,
-            json={"title": "Async Item"},
+            json=json_payload({"title": "Async Item"}),
         )
         listed = await client.get(f"/api/v1/workspaces/{workspace_id}/items", headers=headers)
 

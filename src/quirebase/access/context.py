@@ -29,6 +29,8 @@ from quirebase.models import (
 )
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -47,11 +49,11 @@ class WorkspaceContext:
     role: WorkspaceRole
 
     @property
-    def actor_id(self) -> str:
+    def actor_id(self) -> UUID:
         return self.actor.id
 
     @property
-    def workspace_id(self) -> str:
+    def workspace_id(self) -> UUID:
         return self.workspace.id
 
     @property
@@ -72,7 +74,7 @@ class ProjectContext:
 async def resolve_workspace_context(
     db: AsyncSession,
     actor: User,
-    workspace_id: str,
+    workspace_id: UUID,
 ) -> WorkspaceContext:
     """Resolve active Workspace context at a request/workflow boundary.
 
@@ -132,7 +134,7 @@ def _require_workspace_decision(
 async def require_workspace_membership(
     db: AsyncSession,
     actor: User,
-    workspace_id: str,
+    workspace_id: UUID,
 ) -> WorkspaceContext:
     # Reload the credential subject so a prior transaction rollback or a
     # durable retry cannot leave an expired ORM instance as the authority
@@ -162,7 +164,7 @@ async def require_workspace_membership(
 async def require_workspace_action(
     db: AsyncSession,
     actor: User,
-    workspace_id: str,
+    workspace_id: UUID,
     resource_action: ResourceAction,
     *,
     relation: str = "any",
@@ -182,7 +184,7 @@ async def require_workspace_action(
 
 
 async def lock_workspace_context(
-    db: AsyncSession, actor: User, workspace_id: str
+    db: AsyncSession, actor: User, workspace_id: UUID
 ) -> WorkspaceContext:
     """Hold the Workspace root while a command checks target facts and authority."""
     await db.scalar(

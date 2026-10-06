@@ -27,6 +27,7 @@ from quirebase.search import search_index
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from uuid import UUID
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -81,7 +82,7 @@ class ItemMetadata:
 
 @dataclass(frozen=True)
 class ItemWriteResult:
-    item_id: str
+    item_id: UUID
     version: int
 
 
@@ -244,7 +245,7 @@ def _serialize_custom_fields(fields: tuple[CustomField, ...]) -> str | None:
 async def _create_item(
     db: AsyncSession,
     actor: User,
-    workspace_id: str,
+    workspace_id: UUID,
     metadata: ItemMetadata,
 ) -> ItemWriteResult:
     context = await require_workspace_action(db, actor, workspace_id, ResourceAction.item_create)
@@ -293,7 +294,7 @@ async def _create_item(
 async def create_item(
     db: AsyncSession,
     actor: User,
-    workspace_id: str,
+    workspace_id: UUID,
     metadata: ItemMetadata,
 ) -> ItemWriteResult:
     try:
@@ -306,8 +307,8 @@ async def create_item(
 async def _revise_item_metadata(
     db: AsyncSession,
     actor: User,
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     expected_version: int,
     metadata: ItemMetadata,
 ) -> ItemWriteResult:
@@ -381,8 +382,8 @@ async def _revise_item_metadata(
 async def revise_item_metadata(
     db: AsyncSession,
     actor: User,
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     expected_version: int,
     metadata: ItemMetadata,
 ) -> ItemWriteResult:
@@ -398,8 +399,8 @@ async def revise_item_metadata(
 async def _regenerate_bibtex_key(
     db: AsyncSession,
     actor: User,
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
 ) -> ItemWriteResult:
     actor_id = actor.id
     await require_editable_item(db, actor, workspace_id, item_id)
@@ -436,8 +437,8 @@ async def _regenerate_bibtex_key(
 async def regenerate_bibtex_key(
     db: AsyncSession,
     actor: User,
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
 ) -> ItemWriteResult:
     try:
         return await _regenerate_bibtex_key(db, actor, workspace_id, item_id)

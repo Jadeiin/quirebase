@@ -21,7 +21,6 @@ from quirebase.core.errors import (
     ValidationFailure,
     WorkspaceLifecycleError,
 )
-from quirebase.core.timezones import as_utc
 from quirebase.models import (
     User,
     Workspace,
@@ -34,6 +33,8 @@ from quirebase.models import (
 )
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 from ._locking import _lock_workspace
@@ -42,7 +43,7 @@ from ._locking import _lock_workspace
 async def invite_workspace_member(
     db: AsyncSession,
     actor: User,
-    workspace_id: str,
+    workspace_id: UUID,
     username: str,
     role: WorkspaceInvitationRole | str,
     *,
@@ -81,7 +82,7 @@ async def invite_workspace_member(
     else:
         if expires_at.tzinfo is None or expires_at.utcoffset() is None:
             raise ValidationFailure("Workspace invitation expiry must include a timezone")
-        normalized_expiry = as_utc(expires_at)
+        normalized_expiry = expires_at.astimezone(UTC)
     if normalized_expiry <= now or normalized_expiry > now + timedelta(days=365):
         raise ValidationFailure("Workspace invitation expiry must be within the next 365 days")
     existing = await db.scalar(
@@ -155,7 +156,7 @@ async def get_workspace_invitation_by_token(
         invitation is None
         or invitation.accepted_at is not None
         or invitation.revoked_at is not None
-        or as_utc(invitation.expires_at) <= datetime.now(UTC)
+        or invitation.expires_at <= datetime.now(UTC)
     ):
         return None
     workspace = await db.get(Workspace, invitation.workspace_id, populate_existing=True)
@@ -169,7 +170,7 @@ async def get_workspace_invitation_by_token(
 
 
 async def accept_workspace_invitation(
-    db: AsyncSession, actor: User, workspace_id: str, token: str
+    db: AsyncSession, actor: User, workspace_id: UUID, token: str
 ) -> WorkspaceMember:
     current_actor = await require_system_resource_action(
         db,
@@ -207,7 +208,7 @@ async def accept_workspace_invitation(
         or invitation.user_id != current_actor.id
         or invitation.accepted_at is not None
         or invitation.revoked_at is not None
-        or as_utc(invitation.expires_at) <= datetime.now(UTC)
+        or invitation.expires_at <= datetime.now(UTC)
     ):
         raise ResourceNotFound("Workspace invitation not found or expired")
     member = await db.scalar(
@@ -270,7 +271,7 @@ async def accept_workspace_invitation_by_token(
 
 
 async def _revoke_pending_invitations(
-    db: AsyncSession, workspace_id: str, user_id: str, *, except_id: str | None = None
+    db: AsyncSession, workspace_id: UUID, user_id: UUID, *, except_id: UUID | None = None
 ) -> None:
     statement = select(WorkspaceInvitation).where(
         WorkspaceInvitation.workspace_id == workspace_id,
@@ -287,7 +288,7 @@ async def _revoke_pending_invitations(
 
 
 async def revoke_workspace_invitation(
-    db: AsyncSession, actor: User, workspace_id: str, invitation_id: str
+    db: AsyncSession, actor: User, workspace_id: UUID, invitation_id: UUID
 ) -> None:
     await _lock_workspace(db, workspace_id)
     context = await require_workspace_membership(db, actor, workspace_id)
@@ -303,7 +304,7 @@ async def revoke_workspace_invitation(
     if invitation is None or invitation.accepted_at is not None:
         raise ResourceNotFound("Workspace invitation not found")
     now = datetime.now(UTC)
-    if invitation.revoked_at is not None or as_utc(invitation.expires_at) <= now:
+    if invitation.revoked_at is not None or invitation.expires_at <= now:
         await db.commit()
         return
     invitation.revoked_at = now

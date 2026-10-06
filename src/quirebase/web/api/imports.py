@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, File, Form, UploadFile, status
 
@@ -49,7 +50,7 @@ def _import_batch_view(
     status_code=status.HTTP_201_CREATED,
 )
 async def stage_bibliography_import(
-    workspace_id: str,
+    workspace_id: UUID,
     user: ApiUser,
     db: Database,
     bibliography: Annotated[UploadFile, File()],
@@ -65,7 +66,7 @@ async def stage_bibliography_import(
     status_code=status.HTTP_201_CREATED,
 )
 async def stage_identifier_import(
-    workspace_id: str, data: IdentifierImportRequest, user: ApiUser, db: Database
+    workspace_id: UUID, data: IdentifierImportRequest, user: ApiUser, db: Database
 ):
     result = await stage_identifier_import_batch(
         db,
@@ -84,7 +85,7 @@ async def stage_identifier_import(
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def stage_pdf_import(
-    workspace_id: str,
+    workspace_id: UUID,
     user: ApiUser,
     db: Database,
     pdfs: Annotated[list[UploadFile], File()],
@@ -100,20 +101,20 @@ async def stage_pdf_import(
 
 
 @router.get("/imports/{batch_id}", response_model=ImportBatchView)
-async def import_batch(workspace_id: str, batch_id: str, user: ApiUser, db: Database):
+async def import_batch(workspace_id: UUID, batch_id: UUID, user: ApiUser, db: Database):
     result = await get_import_batch_preview(db, user, workspace_id, batch_id)
     return _import_batch_view(*result, include_workflow=result[0].actor_id == user.id)
 
 
 @router.post("/imports/{batch_id}/retry", response_model=ImportBatchRetryView)
-async def retry_import_batch(workspace_id: str, batch_id: str, user: ApiUser, db: Database):
+async def retry_import_batch(workspace_id: UUID, batch_id: UUID, user: ApiUser, db: Database):
     batch = await retry_pdf_import_batch(db, user, workspace_id, batch_id)
     return {"id": batch.id, "status": batch.status, "workflow_id": batch.workflow_id}
 
 
 @router.post("/imports/{batch_id}/commit", response_model=OkView)
 async def commit_staged_import(
-    workspace_id: str, batch_id: str, user: ApiUser, db: Database
+    workspace_id: UUID, batch_id: UUID, user: ApiUser, db: Database
 ) -> OkView:
     await commit_import_batch(db, user, workspace_id, batch_id)
     return OkView()
@@ -121,7 +122,7 @@ async def commit_staged_import(
 
 @router.delete("/imports/{batch_id}", response_model=OkView)
 async def discard_staged_import(
-    workspace_id: str, batch_id: str, user: ApiUser, db: Database
+    workspace_id: UUID, batch_id: UUID, user: ApiUser, db: Database
 ) -> OkView:
     await discard_import_batch(db, user, workspace_id, batch_id)
     return OkView()

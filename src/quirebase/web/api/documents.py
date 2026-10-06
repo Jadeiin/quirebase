@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, File, Form, Request, UploadFile, status
 from fastapi.responses import Response, StreamingResponse
@@ -182,7 +183,7 @@ async def ranged_object(request: Request, metadata, filename: str, object_get):
 
 @router.get("/items/{item_id}/documents", response_model=DocumentListView)
 async def list_documents(
-    workspace_id: str, item_id: str, context: WorkspaceAccess, db: Database
+    workspace_id: UUID, item_id: UUID, context: WorkspaceAccess, db: Database
 ) -> DocumentListView:
     item_files = await open_item_section(db, context, item_id, ItemSection.files)
     if not isinstance(item_files, ItemFilesData):  # pragma: no cover
@@ -202,8 +203,8 @@ async def list_documents(
     },
 )
 async def download_item_archive(
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     user: ApiUser,
     db: Database,
     revisions: str | None = None,
@@ -212,7 +213,9 @@ async def download_item_archive(
     timezone: str | None = None,
 ) -> StreamingResponse:
     revision_ids = (
-        [value.strip() for value in revisions.split(",") if value.strip()] if revisions else None
+        [UUID(value.strip()) for value in revisions.split(",") if value.strip()]
+        if revisions
+        else None
     )
     bundle = await create_item_document_bundle(
         db,
@@ -238,8 +241,8 @@ async def download_item_archive(
     "/items/{item_id}/attachments", response_model=WriteResult, status_code=status.HTTP_202_ACCEPTED
 )
 async def upload_item_attachment(
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     user: ApiUser,
     db: Database,
     attachment: Annotated[UploadFile, File()],
@@ -267,8 +270,8 @@ async def upload_item_attachment(
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def upload_remote_item_attachment(
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     data: RemoteAttachmentRequest,
     user: ApiUser,
     db: Database,
@@ -306,9 +309,9 @@ async def upload_remote_item_attachment(
 )
 async def download_item_attachment(
     request: Request,
-    workspace_id: str,
-    item_id: str,
-    attachment_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    attachment_id: UUID,
     user: ApiUser,
     db: Database,
 ) -> Response:
@@ -334,7 +337,7 @@ async def download_item_attachment(
 
 @router.delete("/items/{item_id}/attachments/{attachment_id}", response_model=OkView)
 async def delete_item_attachment(
-    workspace_id: str, item_id: str, attachment_id: str, user: ApiUser, db: Database
+    workspace_id: UUID, item_id: UUID, attachment_id: UUID, user: ApiUser, db: Database
 ) -> OkView:
     await delete_attachment(db, user, workspace_id, item_id, attachment_id)
     return OkView()
@@ -344,8 +347,8 @@ async def delete_item_attachment(
     "/items/{item_id}/revisions", response_model=WriteResult, status_code=status.HTTP_202_ACCEPTED
 )
 async def upload_item_pdf(
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     user: ApiUser,
     db: Database,
     pdf: Annotated[UploadFile, File()],
@@ -368,8 +371,8 @@ async def upload_item_pdf(
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def upload_remote_item_pdf(
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     data: RemoteRevisionRequest,
     user: ApiUser,
     db: Database,
@@ -387,7 +390,7 @@ async def upload_remote_item_pdf(
 
 @router.delete("/items/{item_id}/revisions/{revision_id}", response_model=OkView)
 async def delete_item_pdf(
-    workspace_id: str, item_id: str, revision_id: str, user: ApiUser, db: Database
+    workspace_id: UUID, item_id: UUID, revision_id: UUID, user: ApiUser, db: Database
 ) -> OkView:
     await delete_file_revision(db, user, workspace_id, item_id, revision_id)
     return OkView()
@@ -395,7 +398,7 @@ async def delete_item_pdf(
 
 @router.get("/items/{item_id}/revisions/{revision_id}/viewer", response_model=PdfViewerView)
 async def pdf_viewer_configuration(
-    workspace_id: str, item_id: str, revision_id: str, user: ApiUser, db: Database
+    workspace_id: UUID, item_id: UUID, revision_id: UUID, user: ApiUser, db: Database
 ):
     data = await get_pdf_viewer_data(db, user, workspace_id, item_id, revision_id)
     revision = data["revision"]
@@ -442,9 +445,9 @@ async def pdf_viewer_configuration(
 )
 async def pdf_content(
     request: Request,
-    workspace_id: str,
-    item_id: str,
-    revision_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    revision_id: UUID,
     user: ApiUser,
     db: Database,
 ):
@@ -474,9 +477,9 @@ async def pdf_content(
 )
 async def pdf_thumbnail(
     request: Request,
-    workspace_id: str,
-    item_id: str,
-    revision_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    revision_id: UUID,
     user: ApiUser,
     db: Database,
 ):
@@ -502,8 +505,8 @@ async def pdf_thumbnail(
 )
 async def item_thumbnail(
     request: Request,
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     user: ApiUser,
     db: Database,
 ):
@@ -536,13 +539,13 @@ async def item_thumbnail(
     },
 )
 async def export_revision_pdf_route(
-    workspace_id: str,
-    item_id: str,
-    revision_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    revision_id: UUID,
     user: ApiUser,
     db: Database,
     include_annotations: bool = True,
-    project_id: str | None = None,
+    project_id: UUID | None = None,
     timezone: str | None = None,
 ):
     exported = await export_revision_pdf(

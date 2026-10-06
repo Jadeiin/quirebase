@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from typing import Any
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -32,7 +35,7 @@ API_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
 
 
 class WriteResult(BaseModel):
-    id: str
+    id: UUID | str
     version: int | None = None
 
 

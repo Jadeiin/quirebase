@@ -19,10 +19,12 @@ from quirebase.core.errors import (
 from quirebase.models import Item, ItemAuthor, User
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
-def visible_items_query(workspace_id: str) -> Select[tuple[Item]]:
+def visible_items_query(workspace_id: UUID) -> Select[tuple[Item]]:
     return select(Item).where(Item.workspace_id == workspace_id)
 
 
@@ -32,7 +34,7 @@ def workspace_items_query(ctx: WorkspaceContext) -> Select[tuple[Item]]:
     return workspace_select(Item, ctx)
 
 
-async def get_item(db: AsyncSession, ctx: WorkspaceContext, item_id: str) -> Item | None:
+async def get_item(db: AsyncSession, ctx: WorkspaceContext, item_id: UUID) -> Item | None:
     """Load an Item by id inside an already-resolved Workspace context."""
 
     return await db.scalar(
@@ -45,7 +47,9 @@ async def get_item(db: AsyncSession, ctx: WorkspaceContext, item_id: str) -> Ite
     )
 
 
-async def get_item_for_update(db: AsyncSession, ctx: WorkspaceContext, item_id: str) -> Item | None:
+async def get_item_for_update(
+    db: AsyncSession, ctx: WorkspaceContext, item_id: UUID
+) -> Item | None:
     """Load an Item root with a row lock for a mutation boundary."""
 
     return await db.scalar(
@@ -59,7 +63,7 @@ async def get_item_for_update(db: AsyncSession, ctx: WorkspaceContext, item_id: 
     )
 
 
-async def can_read_item(db: AsyncSession, user: User, workspace_id: str, item_id: str) -> bool:
+async def can_read_item(db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID) -> bool:
     try:
         await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     except (PermissionDenied, WorkspaceMembershipRequired, WorkspaceUnavailable):
@@ -71,7 +75,7 @@ async def can_read_item(db: AsyncSession, user: User, workspace_id: str, item_id
     )
 
 
-async def can_edit_item(db: AsyncSession, user: User, workspace_id: str, item_id: str) -> bool:
+async def can_edit_item(db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID) -> bool:
     try:
         await require_workspace_action(db, user, workspace_id, ResourceAction.item_update)
     except (
@@ -88,7 +92,7 @@ async def can_edit_item(db: AsyncSession, user: User, workspace_id: str, item_id
     )
 
 
-async def can_delete_item(db: AsyncSession, user: User, workspace_id: str, item_id: str) -> bool:
+async def can_delete_item(db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID) -> bool:
     try:
         await require_workspace_action(db, user, workspace_id, ResourceAction.item_delete)
     except (
@@ -108,8 +112,8 @@ async def can_delete_item(db: AsyncSession, user: User, workspace_id: str, item_
 async def require_item_action(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     action: ResourceAction,
 ) -> Item:
     context = await require_workspace_action(db, user, workspace_id, action)
@@ -120,19 +124,19 @@ async def require_item_action(
 
 
 async def require_readable_item(
-    db: AsyncSession, user: User, workspace_id: str, item_id: str
+    db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID
 ) -> Item:
     return await require_item_action(db, user, workspace_id, item_id, ResourceAction.workspace_read)
 
 
 async def require_editable_item(
-    db: AsyncSession, user: User, workspace_id: str, item_id: str
+    db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID
 ) -> Item:
     return await require_item_action(db, user, workspace_id, item_id, ResourceAction.item_update)
 
 
 async def require_accessible_items(
-    db: AsyncSession, user: User, workspace_id: str, item_ids: list[str]
+    db: AsyncSession, user: User, workspace_id: UUID, item_ids: list[UUID]
 ) -> list[Item]:
     await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     requested = tuple(dict.fromkeys(item_ids))

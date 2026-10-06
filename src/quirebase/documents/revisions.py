@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
+from uuid_utils.compat import uuid7
 
 from quirebase.access import (
     ResourceAction,
@@ -108,7 +109,7 @@ class ItemThumbnail:
     response: ObjectResponse
     media_type: str
     source_kind: str
-    source_id: str
+    source_id: UUID
 
 
 @dataclass(frozen=True)
@@ -116,7 +117,7 @@ class ItemThumbnailSource:
     object_key: str
     media_type: str
     source_kind: str
-    source_id: str
+    source_id: UUID
 
 
 async def _validate_staged_pdf(store: ObjectStore, object_key: str) -> None:
@@ -226,10 +227,10 @@ async def attach_staged_pdf(
         item.workspace_id,
         revision.id,
         key,
-        str(thumbnail_object_id),
+        thumbnail_object_id,
         queue_name=DOCUMENTS_QUEUE,
         workflow_id=f"inspect-imported-revision:{revision.id}",
-        partition_key=revision.id,
+        partition_key=str(revision.id),
         attributes={
             "capability": "documents",
             "operation": "inspect_imported_revision",
@@ -291,7 +292,9 @@ async def _referenced_candidates(db: AsyncSession, object_keys: tuple[str, ...])
     referenced.update(
         (
             await db.scalars(
-                select(Attachment.object_key).where(Attachment.object_key.in_(object_keys))
+                select(Attachment.file["filename"].as_string()).where(
+                    Attachment.file["filename"].as_string().in_(object_keys)
+                )
             )
         ).all()
     )
@@ -359,10 +362,10 @@ async def enqueue_object_cleanup(
     db: AsyncSession,
     object_keys: Iterable[str],
     *,
-    actor_id: str,
-    workspace_id: str,
+    actor_id: UUID,
+    workspace_id: UUID,
     operation: str,
-    target_id: str | None = None,
+    target_id: UUID | str | None = None,
 ) -> str | None:
     """Durably request post-commit deletion of currently unreferenced objects."""
     keys = list(dict.fromkeys(key for key in object_keys if key))
@@ -396,8 +399,8 @@ async def discard_staged_object(db: AsyncSession, object_key: str) -> None:
 async def store_pdf_revision(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     source: ObjectSource,
     filename: str,
     max_bytes: int | None = None,
@@ -414,9 +417,10 @@ async def store_pdf_revision(
     # transaction open while the upload performs external I/O; the durable
     # finalizer revalidates authority immediately before committing the child.
     await db.rollback()
-    revision_id = uuid4()
+    revision_id = uuid7()
+    object_id = uuid4()
     thumbnail_object_id = uuid4()
-    revision_key = object_key(revision_id, ObjectSuffix.PDF)
+    revision_key = object_key(object_id, ObjectSuffix.PDF)
     thumbnail_key = object_key(thumbnail_object_id, ObjectSuffix.PNG)
     workflow_id = f"upload-revision:{revision_id}"
     await durable_operations().enqueue(
@@ -424,9 +428,9 @@ async def store_pdf_revision(
         user_id,
         workspace_id,
         item_id,
-        str(revision_id),
-        str(revision_id),
-        str(thumbnail_object_id),
+        revision_id,
+        object_id,
+        thumbnail_object_id,
         Path(filename).name,
         queue_name=UPLOAD_QUEUE,
         workflow_id=workflow_id,
@@ -443,7 +447,7 @@ async def store_pdf_revision(
     )
     try:
         stored = await get_object_store().put_object(
-            revision_id,
+            object_id,
             ObjectSuffix.PDF,
             source,
             max_bytes=max_bytes,
@@ -467,7 +471,7 @@ async def store_pdf_revision(
         raise
     return UploadWorkflow(
         workflow_id,
-        revision_id,
+        object_id,
         revision_key,
     )
 
@@ -475,8 +479,8 @@ async def store_pdf_revision(
 async def create_attachment(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     source: ObjectSource,
     filename: str,
     content_type: str = "application/octet-stream",
@@ -501,16 +505,17 @@ async def create_attachment(
     # The finalizer performs the authoritative revalidation in its own short
     # transaction.
     await db.rollback()
-    attachment_id = uuid4()
-    attachment_key = object_key(attachment_id, ObjectSuffix.BINARY)
+    attachment_id = uuid7()
+    object_id = uuid4()
+    attachment_key = object_key(object_id, ObjectSuffix.BINARY)
     workflow_id = f"upload-attachment:{attachment_id}"
     await durable_operations().enqueue(
         ATTACHMENT_UPLOAD_WORKFLOW,
         user_id,
         workspace_id,
         item_id,
-        str(attachment_id),
-        str(attachment_id),
+        attachment_id,
+        object_id,
         Path(filename).name,
         content_type,
         role.value if role else None,
@@ -529,7 +534,7 @@ async def create_attachment(
     )
     try:
         stored = await get_object_store().put_object(
-            attachment_id, ObjectSuffix.BINARY, source, max_bytes=max_bytes
+            object_id, ObjectSuffix.BINARY, source, max_bytes=max_bytes
         )
         await durable_operations().send(
             workflow_id,
@@ -549,39 +554,39 @@ async def create_attachment(
         raise
     return UploadWorkflow(
         workflow_id,
-        attachment_id,
+        object_id,
         attachment_key,
     )
 
 
 async def get_attachment_file(
-    db: AsyncSession, user: User, workspace_id: str, item_id: str, attachment_id: str
+    db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID, attachment_id: UUID
 ) -> tuple[ObjectResponse, str, str]:
     record = await require_attachment(db, user, workspace_id, item_id, attachment_id)
     return (
-        await get_object_store().get(record.object_key),
-        record.original_name,
-        record.mime_type or "application/octet-stream",
+        await get_object_store().get(record.file.path),
+        record.file.metadata["original_name"],
+        record.file.content_type or "application/octet-stream",
     )
 
 
 async def head_attachment_file(
-    db: AsyncSession, user: User, workspace_id: str, item_id: str, attachment_id: str
+    db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID, attachment_id: UUID
 ) -> tuple[ObjectMetadata, str, str]:
     record = await require_attachment(db, user, workspace_id, item_id, attachment_id)
     return (
-        await get_object_store().head(record.object_key),
-        record.original_name,
-        record.mime_type or "application/octet-stream",
+        await get_object_store().head(record.file.path),
+        record.file.metadata["original_name"],
+        record.file.content_type or "application/octet-stream",
     )
 
 
 async def get_revision_file(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
-    revision_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    revision_id: UUID,
     *,
     byte_range: tuple[int, int] | None = None,
 ) -> tuple[ObjectResponse, str, str]:
@@ -598,7 +603,7 @@ async def get_revision_file(
 
 
 async def head_revision_file(
-    db: AsyncSession, user: User, workspace_id: str, item_id: str, revision_id: str
+    db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID, revision_id: UUID
 ) -> tuple[ObjectMetadata, str, str]:
     revision = await require_revision(db, user, workspace_id, revision_id)
     if revision.item_id != item_id:
@@ -611,7 +616,7 @@ async def head_revision_file(
 
 
 async def get_revision_thumbnail(
-    db: AsyncSession, user: User, workspace_id: str, item_id: str, revision_id: str
+    db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID, revision_id: UUID
 ) -> ObjectResponse:
     revision = await require_revision(db, user, workspace_id, revision_id)
     if revision.item_id != item_id:
@@ -625,7 +630,7 @@ async def get_revision_thumbnail(
 
 
 async def head_revision_thumbnail(
-    db: AsyncSession, user: User, workspace_id: str, item_id: str, revision_id: str
+    db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID, revision_id: UUID
 ) -> ObjectMetadata:
     revision = await require_revision(db, user, workspace_id, revision_id)
     if revision.item_id != item_id:
@@ -640,7 +645,7 @@ async def head_revision_thumbnail(
 
 
 async def resolve_item_thumbnail(
-    db: AsyncSession, user: User, workspace_id: str, item_id: str
+    db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID
 ) -> ItemThumbnailSource:
     await require_readable_item(db, user, workspace_id, item_id)
     graphical_abstract = await db.scalar(
@@ -652,10 +657,10 @@ async def resolve_item_thumbnail(
     )
     if graphical_abstract is not None:
         store = get_object_store()
-        if await store.exists(graphical_abstract.object_key):
+        if await store.exists(graphical_abstract.file.path):
             return ItemThumbnailSource(
-                object_key=graphical_abstract.object_key,
-                media_type=graphical_abstract.mime_type,
+                object_key=graphical_abstract.file.path,
+                media_type=graphical_abstract.file.content_type,
                 source_kind="graphical_abstract",
                 source_id=graphical_abstract.id,
             )
@@ -699,7 +704,7 @@ async def head_item_thumbnail(source: ItemThumbnailSource) -> ObjectMetadata:
 
 
 async def delete_file_revision(
-    db: AsyncSession, user: User, workspace_id: str, item_id: str, revision_id: str
+    db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID, revision_id: UUID
 ) -> None:
     await require_workspace_action(db, user, workspace_id, ResourceAction.file_delete)
     if (
@@ -763,9 +768,9 @@ async def delete_file_revision(
 async def delete_attachment(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
-    attachment_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    attachment_id: UUID,
 ) -> None:
     await require_workspace_action(db, user, workspace_id, ResourceAction.file_delete)
     if (
@@ -784,7 +789,7 @@ async def delete_attachment(
         or attachment.item_id != item_id
     ):
         raise ResourceNotFound("attachment not found")
-    object_key = attachment.object_key
+    object_key = attachment.file.path
     await db.delete(attachment)
     await enqueue_object_cleanup(
         db,
@@ -807,7 +812,7 @@ async def delete_attachment(
 
 
 async def get_pdf_viewer_data(
-    db: AsyncSession, user: User, workspace_id: str, item_id: str, revision_id: str
+    db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID, revision_id: UUID
 ) -> dict[str, Any]:
     revision = await require_revision(db, user, workspace_id, revision_id)
     if revision.item_id != item_id:

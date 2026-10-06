@@ -33,6 +33,6 @@ class ApiTokenVerifier(TokenVerifier):
             client_id=client_id,
             scopes=[],
             expires_at=int(verified.expires_at.timestamp()),
-            subject=verified.user_id,
-            claims={"api_token_id": verified.token_id},
+            subject=str(verified.user_id),
+            claims={"api_token_id": str(verified.token_id)},
         )

@@ -10,6 +10,8 @@ from quirebase.audit.invocations import current_programmatic_invocation
 from quirebase.models import AuditEvent
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from quirebase.models import User
@@ -17,15 +19,15 @@ if TYPE_CHECKING:
 
 def record_event(
     db: AsyncSession,
-    actor_id: str | None,
+    actor_id: UUID | None,
     action: str,
     target_type: str,
-    target_id: str | None = None,
+    target_id: UUID | str | None = None,
     detail: dict[str, Any] | str | None = None,
     *,
-    workspace_id: str | None = None,
-    project_id: str | None = None,
-    target_ids: list[str] | tuple[str, ...] | None = None,
+    workspace_id: UUID | None = None,
+    project_id: UUID | None = None,
+    target_ids: list[UUID] | tuple[UUID, ...] | None = None,
     authorization_role: str | None = None,
     authorization_resource_action: str | None = None,
     result: str = "succeeded",
@@ -41,7 +43,7 @@ def record_event(
             detail = {"invocation": invocation.detail()}
     detail_text: str | None = None
     if isinstance(detail, dict):
-        detail_text = json.dumps(detail, ensure_ascii=False)
+        detail_text = json.dumps(detail, ensure_ascii=False, default=str)
     elif isinstance(detail, str):
         detail_text = detail
     event = AuditEvent(
@@ -50,9 +52,11 @@ def record_event(
         project_id=project_id,
         action=action,
         target_type=target_type,
-        target_id=target_id,
+        target_id=str(target_id) if target_id is not None else None,
         detail=detail_text,
-        target_ids=json.dumps(list(target_ids)) if target_ids is not None else None,
+        target_ids=json.dumps([str(target_id) for target_id in target_ids])
+        if target_ids is not None
+        else None,
         authorization_role=authorization_role,
         authorization_resource_action=authorization_resource_action,
         result=result,
@@ -65,7 +69,7 @@ def record_event(
 async def query_events(
     db: AsyncSession,
     admin: User,
-    actor_id: str | None = None,
+    actor_id: UUID | None = None,
     action: str | None = None,
     target_type: str | None = None,
     search: str = "",

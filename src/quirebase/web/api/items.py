@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import suppress
+from uuid import UUID
 
 from fastapi import APIRouter
 
@@ -42,7 +43,7 @@ router = APIRouter(tags=["Items"])
 
 
 @router.get("/items/{item_id}/overview", response_model=ItemOverviewView)
-async def item_overview(workspace_id: str, item_id: str, context: WorkspaceAccess, db: Database):
+async def item_overview(workspace_id: UUID, item_id: UUID, context: WorkspaceAccess, db: Database):
     source_actions = context.allowed_actions
     view = await open_item_section(db, context, item_id, ItemSection.overview)
     user = context.actor
@@ -99,7 +100,7 @@ async def item_overview(workspace_id: str, item_id: str, context: WorkspaceAcces
 
 
 @router.get("/items/{item_id}/organize", response_model=ItemOrganizeView)
-async def item_organize(workspace_id: str, item_id: str, context: WorkspaceAccess, db: Database):
+async def item_organize(workspace_id: UUID, item_id: UUID, context: WorkspaceAccess, db: Database):
     view = await open_item_section(db, context, item_id, ItemSection.organize)
     if not isinstance(view, ItemOrganizationData):  # pragma: no cover
         raise TypeError("item organize section mismatch")
@@ -140,8 +141,8 @@ async def item_organize(workspace_id: str, item_id: str, context: WorkspaceAcces
 
 @router.delete("/items/{item_id}", response_model=OkView)
 async def delete_library_item(
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     data: DeleteConfirmationRequest,
     user: ApiUser,
     db: Database,
@@ -154,8 +155,8 @@ async def delete_library_item(
 
 @router.post("/items/{item_id}/metadata/sync", response_model=OkView)
 async def sync_item_metadata(
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     data: MetadataSyncRequest,
     user: ApiUser,
     db: Database,
@@ -174,14 +175,14 @@ async def sync_item_metadata(
 
 
 @router.post("/items/{item_id}/doi/rescan", response_model=OkView)
-async def rescan_item_doi(workspace_id: str, item_id: str, user: ApiUser, db: Database) -> OkView:
+async def rescan_item_doi(workspace_id: UUID, item_id: UUID, user: ApiUser, db: Database) -> OkView:
     await rescan_pdf_doi(db, user, workspace_id, item_id)
     return OkView()
 
 
 @router.post("/items/{item_id}/citation-key/regenerate", response_model=OkView)
 async def regenerate_item_citation_key(
-    workspace_id: str, item_id: str, user: ApiUser, db: Database
+    workspace_id: UUID, item_id: UUID, user: ApiUser, db: Database
 ) -> OkView:
     await regenerate_bibtex_key(db, user, workspace_id, item_id)
     return OkView()
@@ -189,12 +190,12 @@ async def regenerate_item_citation_key(
 
 @router.post("/items/{item_id}/tag-recommendations", response_model=WriteResult)
 async def regenerate_tag_recommendations(
-    workspace_id: str, item_id: str, user: ApiUser, db: Database
+    workspace_id: UUID, item_id: UUID, user: ApiUser, db: Database
 ) -> WriteResult:
     workflow_id = await regenerate_item_tag_recommendation(db, user, workspace_id, item_id)
     return WriteResult(id=workflow_id)
 
 
 @router.get("/authors", response_model=list[AuthorSuggestionView])
-async def suggest_authors(workspace_id: str, user: ApiUser, db: Database, query: str = ""):
+async def suggest_authors(workspace_id: UUID, user: ApiUser, db: Database, query: str = ""):
     return await search_authors_typeahead(db, user, workspace_id, query=query)

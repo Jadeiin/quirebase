@@ -38,7 +38,6 @@ from quirebase.core.errors import (
     ValidationFailure,
     VersionConflict,
 )
-from quirebase.core.timezones import as_utc
 from quirebase.documents.schemas import ArrowPayload, InkPayload, LinePayload, TextMarkupPayload
 from quirebase.models import (
     AnnotationScope,
@@ -54,6 +53,8 @@ from quirebase.models import (
 )
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from quirebase.documents.schemas import (
@@ -70,7 +71,7 @@ class DocumentNotReady(DomainError):
 
 
 async def _lock_annotation_project_item(
-    db: AsyncSession, workspace_id: str, project_id: str, item_id: str
+    db: AsyncSession, workspace_id: UUID, project_id: UUID, item_id: UUID
 ) -> ProjectItem:
     """Fence ProjectItem detachment while an Annotation write binds to it."""
     project_item = await db.scalar(
@@ -89,7 +90,7 @@ async def _lock_annotation_project_item(
 
 
 async def delete_project_item_annotations(
-    db: AsyncSession, workspace_id: str, project_item_id: str
+    db: AsyncSession, workspace_id: UUID, project_item_id: UUID
 ) -> None:
     """Remove a detached ProjectItem's annotations, replies and UUID identities.
 
@@ -146,18 +147,18 @@ class AnnotationPage:
     projects: tuple[Project, ...]
     annotations: tuple[dict[str, Any], ...]
     total: int
-    next_cursor: str | None = None
+    next_cursor: UUID | None = None
 
 
 def annotation_json(
     record: PdfAnnotation,
-    current_user_id: str,
+    current_user_id: UUID,
     *,
     author_display_name: str,
     editable: bool,
     authorization_resource_actions: list[str],
     revision_name: str,
-    project_id: str | None = None,
+    project_id: UUID | None = None,
     project_name: str | None = None,
     replies: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
@@ -178,19 +179,19 @@ def annotation_json(
         "mine": record.author_id == current_user_id,
         "editable": editable,
         "authorization": {"allowed": authorization_resource_actions},
-        "hidden_at": as_utc(record.hidden_at).isoformat() if record.hidden_at else None,
-        "archived_at": as_utc(record.archived_at).isoformat() if record.archived_at else None,
-        "locked_at": as_utc(record.locked_at).isoformat() if record.locked_at else None,
+        "hidden_at": record.hidden_at.isoformat() if record.hidden_at else None,
+        "archived_at": record.archived_at.isoformat() if record.archived_at else None,
+        "locked_at": record.locked_at.isoformat() if record.locked_at else None,
         "moderated_by": record.moderated_by,
-        "created_at": as_utc(record.created_at).isoformat(),
-        "updated_at": as_utc(record.updated_at).isoformat(),
+        "created_at": record.created_at.isoformat(),
+        "updated_at": record.updated_at.isoformat(),
         "replies": replies or [],
     }
 
 
 def annotation_reply_json(
     record: PdfAnnotationReply,
-    current_user_id: str,
+    current_user_id: UUID,
     *,
     author_display_name: str,
     editable: bool,
@@ -203,8 +204,8 @@ def annotation_reply_json(
         "author_display_name": author_display_name,
         "mine": record.author_id == current_user_id,
         "editable": editable,
-        "created_at": as_utc(record.created_at).isoformat(),
-        "updated_at": as_utc(record.updated_at).isoformat(),
+        "created_at": record.created_at.isoformat(),
+        "updated_at": record.updated_at.isoformat(),
     }
 
 
@@ -283,10 +284,10 @@ def validate_payload(page_index: int, payload: AnnotationPayload, revision: File
 async def select_visible_annotations(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    revision_id: str,
-    item_id: str,
-    project_id: str | None = None,
+    workspace_id: UUID,
+    revision_id: UUID,
+    item_id: UUID,
+    project_id: UUID | None = None,
 ) -> list[PdfAnnotation]:
     """Load exportable annotations: own private ones, plus a project's.
 
@@ -335,10 +336,10 @@ async def select_visible_annotations(
 async def _annotation_views(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
+    workspace_id: UUID,
     records: list[PdfAnnotation],
     *,
-    revision_names: dict[str, str] | None = None,
+    revision_names: dict[UUID, str] | None = None,
 ) -> list[dict[str, Any]]:
     if not records:
         return []
@@ -360,7 +361,7 @@ async def _annotation_views(
     author_rows = (
         await db.execute(select(User.id, User.username).where(User.id.in_(author_ids)))
     ).all()
-    authors: dict[str, str] = {row[0]: row[1] for row in author_rows}
+    authors: dict[UUID, str] = {row[0]: row[1] for row in author_rows}
     project_item_ids = {
         record.project_item_id for record in records if record.project_item_id is not None
     }
@@ -374,9 +375,9 @@ async def _annotation_views(
             )
         )
     ).all()
-    project_ids_by_item: dict[str, str] = {row[0]: row[1] for row in project_rows}
-    project_states_by_item: dict[str, ProjectState] = {row[0]: row[2] for row in project_rows}
-    project_names_by_item: dict[str, str] = {row[0]: row[3] for row in project_rows}
+    project_ids_by_item: dict[UUID, UUID] = {row[0]: row[1] for row in project_rows}
+    project_states_by_item: dict[UUID, ProjectState] = {row[0]: row[2] for row in project_rows}
+    project_names_by_item: dict[UUID, str] = {row[0]: row[3] for row in project_rows}
     if revision_names is None:
         revision_names = dict(
             (
@@ -396,7 +397,7 @@ async def _annotation_views(
     editable_reply_ids = await editable_annotation_reply_ids(
         db, user, workspace_id, replies, records_by_id
     )
-    replies_by_annotation: dict[str, list[dict[str, Any]]] = {
+    replies_by_annotation: dict[UUID, list[dict[str, Any]]] = {
         annotation_id: [] for annotation_id in annotation_ids
     }
     for reply in replies:
@@ -439,7 +440,11 @@ async def _annotation_views(
                     if record.project_item_id is not None
                     else None
                 ),
-                project_name=project_names_by_item.get(record.project_item_id or ""),
+                project_name=(
+                    project_names_by_item.get(record.project_item_id)
+                    if record.project_item_id is not None
+                    else None
+                ),
                 replies=replies_by_annotation[record.id],
             )
         )
@@ -449,10 +454,10 @@ async def _annotation_views(
 async def _editable_reply(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
-    annotation_id: str,
-    reply_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
+    reply_id: UUID,
     *,
     action: str,
 ) -> tuple[PdfAnnotation, PdfAnnotationReply]:
@@ -493,7 +498,7 @@ async def _editable_reply(
 async def _require_reply_action(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
+    workspace_id: UUID,
     annotation: PdfAnnotation,
     resource_action: ResourceAction,
     *,
@@ -530,16 +535,16 @@ async def _require_reply_action(
 async def list_document_annotations(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
-    revision_id: str | None = None,
+    workspace_id: UUID,
+    item_id: UUID,
+    revision_id: UUID | None = None,
     *,
     page: int = 1,
     per_page: int = 50,
     scope: AnnotationScope | None = None,
-    project_ids: tuple[str, ...] | None = None,
+    project_ids: tuple[UUID, ...] | None = None,
     pagination: Literal["page", "cursor"] = "page",
-    cursor: str | None = None,
+    cursor: UUID | None = None,
 ) -> AnnotationPage:
     """List visible Item annotations, with independent revision and source filters."""
     if page < 1 or not 1 <= per_page <= 100:
@@ -655,8 +660,8 @@ async def list_document_annotations(
 async def create_document_annotation(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     data: AnnotationCreate,
 ) -> dict[str, Any]:
     revision = await require_revision(db, user, workspace_id, data.revision_id)
@@ -731,9 +736,9 @@ async def create_document_annotation(
 async def update_document_annotation(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
-    annotation_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
     data: AnnotationUpdate,
 ) -> dict[str, Any]:
     record = await require_editable_annotation(db, user, workspace_id, item_id, annotation_id)
@@ -818,9 +823,9 @@ async def update_document_annotation(
 async def delete_document_annotation(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
-    annotation_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
     version: int,
 ) -> None:
     record = await require_deletable_annotation(db, user, workspace_id, item_id, annotation_id)
@@ -868,9 +873,9 @@ async def delete_document_annotation(
 async def restore_document_annotation(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
-    annotation_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
     version: int,
 ) -> dict[str, Any]:
     record = await require_restorable_annotation(db, user, workspace_id, item_id, annotation_id)
@@ -920,9 +925,9 @@ async def restore_document_annotation(
 async def moderate_document_annotation(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
-    annotation_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
     action: str,
     version: int,
 ) -> dict[str, Any]:
@@ -1049,9 +1054,9 @@ async def moderate_document_annotation(
 async def create_annotation_reply(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
-    annotation_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
     data: AnnotationReplyCreate,
 ) -> dict[str, Any]:
     locked_user, annotation = await require_visible_annotation_for_reply_mutation(
@@ -1108,10 +1113,10 @@ async def create_annotation_reply(
 async def update_annotation_reply(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
-    annotation_id: str,
-    reply_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
+    reply_id: UUID,
     data: AnnotationReplyUpdate,
 ) -> dict[str, Any]:
     annotation, reply = await _editable_reply(
@@ -1174,10 +1179,10 @@ async def update_annotation_reply(
 async def delete_annotation_reply(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
-    annotation_id: str,
-    reply_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
+    reply_id: UUID,
     version: int,
 ) -> None:
     annotation, reply = await _editable_reply(
@@ -1233,10 +1238,10 @@ async def delete_annotation_reply(
 async def restore_annotation_reply(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
-    annotation_id: str,
-    reply_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
+    reply_id: UUID,
     version: int,
 ) -> dict[str, Any]:
     locked_user, annotation = await require_visible_annotation_for_reply_mutation(

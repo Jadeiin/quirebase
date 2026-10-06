@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Literal
+from uuid import UUID
 
 from fastapi import APIRouter, status
 
@@ -58,7 +59,7 @@ router = APIRouter(prefix="/projects", tags=["Projects"])
 
 @router.get("", response_model=list[ProjectSummaryView])
 async def list_projects(
-    workspace_id: str,
+    workspace_id: UUID,
     context: WorkspaceAccess,
     db: Database,
     view: Literal["mine", "joinable", "all"] = "all",
@@ -85,7 +86,7 @@ async def list_projects(
 
 @router.post("", response_model=WriteResult, status_code=status.HTTP_201_CREATED)
 async def create_user_project(
-    workspace_id: str, data: ProjectCreateRequest, user: ApiUser, db: Database
+    workspace_id: UUID, data: ProjectCreateRequest, user: ApiUser, db: Database
 ) -> WriteResult:
     project = await create_project(
         db, user, workspace_id, data.name, data.participation, data.description
@@ -95,7 +96,7 @@ async def create_user_project(
 
 @router.get("/{project_id}", response_model=ProjectDetailView)
 async def get_project(
-    workspace_id: str, project_id: str, context: WorkspaceAccess, db: Database
+    workspace_id: UUID, project_id: UUID, context: WorkspaceAccess, db: Database
 ) -> ProjectDetailView:
     workspace = await open_project_workspace(db, context, project_id)
     return project_detail_view(
@@ -115,8 +116,8 @@ async def get_project(
 
 @router.patch("/{project_id}", response_model=WriteResult)
 async def update_project(
-    workspace_id: str,
-    project_id: str,
+    workspace_id: UUID,
+    project_id: UUID,
     data: ProjectSettingsRequest,
     user: ApiUser,
     db: Database,
@@ -135,8 +136,8 @@ async def update_project(
 
 @router.delete("/{project_id}", response_model=OkView)
 async def delete_user_project(
-    workspace_id: str,
-    project_id: str,
+    workspace_id: UUID,
+    project_id: UUID,
     data: ProjectDeleteRequest,
     user: ApiUser,
     db: Database,
@@ -147,7 +148,7 @@ async def delete_user_project(
 
 @router.post("/{project_id}/archive", response_model=OkView)
 async def archive_project(
-    workspace_id: str, project_id: str, user: ApiUser, db: Database
+    workspace_id: UUID, project_id: UUID, user: ApiUser, db: Database
 ) -> OkView:
     await set_project_state(db, user, workspace_id, project_id, ProjectState.archived)
     return OkView()
@@ -155,7 +156,7 @@ async def archive_project(
 
 @router.post("/{project_id}/restore", response_model=OkView)
 async def restore_project(
-    workspace_id: str, project_id: str, user: ApiUser, db: Database
+    workspace_id: UUID, project_id: UUID, user: ApiUser, db: Database
 ) -> OkView:
     await set_project_state(db, user, workspace_id, project_id, ProjectState.active)
     return OkView()
@@ -163,7 +164,7 @@ async def restore_project(
 
 @router.put("/{project_id}/items/{item_id}", response_model=OkView)
 async def add_project_item(
-    workspace_id: str, project_id: str, item_id: str, user: ApiUser, db: Database
+    workspace_id: UUID, project_id: UUID, item_id: UUID, user: ApiUser, db: Database
 ) -> OkView:
     await add_item_to_project(db, user, workspace_id, project_id, item_id)
     return OkView()
@@ -171,7 +172,7 @@ async def add_project_item(
 
 @router.delete("/{project_id}/items/{item_id}", response_model=OkView)
 async def remove_project_item(
-    workspace_id: str, project_id: str, item_id: str, user: ApiUser, db: Database
+    workspace_id: UUID, project_id: UUID, item_id: UUID, user: ApiUser, db: Database
 ) -> OkView:
     await remove_item_from_project(db, user, workspace_id, project_id, item_id)
     return OkView()
@@ -179,7 +180,7 @@ async def remove_project_item(
 
 @router.post("/{project_id}/join", response_model=ProjectParticipant)
 async def join_project_api(
-    workspace_id: str, project_id: str, user: ApiUser, db: Database
+    workspace_id: UUID, project_id: UUID, user: ApiUser, db: Database
 ) -> ProjectParticipant:
     await join_project(db, user, workspace_id, project_id)
     return ProjectParticipant(user_id=user.id, username=user.username)
@@ -187,7 +188,7 @@ async def join_project_api(
 
 @router.post("/{project_id}/leave", response_model=OkView)
 async def leave_project_api(
-    workspace_id: str, project_id: str, user: ApiUser, db: Database
+    workspace_id: UUID, project_id: UUID, user: ApiUser, db: Database
 ) -> OkView:
     await leave_project(db, user, workspace_id, project_id)
     return OkView()
@@ -195,8 +196,8 @@ async def leave_project_api(
 
 @router.post("/{project_id}/participants", response_model=ProjectParticipant)
 async def add_project_participant(
-    workspace_id: str,
-    project_id: str,
+    workspace_id: UUID,
+    project_id: UUID,
     data: ProjectParticipantRequest,
     user: ApiUser,
     db: Database,
@@ -206,7 +207,7 @@ async def add_project_participant(
 
 @router.delete("/{project_id}/participants/{user_id}", response_model=OkView)
 async def remove_project_participant(
-    workspace_id: str, project_id: str, user_id: str, user: ApiUser, db: Database
+    workspace_id: UUID, project_id: UUID, user_id: UUID, user: ApiUser, db: Database
 ) -> OkView:
     await remove_project_member_domain(db, user, workspace_id, project_id, user_id)
     return OkView()
@@ -214,7 +215,7 @@ async def remove_project_participant(
 
 @router.get("/{project_id}/discussions", response_model=list[DiscussionMessageView])
 async def list_project_discussions(
-    workspace_id: str, project_id: str, context: WorkspaceAccess, db: Database
+    workspace_id: UUID, project_id: UUID, context: WorkspaceAccess, db: Database
 ) -> list[DiscussionMessageView]:
     project_context = await require_project(db, context, project_id)
     messages = await list_project_discussion_messages(db, project_context)
@@ -231,8 +232,8 @@ async def list_project_discussions(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_project_discussion(
-    workspace_id: str,
-    project_id: str,
+    workspace_id: UUID,
+    project_id: UUID,
     data: DiscussionRequest,
     user: ApiUser,
     db: Database,
@@ -244,9 +245,9 @@ async def create_project_discussion(
 
 @router.delete("/{project_id}/discussions/{message_id}", response_model=OkView)
 async def delete_project_discussion(
-    workspace_id: str,
-    project_id: str,
-    message_id: str,
+    workspace_id: UUID,
+    project_id: UUID,
+    message_id: UUID,
     user: ApiUser,
     db: Database,
 ) -> OkView:
@@ -256,9 +257,9 @@ async def delete_project_discussion(
 
 @router.post("/{project_id}/discussions/{message_id}/moderation", response_model=OkView)
 async def moderate_project_discussion(
-    workspace_id: str,
-    project_id: str,
-    message_id: str,
+    workspace_id: UUID,
+    project_id: UUID,
+    message_id: UUID,
     data: DiscussionModerationRequest,
     user: ApiUser,
     db: Database,

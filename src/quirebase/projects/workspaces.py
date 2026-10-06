@@ -39,6 +39,7 @@ from .members import ProjectParticipant
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from uuid import UUID
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -54,7 +55,7 @@ class ProjectWorkspace:
 async def create_project(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
+    workspace_id: UUID,
     name: str,
     participation: ProjectParticipation | str = ProjectParticipation.workspace,
     description: str = "",
@@ -148,7 +149,7 @@ async def list_workspace_projects(
 
 
 async def open_project_workspace(
-    db: AsyncSession, workspace: WorkspaceContext, project_id: str
+    db: AsyncSession, workspace: WorkspaceContext, project_id: UUID
 ) -> ProjectWorkspace:
     context = await require_project(db, workspace, project_id)
     workspace_id = workspace.workspace_id
@@ -209,7 +210,7 @@ async def open_project_workspace(
 
 
 async def add_item_to_project(
-    db: AsyncSession, user: User, workspace_id: str, project_id: str, item_id: str
+    db: AsyncSession, user: User, workspace_id: UUID, project_id: UUID, item_id: UUID
 ) -> None:
     workspace = await lock_workspace_context(db, user, workspace_id)
     project = await lock_project_root(db, workspace, project_id, lock="shared")
@@ -252,7 +253,7 @@ async def add_item_to_project(
 
 
 async def remove_item_from_project(
-    db: AsyncSession, user: User, workspace_id: str, project_id: str, item_id: str
+    db: AsyncSession, user: User, workspace_id: UUID, project_id: UUID, item_id: UUID
 ) -> None:
     workspace = await lock_workspace_context(db, user, workspace_id)
     project = await lock_project_root(db, workspace, project_id, lock="shared")
@@ -287,7 +288,7 @@ async def remove_item_from_project(
 
 
 async def add_items_to_project(
-    db: AsyncSession, user: User, workspace_id: str, project_id: str, item_ids: list[str]
+    db: AsyncSession, user: User, workspace_id: UUID, project_id: UUID, item_ids: list[UUID]
 ) -> int:
     workspace = await lock_workspace_context(db, user, workspace_id)
     project = await lock_project_root(db, workspace, project_id, lock="shared")

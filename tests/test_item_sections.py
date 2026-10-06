@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
+from advanced_alchemy.types import FileObject
+from app_helpers import json_payload
 from sqlalchemy import event, select
 from test_http import authenticated_async_client
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
@@ -181,9 +183,9 @@ async def test_item_sections_separate_page_responsibilities(
         workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
         summary = await client.get(f"{workspace_base}/items/{item.id}/overview")
         assert summary.status_code == 200
-        assert summary.json()["latest_revision"]["id"] == revision.id
+        assert summary.json()["latest_revision"]["id"] == str(revision.id)
         assert summary.json()["thumbnail"] is None
-        assert summary.json()["tags"] == [{"id": tag.id, "name": "User priority"}]
+        assert summary.json()["tags"] == json_payload([{"id": tag.id, "name": "User priority"}])
         assert {tuple(row.values()) for row in summary.json()["identifiers"]} == {
             ("openalex", "W123"),
             ("arxiv", "2401.00001"),
@@ -204,7 +206,7 @@ async def test_item_sections_separate_page_responsibilities(
         created = await client.post(
             f"{workspace_base}/items/{item.id}/annotations",
             headers={"X-CSRF-Token": "test-csrf"},
-            json={
+            json=json_payload({
                 "id": str(uuid4()),
                 "revision_id": revision.id,
                 "page_index": 0,
@@ -216,7 +218,7 @@ async def test_item_sections_separate_page_responsibilities(
                     "rect": {"x": 10, "y": 10, "width": 20, "height": 10},
                     "segment_rects": [{"x": 10, "y": 10, "width": 20, "height": 10}],
                 },
-            },
+            }),
         )
         assert created.status_code == 201
         annotations = await client.get(
@@ -273,7 +275,7 @@ async def test_remote_documents_are_acquired_server_side_before_upload(
     try:
         revision = await client.post(
             f"{workspace_base}/items/{item_id}/revisions/remote",
-            json={"source": "https://publisher.example/article.pdf"},
+            json=json_payload({"source": "https://publisher.example/article.pdf"}),
         )
         assert revision.status_code == 202
         assert revision.json() == {"id": "revision-workflow", "version": None}
@@ -281,10 +283,10 @@ async def test_remote_documents_are_acquired_server_side_before_upload(
 
         attachment = await client.post(
             f"{workspace_base}/items/{item_id}/attachments/remote",
-            json={
+            json=json_payload({
                 "source": "https://publisher.example/supplement.zip",
                 "graphical_abstract": False,
-            },
+            }),
         )
         assert attachment.status_code == 202
         assert attachment.json() == {"id": "attachment-workflow", "version": None}
@@ -396,9 +398,9 @@ async def test_item_overview_offers_only_eligible_copy_targets_and_rechecks_on_c
             f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/overview"
         )
         assert response.status_code == 200
-        assert response.json()["copy_targets"] == [
+        assert response.json()["copy_targets"] == json_payload([
             {"id": active_target.id, "name": active_target.name}
-        ]
+        ])
         # Eligibility is a read-model hint, never a durable grant for the command.
         member = await db.scalar(
             select(WorkspaceMember).where(
@@ -410,7 +412,7 @@ async def test_item_overview_offers_only_eligible_copy_targets_and_rechecks_on_c
         await db.commit()
         denied = await client.post(
             f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/copy",
-            json={"target_workspace_id": active_target.id},
+            json=json_payload({"target_workspace_id": active_target.id}),
         )
         assert denied.status_code == 403
     finally:
@@ -488,7 +490,7 @@ async def test_item_citation_export_and_project_removal(
         )
         assert await db.scalar(
             select(AuditEvent).where(
-                AuditEvent.action == "project.item.remove", AuditEvent.target_id == item.id
+                AuditEvent.action == "project.item.remove", AuditEvent.target_id == str(item.id)
             )
         )
     finally:
@@ -511,10 +513,13 @@ async def test_item_summary_reports_exact_activity_counts(
             Attachment(
                 workspace_id=item.workspace_id,
                 item_id=item.id,
-                object_key="attachments/supplement.txt",
-                size=12,
-                mime_type="text/plain",
-                original_name="supplement.txt",
+                file=FileObject(
+                    backend="documents",
+                    filename="attachments/supplement.txt",
+                    size=12,
+                    content_type="text/plain",
+                    metadata={"original_name": "supplement.txt"},
+                ),
                 created_by=user.id,
             ),
             DiscussionMessage(
@@ -613,10 +618,10 @@ async def test_item_overview_projection_includes_thumbnail_metadata(
 
         response = await client.get(f"{workspace_base}/items/{item.id}/overview")
         assert response.status_code == 200
-        assert response.json()["thumbnail"] == {
+        assert response.json()["thumbnail"] == json_payload({
             "source_kind": "pdf_thumbnail",
             "source_id": revision.id,
-        }
+        })
 
         ga_obj = await store.put_object(
             uuid4(), ObjectSuffix.PNG, b"\x89PNG\r\n\x1a\ngraphical", max_bytes=100
@@ -624,11 +629,14 @@ async def test_item_overview_projection_includes_thumbnail_metadata(
         graphical_abstract = Attachment(
             workspace_id=item.workspace_id,
             item_id=item.id,
-            object_key=ga_obj.key,
-            mime_type="image/png",
+            file=FileObject(
+                backend="documents",
+                filename=ga_obj.key,
+                size=ga_obj.size,
+                content_type="image/png",
+                metadata={"original_name": "graphical_abstract.png"},
+            ),
             role=AttachmentRole.graphical_abstract,
-            size=ga_obj.size,
-            original_name="graphical_abstract.png",
             created_by=revision.created_by,
         )
         db.add(graphical_abstract)
@@ -638,7 +646,7 @@ async def test_item_overview_projection_includes_thumbnail_metadata(
         assert response.status_code == 200
         assert response.json()["thumbnail"] == {
             "source_kind": "graphical_abstract",
-            "source_id": graphical_abstract.id,
+            "source_id": str(graphical_abstract.id),
         }
     finally:
         await client.aclose()

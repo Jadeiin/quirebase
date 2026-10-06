@@ -1,6 +1,7 @@
 import json
 
 import pytest
+from app_helpers import json_payload
 from sqlalchemy import select
 
 from quirebase.models import AuditEvent, SystemSetting, User, WorkspaceMember, WorkspaceRole
@@ -33,18 +34,18 @@ async def test_workspace_creation_audits_authorizing_system_role(
     )
     event = await async_db.scalar(
         select(AuditEvent).where(
-            AuditEvent.action == "workspace.create", AuditEvent.target_id == workspace.id
+            AuditEvent.action == "workspace.create", AuditEvent.target_id == str(workspace.id)
         )
     )
     assert event is not None
     assert event.actor_id == actor.id
     assert event.authorization_role == actor_role
     assert event.authorization_resource_action == "workspace.create"
-    assert json.loads(event.detail) == {
+    assert json.loads(event.detail) == json_payload({
         "owner_user_id": owner.id,
         "owner_workspace_role": "owner",
         "creation_policy": policy,
-    }
+    })
     membership = await async_db.scalar(
         select(WorkspaceMember).where(WorkspaceMember.workspace_id == workspace.id)
     )

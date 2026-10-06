@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime  # ruff: ignore[typing-only-standard-library-import] - Pydantic resolves it
+from datetime import datetime
 from typing import Annotated, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -24,7 +25,7 @@ class ApiTokenCreateRequest(BaseModel):
 
 
 class ApiTokenView(BaseModel):
-    id: str
+    id: UUID
     name: str
     status: Literal["active", "expired", "revoked"]
     expires_at: datetime
@@ -32,7 +33,7 @@ class ApiTokenView(BaseModel):
 
 
 class ApiTokenGrantView(BaseModel):
-    id: str
+    id: UUID
     token: str
     expires_at: datetime
 

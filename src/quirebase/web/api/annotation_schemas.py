@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 from typing import Any, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from quirebase.core.timezones import as_utc
 from quirebase.documents import AnnotationKind, AnnotationPayload, AnnotationScope
 from quirebase.web.api.common import WorkspaceAuthorizationView
 
 
 class FileView(BaseModel):
-    id: str
+    id: UUID
     kind: Literal["revision", "attachment"]
     original_name: str
     mime_type: str
@@ -21,13 +21,13 @@ class FileView(BaseModel):
 
 
 class DocumentListView(BaseModel):
-    item_id: str
+    item_id: UUID
     files: list[FileView]
 
 
 class AnnotationReplyView(BaseModel):
-    id: str
-    annotation_id: str
+    id: UUID
+    annotation_id: UUID
     body: str
     version: int
     author_display_name: str
@@ -38,13 +38,13 @@ class AnnotationReplyView(BaseModel):
 
 
 class AnnotationView(BaseModel):
-    id: str
-    revision_id: str
+    id: UUID
+    revision_id: UUID
     revision_name: str
     page_index: int
     kind: AnnotationKind
     scope: AnnotationScope
-    project_id: str | None
+    project_id: UUID | None
     project_name: str | None
     body: str | None
     selected_text: str | None
@@ -57,7 +57,7 @@ class AnnotationView(BaseModel):
     hidden_at: str | None = None
     archived_at: str | None = None
     locked_at: str | None = None
-    moderated_by: str | None = None
+    moderated_by: UUID | None = None
     created_at: str
     updated_at: str
     replies: list[AnnotationReplyView]
@@ -68,7 +68,7 @@ class AnnotationModerationRequest(BaseModel):
     version: int = Field(ge=1)
 
 
-def document_list_view(item_id: str, item_files: Any) -> DocumentListView:
+def document_list_view(item_id: UUID, item_files: Any) -> DocumentListView:
     revisions = [
         FileView(
             id=row.id,
@@ -76,7 +76,7 @@ def document_list_view(item_id: str, item_files: Any) -> DocumentListView:
             original_name=row.original_name,
             mime_type=row.mime_type,
             size=row.size,
-            created_at=as_utc(row.created_at).isoformat(),
+            created_at=row.created_at.isoformat(),
             page_count=row.page_count,
             processing_state=row.processing_state,
         )
@@ -86,10 +86,10 @@ def document_list_view(item_id: str, item_files: Any) -> DocumentListView:
         FileView(
             id=row.id,
             kind="attachment",
-            original_name=row.original_name,
-            mime_type=row.mime_type,
-            size=row.size,
-            created_at=as_utc(row.created_at).isoformat(),
+            original_name=row.file.metadata["original_name"],
+            mime_type=row.file.content_type,
+            size=row.file.size,
+            created_at=row.created_at.isoformat(),
         )
         for row in item_files.attachments
     ]
@@ -97,12 +97,12 @@ def document_list_view(item_id: str, item_files: Any) -> DocumentListView:
 
 
 class AnnotationRevisionView(BaseModel):
-    id: str
+    id: UUID
     original_name: str
 
 
 class AnnotationProjectView(BaseModel):
-    id: str
+    id: UUID
     name: str
 
 
@@ -113,4 +113,4 @@ class AnnotationListView(BaseModel):
     total: int
     page: int
     per_page: int
-    next_cursor: str | None = None
+    next_cursor: UUID | None = None

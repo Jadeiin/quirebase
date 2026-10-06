@@ -24,6 +24,8 @@ from quirebase.models import FileRevision, Item, ItemIdentifier, User
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from quirebase.core.config import Settings
@@ -71,8 +73,8 @@ def clean_identifier_value(provider: str, value: str) -> str:
 async def set_item_identifiers(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     id_pairs: list[tuple[str, str]],
 ) -> list[ItemIdentifier]:
     item = await require_editable_item(db, user, workspace_id, item_id)
@@ -122,7 +124,7 @@ async def _set_item_identifiers_for_item(
     return links
 
 
-async def get_item_identifiers(db: AsyncSession, item_id: str) -> list[ItemIdentifier]:
+async def get_item_identifiers(db: AsyncSession, item_id: UUID) -> list[ItemIdentifier]:
     return list(
         (await db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item_id))).all()
     )
@@ -152,7 +154,7 @@ def generate_bibtex_key(item: Item) -> str:
 
 
 async def rescan_pdf_doi(
-    db: AsyncSession, user: User, workspace_id: str, item_id: str
+    db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID
 ) -> str | None:
     # Scan the immutable extracted text without holding an Item lock. Re-authorize and lock the
     # canonical Item only after a DOI candidate is found, immediately before mutating identifiers.
@@ -330,7 +332,7 @@ async def apply_metadata_record(
 async def create_item_from_metadata_record(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
+    workspace_id: UUID,
     record: CandidateRecord | dict,
 ) -> Item:
     """Create an imported Item and enqueue its initial Tag recommendation."""
@@ -345,8 +347,8 @@ async def create_item_from_metadata_record(
 async def _sync_metadata_from_upstream(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     expected_version: int,
     provider: str,
     uid_value: str,
@@ -456,8 +458,8 @@ async def _sync_metadata_from_upstream(
 async def sync_metadata_from_upstream(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     expected_version: int,
     provider: str,
     uid_value: str,

@@ -6,7 +6,9 @@ from uuid import uuid4
 
 import pymupdf
 import pytest
-from sqlalchemy import event, select, text
+from advanced_alchemy.types import FileObject
+from app_helpers import json_payload
+from sqlalchemy import event, select
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
 from storage_helpers import collect_body, put_pdf_object
@@ -682,7 +684,7 @@ async def test_invitation_acceptance_records_system_authorization(async_db):
     event = await async_db.scalar(
         select(AuditEvent).where(
             AuditEvent.action == "workspace.invitation.accept",
-            AuditEvent.target_id == member.id,
+            AuditEvent.target_id == str(member.id),
         )
     )
 
@@ -707,13 +709,13 @@ async def test_invitation_creation_audit_references_invitation_and_invitee(async
     event = await async_db.scalar(
         select(AuditEvent).where(
             AuditEvent.action == "workspace.invitation.create",
-            AuditEvent.target_id == invitation.id,
+            AuditEvent.target_id == str(invitation.id),
         )
     )
 
     assert event is not None
     assert event.workspace_id == workspace_id
-    assert json.loads(event.detail) == {"user_id": invitee.id, "role": "viewer"}
+    assert json.loads(event.detail) == json_payload({"user_id": invitee.id, "role": "viewer"})
     assert event.authorization_resource_action == "workspace_invitation.create"
 
 
@@ -722,25 +724,17 @@ async def test_database_accepts_admin_workspace_invitations(async_db):
     owner = await _user(async_db, "invitation-check-owner")
     invitee = await _user(async_db, "invitation-check-invitee")
     workspace_id = fixture_workspace_id(owner)
-    now = datetime.now(UTC).isoformat()
-    invitation_id = str(uuid4())
+    invitation_id = uuid4()
     await async_db.execute(
-        text(
-            "INSERT INTO workspace_invitations "
-            "(id, workspace_id, user_id, role, token_hash, invited_by, expires_at, created_at) "
-            "VALUES (:id, :workspace_id, :user_id, :role, :token_hash, :invited_by, "
-            ":expires_at, :created_at)"
-        ),
-        {
-            "id": invitation_id,
-            "workspace_id": workspace_id,
-            "user_id": invitee.id,
-            "role": "admin",
-            "token_hash": "a" * 64,
-            "invited_by": owner.id,
-            "expires_at": (datetime.now(UTC) + timedelta(days=1)).isoformat(),
-            "created_at": now,
-        },
+        WorkspaceInvitation.__table__.insert().values(
+            id=invitation_id,
+            workspace_id=workspace_id,
+            user_id=invitee.id,
+            role="admin",
+            token_hash="a" * 64,
+            invited_by=owner.id,
+            expires_at=datetime.now(UTC) + timedelta(days=1),
+        )
     )
     await async_db.commit()
     invitation = await async_db.get(WorkspaceInvitation, invitation_id)
@@ -1031,9 +1025,13 @@ async def test_workspace_delete_waits_for_retention_and_purges_owned_data(
         Attachment(
             workspace_id=workspace_id,
             item_id=item.id,
-            object_key=attachment_object.key,
-            size=attachment_object.size,
-            original_name="attachment.bin",
+            file=FileObject(
+                backend="documents",
+                filename=attachment_object.key,
+                size=attachment_object.size,
+                content_type="application/octet-stream",
+                metadata={"original_name": "attachment.bin"},
+            ),
             created_by=owner.id,
         ),
         ImportBatch(
@@ -1184,7 +1182,7 @@ async def test_managed_project_loaders_require_participation_or_workspace_govern
     )
     assert await get_project(async_db, context, project.id) is not None
     assert (await require_project(async_db, context, project.id)).project.id == project.id
-    assert await get_project_item(async_db, owner_context, "missing") is None
+    assert await get_project_item(async_db, owner_context, uuid4()) is None
 
 
 @pytest.mark.anyio
@@ -1749,7 +1747,8 @@ async def test_discussion_moderation_is_workspace_governance_with_audited_reason
     assert await async_db.get(type(message), message.id) is None
     event = await async_db.scalar(
         select(AuditEvent).where(
-            AuditEvent.target_id == message.id, AuditEvent.action == "discussion.moderate.delete"
+            AuditEvent.target_id == str(message.id),
+            AuditEvent.action == "discussion.moderate.delete",
         )
     )
     assert event.actor_id == admin.id
@@ -1781,11 +1780,11 @@ async def test_project_discussion_moderation_respects_lifecycle_and_lineage(asyn
     )
     with pytest.raises(ResourceUnavailable):
         await moderate_project_discussion_message(
-            async_db, owner, workspace_id, "missing", message.id, "Policy"
+            async_db, owner, workspace_id, uuid4(), message.id, "Policy"
         )
     with pytest.raises(ResourceUnavailable):
         await moderate_project_discussion_message(
-            async_db, owner, workspace_id, project.id, "missing", "Policy"
+            async_db, owner, workspace_id, project.id, uuid4(), "Policy"
         )
     project.state = ProjectState.archived
     await async_db.commit()
@@ -1808,7 +1807,7 @@ async def test_project_discussion_moderation_respects_lifecycle_and_lineage(asyn
     )
     event = await async_db.scalar(
         select(AuditEvent).where(
-            AuditEvent.target_id == message.id,
+            AuditEvent.target_id == str(message.id),
             AuditEvent.action == "project.discussion.moderate.delete",
         )
     )
@@ -2793,12 +2792,12 @@ async def test_workspace_reindex_payload_carries_actor_and_workspace(
     enqueue = fake_durable_operations.enqueues[-1]
     assert enqueue["workflow_name"] == "operations.reindex_workspace"
     assert enqueue["args"] == (workflow_id, owner.id, fixture_workspace_id(owner))
-    assert enqueue["attributes"] == {
+    assert enqueue["attributes"] == json_payload({
         "capability": "operations",
         "operation": "reindex",
         "actor_id": owner.id,
         "workspace_id": fixture_workspace_id(owner),
-    }
+    })
 
 
 @pytest.mark.anyio
@@ -3092,7 +3091,8 @@ async def test_annotation_moderation_rejects_authors_and_audits_versioned_deleti
     assert (
         await async_db.scalar(
             select(AuditEvent.id).where(
-                AuditEvent.action == "annotation.restore", AuditEvent.target_id == annotation.id
+                AuditEvent.action == "annotation.restore",
+                AuditEvent.target_id == str(annotation.id),
             )
         )
         is None
@@ -3101,13 +3101,13 @@ async def test_annotation_moderation_rejects_authors_and_audits_versioned_deleti
     event = await async_db.scalar(
         select(AuditEvent).where(
             AuditEvent.action == "annotation.moderate.delete",
-            AuditEvent.target_id == annotation.id,
+            AuditEvent.target_id == str(annotation.id),
         )
     )
     assert event is not None
     assert event.actor_id == administrator.id
     assert event.authorization_resource_action == ResourceAction.project_annotation_delete.value
-    assert json.loads(event.detail or "{}") == {"author_id": author.id}
+    assert json.loads(event.detail or "{}") == json_payload({"author_id": author.id})
 
 
 @pytest.mark.anyio
@@ -3223,9 +3223,13 @@ async def test_permanent_document_deletion_is_an_editor_decision(async_db, fake_
     attachment = Attachment(
         workspace_id=workspace_id,
         item_id=item.id,
-        object_key="objects/governed.bin",
-        size=1,
-        original_name="governed.bin",
+        file=FileObject(
+            backend="documents",
+            filename="objects/governed.bin",
+            size=1,
+            content_type="application/octet-stream",
+            metadata={"original_name": "governed.bin"},
+        ),
         created_by=owner.id,
     )
     async_db.add_all([revision, attachment])
@@ -3244,7 +3248,7 @@ async def test_permanent_document_deletion_is_an_editor_decision(async_db, fake_
     events = (
         await async_db.scalars(
             select(AuditEvent).where(
-                AuditEvent.target_id.in_((attachment.id, revision.id)),
+                AuditEvent.target_id.in_((str(attachment.id), str(revision.id))),
                 AuditEvent.action.in_(("attachment.delete", "pdf.delete")),
             )
         )
@@ -3471,9 +3475,13 @@ async def test_committed_object_cleanup_survives_workspace_archive_and_role_chan
     attachment = Attachment(
         workspace_id=workspace_id,
         item_id=item.id,
-        object_key=stored.key,
-        size=stored.size,
-        original_name="obsolete.bin",
+        file=FileObject(
+            backend="documents",
+            filename=stored.key,
+            size=stored.size,
+            content_type="application/octet-stream",
+            metadata={"original_name": "obsolete.bin"},
+        ),
         created_by=owner.id,
     )
     async_db.add(attachment)
@@ -3528,7 +3536,7 @@ async def test_annotation_export_status_and_file_are_requester_only(
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
         output={"revision_id": "private-revision", "object_key": "private.pdf"},
-        attributes={"actor_id": requester.id, "workspace_id": workspace_id},
+        attributes=json_payload({"actor_id": requester.id, "workspace_id": workspace_id}),
     )
 
     assert (await get_export_status(async_db, requester, workspace_id, workflow_id))[
@@ -3599,7 +3607,7 @@ async def test_project_annotation_export_file_rejects_replaced_assignment(
             "project_id": project.id,
             "project_item_id": original_assignment_id,
         },
-        attributes={"actor_id": requester.id, "workspace_id": workspace_id},
+        attributes=json_payload({"actor_id": requester.id, "workspace_id": workspace_id}),
     )
 
     with pytest.raises(ResourceUnavailable, match="project item not found"):
@@ -3683,7 +3691,7 @@ async def test_cross_workspace_copy_creates_detached_item_and_file(async_db, mon
     import_event = await async_db.scalar(
         select(AuditEvent).where(
             AuditEvent.action == "workspace.item.copy.import",
-            AuditEvent.target_id == copied.id,
+            AuditEvent.target_id == str(copied.id),
         )
     )
     assert import_event is not None

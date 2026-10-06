@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from fastapi import APIRouter
 from fastapi.responses import Response
 
@@ -28,8 +30,8 @@ BIBLIOGRAPHY_CONTENT_TYPES = {
     responses={200: {"content": BIBLIOGRAPHY_CONTENT_TYPES}},
 )
 async def export_item_bibliography(
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     file_format: str,
     user: ApiUser,
     db: Database,
@@ -93,8 +95,8 @@ async def export_item_bibliography(
     },
 )
 async def copy_citation(
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     user: ApiUser,
     db: Database,
     file_format: str = "csl",
@@ -152,8 +154,8 @@ async def copy_citation(
     },
 )
 async def citation_text(
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     user: ApiUser,
     db: Database,
     style: str = "apa",

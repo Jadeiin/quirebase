@@ -11,10 +11,11 @@ from quirebase.access import require_system_resource_action
 from quirebase.audit import record_event
 from quirebase.core.crypto import generate_token, token_hash
 from quirebase.core.errors import ResourceNotFound, ValidationFailure
-from quirebase.core.timezones import as_utc
 from quirebase.models import ApiToken, User
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 API_TOKEN_PREFIX = "qb_api_"
@@ -23,14 +24,14 @@ MAX_API_TOKEN_DAYS = 365
 
 @dataclass(frozen=True)
 class ApiTokenGrant:
-    token_id: str
+    token_id: UUID
     raw_token: str
     expires_at: datetime
 
 
 @dataclass(frozen=True)
 class ApiTokenSummary:
-    token_id: str
+    token_id: UUID
     name: str
     expires_at: datetime
     revoked_at: datetime | None
@@ -40,15 +41,15 @@ class ApiTokenSummary:
     def status(self) -> Literal["active", "expired", "revoked"]:
         if self.revoked_at is not None:
             return "revoked"
-        if as_utc(self.expires_at) <= datetime.now(UTC):
+        if self.expires_at <= datetime.now(UTC):
             return "expired"
         return "active"
 
 
 @dataclass(frozen=True)
 class VerifiedApiToken:
-    token_id: str
-    user_id: str
+    token_id: UUID
+    user_id: UUID
     expires_at: datetime
 
 
@@ -95,14 +96,14 @@ async def verify_api_token(db: AsyncSession, raw_token: str) -> VerifiedApiToken
     if (
         token is None
         or token.revoked_at is not None
-        or as_utc(token.expires_at) <= datetime.now(UTC)
+        or token.expires_at <= datetime.now(UTC)
         or not token.user.active
     ):
         return None
     return VerifiedApiToken(
         token_id=token.id,
         user_id=token.user_id,
-        expires_at=as_utc(token.expires_at),
+        expires_at=token.expires_at.astimezone(UTC),
     )
 
 
@@ -125,7 +126,7 @@ async def list_api_tokens(db: AsyncSession, user: User) -> tuple[ApiTokenSummary
     )
 
 
-async def revoke_api_token(db: AsyncSession, user: User, token_id: str) -> None:
+async def revoke_api_token(db: AsyncSession, user: User, token_id: UUID) -> None:
     token = await db.get(ApiToken, token_id)
     relation = "own" if token is not None and token.user_id == user.id else "other"
     user = await require_system_resource_action(

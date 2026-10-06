@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
+from advanced_alchemy.types import GUID
 from sqlalchemy import and_, delete, func, literal, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -34,6 +35,8 @@ from quirebase.library.workflows import (
 from quirebase.models import Item, ItemTag, ItemTagRecommendation, Tag, User
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -51,8 +54,8 @@ class TagGroup:
 @dataclass(frozen=True)
 class TagMatrix:
     groups: tuple[TagGroup, ...]
-    assigned_ids: frozenset[str]
-    recommended_ids: frozenset[str]
+    assigned_ids: frozenset[UUID]
+    recommended_ids: frozenset[UUID]
     suggested_names: tuple[str, ...]
     suggested_single_words: tuple[str, ...]
     suggested_phrases: tuple[str, ...]
@@ -61,7 +64,7 @@ class TagMatrix:
 
 
 async def regenerate_item_tag_recommendation(
-    db: AsyncSession, user: User, workspace_id: str, item_id: str
+    db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID
 ) -> str:
     await require_editable_item(db, user, workspace_id, item_id)
     recommendation = await request_item_tag_recommendation(
@@ -82,7 +85,7 @@ def normalize_tag_name(name: str) -> str:
     return normalized
 
 
-async def get_or_create_tag(db: AsyncSession, user: User, workspace_id: str, name: str) -> Tag:
+async def get_or_create_tag(db: AsyncSession, user: User, workspace_id: UUID, name: str) -> Tag:
     await require_workspace_action(db, user, workspace_id, ResourceAction.tag_create)
     normalized = normalize_tag_name(name)
     normalized_key = normalized.casefold()
@@ -116,7 +119,7 @@ async def get_or_create_tag(db: AsyncSession, user: User, workspace_id: str, nam
 
 
 async def add_tag_to_item(
-    db: AsyncSession, user: User, workspace_id: str, item_id: str, name: str
+    db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID, name: str
 ) -> ItemTag:
     await require_item_action(db, user, workspace_id, item_id, ResourceAction.tag_use)
     tag = await get_or_create_tag(db, user, workspace_id, name)
@@ -126,9 +129,9 @@ async def add_tag_to_item(
 async def _add_tag_id_to_item(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
-    tag_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    tag_id: UUID,
     *,
     commit: bool = True,
 ) -> ItemTag:
@@ -175,7 +178,7 @@ async def _add_tag_id_to_item(
 
 
 async def add_existing_tag_to_item(
-    db: AsyncSession, user: User, workspace_id: str, item_id: str, tag_id: str
+    db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID, tag_id: UUID
 ) -> ItemTag:
     await require_item_action(db, user, workspace_id, item_id, ResourceAction.tag_use)
     if (
@@ -190,7 +193,7 @@ async def add_existing_tag_to_item(
 
 
 async def remove_tag_from_item(
-    db: AsyncSession, user: User, workspace_id: str, item_id: str, tag_id: str
+    db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID, tag_id: UUID
 ) -> None:
     await require_item_action(db, user, workspace_id, item_id, ResourceAction.tag_use)
     await _remove_tag_from_item(db, user, workspace_id, item_id, tag_id)
@@ -199,9 +202,9 @@ async def remove_tag_from_item(
 async def _remove_tag_from_item(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
-    tag_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    tag_id: UUID,
     *,
     commit: bool = True,
 ) -> None:
@@ -230,11 +233,11 @@ async def _remove_tag_from_item(
 async def apply_item_tag_selection(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     *,
-    remove_tag_ids: list[str] | None = None,
-    tag_ids: list[str] | None = None,
+    remove_tag_ids: list[UUID] | None = None,
+    tag_ids: list[UUID] | None = None,
     new_names: list[str] | None = None,
 ) -> None:
     """Apply a mixed Tag selection atomically.
@@ -277,7 +280,7 @@ async def apply_item_tag_selection(
 
 
 async def rename_tag(
-    db: AsyncSession, user: User, workspace_id: str, tag_id: str, name: str
+    db: AsyncSession, user: User, workspace_id: UUID, tag_id: UUID, name: str
 ) -> Tag:
     await require_workspace_action(db, user, workspace_id, ResourceAction.tag_manage)
     tag = await db.scalar(
@@ -314,7 +317,7 @@ async def rename_tag(
     return tag
 
 
-async def delete_tag(db: AsyncSession, user: User, workspace_id: str, tag_id: str) -> None:
+async def delete_tag(db: AsyncSession, user: User, workspace_id: UUID, tag_id: UUID) -> None:
     await require_workspace_action(db, user, workspace_id, ResourceAction.tag_manage)
     # Deleting a taxonomy root must block FK association inserts until commit.
     tag = await db.scalar(
@@ -428,14 +431,14 @@ async def get_tag_matrix_for_item(db: AsyncSession, item: Item) -> TagMatrix:
 async def merge_tags(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    source_tag_id: str,
-    target_tag_id: str,
+    workspace_id: UUID,
+    source_tag_id: UUID,
+    target_tag_id: UUID,
 ) -> Tag:
     if source_tag_id == target_tag_id:
         raise TagConflict("source and target tags must be different")
     await require_workspace_action(db, user, workspace_id, ResourceAction.tag_manage)
-    locked_tags: dict[str, Tag | None] = {}
+    locked_tags: dict[UUID, Tag | None] = {}
     for tag_id in sorted((source_tag_id, target_tag_id)):
         query = select(Tag).where(Tag.id == tag_id, Tag.workspace_id == workspace_id)
         if tag_id == source_tag_id:
@@ -458,7 +461,7 @@ async def merge_tags(
             select(
                 ItemTag.workspace_id,
                 ItemTag.item_id,
-                literal(target_tag.id),
+                literal(target_tag.id, type_=GUID()),
             ).where(
                 ItemTag.workspace_id == workspace_id,
                 ItemTag.tag_id == source_tag.id,

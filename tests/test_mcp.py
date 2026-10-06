@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 
 import httpx2
 import pytest
+from app_helpers import json_payload
 from fastmcp import Client
 from sqlalchemy import select
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
@@ -74,12 +75,12 @@ async def _call(client, raw_token: str, name: str, arguments: dict, request_id: 
     return await client.post(
         "/mcp/",
         headers=_headers(raw_token),
-        json={
+        json=json_payload({
             "jsonrpc": "2.0",
             "id": request_id,
             "method": "tools/call",
             "params": {"name": name, "arguments": arguments},
-        },
+        }),
     )
 
 
@@ -196,18 +197,18 @@ async def test_generated_library_tool_calls_api_and_preserves_mcp_audit_provenan
     assert item.created_by == user.id
     event = await async_db.scalar(
         select(AuditEvent).where(
-            AuditEvent.action == "item.create", AuditEvent.target_id == item_id
+            AuditEvent.action == "item.create", AuditEvent.target_id == str(item_id)
         )
     )
     assert event is not None
-    assert json.loads(event.detail) == {
+    assert json.loads(event.detail) == json_payload({
         "invocation": {
             "protocol": "mcp",
             "operation": "library.create_library_item",
             "api_token_id": grant.token_id,
             "client_id": f"quirebase-api-token:{grant.token_id}",
         }
-    }
+    })
 
 
 async def test_tool_search_proxy_calls_the_curated_tool(async_db, async_session_factory):
@@ -247,7 +248,7 @@ async def test_tool_search_proxy_calls_the_curated_tool(async_db, async_session_
     item_id = created_result["structuredContent"]["id"]
     event = await async_db.scalar(
         select(AuditEvent).where(
-            AuditEvent.action == "item.create", AuditEvent.target_id == item_id
+            AuditEvent.action == "item.create", AuditEvent.target_id == str(item_id)
         )
     )
     assert event is not None
@@ -302,12 +303,12 @@ async def test_generated_tool_does_not_fall_back_to_cookie_auth(async_db, async_
                 "Accept": "application/json, text/event-stream",
                 "Content-Type": "application/json",
             },
-            json={
+            json=json_payload({
                 "jsonrpc": "2.0",
                 "id": 1,
                 "method": "tools/call",
                 "params": {"name": "library.search_items", "arguments": {}},
-            },
+            }),
         )
         invalid = await _call(client, "invalid", "library.search_items", {})
 

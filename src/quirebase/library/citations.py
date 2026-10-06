@@ -4,6 +4,7 @@ import asyncio
 import json
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
 from inquiro.bibliography import (
     BIBLIOGRAPHY_EXTENSIONS,
@@ -55,7 +56,7 @@ def preview_citation_key(formula: str, *, force_ascii: bool = False) -> str:
 
 
 async def resolve_style_xml(
-    db: AsyncSession, user: User | None, workspace_id: str, style_key: str
+    db: AsyncSession, user: User | None, workspace_id: UUID, style_key: str
 ) -> str | None:
     builtin = await asyncio.to_thread(builtin_style_xml, style_key)
     if builtin:
@@ -63,14 +64,18 @@ async def resolve_style_xml(
     if user is None:
         return None
     await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
-    style = await db.get(CitationStyle, style_key)
+    try:
+        style_id = UUID(style_key)
+    except ValueError:
+        return None
+    style = await db.get(CitationStyle, style_id)
     if style is None or style.workspace_id != workspace_id:
         return None
     return style.csl_xml
 
 
 async def list_custom_citation_styles(
-    db: AsyncSession, user: User, workspace_id: str
+    db: AsyncSession, user: User, workspace_id: UUID
 ) -> list[CitationStyle]:
     await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     return list(
@@ -85,7 +90,7 @@ async def list_custom_citation_styles(
 
 
 async def create_custom_citation_style(
-    db: AsyncSession, user: User, workspace_id: str, name: str, csl: str
+    db: AsyncSession, user: User, workspace_id: UUID, name: str, csl: str
 ) -> CitationStyle:
     await require_workspace_action(db, user, workspace_id, ResourceAction.citation_style_manage)
     name = name.strip()
@@ -121,7 +126,7 @@ async def create_custom_citation_style(
 
 
 async def delete_custom_citation_style(
-    db: AsyncSession, user: User, workspace_id: str, style_id: str
+    db: AsyncSession, user: User, workspace_id: UUID, style_id: UUID
 ) -> None:
     await require_workspace_action(db, user, workspace_id, ResourceAction.citation_style_manage)
     style = await db.get(CitationStyle, style_id)
@@ -134,7 +139,7 @@ async def delete_custom_citation_style(
 async def format_csl_export(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
+    workspace_id: UUID,
     items: list[Item],
     style_key: str = "apa",
     options: BibliographyExportOptions | None = None,
@@ -246,8 +251,8 @@ def _item_to_bibliography_record(item: Item) -> BibliographyRecord:
 async def get_item_citation_response(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     file_format: str,
     style_key: str = "apa",
     options: BibliographyExportOptions | None = None,
@@ -263,8 +268,8 @@ async def get_item_citation_response(
 async def get_item_citation_text_response(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     style_key: str = "apa",
     output: str = "text",
 ) -> tuple[str, str]:

@@ -13,6 +13,8 @@ from quirebase.core.errors import ValidationFailure
 from quirebase.models import Author, Item, ItemAuthor, User, normalize_author_identity
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -78,8 +80,8 @@ async def find_or_create_author(
 async def set_item_authors(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     authors_data: list[dict],
     role: str = "author",
 ) -> list[ItemAuthor]:
@@ -156,7 +158,7 @@ async def set_item_authors_from_string(
 
 
 async def get_item_authors(
-    db: AsyncSession, item_id: str, role: str = "author"
+    db: AsyncSession, item_id: UUID, role: str = "author"
 ) -> list[ItemAuthor]:
     return list(
         (
@@ -171,7 +173,7 @@ async def get_item_authors(
 
 
 async def search_authors_typeahead(
-    db: AsyncSession, user: User, workspace_id: str, query: str, limit: int = 10
+    db: AsyncSession, user: User, workspace_id: UUID, query: str, limit: int = 10
 ) -> list[dict]:
     await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     term = query.strip()

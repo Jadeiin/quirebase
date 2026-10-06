@@ -1684,4 +1684,4 @@ async def test_concurrent_metadata_replacements_reject_stale_version(
         assert total == 1 and items[0].id == item_id
         assert (await search_library(db, actor, workspace_id, q=loser))[1] == 0
         events, total = await query_events(db, actor, action="item.update")
-        assert total == 1 and events[0].target_id == item_id
+        assert total == 1 and events[0].target_id == str(item_id)

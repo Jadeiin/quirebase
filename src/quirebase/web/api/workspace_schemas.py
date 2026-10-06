@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime  # ruff: ignore[typing-only-standard-library-import] - Pydantic resolves it
+from datetime import datetime
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -30,9 +31,9 @@ class WorkspaceUpdateRequest(BaseModel):
 
 
 class WorkspaceView(BaseModel):
-    id: str
+    id: UUID
     name: str
-    owner_id: str
+    owner_id: UUID
     state: WorkspaceState
     current_role: WorkspaceRole
     governance_suspended: bool
@@ -42,14 +43,14 @@ class WorkspaceView(BaseModel):
 
 
 class WorkspaceMemberDirectoryView(BaseModel):
-    user_id: str
+    user_id: UUID
     username: str
     role: WorkspaceRole
 
 
 class WorkspaceGovernanceMemberView(BaseModel):
-    membership_id: str
-    user_id: str
+    membership_id: UUID
+    user_id: UUID
     username: str
     role: WorkspaceRole
     state: WorkspaceMemberState
@@ -69,8 +70,8 @@ class WorkspaceInvitationRequest(BaseModel):
 
 
 class WorkspaceInvitationCreatedView(BaseModel):
-    id: str
-    user_id: str
+    id: UUID
+    user_id: UUID
     username: str
     role: WorkspaceInvitationRole
     expires_at: datetime
@@ -78,14 +79,14 @@ class WorkspaceInvitationCreatedView(BaseModel):
 
 
 class WorkspaceInvitationView(BaseModel):
-    id: str
-    user_id: str
+    id: UUID
+    user_id: UUID
     username: str
     role: WorkspaceInvitationRole
-    invited_by: str
+    invited_by: UUID
     expires_at: datetime
     created_at: datetime
 
 
 class WorkspaceInvitationAcceptanceView(BaseModel):
-    workspace_id: str
+    workspace_id: UUID

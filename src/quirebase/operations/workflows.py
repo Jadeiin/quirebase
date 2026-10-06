@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from dbos import DBOS
 from sqlalchemy import select, update
@@ -74,7 +73,7 @@ async def dispatch_maintenance_workflow(db, admin: User, operation: str) -> str:
     return workflow_id
 
 
-async def dispatch_workspace_reindex(db, actor: User, workspace_id: str) -> str:
+async def dispatch_workspace_reindex(db, actor: User, workspace_id: UUID) -> str:
     context = await require_workspace_action(
         db, actor, workspace_id, ResourceAction.workspace_maintenance_run
     )
@@ -111,8 +110,8 @@ async def dispatch_workspace_reindex(db, actor: User, workspace_id: str) -> str:
 
 @ads.transaction(isolation_level="READ COMMITTED")
 async def list_reindex_item_ids_step(
-    actor_id: str, workspace_id: str, after_id: str | None, limit: int
-) -> tuple[str, ...]:
+    actor_id: UUID, workspace_id: UUID, after_id: UUID | None, limit: int
+) -> tuple[UUID, ...]:
     db = ads.sql_session()
     actor = await db.get(User, actor_id)
     if actor is None:
@@ -127,7 +126,7 @@ async def list_reindex_item_ids_step(
 
 
 @ads.transaction()
-async def reindex_items_step(actor_id: str, workspace_id: str, item_ids: tuple[str, ...]) -> int:
+async def reindex_items_step(actor_id: UUID, workspace_id: UUID, item_ids: tuple[UUID, ...]) -> int:
     db = ads.sql_session()
     actor = await db.get(User, actor_id)
     if actor is None:
@@ -154,8 +153,8 @@ async def reindex_items_step(actor_id: str, workspace_id: str, item_ids: tuple[s
 
 @ads.transaction(isolation_level="READ COMMITTED")
 async def list_reindex_revision_ids_step(
-    actor_id: str, workspace_id: str, after_id: str | None, limit: int
-) -> tuple[str, ...]:
+    actor_id: UUID, workspace_id: UUID, after_id: UUID | None, limit: int
+) -> tuple[UUID, ...]:
     db = ads.sql_session()
     actor = await db.get(User, actor_id)
     if actor is None:
@@ -176,7 +175,7 @@ async def list_reindex_revision_ids_step(
 
 @ads.transaction()
 async def reindex_revisions_step(
-    actor_id: str, workspace_id: str, revision_ids: tuple[str, ...]
+    actor_id: UUID, workspace_id: UUID, revision_ids: tuple[UUID, ...]
 ) -> int:
     db = ads.sql_session()
     actor = await db.get(User, actor_id)
@@ -204,10 +203,10 @@ async def reindex_revisions_step(
 
 @DBOS.workflow(name=REINDEX_WORKFLOW)
 async def reindex_workspace_workflow(
-    _workflow_id: str, actor_id: str, workspace_id: str
+    _workflow_id: str, actor_id: UUID, workspace_id: UUID
 ) -> dict[str, Any]:
     total = 0
-    after_id: str | None = None
+    after_id: UUID | None = None
     while True:
         item_ids = await list_reindex_item_ids_step(
             actor_id, workspace_id, after_id, _REINDEX_BATCH_SIZE
@@ -219,7 +218,7 @@ async def reindex_workspace_workflow(
             break
         after_id = item_ids[-1]
     revision_total = 0
-    after_revision_id: str | None = None
+    after_revision_id: UUID | None = None
     while True:
         revision_ids = await list_reindex_revision_ids_step(
             actor_id, workspace_id, after_revision_id, _REINDEX_BATCH_SIZE
@@ -265,22 +264,14 @@ async def record_integrity_scan_step(errors: list[str], thumbnail_sizes: dict[st
         )
     missing_count = sum("missing " in error for error in errors)
     mismatch_count = sum("mismatch" in error for error in errors)
-    scan = await db.get(ObjectIntegrityScan, "latest")
-    if scan is None:
-        scan = ObjectIntegrityScan(
-            id="latest",
+    db.add(
+        ObjectIntegrityScan(
             status="ok" if not errors else "inconsistencies_found",
             missing_count=missing_count,
             mismatch_count=mismatch_count,
             errors=json.dumps(errors, ensure_ascii=False),
         )
-        db.add(scan)
-    else:
-        scan.status = "ok" if not errors else "inconsistencies_found"
-        scan.missing_count = missing_count
-        scan.mismatch_count = mismatch_count
-        scan.errors = json.dumps(errors, ensure_ascii=False)
-        scan.checked_at = datetime.now(UTC)
+    )
     await db.flush()
 
 
@@ -298,7 +289,7 @@ async def _run_integrity_scan() -> dict[str, Any]:
 
 @DBOS.workflow(name=CHECK_OBJECTS_WORKFLOW)
 async def check_objects_workflow(
-    _workflow_id: str, _actor_id: str, _workspace_id: None
+    _workflow_id: str, _actor_id: UUID, _workspace_id: None
 ) -> dict[str, Any]:
     return await _run_integrity_scan()
 

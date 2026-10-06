@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from app_helpers import json_payload
 from inquiro import CandidateRecord, Identifier
 from sqlalchemy import func, select
 from test_http import authenticated_async_client
@@ -37,7 +38,7 @@ async def test_http_api_creates_complete_metadata(
 
     response = await client.post(
         f"{workspace_base}/items",
-        json={
+        json=json_payload({
             "title": "Complete manual record",
             "abstract": "All editable metadata is accepted during creation.",
             "reference_type": "article",
@@ -62,13 +63,13 @@ async def test_http_api_creates_complete_metadata(
                 {"last_name": "Turing", "first_name": "Alan"},
             ],
             "editors": [{"last_name": "Hopper", "first_name": "Grace"}],
-        },
+        }),
     )
 
     assert response.status_code == 201
     created = await db.scalar(select(Item).where(Item.title == "Complete manual record"))
     assert created is not None
-    assert response.json() == {"id": created.id, "version": 1}
+    assert response.json() == json_payload({"id": created.id, "version": 1})
     assert created.authors == "Lovelace, Ada; Turing, Alan"
     assert created.editors == "Hopper, Grace"
     assert created.doi == "10.1000/complete"
@@ -91,7 +92,7 @@ async def test_http_api_edits_rich_metadata_and_structured_contributors(
     item_id = item.id
     response = await client.put(
         f"{workspace_base}/items/{item_id}",
-        json={
+        json=json_payload({
             "expected_version": item.version,
             "metadata": {
                 "title": "Attention Is All You Need",
@@ -128,7 +129,7 @@ async def test_http_api_edits_rich_metadata_and_structured_contributors(
                     {"last_name": "von Luxburg", "first_name": "Ulrike"},
                 ],
             },
-        },
+        }),
     )
     assert response.status_code == 200
 
@@ -205,7 +206,7 @@ async def test_http_api_tag_matrix_and_selection(
 
     response = await client.put(
         f"{workspace_base}/items/{item_id}/tags",
-        json={
+        json=json_payload({
             "add_tag_ids": [tag1.id],
             "remove_tag_ids": [tag2.id],
             "new_names": [
@@ -213,7 +214,7 @@ async def test_http_api_tag_matrix_and_selection(
                 "New Research Direction",
                 "Deep Learning",
             ],
-        },
+        }),
     )
     assert response.status_code == 200
 
@@ -337,11 +338,11 @@ async def test_http_api_syncs_metadata_and_updates_bibtex_key(
     ):
         response = await client.post(
             f"{workspace_base}/items/{item_id}/metadata/sync",
-            json={
+            json=json_payload({
                 "expected_version": item.version,
                 "provider": "doi",
                 "uid": "10.1038/s41586-019-1666-5",
-            },
+            }),
         )
         assert response.status_code == 200
 
@@ -378,11 +379,11 @@ async def test_http_api_sync_metadata_uses_effective_runtime_provider_settings(
     ) as lookup:
         response = await client.post(
             f"{workspace_base}/items/{item.id}/metadata/sync",
-            json={
+            json=json_payload({
                 "expected_version": item.version,
                 "provider": "bibcode",
                 "uid": "2024ApJ...123A...1X",
-            },
+            }),
         )
 
     assert response.status_code == 200
@@ -410,11 +411,11 @@ async def test_http_api_sync_metadata_translates_expected_lookup_failures(
     with patch("quirebase.library.identifiers.lookup_candidate", new=AsyncMock(side_effect=error)):
         response = await client.post(
             f"{workspace_base}/items/{item.id}/metadata/sync",
-            json={
+            json=json_payload({
                 "expected_version": item.version,
                 "provider": "doi",
                 "uid": "invalid",
-            },
+            }),
         )
 
     assert response.status_code == status_code
@@ -452,7 +453,7 @@ async def test_http_api_suggests_authors(async_db, async_session_factory, tmp_pa
     assert len(data) == 1
     assert data[0]["last_name"] == "LeCun"
     assert data[0]["first_name"] == "Yann"
-    assert data[0]["id"] == a1.id
+    assert data[0]["id"] == str(a1.id)
 
     forbidden = await client.get(
         f"/api/v1/workspaces/{fixture_workspace_id(other)}/authors?query=le"
@@ -485,7 +486,7 @@ async def test_http_api_edit_synchronizes_identifier_rows(
 
     response = await client.put(
         f"{workspace_base}/items/{item_id}",
-        json={
+        json=json_payload({
             "expected_version": item.version,
             "metadata": {
                 "title": item.title,
@@ -495,7 +496,7 @@ async def test_http_api_edit_synchronizes_identifier_rows(
                     {"provider": "arxiv", "value": "2401.12345"},
                 ],
             },
-        },
+        }),
     )
 
     assert response.status_code == 200
@@ -530,10 +531,10 @@ async def test_http_api_edit_can_clear_all_structured_editors(
 
     response = await client.put(
         f"{workspace_base}/items/{item_id}",
-        json={
+        json=json_payload({
             "expected_version": item.version,
             "metadata": {"title": item.title, "editors": []},
-        },
+        }),
     )
 
     assert response.status_code == 200

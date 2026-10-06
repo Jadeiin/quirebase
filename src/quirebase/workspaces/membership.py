@@ -27,6 +27,8 @@ from quirebase.models import (
 )
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 from ._locking import _current_member, _lock_workspace
@@ -36,8 +38,8 @@ from .invitations import _revoke_pending_invitations
 async def set_workspace_member_role(
     db: AsyncSession,
     actor: User,
-    workspace_id: str,
-    membership_id: str,
+    workspace_id: UUID,
+    membership_id: UUID,
     role: WorkspaceRole | str,
 ) -> WorkspaceMember:
     requested = WorkspaceRole(role)
@@ -69,7 +71,7 @@ async def set_workspace_member_role(
 
 
 async def suspend_workspace_member(
-    db: AsyncSession, actor: User, workspace_id: str, membership_id: str
+    db: AsyncSession, actor: User, workspace_id: UUID, membership_id: UUID
 ) -> WorkspaceMember:
     await _lock_workspace(db, workspace_id)
     context = await require_workspace_membership(db, actor, workspace_id)
@@ -102,7 +104,7 @@ async def suspend_workspace_member(
 
 
 async def reactivate_workspace_member(
-    db: AsyncSession, actor: User, workspace_id: str, membership_id: str
+    db: AsyncSession, actor: User, workspace_id: UUID, membership_id: UUID
 ) -> WorkspaceMember:
     await _lock_workspace(db, workspace_id)
     context = await require_workspace_membership(db, actor, workspace_id)
@@ -132,7 +134,7 @@ async def reactivate_workspace_member(
 
 
 async def terminate_workspace_member(
-    db: AsyncSession, actor: User, workspace_id: str, membership_id: str
+    db: AsyncSession, actor: User, workspace_id: UUID, membership_id: UUID
 ) -> None:
     await _lock_workspace(db, workspace_id)
     context = await require_workspace_membership(db, actor, workspace_id)
@@ -166,7 +168,7 @@ async def terminate_workspace_member(
 
 
 async def transfer_workspace_ownership(
-    db: AsyncSession, actor: User, workspace_id: str, target_membership_id: str
+    db: AsyncSession, actor: User, workspace_id: UUID, target_membership_id: UUID
 ) -> Workspace:
     # Account deactivation locks the User before every Workspace where it has a
     # current membership. Take the same order here so transferring ownership cannot

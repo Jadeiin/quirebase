@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from fastapi import APIRouter
 from fastapi.responses import Response, StreamingResponse
 
@@ -41,7 +43,7 @@ def _bibliography_options(data: BibliographyExportRequest) -> BibliographyExport
     responses={200: {"content": BIBLIOGRAPHY_CONTENT_TYPES}},
 )
 async def export_item_selection(
-    workspace_id: str, data: BibliographyExportRequest, user: ApiUser, db: Database
+    workspace_id: UUID, data: BibliographyExportRequest, user: ApiUser, db: Database
 ) -> Response:
     contents, media_type, filename = await export_selected_bibliography(
         db,
@@ -74,7 +76,7 @@ async def export_item_selection(
     },
 )
 async def download_item_selection(
-    workspace_id: str, data: DocumentArchiveRequest, user: ApiUser, db: Database
+    workspace_id: UUID, data: DocumentArchiveRequest, user: ApiUser, db: Database
 ) -> StreamingResponse:
     archive = await download_selected_item_documents(
         db,
@@ -101,7 +103,7 @@ async def download_item_selection(
     responses={200: {"content": BIBLIOGRAPHY_CONTENT_TYPES}},
 )
 async def export_library_bibliography(
-    workspace_id: str,
+    workspace_id: UUID,
     user: ApiUser,
     db: Database,
     file_format: str,

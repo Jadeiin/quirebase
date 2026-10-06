@@ -32,6 +32,8 @@ from quirebase.models import (
 )
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.sql.elements import ColumnElement
 
@@ -126,7 +128,7 @@ def visible_annotation_scope_predicate(
 
 
 async def can_edit_annotation(
-    db: AsyncSession, user: User, workspace_id: str, annotation: PdfAnnotation
+    db: AsyncSession, user: User, workspace_id: UUID, annotation: PdfAnnotation
 ) -> bool:
     try:
         await _require_annotation_action(db, user, workspace_id, annotation, "update")
@@ -144,7 +146,7 @@ async def can_edit_annotation(
 async def _annotation_project_context(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
+    workspace_id: UUID,
     annotation: PdfAnnotation,
     operation: ResourceAction,
     *,
@@ -172,7 +174,7 @@ async def _annotation_project_context(
 async def _require_annotation_action(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
+    workspace_id: UUID,
     annotation: PdfAnnotation,
     action: str,
 ) -> None:
@@ -215,9 +217,9 @@ async def _require_annotation_action(
 async def editable_annotation_ids(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
+    workspace_id: UUID,
     annotations: list[PdfAnnotation],
-) -> set[str]:
+) -> set[UUID]:
     candidates = [
         annotation
         for annotation in annotations
@@ -270,8 +272,8 @@ async def editable_annotation_ids(
 
 
 async def _active_visible_project_item_ids(
-    db: AsyncSession, context: WorkspaceContext, project_item_ids: set[str]
-) -> set[str]:
+    db: AsyncSession, context: WorkspaceContext, project_item_ids: set[UUID]
+) -> set[UUID]:
     """Batch Project facts for read hints; mutation paths reauthorize under locks."""
 
     if not project_item_ids:
@@ -295,12 +297,12 @@ async def _active_visible_project_item_ids(
 async def editable_annotation_reply_ids(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
+    workspace_id: UUID,
     replies: list[PdfAnnotationReply],
-    annotations: dict[str, PdfAnnotation],
+    annotations: dict[UUID, PdfAnnotation],
     *,
     action: str = "update",
-) -> set[str]:
+) -> set[UUID]:
     if not replies:
         return set()
     candidates: list[tuple[PdfAnnotationReply, PdfAnnotation]] = []
@@ -366,9 +368,9 @@ async def editable_annotation_reply_ids(
 async def _visible_annotation(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
-    annotation_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
     *,
     deleted: bool,
 ) -> PdfAnnotation:
@@ -437,9 +439,9 @@ async def _visible_annotation(
 async def require_visible_annotation(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
-    annotation_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
 ) -> PdfAnnotation:
     return await _visible_annotation(db, user, workspace_id, item_id, annotation_id, deleted=False)
 
@@ -447,9 +449,9 @@ async def require_visible_annotation(
 async def require_editable_annotation(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
-    annotation_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
 ) -> PdfAnnotation:
     record = await require_visible_annotation(db, user, workspace_id, item_id, annotation_id)
     await _require_annotation_action(db, user, workspace_id, record, "update")
@@ -459,9 +461,9 @@ async def require_editable_annotation(
 async def require_deletable_annotation(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
-    annotation_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
 ) -> PdfAnnotation:
     record = await require_visible_annotation(db, user, workspace_id, item_id, annotation_id)
     await _require_annotation_action(db, user, workspace_id, record, "delete")
@@ -471,9 +473,9 @@ async def require_deletable_annotation(
 async def require_restorable_annotation(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
-    annotation_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
 ) -> PdfAnnotation:
     record = await _visible_annotation(db, user, workspace_id, item_id, annotation_id, deleted=True)
     if record.deleted_by_moderation:
@@ -485,9 +487,9 @@ async def require_restorable_annotation(
 async def require_visible_annotation_for_reply_mutation(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
-    annotation_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
     *,
     action: str,
 ) -> tuple[User, PdfAnnotation]:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from quirebase.access.authorization import (
     SystemAction,
@@ -26,6 +26,9 @@ from quirebase.models import (
     WorkspaceState,
 )
 
+if TYPE_CHECKING:
+    from uuid import UUID
+
 
 @dataclass(frozen=True, slots=True)
 class AuthorizationProjection:
@@ -35,8 +38,8 @@ class AuthorizationProjection:
 
 
 class DiscussionDecisionSource(Protocol):
-    author_id: str
-    project_id: str | None
+    author_id: UUID
+    project_id: UUID | None
 
 
 def workspace_decisions(

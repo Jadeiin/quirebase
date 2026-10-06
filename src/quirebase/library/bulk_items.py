@@ -37,16 +37,18 @@ from quirebase.projects import add_items_to_project
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def apply_bulk_item_action(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_ids: list[str],
+    workspace_id: UUID,
+    item_ids: list[UUID],
     action: str,
-    project_id: str = "",
+    project_id: UUID | None = None,
     tag_name: str = "",
     confirm_delete: str = "",
 ) -> None:
@@ -59,6 +61,8 @@ async def apply_bulk_item_action(
 
     cleanup_keys: list[str] = []
     if action in ("add_project", "project_add"):
+        if project_id is None:
+            raise ValidationFailure("Project is required")
         try:
             await add_items_to_project(
                 db, user, workspace_id, project_id, [item.id for item in items]
@@ -120,7 +124,7 @@ async def apply_bulk_item_action(
         cleanup_keys.extend(
             (
                 await db.scalars(
-                    select(Attachment.object_key).where(
+                    select(Attachment.file["filename"].as_string()).where(
                         Attachment.workspace_id == workspace_id,
                         Attachment.item_id.in_([item.id for item in items]),
                     )
@@ -188,8 +192,8 @@ async def apply_bulk_item_action(
 async def download_selected_item_documents(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_ids: list[str],
+    workspace_id: UUID,
+    item_ids: list[UUID],
     *,
     include_annotations: bool = False,
     include_supplements: bool = False,

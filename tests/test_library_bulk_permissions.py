@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 
 import pymupdf
 import pytest
+from app_helpers import json_payload
 from sqlalchemy import select
 from storage_helpers import collect_body, local_object_path, put_pdf_object
 from test_http import authenticated_async_client
@@ -205,7 +206,7 @@ async def test_bulk_action_records_single_bulk_audit_event(
         .order_by(AuditEvent.created_at.desc())
     )
     assert event is not None
-    assert json.loads(event.detail)["item_ids"] == [item.id]
+    assert json.loads(event.detail)["item_ids"] == json_payload([item.id])
     await client.aclose()
 
 
@@ -400,7 +401,7 @@ async def test_bulk_download_pdfs_records_audit_event(
     )
     assert event is not None
     detail = json.loads(event.detail)
-    assert detail["item_ids"] == [item.id]
+    assert detail["item_ids"] == json_payload([item.id])
     assert detail["include_annotations"] is False
     assert detail["include_supplements"] is False
     await client.aclose()
@@ -544,7 +545,7 @@ async def test_bulk_export_rejects_inaccessible_items(
 
     response = await client.post(
         f"/api/v1/workspaces/{item.workspace_id}/items/bibliography",
-        json={"file_format": "bibtex", "item_ids": [private_item.id]},
+        json=json_payload({"file_format": "bibtex", "item_ids": [private_item.id]}),
     )
 
     assert response.status_code == 422

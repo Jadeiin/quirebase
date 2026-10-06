@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
@@ -53,7 +54,7 @@ router = APIRouter(tags=["Library"])
 
 @router.post("/items/bulk", response_model=OkView)
 async def apply_item_bulk_action(
-    workspace_id: str, data: BulkActionRequest, user: ApiUser, db: Database
+    workspace_id: UUID, data: BulkActionRequest, user: ApiUser, db: Database
 ) -> OkView:
     await apply_bulk_item_action(
         db,
@@ -70,12 +71,12 @@ async def apply_item_bulk_action(
 
 @router.get("/items", response_model=LibrarySearchView)
 async def search_items(
-    workspace_id: str,
+    workspace_id: UUID,
     user: ApiUser,
     db: Database,
     query: str = "",
     tag: str = "",
-    project: str = "",
+    project: UUID | None = None,
     year: str = "",
     keyword: str = "",
     author: str = "",
@@ -109,7 +110,7 @@ async def search_items(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_library_item(
-    workspace_id: str, metadata: ItemMetadata, user: ApiUser, db: Database
+    workspace_id: UUID, metadata: ItemMetadata, user: ApiUser, db: Database
 ) -> WriteResult:
     result = await create_item(db, user, workspace_id, metadata)
     return WriteResult(id=result.item_id, version=result.version)
@@ -117,7 +118,7 @@ async def create_library_item(
 
 @router.get("/items/{item_id}", response_model=ItemDetailView)
 async def get_library_item(
-    workspace_id: str, item_id: str, context: WorkspaceAccess, db: Database
+    workspace_id: UUID, item_id: UUID, context: WorkspaceAccess, db: Database
 ) -> ItemDetailView:
     view = await open_item_section(db, context, item_id, ItemSection.metadata)
     if not isinstance(view, ItemMetadataData):  # pragma: no cover
@@ -127,7 +128,7 @@ async def get_library_item(
 
 @router.put("/items/{item_id}", response_model=WriteResult)
 async def update_library_item(
-    workspace_id: str, item_id: str, data: ItemUpdateRequest, user: ApiUser, db: Database
+    workspace_id: UUID, item_id: UUID, data: ItemUpdateRequest, user: ApiUser, db: Database
 ) -> WriteResult:
     result = await revise_item_metadata(
         db, user, workspace_id, item_id, data.expected_version, data.metadata
@@ -141,8 +142,8 @@ async def update_library_item(
     status_code=status.HTTP_201_CREATED,
 )
 async def copy_library_item(
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     data: CrossWorkspaceCopyRequest,
     user: ApiUser,
     db: Database,
@@ -161,8 +162,8 @@ async def copy_library_item(
     response_model=CitationView,
 )
 async def format_item_citation(
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     user: ApiUser,
     db: Database,
     style: str = "apa",
@@ -175,7 +176,7 @@ async def format_item_citation(
 
 
 @router.get("/tags", response_model=list[TagView])
-async def list_tags(workspace_id: str, context: WorkspaceAccess, db: Database) -> list[TagView]:
+async def list_tags(workspace_id: UUID, context: WorkspaceAccess, db: Database) -> list[TagView]:
     rows = await list_accessible_tags_with_counts(db, context)
     return [
         TagView(
@@ -190,7 +191,7 @@ async def list_tags(workspace_id: str, context: WorkspaceAccess, db: Database) -
 
 @router.post("/items/{item_id}/tags", response_model=WriteResult)
 async def add_item_tag(
-    workspace_id: str, item_id: str, data: NameRequest, user: ApiUser, db: Database
+    workspace_id: UUID, item_id: UUID, data: NameRequest, user: ApiUser, db: Database
 ) -> WriteResult:
     assignment = await add_tag_to_item(db, user, workspace_id, item_id, data.name)
     return WriteResult(id=assignment.tag_id)
@@ -201,7 +202,7 @@ async def add_item_tag(
     response_model=OkView,
 )
 async def remove_item_tag(
-    workspace_id: str, item_id: str, tag_id: str, user: ApiUser, db: Database
+    workspace_id: UUID, item_id: UUID, tag_id: UUID, user: ApiUser, db: Database
 ) -> OkView:
     await remove_tag_from_item(db, user, workspace_id, item_id, tag_id)
     return OkView()
@@ -209,7 +210,7 @@ async def remove_item_tag(
 
 @router.put("/items/{item_id}/tags", response_model=OkView)
 async def set_item_tag_selection(
-    workspace_id: str, item_id: str, data: TagSetRequest, user: ApiUser, db: Database
+    workspace_id: UUID, item_id: UUID, data: TagSetRequest, user: ApiUser, db: Database
 ) -> OkView:
     await apply_item_tag_selection(
         db,
@@ -228,7 +229,7 @@ async def set_item_tag_selection(
     response_model=list[DiscussionMessageView],
 )
 async def list_discussions(
-    workspace_id: str, item_id: str, context: WorkspaceAccess, db: Database
+    workspace_id: UUID, item_id: UUID, context: WorkspaceAccess, db: Database
 ) -> list[DiscussionMessageView]:
     view = await open_item_section(db, context, item_id, ItemSection.discussion)
     if not isinstance(view, ItemDiscussionData):  # pragma: no cover
@@ -242,7 +243,7 @@ async def list_discussions(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_discussion(
-    workspace_id: str, item_id: str, data: DiscussionRequest, user: ApiUser, db: Database
+    workspace_id: UUID, item_id: UUID, data: DiscussionRequest, user: ApiUser, db: Database
 ) -> WriteResult:
     message = await add_discussion_message(db, user, workspace_id, item_id, data.body)
     return WriteResult(id=message.id)
@@ -253,7 +254,7 @@ async def create_discussion(
     response_model=OkView,
 )
 async def delete_discussion(
-    workspace_id: str, item_id: str, message_id: str, user: ApiUser, db: Database
+    workspace_id: UUID, item_id: UUID, message_id: UUID, user: ApiUser, db: Database
 ) -> OkView:
     await delete_discussion_message(db, user, workspace_id, item_id, message_id)
     return OkView()
@@ -261,9 +262,9 @@ async def delete_discussion(
 
 @router.post("/items/{item_id}/discussions/{message_id}/moderation", response_model=OkView)
 async def moderate_discussion(
-    workspace_id: str,
-    item_id: str,
-    message_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    message_id: UUID,
     data: DiscussionModerationRequest,
     user: ApiUser,
     db: Database,

@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import pymupdf
 import pytest
+from app_helpers import json_payload
 from inquiro import CandidateRecord, Identifier
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
@@ -346,7 +347,7 @@ async def test_failed_pdf_import_can_retry_with_a_new_durable_workflow(
 
         retried = await client.post(
             f"{workspace_base}/imports/{batch.id}/retry",
-            json={},
+            json=json_payload({}),
         )
 
         assert retried.status_code == 200
@@ -418,7 +419,7 @@ async def test_workspace_editor_retry_rebinds_pdf_batch_and_hides_actor_workflow
 
     assert batch.actor_id == editor.id
     assert enqueue["args"][0] == editor.id
-    assert enqueue["attributes"]["actor_id"] == editor.id
+    assert enqueue["attributes"]["actor_id"] == str(editor.id)
     assert (await import_batch_api(workspace_id, batch.id, owner, async_db))["workflow_id"] is None
     assert (await import_batch_api(workspace_id, batch.id, editor, async_db))[
         "workflow_id"
@@ -504,7 +505,7 @@ async def test_terminal_or_missing_pdf_import_workflow_can_retry_while_batch_is_
 
         retried = await client.post(
             f"{workspace_base}/imports/{batch.id}/retry",
-            json={},
+            json=json_payload({}),
         )
 
         assert retried.status_code == 200
@@ -586,7 +587,9 @@ async def test_stale_preview_convergence_does_not_overwrite_concurrent_pdf_impor
         preview_task = asyncio.create_task(client.get(f"{workspace_base}/imports/{batch.id}"))
         await preview_observed_terminal.wait()
 
-        retried = await client.post(f"{workspace_base}/imports/{batch.id}/retry", json={})
+        retried = await client.post(
+            f"{workspace_base}/imports/{batch.id}/retry", json=json_payload({})
+        )
         release_preview.set()
         preview = await preview_task
 
@@ -707,14 +710,15 @@ async def test_item_page_validates_access_before_recording_read(
     private_item_id = private_item.id
     reader_id = item.created_by
 
+    missing_item_id = uuid4()
     try:
         assert (
-            await client.get(f"{workspace_base}/items/missing-item/overview")
+            await client.get(f"{workspace_base}/items/{missing_item_id}/overview")
         ).status_code == 404
         assert (
             await client.get(f"{workspace_base}/items/{private_item_id}/overview")
         ).status_code == 404
-        assert await db.get(ItemRead, (reader_id, "missing-item")) is None
+        assert await db.get(ItemRead, (reader_id, missing_item_id)) is None
         assert await db.get(ItemRead, (reader_id, private_item_id)) is None
     finally:
         await client.aclose()
@@ -799,11 +803,11 @@ async def test_library_pagination_filters_and_bulk_actions(
 
         tagged = await client.post(
             f"{workspace_base}/items/bulk",
-            json={
+            json=json_payload({
                 "action": "add_tag",
                 "tag_name": "Priority",
                 "item_ids": [selected[0].id],
-            },
+            }),
         )
         assert tagged.status_code == 200
         organized = await client.get(f"{workspace_base}/items/{selected[0].id}/organize")
@@ -812,26 +816,31 @@ async def test_library_pagination_filters_and_bulk_actions(
 
         assigned = await client.post(
             f"{workspace_base}/items/bulk",
-            json={
+            json=json_payload({
                 "action": "add_project",
                 "project_id": second_project.id,
                 "item_ids": [selected[0].id, selected[1].id],
-            },
+            }),
         )
         assert assigned.status_code == 200
         project_view = await client.get(f"{workspace_base}/projects/{second_project.id}")
         assert project_view.status_code == 200
-        assert {row["id"] for row in project_view.json()["items"]} == {
-            selected[0].id,
-            selected[1].id,
-        }
+        assert {row["id"] for row in project_view.json()["items"]} == set(
+            map(
+                str,
+                {
+                    selected[0].id,
+                    selected[1].id,
+                },
+            )
+        )
 
         exported = await client.post(
             f"{workspace_base}/items/bibliography",
-            json={
+            json=json_payload({
                 "file_format": "endnote",
                 "item_ids": [selected[0].id, selected[1].id],
-            },
+            }),
         )
         assert exported.status_code == 200
         assert "quirebase-export.enw" in exported.headers["content-disposition"]
@@ -840,29 +849,29 @@ async def test_library_pagination_filters_and_bulk_actions(
 
         native_checkbox_export = await client.post(
             f"{workspace_base}/items/bibliography",
-            json={
+            json=json_payload({
                 "file_format": "endnote",
                 "item_ids": [selected[0].id],
                 "include_abstract": True,
-            },
+            }),
         )
         assert native_checkbox_export.status_code == 200
         assert "This abstract should be optional." in native_checkbox_export.text
 
         exported_without_abstract = await client.post(
             f"{workspace_base}/items/bibliography",
-            json={
+            json=json_payload({
                 "file_format": "endnote",
                 "item_ids": [selected[0].id],
                 "include_abstract": False,
-            },
+            }),
         )
         assert exported_without_abstract.status_code == 200
         assert "This abstract should be optional." not in exported_without_abstract.text
 
         pdf_archive = await client.post(
             f"{workspace_base}/items/documents/archive",
-            json={"item_ids": [original.id]},
+            json=json_payload({"item_ids": [original.id]}),
         )
         assert pdf_archive.status_code == 200
         assert pdf_archive.headers["content-type"] == "application/zip"
@@ -876,10 +885,10 @@ async def test_library_pagination_filters_and_bulk_actions(
 
         annotated_pdf_archive = await client.post(
             f"{workspace_base}/items/documents/archive",
-            json={
+            json=json_payload({
                 "item_ids": [original.id],
                 "include_annotations": True,
-            },
+            }),
         )
         assert annotated_pdf_archive.status_code == 200
         assert (
@@ -889,11 +898,11 @@ async def test_library_pagination_filters_and_bulk_actions(
 
         deleted = await client.post(
             f"{workspace_base}/items/bulk",
-            json={
+            json=json_payload({
                 "action": "delete_items",
                 "item_ids": [selected[1].id],
                 "confirmation": "delete",
-            },
+            }),
         )
         assert deleted.status_code == 200
         assert (await client.get(f"{workspace_base}/items/{selected[1].id}")).status_code == 404
@@ -956,7 +965,7 @@ async def test_pdf_import_batch_previews_before_creating_items(
 
         committed = await client.post(
             f"{workspace_base}/imports/{batch.id}/commit",
-            json={},
+            json=json_payload({}),
         )
         assert committed.status_code == 200
         first = await db.scalar(
@@ -1017,7 +1026,7 @@ async def test_pdf_import_batch_keeps_successes_and_reports_failed_files(
 
         committed = await client.post(
             f"{workspace_base}/imports/{batch.id}/commit",
-            json={},
+            json=json_payload({}),
         )
         assert committed.status_code == 200
         article = await db.scalar(
@@ -1187,7 +1196,7 @@ async def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(
 
         committed = await client.post(
             f"{workspace_base}/imports/{batches[1].id}/commit",
-            json={},
+            json=json_payload({}),
         )
         assert committed.status_code == 200
         imported = await db.scalar(
@@ -1340,13 +1349,13 @@ async def test_commit_pdf_import_batch_rechecks_doi_after_stale_preview(
         )
         first = await client.post(
             f"{workspace_base}/imports/{batches[0].id}/commit",
-            json={},
+            json=json_payload({}),
         )
         assert first.status_code == 200
 
         stale = await client.post(
             f"{workspace_base}/imports/{batches[1].id}/commit",
-            json={},
+            json=json_payload({}),
         )
         assert stale.status_code == 409
         assert (

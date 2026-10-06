@@ -22,6 +22,8 @@ from quirebase.models import (
 )
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 from ._locking import _lock_workspace
@@ -39,7 +41,7 @@ async def list_workspaces_for_governance(db: AsyncSession, actor: User) -> list[
 
 
 async def suspend_workspace_governance(
-    db: AsyncSession, actor: User, workspace_id: str
+    db: AsyncSession, actor: User, workspace_id: UUID
 ) -> Workspace:
     current_actor = await require_system_action(
         db,
@@ -70,7 +72,7 @@ async def suspend_workspace_governance(
 
 
 async def recover_workspace_governance(
-    db: AsyncSession, actor: User, workspace_id: str
+    db: AsyncSession, actor: User, workspace_id: UUID
 ) -> Workspace:
     current_actor = await require_system_action(
         db,
@@ -103,7 +105,7 @@ async def recover_workspace_governance(
 async def read_workspace_items_break_glass(
     db: AsyncSession,
     actor: User,
-    workspace_id: str,
+    workspace_id: UUID,
     reason: str,
     *,
     limit: int = 100,

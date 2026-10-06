@@ -10,11 +10,13 @@ from quirebase.core.errors import ResourceUnavailable
 from quirebase.models import Attachment, FileRevision, Item, ItemAuthor, User
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def require_revision(
-    db: AsyncSession, user: User, workspace_id: str, revision_id: str
+    db: AsyncSession, user: User, workspace_id: UUID, revision_id: UUID
 ) -> FileRevision:
     revision = await db.scalar(
         select(FileRevision)
@@ -38,9 +40,9 @@ async def require_revision(
 async def require_attachment(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
-    item_id: str,
-    attachment_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    attachment_id: UUID,
 ) -> Attachment:
     attachment = await db.scalar(
         select(Attachment).where(

@@ -5,9 +5,9 @@ import json
 import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Literal, TypedDict, cast
-from uuid import UUID
+from typing import TYPE_CHECKING, Any, Literal, TypedDict, cast
 
+from advanced_alchemy.types import FileObject
 from dbos import DBOS
 from sqlalchemy import select
 
@@ -40,6 +40,9 @@ from quirebase.search import search_index
 
 from .pdf import create_thumbnail, export_annotations, inspect_pdf, validate_pdf_container
 
+if TYPE_CHECKING:
+    from uuid import UUID
+
 REVISION_UPLOAD_WORKFLOW = "documents.upload_revision"
 ATTACHMENT_UPLOAD_WORKFLOW = "documents.upload_attachment"
 ANNOTATION_EXPORT_WORKFLOW = "documents.export_annotations"
@@ -50,9 +53,9 @@ _MAX_THUMBNAIL_BYTES = 32 * 1024 * 1024
 
 async def _lock_upload_authority(
     db,
-    actor_id: str,
-    workspace_id: str,
-    item_id: str,
+    actor_id: UUID,
+    workspace_id: UUID,
+    item_id: UUID,
     *,
     role: AttachmentRole | None = None,
 ) -> tuple[User, Item]:
@@ -101,7 +104,7 @@ class PdfInspectionData(TypedDict):
 
 
 class PdfInspection(PdfInspectionData):
-    revision_id: str
+    revision_id: UUID
 
 
 class UploadedPdfInspection(PdfInspection):
@@ -109,14 +112,14 @@ class UploadedPdfInspection(PdfInspection):
 
 
 class RevisionWorkflowResult(TypedDict):
-    revision_id: str
-    item_id: str
+    revision_id: UUID
+    item_id: UUID
 
 
 class ImportedRevisionWorkflowResult(TypedDict):
-    revision_id: str
-    actor_id: str
-    workspace_id: str
+    revision_id: UUID
+    actor_id: UUID
+    workspace_id: UUID
 
 
 class ValidatedAttachment(TypedDict):
@@ -125,17 +128,17 @@ class ValidatedAttachment(TypedDict):
 
 
 class AttachmentWorkflowResult(TypedDict):
-    attachment_id: str
-    item_id: str
+    attachment_id: UUID
+    item_id: UUID
 
 
 class AnnotationExportResult(TypedDict):
     filename: str
     object_key: str
     size_bytes: int
-    revision_id: str
-    project_id: str | None
-    project_item_id: str | None
+    revision_id: UUID
+    project_id: UUID | None
+    project_item_id: UUID | None
 
 
 def _require_upload_receipt(value: Any, *, description: str) -> UploadReceipt:
@@ -155,8 +158,8 @@ async def remove_owned_object(key: str) -> None:
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
 async def delete_unreferenced_objects_step(
-    actor_id: str,
-    workspace_id: str,
+    actor_id: UUID,
+    workspace_id: UUID,
     object_keys: list[str],
     ignore_workflow_id: str | None = None,
 ) -> list[str]:
@@ -175,8 +178,8 @@ async def delete_unreferenced_objects_step(
 
 @DBOS.workflow(name=OBJECT_CLEANUP_WORKFLOW)
 async def cleanup_objects_workflow(
-    actor_id: str,
-    workspace_id: str,
+    actor_id: UUID,
+    workspace_id: UUID,
     object_keys: list[str],
     ignore_workflow_id: str | None = None,
 ) -> list[str]:
@@ -187,14 +190,14 @@ async def cleanup_objects_workflow(
 
 async def _inspect_pdf_object(
     object_key_value: str,
-    thumbnail_object_id: str,
+    thumbnail_object_id: UUID,
     *,
     expected_size: int | None = None,
 ) -> PdfInspectionData:
     metadata = await get_object_store().head(object_key_value)
     if expected_size is not None and metadata.size != expected_size:
         raise ValueError("uploaded object size mismatch")
-    thumbnail_key = object_key(UUID(thumbnail_object_id), ObjectSuffix.PNG)
+    thumbnail_key = object_key(thumbnail_object_id, ObjectSuffix.PNG)
     async with get_object_store().materialize(object_key_value) as source:
         await asyncio.to_thread(validate_pdf_container, source)
         page_count, text, geometry = await asyncio.to_thread(inspect_pdf, source)
@@ -203,7 +206,7 @@ async def _inspect_pdf_object(
         try:
             await asyncio.to_thread(create_thumbnail, source, thumbnail_path)
             thumbnail = await get_object_store().put_object(
-                UUID(thumbnail_object_id),
+                thumbnail_object_id,
                 ObjectSuffix.PNG,
                 thumbnail_path,
                 max_bytes=_MAX_THUMBNAIL_BYTES,
@@ -222,12 +225,12 @@ async def _inspect_pdf_object(
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
 async def inspect_uploaded_pdf(
-    revision_id: str,
-    object_id: str,
-    thumbnail_object_id: str,
+    revision_id: UUID,
+    object_id: UUID,
+    thumbnail_object_id: UUID,
     receipt: UploadReceipt,
 ) -> UploadedPdfInspection:
-    expected_key = object_key(UUID(object_id), ObjectSuffix.PDF)
+    expected_key = object_key(object_id, ObjectSuffix.PDF)
     if receipt["key"] != expected_key:
         raise ValueError("upload receipt does not own the expected object")
     inspected = await _inspect_pdf_object(
@@ -244,9 +247,9 @@ async def inspect_uploaded_pdf(
 
 @ads.transaction()
 async def commit_uploaded_revision(
-    actor_id: str,
-    workspace_id: str,
-    item_id: str,
+    actor_id: UUID,
+    workspace_id: UUID,
+    item_id: UUID,
     filename: str,
     inspected: UploadedPdfInspection,
 ) -> RevisionWorkflowResult:
@@ -298,7 +301,7 @@ async def commit_uploaded_revision(
 
 
 async def _enqueue_file_revision_changed(
-    revision_id: str, actor_id: str, workspace_id: str, item_id: str
+    revision_id: UUID, actor_id: UUID, workspace_id: UUID, item_id: UUID
 ) -> str:
     return await enqueue_child_workflow(
         FILE_REVISION_CHANGED_WORKFLOW,
@@ -313,16 +316,16 @@ async def _enqueue_file_revision_changed(
 
 @DBOS.workflow(name=REVISION_UPLOAD_WORKFLOW)
 async def upload_revision_workflow(
-    actor_id: str,
-    workspace_id: str,
-    item_id: str,
-    revision_id: str,
-    object_id: str,
-    thumbnail_object_id: str,
+    actor_id: UUID,
+    workspace_id: UUID,
+    item_id: UUID,
+    revision_id: UUID,
+    object_id: UUID,
+    thumbnail_object_id: UUID,
     filename: str,
 ) -> RevisionWorkflowResult:
-    key = object_key(UUID(object_id), ObjectSuffix.PDF)
-    thumbnail_key = object_key(UUID(thumbnail_object_id), ObjectSuffix.PNG)
+    key = object_key(object_id, ObjectSuffix.PDF)
+    thumbnail_key = object_key(thumbnail_object_id, ObjectSuffix.PNG)
     receipt = await DBOS.recv_async(
         "upload-complete", timeout_seconds=get_settings().workflow_upload_timeout_seconds
     )
@@ -347,13 +350,13 @@ async def upload_revision_workflow(
 
 @DBOS.workflow(name=IMPORTED_REVISION_INSPECTION_WORKFLOW)
 async def inspect_imported_revision_workflow(
-    actor_id: str,
-    workspace_id: str,
-    revision_id: str,
+    actor_id: UUID,
+    workspace_id: UUID,
+    revision_id: UUID,
     object_key_value: str,
-    thumbnail_object_id: str,
+    thumbnail_object_id: UUID,
 ) -> ImportedRevisionWorkflowResult:
-    thumbnail_key = object_key(UUID(thumbnail_object_id), ObjectSuffix.PNG)
+    thumbnail_key = object_key(thumbnail_object_id, ObjectSuffix.PNG)
     committed = False
     try:
         inspected = await inspect_imported_pdf(revision_id, object_key_value, thumbnail_object_id)
@@ -373,7 +376,7 @@ async def inspect_imported_revision_workflow(
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
 async def inspect_imported_pdf(
-    revision_id: str, object_key_value: str, thumbnail_object_id: str
+    revision_id: UUID, object_key_value: str, thumbnail_object_id: UUID
 ) -> PdfInspection:
     inspected = await _inspect_pdf_object(object_key_value, thumbnail_object_id)
     return {
@@ -384,7 +387,7 @@ async def inspect_imported_pdf(
 
 @ads.transaction()
 async def commit_imported_revision(
-    actor_id: str, workspace_id: str, inspected: PdfInspection
+    actor_id: UUID, workspace_id: UUID, inspected: PdfInspection
 ) -> RevisionWorkflowResult:
     db = ads.sql_session()
     revision = await db.get(FileRevision, inspected["revision_id"])
@@ -417,12 +420,12 @@ def _is_image_header(header: bytes, content_type: str) -> bool:
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
 async def validate_attachment_upload(
-    object_id: str,
+    object_id: UUID,
     content_type: str,
     graphical_abstract: bool,
     receipt: UploadReceipt,
 ) -> ValidatedAttachment:
-    key = object_key(UUID(object_id), ObjectSuffix.BINARY)
+    key = object_key(object_id, ObjectSuffix.BINARY)
     if receipt["key"] != key:
         raise ValueError("upload receipt does not own the expected object")
     metadata = await get_object_store().head(key)
@@ -440,10 +443,10 @@ async def validate_attachment_upload(
 
 @ads.transaction()
 async def commit_uploaded_attachment(
-    actor_id: str,
-    workspace_id: str,
-    item_id: str,
-    attachment_id: str,
+    actor_id: UUID,
+    workspace_id: UUID,
+    item_id: UUID,
+    attachment_id: UUID,
     filename: str,
     content_type: str,
     role_value: str | None,
@@ -472,10 +475,13 @@ async def commit_uploaded_attachment(
         id=attachment_id,
         workspace_id=workspace_id,
         item_id=item_id,
-        object_key=receipt["object_key"],
-        size=receipt["size"],
-        mime_type=content_type[:100],
-        original_name=Path(filename).name[:255],
+        file=FileObject(
+            backend="documents",
+            filename=receipt["object_key"],
+            size=receipt["size"],
+            content_type=content_type[:100],
+            metadata={"original_name": Path(filename).name[:255]},
+        ),
         role=role,
         created_by=actor_id,
     )
@@ -494,16 +500,16 @@ async def commit_uploaded_attachment(
 
 @DBOS.workflow(name=ATTACHMENT_UPLOAD_WORKFLOW)
 async def upload_attachment_workflow(
-    actor_id: str,
-    workspace_id: str,
-    item_id: str,
-    attachment_id: str,
-    object_id: str,
+    actor_id: UUID,
+    workspace_id: UUID,
+    item_id: UUID,
+    attachment_id: UUID,
+    object_id: UUID,
     filename: str,
     content_type: str,
     role_value: str | None,
 ) -> AttachmentWorkflowResult:
-    key = object_key(UUID(object_id), ObjectSuffix.BINARY)
+    key = object_key(object_id, ObjectSuffix.BINARY)
     receipt = await DBOS.recv_async(
         "upload-complete", timeout_seconds=get_settings().workflow_upload_timeout_seconds
     )
@@ -532,11 +538,11 @@ async def upload_attachment_workflow(
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
 async def build_annotation_export(
-    actor_id: str,
-    workspace_id: str,
-    revision_id: str,
-    object_id: str,
-    project_id: str | None,
+    actor_id: UUID,
+    workspace_id: UUID,
+    revision_id: UUID,
+    object_id: UUID,
+    project_id: UUID | None,
     include_private: bool,
     timezone: str | None,
 ) -> AnnotationExportResult:
@@ -555,7 +561,7 @@ async def build_annotation_export(
         )
         if revision is None:
             raise ValueError("revision no longer exists")
-        project_item_id: str | None = None
+        project_item_id: UUID | None = None
         if project_id:
             await require_project_context(
                 db, actor, workspace_id, project_id, ResourceAction.workspace_export
@@ -616,7 +622,7 @@ async def build_annotation_export(
                 display_timezone=annotation_export_timezone(timezone),
             )
         stored = await get_object_store().put_object(
-            UUID(object_id),
+            object_id,
             ObjectSuffix.PDF,
             output_path,
             max_bytes=get_settings().max_pdf_bytes,
@@ -635,11 +641,11 @@ async def build_annotation_export(
 
 @DBOS.workflow(name=ANNOTATION_EXPORT_WORKFLOW)
 async def annotation_export_workflow(
-    actor_id: str,
-    workspace_id: str,
-    revision_id: str,
-    object_id: str,
-    project_id: str | None,
+    actor_id: UUID,
+    workspace_id: UUID,
+    revision_id: UUID,
+    object_id: UUID,
+    project_id: UUID | None,
     include_private: bool,
     timezone: str | None,
 ) -> AnnotationExportResult:
@@ -670,9 +676,9 @@ async def annotation_export_workflow(
 @ads.transaction(isolation_level="READ COMMITTED")
 async def record_annotation_export_artifact(
     workflow_id: str,
-    actor_id: str,
-    workspace_id: str,
-    project_id: str | None,
+    actor_id: UUID,
+    workspace_id: UUID,
+    project_id: UUID | None,
     result: AnnotationExportResult,
 ) -> None:
     from quirebase.operations.settings import get_effective_setting

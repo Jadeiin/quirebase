@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from fastapi import APIRouter, status
 from sqlalchemy import select
 
@@ -57,7 +59,7 @@ workspace_root_router = APIRouter(tags=["Workspaces"])
 workspace_router = APIRouter(tags=["Workspaces"])
 
 
-def _workspace_view(workspace, member, *, owner_id: str) -> WorkspaceView:
+def _workspace_view(workspace, member, *, owner_id: UUID) -> WorkspaceView:
     projection = workspace_decisions(
         member.role,
         workspace.state,
@@ -88,7 +90,7 @@ def _workspace_view(workspace, member, *, owner_id: str) -> WorkspaceView:
     )
 
 
-async def _usernames(db, user_ids: set[str]) -> dict[str, str]:
+async def _usernames(db, user_ids: set[UUID]) -> dict[UUID, str]:
     if not user_ids:
         return {}
     rows = await db.execute(select(User.id, User.username).where(User.id.in_(user_ids)))
@@ -119,7 +121,7 @@ async def get_workspace_creation_availability(
 
 @workspace_root_router.get("/workspaces/{workspace_id}", response_model=WorkspaceView)
 async def get_user_workspace(
-    workspace_id: str, context: WorkspaceAccess, db: Database
+    workspace_id: UUID, context: WorkspaceAccess, db: Database
 ) -> WorkspaceView:
     if context.workspace_id != workspace_id:
         raise ResourceNotFound("Workspace not found")
@@ -145,7 +147,7 @@ async def create_user_workspace(
 
 @workspace_root_router.patch("/workspaces/{workspace_id}", response_model=WriteResult)
 async def update_user_workspace(
-    workspace_id: str, data: WorkspaceUpdateRequest, user: ApiUser, db: Database
+    workspace_id: UUID, data: WorkspaceUpdateRequest, user: ApiUser, db: Database
 ) -> WriteResult:
     workspace = await update_workspace(db, user, workspace_id, data.name)
     return WriteResult(id=workspace.id)
@@ -153,7 +155,7 @@ async def update_user_workspace(
 
 @workspace_router.get("/members", response_model=list[WorkspaceMemberDirectoryView])
 async def get_workspace_members(
-    workspace_id: str, context: WorkspaceAccess, db: Database
+    workspace_id: UUID, context: WorkspaceAccess, db: Database
 ) -> list[WorkspaceMemberDirectoryView]:
     members = await list_workspace_members(db, context)
     usernames = await _usernames(db, {member.user_id for member in members})
@@ -169,7 +171,7 @@ async def get_workspace_members(
 
 @workspace_router.get("/governance/members", response_model=list[WorkspaceGovernanceMemberView])
 async def get_workspace_governance_members(
-    workspace_id: str, context: WorkspaceAccess, db: Database
+    workspace_id: UUID, context: WorkspaceAccess, db: Database
 ) -> list[WorkspaceGovernanceMemberView]:
     members = await list_workspace_governance_members(db, context)
     usernames = await _usernames(db, {member.user_id for member in members})
@@ -194,7 +196,7 @@ async def get_workspace_governance_members(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_workspace_invitation(
-    workspace_id: str,
+    workspace_id: UUID,
     data: WorkspaceInvitationRequest,
     user: ApiUser,
     db: Database,
@@ -222,7 +224,7 @@ async def create_workspace_invitation(
     response_model=list[WorkspaceInvitationView],
 )
 async def get_workspace_invitations(
-    workspace_id: str, context: WorkspaceAccess, db: Database
+    workspace_id: UUID, context: WorkspaceAccess, db: Database
 ) -> list[WorkspaceInvitationView]:
     invitations = await list_workspace_invitations(db, context)
     usernames = await _usernames(db, {invitation.user_id for invitation in invitations})
@@ -245,7 +247,7 @@ async def get_workspace_invitations(
     response_model=OkView,
 )
 async def revoke_workspace_invitation_api(
-    workspace_id: str, invitation_id: str, user: ApiUser, db: Database
+    workspace_id: UUID, invitation_id: UUID, user: ApiUser, db: Database
 ) -> OkView:
     await revoke_workspace_invitation(db, user, workspace_id, invitation_id)
     return OkView()
@@ -264,8 +266,8 @@ async def accept_workspace_invitation_api(
 
 @workspace_router.put("/members/{membership_id}/role", response_model=OkView)
 async def change_workspace_member_role(
-    workspace_id: str,
-    membership_id: str,
+    workspace_id: UUID,
+    membership_id: UUID,
     data: WorkspaceRoleRequest,
     user: ApiUser,
     db: Database,
@@ -276,7 +278,7 @@ async def change_workspace_member_role(
 
 @workspace_router.post("/members/{membership_id}/suspend", response_model=OkView)
 async def suspend_member(
-    workspace_id: str, membership_id: str, user: ApiUser, db: Database
+    workspace_id: UUID, membership_id: UUID, user: ApiUser, db: Database
 ) -> OkView:
     await suspend_workspace_member(db, user, workspace_id, membership_id)
     return OkView()
@@ -284,7 +286,7 @@ async def suspend_member(
 
 @workspace_router.post("/members/{membership_id}/reactivate", response_model=OkView)
 async def reactivate_member(
-    workspace_id: str, membership_id: str, user: ApiUser, db: Database
+    workspace_id: UUID, membership_id: UUID, user: ApiUser, db: Database
 ) -> OkView:
     await reactivate_workspace_member(db, user, workspace_id, membership_id)
     return OkView()
@@ -292,7 +294,7 @@ async def reactivate_member(
 
 @workspace_router.delete("/members/{membership_id}", response_model=OkView)
 async def terminate_member(
-    workspace_id: str, membership_id: str, user: ApiUser, db: Database
+    workspace_id: UUID, membership_id: UUID, user: ApiUser, db: Database
 ) -> OkView:
     await terminate_workspace_member(db, user, workspace_id, membership_id)
     return OkView()
@@ -300,30 +302,30 @@ async def terminate_member(
 
 @workspace_router.post("/ownership/{membership_id}", response_model=OkView)
 async def transfer_ownership(
-    workspace_id: str, membership_id: str, user: ApiUser, db: Database
+    workspace_id: UUID, membership_id: UUID, user: ApiUser, db: Database
 ) -> OkView:
     await transfer_workspace_ownership(db, user, workspace_id, membership_id)
     return OkView()
 
 
 @workspace_router.post("/archive", response_model=OkView)
-async def archive_user_workspace(workspace_id: str, user: ApiUser, db: Database) -> OkView:
+async def archive_user_workspace(workspace_id: UUID, user: ApiUser, db: Database) -> OkView:
     await archive_workspace(db, user, workspace_id)
     return OkView()
 
 
 @workspace_router.post("/restore", response_model=OkView)
-async def restore_user_workspace(workspace_id: str, user: ApiUser, db: Database) -> OkView:
+async def restore_user_workspace(workspace_id: UUID, user: ApiUser, db: Database) -> OkView:
     await restore_workspace(db, user, workspace_id)
     return OkView()
 
 
 @workspace_root_router.delete("/workspaces/{workspace_id}", response_model=OkView)
-async def delete_user_workspace(workspace_id: str, user: ApiUser, db: Database) -> OkView:
+async def delete_user_workspace(workspace_id: UUID, user: ApiUser, db: Database) -> OkView:
     await permanently_delete_workspace(db, user, workspace_id)
     return OkView()
 
 
 @workspace_router.post("/maintenance/reindex", response_model=WriteResult)
-async def reindex_workspace(workspace_id: str, user: ApiUser, db: Database) -> WriteResult:
+async def reindex_workspace(workspace_id: UUID, user: ApiUser, db: Database) -> WriteResult:
     return WriteResult(id=await dispatch_workspace_reindex(db, user, workspace_id))

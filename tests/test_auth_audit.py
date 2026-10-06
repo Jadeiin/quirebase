@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 
 import httpx2
 import pytest
-from app_helpers import create_web_test_app
+from app_helpers import create_web_test_app, json_payload
 from sqlalchemy import select
 
 from quirebase.accounts import (
@@ -61,12 +61,13 @@ async def test_failed_and_successful_logins_are_audited_without_credentials(
     client, _ = await web_client(db, async_session_factory)
     try:
         failed = await client.post(
-            "/api/v1/session", json={"username": "audited", "password": "wrong-password"}
+            "/api/v1/session",
+            json=json_payload({"username": "audited", "password": "wrong-password"}),
         )
         assert failed.status_code == 401
         succeeded = await client.post(
             "/api/v1/session",
-            json={"username": "audited", "password": "correct-password"},
+            json=json_payload({"username": "audited", "password": "correct-password"}),
         )
         assert succeeded.status_code == 200
         assert succeeded.json()["authenticated"] is True
@@ -83,7 +84,7 @@ async def test_failed_and_successful_logins_are_audited_without_credentials(
             "auth.login.succeeded",
         ]
         assert events[0].actor_id is None
-        assert events[0].target_id == user.id
+        assert events[0].target_id == str(user.id)
         assert events[1].actor_id == user.id
         for event in events:
             assert event.source == "http"
@@ -113,14 +114,18 @@ async def test_http_audit_preserves_mcp_provenance_and_isolates_cookie_credentia
     headers = {"Authorization": f"Bearer {grant.raw_token}"}
     try:
         bearer = await client.post(
-            "/api/v1/account/api-tokens", json={"name": "Bearer child", "days": 1}, headers=headers
+            "/api/v1/account/api-tokens",
+            json=json_payload({"name": "Bearer child", "days": 1}),
+            headers=headers,
         )
         with programmatic_invocation("mcp", "account.create_own_api_token", client_id="test-mcp"):
             mcp = await client.post(
-                "/api/v1/account/api-tokens", json={"name": "MCP child", "days": 1}, headers=headers
+                "/api/v1/account/api-tokens",
+                json=json_payload({"name": "MCP child", "days": 1}),
+                headers=headers,
             )
         cookie = await client.post(
-            "/api/v1/account/api-tokens", json={"name": "Cookie child", "days": 1}
+            "/api/v1/account/api-tokens", json=json_payload({"name": "Cookie child", "days": 1})
         )
         for response, protocol, operation, client_id in (
             (bearer, "http", "create_own_api_token", "http-api"),
@@ -131,7 +136,7 @@ async def test_http_audit_preserves_mcp_provenance_and_isolates_cookie_credentia
             event = await db.scalar(
                 select(AuditEvent).where(
                     AuditEvent.action == "auth.api_token.create",
-                    AuditEvent.target_id == response.json()["id"],
+                    AuditEvent.target_id == str(response.json()["id"]),
                 )
             )
             assert event is not None
@@ -139,7 +144,7 @@ async def test_http_audit_preserves_mcp_provenance_and_isolates_cookie_credentia
             expected = {"protocol": protocol, "operation": operation}
             if client_id is not None:
                 expected.update(api_token_id=grant.token_id, client_id=client_id)
-            assert json.loads(event.detail)["invocation"] == expected
+            assert json.loads(event.detail)["invocation"] == json_payload(expected)
         assert current_programmatic_invocation() is None
     finally:
         await client.aclose()
@@ -155,14 +160,14 @@ async def test_password_verification_does_not_block_the_event_loop(async_db, mon
     started = asyncio.Event()
     release_worker = threading.Event()
     loop = asyncio.get_running_loop()
-    original_verify = crypto.verify_password
+    original_verify = crypto.HashedPassword.verify_and_update
 
     def delayed_verify(encoded, candidate):
         loop.call_soon_threadsafe(started.set)
         release_worker.wait()
         return original_verify(encoded, candidate)
 
-    monkeypatch.setattr(crypto, "verify_password", delayed_verify)
+    monkeypatch.setattr(crypto.HashedPassword, "verify_and_update", delayed_verify)
     authentication = asyncio.create_task(
         authenticate_user(db, "threaded-identity", user.username, password)
     )
@@ -254,11 +259,12 @@ async def test_throttled_login_is_audited(async_db, async_session_factory):
             assert (
                 await client.post(
                     "/api/v1/session",
-                    json={"username": "missing", "password": "not-a-password"},
+                    json=json_payload({"username": "missing", "password": "not-a-password"}),
                 )
             ).status_code == 401
         throttled = await client.post(
-            "/api/v1/session", json={"username": "missing", "password": "not-a-password"}
+            "/api/v1/session",
+            json=json_payload({"username": "missing", "password": "not-a-password"}),
         )
         assert throttled.status_code == 429
         event = await db.scalar(
@@ -292,7 +298,7 @@ async def test_change_own_password_validates_current_password_and_audits(async_d
     )
     assert event is not None
     assert event.actor_id == user.id
-    assert event.target_id == user.id
+    assert event.target_id == str(user.id)
 
 
 @pytest.mark.anyio
@@ -329,10 +335,10 @@ async def test_account_settings_and_password_update(
     # Wrong current password returns 422
     wrong = await client.put(
         "/api/v1/account/password",
-        json={
+        json=json_payload({
             "current_password": "wrong-current-password",
             "new_password": "new-secret-password-1",
-        },
+        }),
     )
     assert wrong.status_code == 400
     assert "Current password incorrect" in wrong.text
@@ -340,10 +346,10 @@ async def test_account_settings_and_password_update(
     # Successful update
     success = await client.put(
         "/api/v1/account/password",
-        json={
+        json=json_payload({
             "current_password": "correct-password",
             "new_password": "new-secret-password-1",
-        },
+        }),
     )
     assert success.status_code == 200
     assert success.json() == {"ok": True}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from app_helpers import json_payload
 from inquiro.bibliography import (
     BibliographyExportOptions,
     CitationEngineUnavailable,
@@ -129,8 +130,8 @@ async def test_duplicate_shared_citation_style_returns_validation_response(
         assert xml is not None
         url = f"/api/v1/workspaces/{item.workspace_id}/citation-styles"
         payload = {"name": "Shared", "csl": xml}
-        assert (await client.post(url, json=payload)).status_code == 201
-        duplicate = await client.post(url, json=payload)
+        assert (await client.post(url, json=json_payload(payload))).status_code == 201
+        duplicate = await client.post(url, json=json_payload(payload))
         assert duplicate.status_code == 422
         assert duplicate.json()["code"] == "validation_failed"
     finally:
@@ -413,11 +414,16 @@ async def test_resolve_style_xml_scoped_to_owner(async_db):
     )
 
     # Owner can resolve
-    assert await resolve_style_xml(db, user_a, fixture_workspace_id(user_a), style_a.id) == csl_xml
+    assert (
+        await resolve_style_xml(db, user_a, fixture_workspace_id(user_a), str(style_a.id))
+        == csl_xml
+    )
     # Non-owner cannot resolve
-    assert await resolve_style_xml(db, user_b, fixture_workspace_id(user_b), style_a.id) is None
+    assert (
+        await resolve_style_xml(db, user_b, fixture_workspace_id(user_b), str(style_a.id)) is None
+    )
     # Unauthenticated cannot resolve
-    assert await resolve_style_xml(db, None, fixture_workspace_id(user_a), style_a.id) is None
+    assert await resolve_style_xml(db, None, fixture_workspace_id(user_a), str(style_a.id)) is None
     # Built-in styles remain resolvable by anyone
     assert await resolve_style_xml(db, user_a, fixture_workspace_id(user_a), "apa") == csl_xml
     assert await resolve_style_xml(db, user_b, fixture_workspace_id(user_b), "apa") == csl_xml
@@ -447,7 +453,7 @@ async def test_csl_export_translates_unavailable_engine_at_library_interface(asy
     monkeypatch.setattr(citations, "render_bibliography", unavailable)
 
     with pytest.raises(ValidationFailure, match="requires the 'citation' extra"):
-        await format_csl_export(db, user, item.workspace_id, [item], style_key=style.id)
+        await format_csl_export(db, user, item.workspace_id, [item], style_key=str(style.id))
 
 
 @pytest.mark.anyio
@@ -476,7 +482,7 @@ async def test_citation_text_translates_unavailable_engine_at_library_interface(
 
     with pytest.raises(ValidationFailure, match="requires the 'citation' extra"):
         await get_item_citation_text_response(
-            db, user, item.workspace_id, item.id, style_key=style.id
+            db, user, item.workspace_id, item.id, style_key=str(style.id)
         )
 
 
@@ -565,7 +571,7 @@ async def test_custom_styles_accessible_in_item_sections(
         )
         assert response.status_code == 200
         assert any(
-            style["key"] == custom_style.id and style["scope"] == "custom"
+            style["key"] == str(custom_style.id) and style["scope"] == "custom"
             for style in response.json()["styles"]
         )
 

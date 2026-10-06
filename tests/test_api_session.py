@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import httpx2
 import pytest
-from app_helpers import create_web_test_app
+from app_helpers import create_web_test_app, json_payload
 from sqlalchemy import select
 from test_http import authenticated_async_client
 
@@ -38,17 +38,17 @@ async def test_session_api_mutations_require_an_exact_origin(
         missing = await client.post(
             f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/tags",
             headers={"Origin": ""},
-            json={"name": "Missing origin"},
+            json=json_payload({"name": "Missing origin"}),
         )
         cross_origin = await client.post(
             f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/tags",
             headers={"Origin": "https://attacker.example"},
-            json={"name": "Cross origin"},
+            json=json_payload({"name": "Cross origin"}),
         )
         same_origin = await client.post(
             f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/tags",
             headers={"Origin": "http://testserver"},
-            json={"name": "Same origin"},
+            json=json_payload({"name": "Same origin"}),
         )
 
         assert missing.status_code == 403
@@ -70,12 +70,12 @@ async def test_session_api_uses_configured_external_origin_behind_tls_proxy(
         accepted = await client.post(
             f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/tags",
             headers={"Origin": "https://library.example"},
-            json={"name": "Proxied request"},
+            json=json_payload({"name": "Proxied request"}),
         )
         internal_origin = await client.post(
             f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/tags",
             headers={"Origin": "http://testserver"},
-            json={"name": "Internal origin"},
+            json=json_payload({"name": "Internal origin"}),
         )
 
         assert accepted.status_code == 200
@@ -139,17 +139,17 @@ async def test_login_and_logout_use_json_and_same_origin_policy(async_db, async_
     ) as client:
         missing = await client.post(
             "/api/v1/session",
-            json={"username": "alice", "password": "correct horse battery"},
+            json=json_payload({"username": "alice", "password": "correct horse battery"}),
         )
         cross_origin = await client.post(
             "/api/v1/session",
             headers={"Origin": "https://attacker.example"},
-            json={"username": "alice", "password": "correct horse battery"},
+            json=json_payload({"username": "alice", "password": "correct horse battery"}),
         )
         accepted = await client.post(
             "/api/v1/session",
             headers={"Origin": "http://testserver"},
-            json={"username": "alice", "password": "correct horse battery"},
+            json=json_payload({"username": "alice", "password": "correct horse battery"}),
         )
         bootstrap = await client.get("/api/v1/session")
         logged_out = await client.delete("/api/v1/session", headers={"Origin": "http://testserver"})

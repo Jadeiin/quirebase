@@ -3,6 +3,7 @@ from uuid import uuid4
 
 import pymupdf
 import pytest
+from app_helpers import json_payload
 from sqlalchemy import event, select
 from test_http import authenticated_async_client
 from workspace_helpers import provision_initial_workspace
@@ -81,9 +82,9 @@ def policy_bundle(tmp_path, monkeypatch):
 
 
 def _context(role, lifecycle="active"):
-    actor = User(id=str(uuid4()), username="projection", password_hash="unused")
+    actor = User(id=uuid4(), username="projection", password_hash="unused")
     workspace = Workspace(
-        id=str(uuid4()),
+        id=uuid4(),
         name="Projection",
         created_by=actor.id,
         state=WorkspaceState.archived if lifecycle == "archived" else WorkspaceState.active,
@@ -226,7 +227,11 @@ async def test_child_mutations_and_upload_finalizers_do_not_require_metadata_edi
         assert organize.json()["authorization"] == overview.json()["authorization"]
         assigned = await client.put(
             f"{base}/items/{item_id}/tags",
-            json={"add_tag_ids": [tag.id], "remove_tag_ids": [], "new_names": ["New"]},
+            json=json_payload({
+                "add_tag_ids": [tag.id],
+                "remove_tag_ids": [],
+                "new_names": ["New"],
+            }),
         )
         assert assigned.status_code == 200
         assert (await client.delete(f"{base}/items/{item_id}/tags/{tag.id}")).status_code == 200
@@ -244,9 +249,9 @@ async def test_child_mutations_and_upload_finalizers_do_not_require_metadata_edi
             async_db, actor, workspace_id, item_id, pdf, "independent.pdf"
         )
         inspected = await inspect_uploaded_pdf(
-            str(upload.object_id),
-            str(upload.object_id),
-            str(uuid4()),
+            upload.object_id,
+            upload.object_id,
+            uuid4(),
             {"status": "complete", "key": upload.object_key, "size": len(pdf)},
         )
         result = await commit_uploaded_revision(
@@ -261,7 +266,7 @@ async def test_child_mutations_and_upload_finalizers_do_not_require_metadata_edi
             actor_id,
             workspace_id,
             item_id,
-            str(attachment.object_id),
+            attachment.object_id,
             "independent.txt",
             "text/plain",
             None,
@@ -273,7 +278,7 @@ async def test_child_mutations_and_upload_finalizers_do_not_require_metadata_edi
         ).status_code == 200
         assert (
             await client.request(
-                "DELETE", f"{base}/items/{item_id}", json={"confirmation": "delete"}
+                "DELETE", f"{base}/items/{item_id}", json=json_payload({"confirmation": "delete"})
             )
         ).status_code == 403
     finally:
@@ -405,9 +410,9 @@ async def test_project_choices_and_commands_do_not_infer_independent_grants(
             else []
         )
         assert ("project.update" in view["authorization"]["allowed"]) is metadata_allowed
-        metadata = await client.patch(url, json={"name": "Metadata"})
+        metadata = await client.patch(url, json=json_payload({"name": "Metadata"}))
         assert metadata.status_code == (200 if metadata_allowed else 403)
-        participation = await client.patch(url, json={"participation": "managed"})
+        participation = await client.patch(url, json=json_payload({"participation": "managed"}))
         assert participation.status_code == 403
         await async_db.refresh(project)
         assert project.name == ("Metadata" if metadata_allowed else "Independent choices")

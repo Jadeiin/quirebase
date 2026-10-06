@@ -64,7 +64,7 @@ async def test_admin_create_user_and_authenticate(async_db):
     # Check audit event
     event = await db.scalar(
         select(AuditEvent).where(
-            AuditEvent.action == "admin.user.create", AuditEvent.target_id == new_user.id
+            AuditEvent.action == "admin.user.create", AuditEvent.target_id == str(new_user.id)
         )
     )
     assert event is not None
@@ -161,7 +161,7 @@ async def test_admin_toggle_user_status_and_session_revocation(async_db):
 
     event = await db.scalar(
         select(AuditEvent).where(
-            AuditEvent.action == "admin.user.status_update", AuditEvent.target_id == user.id
+            AuditEvent.action == "admin.user.status_update", AuditEvent.target_id == str(user.id)
         )
     )
     assert event is not None
@@ -191,7 +191,7 @@ async def test_admin_change_user_role(async_db):
 
     event = await db.scalar(
         select(AuditEvent).where(
-            AuditEvent.action == "admin.user.role_change", AuditEvent.target_id == user.id
+            AuditEvent.action == "admin.user.role_change", AuditEvent.target_id == str(user.id)
         )
     )
     assert event is not None
@@ -213,7 +213,7 @@ async def test_admin_reset_password(async_db):
 
     event = await db.scalar(
         select(AuditEvent).where(
-            AuditEvent.action == "admin.user.password_reset", AuditEvent.target_id == user.id
+            AuditEvent.action == "admin.user.password_reset", AuditEvent.target_id == str(user.id)
         )
     )
     assert event is not None
@@ -249,7 +249,7 @@ async def test_admin_revoke_sessions(async_db):
     assert revoked == 2
     event = await db.scalar(
         select(AuditEvent).where(
-            AuditEvent.action == "admin.user.sessions_revoked", AuditEvent.target_id == user.id
+            AuditEvent.action == "admin.user.sessions_revoked", AuditEvent.target_id == str(user.id)
         )
     )
     assert event is not None

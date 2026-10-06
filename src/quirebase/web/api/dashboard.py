@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from uuid import UUID
+
 from fastapi import APIRouter
 
 from quirebase.library import get_dashboard_data
@@ -10,7 +14,7 @@ router = APIRouter(tags=["Dashboard"])
 
 
 @router.get("/dashboard", response_model=DashboardView)
-async def dashboard(workspace_id: str, user: ApiUser, db: Database):
+async def dashboard(workspace_id: UUID, user: ApiUser, db: Database):
     data = await get_dashboard_data(db, user, workspace_id)
     return {
         "new_items": [item_search_view(item) for item in data["new_items"]],

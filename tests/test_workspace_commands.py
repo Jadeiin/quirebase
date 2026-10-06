@@ -7,7 +7,6 @@ from sqlalchemy import func, select
 
 from quirebase.access import resolve_workspace_context
 from quirebase.core.errors import PermissionDenied, ResourceNotFound
-from quirebase.core.timezones import as_utc
 from quirebase.models import (
     AuditEvent,
     ProjectState,
@@ -59,7 +58,7 @@ async def _event_count(db, action, target_id):
     return await db.scalar(
         select(func.count())
         .select_from(AuditEvent)
-        .where(AuditEvent.action == action, AuditEvent.target_id == target_id)
+        .where(AuditEvent.action == action, AuditEvent.target_id == str(target_id))
     )
 
 
@@ -94,9 +93,9 @@ async def test_member_retries_preserve_timestamps_audits_and_terminal_state(comm
         await reactivate_workspace_member(db, owner, workspace_id, member_id)
         assert await _event_count(db, "workspace.member.reactivate", member_id) == 0
         await suspend_workspace_member(db, owner, workspace_id, member_id)
-        suspended_at = as_utc(member.suspended_at)
+        suspended_at = member.suspended_at
         await suspend_workspace_member(db, owner, workspace_id, member_id)
-        assert as_utc(member.suspended_at) == suspended_at
+        assert member.suspended_at == suspended_at
         assert await _event_count(db, "workspace.member.suspend", member_id) == 1
         await reactivate_workspace_member(db, owner, workspace_id, member_id)
         await reactivate_workspace_member(db, owner, workspace_id, member_id)
@@ -150,7 +149,7 @@ async def test_ownership_transfer_audits_the_authorizing_role_and_reloads_next_c
         event = await db.scalar(
             select(AuditEvent).where(
                 AuditEvent.action == "workspace.ownership.transfer",
-                AuditEvent.target_id == workspace_id,
+                AuditEvent.target_id == str(workspace_id),
             )
         )
         assert event.actor_id == owner_id
@@ -178,10 +177,10 @@ async def test_invitation_revoke_retry_reloads_and_preserves_the_first_revocatio
             await revoke_workspace_invitation(
                 other, await other.get(User, owner_id), workspace_id, invitation_id
             )
-            revoked_at = as_utc((await other.get(type(invitation), invitation_id)).revoked_at)
+            revoked_at = (await other.get(type(invitation), invitation_id)).revoked_at
         assert invitation.revoked_at is None
         await revoke_workspace_invitation(db, owner, workspace_id, invitation_id)
-        assert as_utc(invitation.revoked_at) == revoked_at
+        assert invitation.revoked_at == revoked_at
         assert await _event_count(db, "workspace.invitation.revoke", invitation_id) == 1
 
         expired, _ = await invite_workspace_member(
@@ -204,9 +203,9 @@ async def test_governance_retries_preserve_freeze_provenance_and_require_system_
         await recover_workspace_governance(db, owner, workspace_id)
         assert await _event_count(db, "admin.workspace.recover", workspace_id) == 0
         await suspend_workspace_governance(db, owner, workspace_id)
-        suspended_at = as_utc(workspace.governance_suspended_at)
+        suspended_at = workspace.governance_suspended_at
         await suspend_workspace_governance(db, owner, workspace_id)
-        assert as_utc(workspace.governance_suspended_at) == suspended_at
+        assert workspace.governance_suspended_at == suspended_at
         assert workspace.governance_suspended_by == owner_id
         assert await _event_count(db, "admin.workspace.suspend", workspace_id) == 1
         with pytest.raises(ResourceNotFound):

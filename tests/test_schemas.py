@@ -14,7 +14,7 @@ from quirebase.documents.schemas import (
 def base(kind: str, payload: dict) -> dict:
     return {
         "id": str(uuid4()),
-        "revision_id": "revision",
+        "revision_id": str(uuid4()),
         "page_index": 0,
         "kind": kind,
         "payload": {"type": kind, "rect": {"x": 1, "y": 2, "width": 20, "height": 10}, **payload},

@@ -12,6 +12,7 @@ from quirebase.models import Item, ItemIdentifier
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from uuid import UUID
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,7 +27,7 @@ class SearchClauseView(Protocol):
 async def record_discovery_search_audit(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
+    workspace_id: UUID,
     provider: str,
     clauses: Sequence[SearchClauseView],
     result_count: int,
@@ -47,7 +48,7 @@ async def record_discovery_search_audit(
 
 
 async def get_accessible_item_identifiers(
-    db: AsyncSession, user: User, workspace_id: str
+    db: AsyncSession, user: User, workspace_id: UUID
 ) -> set[tuple[str, str]]:
     await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     identifiers_by_provider: set[tuple[str, str]] = set()
@@ -67,7 +68,7 @@ async def get_accessible_item_identifiers(
 async def get_matching_accessible_item_identifiers(
     db: AsyncSession,
     user: User,
-    workspace_id: str,
+    workspace_id: UUID,
     candidates: set[tuple[str, str]],
 ) -> set[tuple[str, str]]:
     """Return accessible identifiers that occur in one Provider result page."""

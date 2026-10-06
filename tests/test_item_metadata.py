@@ -74,7 +74,7 @@ async def test_regenerate_bibtex_key_is_a_narrow_atomic_item_mutation(async_db):
     assert updated.abstract == "Can machines think?"
     assert updated.doi == "10.1093/mind/lix.236.433"
     assert total == 1
-    assert events[0].target_id == item_id
+    assert events[0].target_id == str(item_id)
     assert updated.updated_by == owner_id
 
 

@@ -9,6 +9,8 @@ from quirebase.core.errors import ResourceUnavailable
 from quirebase.models import Project, ProjectParticipation, ProjectState
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from quirebase.access.context import WorkspaceContext
@@ -17,7 +19,7 @@ if TYPE_CHECKING:
 async def lock_project_root(
     db: AsyncSession,
     context: WorkspaceContext,
-    project_id: str,
+    project_id: UUID,
     *,
     lock: Literal["shared", "update"] = "update",
     state: ProjectState | None = None,

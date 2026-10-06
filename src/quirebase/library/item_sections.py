@@ -43,6 +43,8 @@ from quirebase.models import (
 )
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -101,7 +103,7 @@ class ProjectAssignmentOption:
 class ItemOrganizationData(ItemSectionData):
     tags: tuple[Tag, ...]
     projects: tuple[ProjectAssignmentOption, ...]
-    assigned_project_ids: frozenset[str]
+    assigned_project_ids: frozenset[UUID]
     tag_matrix: TagMatrix
 
 
@@ -132,7 +134,7 @@ type ItemSectionResult = (
 )
 
 
-async def _record_read(db: AsyncSession, user: User, workspace_id: str, item_id: str) -> None:
+async def _record_read(db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID) -> None:
     read = await db.get(ItemRead, (user.id, item_id))
     if read is None:
         db.add(ItemRead(user_id=user.id, workspace_id=workspace_id, item_id=item_id))
@@ -232,7 +234,7 @@ async def _open_overview(
 
 
 async def _revisions(
-    db: AsyncSession, workspace_id: str, item_id: str, *, all_revisions: bool = False
+    db: AsyncSession, workspace_id: UUID, item_id: UUID, *, all_revisions: bool = False
 ) -> tuple[FileRevision, ...]:
     query = (
         select(FileRevision)
@@ -406,7 +408,7 @@ async def _open_discussion(
 async def open_item_section(
     db: AsyncSession,
     context: WorkspaceContext,
-    item_id: str,
+    item_id: UUID,
     section: ItemSection,
 ) -> ItemSectionResult:
     try:

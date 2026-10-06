@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = "AGPL-3.0-only"
 dependencies = [
+  "advanced-alchemy[argon2,obstore,uuid]==1.11.0",
   "alembic>=1.16,<2",
   "argon2-cffi>=25,<26",
   "casbin>=1.43,<2",
@@ -136,7 +137,7 @@ future-annotations = true
 "scripts/**" = ["print"]
 "tests/**" = ["import-private-name", "assert"]
 "packages/*/tests/**" = ["import-private-name", "assert"]
-"src/quirebase/web/**" = ["typing-only-first-party-import"]
+"src/quirebase/web/**" = ["typing-only-first-party-import", "typing-only-standard-library-import"]
 
 [tool.ruff.format]
 docstring-code-format = true

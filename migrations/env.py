@@ -4,11 +4,13 @@ import asyncio
 from logging.config import fileConfig
 from typing import TYPE_CHECKING
 
+from advanced_alchemy.types import GUID, DateTimeUTC, StoredObject
 from alembic import context
 
 import quirebase.models  # ruff: ignore[unused-import]
 from quirebase.core.config import get_settings
 from quirebase.core.database import Base, make_async_engine
+from quirebase.core.passwords import PreparedPasswordHash
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Connection
@@ -54,6 +56,22 @@ def include_object(_object, name, type_, reflected, _compare_to):
     return not (type_ == "table" and reflected and _is_search_projection(name))
 
 
+def render_item(type_, object_, autogen_context):
+    """Persist storage types as SQL types without runtime backends in revisions."""
+    if type_ == "type":
+        if isinstance(object_, GUID):
+            autogen_context.imports.add("from sqlalchemy.dialects import postgresql")
+            return "sa.LargeBinary(length=16).with_variant(postgresql.UUID(), 'postgresql')"
+        if isinstance(object_, StoredObject):
+            autogen_context.imports.add("from sqlalchemy.dialects import postgresql")
+            return "sa.JSON().with_variant(postgresql.JSONB(), 'postgresql')"
+        if isinstance(object_, PreparedPasswordHash):
+            return "sa.Text()"
+        if isinstance(object_, DateTimeUTC):
+            return "sa.DateTime(timezone=True)"
+    return False
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
     context.configure(
@@ -62,6 +80,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         include_object=include_object,
+        render_item=render_item,
     )
 
     with context.begin_transaction():
@@ -74,6 +93,7 @@ def do_run_migrations(connection: Connection) -> None:
         target_metadata=target_metadata,
         compare_type=True,
         include_object=include_object,
+        render_item=render_item,
     )
 
     with context.begin_transaction():

@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 
 import pytest
+from app_helpers import json_payload
 from sqlalchemy import func, select
 from test_http import authenticated_async_client
 
@@ -20,7 +21,7 @@ async def test_tags_discussion_and_search(async_db, async_session_factory, tmp_p
     workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     try:
         tagged = await client.post(
-            f"{workspace_base}/items/{item_id}/tags", json={"name": "Quantum Optics"}
+            f"{workspace_base}/items/{item_id}/tags", json=json_payload({"name": "Quantum Optics"})
         )
         assert tagged.status_code == 200
         assert await db.scalar(select(func.count()).select_from(Tag)) == 1
@@ -29,7 +30,8 @@ async def test_tags_discussion_and_search(async_db, async_session_factory, tmp_p
         assert search.json()["items"] == []
 
         posted = await client.post(
-            f"{workspace_base}/items/{item_id}/discussions", json={"body": "Looks useful"}
+            f"{workspace_base}/items/{item_id}/discussions",
+            json=json_payload({"body": "Looks useful"}),
         )
         assert posted.status_code == 201
         message = await db.scalar(select(DiscussionMessage))

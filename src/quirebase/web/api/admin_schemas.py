@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime  # ruff: ignore[typing-only-standard-library-import] - Pydantic resolves it
+from datetime import datetime
 from typing import Any, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -23,12 +24,12 @@ class BreakGlassReadRequest(BaseModel):
 
 
 class AdminWorkspaceView(BaseModel):
-    id: str
+    id: UUID
     name: str
-    owner_id: str
+    owner_id: UUID
     state: WorkspaceState
     governance_suspended_at: datetime | None = None
-    governance_suspended_by: str | None = None
+    governance_suspended_by: UUID | None = None
 
 
 class UserRoleRequest(BaseModel):
@@ -59,7 +60,7 @@ class RuntimeSettingsRequest(BaseModel):
 
 
 class AdminUserView(BaseModel):
-    id: str
+    id: UUID
     username: str
     role: str
     active: bool
@@ -67,7 +68,7 @@ class AdminUserView(BaseModel):
 
 
 class AdminInvitationView(BaseModel):
-    id: str
+    id: UUID
     username: str
     role: str
     expires_at: datetime
@@ -83,7 +84,7 @@ class AdminUsersView(BaseModel):
 
 
 class AdminInvitationCreatedView(BaseModel):
-    id: str
+    id: UUID
     username: str
     role: str
     expires_at: datetime
@@ -106,10 +107,10 @@ class StorageMetricsView(BaseModel):
 
 
 class AdminAuditEventView(BaseModel):
-    id: str
-    actor_id: str | None = None
-    workspace_id: str | None = None
-    project_id: str | None = None
+    id: UUID
+    actor_id: UUID | None = None
+    workspace_id: UUID | None = None
+    project_id: UUID | None = None
     action: str
     target_type: str
     target_id: str | None = None

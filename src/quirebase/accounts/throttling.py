@@ -8,7 +8,6 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from quirebase.core.errors import DomainError
-from quirebase.core.timezones import as_utc
 from quirebase.models import LoginThrottle
 
 if TYPE_CHECKING:
@@ -30,7 +29,7 @@ async def check_login_throttle(db: AsyncSession, identity: str) -> None:
     row = await db.get(LoginThrottle, identity)
     if row is None:
         return
-    started = as_utc(row.window_started_at)
+    started = row.window_started_at
     if started + THROTTLE_WINDOW <= datetime.now(UTC):
         await db.delete(row)
         await db.commit()

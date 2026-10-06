@@ -12,7 +12,15 @@ from typing import TYPE_CHECKING
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import CheckConstraint, UniqueConstraint, create_engine, event, inspect, text
+from sqlalchemy import (
+    CheckConstraint,
+    UniqueConstraint,
+    create_engine,
+    event,
+    inspect,
+    select,
+    text,
+)
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import CompileError, IntegrityError
 from sqlalchemy.orm import Session
@@ -274,25 +282,29 @@ def test_initial_schema_retains_audit_history_and_rejects_inactive_owners(migrat
     with engine.begin() as connection:
         assert (
             connection.scalar(
-                text("SELECT project_id FROM audit_events WHERE id = :id"), {"id": event_id}
+                select(AuditEvent.project_id).where(AuditEvent.id == event_id), {"id": event_id}
             )
             == project_id
         )
-        connection.execute(text("DELETE FROM workspaces WHERE id = :id"), {"id": workspace_id})
+        connection.execute(
+            Workspace.__table__.delete().where(Workspace.id == workspace_id), {"id": workspace_id}
+        )
         assert (
-            connection.scalar(text("SELECT id FROM projects WHERE id = :id"), {"id": project_id})
+            connection.scalar(
+                select(Project.id).where(Project.id == project_id), {"id": project_id}
+            )
             is None
         )
         assert (
             connection.scalar(
-                text("SELECT project_id FROM audit_events WHERE id = :id"), {"id": event_id}
+                select(AuditEvent.project_id).where(AuditEvent.id == event_id), {"id": event_id}
             )
             == project_id
         )
 
         assert (
             connection.scalar(
-                text("SELECT workspace_id FROM audit_events WHERE id = :id"), {"id": event_id}
+                select(AuditEvent.workspace_id).where(AuditEvent.id == event_id), {"id": event_id}
             )
             == workspace_id
         )

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from uuid import uuid4
 
 import pytest
+from app_helpers import json_payload
 from sqlalchemy import select
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
@@ -63,11 +65,13 @@ async def test_tag_mutations_are_workspace_scoped_and_audited(async_db):
         is None
     )
     event = await async_db.scalar(
-        select(AuditEvent).where(AuditEvent.action == "tag.remove", AuditEvent.target_id == item.id)
+        select(AuditEvent).where(
+            AuditEvent.action == "tag.remove", AuditEvent.target_id == str(item.id)
+        )
     )
     assert event is not None
     assert event.workspace_id == workspace_id
-    assert json.loads(event.detail or "{}") == {"tag_id": assignment.tag_id}
+    assert json.loads(event.detail or "{}") == json_payload({"tag_id": assignment.tag_id})
 
 
 @pytest.mark.anyio
@@ -89,7 +93,7 @@ async def test_tag_selection_is_atomic(async_db):
             workspace_id,
             item_id,
             remove_tag_ids=[tag_id],
-            tag_ids=["missing-tag"],
+            tag_ids=[uuid4()],
         )
     assert (
         await async_db.scalar(

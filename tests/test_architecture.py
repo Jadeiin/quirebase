@@ -653,7 +653,10 @@ def test_orm_models_have_one_documented_owner():
         node.name
         for node in tree.body
         if isinstance(node, ast.ClassDef)
-        and any(isinstance(base, ast.Name) and base.id == "Base" for base in node.bases)
+        and any(
+            isinstance(base, ast.Name) and base.id in {"Base", "EntityBase", "IdentityBase"}
+            for base in node.bases
+        )
     }
     assert mapped_classes == set(ORM_MODEL_OWNERS)
     assert set(ORM_MODEL_OWNERS.values()) <= set(PACKAGE_ROLES)

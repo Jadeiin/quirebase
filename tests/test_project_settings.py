@@ -1,4 +1,5 @@
 import pytest
+from app_helpers import json_payload
 from sqlalchemy import select
 from test_http import authenticated_async_client
 
@@ -53,7 +54,7 @@ async def test_metadata_patch_preserves_concurrent_participation_change(
     try:
         response = await client.patch(
             f"/api/v1/workspaces/{item.workspace_id}/projects/{project_id}",
-            json={"name": "Metadata only"},
+            json=json_payload({"name": "Metadata only"}),
         )
         assert response.status_code == 200
         await async_db.refresh(project)
@@ -83,7 +84,7 @@ async def test_project_patch_rejects_empty_or_null_settings(
     project = await create_project(async_db, owner, item.workspace_id, "Unchanged")
     try:
         response = await client.patch(
-            f"/api/v1/workspaces/{item.workspace_id}/projects/{project.id}", json=body
+            f"/api/v1/workspaces/{item.workspace_id}/projects/{project.id}", json=json_payload(body)
         )
         assert response.status_code == 422
         await async_db.refresh(project)
@@ -189,10 +190,10 @@ async def test_added_participant_response_survives_post_commit_deactivation(
     try:
         response = await client.post(
             f"/api/v1/workspaces/{item.workspace_id}/projects/{project.id}/participants",
-            json={"username": username},
+            json=json_payload({"username": username}),
         )
         assert response.status_code == 200
-        assert response.json() == {"user_id": target_id, "username": username}
+        assert response.json() == json_payload({"user_id": target_id, "username": username})
         assert (
             await async_db.scalar(
                 select(ProjectMember.id).where(

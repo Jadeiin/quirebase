@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from functools import lru_cache, wraps
 from typing import TYPE_CHECKING, Any, Literal, Protocol, cast, overload
 
+from advanced_alchemy.utils.serialization import decode_json, encode_json
 from dbos import DBOS, AsyncSQLAlchemyDatasource, DBOSClient, DBOSConfig, EnqueueOptions, error
 
 from quirebase import __version__
@@ -215,7 +216,7 @@ def _options(
     if partition_key is not None:
         options["queue_partition_key"] = partition_key
     if attributes:
-        options["attributes"] = attributes
+        options["attributes"] = decode_json(encode_json(attributes))
     return cast("EnqueueOptions", options)
 
 

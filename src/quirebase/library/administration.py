@@ -18,6 +18,8 @@ from quirebase.models import Attachment, FileRevision, Item, ObjectIntegrityScan
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -31,7 +33,10 @@ async def get_storage_metrics(db: AsyncSession, admin: User) -> dict[str, Any]:
     ).one()
     attachments_count, attachments_bytes = (
         await db.execute(
-            select(func.count(Attachment.id), func.coalesce(func.sum(Attachment.size), 0))
+            select(
+                func.count(Attachment.id),
+                func.coalesce(func.sum(Attachment.file["size"].as_integer()), 0),
+            )
         )
     ).one()
     thumbnails_count, thumbnails_bytes = (
@@ -63,7 +68,7 @@ async def get_storage_metrics(db: AsyncSession, admin: User) -> dict[str, Any]:
     }
 
 
-async def delete_item(db: AsyncSession, actor: User, workspace_id: str, item_id: str) -> None:
+async def delete_item(db: AsyncSession, actor: User, workspace_id: UUID, item_id: UUID) -> None:
     """Permanently delete one Workspace Item after the destructive resource action."""
     await require_workspace_action(db, actor, workspace_id, ResourceAction.item_delete)
     await require_editable_item(db, actor, workspace_id, item_id)
@@ -88,7 +93,7 @@ async def delete_item(db: AsyncSession, actor: User, workspace_id: str, item_id:
     cleanup_keys.extend(
         (
             await db.scalars(
-                select(Attachment.object_key).where(
+                select(Attachment.file["filename"].as_string()).where(
                     Attachment.workspace_id == workspace_id,
                     Attachment.item_id == item.id,
                 )

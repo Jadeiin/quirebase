@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, Protocol
+from uuid import UUID  # ruff: ignore[typing-only-standard-library-import] - SQLAlchemy resolves mappings
 
+from advanced_alchemy.types import GUID, DateTimeUTC, FileObject, HashedPassword, StoredObject
 from sqlalchemy import (
     JSON,
     Boolean,
     CheckConstraint,
-    DateTime,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
@@ -23,12 +23,10 @@ from sqlalchemy import (
     Enum as SqlEnum,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from uuid_utils.compat import uuid7
 
-from .core.database import Base
-
-
-def uid() -> str:
-    return str(uuid.uuid4())
+from .core.database import Base, EntityBase, IdentityBase
+from .core.passwords import PreparedPasswordHash
 
 
 def normalize_author_identity(last_name: str, first_name: str | None = None) -> str:
@@ -149,48 +147,41 @@ def enum_type(enum_class: type[StrEnum], name: str) -> SqlEnum:
     )
 
 
-class User(Base):
+class User(EntityBase):
     __tablename__ = "users"
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     username: Mapped[str] = mapped_column(String(120), unique=True, index=True)
-    password_hash: Mapped[str] = mapped_column(Text)
+    password_hash: Mapped[HashedPassword] = mapped_column(PreparedPasswordHash())
     role: Mapped[str] = mapped_column(String(32), default=SystemRole.member.value)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
-class Workspace(Base):
+class Workspace(EntityBase):
     __tablename__ = "workspaces"
-    __table_args__ = (
-        CheckConstraint("state IN ('active', 'archived', 'deleted')", name="ck_workspaces_state"),
-    )
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    __table_args__ = (CheckConstraint("state IN ('active', 'archived', 'deleted')", name="state"),)
     name: Mapped[str] = mapped_column(String(240))
-    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
     state: Mapped[WorkspaceState] = mapped_column(
         enum_type(WorkspaceState, "workspace_state"), default=WorkspaceState.active
     )
-    governance_suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    governance_suspended_by: Mapped[str | None] = mapped_column(
+    governance_suspended_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
+    governance_suspended_by: Mapped[UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
-    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    archived_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
 
 
-class WorkspaceMember(Base):
+class WorkspaceMember(EntityBase):
     __tablename__ = "workspace_members"
     __table_args__ = (
         CheckConstraint(
             "role IN ('owner', 'admin', 'editor', 'reviewer', 'viewer')",
-            name="ck_workspace_members_role",
+            name="role",
         ),
-        CheckConstraint("state IN ('active', 'suspended')", name="ck_workspace_members_state"),
+        CheckConstraint("state IN ('active', 'suspended')", name="state"),
         CheckConstraint(
             "role <> 'owner' OR (state = 'active' AND terminated_at IS NULL)",
-            name="ck_workspace_members_owner_active",
+            name="owner_active",
         ),
         # PostgreSQL and SQLite both support this partial uniqueness form.
         Index(
@@ -209,11 +200,10 @@ class WorkspaceMember(Base):
             postgresql_where=text("terminated_at IS NULL AND role = 'owner'"),
         ),
     )
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    workspace_id: Mapped[str] = mapped_column(
+    workspace_id: Mapped[UUID] = mapped_column(
         ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
     )
-    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     role: Mapped[WorkspaceRole] = mapped_column(
         enum_type(WorkspaceRole, "workspace_role"), default=WorkspaceRole.viewer
     )
@@ -221,57 +211,50 @@ class WorkspaceMember(Base):
         enum_type(WorkspaceMemberState, "workspace_member_state"),
         default=WorkspaceMemberState.active,
     )
-    invited_by: Mapped[str | None] = mapped_column(
+    invited_by: Mapped[UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
-    suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    terminated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    suspended_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
+    terminated_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
 
 
-class WorkspaceInvitation(Base):
+class WorkspaceInvitation(EntityBase):
     __tablename__ = "workspace_invitations"
     __table_args__ = (
         CheckConstraint(
             "role IN ('admin', 'editor', 'reviewer', 'viewer')",
-            name="ck_workspace_invitations_role",
+            name="role",
         ),
     )
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    workspace_id: Mapped[str] = mapped_column(
+    workspace_id: Mapped[UUID] = mapped_column(
         ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
     )
-    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     role: Mapped[WorkspaceInvitationRole] = mapped_column(
         enum_type(WorkspaceInvitationRole, "workspace_invitation_role")
     )
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    invited_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
-    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    invited_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    expires_at: Mapped[datetime] = mapped_column(DateTimeUTC(timezone=True), index=True)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
 
 
-class LoginSession(Base):
+class LoginSession(EntityBase):
     __tablename__ = "login_sessions"
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    expires_at: Mapped[datetime] = mapped_column(DateTimeUTC(timezone=True), index=True)
     user: Mapped[User] = relationship()
 
 
-class ApiToken(Base):
+class ApiToken(EntityBase):
     __tablename__ = "api_tokens"
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     name: Mapped[str] = mapped_column(String(120))
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
-    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTimeUTC(timezone=True), index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
     user: Mapped[User] = relationship()
 
 
@@ -279,26 +262,23 @@ class LoginThrottle(Base):
     __tablename__ = "login_throttles"
     identity_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
     failures: Mapped[int] = mapped_column(Integer, default=0)
-    window_started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    window_started_at: Mapped[datetime] = mapped_column(DateTimeUTC(timezone=True), default=now)
 
 
-class Invitation(Base):
+class Invitation(EntityBase):
     __tablename__ = "invitations"
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     username: Mapped[str] = mapped_column(String(120), unique=True)
     role: Mapped[str] = mapped_column(String(32), default=SystemRole.member.value)
-    created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
-    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    expires_at: Mapped[datetime] = mapped_column(DateTimeUTC(timezone=True), index=True)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
 
 
-class Item(Base):
+class Item(EntityBase):
     __tablename__ = "items"
     __table_args__ = (UniqueConstraint("workspace_id", "id", name="uq_items_workspace_id"),)
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    workspace_id: Mapped[str] = mapped_column(
+    workspace_id: Mapped[UUID] = mapped_column(
         ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
     )
     title: Mapped[str] = mapped_column(Text, index=True)
@@ -322,13 +302,11 @@ class Item(Base):
     urls: Mapped[str | None] = mapped_column(Text)
     keywords: Mapped[str | None] = mapped_column(Text)
     custom_fields: Mapped[str | None] = mapped_column(Text)
-    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
-    updated_by: Mapped[str | None] = mapped_column(
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    updated_by: Mapped[UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     version: Mapped[int] = mapped_column(Integer, default=1)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
     revisions: Mapped[list[FileRevision]] = relationship(
         back_populates="item", cascade="all, delete-orphan", passive_deletes=True
     )
@@ -345,24 +323,21 @@ class Item(Base):
     updater: Mapped[User | None] = relationship(foreign_keys=[updated_by])
 
 
-class Author(Base):
+class Author(EntityBase):
     __tablename__ = "authors"
     __table_args__ = (UniqueConstraint("identity_key", name="uq_authors_identity"),)
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     first_name: Mapped[str | None] = mapped_column(String(120))
     last_name: Mapped[str] = mapped_column(String(120), index=True)
     identity_key: Mapped[str] = mapped_column(
         String(512), nullable=False, default=_author_identity_default
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
-class ItemAuthor(Base):
+class ItemAuthor(EntityBase):
     __tablename__ = "item_authors"
     __table_args__ = (UniqueConstraint("item_id", "author_id", "role", name="uq_item_author_role"),)
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    item_id: Mapped[str] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
-    author_id: Mapped[str] = mapped_column(
+    item_id: Mapped[UUID] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
+    author_id: Mapped[UUID] = mapped_column(
         ForeignKey("authors.id", ondelete="RESTRICT"), index=True
     )
     position: Mapped[int] = mapped_column(Integer, default=1)
@@ -372,16 +347,14 @@ class ItemAuthor(Base):
     author: Mapped[Author] = relationship()
 
 
-class ItemIdentifier(Base):
+class ItemIdentifier(EntityBase):
     __tablename__ = "item_identifiers"
     __table_args__ = (
         UniqueConstraint("item_id", "provider", "value", name="uq_item_provider_value"),
     )
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    item_id: Mapped[str] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
+    item_id: Mapped[UUID] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
     provider: Mapped[str] = mapped_column(String(40), index=True)
     value: Mapped[str] = mapped_column(String(500), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     item: Mapped[Item] = relationship(back_populates="identifier_links")
 
 
@@ -395,32 +368,29 @@ class ItemRead(Base):
             ondelete="CASCADE",
         ),
     )
-    user_id: Mapped[str] = mapped_column(
+    user_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
-    item_id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    workspace_id: Mapped[str] = mapped_column(String(36), index=True)
-    last_read_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
+    item_id: Mapped[UUID] = mapped_column(GUID(), primary_key=True)
+    workspace_id: Mapped[UUID] = mapped_column(GUID(), index=True)
+    last_read_at: Mapped[datetime] = mapped_column(
+        DateTimeUTC(timezone=True), default=now, index=True
+    )
 
 
-class Project(Base):
+class Project(EntityBase):
     __tablename__ = "projects"
     __table_args__ = (
-        CheckConstraint("state IN ('active', 'archived', 'deleted')", name="ck_projects_state"),
-        CheckConstraint(
-            "participation IN ('workspace', 'open', 'managed')", name="ck_projects_participation"
-        ),
+        CheckConstraint("state IN ('active', 'archived', 'deleted')", name="state"),
+        CheckConstraint("participation IN ('workspace', 'open', 'managed')", name="participation"),
         UniqueConstraint("workspace_id", "id", name="uq_projects_workspace_id"),
     )
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    workspace_id: Mapped[str] = mapped_column(
+    workspace_id: Mapped[UUID] = mapped_column(
         ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
     )
     name: Mapped[str] = mapped_column(String(240))
     description: Mapped[str] = mapped_column(Text, default="")
-    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
     state: Mapped[ProjectState] = mapped_column(
         enum_type(ProjectState, "project_state"), default=ProjectState.active
     )
@@ -430,7 +400,7 @@ class Project(Base):
     )
 
 
-class ProjectMember(Base):
+class ProjectMember(EntityBase):
     __tablename__ = "project_members"
     __table_args__ = (
         UniqueConstraint(
@@ -443,14 +413,12 @@ class ProjectMember(Base):
             ondelete="CASCADE",
         ),
     )
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    workspace_id: Mapped[str] = mapped_column(String(36), index=True)
-    project_id: Mapped[str] = mapped_column(String(36), index=True)
-    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    workspace_id: Mapped[UUID] = mapped_column(GUID(), index=True)
+    project_id: Mapped[UUID] = mapped_column(GUID(), index=True)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
 
 
-class ProjectItem(Base):
+class ProjectItem(EntityBase):
     __table_args__ = (
         UniqueConstraint(
             "workspace_id", "project_id", "item_id", name="uq_project_items_workspace"
@@ -472,31 +440,27 @@ class ProjectItem(Base):
             ondelete="CASCADE",
         ),
     )
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    workspace_id: Mapped[str] = mapped_column(String(36), index=True)
+    workspace_id: Mapped[UUID] = mapped_column(GUID(), index=True)
     __tablename__ = "project_items"
-    project_id: Mapped[str] = mapped_column(String(36), index=True)
-    item_id: Mapped[str] = mapped_column(String(36), index=True)
-    added_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    project_id: Mapped[UUID] = mapped_column(GUID(), index=True)
+    item_id: Mapped[UUID] = mapped_column(GUID(), index=True)
+    added_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
 
 
-class Tag(Base):
+class Tag(EntityBase):
     __tablename__ = "tags"
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     __table_args__ = (
         UniqueConstraint("workspace_id", "normalized_name", name="uq_tags_workspace_normalized"),
         UniqueConstraint("workspace_id", "id", name="uq_tags_workspace_id"),
     )
-    workspace_id: Mapped[str] = mapped_column(
+    workspace_id: Mapped[UUID] = mapped_column(
         ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
     )
     name: Mapped[str] = mapped_column(String(120), index=True)
     # Unicode case-folding can expand one display character to three code
     # points (for example, the ligature "ﬃ" becomes "ffi").
     normalized_name: Mapped[str] = mapped_column(String(360), index=True, default=_tag_name_default)
-    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
 
 
 class ItemTag(Base):
@@ -514,16 +478,16 @@ class ItemTag(Base):
             ondelete="CASCADE",
         ),
     )
-    workspace_id: Mapped[str] = mapped_column(String(36), index=True)
+    workspace_id: Mapped[UUID] = mapped_column(GUID(), index=True)
     __tablename__ = "item_tags"
-    item_id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    tag_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    item_id: Mapped[UUID] = mapped_column(GUID(), primary_key=True)
+    tag_id: Mapped[UUID] = mapped_column(GUID(), primary_key=True)
 
 
-class ItemTagRecommendation(Base):
+class ItemTagRecommendation(EntityBase):
     __tablename__ = "item_tag_recommendations"
     __table_args__ = (
-        CheckConstraint("generation_token >= 1", name="ck_item_tag_recommendations_token"),
+        CheckConstraint("generation_token >= 1", name="token"),
         ForeignKeyConstraint(
             ["workspace_id", "item_id"],
             ["items.workspace_id", "items.id"],
@@ -531,25 +495,22 @@ class ItemTagRecommendation(Base):
             ondelete="CASCADE",
         ),
     )
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    workspace_id: Mapped[str] = mapped_column(String(36), index=True)
-    item_id: Mapped[str] = mapped_column(String(36), unique=True, index=True)
+    workspace_id: Mapped[UUID] = mapped_column(GUID(), index=True)
+    item_id: Mapped[UUID] = mapped_column(GUID(), unique=True, index=True)
     generation_token: Mapped[int] = mapped_column(Integer, default=1)
     workflow_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     single_words: Mapped[str | None] = mapped_column(Text, nullable=True)
     phrases: Mapped[str | None] = mapped_column(Text, nullable=True)
-    generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+    generated_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True), nullable=True)
 
 
-class DiscussionMessage(Base):
+class DiscussionMessage(EntityBase):
     __tablename__ = "discussion_messages"
     __table_args__ = (
         CheckConstraint(
             "(item_id IS NOT NULL AND project_id IS NULL) OR "
             "(item_id IS NULL AND project_id IS NOT NULL)",
-            name="ck_discussion_messages_context",
+            name="context",
         ),
         ForeignKeyConstraint(
             ["workspace_id", "item_id"],
@@ -564,23 +525,20 @@ class DiscussionMessage(Base):
             ondelete="CASCADE",
         ),
     )
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    workspace_id: Mapped[str] = mapped_column(String(36), index=True)
-    item_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
-    project_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
-    author_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    workspace_id: Mapped[UUID] = mapped_column(GUID(), index=True)
+    item_id: Mapped[UUID | None] = mapped_column(GUID(), nullable=True, index=True)
+    project_id: Mapped[UUID | None] = mapped_column(GUID(), nullable=True, index=True)
+    author_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     body: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
     author: Mapped[User] = relationship()
 
 
-class FileRevision(Base):
+class FileRevision(EntityBase):
     __tablename__ = "file_revisions"
     __table_args__ = (
         CheckConstraint(
             "processing_state IN ('pending', 'ready')",
-            name="ck_file_revisions_processing_state",
+            name="processing_state",
         ),
         UniqueConstraint("workspace_id", "id", name="uq_file_revisions_workspace_id"),
         UniqueConstraint(
@@ -593,9 +551,8 @@ class FileRevision(Base):
             ondelete="CASCADE",
         ),
     )
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    workspace_id: Mapped[str] = mapped_column(String(36), index=True)
-    item_id: Mapped[str] = mapped_column(String(36), index=True)
+    workspace_id: Mapped[UUID] = mapped_column(GUID(), index=True)
+    item_id: Mapped[UUID] = mapped_column(GUID(), index=True)
     object_key: Mapped[str] = mapped_column(String(200), index=True)
     thumbnail_object_key: Mapped[str | None] = mapped_column(String(200), nullable=True, index=True)
     thumbnail_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -609,8 +566,7 @@ class FileRevision(Base):
         enum_type(FileRevisionProcessingState, "file_revision_processing_state"),
         default=FileRevisionProcessingState.pending,
     )
-    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
     item: Mapped[Item] = relationship(
         back_populates="revisions",
         primaryjoin="and_(FileRevision.workspace_id == Item.workspace_id, FileRevision.item_id == Item.id)",
@@ -618,12 +574,12 @@ class FileRevision(Base):
     )
 
 
-class Attachment(Base):
+class Attachment(EntityBase):
     __tablename__ = "attachments"
     __table_args__ = (
         CheckConstraint(
             "role IS NULL OR role = 'graphical_abstract'",
-            name="ck_attachments_role",
+            name="role",
         ),
         UniqueConstraint("item_id", "role", name="uq_attachments_item_role"),
         ForeignKeyConstraint(
@@ -633,47 +589,41 @@ class Attachment(Base):
             ondelete="CASCADE",
         ),
     )
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    workspace_id: Mapped[str] = mapped_column(String(36), index=True)
-    item_id: Mapped[str] = mapped_column(String(36), index=True)
-    object_key: Mapped[str] = mapped_column(String(200), index=True)
-    size: Mapped[int] = mapped_column(Integer)
-    mime_type: Mapped[str] = mapped_column(String(100), default="application/octet-stream")
-    original_name: Mapped[str] = mapped_column(String(255))
+    workspace_id: Mapped[UUID] = mapped_column(GUID(), index=True)
+    item_id: Mapped[UUID] = mapped_column(GUID(), index=True)
+    file: Mapped[FileObject] = mapped_column(StoredObject(backend="documents"))
     role: Mapped[AttachmentRole | None] = mapped_column(
         enum_type(AttachmentRole, "attachment_role"), nullable=True
     )
-    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
 
 
-class PdfAnnotationObject(Base):
+class PdfAnnotationObject(IdentityBase):
     __tablename__ = "pdf_annotation_objects"
     __table_args__ = (
         CheckConstraint(
             "object_type IN ('annotation', 'reply')",
-            name="ck_pdf_annotation_objects_type",
+            name="type",
         ),
     )
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
     object_type: Mapped[AnnotationObjectType] = mapped_column(
         enum_type(AnnotationObjectType, "annotation_object_type")
     )
 
 
-class PdfAnnotation(Base):
+class PdfAnnotation(EntityBase):
     __tablename__ = "pdf_annotations"
     __table_args__ = (
         CheckConstraint(
             "kind IN ('highlight', 'underline', 'strikeout', 'note', 'free_text', "
             "'ink', 'rectangle', 'ellipse', 'line', 'arrow')",
-            name="ck_pdf_annotations_kind",
+            name="kind",
         ),
-        CheckConstraint("scope IN ('private', 'project')", name="ck_pdf_annotations_scope"),
+        CheckConstraint("scope IN ('private', 'project')", name="scope"),
         CheckConstraint(
             "(scope = 'private' AND project_item_id IS NULL) OR "
             "(scope = 'project' AND project_item_id IS NOT NULL)",
-            name="ck_pdf_annotations_project_scope",
+            name="project_scope",
         ),
         UniqueConstraint("workspace_id", "id", name="uq_pdf_annotations_workspace_id"),
         ForeignKeyConstraint(
@@ -689,44 +639,42 @@ class PdfAnnotation(Base):
             ondelete="CASCADE",
         ),
     )
-    id: Mapped[str] = mapped_column(
+    id: Mapped[UUID] = mapped_column(
         ForeignKey(
             "pdf_annotation_objects.id",
             name="fk_pdf_annotations_object_id",
         ),
         primary_key=True,
-        default=uid,
+        default=uuid7,
     )
-    workspace_id: Mapped[str] = mapped_column(String(36), index=True)
+    workspace_id: Mapped[UUID] = mapped_column(GUID(), index=True)
     object_identity: Mapped[PdfAnnotationObject] = relationship()
-    file_revision_id: Mapped[str] = mapped_column(String(36), index=True)
-    item_id: Mapped[str] = mapped_column(String(36), index=True)
+    file_revision_id: Mapped[UUID] = mapped_column(GUID(), index=True)
+    item_id: Mapped[UUID] = mapped_column(GUID(), index=True)
     page_index: Mapped[int] = mapped_column(Integer)
-    author_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    author_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     kind: Mapped[AnnotationKind] = mapped_column(enum_type(AnnotationKind, "annotation_kind"))
     scope: Mapped[AnnotationScope] = mapped_column(
         enum_type(AnnotationScope, "annotation_scope"), default=AnnotationScope.private
     )
-    project_item_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    project_item_id: Mapped[UUID | None] = mapped_column(GUID(), nullable=True, index=True)
     body: Mapped[str | None] = mapped_column(Text)
     selected_text: Mapped[str | None] = mapped_column(Text)
     payload: Mapped[dict] = mapped_column(JSON)
     version: Mapped[int] = mapped_column(Integer, default=1)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
     deleted_by_moderation: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("false")
     )
-    hidden_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    moderated_by: Mapped[str | None] = mapped_column(
+    hidden_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
+    archived_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
+    locked_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
+    moderated_by: Mapped[UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     def __init__(self, **kwargs):
-        object_id = kwargs.setdefault("id", uid())
+        object_id = kwargs.setdefault("id", uuid7())
         kwargs.setdefault(
             "object_identity",
             PdfAnnotationObject(
@@ -737,7 +685,7 @@ class PdfAnnotation(Base):
         super().__init__(**kwargs)
 
 
-class PdfAnnotationReply(Base):
+class PdfAnnotationReply(EntityBase):
     __tablename__ = "pdf_annotation_replies"
     __table_args__ = (
         ForeignKeyConstraint(
@@ -747,26 +695,24 @@ class PdfAnnotationReply(Base):
             ondelete="CASCADE",
         ),
     )
-    id: Mapped[str] = mapped_column(
+    id: Mapped[UUID] = mapped_column(
         ForeignKey(
             "pdf_annotation_objects.id",
             name="fk_pdf_annotation_replies_object_id",
         ),
         primary_key=True,
-        default=uid,
+        default=uuid7,
     )
-    workspace_id: Mapped[str] = mapped_column(String(36), index=True)
+    workspace_id: Mapped[UUID] = mapped_column(GUID(), index=True)
     object_identity: Mapped[PdfAnnotationObject] = relationship()
-    annotation_id: Mapped[str] = mapped_column(String(36), index=True)
-    author_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    annotation_id: Mapped[UUID] = mapped_column(GUID(), index=True)
+    author_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     body: Mapped[str] = mapped_column(Text)
     version: Mapped[int] = mapped_column(Integer, default=1)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
 
     def __init__(self, **kwargs):
-        object_id = kwargs.setdefault("id", uid())
+        object_id = kwargs.setdefault("id", uuid7())
         kwargs.setdefault(
             "object_identity",
             PdfAnnotationObject(
@@ -780,58 +726,53 @@ class PdfAnnotationReply(Base):
 class ExportArtifact(Base):
     __tablename__ = "export_artifacts"
     workflow_id: Mapped[str] = mapped_column(String(255), primary_key=True)
-    workspace_id: Mapped[str] = mapped_column(
+    workspace_id: Mapped[UUID] = mapped_column(
         ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
     )
     object_key: Mapped[str] = mapped_column(String(500), unique=True)
     filename: Mapped[str] = mapped_column(String(255))
     size: Mapped[int] = mapped_column(Integer)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTimeUTC(timezone=True), index=True)
 
 
-class ImportBatch(Base):
+class ImportBatch(EntityBase):
     __tablename__ = "import_batches"
     __table_args__ = (
         CheckConstraint(
             "status IN ('pending', 'ready', 'failed', 'committed')",
-            name="ck_import_batches_status",
+            name="status",
         ),
     )
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    workspace_id: Mapped[str] = mapped_column(
+    workspace_id: Mapped[UUID] = mapped_column(
         ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
     )
-    actor_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    actor_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     file_format: Mapped[str] = mapped_column(String(16))
     records: Mapped[str] = mapped_column(Text)
     errors: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(16), default="ready")
     workflow_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     committed_item_ids: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
 
 
-class CitationStyle(Base):
+class CitationStyle(EntityBase):
     __tablename__ = "citation_styles"
     __table_args__ = (
         UniqueConstraint("workspace_id", "name", name="uq_citation_styles_workspace_name"),
     )
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    workspace_id: Mapped[str] = mapped_column(
+    workspace_id: Mapped[UUID] = mapped_column(
         ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
     )
     name: Mapped[str] = mapped_column(String(120))
     csl_xml: Mapped[str] = mapped_column(Text)
-    created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
 
 
-class AuditEvent(Base):
+class AuditEvent(IdentityBase):
     __tablename__ = "audit_events"
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    actor_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
-    workspace_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
-    project_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    actor_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    workspace_id: Mapped[UUID | None] = mapped_column(GUID(), nullable=True, index=True)
+    project_id: Mapped[UUID | None] = mapped_column(GUID(), nullable=True, index=True)
     action: Mapped[str] = mapped_column(String(120), index=True)
     target_type: Mapped[str] = mapped_column(String(80))
     target_id: Mapped[str | None] = mapped_column(String(36))
@@ -841,24 +782,27 @@ class AuditEvent(Base):
     authorization_resource_action: Mapped[str | None] = mapped_column(String(80))
     result: Mapped[str | None] = mapped_column(String(32))
     source: Mapped[str | None] = mapped_column(String(32))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    created_at: Mapped[datetime] = mapped_column(DateTimeUTC(timezone=True), default=now)
 
 
 class SystemSetting(Base):
     __tablename__ = "system_settings"
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(Text)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
-    updated_by: Mapped[str | None] = mapped_column(
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTimeUTC(timezone=True), default=now, onupdate=now
+    )
+    updated_by: Mapped[UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
 
-class ObjectIntegrityScan(Base):
+class ObjectIntegrityScan(EntityBase):
     __tablename__ = "object_integrity_scans"
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     status: Mapped[str] = mapped_column(String(32))
     missing_count: Mapped[int] = mapped_column(Integer, default=0)
     mismatch_count: Mapped[int] = mapped_column(Integer, default=0)
     errors: Mapped[str] = mapped_column(Text, default="[]")
-    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
+    checked_at: Mapped[datetime] = mapped_column(
+        DateTimeUTC(timezone=True), default=now, index=True
+    )

@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock
 
 import pytest
+from app_helpers import json_payload
 from inquiro import CandidateRecord, Identifier
 from sqlalchemy import select
 from test_http import authenticated_async_client
@@ -37,7 +38,7 @@ async def test_online_preview_uses_existing_confirmed_import_flow(
     try:
         preview = await client.post(
             f"/api/v1/workspaces/{workspace_id}/imports/identifier",
-            json={"identifier": "10.1/looked-up", "provider": "auto"},
+            json=json_payload({"identifier": "10.1/looked-up", "provider": "auto"}),
         )
         assert preview.status_code == 201
         assert "Looked-up paper" in preview.text
@@ -49,7 +50,7 @@ async def test_online_preview_uses_existing_confirmed_import_flow(
         batch_id = batch.id
         committed = await client.post(
             f"/api/v1/workspaces/{workspace_id}/imports/{batch_id}/commit",
-            json={},
+            json=json_payload({}),
         )
         assert committed.status_code == 200
         imported = await db.scalar(select(Item).where(Item.title == "Looked-up paper"))

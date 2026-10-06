@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
+from advanced_alchemy.base import DefaultBase, UUIDv7AuditBase, UUIDv7Base
+from advanced_alchemy.config import AsyncSessionConfig, SQLAlchemyAsyncConfig
+from advanced_alchemy.types import GUID
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -9,7 +12,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.ext.compiler import compiles
 
 from quirebase.core.config import get_settings
 
@@ -17,8 +20,26 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
 
-class Base(DeclarativeBase):
-    pass
+@compiles(GUID, "sqlite")
+def _sqlite_guid_storage(_type, _compiler, **_kwargs) -> str:
+    # BINARY has NUMERIC affinity on SQLite and reflects as NUMERIC(16).
+    # BLOB stores the same UUID bytes and keeps Alembic roundtrips stable.
+    return "BLOB"
+
+
+class Base(DefaultBase):
+    __abstract__ = True
+    __bind_key__ = "quirebase"
+
+
+class EntityBase(UUIDv7AuditBase):
+    __abstract__ = True
+    __bind_key__ = "quirebase"
+
+
+class IdentityBase(UUIDv7Base):
+    __abstract__ = True
+    __bind_key__ = "quirebase"
 
 
 def _libpq_url(database_url: str) -> str:
@@ -74,7 +95,15 @@ def make_async_engine(url: str | None = None) -> AsyncEngine:
 
 
 engine = make_async_engine()
-AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+database_config = SQLAlchemyAsyncConfig(
+    engine_instance=engine,
+    metadata=Base.metadata,
+    session_config=AsyncSessionConfig(expire_on_commit=False),
+    enable_file_object_listener=False,
+    # AuditColumns supplies onupdate for ORM and SQL DML; keep explicit overrides.
+    enable_touch_updated_timestamp_listener=False,
+)
+AsyncSessionLocal = cast("async_sessionmaker[AsyncSession]", database_config.create_session_maker())
 
 
 async def get_db() -> AsyncIterator[AsyncSession]:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import typer
 import uvicorn
@@ -147,7 +147,7 @@ def list_api_tokens_command(username: str = typer.Argument(...)):
 @app.command("revoke-api-token")
 def revoke_api_token_command(
     username: str = typer.Argument(...),
-    token_id: str = typer.Argument(...),
+    token_id: UUID = typer.Argument(...),
 ):
     async def revoke() -> None:
         async with AsyncSessionLocal() as db:

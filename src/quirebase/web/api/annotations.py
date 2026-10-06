@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Annotated, Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
@@ -37,20 +38,20 @@ router = APIRouter(tags=["Annotations"])
 
 @router.get("/items/{item_id}/annotations", response_model=AnnotationListView)
 async def list_annotations(
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     user: ApiUser,
     db: Database,
     page: Annotated[int, Query(ge=1)] = 1,
     per_page: Annotated[int, Query(ge=1, le=100)] = 50,
-    revision_id: str | None = None,
+    revision_id: UUID | None = None,
     scope: AnnotationScope | None = None,
     project_id: Annotated[
-        list[str] | None,
+        list[UUID] | None,
         Query(description="Repeat to select multiple readable Projects linked to this Item."),
     ] = None,
     pagination: Literal["page", "cursor"] = "page",
-    cursor: Annotated[str | None, Query(min_length=1, max_length=36)] = None,
+    cursor: Annotated[UUID | None, Query()] = None,
 ) -> AnnotationListView:
     """List authorized Annotations across revisions and sources.
 
@@ -95,8 +96,8 @@ async def list_annotations(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_annotation(
-    workspace_id: str,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     data: AnnotationCreate,
     user: ApiUser,
     db: Database,
@@ -111,9 +112,9 @@ async def create_annotation(
     response_model=AnnotationView,
 )
 async def update_annotation(
-    workspace_id: str,
-    item_id: str,
-    annotation_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
     data: AnnotationUpdate,
     user: ApiUser,
     db: Database,
@@ -128,9 +129,9 @@ async def update_annotation(
     response_model=OkView,
 )
 async def delete_annotation(
-    workspace_id: str,
-    item_id: str,
-    annotation_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
     version: int,
     user: ApiUser,
     db: Database,
@@ -141,9 +142,9 @@ async def delete_annotation(
 
 @router.post("/items/{item_id}/annotations/{annotation_id}/restore", response_model=AnnotationView)
 async def restore_annotation(
-    workspace_id: str,
-    item_id: str,
-    annotation_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
     version: int,
     user: ApiUser,
     db: Database,
@@ -158,9 +159,9 @@ async def restore_annotation(
     response_model=AnnotationView,
 )
 async def moderate_annotation(
-    workspace_id: str,
-    item_id: str,
-    annotation_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
     data: AnnotationModerationRequest,
     user: ApiUser,
     db: Database,
@@ -184,9 +185,9 @@ async def moderate_annotation(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_reply(
-    workspace_id: str,
-    item_id: str,
-    annotation_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
     data: AnnotationReplyCreate,
     user: ApiUser,
     db: Database,
@@ -201,10 +202,10 @@ async def create_reply(
     response_model=AnnotationReplyView,
 )
 async def update_reply(
-    workspace_id: str,
-    item_id: str,
-    annotation_id: str,
-    reply_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
+    reply_id: UUID,
     data: AnnotationReplyUpdate,
     user: ApiUser,
     db: Database,
@@ -221,10 +222,10 @@ async def update_reply(
     response_model=OkView,
 )
 async def delete_reply(
-    workspace_id: str,
-    item_id: str,
-    annotation_id: str,
-    reply_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
+    reply_id: UUID,
     version: int,
     user: ApiUser,
     db: Database,
@@ -238,10 +239,10 @@ async def delete_reply(
     response_model=AnnotationReplyView,
 )
 async def restore_reply(
-    workspace_id: str,
-    item_id: str,
-    annotation_id: str,
-    reply_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
+    reply_id: UUID,
     version: int,
     user: ApiUser,
     db: Database,
