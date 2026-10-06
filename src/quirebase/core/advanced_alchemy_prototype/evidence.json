@@ -1,0 +1,245 @@
+{
+  "environment": {
+    "python": "3.14.3",
+    "sqlalchemy": "2.0.52",
+    "advanced_alchemy": "1.11.0",
+    "sqlite_runtime": true,
+    "postgres_runtime": false
+  },
+  "integration": {
+    "existing_engine": true,
+    "existing_metadata": true,
+    "commit_mode": "manual"
+  },
+  "uuid": {
+    "native_version": 7,
+    "alchemy_version": 7,
+    "alchemy_python_type": "UUID",
+    "alchemy_sqlite_utc_roundtrip": "UTC",
+    "native_sqlite_utc_roundtrip": "None",
+    "matching_composite_fk_accepted": true,
+    "cross_workspace_composite_fk_rejected": true,
+    "object_key_prefixes_in_burst": {
+      "uuid7": 1,
+      "uuid4": 256,
+      "samples": [
+        "01/a1/01a110da8a707b609c548b6083697cfd.pdf"
+      ]
+    }
+  },
+  "transaction": {
+    "cas_winner": true,
+    "cas_stale_rejected": true,
+    "rollback_restores_record_and_audit": true
+  },
+  "postgres_sql": {
+    "cas": "UPDATE prototype_aa_records SET version=(prototype_aa_records.version + %(version_1)s), name=%(name)s, updated_at=%(updated_at)s WHERE prototype_aa_records.id = %(id_1)s::UUID AND prototype_aa_records.workspace_id = %(workspace_id_1)s::UUID AND prototype_aa_records.version = %(version_2)s RETURNING prototype_aa_records.id",
+    "lock": "SELECT prototype_aa_records.id, prototype_aa_records.workspace_id, prototype_aa_records.version, prototype_aa_records.name, prototype_aa_records.sa_orm_sentinel, prototype_aa_records.created_at, prototype_aa_records.updated_at \nFROM prototype_aa_records FOR SHARE OF prototype_aa_records"
+  },
+  "projection": {
+    "raw_rows": [
+      {
+        "name": "Workspace desk",
+        "item_count": 2,
+        "participating": true
+      },
+      {
+        "name": "Open joined",
+        "item_count": 1,
+        "participating": true
+      }
+    ],
+    "generic_window_error": "ValueError: too many values to unpack (expected 2)",
+    "generic_grouped_count_error": "MultipleResultsFound: Multiple rows were found when exactly one was required",
+    "explicit_subquery_total": 6
+  },
+  "pagination": {
+    "admin_first_page": {
+      "names": [
+        "Workspace desk",
+        "Open joined"
+      ],
+      "total": 6
+    },
+    "editor_first_page": {
+      "names": [
+        "Workspace desk",
+        "Open joined"
+      ],
+      "total": 5
+    },
+    "empty_page": {
+      "rows": 0,
+      "window_total": 0,
+      "separate_count_total": 6
+    },
+    "admin_mine": {
+      "names": [
+        "Workspace desk",
+        "Open joined",
+        "Managed joined"
+      ],
+      "total": 3
+    },
+    "governance_discovery_is_not_participation": true,
+    "deleted_and_foreign_excluded": true,
+    "scoped_get_rejects_foreign": true
+  },
+  "workspace_recovery": {
+    "page_names": [
+      "Alpha"
+    ],
+    "total": 3,
+    "current_on_first_page": false,
+    "direct_resolution": "Gamma"
+  },
+  "demo_fixture": {
+    "currentWorkspaceId": "01a110da-8a55-7842-8a3f-f395bd9a32e1",
+    "workspaces": [
+      {
+        "id": "01a110da-8a55-7842-8a3f-f3768d68cd2e",
+        "name": "Alpha"
+      },
+      {
+        "id": "01a110da-8a55-7842-8a3f-f38bd29122b6",
+        "name": "Beta"
+      },
+      {
+        "id": "01a110da-8a55-7842-8a3f-f395bd9a32e1",
+        "name": "Gamma"
+      }
+    ],
+    "workspaceAccess": {
+      "admin": [
+        "01a110da-8a55-7842-8a3f-f3768d68cd2e",
+        "01a110da-8a55-7842-8a3f-f38bd29122b6",
+        "01a110da-8a55-7842-8a3f-f395bd9a32e1"
+      ],
+      "editor": [
+        "01a110da-8a55-7842-8a3f-f395bd9a32e1"
+      ]
+    },
+    "projects": [
+      {
+        "id": "01a110da-8a55-7842-8a3f-f3aa57ef6e3e",
+        "name": "Workspace desk",
+        "participation": "workspace",
+        "createdAt": "2026-01-01T00:00:00+00:00",
+        "state": "active",
+        "discoverableFor": [
+          "admin",
+          "editor"
+        ],
+        "participatingFor": [
+          "admin",
+          "editor"
+        ]
+      },
+      {
+        "id": "01a110da-8a55-7842-8a3f-f3b53c6f6fe0",
+        "name": "Open joined",
+        "participation": "open",
+        "createdAt": "2026-01-01T00:00:00+00:00",
+        "state": "active",
+        "discoverableFor": [
+          "admin",
+          "editor"
+        ],
+        "participatingFor": [
+          "admin",
+          "editor"
+        ]
+      },
+      {
+        "id": "01a110da-8a55-7842-8a3f-f3c9754b031c",
+        "name": "Open joinable",
+        "participation": "open",
+        "createdAt": "2026-01-01T00:00:01+00:00",
+        "state": "active",
+        "discoverableFor": [
+          "admin",
+          "editor"
+        ],
+        "participatingFor": []
+      },
+      {
+        "id": "01a110da-8a55-7842-8a3f-f3d84597441d",
+        "name": "Managed joined",
+        "participation": "managed",
+        "createdAt": "2026-01-01T00:00:01+00:00",
+        "state": "active",
+        "discoverableFor": [
+          "admin",
+          "editor"
+        ],
+        "participatingFor": [
+          "admin",
+          "editor"
+        ]
+      },
+      {
+        "id": "01a110da-8a55-7842-8a3f-f3e7587416c7",
+        "name": "Managed governance",
+        "participation": "managed",
+        "createdAt": "2026-01-01T00:00:02+00:00",
+        "state": "active",
+        "discoverableFor": [
+          "admin"
+        ],
+        "participatingFor": []
+      },
+      {
+        "id": "01a110da-8a55-7842-8a3f-f3fc23d4260e",
+        "name": "Archived open",
+        "participation": "open",
+        "createdAt": "2026-01-01T00:00:02+00:00",
+        "state": "archived",
+        "discoverableFor": [
+          "admin",
+          "editor"
+        ],
+        "participatingFor": []
+      }
+    ]
+  },
+  "cursor": {
+    "first_page": [
+      "Workspace desk",
+      "Open joined"
+    ],
+    "after_deleting_boundary_and_renaming_next": [
+      "Open renamed",
+      "Managed joined"
+    ],
+    "offset_after_same_changes": [
+      "Managed joined",
+      "Managed governance"
+    ],
+    "cursor_preserves_next_record": true,
+    "offset_skips_next_record": true
+  },
+  "write_boundary": {
+    "bulk_returned_rows": 0,
+    "foreign_record_changed": true
+  },
+  "nanoid": {
+    "native_extra_installed": false,
+    "runtime_validated": false
+  },
+  "ddl": {
+    "sqlite": {
+      "prototype_native_records": "\nCREATE TABLE prototype_native_records (\n\tid CHAR(32) NOT NULL, \n\tcreated_at DATETIME NOT NULL, \n\tPRIMARY KEY (id)\n)\n\n",
+      "prototype_aa_workspaces": "\nCREATE TABLE prototype_aa_workspaces (\n\tid BINARY(16) NOT NULL, \n\tname VARCHAR(100) NOT NULL, \n\tsa_orm_sentinel INTEGER, \n\tcreated_at DATETIME NOT NULL, \n\tupdated_at DATETIME NOT NULL, \n\tCONSTRAINT pk_prototype_aa_workspaces PRIMARY KEY (id)\n)\n\n",
+      "prototype_aa_records": "\nCREATE TABLE prototype_aa_records (\n\tid BINARY(16) NOT NULL, \n\tworkspace_id BINARY(16) NOT NULL, \n\tversion INTEGER NOT NULL, \n\tname VARCHAR(100) NOT NULL, \n\tsa_orm_sentinel INTEGER, \n\tcreated_at DATETIME NOT NULL, \n\tupdated_at DATETIME NOT NULL, \n\tCONSTRAINT pk_prototype_aa_records PRIMARY KEY (id), \n\tCONSTRAINT uq_prototype_aa_records_workspace_id UNIQUE (workspace_id, id), \n\tCONSTRAINT fk_prototype_aa_records_workspace_id_prototype_aa_workspaces FOREIGN KEY(workspace_id) REFERENCES prototype_aa_workspaces (id)\n)\n\n",
+      "prototype_aa_links": "\nCREATE TABLE prototype_aa_links (\n\tid INTEGER NOT NULL, \n\tworkspace_id BINARY(16) NOT NULL, \n\trecord_id BINARY(16) NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(workspace_id, record_id) REFERENCES prototype_aa_records (workspace_id, id)\n)\n\n",
+      "prototype_nano_records": "\nCREATE TABLE prototype_nano_records (\n\tid VARCHAR NOT NULL, \n\tsa_orm_sentinel INTEGER, \n\tCONSTRAINT pk_prototype_nano_records PRIMARY KEY (id)\n)\n\n"
+    },
+    "postgresql": {
+      "prototype_native_records": "\nCREATE TABLE prototype_native_records (\n\tid UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tPRIMARY KEY (id)\n)\n\n",
+      "prototype_aa_workspaces": "\nCREATE TABLE prototype_aa_workspaces (\n\tid UUID NOT NULL, \n\tname VARCHAR(100) NOT NULL, \n\tsa_orm_sentinel INTEGER, \n\tcreated_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tCONSTRAINT pk_prototype_aa_workspaces PRIMARY KEY (id)\n)\n\n",
+      "prototype_aa_records": "\nCREATE TABLE prototype_aa_records (\n\tid UUID NOT NULL, \n\tworkspace_id UUID NOT NULL, \n\tversion INTEGER NOT NULL, \n\tname VARCHAR(100) NOT NULL, \n\tsa_orm_sentinel INTEGER, \n\tcreated_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tCONSTRAINT pk_prototype_aa_records PRIMARY KEY (id), \n\tCONSTRAINT uq_prototype_aa_records_workspace_id UNIQUE (workspace_id, id), \n\tCONSTRAINT fk_prototype_aa_records_workspace_id_prototype_aa_workspaces FOREIGN KEY(workspace_id) REFERENCES prototype_aa_workspaces (id)\n)\n\n",
+      "prototype_aa_links": "\nCREATE TABLE prototype_aa_links (\n\tid SERIAL NOT NULL, \n\tworkspace_id UUID NOT NULL, \n\trecord_id UUID NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(workspace_id, record_id) REFERENCES prototype_aa_records (workspace_id, id)\n)\n\n",
+      "prototype_nano_records": "\nCREATE TABLE prototype_nano_records (\n\tid VARCHAR NOT NULL, \n\tsa_orm_sentinel INTEGER, \n\tCONSTRAINT pk_prototype_nano_records PRIMARY KEY (id)\n)\n\n"
+    }
+  }
+}
